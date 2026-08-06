@@ -19,8 +19,9 @@ import {
   normalizeJobTitle,
   titlesNearlyIdentical,
 } from '../common/dedupe';
+import { resolveSkill } from '../common/skill-resolve';
 
-type JobSkillInput = { slug: string; isRequired?: boolean; weight?: number };
+type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 
 const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
@@ -172,15 +173,16 @@ export class JobsService {
 
   private async syncSkills(jobPostId: string, skills: JobSkillInput[]) {
     await this.prisma.jobPostSkill.deleteMany({ where: { jobPostId } });
+    const seen = new Set<string>();
     for (const s of skills) {
-      const skill =
-        (await this.prisma.skill.findUnique({ where: { slug: s.slug } })) ??
-        (await this.prisma.skill.create({
-          data: {
-            name: s.slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-            slug: s.slug || slugify(s.slug),
-          },
-        }));
+      if (!s.slug && !s.name) continue;
+      const { skill } = await resolveSkill(this.prisma, {
+        slug: s.slug,
+        name: s.name,
+        allowCreate: true,
+      });
+      if (seen.has(skill.id)) continue;
+      seen.add(skill.id);
       await this.prisma.jobPostSkill.create({
         data: {
           jobPostId,
@@ -615,6 +617,7 @@ export class JobsService {
         city: { select: { slug: true, name: true } },
         category: { select: { slug: true, name: true } },
         company: { select: { slug: true, name: true, logoUrl: true } },
+        jobSkills: { select: { skill: { select: { slug: true, name: true } } } },
       },
       take: 1000,
     });
@@ -625,6 +628,7 @@ export class JobsService {
       string,
       { slug: string; name: string; logoUrl?: string | null; count: number }
     > = {};
+    const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const experienceFacets: Record<string, number> = {};
     for (const j of facetJobs) {
       if (j.city) {
@@ -653,6 +657,13 @@ export class JobsService {
       if (j.experienceLevel) {
         experienceFacets[j.experienceLevel] = (experienceFacets[j.experienceLevel] || 0) + 1;
       }
+      for (const js of j.jobSkills) {
+        const sk = js.skill;
+        if (!sk) continue;
+        skillFacets[sk.slug] = skillFacets[sk.slug]
+          ? { ...skillFacets[sk.slug], count: skillFacets[sk.slug].count + 1 }
+          : { slug: sk.slug, name: sk.name, count: 1 };
+      }
     }
 
     return {
@@ -666,6 +677,7 @@ export class JobsService {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count),
         categories: Object.values(categoryFacets).sort((a, b) => b.count - a.count),
         companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
+        skills: Object.values(skillFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,
       },
     };

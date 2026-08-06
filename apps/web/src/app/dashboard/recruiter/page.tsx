@@ -6,6 +6,9 @@ import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 import { FilterFieldset, FormAlert, LabelText } from '@/components/ui/Field';
+import { ExpandableList } from '@/components/ui/ExpandableList';
+import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
+import { SkillCombobox } from '@/components/ui/SkillCombobox';
 
 type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'company';
 
@@ -90,6 +93,7 @@ export default function RecruiterDashboard() {
   const [candFilters, setCandFilters] = useState<CandFilters>(DEFAULT_CAND_FILTERS);
   const [candLoading, setCandLoading] = useState(false);
   const [skillQ, setSkillQ] = useState('');
+  const [draftJobSkills, setDraftJobSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
     cities: [],
     skills: [],
@@ -128,7 +132,7 @@ export default function RecruiterDashboard() {
     const [mine, cities, skills, categories, benefits, inds, langs] = await Promise.all([
       api<any[]>('/companies/mine'),
       api('/meta/cities', { auth: false }),
-      api('/meta/skills', { auth: false }),
+      api('/meta/skills?sort=popular&take=120', { auth: false }),
       api('/meta/categories', { auth: false }),
       api('/meta/benefits', { auth: false }),
       api('/meta/industries', { auth: false }).catch(() => []),
@@ -182,10 +186,6 @@ export default function RecruiterDashboard() {
   async function createJob(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const skillSlugs = String(fd.get('skills') || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
     await api(`/jobs/company/${companyId}`, {
       method: 'POST',
       body: JSON.stringify({
@@ -200,13 +200,18 @@ export default function RecruiterDashboard() {
         salaryMin: fd.get('salaryMin') ? Number(fd.get('salaryMin')) : null,
         salaryMax: fd.get('salaryMax') ? Number(fd.get('salaryMax')) : null,
         workMode: fd.get('workMode') || 'ONSITE',
-        skills: skillSlugs.map((slug) => ({ slug, isRequired: true, weight: 1 })),
+        skills: draftJobSkills.map((s) =>
+          s.slug
+            ? { slug: s.slug, isRequired: true, weight: 1 }
+            : { name: s.name, isRequired: true, weight: 1 },
+        ),
         benefitSlugs: String(fd.get('benefits') || '')
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
       }),
     });
+    setDraftJobSkills([]);
     setMsg('Job created as DRAFT');
     await loadJobs(companyId);
   }
@@ -306,11 +311,30 @@ export default function RecruiterDashboard() {
   const selectedCandCities = candFilters.city.split(',').filter(Boolean);
   const selectedCandSkills = candFilters.skills.split(',').filter(Boolean);
   const selectedCandLangs = candFilters.languages.split(',').filter(Boolean);
-  const filteredSkills = meta.skills
-    .filter((s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()))
-    .slice(0, 25);
   const cityFacet = Object.fromEntries((candidates?.facets?.cities || []).map((c: any) => [c.slug, c.count]));
-  const skillFacet = Object.fromEntries((candidates?.facets?.skills || []).map((s: any) => [s.slug, s.count]));
+  const skillFacetList = candidates?.facets?.skills || [];
+  const skillFacet = Object.fromEntries(skillFacetList.map((s: any) => [s.slug, s.count]));
+  const filteredSkills = useMemo(() => {
+    const bySlug = new Map<string, { slug: string; name: string; count?: number }>();
+    for (const s of skillFacetList) {
+      bySlug.set(s.slug, { slug: s.slug, name: s.name, count: s.count });
+    }
+    for (const s of meta.skills) {
+      if (!bySlug.has(s.slug)) bySlug.set(s.slug, { slug: s.slug, name: s.name, count: skillFacet[s.slug] });
+    }
+    return [...bySlug.values()]
+      .filter((s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()))
+      .sort((a, b) => (b.count || 0) - (a.count || 0) || a.name.localeCompare(b.name));
+  }, [meta.skills, skillFacetList, skillFacet, skillQ]);
+  const candAdvancedCount = [
+    candFilters.skills,
+    candFilters.degree,
+    candFilters.languages,
+    candFilters.experienceYearsMin,
+    candFilters.experienceYearsMax,
+    candFilters.hasCertification ? '1' : '',
+    candFilters.skillMode !== 'OR' ? candFilters.skillMode : '',
+  ].filter(Boolean).length;
   const candTotalPages = candidates?.totalPages || Math.max(1, Math.ceil((candidates?.total || 0) / candFilters.limit));
   const candPageItems = buildCandPageItems(candFilters.page, candTotalPages);
 
@@ -423,10 +447,39 @@ export default function RecruiterDashboard() {
                 <p className="muted" style={{ fontSize: '0.78rem', margin: '-0.35rem 0 0.5rem' }}>
                   Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.
                 </p>
-                <label>
-                  <LabelText>Skill slugs (comma)</LabelText>
-                  <input name="skills" placeholder="typescript,react,nestjs" />
-                </label>
+                <div>
+                  <LabelText>Skills</LabelText>
+                  <div className="chips" style={{ margin: '0.4rem 0' }}>
+                    {draftJobSkills.map((s) => (
+                      <span key={s.slug || s.name} className="badge">
+                        {s.name}
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ marginLeft: 6, padding: 0 }}
+                          onClick={() =>
+                            setDraftJobSkills((prev) =>
+                              prev.filter((x) => (x.slug || x.name) !== (s.slug || s.name)),
+                            )
+                          }
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <SkillCombobox
+                    levelSelect={false}
+                    submitLabel="Add skill to job"
+                    onPick={(skill) => {
+                      setDraftJobSkills((prev) => {
+                        const key = skill.slug || skill.name;
+                        if (prev.some((p) => (p.slug || p.name) === key)) return prev;
+                        return [...prev, { slug: skill.slug, name: skill.name }];
+                      });
+                    }}
+                  />
+                </div>
                 <label>
                   <LabelText>Benefit slugs (comma)</LabelText>
                   <input name="benefits" placeholder="health-insurance,remote-work" />
@@ -706,123 +759,147 @@ export default function RecruiterDashboard() {
                 </div>
 
                 <FilterFieldset legend="City" className="filter-group">
-                  {meta.cities.slice(0, 12).map((c) => (
-                    <label key={c.slug} className="filter-check">
-                      <input
-                        type="checkbox"
-                        checked={selectedCandCities.includes(c.slug)}
-                        onChange={() => applyCand({ city: toggleCsv(candFilters.city, c.slug) })}
-                      />
-                      <LabelText optional={false}>{c.name}</LabelText>
-                      {cityFacet[c.slug] !== undefined && (
-                        <span className="facet-count">({cityFacet[c.slug]})</span>
-                      )}
-                    </label>
-                  ))}
+                  <ExpandableList
+                    items={meta.cities}
+                    initialCount={10}
+                    step={10}
+                    getKey={(c) => c.slug}
+                    renderItem={(c) => (
+                      <label className="filter-check">
+                        <input
+                          type="checkbox"
+                          checked={selectedCandCities.includes(c.slug)}
+                          onChange={() => applyCand({ city: toggleCsv(candFilters.city, c.slug) })}
+                        />
+                        <LabelText optional={false}>{c.name}</LabelText>
+                        {cityFacet[c.slug] !== undefined && (
+                          <span className="facet-count">({cityFacet[c.slug]})</span>
+                        )}
+                      </label>
+                    )}
+                  />
                 </FilterFieldset>
 
-                <FilterFieldset legend={`Skills (${candFilters.skillMode})`} className="filter-group">
-                  <label>
-                    <LabelText>Match mode</LabelText>
-                    <select
-                      value={candFilters.skillMode}
-                      onChange={(e) => applyCand({ skillMode: e.target.value as 'AND' | 'OR' })}
-                      style={{ marginBottom: '0.4rem' }}
-                    >
-                      <option value="OR">Match any (OR)</option>
-                      <option value="AND">Match all (AND)</option>
-                    </select>
-                  </label>
-                  <label>
-                    <LabelText>Filter skills</LabelText>
-                    <input
-                      value={skillQ}
-                      onChange={(e) => setSkillQ(e.target.value)}
-                      placeholder="Filter skills…"
+                <AdvancedFiltersPanel
+                  storageKey="jt_talent_advanced_filters"
+                  activeCount={candAdvancedCount}
+                  forceOpen={candAdvancedCount > 0}
+                >
+                  <FilterFieldset legend={`Skills (${candFilters.skillMode})`} className="filter-group">
+                    <label>
+                      <LabelText>Match mode</LabelText>
+                      <select
+                        value={candFilters.skillMode}
+                        onChange={(e) => applyCand({ skillMode: e.target.value as 'AND' | 'OR' })}
+                        style={{ marginBottom: '0.4rem' }}
+                      >
+                        <option value="OR">Match any (OR)</option>
+                        <option value="AND">Match all (AND)</option>
+                      </select>
+                    </label>
+                    <label>
+                      <LabelText>Filter skills</LabelText>
+                      <input
+                        value={skillQ}
+                        onChange={(e) => setSkillQ(e.target.value)}
+                        placeholder="Filter skills…"
+                      />
+                    </label>
+                    <ExpandableList
+                      items={filteredSkills}
+                      initialCount={10}
+                      step={10}
+                      getKey={(s) => s.slug}
+                      renderItem={(s) => (
+                        <label className="filter-check">
+                          <input
+                            type="checkbox"
+                            checked={selectedCandSkills.includes(s.slug)}
+                            onChange={() => applyCand({ skills: toggleCsv(candFilters.skills, s.slug) })}
+                          />
+                          <LabelText optional={false}>{s.name}</LabelText>
+                          {s.count !== undefined && (
+                            <span className="facet-count">({s.count})</span>
+                          )}
+                        </label>
+                      )}
                     />
-                  </label>
-                  {filteredSkills.map((s) => (
-                    <label key={s.slug} className="filter-check">
-                      <input
-                        type="checkbox"
-                        checked={selectedCandSkills.includes(s.slug)}
-                        onChange={() => applyCand({ skills: toggleCsv(candFilters.skills, s.slug) })}
-                      />
-                      <LabelText optional={false}>{s.name}</LabelText>
-                      {skillFacet[s.slug] !== undefined && (
-                        <span className="facet-count">({skillFacet[s.slug]})</span>
-                      )}
-                    </label>
-                  ))}
-                </FilterFieldset>
+                  </FilterFieldset>
 
-                <div className="filter-group">
-                  <div className="grid-2" style={{ gap: '0.4rem' }}>
+                  <div className="filter-group">
+                    <div className="grid-2" style={{ gap: '0.4rem' }}>
+                      <label>
+                        <LabelText>Min years</LabelText>
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder="Min"
+                          value={candFilters.experienceYearsMin}
+                          onChange={(e) => applyCand({ experienceYearsMin: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        <LabelText>Max years</LabelText>
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder="Max"
+                          value={candFilters.experienceYearsMax}
+                          onChange={(e) => applyCand({ experienceYearsMax: e.target.value })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="filter-group">
                     <label>
-                      <LabelText>Min years</LabelText>
-                      <input
-                        type="number"
-                        min={0}
-                        placeholder="Min"
-                        value={candFilters.experienceYearsMin}
-                        onChange={(e) => applyCand({ experienceYearsMin: e.target.value })}
-                      />
-                    </label>
-                    <label>
-                      <LabelText>Max years</LabelText>
-                      <input
-                        type="number"
-                        min={0}
-                        placeholder="Max"
-                        value={candFilters.experienceYearsMax}
-                        onChange={(e) => applyCand({ experienceYearsMax: e.target.value })}
-                      />
+                      <LabelText>Degree</LabelText>
+                      <select
+                        value={candFilters.degree}
+                        onChange={(e) => applyCand({ degree: e.target.value })}
+                      >
+                        <option value="">Any</option>
+                        {DEGREE_OPTS.map((d) => (
+                          <option key={d} value={d}>
+                            {d.replace(/_/g, ' ')}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   </div>
-                </div>
 
-                <div className="filter-group">
-                  <label>
-                    <LabelText>Degree</LabelText>
-                    <select
-                      value={candFilters.degree}
-                      onChange={(e) => applyCand({ degree: e.target.value })}
-                    >
-                      <option value="">Any</option>
-                      {DEGREE_OPTS.map((d) => (
-                        <option key={d} value={d}>
-                          {d.replace(/_/g, ' ')}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                  <FilterFieldset legend="Languages" className="filter-group">
+                    <ExpandableList
+                      items={meta.languages}
+                      initialCount={8}
+                      step={10}
+                      getKey={(l) => l.code}
+                      renderItem={(l) => (
+                        <label className="filter-check">
+                          <input
+                            type="checkbox"
+                            checked={selectedCandLangs.includes(l.code)}
+                            onChange={() =>
+                              applyCand({ languages: toggleCsv(candFilters.languages, l.code) })
+                            }
+                          />
+                          <LabelText optional={false}>{l.name}</LabelText>
+                        </label>
+                      )}
+                    />
+                  </FilterFieldset>
 
-                <FilterFieldset legend="Languages" className="filter-group">
-                  {meta.languages.map((l) => (
-                    <label key={l.code} className="filter-check">
+                  <div className="filter-group">
+                    <label className="filter-check">
                       <input
                         type="checkbox"
-                        checked={selectedCandLangs.includes(l.code)}
-                        onChange={() =>
-                          applyCand({ languages: toggleCsv(candFilters.languages, l.code) })
-                        }
+                        checked={candFilters.hasCertification}
+                        onChange={(e) => applyCand({ hasCertification: e.target.checked })}
                       />
-                      <LabelText optional={false}>{l.name}</LabelText>
+                      <LabelText optional={false}>Has certification</LabelText>
                     </label>
-                  ))}
-                </FilterFieldset>
-
-                <div className="filter-group">
-                  <label className="filter-check">
-                    <input
-                      type="checkbox"
-                      checked={candFilters.hasCertification}
-                      onChange={(e) => applyCand({ hasCertification: e.target.checked })}
-                    />
-                    <LabelText optional={false}>Has certification</LabelText>
-                  </label>
-                </div>
+                  </div>
+                </AdvancedFiltersPanel>
               </aside>
 
               <div>

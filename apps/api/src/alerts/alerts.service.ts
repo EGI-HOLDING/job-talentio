@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
+import { resolveSkill } from '../common/skill-resolve';
 
 @Injectable()
 export class AlertsService {
@@ -77,11 +78,13 @@ export class AlertsService {
     });
 
     for (const slug of skillSlugs) {
-      const skill = await this.prisma.skill.findUnique({ where: { slug } });
-      if (skill) {
+      try {
+        const { skill } = await resolveSkill(this.prisma, { slug, allowCreate: false });
         await this.prisma.jobAlertSkill.create({
           data: { alertId: alert.id, skillId: skill.id },
         });
+      } catch {
+        /* unknown skill slug — skip */
       }
     }
 

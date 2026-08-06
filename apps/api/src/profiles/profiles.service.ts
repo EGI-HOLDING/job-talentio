@@ -14,6 +14,7 @@ import { MatchingService } from '../matching/matching.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
 import { normalizePhone } from '../common/dedupe';
+import { resolveSkill } from '../common/skill-resolve';
 import { parseCvText, ParsedCvData } from './cv-parser';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
@@ -107,20 +108,13 @@ export class ProfilesService {
 
   async addSkill(user: AuthUser, opts: { slug?: string; name?: string; level?: string }) {
     const profile = await this.getProfileForUser(user.id);
-    const slug = opts.slug || (opts.name ? slugify(opts.name) : '');
-    if (!slug) throw new BadRequestException('slug or name required');
+    const { skill, created, matchedVia } = await resolveSkill(this.prisma, {
+      slug: opts.slug,
+      name: opts.name,
+      allowCreate: true,
+    });
 
-    let skill = await this.prisma.skill.findUnique({ where: { slug } });
-    if (!skill) {
-      skill = await this.prisma.skill.create({
-        data: {
-          slug,
-          name: opts.name || slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        },
-      });
-    }
-
-    return this.prisma.profileSkill.upsert({
+    const row = await this.prisma.profileSkill.upsert({
       where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
       create: {
         profileId: profile.id,
@@ -130,6 +124,7 @@ export class ProfilesService {
       update: { level: (opts.level as never) || 'INTERMEDIATE' },
       include: { skill: true },
     });
+    return { ...row, skillCreated: created, matchedVia };
   }
 
   async removeSkill(user: AuthUser, skillId: string) {
@@ -465,18 +460,7 @@ export class ProfilesService {
     for (const idx of selection.skillIndexes || []) {
       const name = parsed.skillNames?.[idx];
       if (!name) continue;
-      const slug = slugify(name);
-      let skill = await this.prisma.skill.findUnique({ where: { slug } });
-      if (!skill) {
-        skill = await this.prisma.skill.findFirst({
-          where: { name: { equals: name, mode: 'insensitive' } },
-        });
-      }
-      if (!skill) {
-        skill = await this.prisma.skill.create({
-          data: { slug: slug || `skill-${Date.now()}`, name },
-        });
-      }
+      const { skill } = await resolveSkill(this.prisma, { name, allowCreate: true });
       await this.prisma.profileSkill.upsert({
         where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
         create: { profileId: profile.id, skillId: skill.id, level: 'INTERMEDIATE' },
@@ -731,8 +715,8 @@ export class ProfilesService {
       totalPages: Math.max(1, Math.ceil(total / limit)),
       limited,
       facets: {
-        cities: Object.values(cityFacets).sort((a, b) => b.count - a.count).slice(0, 20),
-        skills: Object.values(skillFacets).sort((a, b) => b.count - a.count).slice(0, 30),
+        cities: Object.values(cityFacets).sort((a, b) => b.count - a.count).slice(0, 80),
+        skills: Object.values(skillFacets).sort((a, b) => b.count - a.count).slice(0, 80),
       },
     };
   }

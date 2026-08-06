@@ -66,11 +66,14 @@ export const jobPostSchema = z.object({
     .nullable(),
   skills: z
     .array(
-      z.object({
-        slug: z.string().min(1).max(80),
-        isRequired: z.boolean().optional().default(true),
-        weight: z.number().min(0.1).max(5).optional().default(1),
-      }),
+      z
+        .object({
+          slug: z.string().min(1).max(80).optional(),
+          name: z.string().min(1).max(80).optional(),
+          isRequired: z.boolean().optional().default(true),
+          weight: z.number().min(0.1).max(5).optional().default(1),
+        })
+        .refine((s) => Boolean(s.slug || s.name), { message: 'slug or name required' }),
     )
     .max(30)
     .default([]),
