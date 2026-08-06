@@ -13,15 +13,26 @@ Local development still uses [docker/docker-compose.yml](../docker/docker-compos
 
 ```
 Browser → Cloudflare (DNS/CDN/proxy)
-            ├─ jobtalent.io              → Railway web (prod)
-            ├─ admin.jobtalent.io        → Railway admin (prod)
-            ├─ api.jobtalent.io          → Railway api (prod)
-            ├─ staging.jobtalent.io      → Railway web (staging)
-            ├─ admin.staging.jobtalent.io→ Railway admin (staging)
-            └─ api.staging.jobtalent.io  → Railway api (staging)
+            ├─ jobtalent.io                 → Railway web (prod)
+            ├─ admin.jobtalent.io           → Railway admin (prod)
+            ├─ api.jobtalent.io             → Railway api (prod)
+            ├─ staging.jobtalent.io         → Railway web (staging)
+            ├─ admin-staging.jobtalent.io   → Railway admin (staging)
+            └─ api-staging.jobtalent.io     → Railway api (staging)
 
-API → Postgres (Railway) + Redis (prod) + Cloudflare R2 + Hostinger SMTP
+API → Postgres + Redis + MinIO (staging) / R2 (prod) + Hostinger SMTP
 ```
+
+### Live staging URLs
+
+| Surface | URL |
+|---------|-----|
+| Web | https://staging.jobtalent.io |
+| Admin | https://admin-staging.jobtalent.io |
+| API health | https://api-staging.jobtalent.io/api/health |
+| MinIO S3 | https://minio-staging-staging-ba96.up.railway.app |
+
+Git auto-deploy: `api` / `web` / `admin` watch branch `develop` in Railway environment `staging`.
 
 ### Hobby plan limits (important)
 
@@ -35,8 +46,10 @@ API → Postgres (Railway) + Redis (prod) + Cloudflare R2 + Hostinger SMTP
 | admin (prod) | `admin.jobtalent.io` |
 | api (prod) | `api.jobtalent.io` |
 | web (staging) | `staging.jobtalent.io` |
-| admin (staging) | `admin.staging.jobtalent.io` |
-| api (staging) | `api.staging.jobtalent.io` |
+| admin (staging) | `admin-staging.jobtalent.io` |
+| api (staging) | `api-staging.jobtalent.io` |
+
+Use single-level hostnames for staging (`admin-staging`, `api-staging`). Nested names like `admin.staging.jobtalent.io` are outside Cloudflare Universal SSL coverage (`*.jobtalent.io` only).
 
 ## Repo deploy assets
 
