@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { FormEvent, useId, useState } from 'react';
-import { api, saveSession } from '@/lib/api';
-import { FormAlert, FormField } from '@/components/ui/Field';
+import { ADMIN_URL, api, saveSession } from '@/lib/api';
+import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
 import { useI18n } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
+
+function redirectAfterLogin(role: string) {
+  if (role === 'RECRUITER') return '/dashboard/recruiter';
+  if (role === 'SUPER_ADMIN') return ADMIN_URL;
+  return '/dashboard/employee';
+}
 
 export default function LoginPage() {
   const { t, setLocale } = useI18n();
@@ -23,45 +29,29 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     const fd = new FormData(e.currentTarget);
+    const email = String(fd.get('email') ?? '').trim();
+    const password = String(fd.get('password') ?? '');
+    if (!email || !password) {
+      setError(t('authFillRequired'));
+      setLoading(false);
+      return;
+    }
     try {
-      const session = await api<any>('/auth/login', {
-        method: 'POST',
-        auth: false,
-        body: JSON.stringify({
-          email: fd.get('email'),
-          password: fd.get('password'),
-        }),
-      });
-      saveSession(session);
+      const session = await api<{ accessToken: string; user: { role: string; locale?: string } }>(
+        '/auth/login',
+        {
+          method: 'POST',
+          auth: false,
+          body: JSON.stringify({ email, password }),
+        },
+      );
+      saveSession(session as Parameters<typeof saveSession>[0]);
       applySessionLocale(session);
-      const role = session.user.role;
-      window.location.href =
-        role === 'RECRUITER'
-          ? '/dashboard/recruiter'
-          : role === 'SUPER_ADMIN'
-            ? 'http://localhost:3001'
-            : '/dashboard/employee';
+      window.location.href = redirectAfterLogin(session.user.role);
     } catch (err) {
-      setError((err as Error).message);
+      setError((err as Error).message || t('authLoginFailed'));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function quick(email: string) {
-    setError('');
-    try {
-      const session = await api<any>('/auth/dev-login', {
-        method: 'POST',
-        auth: false,
-        body: JSON.stringify({ email }),
-      });
-      saveSession(session);
-      applySessionLocale(session);
-      window.location.href =
-        session.user.role === 'RECRUITER' ? '/dashboard/recruiter' : '/dashboard/employee';
-    } catch (err) {
-      setError((err as Error).message);
     }
   }
 
@@ -73,36 +63,25 @@ export default function LoginPage() {
         <p id={formHintId} className="required-note">
           {t('requiredFieldsNote')}
         </p>
-        <form className="form-stack" onSubmit={onSubmit} aria-describedby={formHintId}>
+        <form className="form-stack" onSubmit={onSubmit} aria-describedby={formHintId} noValidate>
           <FormField label={t('email')} required>
-            <input name="email" type="email" autoComplete="email" defaultValue="madina.karimova@gmail.com" />
-          </FormField>
-          <FormField label={t('password')} required>
             <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              defaultValue="Password123!"
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              required
+              spellCheck={false}
             />
           </FormField>
+          <FormField label={t('password')} required>
+            <PasswordInput name="password" autoComplete="current-password" required />
+          </FormField>
           <FormAlert>{error}</FormAlert>
-          <button type="submit" disabled={loading}>
+          <button type="submit" disabled={loading} aria-busy={loading}>
             {loading ? t('signingIn') : t('signIn')}
           </button>
         </form>
-        <div style={{ marginTop: '1.25rem' }}>
-          <p className="muted" style={{ fontSize: '0.85rem' }}>
-            {t('localQuickLogin')}
-          </p>
-          <div className="chips" style={{ marginTop: '0.5rem' }} role="group" aria-label={t('localQuickLogin')}>
-            <button type="button" className="chip" onClick={() => quick('madina.karimova@gmail.com')}>
-              {t('employee')}
-            </button>
-            <button type="button" className="chip" onClick={() => quick('jasur.tursunov@apexsoft.uz')}>
-              {t('recruiter')}
-            </button>
-          </div>
-        </div>
         <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>
           {t('noAccount')}{' '}
           <Link href="/register" style={{ color: 'var(--accent)' }}>

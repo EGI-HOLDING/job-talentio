@@ -160,11 +160,12 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user?.passwordHash) throw new UnauthorizedException('Invalid credentials');
+    const normalized = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalized } });
+    if (!user?.passwordHash) throw new UnauthorizedException('Invalid email or password');
     if (user.isBanned) throw new ForbiddenException('Account banned');
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) throw new UnauthorizedException('Invalid email or password');
     return this.tokenFor(user.id);
   }
 
@@ -240,15 +241,13 @@ export class AuthService {
 
   /** Optional Google OAuth stub — requires credentials later */
   async oauthGoogleStub() {
-    throw new BadRequestException(
-      'Google OAuth not configured. Use email/password or Dev Login locally.',
-    );
+    throw new BadRequestException('Google sign-in is not available yet. Please use email and password.');
   }
 
   /** Optional Telegram Login stub */
   async oauthTelegramStub() {
     throw new BadRequestException(
-      'Telegram Login not configured. Use email/password or Dev Login locally.',
+      'Telegram sign-in is not available yet. Please use email and password.',
     );
   }
 }

@@ -23,6 +23,10 @@ export class MailService {
     });
   }
 
+  /**
+   * Best-effort email. SMTP/Mailpit outages must not fail user-facing flows
+   * (register, applications, alerts) after the DB write already succeeded.
+   */
   async send(to: string, subject: string, html: string) {
     try {
       const info = await this.transporter.sendMail({
@@ -35,7 +39,7 @@ export class MailService {
       return info;
     } catch (err) {
       this.logger.error(`Email failed to ${to}: ${(err as Error).message}`);
-      throw err;
+      return null;
     }
   }
 }
