@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
+import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { useI18n } from '@/lib/i18n';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
@@ -129,7 +130,7 @@ export default function JobDetailPage() {
     setSuccess('Job saved to your list.');
   }
 
-  if (!job && !error) return <div className="shell" style={{ padding: '2rem' }}>Loading…</div>;
+  if (!job && !error) return <DetailPageSkeleton />;
   if (error && !job) return <div className="shell"><div className="error">{error}</div></div>;
   if (!job) return null;
 

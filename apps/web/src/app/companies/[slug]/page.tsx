@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
+import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 
 type Company = {
   id: string;
@@ -66,7 +67,7 @@ export default function CompanyPage() {
   }
 
   if (error) return <div className="shell"><div className="error">{error}</div></div>;
-  if (!company) return <div className="shell" style={{ padding: '2rem' }}>Loading…</div>;
+  if (!company) return <DetailPageSkeleton />;
 
   return (
     <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>

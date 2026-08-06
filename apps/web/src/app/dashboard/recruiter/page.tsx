@@ -9,6 +9,8 @@ import { FilterFieldset, FormAlert, LabelText } from '@/components/ui/Field';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
+import { LookupCombobox } from '@/components/ui/LookupCombobox';
+import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 
 type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'company';
 
@@ -94,6 +96,7 @@ export default function RecruiterDashboard() {
   const [candLoading, setCandLoading] = useState(false);
   const [skillQ, setSkillQ] = useState('');
   const [draftJobSkills, setDraftJobSkills] = useState<Array<{ slug: string; name: string }>>([]);
+  const [draftJobBenefits, setDraftJobBenefits] = useState<Array<{ slug: string; name: string }>>([]);
   const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
     cities: [],
     skills: [],
@@ -205,13 +208,13 @@ export default function RecruiterDashboard() {
             ? { slug: s.slug, isRequired: true, weight: 1 }
             : { name: s.name, isRequired: true, weight: 1 },
         ),
-        benefitSlugs: String(fd.get('benefits') || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        benefits: draftJobBenefits.map((b) =>
+          b.slug ? { slug: b.slug } : { name: b.name },
+        ),
       }),
     });
     setDraftJobSkills([]);
+    setDraftJobBenefits([]);
     setMsg('Job created as DRAFT');
     await loadJobs(companyId);
   }
@@ -480,10 +483,41 @@ export default function RecruiterDashboard() {
                     }}
                   />
                 </div>
-                <label>
-                  <LabelText>Benefit slugs (comma)</LabelText>
-                  <input name="benefits" placeholder="health-insurance,remote-work" />
-                </label>
+                <div>
+                  <LabelText>Benefits</LabelText>
+                  <div className="chips" style={{ margin: '0.4rem 0' }}>
+                    {draftJobBenefits.map((b) => (
+                      <span key={b.slug || b.name} className="badge">
+                        {b.name}
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ marginLeft: 6, padding: 0 }}
+                          onClick={() =>
+                            setDraftJobBenefits((prev) =>
+                              prev.filter((x) => (x.slug || x.name) !== (b.slug || b.name)),
+                            )
+                          }
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <LookupCombobox
+                    kind="benefits"
+                    allowCreate
+                    submitLabel={t('addBenefit')}
+                    placeholder={t('benefitSearchPlaceholder')}
+                    onPick={(item) => {
+                      setDraftJobBenefits((prev) => {
+                        const key = item.slug || item.name;
+                        if (prev.some((p) => (p.slug || p.name) === key)) return prev;
+                        return [...prev, { slug: item.slug, name: item.name }];
+                      });
+                    }}
+                  />
+                </div>
                 <button type="submit">Create draft</button>
               </form>
             </div>
@@ -670,8 +704,8 @@ export default function RecruiterDashboard() {
                   Find talent
                 </h2>
                 <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
-                  {candLoading
-                    ? 'Loading candidates…'
+                  {candLoading && !candidates
+                    ? 'Searching talent…'
                     : `${candidates?.total ?? 0} candidates found`}
                 </p>
               </div>
@@ -903,9 +937,7 @@ export default function RecruiterDashboard() {
               </aside>
 
               <div>
-                {candLoading && !candidates && (
-                  <p className="muted">Loading candidates…</p>
-                )}
+                {candLoading && !candidates && <CandidateListSkeleton count={6} />}
                 {!candLoading && (candidates?.items || []).length === 0 && (
                   <div className="card">
                     <p className="muted" style={{ margin: 0 }}>

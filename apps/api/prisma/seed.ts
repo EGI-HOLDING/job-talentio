@@ -538,22 +538,56 @@ async function main() {
     LANGUAGES.map((l) =>
       prisma.language.upsert({
         where: { code: l.code },
-        update: { name: l.name },
-        create: l,
+        update: { name: l.name, normalizedKey: l.code },
+        create: { ...l, normalizedKey: l.code },
       }),
     ),
   );
   const langMap = Object.fromEntries(languages.map((l) => [l.code, l]));
+  for (const [alias, code] of [
+    ['Uzbekcha', 'uz'],
+    ['O\'zbek', 'uz'],
+    ['Русский', 'ru'],
+    ['English language', 'en'],
+  ] as const) {
+    const lang = langMap[code];
+    if (!lang) continue;
+    const aliasKey = alias.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, '');
+    if (!aliasKey) continue;
+    await prisma.languageAlias.upsert({
+      where: { aliasKey },
+      update: { alias, languageId: lang.id },
+      create: { alias, aliasKey, languageId: lang.id },
+    });
+  }
 
   const benefits = await Promise.all(
-    BENEFITS.map((b) =>
-      prisma.benefit.upsert({
+    BENEFITS.map((b) => {
+      const normalizedKey = b.slug.replace(/-/g, '');
+      return prisma.benefit.upsert({
         where: { slug: b.slug },
-        update: b,
-        create: b,
-      }),
-    ),
+        update: { ...b, normalizedKey },
+        create: { ...b, normalizedKey },
+      });
+    }),
   );
+  const benefitMap = Object.fromEntries(benefits.map((b) => [b.slug, b]));
+  for (const [alias, slug] of [
+    ['WFH', 'remote-work'],
+    ['Work from home', 'remote-work'],
+    ['Medical insurance', 'health-insurance'],
+    ['Healthcare', 'health-insurance'],
+    ['Annual leave', 'paid-vacation'],
+  ] as const) {
+    const benefit = benefitMap[slug];
+    if (!benefit) continue;
+    const aliasKey = alias.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    await prisma.benefitAlias.upsert({
+      where: { aliasKey },
+      update: { alias, benefitId: benefit.id },
+      create: { alias, aliasKey, benefitId: benefit.id },
+    });
+  }
 
   // Remove legacy sequential demo emails from earlier seeds
   await prisma.user.deleteMany({

@@ -78,6 +78,17 @@ export const jobPostSchema = z.object({
     .max(30)
     .default([]),
   benefitSlugs: z.array(z.string()).max(20).default([]),
+  benefits: z
+    .array(
+      z
+        .object({
+          slug: z.string().min(1).max(80).optional(),
+          name: z.string().min(1).max(80).optional(),
+        })
+        .refine((b) => Boolean(b.slug || b.name), { message: 'slug or name required' }),
+    )
+    .max(20)
+    .optional(),
   locale: z.enum(['uz', 'ru', 'en']).default('uz'),
 });
 

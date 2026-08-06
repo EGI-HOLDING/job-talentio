@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, getSession, AuthSession } from '@/lib/api';
+import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { useI18n } from '@/lib/i18n';
 
 type CandidateDetail = {
@@ -91,7 +92,7 @@ function CandidateInner() {
       </div>
     );
   }
-  if (!data) return <div className="shell" style={{ padding: '3rem 1.5rem' }}>Loading…</div>;
+  if (!data) return <DetailPageSkeleton />;
 
   return (
     <div className="shell" style={{ padding: '2.5rem 1.5rem', maxWidth: 900 }}>

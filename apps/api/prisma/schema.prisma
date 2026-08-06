@@ -225,20 +225,48 @@ model Industry {
 }
 
 model Language {
-  id   String @id @default(cuid())
-  name String
-  code String @unique
+  id            String  @id @default(cuid())
+  name          String
+  code          String  @unique
+  normalizedKey String? @unique
 
+  aliases          LanguageAlias[]
   profileLanguages ProfileLanguage[]
 }
 
-model Benefit {
-  id   String  @id @default(cuid())
-  name String
-  slug String  @unique
-  icon String?
+model LanguageAlias {
+  id         String   @id @default(cuid())
+  languageId String
+  alias      String
+  aliasKey   String   @unique
+  createdAt  DateTime @default(now())
 
+  language Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@index([languageId])
+}
+
+model Benefit {
+  id            String  @id @default(cuid())
+  name          String
+  slug          String  @unique
+  normalizedKey String? @unique
+  icon          String?
+
+  aliases         BenefitAlias[]
   jobPostBenefits JobPostBenefit[]
+}
+
+model BenefitAlias {
+  id        String   @id @default(cuid())
+  benefitId String
+  alias     String
+  aliasKey  String   @unique
+  createdAt DateTime @default(now())
+
+  benefit Benefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+
+  @@index([benefitId])
 }
 
 // ─── Core identity ───────────────────────────────────────────
