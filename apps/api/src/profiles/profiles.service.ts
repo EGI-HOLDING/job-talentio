@@ -15,6 +15,8 @@ import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
 import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
+import { resolveLanguage } from '../common/language-resolve';
+import { resolveCity } from '../common/city-resolve';
 import { parseCvText, ParsedCvData } from './cv-parser';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
@@ -60,10 +62,15 @@ export class ProfilesService {
     if (data.citySlug !== undefined) {
       if (!data.citySlug) cityId = null;
       else {
-        const city = await this.prisma.city.findUnique({
-          where: { slug: String(data.citySlug) },
-        });
-        cityId = city?.id ?? null;
+        try {
+          const { city } = await resolveCity(this.prisma, {
+            slug: String(data.citySlug),
+            allowCreate: false,
+          });
+          cityId = city.id;
+        } catch {
+          cityId = null;
+        }
       }
     }
 
@@ -208,17 +215,13 @@ export class ProfilesService {
 
   async addLanguage(user: AuthUser, opts: { code?: string; name?: string; level: string }) {
     const profile = await this.getProfileForUser(user.id);
-    let language = opts.code
-      ? await this.prisma.language.findUnique({ where: { code: opts.code } })
-      : null;
-    if (!language && opts.name) {
-      language = await this.prisma.language.findFirst({
-        where: { name: { equals: opts.name, mode: 'insensitive' } },
-      });
-    }
-    if (!language) throw new BadRequestException('Unknown language — pick from /meta/languages');
+    const { language, created, matchedVia } = await resolveLanguage(this.prisma, {
+      code: opts.code,
+      name: opts.name,
+      allowCreate: true,
+    });
 
-    return this.prisma.profileLanguage.upsert({
+    const row = await this.prisma.profileLanguage.upsert({
       where: {
         profileId_languageId: { profileId: profile.id, languageId: language.id },
       },
@@ -230,6 +233,7 @@ export class ProfilesService {
       update: { level: opts.level as never },
       include: { language: true },
     });
+    return { ...row, languageCreated: created, matchedVia };
   }
 
   async removeLanguage(user: AuthUser, id: string) {

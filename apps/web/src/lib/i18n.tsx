@@ -361,6 +361,23 @@ const DICT = {
     en: 'Pick a suggestion or type a new skill name',
   },
   addSkill: { uz: 'Ko‘nikma qo‘shish', ru: 'Добавить навык', en: 'Add skill' },
+  addBenefit: { uz: 'Imtiyoz qo‘shish', ru: 'Добавить льготу', en: 'Add benefit' },
+  addLanguage: { uz: 'Til qo‘shish', ru: 'Добавить язык', en: 'Add language' },
+  confirmAddLookup: {
+    uz: '“{name}” katalogda yo‘q ({kind}). Yangi yozuv sifatida qo‘shilsinmi?',
+    ru: '«{name}» нет в каталоге ({kind}). Добавить как новую запись?',
+    en: '“{name}” is not in the catalog ({kind}). Add it as a new entry?',
+  },
+  benefitSearchPlaceholder: {
+    uz: 'Imtiyoz qidiring…',
+    ru: 'Поиск льготы…',
+    en: 'Search benefits…',
+  },
+  languageSearchPlaceholder: {
+    uz: 'Til qidiring…',
+    ru: 'Поиск языка…',
+    en: 'Search languages…',
+  },
 } as const;
 
 export type DictKey = keyof typeof DICT;

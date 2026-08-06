@@ -157,7 +157,90 @@ export class MetaService {
     return this.prisma.benefit.findMany({ orderBy: { name: 'asc' } });
   }
 
+  async suggestBenefits(q?: string, take = 10) {
+    const limit = Math.min(Math.max(take || 10, 1), 20);
+    const term = q?.trim();
+    const rows = await this.prisma.benefit.findMany({
+      where: term
+        ? {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+              { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
+            ],
+          }
+        : undefined,
+      include: {
+        _count: { select: { jobPostBenefits: true } },
+        aliases: { take: 3, select: { alias: true } },
+      },
+      orderBy: { name: 'asc' },
+      take: limit * 2,
+    });
+    return rows
+      .map((b) => ({
+        id: b.id,
+        name: b.name,
+        slug: b.slug,
+        icon: b.icon,
+        aliases: b.aliases.map((a) => a.alias),
+        usageCount: b._count.jobPostBenefits,
+      }))
+      .sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name))
+      .slice(0, limit);
+  }
+
   languages() {
     return this.prisma.language.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async suggestLanguages(q?: string, take = 10) {
+    const limit = Math.min(Math.max(take || 10, 1), 20);
+    const term = q?.trim();
+    const rows = await this.prisma.language.findMany({
+      where: term
+        ? {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { code: { contains: term.toLowerCase(), mode: 'insensitive' } },
+              { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
+            ],
+          }
+        : undefined,
+      include: {
+        _count: { select: { profileLanguages: true } },
+        aliases: { take: 3, select: { alias: true } },
+      },
+      orderBy: { name: 'asc' },
+      take: limit * 2,
+    });
+    return rows
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        slug: l.code,
+        code: l.code,
+        aliases: l.aliases.map((a) => a.alias),
+        usageCount: l._count.profileLanguages,
+      }))
+      .sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name))
+      .slice(0, limit);
+  }
+
+  async suggestCities(q?: string, take = 10) {
+    const limit = Math.min(Math.max(take || 10, 1), 20);
+    const term = q?.trim();
+    return this.prisma.city.findMany({
+      where: term
+        ? {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+            ],
+          }
+        : undefined,
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
   }
 }

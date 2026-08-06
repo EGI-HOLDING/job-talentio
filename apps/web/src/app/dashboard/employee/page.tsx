@@ -7,6 +7,8 @@ import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
+import { LookupCombobox } from '@/components/ui/LookupCombobox';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { useI18n } from '@/lib/i18n';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
@@ -57,6 +59,7 @@ export default function EmployeeDashboard() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [draftAlertSkills, setDraftAlertSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
@@ -192,15 +195,22 @@ export default function EmployeeDashboard() {
     await load();
   }
 
-  async function addLanguage(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  async function addLanguagePick(item: {
+    slug: string;
+    name: string;
+    code?: string;
+    isNew?: boolean;
+    level?: string;
+  }) {
     await api('/profiles/me/languages', {
       method: 'POST',
-      body: JSON.stringify({ code: fd.get('code'), level: fd.get('level') }),
+      body: JSON.stringify(
+        item.code || item.slug
+          ? { code: item.code || item.slug, level: item.level || 'B1' }
+          : { name: item.name, level: item.level || 'B1' },
+      ),
     });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Language added');
+    setMsg(item.isNew ? `Language “${item.name}” resolved and saved` : `Language “${item.name}” added`);
     await load();
   }
 
@@ -285,13 +295,11 @@ export default function EmployeeDashboard() {
         name: fd.get('name'),
         query: fd.get('query'),
         citySlug: fd.get('citySlug') || undefined,
-        skillSlugs: String(fd.get('skills') || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        skillSlugs: draftAlertSkills.map((s) => s.slug).filter(Boolean),
         frequency: fd.get('frequency'),
       }),
     });
+    setDraftAlertSkills([]);
     await load();
   }
 
@@ -306,7 +314,7 @@ export default function EmployeeDashboard() {
     return map;
   }, [profile]);
 
-  if (!profile && !error) return <div className="shell" style={{ padding: '2rem' }}>Loading…</div>;
+  if (!profile && !error) return <DashboardSkeleton />;
 
   return (
     <div className="shell dash-grid">
@@ -523,10 +531,39 @@ export default function EmployeeDashboard() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  <LabelText>Skill slugs (comma)</LabelText>
-                  <input name="skills" placeholder="typescript,react" />
-                </label>
+                <div>
+                  <LabelText>Skills</LabelText>
+                  <div className="chips" style={{ margin: '0.4rem 0' }}>
+                    {draftAlertSkills.map((s) => (
+                      <span key={s.slug} className="badge">
+                        {s.name}
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ marginLeft: 6, padding: 0 }}
+                          onClick={() =>
+                            setDraftAlertSkills((prev) => prev.filter((x) => x.slug !== s.slug))
+                          }
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <SkillCombobox
+                    levelSelect={false}
+                    allowCreate={false}
+                    submitLabel="Add skill to alert"
+                    onPick={(skill) => {
+                      if (!skill.slug) return;
+                      setDraftAlertSkills((prev) =>
+                        prev.some((p) => p.slug === skill.slug)
+                          ? prev
+                          : [...prev, { slug: skill.slug, name: skill.name }],
+                      );
+                    }}
+                  />
+                </div>
                 <label>
                   <LabelText>Frequency</LabelText>
                   <select name="frequency" defaultValue="DAILY">
@@ -863,28 +900,24 @@ export default function EmployeeDashboard() {
                 </div>
                 {!(profile.languages || []).length && <p className="muted">No languages yet.</p>}
                 {openForm === 'lang' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addLanguage(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                  <div style={{ marginTop: '1rem' }}>
                     <p className="required-note">{t('requiredFieldsNote')}</p>
-                    <div className="grid-2">
-                      <label>
-                        <LabelText required>Language</LabelText>
-                        <select name="code" required>
-                          {languagesMeta.map((l) => (
-                            <option key={l.code} value={l.code}>{l.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <LabelText>Level</LabelText>
-                        <select name="level" defaultValue="B1">
-                          {['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((l) => (
-                            <option key={l}>{l}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <button type="submit">Save language</button>
-                  </form>
+                    <LookupCombobox
+                      kind="languages"
+                      allowCreate
+                      submitLabel={t('addLanguage')}
+                      placeholder={t('languageSearchPlaceholder')}
+                      defaultLevel="B1"
+                      levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((l) => ({
+                        value: l,
+                        label: l,
+                      }))}
+                      onPick={async (item) => {
+                        await addLanguagePick(item);
+                        setOpenForm(null);
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>

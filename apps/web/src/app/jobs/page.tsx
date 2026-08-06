@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FilterFieldset, FormField } from '@/components/ui/Field';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
+import { JobListSkeleton } from '@/components/ui/Skeleton';
 import { api, getSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
@@ -616,7 +617,7 @@ function JobsInner() {
         </div>
 
         {error && <div className="error">{error}</div>}
-        {loading && <p className="muted">Loading…</p>}
+        {loading && <JobListSkeleton count={filters.limit > 12 ? 8 : 6} />}
 
         {!loading &&
           data?.items.map((job) => (
@@ -732,7 +733,13 @@ function JobsInner() {
 
 export default function JobsPage() {
   return (
-    <Suspense fallback={<div className="shell" style={{ padding: '2rem' }}>Loading jobs…</div>}>
+    <Suspense
+      fallback={
+        <div className="shell jobs-layout" style={{ padding: '1.5rem 0' }}>
+          <JobListSkeleton count={6} />
+        </div>
+      }
+    >
       <JobsInner />
     </Suspense>
   );

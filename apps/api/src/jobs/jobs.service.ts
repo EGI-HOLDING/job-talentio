@@ -20,8 +20,10 @@ import {
   titlesNearlyIdentical,
 } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
+import { resolveBenefit } from '../common/benefit-resolve';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
+type JobBenefitInput = { slug?: string; name?: string } | string;
 
 const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
@@ -194,14 +196,27 @@ export class JobsService {
     }
   }
 
-  private async syncBenefits(jobPostId: string, benefitSlugs: string[]) {
+  private async syncBenefits(jobPostId: string, benefits: JobBenefitInput[]) {
     await this.prisma.jobPostBenefit.deleteMany({ where: { jobPostId } });
-    for (const slug of benefitSlugs) {
-      const benefit = await this.prisma.benefit.findUnique({ where: { slug } });
-      if (!benefit) continue;
-      await this.prisma.jobPostBenefit.create({
-        data: { jobPostId, benefitId: benefit.id },
-      });
+    const seen = new Set<string>();
+    for (const b of benefits) {
+      const slug = typeof b === 'string' ? b : b.slug;
+      const name = typeof b === 'string' ? undefined : b.name;
+      if (!slug && !name) continue;
+      try {
+        const { benefit } = await resolveBenefit(this.prisma, {
+          slug,
+          name,
+          allowCreate: true,
+        });
+        if (seen.has(benefit.id)) continue;
+        seen.add(benefit.id);
+        await this.prisma.jobPostBenefit.create({
+          data: { jobPostId, benefitId: benefit.id },
+        });
+      } catch {
+        /* skip invalid */
+      }
     }
   }
 
@@ -248,7 +263,13 @@ export class JobsService {
     });
 
     await this.syncSkills(job.id, (data.skills as JobSkillInput[]) || []);
-    await this.syncBenefits(job.id, (data.benefitSlugs as string[]) || []);
+    await this.syncBenefits(
+      job.id,
+      ([
+        ...((data.benefits as JobBenefitInput[]) || []),
+        ...((data.benefitSlugs as string[]) || []),
+      ] as JobBenefitInput[]),
+    );
 
     return this.prisma.jobPost.findUnique({
       where: { id: job.id },
@@ -314,7 +335,12 @@ export class JobsService {
     });
 
     if (data.skills) await this.syncSkills(jobId, data.skills as JobSkillInput[]);
-    if (data.benefitSlugs) await this.syncBenefits(jobId, data.benefitSlugs as string[]);
+    if (data.benefits || data.benefitSlugs) {
+      await this.syncBenefits(jobId, [
+        ...((data.benefits as JobBenefitInput[]) || []),
+        ...((data.benefitSlugs as string[]) || []),
+      ]);
+    }
 
     return this.prisma.jobPost.findUnique({
       where: { id: jobId },

@@ -20,6 +20,11 @@ export class MetaController {
     return this.meta.skills(q, category, sort, take ? Number(take) : 100);
   }
 
+  @Get('cities/suggest')
+  suggestCities(@Query('q') q?: string, @Query('take') take?: string) {
+    return this.meta.suggestCities(q, take ? Number(take) : 10);
+  }
+
   @Get('cities')
   cities(@Query('q') q?: string) {
     return this.meta.cities(q);
@@ -35,9 +40,19 @@ export class MetaController {
     return this.meta.industries();
   }
 
+  @Get('benefits/suggest')
+  suggestBenefits(@Query('q') q?: string, @Query('take') take?: string) {
+    return this.meta.suggestBenefits(q, take ? Number(take) : 10);
+  }
+
   @Get('benefits')
   benefits() {
     return this.meta.benefits();
+  }
+
+  @Get('languages/suggest')
+  suggestLanguages(@Query('q') q?: string, @Query('take') take?: string) {
+    return this.meta.suggestLanguages(q, take ? Number(take) : 10);
   }
 
   @Get('languages')
