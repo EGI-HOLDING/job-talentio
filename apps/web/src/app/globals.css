@@ -619,18 +619,37 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   background: #ecfdf5;
 }
 
-/* Pagination */
+/* Pagination — windowed controls stay compact even at ~1000 pages */
 .pagination-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
-.pagination-range { color: var(--muted); font-size: 0.875rem; }
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.pagination-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.pagination-range,
+.pagination-truncated {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.pagination-truncated { font-size: 0.8rem; }
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
 .pagination-pages {
   display: flex;
   gap: 0.35rem;
@@ -647,10 +666,15 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   color: var(--text);
   font-weight: 600;
 }
-.pagination-page.active {
+.pagination-page.active,
+.pagination-page.is-active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+.pagination-page:disabled:not(.is-active):not(.active) {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .pagination-ellipsis { color: var(--muted); padding: 0 0.25rem; }
 .pagination-jump {
@@ -658,7 +682,15 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   gap: 0.4rem;
   align-items: center;
 }
-.pagination-jump input { width: 64px; }
+.pagination-jump-label { font-size: 0.8rem; }
+.pagination-jump-input,
+.pagination-jump input {
+  width: 72px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 0 0.5rem;
+}
 
 /* Job detail */
 .job-detail-header {

@@ -7,6 +7,7 @@ import { FilterFieldset, FormField } from '@/components/ui/Field';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { JobListSkeleton } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 import { api, getSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
@@ -32,6 +33,8 @@ type Job = {
 type SearchResponse = {
   items: Job[];
   total: number;
+  matchedTotal?: number;
+  truncated?: boolean;
   page: number;
   limit: number;
   sort: string;
@@ -145,18 +148,6 @@ function toParams(f: Filters, view?: string | null): URLSearchParams {
   return p;
 }
 
-function buildPageItems(page: number, totalPages: number): Array<number | '…'> {
-  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-  const pages = new Set<number>([1, totalPages, page, page - 1, page + 1, page - 2, page + 2]);
-  const sorted = [...pages].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
-  const out: Array<number | '…'> = [];
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('…');
-    out.push(sorted[i]);
-  }
-  return out;
-}
-
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return 'Negotiable';
   const fmt = (n: number) => n.toLocaleString('uz-UZ');
@@ -185,7 +176,6 @@ function JobsInner() {
   const [skills, setSkills] = useState<MetaItem[]>([]);
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
   const [skillQ, setSkillQ] = useState('');
-  const [jumpPage, setJumpPage] = useState('');
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
@@ -225,10 +215,16 @@ function JobsInner() {
     setError('');
     const p = toParams(filters);
     api<SearchResponse>(`/jobs?${p.toString()}`, { auth: false })
-      .then(setData)
+      .then((res) => {
+        setData(res);
+        // Keep URL in sync when the API clamps an out-of-range page.
+        if (res.page !== filters.page) {
+          router.replace(`/jobs?${toParams({ ...filters, page: res.page }, browseCompanies ? 'companies' : null).toString()}`);
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [filters]);
+  }, [filters, router, browseCompanies]);
 
   const selectedSkills = filters.skills.split(',').filter(Boolean);
   const selectedCities = filters.city.split(',').filter(Boolean);
@@ -290,7 +286,6 @@ function JobsInner() {
     apply({ q: String(fd.get('q') || '') });
   }
 
-  const pageItems = buildPageItems(filters.page, data?.totalPages || 1);
   const rolesLabel = (n: number) => t('openRolesCount').replace('{n}', String(n));
 
   return (
@@ -667,63 +662,21 @@ function JobsInner() {
           </div>
         )}
 
-        {data && data.totalPages > 1 && (
+        {data && data.total > 0 && data.totalPages > 1 && (
           <div className="pagination-wrap">
-            <div className="pagination-range">
-              Page {data.page} of {data.totalPages}
-            </div>
-            <div className="pagination-pages">
-              <button
-                type="button"
-                className="pagination-page"
-                disabled={filters.page <= 1}
-                onClick={() => apply({ page: filters.page - 1 })}
-              >
-                ‹
-              </button>
-              {pageItems.map((item, i) =>
-                item === '…' ? (
-                  <span key={`e${i}`} className="pagination-ellipsis">
-                    …
-                  </span>
-                ) : (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`pagination-page ${item === filters.page ? 'active' : ''}`}
-                    onClick={() => apply({ page: item })}
-                  >
-                    {item}
-                  </button>
-                ),
-              )}
-              <button
-                type="button"
-                className="pagination-page"
-                disabled={filters.page >= data.totalPages}
-                onClick={() => apply({ page: filters.page + 1 })}
-              >
-                ›
-              </button>
-            </div>
-            <form
-              className="pagination-jump"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const n = Number(jumpPage);
-                if (n >= 1 && n <= data.totalPages) apply({ page: n });
-              }}
-            >
-              <input
-                value={jumpPage}
-                onChange={(e) => setJumpPage(e.target.value)}
-                placeholder="#"
-                aria-label={t('jumpToPage')}
-              />
-              <button type="submit" className="secondary">
-                Go
-              </button>
-            </form>
+            <Pagination
+              page={data.page}
+              totalPages={data.totalPages}
+              total={data.total}
+              limit={data.limit}
+              disabled={loading}
+              onPageChange={(p) => apply({ page: p })}
+              truncatedNote={
+                data.truncated
+                  ? `Showing top ${data.total.toLocaleString()} of ${(data.matchedTotal ?? data.total).toLocaleString()} matches for this sort`
+                  : null
+              }
+            />
           </div>
         )}
       </section>
