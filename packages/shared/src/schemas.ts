@@ -1,17 +1,33 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8).max(128),
-  fullName: z.string().min(2).max(120),
-  role: z.enum(['EMPLOYEE', 'RECRUITER']),
-  locale: z.enum(['uz', 'ru', 'en']).default('uz'),
-  acceptTerms: z.literal(true),
-});
+export const registerSchema = z
+  .object({
+    email: z.string().trim().email(),
+    password: z.string().min(8).max(128),
+    fullName: z.string().trim().min(2).max(120),
+    role: z.enum(['EMPLOYEE', 'RECRUITER']),
+    locale: z.enum(['uz', 'ru', 'en']).default('uz'),
+    acceptTerms: z
+      .boolean()
+      .refine((v) => v === true, { message: 'You must accept the terms to create an account' }),
+    companyName: z.string().trim().min(2).max(160).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'RECRUITER') {
+      const name = data.companyName?.trim() ?? '';
+      if (name.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['companyName'],
+          message: 'Company name is required for recruiter accounts',
+        });
+      }
+    }
+  });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().trim().email(),
+  password: z.string().min(1, 'Password is required'),
 });
 
 export const devLoginSchema = z.object({

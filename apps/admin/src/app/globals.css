@@ -73,3 +73,36 @@ input:focus, select:focus, button:focus-visible {
 @media (max-width: 800px) {
   .layout { grid-template-columns: 1fr; }
 }
+.pw-field {
+  position: relative;
+  display: block;
+}
+.pw-field input {
+  width: 100%;
+  padding-right: 2.75rem;
+  box-sizing: border-box;
+}
+.pw-field .pw-toggle {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+.pw-field .pw-toggle:hover,
+.pw-field .pw-toggle:focus-visible {
+  color: var(--text);
+  background: #eef2f6;
+}

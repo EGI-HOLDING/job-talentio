@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
-import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
+import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 
 type Section = 'account' | 'preferences' | 'security';
 
@@ -31,8 +31,6 @@ export default function SettingsPage() {
   const [prefLocale, setPrefLocale] = useState<Locale>('uz');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -230,47 +228,25 @@ export default function SettingsPage() {
               <form onSubmit={changePassword} className="form-stack">
                 <label>
                   <LabelText required>{t('currentPassword')}</LabelText>
-                  <div className="pw-field">
-                    <input
-                      type={showCurrent ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      required
-                      aria-required="true"
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      aria-pressed={showCurrent}
-                      aria-label={showCurrent ? 'Hide current password' : 'Show current password'}
-                      onClick={() => setShowCurrent((v) => !v)}
-                    >
-                      {showCurrent ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
+                  <PasswordInput
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                    aria-required="true"
+                    autoComplete="current-password"
+                  />
                 </label>
                 <label>
                   <LabelText required>{t('newPassword')}</LabelText>
-                  <div className="pw-field">
-                    <input
-                      type={showNew ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                      aria-required="true"
-                      minLength={8}
-                      autoComplete="new-password"
-                      aria-describedby={newPassword ? 'pw-strength' : undefined}
-                    />
-                    <button
-                      type="button"
-                      aria-pressed={showNew}
-                      aria-label={showNew ? 'Hide new password' : 'Show new password'}
-                      onClick={() => setShowNew((v) => !v)}
-                    >
-                      {showNew ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
+                  <PasswordInput
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    aria-required="true"
+                    minLength={8}
+                    autoComplete="new-password"
+                    aria-describedby={newPassword ? 'pw-strength' : undefined}
+                  />
                   {newPassword && (
                     <>
                       <div className="pw-strength" aria-hidden="true">

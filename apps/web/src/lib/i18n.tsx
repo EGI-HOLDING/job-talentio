@@ -239,14 +239,56 @@ const DICT = {
   },
   cancel: { uz: 'Bekor qilish', ru: 'Отмена', en: 'Cancel' },
   applyFor: { uz: 'Ariza', ru: 'Отклик', en: 'Apply' },
-  localQuickLogin: {
-    uz: 'Mahalliy tezkor kirish',
-    ru: 'Быстрый локальный вход',
-    en: 'Local quick login',
-  },
   employee: { uz: 'Xodim', ru: 'Сотрудник', en: 'Employee' },
   recruiter: { uz: 'Rekruter', ru: 'Рекрутер', en: 'Recruiter' },
   accountType: { uz: 'Hisob turi', ru: 'Тип аккаунта', en: 'Account type' },
+  showPassword: { uz: 'Parolni ko‘rsatish', ru: 'Показать пароль', en: 'Show password' },
+  hidePassword: { uz: 'Parolni yashirish', ru: 'Скрыть пароль', en: 'Hide password' },
+  confirmPassword: {
+    uz: 'Parolni tasdiqlang',
+    ru: 'Подтвердите пароль',
+    en: 'Confirm password',
+  },
+  passwordsDoNotMatch: {
+    uz: 'Parollar mos kelmaydi',
+    ru: 'Пароли не совпадают',
+    en: 'Passwords do not match',
+  },
+  mustAcceptTerms: {
+    uz: 'Hisob yaratish uchun shartlarga rozilik bering',
+    ru: 'Чтобы создать аккаунт, примите условия',
+    en: 'Please accept the terms to create an account',
+  },
+  acceptTermsLabel: {
+    uz: 'Men Foydalanish shartlari va Maxfiylik siyosatiga roziman',
+    ru: 'Я принимаю Условия использования и Политику конфиденциальности',
+    en: 'I agree to the Terms of Service and Privacy Policy',
+  },
+  creatingAccount: {
+    uz: 'Hisob yaratilmoqda…',
+    ru: 'Создание аккаунта…',
+    en: 'Creating account…',
+  },
+  companyNameRequired: {
+    uz: 'Rekruter uchun kompaniya nomi majburiy',
+    ru: 'Название компании обязательно для рекрутера',
+    en: 'Company name is required for recruiter accounts',
+  },
+  authFillRequired: {
+    uz: 'Barcha majburiy maydonlarni to‘ldiring',
+    ru: 'Заполните все обязательные поля',
+    en: 'Please fill in all required fields',
+  },
+  authLoginFailed: {
+    uz: 'Kirish amalga oshmadi. Email yoki parolni tekshiring.',
+    ru: 'Не удалось войти. Проверьте email или пароль.',
+    en: 'Sign-in failed. Check your email or password.',
+  },
+  authRegisterFailed: {
+    uz: 'Ro‘yxatdan o‘tish amalga oshmadi. Qayta urinib ko‘ring.',
+    ru: 'Не удалось зарегистрироваться. Попробуйте ещё раз.',
+    en: 'Registration failed. Please try again.',
+  },
   avatarUrl: { uz: 'Avatar URL', ru: 'URL аватара', en: 'Avatar URL' },
   updateProfileHint: {
     uz: 'Job Talentio’da qanday ko‘rinishingizni yangilang.',

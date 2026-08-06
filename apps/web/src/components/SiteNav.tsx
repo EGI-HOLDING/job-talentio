@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { api, clearSession, getSession, AuthSession } from '@/lib/api';
+import { ADMIN_URL, api, clearSession, getSession, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
 
 type Notif = {
@@ -92,7 +92,7 @@ export function SiteNav() {
           {dash && <Link href={dash}>{t('dashboard')}</Link>}
           {session && <Link href="/messages">{t('messages')}</Link>}
           {session?.user.role === 'SUPER_ADMIN' && (
-            <a href="http://localhost:3001" target="_blank" rel="noreferrer">
+            <a href={ADMIN_URL} target="_blank" rel="noreferrer">
               Admin
             </a>
           )}

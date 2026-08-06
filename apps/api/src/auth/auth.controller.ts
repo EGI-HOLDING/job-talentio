@@ -18,8 +18,12 @@ export class AuthController {
   register(@Body() body: unknown) {
     const data = parseDto(registerSchema, body);
     return this.auth.register({
-      ...data,
-      companyName: (body as { companyName?: string }).companyName,
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      role: data.role,
+      locale: data.locale,
+      companyName: data.companyName,
     });
   }
 
