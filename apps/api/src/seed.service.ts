@@ -1,0 +1,46 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcryptjs';
+import { PrismaService } from './prisma/prisma.service';
+
+@Injectable()
+export class SeedService implements OnModuleInit {
+  private readonly logger = new Logger(SeedService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+  ) {}
+
+  async onModuleInit() {
+    await this.ensureSuperAdmin();
+  }
+
+  private async ensureSuperAdmin() {
+    const email = (
+      this.config.get('SUPERADMIN_EMAIL') ?? 'admin@jobtalentio.local'
+    ).toLowerCase();
+    const password = this.config.get('SUPERADMIN_PASSWORD') ?? 'Admin123!';
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      if (existing.role !== 'SUPER_ADMIN') {
+        await this.prisma.user.update({
+          where: { id: existing.id },
+          data: { role: 'SUPER_ADMIN' },
+        });
+      }
+      return;
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        fullName: 'Super Admin',
+        role: 'SUPER_ADMIN',
+        emailVerified: true,
+      },
+    });
+    this.logger.log(`Seeded Super Admin: ${email}`);
+  }
+}

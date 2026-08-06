@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build shared
+        run: pnpm --filter @job-talentio/shared build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @job-talentio/api prisma:generate
+        env:
+          DATABASE_URL: postgresql://talentio:talentio@localhost:5432/job_talentio?schema=public
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build packages
+        run: pnpm build
+        env:
+          DATABASE_URL: postgresql://talentio:talentio@localhost:5432/job_talentio?schema=public
+          NEXT_PUBLIC_API_URL: http://localhost:4000

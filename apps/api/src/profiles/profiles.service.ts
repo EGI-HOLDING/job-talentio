@@ -1,0 +1,840 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
+import { PLAN_LIMITS } from '@job-talentio/shared';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { CompaniesService } from '../companies/companies.service';
+import { MatchingService } from '../matching/matching.service';
+import { AuthUser } from '../common/auth.decorators';
+import { slugify } from '../common/utils';
+import { normalizePhone } from '../common/dedupe';
+import { parseCvText, ParsedCvData } from './cv-parser';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
+
+@Injectable()
+export class ProfilesService {
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+    private companies: CompaniesService,
+    private matching: MatchingService,
+  ) {}
+
+  private profileInclude = {
+    skills: { include: { skill: true } },
+    experiences: { include: { city: true } },
+    educations: true,
+    certifications: true,
+    languages: { include: { language: true } },
+    resumes: { orderBy: { updatedAt: 'desc' as const } },
+    city: true,
+    user: {
+      select: { id: true, fullName: true, email: true, locale: true, avatarUrl: true },
+    },
+  };
+
+  private async getProfileForUser(userId: string) {
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { userId },
+      include: this.profileInclude,
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+    return profile;
+  }
+
+  async myProfile(user: AuthUser) {
+    return this.getProfileForUser(user.id);
+  }
+
+  async updateProfile(user: AuthUser, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    let cityId: string | null | undefined = undefined;
+    if (data.citySlug !== undefined) {
+      if (!data.citySlug) cityId = null;
+      else {
+        const city = await this.prisma.city.findUnique({
+          where: { slug: String(data.citySlug) },
+        });
+        cityId = city?.id ?? null;
+      }
+    }
+
+    let phone: string | null | undefined = undefined;
+    if (data.phone !== undefined) {
+      const raw = String(data.phone || '').trim();
+      if (!raw) phone = null;
+      else {
+        phone = normalizePhone(raw);
+        if (phone.length < 9) throw new BadRequestException('Invalid phone number');
+        const taken = await this.prisma.employeeProfile.findFirst({
+          where: { phone, NOT: { id: profile.id } },
+          select: { id: true },
+        });
+        if (taken) {
+          throw new ConflictException('This phone number is already linked to another account');
+        }
+      }
+    }
+
+    try {
+      return await this.prisma.employeeProfile.update({
+        where: { userId: user.id },
+        data: {
+          headline: data.headline as string | undefined,
+          summary: data.summary as string | undefined,
+          cityId,
+          phone,
+          visibility: data.visibility as never,
+          desiredSalaryMin: data.desiredSalaryMin as number | null | undefined,
+          desiredPosition: data.desiredPosition as string | undefined,
+        },
+        include: this.profileInclude,
+      });
+    } catch (e: unknown) {
+      if ((e as { code?: string })?.code === 'P2002') {
+        throw new ConflictException('This phone number is already linked to another account');
+      }
+      throw e;
+    }
+  }
+
+  async addSkill(user: AuthUser, opts: { slug?: string; name?: string; level?: string }) {
+    const profile = await this.getProfileForUser(user.id);
+    const slug = opts.slug || (opts.name ? slugify(opts.name) : '');
+    if (!slug) throw new BadRequestException('slug or name required');
+
+    let skill = await this.prisma.skill.findUnique({ where: { slug } });
+    if (!skill) {
+      skill = await this.prisma.skill.create({
+        data: {
+          slug,
+          name: opts.name || slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        },
+      });
+    }
+
+    return this.prisma.profileSkill.upsert({
+      where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
+      create: {
+        profileId: profile.id,
+        skillId: skill.id,
+        level: (opts.level as never) || 'INTERMEDIATE',
+      },
+      update: { level: (opts.level as never) || 'INTERMEDIATE' },
+      include: { skill: true },
+    });
+  }
+
+  async removeSkill(user: AuthUser, skillId: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.profileSkill.deleteMany({
+      where: { OR: [{ id: skillId, profileId: profile.id }, { skillId, profileId: profile.id }] },
+    });
+    return { ok: true };
+  }
+
+  async addExperience(user: AuthUser, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    let cityId: string | null = null;
+    if (data.citySlug) {
+      const city = await this.prisma.city.findUnique({
+        where: { slug: String(data.citySlug) },
+      });
+      cityId = city?.id ?? null;
+    }
+    return this.prisma.workExperience.create({
+      data: {
+        profileId: profile.id,
+        companyName: String(data.companyName),
+        title: String(data.title),
+        description: (data.description as string) || null,
+        cityId,
+        locationNote: (data.locationNote as string) || null,
+        startDate: new Date(String(data.startDate)),
+        endDate: data.endDate ? new Date(String(data.endDate)) : null,
+        isCurrent: Boolean(data.isCurrent),
+      },
+      include: { city: true },
+    });
+  }
+
+  async removeExperience(user: AuthUser, id: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.workExperience.deleteMany({ where: { id, profileId: profile.id } });
+    return { ok: true };
+  }
+
+  async addEducation(user: AuthUser, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    return this.prisma.education.create({
+      data: {
+        profileId: profile.id,
+        school: String(data.school),
+        degree: (data.degree as never) || null,
+        field: (data.field as string) || null,
+        startDate: data.startDate ? new Date(String(data.startDate)) : null,
+        endDate: data.endDate ? new Date(String(data.endDate)) : null,
+      },
+    });
+  }
+
+  async removeEducation(user: AuthUser, id: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.education.deleteMany({ where: { id, profileId: profile.id } });
+    return { ok: true };
+  }
+
+  async addCertification(user: AuthUser, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    return this.prisma.certification.create({
+      data: {
+        profileId: profile.id,
+        name: String(data.name),
+        issuer: (data.issuer as string) || null,
+        issuedAt: data.issuedAt ? new Date(String(data.issuedAt)) : null,
+        expiresAt: data.expiresAt ? new Date(String(data.expiresAt)) : null,
+        credentialUrl: (data.credentialUrl as string) || null,
+      },
+    });
+  }
+
+  async removeCertification(user: AuthUser, id: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.certification.deleteMany({ where: { id, profileId: profile.id } });
+    return { ok: true };
+  }
+
+  async addLanguage(user: AuthUser, opts: { code?: string; name?: string; level: string }) {
+    const profile = await this.getProfileForUser(user.id);
+    let language = opts.code
+      ? await this.prisma.language.findUnique({ where: { code: opts.code } })
+      : null;
+    if (!language && opts.name) {
+      language = await this.prisma.language.findFirst({
+        where: { name: { equals: opts.name, mode: 'insensitive' } },
+      });
+    }
+    if (!language) throw new BadRequestException('Unknown language — pick from /meta/languages');
+
+    return this.prisma.profileLanguage.upsert({
+      where: {
+        profileId_languageId: { profileId: profile.id, languageId: language.id },
+      },
+      create: {
+        profileId: profile.id,
+        languageId: language.id,
+        level: opts.level as never,
+      },
+      update: { level: opts.level as never },
+      include: { language: true },
+    });
+  }
+
+  async removeLanguage(user: AuthUser, id: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.profileLanguage.deleteMany({ where: { id, profileId: profile.id } });
+    return { ok: true };
+  }
+
+  async createResume(user: AuthUser, data: { title: string; content?: string; isPrimary?: boolean }) {
+    const profile = await this.getProfileForUser(user.id);
+    if (data.isPrimary) {
+      await this.prisma.resume.updateMany({
+        where: { profileId: profile.id },
+        data: { isPrimary: false },
+      });
+    }
+    return this.prisma.resume.create({
+      data: {
+        profileId: profile.id,
+        title: data.title,
+        content: data.content,
+        isPrimary: data.isPrimary ?? false,
+      },
+    });
+  }
+
+  async updateResume(
+    user: AuthUser,
+    resumeId: string,
+    data: { title?: string; content?: string; isPrimary?: boolean },
+  ) {
+    const profile = await this.getProfileForUser(user.id);
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: resumeId, profileId: profile.id },
+    });
+    if (!resume) throw new NotFoundException();
+    if (data.isPrimary) {
+      await this.prisma.resume.updateMany({
+        where: { profileId: profile.id },
+        data: { isPrimary: false },
+      });
+    }
+    return this.prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        title: data.title,
+        content: data.content,
+        isPrimary: data.isPrimary,
+      },
+    });
+  }
+
+  async deleteResume(user: AuthUser, resumeId: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.resume.deleteMany({ where: { id: resumeId, profileId: profile.id } });
+    return { ok: true };
+  }
+
+  private async ownedResume(userId: string, resumeId: string) {
+    const profile = await this.getProfileForUser(userId);
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: resumeId, profileId: profile.id },
+    });
+    if (!resume) throw new NotFoundException('Resume not found');
+    return { profile, resume };
+  }
+
+  async downloadResume(user: AuthUser, resumeId: string) {
+    const { resume } = await this.ownedResume(user.id, resumeId);
+    if (!resume.fileKey) throw new NotFoundException('No file attached to this resume');
+    const url = await this.storage.getPresignedGetUrl(resume.fileKey, 900);
+    return { url, expiresIn: 900, title: resume.title };
+  }
+
+  async attachFileToResume(user: AuthUser, resumeId: string, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File required');
+    const { profile, resume } = await this.ownedResume(user.id, resumeId);
+    const uploaded = await this.storage.upload(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      'cvs',
+    );
+
+    const knownSkills = await this.prisma.skill.findMany({
+      select: { name: true, slug: true },
+      take: 500,
+    });
+    let parsed = parseCvText('', knownSkills);
+    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+      try {
+        const result = await pdfParse(file.buffer);
+        parsed = parseCvText(result.text || '', knownSkills);
+      } catch {
+        parsed = {
+          ...parseCvText('', knownSkills),
+          textPreview: 'Could not parse PDF text',
+        };
+      }
+    }
+
+    const updated = await this.prisma.resume.update({
+      where: { id: resume.id },
+      data: {
+        fileKey: uploaded.key,
+        fileUrl: null, // use presigned download endpoint
+        parsedData: parsed as object,
+        content: parsed.textPreview || resume.content,
+        title: resume.title || file.originalname,
+      },
+    });
+
+    return {
+      ...updated,
+      parsedData: parsed,
+      profileId: profile.id,
+      needsReview: true,
+    };
+  }
+
+  async uploadCv(user: AuthUser, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File required');
+    if (file.size > 8 * 1024 * 1024) {
+      throw new BadRequestException('File too large (max 8MB)');
+    }
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const isPdf =
+      file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
+    if (!isPdf && !allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF (recommended) or Word documents are supported');
+    }
+
+    const profile = await this.getProfileForUser(user.id);
+    const uploaded = await this.storage.upload(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      'cvs',
+    );
+
+    const knownSkills = await this.prisma.skill.findMany({
+      select: { name: true, slug: true },
+      take: 500,
+    });
+
+    let parsed = parseCvText('', knownSkills);
+    if (isPdf) {
+      try {
+        const result = await pdfParse(file.buffer);
+        parsed = parseCvText(result.text || '', knownSkills);
+      } catch {
+        parsed = {
+          ...parseCvText('', knownSkills),
+          textPreview: 'Could not extract text from this PDF',
+        };
+      }
+    }
+
+    await this.prisma.resume.updateMany({
+      where: { profileId: profile.id },
+      data: { isPrimary: false },
+    });
+
+    const resume = await this.prisma.resume.create({
+      data: {
+        profileId: profile.id,
+        title: file.originalname.replace(/\.[^.]+$/, '') || 'Uploaded CV',
+        fileKey: uploaded.key,
+        fileUrl: null,
+        isPrimary: true,
+        parsedData: parsed as object,
+        content: parsed.textPreview,
+      },
+    });
+
+    return {
+      ...resume,
+      parsedData: parsed,
+      needsReview: true,
+    };
+  }
+
+  async importParsedResume(
+    user: AuthUser,
+    resumeId: string,
+    selection: {
+      headline?: boolean;
+      summary?: boolean;
+      phone?: boolean;
+      skillIndexes?: number[];
+      experienceIndexes?: number[];
+      educationIndexes?: number[];
+      languageIndexes?: number[];
+    },
+  ) {
+    const { profile, resume } = await this.ownedResume(user.id, resumeId);
+    const parsed = resume.parsedData as ParsedCvData | null;
+    if (!parsed || typeof parsed !== 'object') {
+      throw new BadRequestException('No parsed CV data on this resume — upload a CV first');
+    }
+
+    const profilePatch: Record<string, unknown> = {};
+    if (selection.headline && parsed.headline) profilePatch.headline = parsed.headline;
+    if (selection.summary && parsed.summary) profilePatch.summary = parsed.summary;
+    if (selection.phone && parsed.phone) {
+      const phone = normalizePhone(parsed.phone);
+      const taken = await this.prisma.employeeProfile.findFirst({
+        where: { phone, NOT: { id: profile.id } },
+        select: { id: true },
+      });
+      if (!taken) profilePatch.phone = phone;
+    }
+    if (Object.keys(profilePatch).length) {
+      await this.prisma.employeeProfile.update({
+        where: { id: profile.id },
+        data: profilePatch,
+      });
+    }
+
+    const imported = {
+      skills: 0,
+      experiences: 0,
+      educations: 0,
+      languages: 0,
+      skippedPhoneTaken: Boolean(selection.phone && parsed.phone && !profilePatch.phone),
+    };
+
+    for (const idx of selection.skillIndexes || []) {
+      const name = parsed.skillNames?.[idx];
+      if (!name) continue;
+      const slug = slugify(name);
+      let skill = await this.prisma.skill.findUnique({ where: { slug } });
+      if (!skill) {
+        skill = await this.prisma.skill.findFirst({
+          where: { name: { equals: name, mode: 'insensitive' } },
+        });
+      }
+      if (!skill) {
+        skill = await this.prisma.skill.create({
+          data: { slug: slug || `skill-${Date.now()}`, name },
+        });
+      }
+      await this.prisma.profileSkill.upsert({
+        where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
+        create: { profileId: profile.id, skillId: skill.id, level: 'INTERMEDIATE' },
+        update: {},
+      });
+      imported.skills += 1;
+    }
+
+    for (const idx of selection.experienceIndexes || []) {
+      const exp = parsed.experiences?.[idx];
+      if (!exp?.title || !exp.companyName) continue;
+      await this.prisma.workExperience.create({
+        data: {
+          profileId: profile.id,
+          title: exp.title,
+          companyName: exp.companyName,
+          description: exp.description,
+          startDate: exp.startDate ? new Date(exp.startDate) : new Date(),
+          endDate: exp.endDate ? new Date(exp.endDate) : null,
+          isCurrent: Boolean(exp.isCurrent),
+        },
+      });
+      imported.experiences += 1;
+    }
+
+    for (const idx of selection.educationIndexes || []) {
+      const edu = parsed.educations?.[idx];
+      if (!edu?.school) continue;
+      await this.prisma.education.create({
+        data: {
+          profileId: profile.id,
+          school: edu.school,
+          degree: edu.degree as never,
+          field: edu.field,
+          startDate: edu.startDate ? new Date(edu.startDate) : null,
+          endDate: edu.endDate ? new Date(edu.endDate) : null,
+        },
+      });
+      imported.educations += 1;
+    }
+
+    for (const idx of selection.languageIndexes || []) {
+      const lang = parsed.languages?.[idx];
+      if (!lang) continue;
+      let language = lang.code
+        ? await this.prisma.language.findUnique({ where: { code: lang.code } })
+        : null;
+      if (!language) {
+        language = await this.prisma.language.findFirst({
+          where: { name: { equals: lang.name, mode: 'insensitive' } },
+        });
+      }
+      if (!language) continue;
+      await this.prisma.profileLanguage.upsert({
+        where: {
+          profileId_languageId: { profileId: profile.id, languageId: language.id },
+        },
+        create: {
+          profileId: profile.id,
+          languageId: language.id,
+          level: (lang.level || 'B1') as never,
+        },
+        update: { level: (lang.level || 'B1') as never },
+      });
+      imported.languages += 1;
+    }
+
+    const refreshed = await this.getProfileForUser(user.id);
+    return { ok: true, imported, profile: refreshed };
+  }
+
+  async searchCandidates(
+    user: AuthUser,
+    query: {
+      q?: string;
+      city?: string;
+      skills?: string;
+      skillMode?: 'AND' | 'OR';
+      degree?: string;
+      languages?: string;
+      experienceYearsMin?: number;
+      experienceYearsMax?: number;
+      hasCertification?: boolean;
+      matchJobId?: string;
+      sort?: 'relevance' | 'newest' | 'match';
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException();
+    }
+
+    const membership = user.memberships?.[0];
+    let limited = true;
+    if (membership) {
+      const sub = await this.prisma.subscription.findUnique({
+        where: { companyId: membership.companyId },
+      });
+      const plan = sub?.plan ?? 'FREE';
+      limited = PLAN_LIMITS[plan].candidateSearch === 'limited';
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const and: Prisma.EmployeeProfileWhereInput[] = [
+      { visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] } },
+    ];
+
+    const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (citySlugs.length) and.push({ city: { slug: { in: citySlugs } } });
+
+    const skillSlugs = (query.skills || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (skillSlugs.length) {
+      if (query.skillMode === 'AND') {
+        for (const slug of skillSlugs) {
+          and.push({ skills: { some: { skill: { slug } } } });
+        }
+      } else {
+        and.push({ skills: { some: { skill: { slug: { in: skillSlugs } } } } });
+      }
+    }
+
+    if (query.degree) {
+      and.push({ educations: { some: { degree: query.degree as never } } });
+    }
+
+    const langCodes = (query.languages || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (langCodes.length) {
+      and.push({ languages: { some: { language: { code: { in: langCodes } } } } });
+    }
+
+    if (query.hasCertification) {
+      and.push({ certifications: { some: {} } });
+    }
+
+    if (query.q) {
+      const term = query.q.trim();
+      and.push({
+        OR: [
+          { headline: { contains: term, mode: 'insensitive' } },
+          { summary: { contains: term, mode: 'insensitive' } },
+          { desiredPosition: { contains: term, mode: 'insensitive' } },
+          { user: { fullName: { contains: term, mode: 'insensitive' } } },
+          { skills: { some: { skill: { name: { contains: term, mode: 'insensitive' } } } } },
+          {
+            experiences: {
+              some: {
+                OR: [
+                  { title: { contains: term, mode: 'insensitive' } },
+                  { companyName: { contains: term, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.EmployeeProfileWhereInput = { AND: and };
+
+    const items = await this.prisma.employeeProfile.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: limited ? false : true,
+            avatarUrl: true,
+          },
+        },
+        skills: { include: { skill: true } },
+        city: true,
+        experiences: true,
+        educations: true,
+        languages: { include: { language: true } },
+        certifications: true,
+        _count: { select: { certifications: true } },
+      },
+      take: Math.min(200, limit * 5),
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    let scored = items.map((p) => {
+      const years = this.matching.totalExperienceYears(p.experiences);
+      return {
+        ...p,
+        experienceYears: years,
+        user: {
+          id: p.user.id,
+          fullName: p.user.fullName,
+          avatarUrl: p.user.avatarUrl,
+          email: limited ? undefined : (p.user as { email?: string }).email,
+        },
+        contactsBlurred: limited,
+        matchScore: null as number | null,
+        matchBreakdown: null as unknown,
+      };
+    });
+
+    if (query.experienceYearsMin !== undefined) {
+      scored = scored.filter((p) => p.experienceYears >= query.experienceYearsMin!);
+    }
+    if (query.experienceYearsMax !== undefined) {
+      scored = scored.filter((p) => p.experienceYears <= query.experienceYearsMax!);
+    }
+
+    if (query.matchJobId || query.sort === 'match') {
+      const jobId = query.matchJobId;
+      if (jobId) {
+        scored = await Promise.all(
+          scored.map(async (p) => {
+            try {
+              const breakdown = await this.matching.scoreProfileAgainstJob(p.id, jobId);
+              return { ...p, matchScore: breakdown.total, matchBreakdown: breakdown };
+            } catch {
+              return p;
+            }
+          }),
+        );
+        scored.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+      }
+    }
+
+    const total = scored.length;
+    const pageItems = scored.slice((page - 1) * limit, page * limit);
+
+    // Facets
+    const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    for (const p of scored) {
+      if (p.city) {
+        const key = p.city.slug;
+        cityFacets[key] = cityFacets[key]
+          ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
+          : { slug: p.city.slug, name: p.city.name, count: 1 };
+      }
+      for (const s of p.skills) {
+        const key = s.skill.slug;
+        skillFacets[key] = skillFacets[key]
+          ? { ...skillFacets[key], count: skillFacets[key].count + 1 }
+          : { slug: s.skill.slug, name: s.skill.name, count: 1 };
+      }
+    }
+
+    return {
+      items: pageItems,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      limited,
+      facets: {
+        cities: Object.values(cityFacets).sort((a, b) => b.count - a.count).slice(0, 20),
+        skills: Object.values(skillFacets).sort((a, b) => b.count - a.count).slice(0, 30),
+      },
+    };
+  }
+
+  async getCandidateProfile(user: AuthUser, profileId: string, matchJobId?: string) {
+    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException();
+    }
+
+    const membership = user.memberships?.[0];
+    let limited = true;
+    if (user.role === 'SUPER_ADMIN') limited = false;
+    else if (membership) {
+      const sub = await this.prisma.subscription.findUnique({
+        where: { companyId: membership.companyId },
+      });
+      const plan = sub?.plan ?? 'FREE';
+      limited = PLAN_LIMITS[plan].candidateSearch === 'limited';
+    }
+
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { id: profileId },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, avatarUrl: true, locale: true },
+        },
+        skills: { include: { skill: true } },
+        experiences: { include: { city: true }, orderBy: { startDate: 'desc' } },
+        educations: { orderBy: { startDate: 'desc' } },
+        certifications: true,
+        languages: { include: { language: true } },
+        resumes: { where: { isPrimary: true }, take: 1 },
+        city: true,
+      },
+    });
+    if (!profile || profile.visibility === 'PRIVATE') {
+      throw new NotFoundException('Profile not available');
+    }
+
+    // Recruiter can always see contacts of candidates who applied to their company
+    if (limited && membership) {
+      const applied = await this.prisma.application.findFirst({
+        where: {
+          profileId,
+          jobPost: { companyId: membership.companyId },
+        },
+      });
+      if (applied) limited = false;
+    }
+
+    const experienceYears = this.matching.totalExperienceYears(profile.experiences);
+
+    let match: unknown = null;
+    if (matchJobId) {
+      try {
+        match = await this.matching.scoreProfileAgainstJob(profileId, matchJobId);
+      } catch {
+        match = null;
+      }
+    }
+
+    return {
+      ...profile,
+      user: {
+        ...profile.user,
+        email: limited ? undefined : profile.user.email,
+      },
+      phone: limited ? undefined : profile.phone,
+      contactsBlurred: limited,
+      experienceYears,
+      match,
+    };
+  }
+
+  async saveJob(user: AuthUser, jobPostId: string) {
+    const profile = await this.getProfileForUser(user.id);
+    return this.prisma.savedJob.upsert({
+      where: { profileId_jobPostId: { profileId: profile.id, jobPostId } },
+      create: { profileId: profile.id, jobPostId },
+      update: {},
+    });
+  }
+
+  async unsaveJob(user: AuthUser, jobPostId: string) {
+    const profile = await this.getProfileForUser(user.id);
+    await this.prisma.savedJob.deleteMany({ where: { profileId: profile.id, jobPostId } });
+    return { ok: true };
+  }
+
+  async listSaved(user: AuthUser) {
+    const profile = await this.getProfileForUser(user.id);
+    return this.prisma.savedJob.findMany({
+      where: { profileId: profile.id },
+      include: {
+        jobPost: {
+          include: {
+            company: { select: { id: true, name: true, slug: true, logoUrl: true } },
+            city: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+}

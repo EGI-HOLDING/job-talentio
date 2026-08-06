@@ -1,0 +1,757 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYEE
+  RECRUITER
+  SUPER_ADMIN
+}
+
+enum CompanyMemberRole {
+  OWNER
+  ADMIN
+  RECRUITER
+}
+
+enum PlanCode {
+  FREE
+  STANDARD
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  CLOSED
+  EXPIRED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum WorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum ApplicationStatus {
+  NEW
+  IN_REVIEW
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  TO_REGISTERED_RECRUITERS
+  PRIVATE
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum LanguageLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+  NATIVE
+}
+
+enum AlertFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  MOCKED
+}
+
+enum DegreeLevel {
+  HIGH_SCHOOL
+  VOCATIONAL
+  BACHELOR
+  MASTER
+  PHD
+}
+
+enum ExperienceLevel {
+  INTERN
+  JUNIOR
+  MIDDLE
+  SENIOR
+  LEAD
+  EXECUTIVE
+}
+
+enum SalaryPeriod {
+  MONTHLY
+  YEARLY
+  HOURLY
+}
+
+enum CompanySize {
+  SIZE_1_10
+  SIZE_11_50
+  SIZE_51_200
+  SIZE_201_1000
+  SIZE_1000_PLUS
+}
+
+enum NotificationType {
+  APPLICATION_STATUS
+  NEW_APPLICANT
+  INTERVIEW_SCHEDULED
+  NEW_JOB_MATCH
+  CHAT_MESSAGE
+  SYSTEM
+}
+
+enum QuestionType {
+  TEXT
+  YES_NO
+  NUMBER
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReportEntityType {
+  JOB_POST
+  USER
+  COMPANY
+  CHAT_MESSAGE
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// ─── Lookup tables ───────────────────────────────────────────
+
+model Skill {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  category  String?
+  createdAt DateTime @default(now())
+
+  profileSkills  ProfileSkill[]
+  jobPostSkills  JobPostSkill[]
+  jobAlertSkills JobAlertSkill[]
+}
+
+model City {
+  id     String  @id @default(cuid())
+  name   String
+  slug   String  @unique
+  region String?
+
+  jobPosts       JobPost[]
+  profiles       EmployeeProfile[]
+  companies      Company[]
+  jobAlerts      JobAlert[]
+  workExperiences WorkExperience[]
+}
+
+model JobCategory {
+  id   String  @id @default(cuid())
+  name String
+  slug String  @unique
+  icon String?
+
+  jobPosts  JobPost[]
+  jobAlerts JobAlert[]
+}
+
+model Industry {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  companies Company[]
+}
+
+model Language {
+  id   String @id @default(cuid())
+  name String
+  code String @unique
+
+  profileLanguages ProfileLanguage[]
+}
+
+model Benefit {
+  id   String  @id @default(cuid())
+  name String
+  slug String  @unique
+  icon String?
+
+  jobPostBenefits JobPostBenefit[]
+}
+
+// ─── Core identity ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  fullName      String
+  role          UserRole  @default(EMPLOYEE)
+  locale        String    @default("uz")
+  avatarUrl     String?
+  isBanned      Boolean   @default(false)
+  emailVerified Boolean   @default(false)
+  googleId      String?   @unique
+  telegramId    String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  employeeProfile  EmployeeProfile?
+  memberships      CompanyMember[]
+  sentMessages     ChatMessage[]       @relation("SentMessages")
+  conversationsAsA Conversation[]      @relation("ConversationUserA")
+  conversationsAsB Conversation[]      @relation("ConversationUserB")
+  auditLogs        AuditLog[]
+  jobAlerts        JobAlert[]
+  notifications    Notification[]
+  followedCompanies CompanyFollower[]
+  jobViews         JobView[]
+  reports          Report[]            @relation("Reporter")
+}
+
+model Company {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  description String?
+  website     String?
+  cityId      String?
+  industryId  String?
+  size        CompanySize?
+  logoUrl     String?
+  isVerified  Boolean      @default(false)
+  isBanned    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  city         City?             @relation(fields: [cityId], references: [id])
+  industry     Industry?         @relation(fields: [industryId], references: [id])
+  members      CompanyMember[]
+  jobPosts     JobPost[]
+  subscription Subscription?
+  payments     Payment[]
+  followers    CompanyFollower[]
+
+  @@index([cityId])
+  @@index([industryId])
+}
+
+model CompanyMember {
+  id        String            @id @default(cuid())
+  companyId String
+  userId    String
+  role      CompanyMemberRole @default(RECRUITER)
+  createdAt DateTime          @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@index([userId])
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  companyId String             @unique
+  plan      PlanCode           @default(FREE)
+  status    SubscriptionStatus @default(ACTIVE)
+  startsAt  DateTime           @default(now())
+  endsAt    DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id         String        @id @default(cuid())
+  companyId  String
+  provider   String        @default("mock")
+  externalId String?
+  purpose    String
+  amountUzs  Int
+  currency   String        @default("UZS")
+  status     PaymentStatus @default(PENDING)
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model JobPost {
+  id                 String          @id @default(cuid())
+  companyId          String
+  title              String
+  description        String
+  cityId             String?
+  categoryId         String?
+  employmentType     EmploymentType  @default(FULL_TIME)
+  workMode           WorkMode        @default(ONSITE)
+  salaryMin          Int?
+  salaryMax          Int?
+  salaryPeriod       SalaryPeriod    @default(MONTHLY)
+  currency           String          @default("UZS")
+  experienceYearsMin Int?
+  experienceLevel    ExperienceLevel?
+  locale             String          @default("uz")
+  status             JobStatus       @default(DRAFT)
+  publishedAt        DateTime?
+  closedAt           DateTime?
+  boostWeight        Float           @default(0)
+  boostUntil         DateTime?
+  /// SHA-256 of normalized title|workMode|cityId — blocks duplicate openings
+  fingerprint        String?
+  /// SHA-256 of normalized description — blocks copy-paste duplicate posts
+  contentHash        String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  city         City?            @relation(fields: [cityId], references: [id])
+  category     JobCategory?     @relation(fields: [categoryId], references: [id])
+  jobSkills    JobPostSkill[]
+  benefits     JobPostBenefit[]
+  applications Application[]
+  savedBy      SavedJob[]
+  questions    JobQuestion[]
+  views        JobView[]
+
+  @@index([companyId, status])
+  @@index([status, publishedAt])
+  @@index([cityId])
+  @@index([categoryId])
+  @@index([experienceLevel])
+  @@index([companyId, fingerprint])
+  @@index([companyId, contentHash])
+}
+
+model JobPostSkill {
+  id        String  @id @default(cuid())
+  jobPostId String
+  skillId   String
+  isRequired Boolean @default(true)
+  weight    Float   @default(1)
+
+  jobPost JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([jobPostId, skillId])
+  @@index([skillId])
+}
+
+model JobPostBenefit {
+  id        String @id @default(cuid())
+  jobPostId String
+  benefitId String
+
+  jobPost JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  benefit Benefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+
+  @@unique([jobPostId, benefitId])
+}
+
+model EmployeeProfile {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  headline         String?
+  summary          String?
+  cityId           String?
+  phone            String?           @unique
+  visibility       ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
+  desiredSalaryMin Int?
+  desiredPosition  String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city           City?             @relation(fields: [cityId], references: [id])
+  skills         ProfileSkill[]
+  experiences    WorkExperience[]
+  educations     Education[]
+  certifications Certification[]
+  languages      ProfileLanguage[]
+  resumes        Resume[]
+  applications   Application[]
+  savedJobs      SavedJob[]
+
+  @@index([cityId])
+}
+
+model ProfileSkill {
+  id        String     @id @default(cuid())
+  profileId String
+  skillId   String
+  level     SkillLevel @default(INTERMEDIATE)
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skill   Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, skillId])
+  @@index([skillId])
+}
+
+model WorkExperience {
+  id           String    @id @default(cuid())
+  profileId    String
+  companyName  String
+  title        String
+  description  String?
+  cityId       String?
+  locationNote String?
+  startDate    DateTime
+  endDate      DateTime?
+  isCurrent    Boolean   @default(false)
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  city    City?           @relation(fields: [cityId], references: [id])
+}
+
+model Education {
+  id        String       @id @default(cuid())
+  profileId String
+  school    String
+  degree    DegreeLevel?
+  field     String?
+  startDate DateTime?
+  endDate   DateTime?
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([school])
+  @@index([degree])
+}
+
+model Certification {
+  id            String    @id @default(cuid())
+  profileId     String
+  name          String
+  issuer        String?
+  issuedAt      DateTime?
+  expiresAt     DateTime?
+  credentialUrl String?
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model ProfileLanguage {
+  id         String        @id @default(cuid())
+  profileId  String
+  languageId String
+  level      LanguageLevel
+
+  profile  EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language Language        @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, languageId])
+}
+
+model Resume {
+  id         String   @id @default(cuid())
+  profileId  String
+  title      String
+  content    String?
+  fileKey    String?
+  fileUrl    String?
+  isPrimary  Boolean  @default(false)
+  parsedData Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+model Application {
+  id             String            @id @default(cuid())
+  jobPostId      String
+  profileId      String
+  status         ApplicationStatus @default(NEW)
+  coverLetter    String?
+  resumeSnapshot Json?
+  matchScore     Float?
+  matchBreakdown Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  jobPost   JobPost             @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  profile   EmployeeProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  events    PipelineEvent[]
+  answers   ApplicationAnswer[]
+  interviews Interview[]
+
+  @@unique([jobPostId, profileId])
+  @@index([profileId])
+  @@index([status])
+  @@index([matchScore])
+}
+
+model PipelineEvent {
+  id            String             @id @default(cuid())
+  applicationId String
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  note          String?
+  actorUserId   String?
+  createdAt     DateTime           @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  profileId String
+  jobPostId String
+  createdAt DateTime @default(now())
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobPost JobPost         @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, jobPostId])
+}
+
+model Conversation {
+  id             String   @id @default(cuid())
+  userAId        String
+  userBId        String
+  companyId      String?
+  jobPostId      String?
+  initiatedBy    String
+  isColdOutreach Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  userA    User          @relation("ConversationUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User          @relation("ConversationUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@unique([userAId, userBId, jobPostId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model ChatMessage {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  createdAt      DateTime  @default(now())
+  readAt         DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model JobAlert {
+  id         String         @id @default(cuid())
+  userId     String
+  name       String
+  query      String?
+  cityId     String?
+  categoryId String?
+  frequency  AlertFrequency @default(DAILY)
+  isActive   Boolean        @default(true)
+  lastSentAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city     City?           @relation(fields: [cityId], references: [id])
+  category JobCategory?    @relation(fields: [categoryId], references: [id])
+  skills   JobAlertSkill[]
+
+  @@index([userId])
+}
+
+model JobAlertSkill {
+  id      String @id @default(cuid())
+  alertId String
+  skillId String
+
+  alert JobAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  skill Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, skillId])
+}
+
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  enabled   Boolean  @default(false)
+  payload   Json?
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Enterprise features ─────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  linkUrl   String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+model JobQuestion {
+  id         String       @id @default(cuid())
+  jobPostId  String
+  question   String
+  type       QuestionType @default(TEXT)
+  isRequired Boolean      @default(true)
+  sortOrder  Int          @default(0)
+
+  jobPost JobPost             @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  answers ApplicationAnswer[]
+
+  @@index([jobPostId])
+}
+
+model ApplicationAnswer {
+  id            String @id @default(cuid())
+  applicationId String
+  questionId    String
+  answer        String
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  question    JobQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, questionId])
+}
+
+model Interview {
+  id            String          @id @default(cuid())
+  applicationId String
+  scheduledAt   DateTime
+  durationMins  Int             @default(60)
+  location      String?
+  meetingUrl    String?
+  note          String?
+  status        InterviewStatus @default(SCHEDULED)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([scheduledAt])
+}
+
+model CompanyFollower {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+}
+
+model JobView {
+  id        String   @id @default(cuid())
+  jobPostId String
+  viewerId  String?
+  createdAt DateTime @default(now())
+
+  jobPost JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  viewer  User?   @relation(fields: [viewerId], references: [id], onDelete: SetNull)
+
+  @@index([jobPostId, createdAt])
+}
+
+model Report {
+  id         String           @id @default(cuid())
+  reporterId String
+  entityType ReportEntityType
+  entityId   String
+  reason     String
+  status     ReportStatus     @default(OPEN)
+  resolution String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([entityType, entityId])
+}

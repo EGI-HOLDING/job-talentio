@@ -1,0 +1,26 @@
+{
+  "name": "job-talentio",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @job-talentio/api --filter @job-talentio/web --filter @job-talentio/admin run dev",
+    "dev:api": "pnpm --filter @job-talentio/api dev",
+    "dev:web": "pnpm --filter @job-talentio/web dev",
+    "dev:admin": "pnpm --filter @job-talentio/admin dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "db:generate": "pnpm --filter @job-talentio/api prisma:generate",
+    "db:migrate": "pnpm --filter @job-talentio/api prisma:migrate",
+    "db:seed": "pnpm --filter @job-talentio/api prisma:seed",
+    "db:studio": "pnpm --filter @job-talentio/api prisma:studio",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
