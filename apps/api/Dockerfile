@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile=false
 RUN pnpm --filter @job-talentio/shared build
 RUN pnpm --filter @job-talentio/api prisma:generate
 RUN pnpm --filter @job-talentio/api build
+# Fail the image build if Nest emitted the wrong layout (e.g. dist/src/main.js).
+RUN test -f /app/apps/api/dist/main.js
 
 FROM base AS runner
 ENV NODE_ENV=production
@@ -26,4 +28,5 @@ COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 
 WORKDIR /app/apps/api
 EXPOSE 4000
+# Nest emits dist/main.js when only `src` is compiled (see tsconfig.build.json).
 CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
