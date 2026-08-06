@@ -535,7 +535,7 @@ function JobsInner() {
                     }
                     alt=""
                   />
-                  <div>
+                  <div className="hiring-card-body">
                     <strong>{c.name}</strong>
                     <span>{rolesLabel(c.count)}</span>
                   </div>
