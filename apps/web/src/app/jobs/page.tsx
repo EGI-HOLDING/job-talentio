@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FilterFieldset, FormField } from '@/components/ui/Field';
+import { ExpandableList } from '@/components/ui/ExpandableList';
+import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { api, getSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
@@ -37,6 +39,7 @@ type SearchResponse = {
     cities: Array<{ slug: string; name: string; count: number }>;
     categories: Array<{ slug: string; name: string; count: number }>;
     companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>;
+    skills?: Array<{ slug: string; name: string; count: number }>;
     experienceLevels: Record<string, number>;
   };
 };
@@ -191,7 +194,7 @@ function JobsInner() {
     Promise.all([
       api<MetaItem[]>('/meta/cities', { auth: false }),
       api<MetaItem[]>('/meta/categories', { auth: false }),
-      api<MetaItem[]>('/meta/skills', { auth: false }),
+      api<MetaItem[]>('/meta/skills?sort=popular&take=120', { auth: false }),
       api<MetaItem[]>('/meta/benefits', { auth: false }),
     ])
       .then(([c, cat, sk, b]) => {
@@ -233,9 +236,24 @@ function JobsInner() {
   const selectedLevels = filters.experienceLevel.split(',').filter(Boolean);
   const selectedCompanies = filters.companySlug.split(',').filter(Boolean);
 
-  const filteredSkills = skills.filter(
-    (s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()),
-  ).slice(0, 25);
+  const skillFacetList = data?.facets?.skills || [];
+  const skillFacet = Object.fromEntries(skillFacetList.map((s) => [s.slug, s.count]));
+  const skillList = useMemo(() => {
+    const bySlug = new Map<string, MetaItem & { count?: number }>();
+    for (const s of skillFacetList) {
+      bySlug.set(s.slug, { id: s.slug, slug: s.slug, name: s.name, count: s.count });
+    }
+    for (const s of skills) {
+      if (!bySlug.has(s.slug)) bySlug.set(s.slug, { ...s, count: skillFacet[s.slug] });
+      else {
+        const cur = bySlug.get(s.slug)!;
+        bySlug.set(s.slug, { ...cur, name: s.name || cur.name });
+      }
+    }
+    return [...bySlug.values()]
+      .filter((s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()))
+      .sort((a, b) => (b.count || 0) - (a.count || 0) || a.name.localeCompare(b.name));
+  }, [skills, skillFacetList, skillFacet, skillQ]);
 
   const cityFacet = Object.fromEntries((data?.facets?.cities || []).map((c) => [c.slug, c.count]));
   const catFacet = Object.fromEntries((data?.facets?.categories || []).map((c) => [c.slug, c.count]));
@@ -250,6 +268,20 @@ function JobsInner() {
     (singleCompanySlug
       ? { slug: singleCompanySlug, name: singleCompanySlug, count: data?.total ?? 0 }
       : null);
+
+  const advancedActiveCount = [
+    filters.companySlug,
+    filters.skills,
+    filters.experienceLevel,
+    filters.benefits,
+    filters.workMode,
+    filters.postedWithin,
+    filters.salaryMin,
+    filters.salaryMax,
+    filters.hotOnly ? '1' : '',
+    filters.skillMode !== 'OR' ? filters.skillMode : '',
+  ].filter(Boolean).length;
+  const forceAdvancedOpen = advancedActiveCount > 0;
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -274,34 +306,25 @@ function JobsInner() {
         </form>
 
         <FilterFieldset legend={t('city')} className="filter-group">
-          {cities.slice(0, 10).map((c) => (
-            <label key={c.slug} className="filter-check">
-              <input
-                type="checkbox"
-                checked={selectedCities.includes(c.slug)}
-                onChange={() => apply({ city: toggleCsv(filters.city, c.slug) })}
-              />
-              {c.name}
-              {cityFacet[c.slug] !== undefined && (
-                <span className="facet-count">({cityFacet[c.slug]})</span>
-              )}
-            </label>
-          ))}
-        </FilterFieldset>
-
-        <FilterFieldset legend={t('company')} className="filter-group">
-          {(companyFacetList.length ? companyFacetList : []).slice(0, 12).map((c) => (
-            <label key={c.slug} className="filter-check">
-              <input
-                type="checkbox"
-                checked={selectedCompanies.includes(c.slug)}
-                onChange={() => apply({ companySlug: toggleCsv(filters.companySlug, c.slug) })}
-              />
-              {c.name}
-              <span className="facet-count">({c.count})</span>
-            </label>
-          ))}
-          {!companyFacetList.length && <p className="muted" style={{ fontSize: '0.8rem' }}>—</p>}
+          <ExpandableList
+            items={cities}
+            initialCount={10}
+            step={10}
+            getKey={(c) => c.slug}
+            renderItem={(c) => (
+              <label className="filter-check">
+                <input
+                  type="checkbox"
+                  checked={selectedCities.includes(c.slug)}
+                  onChange={() => apply({ city: toggleCsv(filters.city, c.slug) })}
+                />
+                {c.name}
+                {cityFacet[c.slug] !== undefined && (
+                  <span className="facet-count">({cityFacet[c.slug]})</span>
+                )}
+              </label>
+            )}
+          />
         </FilterFieldset>
 
         <FilterFieldset legend={t('category')} className="filter-group">
@@ -320,120 +343,160 @@ function JobsInner() {
           ))}
         </FilterFieldset>
 
-        <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
-          <FormField label={t('matchMode')} optional>
-            <select
-              value={filters.skillMode}
-              onChange={(e) => apply({ skillMode: e.target.value })}
-              style={{ marginBottom: '0.4rem' }}
-            >
-              <option value="OR">{t('matchAny')}</option>
-              <option value="AND">{t('matchAll')}</option>
-            </select>
-          </FormField>
-          <FormField label={t('filterSkills')} optional>
-            <input
-              value={skillQ}
-              onChange={(e) => setSkillQ(e.target.value)}
-              placeholder={t('filterSkills')}
-            />
-          </FormField>
-          {filteredSkills.map((s) => (
-            <label key={s.slug} className="filter-check">
-              <input
-                type="checkbox"
-                checked={selectedSkills.includes(s.slug)}
-                onChange={() => apply({ skills: toggleCsv(filters.skills, s.slug) })}
-              />
-              {s.name}
-            </label>
-          ))}
-        </FilterFieldset>
-
-        <FilterFieldset legend={t('experienceLevel')} className="filter-group">
-          {EXP_LEVELS.map((lvl) => (
-            <label key={lvl} className="filter-check">
-              <input
-                type="checkbox"
-                checked={selectedLevels.includes(lvl)}
-                onChange={() => apply({ experienceLevel: toggleCsv(filters.experienceLevel, lvl) })}
-              />
-              {lvl}
-              {expFacet[lvl] !== undefined && (
-                <span className="facet-count">({expFacet[lvl]})</span>
+        <AdvancedFiltersPanel
+          storageKey="jt_jobs_advanced_filters"
+          activeCount={advancedActiveCount}
+          forceOpen={forceAdvancedOpen}
+        >
+          <FilterFieldset legend={t('company')} className="filter-group">
+            <ExpandableList
+              items={companyFacetList}
+              initialCount={10}
+              step={10}
+              getKey={(c) => c.slug}
+              renderItem={(c) => (
+                <label className="filter-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedCompanies.includes(c.slug)}
+                    onChange={() => apply({ companySlug: toggleCsv(filters.companySlug, c.slug) })}
+                  />
+                  {c.name}
+                  <span className="facet-count">({c.count})</span>
+                </label>
               )}
-            </label>
-          ))}
-        </FilterFieldset>
+            />
+            {!companyFacetList.length && <p className="muted" style={{ fontSize: '0.8rem' }}>—</p>}
+          </FilterFieldset>
 
-        <FilterFieldset legend={t('benefits')} className="filter-group">
-          {benefits.slice(0, 8).map((b) => (
-            <label key={b.slug} className="filter-check">
+          <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
+            <FormField label={t('matchMode')} optional>
+              <select
+                value={filters.skillMode}
+                onChange={(e) => apply({ skillMode: e.target.value })}
+                style={{ marginBottom: '0.4rem' }}
+              >
+                <option value="OR">{t('matchAny')}</option>
+                <option value="AND">{t('matchAll')}</option>
+              </select>
+            </FormField>
+            <FormField label={t('filterSkills')} optional>
               <input
-                type="checkbox"
-                checked={selectedBenefits.includes(b.slug)}
-                onChange={() => apply({ benefits: toggleCsv(filters.benefits, b.slug) })}
+                value={skillQ}
+                onChange={(e) => setSkillQ(e.target.value)}
+                placeholder={t('filterSkills')}
               />
-              {b.icon} {b.name}
-            </label>
-          ))}
-        </FilterFieldset>
-
-        <div className="filter-group">
-          <FormField label={t('workMode')} optional>
-            <select
-              value={filters.workMode}
-              onChange={(e) => apply({ workMode: e.target.value })}
-            >
-              <option value="">{t('any')}</option>
-              <option value="ONSITE">{t('onsite')}</option>
-              <option value="HYBRID">{t('hybrid')}</option>
-              <option value="REMOTE">{t('remote')}</option>
-            </select>
-          </FormField>
-        </div>
-
-        <div className="filter-group">
-          <FormField label={t('postedWithin')} optional>
-            <select
-              value={filters.postedWithin}
-              onChange={(e) => apply({ postedWithin: e.target.value })}
-            >
-              <option value="">{t('anyTime')}</option>
-              <option value="24h">{t('last24h')}</option>
-              <option value="7d">{t('last7d')}</option>
-              <option value="30d">{t('last30d')}</option>
-            </select>
-          </FormField>
-        </div>
-
-        <div className="filter-group grid-2">
-          <FormField label={`${t('salary')} min`} optional>
-            <input
-              type="number"
-              value={filters.salaryMin}
-              onChange={(e) => apply({ salaryMin: e.target.value })}
-              placeholder="UZS"
+            </FormField>
+            <ExpandableList
+              items={skillList}
+              initialCount={10}
+              step={10}
+              getKey={(s) => s.slug}
+              renderItem={(s) => (
+                <label className="filter-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedSkills.includes(s.slug)}
+                    onChange={() => apply({ skills: toggleCsv(filters.skills, s.slug) })}
+                  />
+                  {s.name}
+                  {s.count !== undefined && <span className="facet-count">({s.count})</span>}
+                </label>
+              )}
             />
-          </FormField>
-          <FormField label={`${t('salary')} max`} optional>
-            <input
-              type="number"
-              value={filters.salaryMax}
-              onChange={(e) => apply({ salaryMax: e.target.value })}
-              placeholder="UZS"
-            />
-          </FormField>
-        </div>
+          </FilterFieldset>
 
-        <label className="filter-check">
-          <input
-            type="checkbox"
-            checked={filters.hotOnly}
-            onChange={(e) => apply({ hotOnly: e.target.checked })}
-          />
-          {t('hotJobsOnly')}
-        </label>
+          <FilterFieldset legend={t('experienceLevel')} className="filter-group">
+            {EXP_LEVELS.map((lvl) => (
+              <label key={lvl} className="filter-check">
+                <input
+                  type="checkbox"
+                  checked={selectedLevels.includes(lvl)}
+                  onChange={() => apply({ experienceLevel: toggleCsv(filters.experienceLevel, lvl) })}
+                />
+                {lvl}
+                {expFacet[lvl] !== undefined && (
+                  <span className="facet-count">({expFacet[lvl]})</span>
+                )}
+              </label>
+            ))}
+          </FilterFieldset>
+
+          <FilterFieldset legend={t('benefits')} className="filter-group">
+            <ExpandableList
+              items={benefits}
+              initialCount={8}
+              step={10}
+              getKey={(b) => b.slug}
+              renderItem={(b) => (
+                <label className="filter-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedBenefits.includes(b.slug)}
+                    onChange={() => apply({ benefits: toggleCsv(filters.benefits, b.slug) })}
+                  />
+                  {b.icon} {b.name}
+                </label>
+              )}
+            />
+          </FilterFieldset>
+
+          <div className="filter-group">
+            <FormField label={t('workMode')} optional>
+              <select
+                value={filters.workMode}
+                onChange={(e) => apply({ workMode: e.target.value })}
+              >
+                <option value="">{t('any')}</option>
+                <option value="ONSITE">{t('onsite')}</option>
+                <option value="HYBRID">{t('hybrid')}</option>
+                <option value="REMOTE">{t('remote')}</option>
+              </select>
+            </FormField>
+          </div>
+
+          <div className="filter-group">
+            <FormField label={t('postedWithin')} optional>
+              <select
+                value={filters.postedWithin}
+                onChange={(e) => apply({ postedWithin: e.target.value })}
+              >
+                <option value="">{t('anyTime')}</option>
+                <option value="24h">{t('last24h')}</option>
+                <option value="7d">{t('last7d')}</option>
+                <option value="30d">{t('last30d')}</option>
+              </select>
+            </FormField>
+          </div>
+
+          <div className="filter-group grid-2">
+            <FormField label={`${t('salary')} min`} optional>
+              <input
+                type="number"
+                value={filters.salaryMin}
+                onChange={(e) => apply({ salaryMin: e.target.value })}
+                placeholder="UZS"
+              />
+            </FormField>
+            <FormField label={`${t('salary')} max`} optional>
+              <input
+                type="number"
+                value={filters.salaryMax}
+                onChange={(e) => apply({ salaryMax: e.target.value })}
+                placeholder="UZS"
+              />
+            </FormField>
+          </div>
+
+          <label className="filter-check">
+            <input
+              type="checkbox"
+              checked={filters.hotOnly}
+              onChange={(e) => apply({ hotOnly: e.target.checked })}
+            />
+            {t('hotJobsOnly')}
+          </label>
+        </AdvancedFiltersPanel>
 
         <button type="button" className="secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={() => router.push('/jobs')}>
           {t('clearFilters')}

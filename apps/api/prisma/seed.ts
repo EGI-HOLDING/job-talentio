@@ -69,6 +69,7 @@ const SKILLS: Array<{ name: string; category: string }> = [
   { name: 'Go', category: 'Programming' },
   { name: 'PHP', category: 'Programming' },
   { name: 'C#', category: 'Programming' },
+  { name: 'C++', category: 'Programming' },
   { name: 'Kotlin', category: 'Programming' },
   { name: 'Swift', category: 'Programming' },
   { name: 'React', category: 'Frontend' },
@@ -132,7 +133,65 @@ const SKILLS: Array<{ name: string; category: string }> = [
   { name: 'Legal Research', category: 'Legal' },
   { name: 'Contract Law', category: 'Legal' },
   { name: 'Supply Chain', category: 'Logistics' },
+  { name: 'Nursing', category: 'Healthcare' },
+  { name: 'Patient Care', category: 'Healthcare' },
+  { name: 'Clinical Research', category: 'Healthcare' },
+  { name: 'Pharmacy', category: 'Healthcare' },
+  { name: 'Teaching', category: 'Education' },
+  { name: 'Curriculum Design', category: 'Education' },
+  { name: 'Hospitality Management', category: 'Hospitality' },
+  { name: 'Food Safety', category: 'Hospitality' },
+  { name: 'AutoCAD', category: 'Engineering' },
+  { name: 'Mechanical Design', category: 'Engineering' },
+  { name: 'Electrical Engineering', category: 'Engineering' },
 ];
+
+/** alias string → skill slug */
+const SKILL_ALIASES: Array<{ alias: string; skillSlug: string }> = [
+  { alias: 'React.JS', skillSlug: 'react' },
+  { alias: 'ReactJS', skillSlug: 'react' },
+  { alias: 'CPP', skillSlug: 'cplusplus' },
+  { alias: 'C plus plus', skillSlug: 'cplusplus' },
+  { alias: 'NodeJS', skillSlug: 'node-js' },
+  { alias: 'Node', skillSlug: 'node-js' },
+  { alias: 'NextJS', skillSlug: 'next-js' },
+  { alias: 'VueJS', skillSlug: 'vue-js' },
+  { alias: 'k8s', skillSlug: 'kubernetes' },
+  { alias: 'Postgres', skillSlug: 'postgresql' },
+  { alias: 'JS', skillSlug: 'javascript' },
+  { alias: 'TS', skillSlug: 'typescript' },
+];
+
+function skillSlugifySeed(name: string) {
+  let s = name.trim().toLowerCase();
+  s = s.replace(/c\+\+/gi, 'cplusplus').replace(/c#/gi, 'csharp');
+  return slugify(s);
+}
+
+function normalizeSkillKeySeed(input: string): string {
+  let s = input
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '');
+  s = s
+    .replace(/c\+\+/g, 'cplusplus')
+    .replace(/c#/g, 'csharp')
+    .replace(/\.js\b/g, 'js')
+    .replace(/\.ts\b/g, 'ts');
+  s = s.replace(/[^a-z0-9]+/g, '');
+  const synonyms: Record<string, string> = {
+    reactjs: 'react',
+    cpp: 'cplusplus',
+    cplusplus: 'cplusplus',
+    nodejs: 'nodejs',
+    nextjs: 'nextjs',
+    vuejs: 'vuejs',
+    js: 'javascript',
+    ts: 'typescript',
+  };
+  return synonyms[s] ?? s;
+}
 
 const LANGUAGES = [
   { name: 'Uzbek', code: 'uz' },
@@ -345,47 +404,68 @@ const EDUCATION_FIELDS = [
   'Communications',
 ];
 
+/** ~4 templates per category → even mix when JOB_COUNT is a multiple of length */
 const JOB_TITLES = [
+  // IT & Software (4)
   { title: 'Senior Full-stack Developer', skills: ['typescript', 'react', 'nestjs', 'postgresql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'Frontend React Engineer', skills: ['react', 'typescript', 'next-js', 'figma'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Backend NestJS Developer', skills: ['nestjs', 'nodejs', 'postgresql', 'redis'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Python Data Analyst', skills: ['python', 'sql', 'data-analysis', 'tableau'], cat: 'it-software', level: 'JUNIOR' as ExperienceLevel, years: 1 },
   { title: 'DevOps Engineer', skills: ['docker', 'kubernetes', 'aws', 'ci-cd'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Mobile Flutter Developer', skills: ['flutter', 'mobile-development', 'react-native'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'QA Automation Engineer', skills: ['qa-testing', 'cypress', 'selenium'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Product Manager', skills: ['product-management', 'agile', 'scrum'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Digital Marketing Specialist', skills: ['digital-marketing', 'seo', 'smm'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Sales Manager', skills: ['sales', 'communication', 'excel'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'HR Recruiter', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Customer Support Lead', skills: ['customer-support', 'communication', 'leadership'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'Logistics Coordinator', skills: ['supply-chain', 'excel', 'communication'], cat: 'logistics', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Machine Learning Engineer', skills: ['machine-learning', 'python', 'sql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
   { title: 'Junior Java Developer', skills: ['java', 'spring-boot', 'sql'], cat: 'it-software', level: 'JUNIOR' as ExperienceLevel, years: 0 },
-  { title: 'Content Writer', skills: ['content-writing', 'english', 'seo'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Engineering Project Lead', skills: ['project-management', 'leadership', 'excel'], cat: 'engineering', level: 'LEAD' as ExperienceLevel, years: 8 },
-  { title: 'Go Microservices Engineer', skills: ['go', 'docker', 'kubernetes', 'postgresql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Angular Frontend Developer', skills: ['angular', 'typescript', 'react'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'PHP Laravel Developer', skills: ['php', 'laravel', 'mysql'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'iOS Swift Developer', skills: ['swift', 'mobile-development'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Android Kotlin Developer', skills: ['kotlin', 'mobile-development', 'java'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Business Analyst', skills: ['agile', 'product-management', 'excel'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Scrum Master', skills: ['scrum', 'agile', 'leadership'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'SEO Specialist', skills: ['seo', 'google-analytics', 'content-writing'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'SMM Manager', skills: ['smm', 'digital-marketing', 'content-writing'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'C++ Systems Engineer', skills: ['cplusplus', 'linux', 'problem-solving'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  // Finance (4)
+  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 2 },
   { title: 'Accountant', skills: ['accounting', '1c', 'excel'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 3 },
   { title: 'Credit Risk Analyst', skills: ['financial-analysis', 'excel', 'sql'], cat: 'finance', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Talent Acquisition Partner', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Warehouse Supervisor', skills: ['supply-chain', 'leadership', 'excel'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Hotel Front Office Manager', skills: ['customer-support', 'communication', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Junior Banking Associate', skills: ['excel', 'communication', 'customer-support'], cat: 'finance', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Sales & Marketing (4)
+  { title: 'Digital Marketing Specialist', skills: ['digital-marketing', 'seo', 'smm'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Sales Manager', skills: ['sales', 'communication', 'excel'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'SEO Specialist', skills: ['seo', 'google-analytics', 'content-writing'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'SMM Manager', skills: ['smm', 'digital-marketing', 'content-writing'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  // Design (4)
+  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE' as ExperienceLevel, years: 2 },
   { title: 'Graphic Designer', skills: ['adobe-photoshop', 'figma', 'ui-ux'], cat: 'design', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Power BI Developer', skills: ['power-bi', 'sql', 'data-analysis'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Network Administrator', skills: ['linux', 'docker', 'aws'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'English Teacher (Corporate)', skills: ['english', 'communication', 'leadership'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Product Designer', skills: ['figma', 'ui-ux', 'product-management'], cat: 'design', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Motion Design Intern', skills: ['adobe-photoshop', 'figma', 'communication'], cat: 'design', level: 'INTERN' as ExperienceLevel, years: 0 },
+  // HR (4)
+  { title: 'HR Recruiter', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Talent Acquisition Partner', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'HR Business Partner', skills: ['hr-management', 'leadership', 'communication'], cat: 'hr', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  { title: 'People Operations Specialist', skills: ['hr-management', 'excel', 'teamwork'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  // Education (4)
+  { title: 'English Teacher (Corporate)', skills: ['english', 'teaching', 'communication'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Curriculum Designer', skills: ['curriculum-design', 'teaching', 'english'], cat: 'education', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Online Course Instructor', skills: ['teaching', 'content-writing', 'communication'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Teaching Assistant', skills: ['teaching', 'uzbek', 'teamwork'], cat: 'education', level: 'JUNIOR' as ExperienceLevel, years: 0 },
+  // Healthcare (4)
+  { title: 'Registered Nurse', skills: ['nursing', 'patient-care', 'communication'], cat: 'healthcare', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Clinical Research Associate', skills: ['clinical-research', 'excel', 'english'], cat: 'healthcare', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Pharmacy Specialist', skills: ['pharmacy', 'patient-care', 'communication'], cat: 'healthcare', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Patient Care Coordinator', skills: ['patient-care', 'customer-support', 'communication'], cat: 'healthcare', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Engineering (4)
+  { title: 'Engineering Project Lead', skills: ['project-management', 'leadership', 'autocad'], cat: 'engineering', level: 'LEAD' as ExperienceLevel, years: 8 },
+  { title: 'Mechanical Design Engineer', skills: ['mechanical-design', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Electrical Engineer', skills: ['electrical-engineering', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Junior Site Engineer', skills: ['autocad', 'excel', 'teamwork'], cat: 'engineering', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Customer Support (4)
+  { title: 'Customer Support Lead', skills: ['customer-support', 'communication', 'leadership'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Support Specialist', skills: ['customer-support', 'communication', 'russian'], cat: 'customer-support', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Technical Support Engineer', skills: ['customer-support', 'problem-solving', 'english'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Call Center Supervisor', skills: ['customer-support', 'leadership', 'communication'], cat: 'customer-support', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  // Logistics (4)
+  { title: 'Logistics Coordinator', skills: ['supply-chain', 'excel', 'communication'], cat: 'logistics', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Warehouse Supervisor', skills: ['supply-chain', 'leadership', 'excel'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Supply Chain Analyst', skills: ['supply-chain', 'excel', 'data-analysis'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Fleet Operations Manager', skills: ['supply-chain', 'leadership', 'project-management'], cat: 'logistics', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  // Legal (4)
+  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
   { title: 'Compliance Officer', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'Intern — Software Engineering', skills: ['javascript', 'react', 'typescript'], cat: 'it-software', level: 'INTERN' as ExperienceLevel, years: 0 },
+  { title: 'Contract Specialist', skills: ['contract-law', 'excel', 'communication'], cat: 'legal', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Paralegal Assistant', skills: ['legal-research', 'communication', 'english'], cat: 'legal', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Hospitality (4)
+  { title: 'Hotel Front Office Manager', skills: ['hospitality-management', 'customer-support', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Restaurant Supervisor', skills: ['food-safety', 'hospitality-management', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Guest Relations Officer', skills: ['hospitality-management', 'communication', 'english'], cat: 'hospitality', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'F&B Operations Lead', skills: ['food-safety', 'leadership', 'hospitality-management'], cat: 'hospitality', level: 'SENIOR' as ExperienceLevel, years: 4 },
 ];
 
 const SCHOOLS = ['TUIT', 'NUUz', 'Westminster International University in Tashkent', 'INHA University in Tashkent', 'Amity University Tashkent', 'Turin Polytechnic University in Tashkent'];
@@ -431,15 +511,28 @@ async function main() {
 
   const skills = await Promise.all(
     SKILLS.map((s) => {
-      const slug = slugify(s.name);
+      const slug = skillSlugifySeed(s.name);
+      const normalizedKey = normalizeSkillKeySeed(s.name);
       return prisma.skill.upsert({
         where: { slug },
-        update: { name: s.name, category: s.category },
-        create: { name: s.name, slug, category: s.category },
+        update: { name: s.name, category: s.category, normalizedKey },
+        create: { name: s.name, slug, category: s.category, normalizedKey },
       });
     }),
   );
   const skillMap = Object.fromEntries(skills.map((s) => [s.slug, s]));
+
+  for (const a of SKILL_ALIASES) {
+    const skill = skillMap[a.skillSlug];
+    if (!skill) continue;
+    const aliasKey = normalizeSkillKeySeed(a.alias);
+    if (!aliasKey || aliasKey === skill.normalizedKey) continue;
+    await prisma.skillAlias.upsert({
+      where: { aliasKey },
+      update: { alias: a.alias, skillId: skill.id },
+      create: { alias: a.alias, aliasKey, skillId: skill.id },
+    });
+  }
 
   const languages = await Promise.all(
     LANGUAGES.map((l) =>
@@ -778,11 +871,12 @@ async function main() {
   // Jobs — refresh listings on each seed so counts stay predictable
   await prisma.jobPost.deleteMany({});
   const jobRecords = [];
-  const JOB_COUNT = 90;
+  // 96 = 2×48 templates → every category twice; cities round-robin all 15
+  const JOB_COUNT = 96;
   for (let i = 0; i < JOB_COUNT; i++) {
     const tpl = JOB_TITLES[i % JOB_TITLES.length];
     const company = companyRecords[i % companyRecords.length];
-    const city = cities[(i * 3) % cities.length];
+    const city = cities[i % cities.length];
     const isHot = i < 10;
     const status = i % 14 === 0 ? 'DRAFT' : i % 16 === 0 ? 'CLOSED' : 'PUBLISHED';
     const employmentTypes: EmploymentType[] = ['FULL_TIME', 'FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'];

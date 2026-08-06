@@ -6,6 +6,7 @@ import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
+import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { useI18n } from '@/lib/i18n';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
@@ -109,13 +110,25 @@ export default function EmployeeDashboard() {
     await load();
   }
 
-  async function addSkill(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  async function addSkillPick(skill: {
+    slug: string;
+    name: string;
+    isNew?: boolean;
+    level?: string;
+  }) {
     await api('/profiles/me/skills', {
       method: 'POST',
-      body: JSON.stringify({ slug: fd.get('slug'), level: fd.get('level') }),
+      body: JSON.stringify(
+        skill.slug
+          ? { slug: skill.slug, level: skill.level || 'INTERMEDIATE' }
+          : { name: skill.name, level: skill.level || 'INTERMEDIATE' },
+      ),
     });
+    setMsg(
+      skill.isNew
+        ? `Skill “${skill.name}” resolved and saved`
+        : `Skill “${skill.name}” added`,
+    );
     await load();
   }
 
@@ -595,28 +608,7 @@ export default function EmployeeDashboard() {
                 ))}
               </div>
               <p className="required-note">{t('requiredFieldsNote')}</p>
-              <form className="form-stack" onSubmit={addSkill}>
-                <label>
-                  <LabelText required>Skill</LabelText>
-                  <select name="slug" required>
-                    {skillsMeta.map((s) => (
-                      <option key={s.slug} value={s.slug}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <LabelText>Level</LabelText>
-                  <select name="level" defaultValue="INTERMEDIATE">
-                    <option>BEGINNER</option>
-                    <option>INTERMEDIATE</option>
-                    <option>ADVANCED</option>
-                    <option>EXPERT</option>
-                  </select>
-                </label>
-                <button type="submit">Add skill</button>
-              </form>
+              <SkillCombobox onPick={addSkillPick} />
             </div>
           </div>
         )}
@@ -676,28 +668,16 @@ export default function EmployeeDashboard() {
               )}
               {!(profile.skills || []).length && <p className="muted">No skills yet — add manually or import from CV.</p>}
               {openForm === 'skill' && (
-                <form className="form-stack" onSubmit={async (e) => { await addSkill(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                <div style={{ marginTop: '1rem' }}>
                   <p className="required-note">{t('requiredFieldsNote')}</p>
-                  <div className="grid-2">
-                    <label>
-                      <LabelText required>Skill</LabelText>
-                      <select name="slug" required>
-                        {skillsMeta.map((s) => (
-                          <option key={s.slug} value={s.slug}>{s.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <LabelText>Level</LabelText>
-                      <select name="level" defaultValue="INTERMEDIATE">
-                        {LEVEL_ORDER.slice().reverse().map((l) => (
-                          <option key={l}>{l}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <button type="submit">Save skill</button>
-                </form>
+                  <SkillCombobox
+                    onPick={async (s) => {
+                      await addSkillPick(s);
+                      setOpenForm(null);
+                    }}
+                    submitLabel="Save skill"
+                  />
+                </div>
               )}
             </div>
 

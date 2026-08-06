@@ -5,9 +5,19 @@ import { MetaService } from './meta.service';
 export class MetaController {
   constructor(private meta: MetaService) {}
 
+  @Get('skills/suggest')
+  suggestSkills(@Query('q') q?: string, @Query('take') take?: string) {
+    return this.meta.suggestSkills(q, take ? Number(take) : 10);
+  }
+
   @Get('skills')
-  skills(@Query('q') q?: string, @Query('category') category?: string) {
-    return this.meta.skills(q, category);
+  skills(
+    @Query('q') q?: string,
+    @Query('category') category?: string,
+    @Query('sort') sort?: string,
+    @Query('take') take?: string,
+  ) {
+    return this.meta.skills(q, category, sort, take ? Number(take) : 100);
   }
 
   @Get('cities')

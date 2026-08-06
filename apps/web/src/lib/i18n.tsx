@@ -308,6 +308,59 @@ const DICT = {
   hotJobsOnly: { uz: 'Faqat dolzarb ishlar', ru: 'Только горячие вакансии', en: 'Hot jobs only' },
   matchAny: { uz: 'Kamida bittasi (OR)', ru: 'Любой навык (OR)', en: 'Match any (OR)' },
   matchAll: { uz: 'Barchasi (AND)', ru: 'Все навыки (AND)', en: 'Match all (AND)' },
+  viewMore: { uz: 'Yana ko‘rish', ru: 'Показать ещё', en: 'View more' },
+  showLess: { uz: 'Kamroq', ru: 'Свернуть', en: 'Show less' },
+  showingNofM: {
+    uz: '{n} / {m} ko‘rsatilmoqda',
+    ru: 'Показано {n} из {m}',
+    en: 'Showing {n} of {m}',
+  },
+  showAdvancedFilters: {
+    uz: 'Kengaytirilgan filtrlar',
+    ru: 'Расширенные фильтры',
+    en: 'Advanced filters',
+  },
+  hideAdvancedFilters: {
+    uz: 'Kengaytirilgan filtrlarni yashirish',
+    ru: 'Скрыть расширенные фильтры',
+    en: 'Hide advanced filters',
+  },
+  activeFiltersCount: {
+    uz: '{n} ta faol filtr',
+    ru: 'Активных фильтров: {n}',
+    en: '{n} active filters',
+  },
+  skillSearchPlaceholder: {
+    uz: 'Ko‘nikma qidiring…',
+    ru: 'Поиск навыка…',
+    en: 'Search skills…',
+  },
+  skillNoMatchAdd: {
+    uz: 'Topilmadi. “{name}” ni yangi ko‘nikma sifatida qo‘shish mumkin.',
+    ru: 'Нет совпадений. Можно добавить «{name}» как новый навык.',
+    en: 'No match. You can add “{name}” as a new skill.',
+  },
+  confirmAddSkill: {
+    uz: '“{name}” katalogda yo‘q. Yangi ko‘nikma sifatida qo‘shilsinmi?',
+    ru: '«{name}» нет в каталоге. Добавить как новый навык?',
+    en: '“{name}” is not in the catalog. Add it as a new skill?',
+  },
+  skillMatched: {
+    uz: 'Tanlandi: {name}',
+    ru: 'Выбрано: {name}',
+    en: 'Selected: {name}',
+  },
+  skillCreating: {
+    uz: 'Qo‘shilmoqda: {name}',
+    ru: 'Добавление: {name}',
+    en: 'Adding: {name}',
+  },
+  skillPickOrType: {
+    uz: 'Ro‘yxatdan tanlang yoki yangi nom yozing',
+    ru: 'Выберите из списка или введите новое имя',
+    en: 'Pick a suggestion or type a new skill name',
+  },
+  addSkill: { uz: 'Ko‘nikma qo‘shish', ru: 'Добавить навык', en: 'Add skill' },
 } as const;
 
 export type DictKey = keyof typeof DICT;

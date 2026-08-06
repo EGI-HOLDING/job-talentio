@@ -168,15 +168,29 @@ enum ReportStatus {
 // ─── Lookup tables ───────────────────────────────────────────
 
 model Skill {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  category  String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  normalizedKey  String?  @unique
+  category       String?
+  createdAt      DateTime @default(now())
 
+  aliases        SkillAlias[]
   profileSkills  ProfileSkill[]
   jobPostSkills  JobPostSkill[]
   jobAlertSkills JobAlertSkill[]
+}
+
+model SkillAlias {
+  id        String   @id @default(cuid())
+  skillId   String
+  alias     String
+  aliasKey  String   @unique
+  createdAt DateTime @default(now())
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
 }
 
 model City {
