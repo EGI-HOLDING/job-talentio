@@ -5,14 +5,16 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, getSession, AuthSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { MatchRing } from '@/components/ui/MatchRing';
 import { useI18n } from '@/lib/i18n';
 
 type CandidateDetail = {
   id: string;
   headline?: string | null;
-  about?: string | null;
+  summary?: string | null;
   phone?: string | null;
-  desiredSalary?: number | null;
+  desiredSalaryMin?: number | null;
+  desiredSalaryMax?: number | null;
   desiredSalaryCurrency?: string | null;
   visibility: string;
   contactsBlurred: boolean;
@@ -42,11 +44,15 @@ type CandidateDetail = {
   resumes: Array<{ id: string; title: string; fileUrl?: string | null }>;
   match?: {
     total: number;
-    skills?: { score: number };
-    experience?: { score: number };
-    location?: { score: number };
-    education?: { score: number };
-    language?: { score: number };
+    skills: number;
+    experience: number;
+    location: number;
+    education: number;
+    language: number;
+    details?: {
+      matchedSkills?: string[];
+      missingRequiredSkills?: string[];
+    };
   } | null;
 };
 
@@ -63,6 +69,7 @@ function CandidateInner() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [data, setData] = useState<CandidateDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const matchJobId = search.get('matchJobId');
 
   useEffect(() => {
     const s = getSession();
@@ -75,24 +82,39 @@ function CandidateInner() {
       return;
     }
     setSession(s);
-    const matchJobId = search.get('matchJobId');
     api<CandidateDetail>(
       `/profiles/candidates/${id}${matchJobId ? `?matchJobId=${matchJobId}` : ''}`,
     )
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, matchJobId, router]);
 
   if (!session) return null;
   if (error) {
     return (
       <div className="shell" style={{ padding: '3rem 1.5rem' }}>
-        <div className="card" style={{ color: '#be123c' }}>{error}</div>
+        <div className="card" style={{ color: '#be123c' }}>
+          <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Couldn’t open this profile</strong>
+          {error}
+          <div style={{ marginTop: '0.85rem' }}>
+            <Link href="/dashboard/recruiter" className="chip">
+              Back to recruiter dashboard
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
   if (!data) return <DetailPageSkeleton />;
+
+  const salaryBits = [
+    data.desiredSalaryMin != null ? data.desiredSalaryMin.toLocaleString() : null,
+    data.desiredSalaryMax != null ? data.desiredSalaryMax.toLocaleString() : null,
+  ].filter(Boolean);
+  const salaryLabel =
+    salaryBits.length > 0
+      ? `${salaryBits.join(' – ')} ${data.desiredSalaryCurrency || 'UZS'}`
+      : null;
 
   return (
     <div className="shell" style={{ padding: '2.5rem 1.5rem', maxWidth: 900 }}>
@@ -100,7 +122,10 @@ function CandidateInner() {
         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={data.user.avatarUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(data.user.fullName)}`}
+            src={
+              data.user.avatarUrl ||
+              `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(data.user.fullName)}`
+            }
             alt=""
             className="avatar"
             style={{ width: 72, height: 72 }}
@@ -112,9 +137,14 @@ function CandidateInner() {
               {data.city ? ` · ${data.city.name}` : ''}
               {` · ${data.experienceYears} ${t('years')} ${t('experience').toLowerCase()}`}
             </p>
+            {salaryLabel && (
+              <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
+                Desired salary: {salaryLabel}
+              </p>
+            )}
             {data.contactsBlurred ? (
               <p className="muted" style={{ marginTop: '0.4rem', fontSize: '0.85rem' }}>
-                🔒 Contacts hidden — upgrade to Standard/Premium or wait for the candidate to apply.
+                Contacts hidden — upgrade to Standard/Premium, or unlock after the candidate applies.
               </p>
             ) : (
               <p style={{ marginTop: '0.4rem', fontSize: '0.9rem' }}>
@@ -123,23 +153,61 @@ function CandidateInner() {
               </p>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
-            {data.match && (
-              <span className="chip" style={{ background: 'var(--accent)', color: '#fff', border: 0, fontWeight: 700 }}>
-                {t('match')}: {Math.round(data.match.total)}%
-              </span>
-            )}
-            <Link href={`/messages?peer=${data.user.id}`} className="chip">
-              💬 {t('chatWithCandidate')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', alignItems: 'flex-end' }}>
+            {data.match && <MatchRing score={data.match.total} size="lg" label={t('match')} />}
+            <Link
+              href={`/messages?peer=${data.user.id}${matchJobId ? `&job=${matchJobId}` : ''}`}
+              className="chip"
+            >
+              {t('chatWithCandidate')}
             </Link>
           </div>
         </div>
       </div>
 
-      {data.about && (
+      {data.match && (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ marginTop: 0 }}>{t('match')} breakdown</h3>
+          <div className="match-breakdown" style={{ marginTop: '0.75rem' }}>
+            {(
+              [
+                ['Skills', data.match.skills],
+                ['Experience', data.match.experience],
+                ['Location', data.match.location],
+                ['Education', data.match.education],
+                ['Language', data.match.language],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="match-breakdown-row">
+                <span className="muted">{label}</span>
+                <div className="match-breakdown-track">
+                  <i style={{ width: `${Math.round(Number(value) || 0)}%` }} />
+                </div>
+                <span>{Math.round(Number(value) || 0)}</span>
+              </div>
+            ))}
+          </div>
+          {!!data.match.details?.matchedSkills?.length && (
+            <div className="chips" style={{ marginTop: '0.85rem' }}>
+              {data.match.details.matchedSkills.map((s) => (
+                <span key={s} className="badge skill">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+          {!!data.match.details?.missingRequiredSkills?.length && (
+            <p className="muted" style={{ marginTop: '0.65rem', fontSize: '0.85rem' }}>
+              Missing required: {data.match.details.missingRequiredSkills.join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {data.summary && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <h3>About</h3>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{data.about}</p>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{data.summary}</p>
         </div>
       )}
 
@@ -210,7 +278,7 @@ function CandidateInner() {
 
 export default function CandidatePage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<DetailPageSkeleton />}>
       <CandidateInner />
     </Suspense>
   );

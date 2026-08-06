@@ -8,6 +8,7 @@ import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { JobListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
+import { MatchRing } from '@/components/ui/MatchRing';
 import { api, getSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
@@ -649,11 +650,7 @@ function JobsInner() {
                   ))}
                 </div>
               </div>
-              {job.matchScore != null ? (
-                <div className="match-ring">{job.matchScore}%</div>
-              ) : (
-                <div />
-              )}
+              {job.matchScore != null ? <MatchRing score={job.matchScore} /> : <div />}
             </Link>
           ))}
 

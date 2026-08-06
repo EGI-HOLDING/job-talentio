@@ -1,7 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
@@ -12,10 +13,20 @@ import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
+import { MatchRing } from '@/components/ui/MatchRing';
 
 type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'company';
 
-const STAGES = ['NEW', 'IN_REVIEW', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'] as const;
+const STAGES = ['NEW', 'IN_REVIEW', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED', 'WITHDRAWN'] as const;
+const STAGE_LABEL: Record<(typeof STAGES)[number], string> = {
+  NEW: 'New',
+  IN_REVIEW: 'In review',
+  INTERVIEW: 'Interview',
+  OFFER: 'Offer',
+  HIRED: 'Hired',
+  REJECTED: 'Rejected',
+  WITHDRAWN: 'Withdrawn',
+};
 const CAND_PAGE_SIZES = [12, 24, 36] as const;
 const DEGREE_OPTS = ['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'] as const;
 
@@ -70,13 +81,15 @@ function jobSelectLabel(j: {
   return `${j.title} — ${location}${status}`;
 }
 
-export default function RecruiterDashboard() {
+function RecruiterDashboard() {
   const { t } = useI18n();
-  const [tab, setTab] = useState<Tab>('jobs');
+  const searchParams = useSearchParams();
+  const jobFromUrl = searchParams.get('job') || '';
+  const [tab, setTab] = useState<Tab>(() => (jobFromUrl ? 'pipeline' : 'jobs'));
   const [memberships, setMemberships] = useState<any[]>([]);
   const [companyId, setCompanyId] = useState('');
   const [jobs, setJobs] = useState<any[]>([]);
-  const [selectedJob, setSelectedJob] = useState('');
+  const [selectedJob, setSelectedJob] = useState(jobFromUrl);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [recommended, setRecommended] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -149,9 +162,15 @@ export default function RecruiterDashboard() {
   async function loadJobs(cid: string) {
     const list = await api<any[]>(`/jobs/company/${cid}`);
     setJobs(list);
-    if (list[0] && !selectedJob) {
-      setSelectedJob(list[0].id);
-      await loadJobData(list[0].id);
+    const preferred =
+      (jobFromUrl && list.some((j) => j.id === jobFromUrl) && jobFromUrl) ||
+      (selectedJob && list.some((j) => j.id === selectedJob) && selectedJob) ||
+      list[0]?.id ||
+      '';
+    if (preferred && preferred !== selectedJob) {
+      setSelectedJob(preferred);
+    } else if (preferred) {
+      await loadJobData(preferred);
     }
   }
 
@@ -276,10 +295,10 @@ export default function RecruiterDashboard() {
       params.set('sort', f.matchJobId ? 'match' : f.sort);
       params.set('page', String(f.page));
       params.set('limit', String(f.limit));
-      const data = await api(`/profiles/candidates?${params.toString()}`);
+      const data = await api<any>(`/profiles/candidates?${params.toString()}`);
       setCandidates(data);
       if (data?.page != null && data.page !== f.page) {
-        setCandFilters((prev) => ({ ...prev, page: data.page }));
+        setCandFilters((prev) => ({ ...prev, page: data.page as number }));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load candidates');
@@ -547,144 +566,276 @@ export default function RecruiterDashboard() {
         {tab === 'pipeline' && (
           <div className="pipeline-page">
             <div className="pipeline-toolbar">
-              <h2 className="section-title" style={{ margin: 0 }}>
-                Pipeline & candidate matching
-              </h2>
-              <select
-                value={selectedJob}
-                onChange={(e) => setSelectedJob(e.target.value)}
-                className="job-select"
-                title="Select job post"
-                aria-label="Select job post"
-              >
-                {jobs.length === 0 && <option value="">No jobs yet</option>}
-                {jobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {jobSelectLabel(j)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="pipeline">
-              {STAGES.map((stage) => (
-                <div key={stage} className="pipeline-col">
-                  <h4>
-                    {stage} ({byStage[stage]?.length || 0})
-                  </h4>
-                  {(byStage[stage] || []).map((a) => (
-                    <div key={a.id} className="candidate-card">
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', minWidth: 0 }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          className="avatar avatar-sm"
-                          src={a.profile?.user?.avatarUrl || ''}
-                          alt=""
-                        />
-                        <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                          <strong style={{ fontSize: '0.9rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {a.profile?.user?.fullName}
-                          </strong>
-                          <div className="muted" style={{ fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {a.profile?.headline}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="badge match"
-                        style={{ marginTop: '0.5rem', border: 0, width: '100%' }}
-                        onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
-                      >
-                        Match {a.matchScore ?? '—'}%
-                      </button>
-                      {breakdownId === a.id && a.matchBreakdown && (
-                        <div style={{ fontSize: '0.75rem', marginTop: '0.35rem', color: 'var(--text)' }}>
-                          <div>Skills: {a.matchBreakdown.skills}</div>
-                          <div>Experience: {a.matchBreakdown.experience}</div>
-                          <div>Location: {a.matchBreakdown.location}</div>
-                          <div>Education: {a.matchBreakdown.education}</div>
-                          <div>Language: {a.matchBreakdown.language}</div>
-                        </div>
-                      )}
-                      <div className="match-bar">
-                        <span style={{ width: `${a.matchScore || 0}%` }} />
-                      </div>
-                      <div className="chips" style={{ marginTop: '0.5rem' }}>
-                        <Link href={`/candidates/${a.profile?.id}?matchJobId=${selectedJob}`} className="chip" style={{ fontSize: '0.72rem' }}>
-                          View profile
-                        </Link>
-                        <Link href={`/messages?peer=${a.profile?.user?.id}&job=${selectedJob}`} className="chip" style={{ fontSize: '0.72rem' }}>
-                          💬 Chat
-                        </Link>
-                      </div>
-                      <select
-                        style={{ marginTop: '0.5rem', fontSize: '0.8rem', width: '100%' }}
-                        value={a.status}
-                        onChange={(e) => setStatus(a.id, e.target.value)}
-                        aria-label={`Status for ${a.profile?.user?.fullName || 'applicant'}`}
-                      >
-                        {STAGES.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
-                      {stage === 'INTERVIEW' || stage === 'IN_REVIEW' ? (
-                        <form
-                          style={{ marginTop: '0.5rem', display: 'grid', gap: '0.25rem' }}
-                          onSubmit={(e) => scheduleInterview(e, a.id)}
-                        >
-                          <label>
-                            <LabelText required>Interview time</LabelText>
-                            <input name="scheduledAt" type="datetime-local" required style={{ fontSize: '0.75rem', width: '100%' }} />
-                          </label>
-                          <label>
-                            <LabelText>Meeting URL</LabelText>
-                            <input name="meetingUrl" placeholder="Meet URL" style={{ fontSize: '0.75rem', width: '100%' }} />
-                          </label>
-                          <button type="submit" style={{ padding: '0.35rem', fontSize: '0.75rem' }}>
-                            Schedule interview
-                          </button>
-                        </form>
-                      ) : null}
-                    </div>
+              <div>
+                <h2 className="section-title" style={{ margin: 0 }}>
+                  Pipeline & matching
+                </h2>
+                <p className="muted" style={{ margin: '0.3rem 0 0', fontSize: '0.9rem' }}>
+                  Move applicants through stages and review match scores for this job.
+                </p>
+              </div>
+              <label style={{ display: 'grid', gap: '0.3rem' }}>
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  Job post
+                </span>
+                <select
+                  value={selectedJob}
+                  onChange={(e) => setSelectedJob(e.target.value)}
+                  className="job-select"
+                  title="Select job post"
+                  aria-label="Select job post"
+                >
+                  {jobs.length === 0 && <option value="">No jobs yet</option>}
+                  {jobs.map((j) => (
+                    <option key={j.id} value={j.id}>
+                      {jobSelectLabel(j)}
+                    </option>
                   ))}
-                </div>
-              ))}
+                </select>
+              </label>
             </div>
 
-            <h3 className="section-title" style={{ marginTop: '1.5rem' }}>
-              Recommended candidates (not yet applied)
-            </h3>
-            <div className="pipeline-reco">
-              {recommended.map((r) => (
-                <div key={r.profile.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', minWidth: 0 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {r.profile.user.fullName}
-                      </strong>
-                      <p className="muted" style={{ margin: '0.25rem 0' }}>{r.profile.headline}</p>
-                      <div className="chips">
-                        {(r.profile.skills || []).slice(0, 5).map((s: any) => (
-                          <span key={s.slug} className="badge skill">
-                            {s.name}
-                          </span>
-                        ))}
+            {!selectedJob ? (
+              <div className="card">
+                <p className="muted" style={{ margin: 0 }}>
+                  Create or select a job post to open the pipeline.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="pipeline">
+                  {STAGES.map((stage) => {
+                    const cards = byStage[stage] || [];
+                    return (
+                      <div key={stage} className="pipeline-col">
+                        <h4>
+                          <span>{STAGE_LABEL[stage]}</span>
+                          <span className="pipeline-col-count">{cards.length}</span>
+                        </h4>
+                        {cards.length === 0 && (
+                          <div className="pipeline-empty">No candidates</div>
+                        )}
+                        {cards.map((a) => {
+                          const name = a.profile?.user?.fullName || 'Candidate';
+                          const avatar =
+                            a.profile?.user?.avatarUrl ||
+                            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
+                          const score = a.matchScore != null ? Math.round(a.matchScore) : null;
+                          return (
+                            <div key={a.id} className="candidate-card">
+                              <div className="candidate-card-head">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img className="avatar avatar-sm" src={avatar} alt="" />
+                                <div className="candidate-card-meta">
+                                  <strong
+                                    style={{
+                                      fontSize: '0.9rem',
+                                      display: 'block',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {name}
+                                  </strong>
+                                  <div
+                                    className="muted"
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {a.profile?.headline || '—'}
+                                  </div>
+                                </div>
+                                {score != null && <MatchRing score={score} size="sm" />}
+                              </div>
+                              {score != null && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="badge match"
+                                    style={{ marginTop: '0.55rem', border: 0, width: '100%', cursor: 'pointer' }}
+                                    onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
+                                  >
+                                    Match {score}% · details
+                                  </button>
+                                  {breakdownId === a.id && a.matchBreakdown && (
+                                    <div className="match-breakdown">
+                                      {(
+                                        [
+                                          ['Skills', a.matchBreakdown.skills],
+                                          ['Experience', a.matchBreakdown.experience],
+                                          ['Location', a.matchBreakdown.location],
+                                          ['Education', a.matchBreakdown.education],
+                                          ['Language', a.matchBreakdown.language],
+                                        ] as const
+                                      ).map(([label, value]) => (
+                                        <div key={label} className="match-breakdown-row">
+                                          <span className="muted">{label}</span>
+                                          <div className="match-breakdown-track">
+                                            <i style={{ width: `${Math.round(Number(value) || 0)}%` }} />
+                                          </div>
+                                          <span>{Math.round(Number(value) || 0)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="match-bar">
+                                    <span style={{ width: `${score}%` }} />
+                                  </div>
+                                </>
+                              )}
+                              <div className="chips" style={{ marginTop: '0.55rem' }}>
+                                <Link
+                                  href={`/candidates/${a.profile?.id}?matchJobId=${selectedJob}`}
+                                  className="chip"
+                                  style={{ fontSize: '0.72rem' }}
+                                >
+                                  View profile
+                                </Link>
+                                <Link
+                                  href={`/messages?peer=${a.profile?.user?.id}&job=${selectedJob}`}
+                                  className="chip"
+                                  style={{ fontSize: '0.72rem' }}
+                                >
+                                  Chat
+                                </Link>
+                              </div>
+                              <select
+                                style={{ marginTop: '0.5rem', fontSize: '0.8rem', width: '100%' }}
+                                value={a.status}
+                                onChange={(e) => setStatus(a.id, e.target.value)}
+                                aria-label={`Status for ${name}`}
+                              >
+                                {STAGES.map((s) => (
+                                  <option key={s} value={s}>
+                                    {STAGE_LABEL[s]}
+                                  </option>
+                                ))}
+                              </select>
+                              {stage === 'INTERVIEW' || stage === 'IN_REVIEW' ? (
+                                <form
+                                  style={{ marginTop: '0.5rem', display: 'grid', gap: '0.25rem' }}
+                                  onSubmit={(e) => scheduleInterview(e, a.id)}
+                                >
+                                  <label>
+                                    <LabelText required>Interview time</LabelText>
+                                    <input
+                                      name="scheduledAt"
+                                      type="datetime-local"
+                                      required
+                                      style={{ fontSize: '0.75rem', width: '100%' }}
+                                    />
+                                  </label>
+                                  <label>
+                                    <LabelText>Meeting URL</LabelText>
+                                    <input
+                                      name="meetingUrl"
+                                      placeholder="Meet URL"
+                                      style={{ fontSize: '0.75rem', width: '100%' }}
+                                    />
+                                  </label>
+                                  <button type="submit" style={{ padding: '0.35rem', fontSize: '0.75rem' }}>
+                                    Schedule interview
+                                  </button>
+                                </form>
+                              ) : null}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="chips" style={{ marginTop: '0.5rem' }}>
-                        <Link href={`/candidates/${r.profile.id}?matchJobId=${selectedJob}`} className="chip" style={{ fontSize: '0.75rem' }}>
-                          View profile
-                        </Link>
-                        <Link href={`/messages?peer=${r.profile.user.id}&job=${selectedJob}`} className="chip" style={{ fontSize: '0.75rem' }}>
-                          💬 Chat
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="match-ring">{r.matchScore}%</div>
-                  </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+
+                <div className="pipeline-section-head">
+                  <div>
+                    <h3 className="section-title" style={{ margin: 0 }}>
+                      Recommended candidates
+                    </h3>
+                    <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
+                      Strong matches who have not applied yet.
+                    </p>
+                  </div>
+                  <span className="muted" style={{ fontSize: '0.85rem' }}>
+                    {recommended.length} suggested
+                  </span>
+                </div>
+                {recommended.length === 0 ? (
+                  <div className="card">
+                    <p className="muted" style={{ margin: 0 }}>
+                      No recommendations yet. Add required skills on the job post to improve matching.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="pipeline-reco">
+                    {recommended.map((r) => {
+                      const name = r.profile.user.fullName;
+                      const avatar =
+                        r.profile.user.avatarUrl ||
+                        `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
+                      return (
+                        <div key={r.profile.id} className="card pipeline-reco-card">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img className="avatar" src={avatar} alt="" style={{ width: 44, height: 44 }} />
+                          <div className="card-body">
+                            <strong
+                              style={{
+                                display: 'block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {name}
+                            </strong>
+                            <p
+                              className="muted"
+                              style={{
+                                margin: '0.2rem 0 0.45rem',
+                                fontSize: '0.85rem',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {r.profile.headline || '—'}
+                            </p>
+                            <div className="chips">
+                              {(r.profile.skills || []).slice(0, 4).map((s: any) => (
+                                <span key={s.slug || s.name} className="badge skill">
+                                  {s.name}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="chips" style={{ marginTop: '0.55rem' }}>
+                              <Link
+                                href={`/candidates/${r.profile.id}?matchJobId=${selectedJob}`}
+                                className="chip"
+                                style={{ fontSize: '0.75rem' }}
+                              >
+                                View profile
+                              </Link>
+                              <Link
+                                href={`/messages?peer=${r.profile.user.id}&job=${selectedJob}`}
+                                className="chip"
+                                style={{ fontSize: '0.75rem' }}
+                              >
+                                Chat
+                              </Link>
+                            </div>
+                          </div>
+                          <MatchRing score={r.matchScore} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -981,7 +1132,7 @@ export default function RecruiterDashboard() {
                         </Link>
                       </div>
                     </div>
-                    {p.matchScore != null && <div className="match-ring">{p.matchScore}%</div>}
+                    {p.matchScore != null && <MatchRing score={p.matchScore} />}
                   </div>
                 ))}
 
@@ -1121,5 +1272,13 @@ export default function RecruiterDashboard() {
         )}
       </section>
     </div>
+  );
+}
+
+export default function RecruiterDashboardPage() {
+  return (
+    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loading…</div>}>
+      <RecruiterDashboard />
+    </Suspense>
   );
 }
