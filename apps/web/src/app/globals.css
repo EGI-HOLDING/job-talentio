@@ -607,16 +607,94 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   font-weight: 500;
 }
 .match-ring {
-  width: 52px;
-  height: 52px;
+  --score: 0;
+  --ring-track: #e2e8f0;
+  --ring-fill: #059669;
+  --ring-size: 56px;
+  --ring-stroke: 5px;
+  width: var(--ring-size);
+  height: var(--ring-size);
   border-radius: 50%;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
+  background: conic-gradient(
+    var(--ring-fill) calc(var(--score) * 1%),
+    var(--ring-track) 0
+  );
+  border: none;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+.match-ring-inner {
+  width: calc(100% - (var(--ring-stroke) * 2));
+  height: calc(100% - (var(--ring-stroke) * 2));
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+.match-ring-value {
   font-weight: 800;
   font-size: 0.85rem;
-  border: 3px solid #a7f3d0;
-  color: #047857;
-  background: #ecfdf5;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.match-ring-unit {
+  font-weight: 700;
+  font-size: 0.58rem;
+  opacity: 0.75;
+}
+.match-ring--sm {
+  --ring-size: 44px;
+  --ring-stroke: 4px;
+}
+.match-ring--sm .match-ring-value { font-size: 0.72rem; }
+.match-ring--sm .match-ring-unit { font-size: 0.5rem; }
+.match-ring--lg {
+  --ring-size: 72px;
+  --ring-stroke: 6px;
+}
+.match-ring--lg .match-ring-value { font-size: 1.05rem; }
+.match-ring--lg .match-ring-unit { font-size: 0.7rem; }
+.match-ring--high { --ring-fill: #059669; }
+.match-ring--high .match-ring-value { color: #047857; }
+.match-ring--mid { --ring-fill: #d97706; }
+.match-ring--mid .match-ring-value { color: #b45309; }
+.match-ring--low { --ring-fill: #dc2626; }
+.match-ring--low .match-ring-value { color: #b91c1c; }
+
+.match-breakdown {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+.match-breakdown-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 28px;
+  gap: 0.4rem;
+  align-items: center;
+}
+.match-breakdown-row span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.match-breakdown-track {
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.match-breakdown-track > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #34d399, #059669);
+  border-radius: inherit;
 }
 
 /* Pagination — windowed controls stay compact even at ~1000 pages */
@@ -772,6 +850,10 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   background: var(--accent-soft);
   color: var(--accent);
 }
+.pipeline-page {
+  display: grid;
+  gap: 1.25rem;
+}
 .pipeline {
   display: flex;
   gap: 0.75rem;
@@ -795,9 +877,9 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   border-radius: 999px;
 }
 .pipeline-col {
-  flex: 0 0 220px;
-  width: 220px;
-  min-width: 220px;
+  flex: 0 0 240px;
+  width: 240px;
+  min-width: 240px;
   max-height: min(68vh, 640px);
   overflow-y: auto;
   background: #f8fafc;
@@ -808,7 +890,7 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
 }
 .pipeline-col h4 {
   margin: 0 0 0.75rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
@@ -817,6 +899,27 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   background: #f8fafc;
   padding-bottom: 0.35rem;
   z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+.pipeline-col-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.pipeline-empty {
+  padding: 0.75rem 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 .candidate-card {
   background: #fff;
@@ -835,6 +938,17 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
 .candidate-card .chips {
   flex-wrap: wrap;
 }
+.candidate-card-head {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+.candidate-card-meta {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
 .match-bar {
   height: 6px;
   background: #e2e8f0;
@@ -851,9 +965,8 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 1rem;
 }
 .pipeline-toolbar select,
 .job-select {
@@ -862,8 +975,26 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
 }
 .pipeline-reco {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.85rem;
+}
+.pipeline-reco-card {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+.pipeline-reco-card .card-body {
+  flex: 1;
+  min-width: 0;
+}
+.pipeline-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 0.25rem;
 }
 
 /* Auth */

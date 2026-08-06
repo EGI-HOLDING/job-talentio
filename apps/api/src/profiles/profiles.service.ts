@@ -821,19 +821,36 @@ export class ProfilesService {
         city: true,
       },
     });
-    if (!profile || profile.visibility === 'PRIVATE') {
+    if (!profile) {
+      throw new NotFoundException('Profile not available');
+    }
+
+    const companyIds = (user.memberships ?? [])
+      .map((m) => m.companyId)
+      .filter(Boolean);
+
+    // Applicants to this recruiter's company must remain viewable even if PRIVATE.
+    const applied =
+      user.role === 'SUPER_ADMIN'
+        ? { id: 'admin' }
+        : companyIds.length
+          ? await this.prisma.application.findFirst({
+              where: {
+                profileId,
+                jobPost: { companyId: { in: companyIds } },
+              },
+              select: { id: true },
+            })
+          : null;
+    const appliedToMyCompany = Boolean(applied);
+
+    if (profile.visibility === 'PRIVATE' && !appliedToMyCompany) {
       throw new NotFoundException('Profile not available');
     }
 
     // Recruiter can always see contacts of candidates who applied to their company
-    if (limited && membership) {
-      const applied = await this.prisma.application.findFirst({
-        where: {
-          profileId,
-          jobPost: { companyId: membership.companyId },
-        },
-      });
-      if (applied) limited = false;
+    if (limited && appliedToMyCompany) {
+      limited = false;
     }
 
     const experienceYears = this.matching.totalExperienceYears(profile.experiences);

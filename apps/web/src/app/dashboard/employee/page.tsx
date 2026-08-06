@@ -9,6 +9,7 @@ import { FormAlert, LabelText } from '@/components/ui/Field';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
+import { MatchRing } from '@/components/ui/MatchRing';
 import { useI18n } from '@/lib/i18n';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
@@ -436,7 +437,7 @@ export default function EmployeeDashboard() {
                     <span style={{ width: `${item.matchScore}%` }} />
                   </div>
                 </div>
-                <div className="match-ring">{item.matchScore}%</div>
+                <MatchRing score={item.matchScore} />
               </Link>
             ))}
             {!recommended.length && <p className="muted">Add skills to your profile to get recommendations.</p>}
