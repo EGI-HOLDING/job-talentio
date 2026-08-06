@@ -78,7 +78,22 @@ We use **Git Flow** with two long-lived branches:
 
 Full details: [CONTRIBUTING.md](CONTRIBUTING.md)
 
-CI runs on pushes/PRs to `main` and `develop` (see [.github/workflows/ci.yml](.github/workflows/ci.yml)). Cloud deploy is not wired yet.
+CI runs on pushes/PRs to `main` and `develop` (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+
+## Cloud deploy (Railway)
+
+Staging and production run on **Railway** (Hobby-safe domain layout), with **Cloudflare** DNS/CDN + **R2** storage and **Hostinger SMTP** for email.
+
+| Env | Branch | Domains |
+|-----|--------|---------|
+| Staging | `develop` | `staging.jobtalent.io`, `admin.staging…`, `api.staging…` |
+| Production | `main` | `jobtalent.io`, `admin.jobtalent.io`, `api.jobtalent.io` |
+
+`www` redirects to apex via Cloudflare (not a Railway custom domain — Hobby allows 2 domains per service).
+
+Dockerfiles: `apps/api`, `apps/web`, `apps/admin`. Full checklist, env matrix, and Hobby cost tips: **[infra/README.md](infra/README.md)**.
+
+Production DB migrate: `pnpm db:migrate:deploy` (also runs on API container start).
 
 ## Plans & billing (local)
 
@@ -88,6 +103,4 @@ CI runs on pushes/PRs to `main` and `develop` (see [.github/workflows/ci.yml](.g
 - Hot Job: time-boxed ranking boost
 - Payments: `MockPaymentProvider` (auto-confirm) + Admin plan override
 
-## Cloud later
-
-See [infra/README.md](infra/README.md). Swap storage/email/payment adapters when AWS + Payme/Click are ready.
+Payme/Click adapters can replace the mock provider later without changing the Railway layout.

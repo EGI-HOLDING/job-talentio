@@ -72,10 +72,12 @@ gh pr create --base develop --title "feat: my change" --body "## Summary
 
 ## Release (`develop` → `main`)
 
-1. Confirm staging is healthy.
+1. Confirm staging is healthy (Railway staging auto-deploys from `develop`).
 2. Open PR: `develop` → `main`.
-3. Merge (merge commit or squash — team choice; document in the PR).
+3. Merge (merge commit or squash — team choice; document in the PR). Railway **production** auto-deploys from `main`.
 4. Optionally tag: `git tag v0.1.0 && git push origin v0.1.0`.
+
+Deploy runbooks (domains, env vars, Hobby limits): [infra/README.md](infra/README.md).
 
 ## Hotfix (production)
 

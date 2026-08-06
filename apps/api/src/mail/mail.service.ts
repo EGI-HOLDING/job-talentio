@@ -10,10 +10,12 @@ export class MailService {
 
   constructor(private config: ConfigService) {
     this.from = this.config.get('SMTP_FROM', 'Job Talentio <noreply@jobtalentio.local>');
+    const secure =
+      String(this.config.get('SMTP_SECURE', 'false')).toLowerCase() === 'true';
     this.transporter = nodemailer.createTransport({
       host: this.config.get('SMTP_HOST', 'localhost'),
       port: Number(this.config.get('SMTP_PORT', 1025)),
-      secure: false,
+      secure,
       auth: this.config.get('SMTP_USER')
         ? {
             user: this.config.get('SMTP_USER'),

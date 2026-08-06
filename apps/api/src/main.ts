@@ -19,10 +19,10 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-  const port = Number(process.env.API_PORT ?? 4000);
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
   await app.listen(port);
   // eslint-disable-next-line no-console
-  console.log(`Job Talentio API listening on http://localhost:${port}`);
+  console.log(`Job Talentio API listening on port ${port}`);
 }
 
 bootstrap();
