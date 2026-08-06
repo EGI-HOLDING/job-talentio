@@ -36,6 +36,7 @@ type SearchResponse = {
   facets?: {
     cities: Array<{ slug: string; name: string; count: number }>;
     categories: Array<{ slug: string; name: string; count: number }>;
+    companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>;
     experienceLevels: Record<string, number>;
   };
 };
@@ -44,6 +45,7 @@ type Filters = {
   q: string;
   city: string;
   category: string;
+  companySlug: string;
   skills: string;
   skillMode: string;
   benefits: string;
@@ -67,6 +69,7 @@ const EMPTY: Filters = {
   q: '',
   city: '',
   category: '',
+  companySlug: '',
   skills: '',
   skillMode: 'OR',
   benefits: '',
@@ -91,6 +94,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     q: sp.get('q') ?? '',
     city: sp.get('city') ?? '',
     category: sp.get('category') ?? '',
+    companySlug: sp.get('companySlug') ?? '',
     skills: sp.get('skills') ?? '',
     skillMode: sp.get('skillMode') ?? 'OR',
     benefits: sp.get('benefits') ?? '',
@@ -107,7 +111,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
   };
 }
 
-function toParams(f: Filters): URLSearchParams {
+function toParams(f: Filters, view?: string | null): URLSearchParams {
   const p = new URLSearchParams();
   (Object.keys(EMPTY) as Array<keyof Filters>).forEach((key) => {
     const value = f[key];
@@ -133,6 +137,7 @@ function toParams(f: Filters): URLSearchParams {
     }
     if (value) p.set(key, String(value));
   });
+  if (view === 'companies') p.set('view', 'companies');
   return p;
 }
 
@@ -167,6 +172,7 @@ function JobsInner() {
   const searchParams = useSearchParams();
   const { t } = useI18n();
   const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
+  const browseCompanies = searchParams.get('view') === 'companies';
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -176,6 +182,9 @@ function JobsInner() {
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
   const [skillQ, setSkillQ] = useState('');
   const [jumpPage, setJumpPage] = useState('');
+  const [hiringCompanies, setHiringCompanies] = useState<
+    Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
+  >([]);
   const session = typeof window !== 'undefined' ? getSession() : null;
 
   useEffect(() => {
@@ -192,15 +201,19 @@ function JobsInner() {
         setBenefits(b);
       })
       .catch(() => undefined);
+    api<SearchResponse>('/jobs?limit=1&sort=newest', { auth: false })
+      .then((r) => setHiringCompanies(r.facets?.companies || []))
+      .catch(() => undefined);
   }, []);
 
   const apply = useCallback(
-    (patch: Partial<Filters>) => {
+    (patch: Partial<Filters>, opts?: { keepBrowse?: boolean }) => {
       const next = { ...filters, ...patch };
       if (patch.page === undefined && !('page' in patch)) next.page = 1;
-      router.push(`/jobs?${toParams(next).toString()}`);
+      const keepBrowse = opts?.keepBrowse ?? browseCompanies;
+      router.push(`/jobs?${toParams(next, keepBrowse ? 'companies' : null).toString()}`);
     },
-    [filters, router],
+    [filters, router, browseCompanies],
   );
 
   useEffect(() => {
@@ -218,6 +231,7 @@ function JobsInner() {
   const selectedCats = filters.category.split(',').filter(Boolean);
   const selectedBenefits = filters.benefits.split(',').filter(Boolean);
   const selectedLevels = filters.experienceLevel.split(',').filter(Boolean);
+  const selectedCompanies = filters.companySlug.split(',').filter(Boolean);
 
   const filteredSkills = skills.filter(
     (s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()),
@@ -225,7 +239,17 @@ function JobsInner() {
 
   const cityFacet = Object.fromEntries((data?.facets?.cities || []).map((c) => [c.slug, c.count]));
   const catFacet = Object.fromEntries((data?.facets?.categories || []).map((c) => [c.slug, c.count]));
+  const companyFacetList = hiringCompanies.length
+    ? hiringCompanies
+    : data?.facets?.companies || [];
   const expFacet = data?.facets?.experienceLevels || {};
+  const singleCompanySlug =
+    filters.companySlug && !filters.companySlug.includes(',') ? filters.companySlug : '';
+  const activeCompany =
+    (singleCompanySlug && companyFacetList.find((c) => c.slug === singleCompanySlug)) ||
+    (singleCompanySlug
+      ? { slug: singleCompanySlug, name: singleCompanySlug, count: data?.total ?? 0 }
+      : null);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -234,6 +258,7 @@ function JobsInner() {
   }
 
   const pageItems = buildPageItems(filters.page, data?.totalPages || 1);
+  const rolesLabel = (n: number) => t('openRolesCount').replace('{n}', String(n));
 
   return (
     <div className="shell jobs-layout">
@@ -262,6 +287,21 @@ function JobsInner() {
               )}
             </label>
           ))}
+        </FilterFieldset>
+
+        <FilterFieldset legend={t('company')} className="filter-group">
+          {(companyFacetList.length ? companyFacetList : []).slice(0, 12).map((c) => (
+            <label key={c.slug} className="filter-check">
+              <input
+                type="checkbox"
+                checked={selectedCompanies.includes(c.slug)}
+                onChange={() => apply({ companySlug: toggleCsv(filters.companySlug, c.slug) })}
+              />
+              {c.name}
+              <span className="facet-count">({c.count})</span>
+            </label>
+          ))}
+          {!companyFacetList.length && <p className="muted" style={{ fontSize: '0.8rem' }}>—</p>}
         </FilterFieldset>
 
         <FilterFieldset legend={t('category')} className="filter-group">
@@ -401,6 +441,69 @@ function JobsInner() {
       </aside>
 
       <section>
+        {(browseCompanies || !singleCompanySlug) && companyFacetList.length > 0 && (
+          <div className="company-browse">
+            <div className="company-browse-head">
+              <div>
+                <h2>{t('browseByCompany')}</h2>
+                <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
+                  {t('browseByCompanyHint')}
+                </p>
+              </div>
+              {!browseCompanies && (
+                <Link href="/jobs?view=companies" className="hiring-view-all">
+                  {t('viewAll')} <span aria-hidden>→</span>
+                </Link>
+              )}
+            </div>
+            <div className="company-browse-grid">
+              {(browseCompanies ? companyFacetList : companyFacetList.slice(0, 8)).map((c) => (
+                <Link
+                  key={c.slug}
+                  href={`/jobs?companySlug=${encodeURIComponent(c.slug)}`}
+                  className={`hiring-card ${selectedCompanies.includes(c.slug) ? 'active' : ''}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={
+                      c.logoUrl ||
+                      `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(c.name)}`
+                    }
+                    alt=""
+                  />
+                  <div>
+                    <strong>{c.name}</strong>
+                    <span>{rolesLabel(c.count)}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeCompany && singleCompanySlug && (
+          <div className="company-filter-banner">
+            <div>
+              <strong>{t('jobsAtCompany').replace('{name}', activeCompany.name)}</strong>
+              <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+                {rolesLabel(data?.total ?? activeCompany.count)}
+              </p>
+            </div>
+            <div className="company-filter-actions">
+              <Link href={`/companies/${activeCompany.slug}`} className="chip">
+                {t('viewCompanyProfile')}
+              </Link>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => apply({ companySlug: '' }, { keepBrowse: true })}
+              >
+                {t('clearCompanyFilter')}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="jobs-toolbar">
           <div>
             <strong>{data?.total ?? '—'}</strong> <span className="muted">{t('jobsFound')}</span>

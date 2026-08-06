@@ -55,6 +55,46 @@ const DICT = {
   },
   viewAll: { uz: 'Barchasini ko‘rish', ru: 'Смотреть все', en: 'View all' },
   hiringNow: { uz: 'Hozir ishga olmoqda', ru: 'Сейчас нанимают', en: 'Hiring now' },
+  hiringNowSubtitle: {
+    uz: 'Kompaniyalar ochiq vakansiyalar bilan',
+    ru: 'Компании с открытыми вакансиями',
+    en: 'Companies with open roles right now',
+  },
+  openRolesCount: {
+    uz: '{n} ochiq ish',
+    ru: '{n} вакансий',
+    en: '{n} open roles',
+  },
+  browseByCompany: {
+    uz: 'Kompaniya bo‘yicha qidirish',
+    ru: 'Поиск по компаниям',
+    en: 'Browse jobs by company',
+  },
+  browseByCompanyHint: {
+    uz: 'Kompaniyani tanlang — uning barcha ochiq ishlari chiqadi.',
+    ru: 'Выберите компанию, чтобы увидеть все её открытые вакансии.',
+    en: 'Pick a company to see all of its open roles.',
+  },
+  jobsAtCompany: {
+    uz: 'Ishlar: {name}',
+    ru: 'Вакансии: {name}',
+    en: 'Jobs at {name}',
+  },
+  clearCompanyFilter: {
+    uz: 'Kompaniya filtrini tozalash',
+    ru: 'Сбросить фильтр компании',
+    en: 'Clear company filter',
+  },
+  viewCompanyProfile: {
+    uz: 'Kompaniya profili',
+    ru: 'Профиль компании',
+    en: 'Company profile',
+  },
+  companiesHiring: {
+    uz: 'Ishga olayotgan kompaniyalar',
+    ru: 'Компании, которые нанимают',
+    en: 'Companies hiring',
+  },
   forCandidates: { uz: 'Nomzodlar uchun', ru: 'Для кандидатов', en: 'For candidates' },
   forCandidatesDesc: {
     uz: 'Profil, ko‘nikmalar, CV yuklash, moslik ballari, ogohlantirishlar va chat.',

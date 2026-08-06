@@ -416,6 +416,7 @@ export class JobsService {
     city?: string;
     category?: string;
     company?: string;
+    companySlug?: string;
     employmentType?: string;
     workMode?: string;
     experienceLevel?: string;
@@ -442,6 +443,13 @@ export class JobsService {
 
     if (query.company) {
       and.push({ company: { name: { contains: query.company, mode: 'insensitive' } } });
+    }
+    const companySlugs = (query.companySlug || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (companySlugs.length) {
+      and.push({ company: { slug: { in: companySlugs } } });
     }
     if (query.employmentType) and.push({ employmentType: query.employmentType as never });
     if (query.workMode) and.push({ workMode: query.workMode as never });
@@ -606,12 +614,17 @@ export class JobsService {
         experienceLevel: true,
         city: { select: { slug: true, name: true } },
         category: { select: { slug: true, name: true } },
+        company: { select: { slug: true, name: true, logoUrl: true } },
       },
       take: 1000,
     });
 
     const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const categoryFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const companyFacets: Record<
+      string,
+      { slug: string; name: string; logoUrl?: string | null; count: number }
+    > = {};
     const experienceFacets: Record<string, number> = {};
     for (const j of facetJobs) {
       if (j.city) {
@@ -625,6 +638,17 @@ export class JobsService {
         categoryFacets[key] = categoryFacets[key]
           ? { ...categoryFacets[key], count: categoryFacets[key].count + 1 }
           : { slug: j.category.slug, name: j.category.name, count: 1 };
+      }
+      if (j.company) {
+        const key = j.company.slug;
+        companyFacets[key] = companyFacets[key]
+          ? { ...companyFacets[key], count: companyFacets[key].count + 1 }
+          : {
+              slug: j.company.slug,
+              name: j.company.name,
+              logoUrl: j.company.logoUrl,
+              count: 1,
+            };
       }
       if (j.experienceLevel) {
         experienceFacets[j.experienceLevel] = (experienceFacets[j.experienceLevel] || 0) + 1;
@@ -641,6 +665,7 @@ export class JobsService {
       facets: {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count),
         categories: Object.values(categoryFacets).sort((a, b) => b.count - a.count),
+        companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,
       },
     };
