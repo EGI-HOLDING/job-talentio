@@ -19,6 +19,13 @@ type Job = {
   city?: { name: string } | null;
 };
 
+type HiringCompany = {
+  name: string;
+  logoUrl?: string | null;
+  slug: string;
+  openRoles: number;
+};
+
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return null;
   const fmt = (n: number) => `${Math.round(n / 1_000_000)}M`;
@@ -26,23 +33,33 @@ function formatSalary(min?: number | null, max?: number | null) {
   return `${fmt(min || max!)} UZS`;
 }
 
+function rolesLabel(t: (k: string) => string, n: number) {
+  return t('openRolesCount').replace('{n}', String(n));
+}
+
 export default function HomePage() {
   const router = useRouter();
   const { t } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [hotJobs, setHotJobs] = useState<Job[]>([]);
-  const [companies, setCompanies] = useState<Array<{ name: string; logoUrl?: string | null; slug: string }>>([]);
+  const [companies, setCompanies] = useState<HiringCompany[]>([]);
 
   useEffect(() => {
     api<Category[]>('/meta/categories', { auth: false }).then(setCategories).catch(() => undefined);
     api<{ items: Job[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false })
+      .then((r) => setHotJobs(r.items))
+      .catch(() => undefined);
+    api<{
+      facets?: { companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }> };
+    }>('/jobs?limit=1&sort=newest', { auth: false })
       .then((r) => {
-        setHotJobs(r.items);
-        setCompanies(
-          Array.from(
-            new Map(r.items.map((j) => [j.company.slug, j.company])).values(),
-          ),
-        );
+        const list = (r.facets?.companies || []).slice(0, 8).map((c) => ({
+          name: c.name,
+          slug: c.slug,
+          logoUrl: c.logoUrl,
+          openRoles: c.count,
+        }));
+        setCompanies(list);
       })
       .catch(() => undefined);
   }, []);
@@ -137,12 +154,36 @@ export default function HomePage() {
 
       {companies.length > 0 && (
         <section className="section">
-          <h2 className="section-title">{t('hiringNow')}</h2>
-          <div className="logo-strip">
+          <div className="hiring-head">
+            <div>
+              <h2 className="section-title">{t('hiringNow')}</h2>
+              <p className="muted">{t('hiringNowSubtitle')}</p>
+            </div>
+            <Link href="/jobs?view=companies" className="hiring-view-all">
+              {t('viewAll')}
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
+          <div className="hiring-grid">
             {companies.map((c) => (
-              <Link key={c.slug} href={`/companies/${c.slug}`} title={c.name}>
+              <Link
+                key={c.slug}
+                href={`/jobs?companySlug=${encodeURIComponent(c.slug)}`}
+                className="hiring-card"
+                title={c.name}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.logoUrl || ''} alt={c.name} />
+                <img
+                  src={
+                    c.logoUrl ||
+                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(c.name)}`
+                  }
+                  alt=""
+                />
+                <div>
+                  <strong>{c.name}</strong>
+                  <span>{rolesLabel(t, c.openRoles)}</span>
+                </div>
               </Link>
             ))}
           </div>

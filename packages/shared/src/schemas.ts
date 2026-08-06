@@ -67,6 +67,7 @@ export const jobSearchSchema = z.object({
   city: z.string().optional(), // slug or comma-separated slugs
   category: z.string().optional(),
   company: z.string().optional(),
+  companySlug: z.string().optional(), // exact company slug (comma-separated ok)
   employmentType: z.string().optional(),
   workMode: z.string().optional(),
   experienceLevel: z.string().optional(),
