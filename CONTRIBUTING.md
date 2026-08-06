@@ -2,7 +2,7 @@
 
 Job Talentio uses a simplified **Git Flow** with two long-lived branches.
 
-Remote: [echestratus/job-talentio](https://github.com/echestratus/job-talentio)
+Remote: [EGI-HOLDING/job-talentio](https://github.com/EGI-HOLDING/job-talentio)
 
 ## Branches
 

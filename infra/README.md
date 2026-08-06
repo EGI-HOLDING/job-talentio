@@ -55,7 +55,7 @@ API healthcheck: `GET /api/health`
 
 ## 1. Railway project setup
 
-1. Create project `job-talentio` and connect GitHub `echestratus/job-talentio`.
+1. Create project `job-talentio` and connect GitHub `EGI-HOLDING/job-talentio`.
 2. Create environment **staging** (duplicate or empty), keep **production**.
 3. Per environment, add services:
    - **Postgres** (Railway plugin)
