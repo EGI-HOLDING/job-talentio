@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
+import { useI18n } from '@/lib/i18n';
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -27,6 +28,7 @@ function formatSalary(min?: number | null, max?: number | null) {
 
 export default function HomePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [hotJobs, setHotJobs] = useState<Job[]>([]);
   const [companies, setCompanies] = useState<Array<{ name: string; logoUrl?: string | null; slug: string }>>([]);
@@ -54,16 +56,17 @@ export default function HomePage() {
   return (
     <div className="shell">
       <section className="hero">
-        <span className="badge">Uzbekistan · uz / ru / en</span>
-        <h1>Find work that fits. Hire talent that delivers.</h1>
-        <p>
-          Job Talentio connects candidates and companies across Uzbekistan with smart matching,
-          advanced search, and a lightweight ATS.
-        </p>
+        <span className="badge">{t('heroBadge')}</span>
+        <h1>{t('heroTitle')}</h1>
+        <p>{t('heroSubtitle')}</p>
         <form className="hero-search" onSubmit={onSearch}>
-          <input name="q" placeholder="Job title, skill, or company…" aria-label="Search jobs" />
+          <input
+            name="q"
+            placeholder={t('searchPlaceholder')}
+            aria-label={t('searchJobs')}
+          />
           <button type="submit" className="cta">
-            Search jobs
+            {t('searchJobs')}
           </button>
         </form>
         <div className="chips">
@@ -78,29 +81,29 @@ export default function HomePage() {
       <section className="section">
         <div className="stats-row">
           <div className="stat">
-            <strong>40+</strong>
-            <span>Open roles</span>
+            <strong>90+</strong>
+            <span>{t('openRoles')}</span>
           </div>
           <div className="stat">
-            <strong>10</strong>
-            <span>Companies</span>
+            <strong>20</strong>
+            <span>{t('companiesStat')}</span>
           </div>
           <div className="stat">
-            <strong>30+</strong>
-            <span>Talent profiles</span>
+            <strong>60+</strong>
+            <span>{t('talentProfiles')}</span>
           </div>
           <div className="stat">
             <strong>15</strong>
-            <span>Cities covered</span>
+            <span>{t('citiesCovered')}</span>
           </div>
         </div>
       </section>
 
       <section className="section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h2 className="section-title">Hot jobs</h2>
+          <h2 className="section-title">{t('hotJobs')}</h2>
           <Link href="/jobs?hotOnly=true" className="muted">
-            View all →
+            {t('viewAll')} →
           </Link>
         </div>
         <div className="grid-2">
@@ -114,7 +117,7 @@ export default function HomePage() {
                 style={{ width: 48, height: 48 }}
               />
               <div>
-                <span className="badge hot">Hot</span>
+                <span className="badge hot">{t('hot')}</span>
                 <h3>{job.title}</h3>
                 <div className="job-meta">
                   <span>{job.company.name}</span>
@@ -128,13 +131,13 @@ export default function HomePage() {
               </div>
             </Link>
           ))}
-          {!hotJobs.length && <p className="muted">Hot jobs will appear after seed data loads.</p>}
+          {!hotJobs.length && <p className="muted">{t('hotJobsEmpty')}</p>}
         </div>
       </section>
 
       {companies.length > 0 && (
         <section className="section">
-          <h2 className="section-title">Hiring now</h2>
+          <h2 className="section-title">{t('hiringNow')}</h2>
           <div className="logo-strip">
             {companies.map((c) => (
               <Link key={c.slug} href={`/companies/${c.slug}`} title={c.name}>
@@ -148,16 +151,16 @@ export default function HomePage() {
 
       <section className="section grid-3" style={{ paddingBottom: '3rem' }}>
         <div className="card">
-          <h3>For candidates</h3>
-          <p className="muted">Profile, skills, CV upload, match scores, alerts, and chat.</p>
+          <h3>{t('forCandidates')}</h3>
+          <p className="muted">{t('forCandidatesDesc')}</p>
         </div>
         <div className="card">
-          <h3>For companies</h3>
-          <p className="muted">Pipeline, candidate matching, Hot Jobs, screening questions.</p>
+          <h3>{t('forCompanies')}</h3>
+          <p className="muted">{t('forCompaniesDesc')}</p>
         </div>
         <div className="card">
-          <h3>Enterprise-ready</h3>
-          <p className="muted">Normalized data, analytics, notifications, moderation tools.</p>
+          <h3>{t('enterpriseReady')}</h3>
+          <p className="muted">{t('enterpriseReadyDesc')}</p>
         </div>
       </section>
     </div>

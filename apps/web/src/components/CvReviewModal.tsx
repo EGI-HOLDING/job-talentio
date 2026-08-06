@@ -106,21 +106,33 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal cv-review-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="modal cv-review-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cv-review-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="cv-review-header">
           <div>
-            <h2 style={{ margin: 0 }}>Review parsed CV</h2>
+            <h2 id="cv-review-title" style={{ margin: 0 }}>
+              Review parsed CV
+            </h2>
             <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
               Choose what to import into your profile. Uncheck anything that looks wrong.
             </p>
           </div>
-          <button type="button" className="ghost" onClick={onClose}>
+          <button type="button" className="ghost" onClick={onClose} aria-label="Close dialog">
             ✕
           </button>
         </div>
 
-        {error && <div className="error" style={{ marginBottom: '1rem' }}>{error}</div>}
+        {error && (
+          <div className="error" style={{ marginBottom: '1rem' }} role="alert">
+            {error}
+          </div>
+        )}
 
         <div className="cv-review-body">
           {(parsed.headline || parsed.summary || parsed.phone || parsed.email) && (

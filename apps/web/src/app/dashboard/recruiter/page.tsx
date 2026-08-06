@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
+import { useI18n } from '@/lib/i18n';
+import { FilterFieldset, FormAlert, LabelText } from '@/components/ui/Field';
 
 type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'company';
 
@@ -75,6 +77,7 @@ function jobSelectLabel(j: {
 }
 
 export default function RecruiterDashboard() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('jobs');
   const [memberships, setMemberships] = useState<any[]>([]);
   const [companyId, setCompanyId] = useState('');
@@ -334,6 +337,7 @@ export default function RecruiterDashboard() {
               setCompanyId(e.target.value);
               loadJobs(e.target.value);
             }}
+            aria-label="Company"
             style={{ marginTop: '0.75rem' }}
           >
             {memberships.map((m) => (
@@ -346,24 +350,25 @@ export default function RecruiterDashboard() {
       </aside>
 
       <section>
-        {error && <div className="error">{error}</div>}
-        {msg && <div className="success">{msg}</div>}
+        {error && <FormAlert>{error}</FormAlert>}
+        {msg && <FormAlert tone="success">{msg}</FormAlert>}
 
         {tab === 'jobs' && (
           <div className="grid-2">
             <div className="card">
               <h3>Create job</h3>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={createJob}>
                 <label>
-                  Title
+                  <LabelText required>Title</LabelText>
                   <input name="title" required minLength={3} />
                 </label>
                 <label>
-                  Description
+                  <LabelText required>Description</LabelText>
                   <textarea name="description" rows={5} required minLength={20} />
                 </label>
                 <label>
-                  City
+                  <LabelText>City</LabelText>
                   <select name="citySlug">
                     <option value="">—</option>
                     {meta.cities.map((c) => (
@@ -374,7 +379,7 @@ export default function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  Category
+                  <LabelText>Category</LabelText>
                   <select name="categorySlug">
                     <option value="">—</option>
                     {meta.categories.map((c) => (
@@ -385,7 +390,7 @@ export default function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  Level
+                  <LabelText>Level</LabelText>
                   <select name="experienceLevel">
                     <option value="">—</option>
                     {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
@@ -394,21 +399,21 @@ export default function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  Min years
+                  <LabelText>Min years</LabelText>
                   <input name="experienceYearsMin" type="number" />
                 </label>
                 <div className="grid-2">
                   <label>
-                    Salary min
+                    <LabelText>Salary min</LabelText>
                     <input name="salaryMin" type="number" />
                   </label>
                   <label>
-                    Salary max
+                    <LabelText>Salary max</LabelText>
                     <input name="salaryMax" type="number" />
                   </label>
                 </div>
                 <label>
-                  Work mode
+                  <LabelText>Work mode</LabelText>
                   <select name="workMode" defaultValue="HYBRID">
                     <option>ONSITE</option>
                     <option>HYBRID</option>
@@ -419,11 +424,11 @@ export default function RecruiterDashboard() {
                   Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.
                 </p>
                 <label>
-                  Skill slugs (comma)
+                  <LabelText>Skill slugs (comma)</LabelText>
                   <input name="skills" placeholder="typescript,react,nestjs" />
                 </label>
                 <label>
-                  Benefit slugs (comma)
+                  <LabelText>Benefit slugs (comma)</LabelText>
                   <input name="benefits" placeholder="health-insurance,remote-work" />
                 </label>
                 <button type="submit">Create draft</button>
@@ -471,6 +476,7 @@ export default function RecruiterDashboard() {
                 onChange={(e) => setSelectedJob(e.target.value)}
                 className="job-select"
                 title="Select job post"
+                aria-label="Select job post"
               >
                 {jobs.length === 0 && <option value="">No jobs yet</option>}
                 {jobs.map((j) => (
@@ -537,6 +543,7 @@ export default function RecruiterDashboard() {
                         style={{ marginTop: '0.5rem', fontSize: '0.8rem', width: '100%' }}
                         value={a.status}
                         onChange={(e) => setStatus(a.id, e.target.value)}
+                        aria-label={`Status for ${a.profile?.user?.fullName || 'applicant'}`}
                       >
                         {STAGES.map((s) => (
                           <option key={s}>{s}</option>
@@ -547,8 +554,14 @@ export default function RecruiterDashboard() {
                           style={{ marginTop: '0.5rem', display: 'grid', gap: '0.25rem' }}
                           onSubmit={(e) => scheduleInterview(e, a.id)}
                         >
-                          <input name="scheduledAt" type="datetime-local" required style={{ fontSize: '0.75rem', width: '100%' }} />
-                          <input name="meetingUrl" placeholder="Meet URL" style={{ fontSize: '0.75rem', width: '100%' }} />
+                          <label>
+                            <LabelText required>Interview time</LabelText>
+                            <input name="scheduledAt" type="datetime-local" required style={{ fontSize: '0.75rem', width: '100%' }} />
+                          </label>
+                          <label>
+                            <LabelText>Meeting URL</LabelText>
+                            <input name="meetingUrl" placeholder="Meet URL" style={{ fontSize: '0.75rem', width: '100%' }} />
+                          </label>
                           <button type="submit" style={{ padding: '0.35rem', fontSize: '0.75rem' }}>
                             Schedule interview
                           </button>
@@ -615,6 +628,7 @@ export default function RecruiterDashboard() {
                   onChange={(e) =>
                     applyCand({ sort: e.target.value as CandFilters['sort'] })
                   }
+                  aria-label={t('sortBy')}
                 >
                   <option value="relevance">Sort: Relevance</option>
                   <option value="newest">Sort: Newest</option>
@@ -625,6 +639,7 @@ export default function RecruiterDashboard() {
                 <select
                   value={candFilters.limit}
                   onChange={(e) => applyCand({ limit: Number(e.target.value) })}
+                  aria-label={t('resultsPerPage')}
                 >
                   {CAND_PAGE_SIZES.map((n) => (
                     <option key={n} value={n}>
@@ -660,7 +675,7 @@ export default function RecruiterDashboard() {
                   }}
                 >
                   <label>
-                    Keywords
+                    <LabelText>Keywords</LabelText>
                     <input name="q" defaultValue={candFilters.q} key={candFilters.q} placeholder="Name, headline, skill…" />
                   </label>
                   <button type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
@@ -669,27 +684,28 @@ export default function RecruiterDashboard() {
                 </form>
 
                 <div className="filter-group">
-                  <label>Match to job</label>
-                  <select
-                    value={candFilters.matchJobId}
-                    onChange={(e) =>
-                      applyCand({
-                        matchJobId: e.target.value,
-                        sort: e.target.value ? 'match' : 'relevance',
-                      })
-                    }
-                  >
-                    <option value="">Any (no match ranking)</option>
-                    {jobs.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {jobSelectLabel(j)}
-                      </option>
-                    ))}
-                  </select>
+                  <label>
+                    <LabelText>Match to job</LabelText>
+                    <select
+                      value={candFilters.matchJobId}
+                      onChange={(e) =>
+                        applyCand({
+                          matchJobId: e.target.value,
+                          sort: e.target.value ? 'match' : 'relevance',
+                        })
+                      }
+                    >
+                      <option value="">Any (no match ranking)</option>
+                      {jobs.map((j) => (
+                        <option key={j.id} value={j.id}>
+                          {jobSelectLabel(j)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
 
-                <div className="filter-group">
-                  <label>City</label>
+                <FilterFieldset legend="City" className="filter-group">
                   {meta.cities.slice(0, 12).map((c) => (
                     <label key={c.slug} className="filter-check">
                       <input
@@ -697,17 +713,17 @@ export default function RecruiterDashboard() {
                         checked={selectedCandCities.includes(c.slug)}
                         onChange={() => applyCand({ city: toggleCsv(candFilters.city, c.slug) })}
                       />
-                      {c.name}
+                      <LabelText optional={false}>{c.name}</LabelText>
                       {cityFacet[c.slug] !== undefined && (
                         <span className="facet-count">({cityFacet[c.slug]})</span>
                       )}
                     </label>
                   ))}
-                </div>
+                </FilterFieldset>
 
-                <div className="filter-group">
+                <FilterFieldset legend={`Skills (${candFilters.skillMode})`} className="filter-group">
                   <label>
-                    Skills ({candFilters.skillMode})
+                    <LabelText>Match mode</LabelText>
                     <select
                       value={candFilters.skillMode}
                       onChange={(e) => applyCand({ skillMode: e.target.value as 'AND' | 'OR' })}
@@ -716,6 +732,9 @@ export default function RecruiterDashboard() {
                       <option value="OR">Match any (OR)</option>
                       <option value="AND">Match all (AND)</option>
                     </select>
+                  </label>
+                  <label>
+                    <LabelText>Filter skills</LabelText>
                     <input
                       value={skillQ}
                       onChange={(e) => setSkillQ(e.target.value)}
@@ -729,51 +748,57 @@ export default function RecruiterDashboard() {
                         checked={selectedCandSkills.includes(s.slug)}
                         onChange={() => applyCand({ skills: toggleCsv(candFilters.skills, s.slug) })}
                       />
-                      {s.name}
+                      <LabelText optional={false}>{s.name}</LabelText>
                       {skillFacet[s.slug] !== undefined && (
                         <span className="facet-count">({skillFacet[s.slug]})</span>
                       )}
                     </label>
                   ))}
-                </div>
+                </FilterFieldset>
 
                 <div className="filter-group">
-                  <label>Experience (years)</label>
                   <div className="grid-2" style={{ gap: '0.4rem' }}>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="Min"
-                      value={candFilters.experienceYearsMin}
-                      onChange={(e) => applyCand({ experienceYearsMin: e.target.value })}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="Max"
-                      value={candFilters.experienceYearsMax}
-                      onChange={(e) => applyCand({ experienceYearsMax: e.target.value })}
-                    />
+                    <label>
+                      <LabelText>Min years</LabelText>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Min"
+                        value={candFilters.experienceYearsMin}
+                        onChange={(e) => applyCand({ experienceYearsMin: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <LabelText>Max years</LabelText>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Max"
+                        value={candFilters.experienceYearsMax}
+                        onChange={(e) => applyCand({ experienceYearsMax: e.target.value })}
+                      />
+                    </label>
                   </div>
                 </div>
 
                 <div className="filter-group">
-                  <label>Degree</label>
-                  <select
-                    value={candFilters.degree}
-                    onChange={(e) => applyCand({ degree: e.target.value })}
-                  >
-                    <option value="">Any</option>
-                    {DEGREE_OPTS.map((d) => (
-                      <option key={d} value={d}>
-                        {d.replace(/_/g, ' ')}
-                      </option>
-                    ))}
-                  </select>
+                  <label>
+                    <LabelText>Degree</LabelText>
+                    <select
+                      value={candFilters.degree}
+                      onChange={(e) => applyCand({ degree: e.target.value })}
+                    >
+                      <option value="">Any</option>
+                      {DEGREE_OPTS.map((d) => (
+                        <option key={d} value={d}>
+                          {d.replace(/_/g, ' ')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
 
-                <div className="filter-group">
-                  <label>Languages</label>
+                <FilterFieldset legend="Languages" className="filter-group">
                   {meta.languages.map((l) => (
                     <label key={l.code} className="filter-check">
                       <input
@@ -783,10 +808,10 @@ export default function RecruiterDashboard() {
                           applyCand({ languages: toggleCsv(candFilters.languages, l.code) })
                         }
                       />
-                      {l.name}
+                      <LabelText optional={false}>{l.name}</LabelText>
                     </label>
                   ))}
-                </div>
+                </FilterFieldset>
 
                 <div className="filter-group">
                   <label className="filter-check">
@@ -795,7 +820,7 @@ export default function RecruiterDashboard() {
                       checked={candFilters.hasCertification}
                       onChange={(e) => applyCand({ hasCertification: e.target.checked })}
                     />
-                    Has certification
+                    <LabelText optional={false}>Has certification</LabelText>
                   </label>
                 </div>
               </aside>
@@ -914,6 +939,7 @@ export default function RecruiterDashboard() {
                 onChange={(e) => setSelectedJob(e.target.value)}
                 className="job-select"
                 title="Select job post"
+                aria-label="Select job post"
               >
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>
@@ -964,21 +990,22 @@ export default function RecruiterDashboard() {
             </div>
             <div className="card">
               <h3>Edit company profile</h3>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={updateCompany} key={company.id}>
                 <label>
-                  Name
+                  <LabelText required>Name</LabelText>
                   <input name="name" defaultValue={company.name} required minLength={2} />
                 </label>
                 <label>
-                  Description
+                  <LabelText>Description</LabelText>
                   <textarea name="description" rows={4} defaultValue={company.description || ''} />
                 </label>
                 <label>
-                  Website
+                  <LabelText>Website</LabelText>
                   <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://…" />
                 </label>
                 <label>
-                  City
+                  <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={company.city?.slug || ''}>
                     <option value="">—</option>
                     {meta.cities.map((c) => (
@@ -989,7 +1016,7 @@ export default function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  Industry
+                  <LabelText>Industry</LabelText>
                   <select name="industrySlug" defaultValue={company.industry?.slug || ''}>
                     <option value="">—</option>
                     {industries.map((i) => (
@@ -1000,7 +1027,7 @@ export default function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  Company size
+                  <LabelText>Company size</LabelText>
                   <select name="size" defaultValue={company.size || ''}>
                     <option value="">—</option>
                     <option value="SIZE_1_10">1–10</option>

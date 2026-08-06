@@ -26,7 +26,7 @@ Follow this branching model for every change in this repo.
    ```
 2. Create a short-lived branch:
    - Feature: `feature/<short-kebab-name>`
-   - Bugfix: `fix/<short-kebab-name>`
+   - Bug fix: `fix/<short-kebab-name>`
    - Chore/docs/ci: `chore/<short-kebab-name>`
    - Hotfix (prod): `hotfix/<short-kebab-name>` from `main`
 3. Commit focused changes with clear messages (why > what).
@@ -45,11 +45,15 @@ Follow this branching model for every change in this repo.
 1. Branch from `main`: `hotfix/<name>`.
 2. PR into `main`, then also merge/cherry-pick into `develop`.
 
-## Agent behavior
+## Agent behavior (required)
 
 When implementing user-requested work in this repo:
 
-- Create/use a feature (or fix/chore) branch off `develop` before making commits.
+- Create/use a feature (or fix/chore) branch off `develop` **before** making commits.
+- After finishing a coherent unit of work, **automatically**:
+  1. Commit the relevant changes (never secrets like `.env`)
+  2. Push the branch with `-u` if needed
+  3. Open a Pull Request targeting **`develop`**
+- Do not wait for the user to ask again for commit / push / PR unless they explicitly say to hold.
 - Do not push to `main` or merge to `main` unless the user explicitly asks for a production release.
-- Prefer opening a PR targeting `develop` when the user asks to create a pull request.
 - Never skip hooks or force-push protected branches.

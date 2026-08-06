@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { FilterFieldset, FormField } from '@/components/ui/Field';
 import { api, getSession } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
 
 type MetaItem = { id: string; name: string; slug: string; icon?: string | null };
@@ -163,6 +165,7 @@ function toggleCsv(csv: string, slug: string) {
 function JobsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useI18n();
   const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,19 +238,17 @@ function JobsInner() {
   return (
     <div className="shell jobs-layout">
       <aside className="filters">
-        <h3>Filters</h3>
+        <h3>{t('filters')}</h3>
         <form onSubmit={onSearch} className="filter-group">
-          <label>
-            Keywords
-            <input name="q" defaultValue={filters.q} key={filters.q} placeholder="Title, skill…" />
-          </label>
+          <FormField label={t('keyword')} optional>
+            <input name="q" defaultValue={filters.q} key={filters.q} placeholder={t('searchPlaceholder')} />
+          </FormField>
           <button type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
-            Search
+            {t('search')}
           </button>
         </form>
 
-        <div className="filter-group">
-          <label>City</label>
+        <FilterFieldset legend={t('city')} className="filter-group">
           {cities.slice(0, 10).map((c) => (
             <label key={c.slug} className="filter-check">
               <input
@@ -261,10 +262,9 @@ function JobsInner() {
               )}
             </label>
           ))}
-        </div>
+        </FilterFieldset>
 
-        <div className="filter-group">
-          <label>Category</label>
+        <FilterFieldset legend={t('category')} className="filter-group">
           {categories.map((c) => (
             <label key={c.slug} className="filter-check">
               <input
@@ -278,25 +278,26 @@ function JobsInner() {
               )}
             </label>
           ))}
-        </div>
+        </FilterFieldset>
 
-        <div className="filter-group">
-          <label>
-            Skills ({filters.skillMode})
+        <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
+          <FormField label={t('matchMode')} optional>
             <select
               value={filters.skillMode}
               onChange={(e) => apply({ skillMode: e.target.value })}
               style={{ marginBottom: '0.4rem' }}
             >
-              <option value="OR">Match any (OR)</option>
-              <option value="AND">Match all (AND)</option>
+              <option value="OR">{t('matchAny')}</option>
+              <option value="AND">{t('matchAll')}</option>
             </select>
+          </FormField>
+          <FormField label={t('filterSkills')} optional>
             <input
               value={skillQ}
               onChange={(e) => setSkillQ(e.target.value)}
-              placeholder="Filter skills…"
+              placeholder={t('filterSkills')}
             />
-          </label>
+          </FormField>
           {filteredSkills.map((s) => (
             <label key={s.slug} className="filter-check">
               <input
@@ -307,10 +308,9 @@ function JobsInner() {
               {s.name}
             </label>
           ))}
-        </div>
+        </FilterFieldset>
 
-        <div className="filter-group">
-          <label>Experience level</label>
+        <FilterFieldset legend={t('experienceLevel')} className="filter-group">
           {EXP_LEVELS.map((lvl) => (
             <label key={lvl} className="filter-check">
               <input
@@ -324,10 +324,9 @@ function JobsInner() {
               )}
             </label>
           ))}
-        </div>
+        </FilterFieldset>
 
-        <div className="filter-group">
-          <label>Benefits</label>
+        <FilterFieldset legend={t('benefits')} className="filter-group">
           {benefits.slice(0, 8).map((b) => (
             <label key={b.slug} className="filter-check">
               <input
@@ -338,57 +337,53 @@ function JobsInner() {
               {b.icon} {b.name}
             </label>
           ))}
-        </div>
+        </FilterFieldset>
 
         <div className="filter-group">
-          <label>
-            Work mode
+          <FormField label={t('workMode')} optional>
             <select
               value={filters.workMode}
               onChange={(e) => apply({ workMode: e.target.value })}
             >
-              <option value="">Any</option>
-              <option value="ONSITE">On-site</option>
-              <option value="HYBRID">Hybrid</option>
-              <option value="REMOTE">Remote</option>
+              <option value="">{t('any')}</option>
+              <option value="ONSITE">{t('onsite')}</option>
+              <option value="HYBRID">{t('hybrid')}</option>
+              <option value="REMOTE">{t('remote')}</option>
             </select>
-          </label>
+          </FormField>
         </div>
 
         <div className="filter-group">
-          <label>
-            Posted
+          <FormField label={t('postedWithin')} optional>
             <select
               value={filters.postedWithin}
               onChange={(e) => apply({ postedWithin: e.target.value })}
             >
-              <option value="">Any time</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
+              <option value="">{t('anyTime')}</option>
+              <option value="24h">{t('last24h')}</option>
+              <option value="7d">{t('last7d')}</option>
+              <option value="30d">{t('last30d')}</option>
             </select>
-          </label>
+          </FormField>
         </div>
 
         <div className="filter-group grid-2">
-          <label>
-            Salary min
+          <FormField label={`${t('salary')} min`} optional>
             <input
               type="number"
               value={filters.salaryMin}
               onChange={(e) => apply({ salaryMin: e.target.value })}
               placeholder="UZS"
             />
-          </label>
-          <label>
-            Salary max
+          </FormField>
+          <FormField label={`${t('salary')} max`} optional>
             <input
               type="number"
               value={filters.salaryMax}
               onChange={(e) => apply({ salaryMax: e.target.value })}
               placeholder="UZS"
             />
-          </label>
+          </FormField>
         </div>
 
         <label className="filter-check">
@@ -397,18 +392,18 @@ function JobsInner() {
             checked={filters.hotOnly}
             onChange={(e) => apply({ hotOnly: e.target.checked })}
           />
-          Hot jobs only
+          {t('hotJobsOnly')}
         </label>
 
         <button type="button" className="secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={() => router.push('/jobs')}>
-          Clear filters
+          {t('clearFilters')}
         </button>
       </aside>
 
       <section>
         <div className="jobs-toolbar">
           <div>
-            <strong>{data?.total ?? '—'}</strong> <span className="muted">jobs found</span>
+            <strong>{data?.total ?? '—'}</strong> <span className="muted">{t('jobsFound')}</span>
             <div className="chips" style={{ marginTop: '0.5rem' }}>
               {selectedCities.map((s) => (
                 <button key={s} type="button" className="chip active" onClick={() => apply({ city: toggleCsv(filters.city, s) })}>
@@ -428,7 +423,11 @@ function JobsInner() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <select value={filters.sort} onChange={(e) => apply({ sort: e.target.value })}>
+            <select
+              value={filters.sort}
+              onChange={(e) => apply({ sort: e.target.value })}
+              aria-label={t('sortBy')}
+            >
               <option value="relevance">Relevance</option>
               <option value="newest">Newest</option>
               <option value="salary_high">Salary high</option>
@@ -436,7 +435,11 @@ function JobsInner() {
               <option value="experience">Experience</option>
               {session?.user.role === 'EMPLOYEE' && <option value="match">Best match</option>}
             </select>
-            <select value={filters.limit} onChange={(e) => apply({ limit: Number(e.target.value) })}>
+            <select
+              value={filters.limit}
+              onChange={(e) => apply({ limit: Number(e.target.value) })}
+              aria-label={t('resultsPerPage')}
+            >
               {PAGE_SIZE_OPTIONS.map((n) => (
                 <option key={n} value={n}>
                   {n} / page
@@ -548,6 +551,7 @@ function JobsInner() {
                 value={jumpPage}
                 onChange={(e) => setJumpPage(e.target.value)}
                 placeholder="#"
+                aria-label={t('jumpToPage')}
               />
               <button type="submit" className="secondary">
                 Go
