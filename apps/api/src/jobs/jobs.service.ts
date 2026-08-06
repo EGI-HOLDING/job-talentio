@@ -553,84 +553,130 @@ export class JobsService {
 
     const where: Prisma.JobPostWhereInput = { AND: and };
     const sort = query.sort ?? 'relevance';
+    const limit = query.limit;
+    /** In-memory rank/match must scan a bounded window so deep pages stay consistent. */
+    const RELEVANCE_SCAN_CAP = 1000;
+    const MATCH_SCAN_CAP = 250;
+    const needsInMemoryRank = sort === 'relevance' || sort === 'match';
+    const scanCap = sort === 'match' ? MATCH_SCAN_CAP : RELEVANCE_SCAN_CAP;
 
-    const fetchTake =
-      sort === 'relevance' || sort === 'match'
-        ? Math.min(300, Math.max(query.limit * 5, 80))
-        : query.limit;
-    const fetchSkip =
-      sort === 'relevance' || sort === 'match' ? 0 : (query.page - 1) * query.limit;
-
-    const [items, total] = await Promise.all([
-      this.prisma.jobPost.findMany({
-        where,
-        include: {
-          company: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              logoUrl: true,
-              subscription: { select: { plan: true } },
-            },
-          },
-          city: true,
-          category: true,
-          jobSkills: { include: { skill: true }, take: 8 },
-          benefits: { include: { benefit: true }, take: 6 },
+    const jobInclude = {
+      company: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logoUrl: true,
+          subscription: { select: { plan: true } },
         },
-        skip: fetchSkip,
-        take: fetchTake,
-        orderBy:
-          sort === 'newest'
-            ? [{ publishedAt: 'desc' }, { createdAt: 'desc' }]
-            : sort === 'salary_high'
-              ? [{ salaryMax: 'desc' }, { salaryMin: 'desc' }]
-              : sort === 'salary_low'
-                ? [{ salaryMin: 'asc' }, { salaryMax: 'asc' }]
-                : sort === 'experience'
-                  ? [{ experienceYearsMin: 'asc' }, { publishedAt: 'desc' }]
-                  : [{ publishedAt: 'desc' }],
-      }),
-      this.prisma.jobPost.count({ where }),
-    ]);
+      },
+      city: true,
+      category: true,
+      jobSkills: { include: { skill: true }, take: 8 },
+      benefits: { include: { benefit: true }, take: 6 },
+    } as const;
 
-    let withScore = items.map((job) => ({
-      ...job,
-      rankScore: this.computeRankScore({
+    const dbOrderBy =
+      sort === 'newest'
+        ? ([{ publishedAt: 'desc' }, { createdAt: 'desc' }] as const)
+        : sort === 'salary_high'
+          ? ([{ salaryMax: 'desc' }, { salaryMin: 'desc' }] as const)
+          : sort === 'salary_low'
+            ? ([{ salaryMin: 'asc' }, { salaryMax: 'asc' }] as const)
+            : sort === 'experience'
+              ? ([{ experienceYearsMin: 'asc' }, { publishedAt: 'desc' }] as const)
+              : ([{ publishedAt: 'desc' }] as const);
+
+    const matchedTotal = await this.prisma.jobPost.count({ where });
+    let page = Math.max(1, query.page);
+    let truncated = false;
+    let total = matchedTotal;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sorted: any[] = [];
+
+    if (!needsInMemoryRank) {
+      const totalPages = Math.max(1, Math.ceil(matchedTotal / limit) || 1);
+      page = Math.min(page, matchedTotal === 0 ? 1 : totalPages);
+      const items = await this.prisma.jobPost.findMany({
+        where,
+        include: jobInclude,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [...dbOrderBy] as Prisma.JobPostOrderByWithRelationInput[],
+      });
+      sorted = items.map((job) => ({
         ...job,
-        plan: job.company.subscription?.plan,
-        skillCount: job.jobSkills.length,
-      }),
-      isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
-      matchScore: null as number | null,
-    }));
-
-    if ((sort === 'match' || query.profileId) && query.profileId) {
-      withScore = await Promise.all(
-        withScore.map(async (job) => {
-          try {
-            const breakdown = await this.matching.scoreProfileAgainstJob(
-              query.profileId!,
-              job.id,
-            );
-            return { ...job, matchScore: breakdown.total };
-          } catch {
-            return job;
-          }
+        rankScore: this.computeRankScore({
+          ...job,
+          plan: job.company.subscription?.plan,
+          skillCount: job.jobSkills.length,
         }),
-      );
-    }
+        isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
+        matchScore: null as number | null,
+      }));
 
-    let sorted = withScore;
-    if (sort === 'relevance') {
-      sorted = withScore.sort((a, b) => b.rankScore - a.rankScore);
-      const start = (query.page - 1) * query.limit;
-      sorted = sorted.slice(start, start + query.limit);
-    } else if (sort === 'match') {
-      sorted = withScore.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
-      const start = (query.page - 1) * query.limit;
-      sorted = sorted.slice(start, start + query.limit);
+      if (query.profileId) {
+        sorted = await Promise.all(
+          sorted.map(async (job) => {
+            try {
+              const breakdown = await this.matching.scoreProfileAgainstJob(
+                query.profileId!,
+                job.id,
+              );
+              return { ...job, matchScore: breakdown.total };
+            } catch {
+              return job;
+            }
+          }),
+        );
+      }
+    } else {
+      truncated = matchedTotal > scanCap;
+      const items = await this.prisma.jobPost.findMany({
+        where,
+        include: jobInclude,
+        skip: 0,
+        take: scanCap,
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      let withScore = items.map((job) => ({
+        ...job,
+        rankScore: this.computeRankScore({
+          ...job,
+          plan: job.company.subscription?.plan,
+          skillCount: job.jobSkills.length,
+        }),
+        isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
+        matchScore: null as number | null,
+      }));
+
+      if ((sort === 'match' || query.profileId) && query.profileId) {
+        withScore = await Promise.all(
+          withScore.map(async (job) => {
+            try {
+              const breakdown = await this.matching.scoreProfileAgainstJob(
+                query.profileId!,
+                job.id,
+              );
+              return { ...job, matchScore: breakdown.total };
+            } catch {
+              return job;
+            }
+          }),
+        );
+      }
+
+      withScore =
+        sort === 'match'
+          ? withScore.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+          : withScore.sort((a, b) => b.rankScore - a.rankScore);
+
+      // Paginate the ranked window only — never advertise pages beyond what we ranked.
+      total = withScore.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+      page = Math.min(page, total === 0 ? 1 : totalPages);
+      sorted = withScore.slice((page - 1) * limit, page * limit);
     }
 
     // Facet counts on the full filtered set (without pagination)
@@ -695,10 +741,12 @@ export class JobsService {
     return {
       items: sorted,
       total,
-      page: query.page,
-      limit: query.limit,
+      matchedTotal,
+      truncated,
+      page,
+      limit,
       sort,
-      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
       facets: {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count),
         categories: Object.values(categoryFacets).sort((a, b) => b.count - a.count),

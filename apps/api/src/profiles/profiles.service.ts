@@ -625,31 +625,45 @@ export class ProfilesService {
     }
 
     const where: Prisma.EmployeeProfileWhereInput = { AND: and };
+    const sort = query.sort ?? 'relevance';
+    const needsExperienceFilter =
+      query.experienceYearsMin !== undefined || query.experienceYearsMax !== undefined;
+    const needsMatchRank = Boolean(query.matchJobId) && sort === 'match';
+    /** Experience years + match scoring happen in memory — bound the scan window. */
+    const SCAN_CAP = needsMatchRank ? 250 : 1000;
+    const needsScan = needsExperienceFilter || needsMatchRank;
 
-    const items = await this.prisma.employeeProfile.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: limited ? false : true,
-            avatarUrl: true,
-          },
+    const candidateInclude = {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          email: limited ? false : true,
+          avatarUrl: true,
         },
-        skills: { include: { skill: true } },
-        city: true,
-        experiences: true,
-        educations: true,
-        languages: { include: { language: true } },
-        certifications: true,
-        _count: { select: { certifications: true } },
       },
-      take: Math.min(200, limit * 5),
-      orderBy: { updatedAt: 'desc' },
-    });
+      skills: { include: { skill: true } },
+      city: true,
+      experiences: true,
+      educations: true,
+      languages: { include: { language: true } },
+      certifications: true,
+      _count: { select: { certifications: true } },
+    };
 
-    let scored = items.map((p) => {
+    const matchedTotal = await this.prisma.employeeProfile.count({ where });
+    let currentPage = Math.max(1, page);
+    let truncated = false;
+    let total = matchedTotal;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let pageItems: any[] = [];
+    let facetSource: Array<{
+      city?: { slug: string; name: string } | null;
+      skills: Array<{ skill: { slug: string; name: string } }>;
+    }> = [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mapProfile = (p: any) => {
       const years = this.matching.totalExperienceYears(p.experiences);
       return {
         ...p,
@@ -664,39 +678,88 @@ export class ProfilesService {
         matchScore: null as number | null,
         matchBreakdown: null as unknown,
       };
-    });
+    };
 
-    if (query.experienceYearsMin !== undefined) {
-      scored = scored.filter((p) => p.experienceYears >= query.experienceYearsMin!);
-    }
-    if (query.experienceYearsMax !== undefined) {
-      scored = scored.filter((p) => p.experienceYears <= query.experienceYearsMax!);
-    }
+    if (!needsScan) {
+      // Pure DB pagination for relevance/newest (and match without job id).
+      const totalPages = Math.max(1, Math.ceil(matchedTotal / limit) || 1);
+      currentPage = Math.min(currentPage, matchedTotal === 0 ? 1 : totalPages);
+      const items = await this.prisma.employeeProfile.findMany({
+        where,
+        include: candidateInclude,
+        skip: (currentPage - 1) * limit,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+      });
+      pageItems = items.map(mapProfile);
 
-    if (query.matchJobId || query.sort === 'match') {
-      const jobId = query.matchJobId;
-      if (jobId) {
-        scored = await Promise.all(
-          scored.map(async (p) => {
+      if (query.matchJobId) {
+        pageItems = await Promise.all(
+          pageItems.map(async (p) => {
             try {
-              const breakdown = await this.matching.scoreProfileAgainstJob(p.id, jobId);
+              const breakdown = await this.matching.scoreProfileAgainstJob(p.id, query.matchJobId!);
               return { ...p, matchScore: breakdown.total, matchBreakdown: breakdown };
             } catch {
               return p;
             }
           }),
         );
-        scored.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
       }
+
+      facetSource = await this.prisma.employeeProfile.findMany({
+        where,
+        select: {
+          city: { select: { slug: true, name: true } },
+          skills: { select: { skill: { select: { slug: true, name: true } } } },
+        },
+        take: 1000,
+        orderBy: { updatedAt: 'desc' },
+      });
+    } else {
+      truncated = matchedTotal > SCAN_CAP;
+      const items = await this.prisma.employeeProfile.findMany({
+        where,
+        include: candidateInclude,
+        take: SCAN_CAP,
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      let scored = items.map(mapProfile);
+
+      if (query.experienceYearsMin !== undefined) {
+        scored = scored.filter((p) => p.experienceYears >= query.experienceYearsMin!);
+      }
+      if (query.experienceYearsMax !== undefined) {
+        scored = scored.filter((p) => p.experienceYears <= query.experienceYearsMax!);
+      }
+
+      if (query.matchJobId) {
+        scored = await Promise.all(
+          scored.map(async (p) => {
+            try {
+              const breakdown = await this.matching.scoreProfileAgainstJob(p.id, query.matchJobId!);
+              return { ...p, matchScore: breakdown.total, matchBreakdown: breakdown };
+            } catch {
+              return p;
+            }
+          }),
+        );
+        if (sort === 'match') {
+          scored.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+        }
+      }
+
+      // Advertise pages only for the ranked/filtered window.
+      total = scored.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+      currentPage = Math.min(currentPage, total === 0 ? 1 : totalPages);
+      pageItems = scored.slice((currentPage - 1) * limit, currentPage * limit);
+      facetSource = scored;
     }
 
-    const total = scored.length;
-    const pageItems = scored.slice((page - 1) * limit, page * limit);
-
-    // Facets
     const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
-    for (const p of scored) {
+    for (const p of facetSource) {
       if (p.city) {
         const key = p.city.slug;
         cityFacets[key] = cityFacets[key]
@@ -714,9 +777,11 @@ export class ProfilesService {
     return {
       items: pageItems,
       total,
-      page,
+      matchedTotal,
+      truncated,
+      page: currentPage,
       limit,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
+      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
       limited,
       facets: {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count).slice(0, 80),

@@ -11,6 +11,7 @@ import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 
 type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'company';
 
@@ -55,18 +56,6 @@ function toggleCsv(csv: string, value: string) {
   if (set.has(value)) set.delete(value);
   else set.add(value);
   return Array.from(set).join(',');
-}
-
-function buildCandPageItems(page: number, totalPages: number) {
-  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-  const items: Array<number | '…'> = [1];
-  const start = Math.max(2, page - 1);
-  const end = Math.min(totalPages - 1, page + 1);
-  if (start > 2) items.push('…');
-  for (let i = start; i <= end; i++) items.push(i);
-  if (end < totalPages - 1) items.push('…');
-  items.push(totalPages);
-  return items;
 }
 
 /** Distinguish same-title openings by location + status in selects */
@@ -289,6 +278,9 @@ export default function RecruiterDashboard() {
       params.set('limit', String(f.limit));
       const data = await api(`/profiles/candidates?${params.toString()}`);
       setCandidates(data);
+      if (data?.page != null && data.page !== f.page) {
+        setCandFilters((prev) => ({ ...prev, page: data.page }));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load candidates');
     } finally {
@@ -338,8 +330,8 @@ export default function RecruiterDashboard() {
     candFilters.hasCertification ? '1' : '',
     candFilters.skillMode !== 'OR' ? candFilters.skillMode : '',
   ].filter(Boolean).length;
-  const candTotalPages = candidates?.totalPages || Math.max(1, Math.ceil((candidates?.total || 0) / candFilters.limit));
-  const candPageItems = buildCandPageItems(candFilters.page, candTotalPages);
+  const candTotalPages =
+    candidates?.totalPages || Math.max(1, Math.ceil((candidates?.total || 0) / candFilters.limit));
 
   return (
     <div className="shell dash-grid">
@@ -993,45 +985,21 @@ export default function RecruiterDashboard() {
                   </div>
                 ))}
 
-                {candTotalPages > 1 && (
-                  <div className="pagination" style={{ marginTop: '1.25rem' }}>
-                    <span className="pagination-range">
-                      Page {candFilters.page} of {candTotalPages}
-                    </span>
-                    <div className="pagination-pages">
-                      <button
-                        type="button"
-                        className="pagination-page"
-                        disabled={candFilters.page <= 1}
-                        onClick={() => applyCand({ page: candFilters.page - 1 })}
-                      >
-                        ‹
-                      </button>
-                      {candPageItems.map((item, idx) =>
-                        item === '…' ? (
-                          <span key={`e-${idx}`} className="pagination-ellipsis">
-                            …
-                          </span>
-                        ) : (
-                          <button
-                            key={item}
-                            type="button"
-                            className={`pagination-page${candFilters.page === item ? ' active' : ''}`}
-                            onClick={() => applyCand({ page: item as number })}
-                          >
-                            {item}
-                          </button>
-                        ),
-                      )}
-                      <button
-                        type="button"
-                        className="pagination-page"
-                        disabled={candFilters.page >= candTotalPages}
-                        onClick={() => applyCand({ page: candFilters.page + 1 })}
-                      >
-                        ›
-                      </button>
-                    </div>
+                {(candidates?.total || 0) > 0 && candTotalPages > 1 && (
+                  <div className="pagination-wrap" style={{ marginTop: '1.25rem' }}>
+                    <Pagination
+                      page={candidates?.page ?? candFilters.page}
+                      totalPages={candTotalPages}
+                      total={candidates?.total || 0}
+                      limit={candidates?.limit ?? candFilters.limit}
+                      disabled={candLoading}
+                      onPageChange={(p) => applyCand({ page: p })}
+                      truncatedNote={
+                        candidates?.truncated
+                          ? `Showing top ${Number(candidates.total).toLocaleString()} of ${Number(candidates.matchedTotal ?? candidates.total).toLocaleString()} matches for this sort`
+                          : null
+                      }
+                    />
                   </div>
                 )}
               </div>
