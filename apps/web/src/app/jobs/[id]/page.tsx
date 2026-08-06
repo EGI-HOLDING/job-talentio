@@ -5,6 +5,8 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
+import { FormField, LabelText } from '@/components/ui/Field';
+import { useI18n } from '@/lib/i18n';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
 type Job = {
@@ -45,6 +47,7 @@ function formatSalary(min?: number | null, max?: number | null) {
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useI18n();
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -230,19 +233,33 @@ export default function JobDetailPage() {
       </div>
 
       {showApply && (
-        <div className="modal-backdrop" onClick={() => setShowApply(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Apply — {job.title}</h2>
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowApply(false)}
+          role="presentation"
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="apply-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="apply-dialog-title">
+              {t('applyFor')} — {job.title}
+            </h2>
+            <p className="required-note">{t('requiredFieldsNote')}</p>
             <form className="form-stack" onSubmit={onApply}>
-              <label>
-                Cover letter
-                <textarea name="coverLetter" rows={4} placeholder="Why are you a great fit?" />
-              </label>
+              <FormField label={t('coverLetter')}>
+                <textarea name="coverLetter" rows={4} placeholder={t('coverLetter')} />
+              </FormField>
               {(job.questions || []).map((q) => (
                 <label key={q.id}>
-                  {q.question} {q.isRequired && '*'}
+                  <LabelText required={q.isRequired} optional={!q.isRequired}>
+                    {q.question}
+                  </LabelText>
                   {q.type === 'YES_NO' ? (
-                    <select name={`q_${q.id}`} required={q.isRequired}>
+                    <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
                       <option value="">Select…</option>
                       <option value="Yes">Yes</option>
                       <option value="No">No</option>
@@ -252,15 +269,16 @@ export default function JobDetailPage() {
                       name={`q_${q.id}`}
                       type={q.type === 'NUMBER' ? 'number' : 'text'}
                       required={q.isRequired}
+                      aria-required={q.isRequired || undefined}
                     />
                   )}
                 </label>
               ))}
               <button type="submit" className="cta">
-                Submit application
+                {t('submitApplication')}
               </button>
               <button type="button" className="secondary" onClick={() => setShowApply(false)}>
-                Cancel
+                {t('cancel')}
               </button>
             </form>
           </div>

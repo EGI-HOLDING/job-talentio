@@ -70,7 +70,6 @@ export function SiteNav() {
     setLocale(l);
     setLangOpen(false);
     if (session) {
-      // Persist preference to the account (fire and forget)
       api('/auth/me', { method: 'PATCH', body: JSON.stringify({ locale: l }) }).catch(() => undefined);
     }
   }
@@ -98,18 +97,45 @@ export function SiteNav() {
             </a>
           )}
           <div className="lang-switch" ref={langRef} style={{ position: 'relative' }}>
-            <button type="button" className="chip" onClick={() => setLangOpen((v) => !v)}>
+            <button
+              type="button"
+              className="chip"
+              aria-haspopup="listbox"
+              aria-expanded={langOpen}
+              aria-label={t('language')}
+              onClick={(e) => {
+                e.stopPropagation();
+                setLangOpen((v) => !v);
+              }}
+            >
               🌐 {LOCALE_LABELS[locale]}
             </button>
             {langOpen && (
-              <div className="notif-dropdown" style={{ minWidth: 140, right: 0 }}>
+              <div
+                className="notif-dropdown"
+                role="listbox"
+                aria-label={t('language')}
+                style={{ minWidth: 160, right: 0 }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 {(['uz', 'ru', 'en'] as Locale[]).map((l) => (
                   <button
                     key={l}
                     type="button"
+                    role="option"
+                    aria-selected={l === locale}
                     className={`notif-item ${l === locale ? 'unread' : ''}`}
-                    style={{ width: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer' }}
-                    onClick={() => chooseLocale(l)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      border: 0,
+                      background: l === locale ? 'var(--accent-soft)' : 'transparent',
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      chooseLocale(l);
+                    }}
                   >
                     <strong>
                       {l === 'uz' ? "O'zbekcha" : l === 'ru' ? 'Русский' : 'English'}
@@ -129,21 +155,21 @@ export function SiteNav() {
           ) : (
             <div className="nav-user" ref={ref}>
               <div style={{ position: 'relative' }}>
-                <button type="button" className="notif-btn" onClick={toggleNotifs} aria-label="Notifications">
+                <button type="button" className="notif-btn" onClick={toggleNotifs} aria-label={t('notifications')}>
                   🔔
                   {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
                 </button>
                 {open && (
                   <div className="notif-dropdown">
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
-                      <strong>Notifications</strong>
+                      <strong>{t('notifications')}</strong>
                       {unread > 0 && (
                         <button type="button" className="ghost" onClick={markAll}>
-                          Mark all read
+                          {t('markAllRead')}
                         </button>
                       )}
                     </div>
-                    {notifs.length === 0 && <div className="notif-item muted">No notifications yet</div>}
+                    {notifs.length === 0 && <div className="notif-item muted">{t('noNotifications')}</div>}
                     {notifs.map((n) => (
                       <a
                         key={n.id}

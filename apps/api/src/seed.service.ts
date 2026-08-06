@@ -18,7 +18,7 @@ export class SeedService implements OnModuleInit {
 
   private async ensureSuperAdmin() {
     const email = (
-      this.config.get('SUPERADMIN_EMAIL') ?? 'admin@jobtalentio.local'
+      this.config.get('SUPERADMIN_EMAIL') ?? 'sarvar.adminov@jobtalentio.uz'
     ).toLowerCase();
     const password = this.config.get('SUPERADMIN_PASSWORD') ?? 'Admin123!';
     const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -36,7 +36,7 @@ export class SeedService implements OnModuleInit {
       data: {
         email,
         passwordHash,
-        fullName: 'Super Admin',
+        fullName: 'Sarvar Adminov',
         role: 'SUPER_ADMIN',
         emailVerified: true,
       },

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
+import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
 
 type Section = 'account' | 'preferences' | 'security';
 
@@ -139,35 +140,46 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {err && <div className="error" style={{ marginBottom: '1rem' }}>{err}</div>}
-          {msg && <div className="success" style={{ marginBottom: '1rem' }}>{msg}</div>}
-          {pwMsg && <div className="success" style={{ marginBottom: '1rem' }}>{pwMsg}</div>}
+          {err && (
+            <div style={{ marginBottom: '1rem' }}>
+              <FormAlert>{err}</FormAlert>
+            </div>
+          )}
+          {msg && (
+            <div style={{ marginBottom: '1rem' }}>
+              <FormAlert tone="success">{msg}</FormAlert>
+            </div>
+          )}
+          {pwMsg && (
+            <div style={{ marginBottom: '1rem' }}>
+              <FormAlert tone="success">{pwMsg}</FormAlert>
+            </div>
+          )}
 
           {section === 'account' && (
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('account')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                Update how you appear across Job Talentio.
+                {t('updateProfileHint')}
               </p>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form onSubmit={saveAccount} className="form-stack">
-                <label>
-                  {t('fullName')}
-                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} />
-                </label>
-                <label>
-                  Avatar URL
+                <FormField label={t('fullName')} required>
+                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} minLength={2} />
+                </FormField>
+                <FormField
+                  label={t('avatarUrl')}
+                  hint="Preview updates live above. Leave empty to use initials avatar."
+                >
                   <input
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
                     placeholder="https://…"
                     type="url"
                   />
-                </label>
-                <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>
-                  Preview updates live above. Leave empty to use initials avatar.
-                </p>
+                </FormField>
                 <button type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : t('save')}
+                  {saving ? t('saving') : t('save')}
                 </button>
               </form>
             </div>
@@ -177,8 +189,9 @@ export default function SettingsPage() {
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('language')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                Preferred language for the interface and alerts.
+                {t('languagePreference')}
               </p>
+              <p className="required-note">{t('languageApplied')}</p>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -186,16 +199,22 @@ export default function SettingsPage() {
                 }}
                 className="form-stack"
               >
-                <label>
-                  {t('language')}
-                  <select value={prefLocale} onChange={(e) => setPrefLocale(e.target.value as Locale)}>
+                <FormField label={t('language')} required>
+                  <select
+                    value={prefLocale}
+                    onChange={(e) => {
+                      const next = e.target.value as Locale;
+                      setPrefLocale(next);
+                      setLocale(next);
+                    }}
+                  >
                     <option value="uz">O&apos;zbekcha</option>
                     <option value="ru">Русский</option>
                     <option value="en">English</option>
                   </select>
-                </label>
+                </FormField>
                 <button type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : t('save')}
+                  {saving ? t('saving') : t('save')}
                 </button>
               </form>
             </div>
@@ -207,41 +226,57 @@ export default function SettingsPage() {
               <p className="muted" style={{ marginTop: 0 }}>
                 Use at least 8 characters with mixed case and a number.
               </p>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form onSubmit={changePassword} className="form-stack">
                 <label>
-                  {t('currentPassword')}
+                  <LabelText required>{t('currentPassword')}</LabelText>
                   <div className="pw-field">
                     <input
                       type={showCurrent ? 'text' : 'password'}
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       required
+                      aria-required="true"
+                      autoComplete="current-password"
                     />
-                    <button type="button" onClick={() => setShowCurrent((v) => !v)}>
+                    <button
+                      type="button"
+                      aria-pressed={showCurrent}
+                      aria-label={showCurrent ? 'Hide current password' : 'Show current password'}
+                      onClick={() => setShowCurrent((v) => !v)}
+                    >
                       {showCurrent ? 'Hide' : 'Show'}
                     </button>
                   </div>
                 </label>
                 <label>
-                  {t('newPassword')}
+                  <LabelText required>{t('newPassword')}</LabelText>
                   <div className="pw-field">
                     <input
                       type={showNew ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       required
+                      aria-required="true"
                       minLength={8}
+                      autoComplete="new-password"
+                      aria-describedby={newPassword ? 'pw-strength' : undefined}
                     />
-                    <button type="button" onClick={() => setShowNew((v) => !v)}>
+                    <button
+                      type="button"
+                      aria-pressed={showNew}
+                      aria-label={showNew ? 'Hide new password' : 'Show new password'}
+                      onClick={() => setShowNew((v) => !v)}
+                    >
                       {showNew ? 'Hide' : 'Show'}
                     </button>
                   </div>
                   {newPassword && (
                     <>
-                      <div className="pw-strength">
+                      <div className="pw-strength" aria-hidden="true">
                         <span style={{ width: `${strength.score}%`, background: strength.color }} />
                       </div>
-                      <span className="muted" style={{ fontSize: '0.8rem' }}>
+                      <span id="pw-strength" className="muted" style={{ fontSize: '0.8rem' }}>
                         Strength: {strength.label}
                       </span>
                     </>

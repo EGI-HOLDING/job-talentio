@@ -70,10 +70,40 @@ export default function AdminPage() {
         <div className="card">
           <h2>Super Admin Login</h2>
           <p className="muted">Bootstrap credentials from .env</p>
-          <form onSubmit={login} className="row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <input name="email" type="email" defaultValue="admin@jobtalentio.local" required />
-            <input name="password" type="password" defaultValue="Admin123!" required />
-            {error && <p className="error">{error}</p>}
+          <form onSubmit={login} className="row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem' }}>
+            <label style={{ display: 'grid', gap: '0.35rem' }}>
+              <span>
+                Email <abbr style={{ color: 'var(--danger)', textDecoration: 'none' }} title="Required">*</abbr>
+                <span className="sr-only"> (required)</span>
+              </span>
+              <input
+                name="email"
+                type="email"
+                defaultValue="sarvar.adminov@jobtalentio.uz"
+                required
+                aria-required="true"
+                autoComplete="username"
+              />
+            </label>
+            <label style={{ display: 'grid', gap: '0.35rem' }}>
+              <span>
+                Password <abbr style={{ color: 'var(--danger)', textDecoration: 'none' }} title="Required">*</abbr>
+                <span className="sr-only"> (required)</span>
+              </span>
+              <input
+                name="password"
+                type="password"
+                defaultValue="Admin123!"
+                required
+                aria-required="true"
+                autoComplete="current-password"
+              />
+            </label>
+            {error && (
+              <p className="error" role="alert" aria-live="polite">
+                {error}
+              </p>
+            )}
             <button type="submit">Sign in</button>
           </form>
         </div>

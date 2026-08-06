@@ -192,12 +192,18 @@ function MessagesInner() {
                 <div ref={bottomRef} />
               </div>
               <form className="chat-compose" onSubmit={send}>
+                <label className="sr-only" htmlFor="chat-message-input">
+                  {t('messageInput')}
+                </label>
                 <input
+                  id="chat-message-input"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={t('writeMessage')}
+                  aria-label={t('messageInput')}
+                  autoComplete="off"
                 />
-                <button type="submit" disabled={!draft.trim()}>
+                <button type="submit" disabled={!draft.trim()} aria-label={t('send')}>
                   {t('send')}
                 </button>
               </form>

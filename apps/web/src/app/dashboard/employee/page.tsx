@@ -5,6 +5,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
+import { FormAlert, LabelText } from '@/components/ui/Field';
+import { useI18n } from '@/lib/i18n';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
 
@@ -41,6 +43,7 @@ function completeness(profile: any) {
 const LEVEL_ORDER = ['EXPERT', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'] as const;
 
 export default function EmployeeDashboard() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('overview');
   const [profile, setProfile] = useState<any>(null);
   const [apps, setApps] = useState<any[]>([]);
@@ -326,8 +329,8 @@ export default function EmployeeDashboard() {
       </aside>
 
       <section>
-        {error && <div className="error">{error}</div>}
-        {msg && <div className="success">{msg}</div>}
+        {error && <FormAlert>{error}</FormAlert>}
+        {msg && <FormAlert tone="success">{msg}</FormAlert>}
 
         {tab === 'overview' && (
           <div>
@@ -486,17 +489,18 @@ export default function EmployeeDashboard() {
           <div className="grid-2">
             <div className="card">
               <h3>Create alert</h3>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={createAlert}>
                 <label>
-                  Name
+                  <LabelText required>Name</LabelText>
                   <input name="name" required />
                 </label>
                 <label>
-                  Keywords
+                  <LabelText>Keywords</LabelText>
                   <input name="query" />
                 </label>
                 <label>
-                  City
+                  <LabelText>City</LabelText>
                   <select name="citySlug">
                     <option value="">Any</option>
                     {cities.map((c) => (
@@ -507,11 +511,11 @@ export default function EmployeeDashboard() {
                   </select>
                 </label>
                 <label>
-                  Skill slugs (comma)
+                  <LabelText>Skill slugs (comma)</LabelText>
                   <input name="skills" placeholder="typescript,react" />
                 </label>
                 <label>
-                  Frequency
+                  <LabelText>Frequency</LabelText>
                   <select name="frequency" defaultValue="DAILY">
                     <option value="DAILY">Daily</option>
                     <option value="WEEKLY">Weekly</option>
@@ -537,17 +541,18 @@ export default function EmployeeDashboard() {
           <div className="grid-2">
             <div className="card">
               <h3>Edit profile</h3>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={updateProfile}>
                 <label>
-                  Headline
+                  <LabelText>Headline</LabelText>
                   <input name="headline" defaultValue={profile.headline || ''} />
                 </label>
                 <label>
-                  Summary
+                  <LabelText>Summary</LabelText>
                   <textarea name="summary" rows={4} defaultValue={profile.summary || ''} />
                 </label>
                 <label>
-                  City
+                  <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={profile.city?.slug || ''}>
                     <option value="">—</option>
                     {cities.map((c) => (
@@ -558,11 +563,11 @@ export default function EmployeeDashboard() {
                   </select>
                 </label>
                 <label>
-                  Desired position
+                  <LabelText>Desired position</LabelText>
                   <input name="desiredPosition" defaultValue={profile.desiredPosition || ''} />
                 </label>
                 <label>
-                  Desired salary (UZS)
+                  <LabelText>Desired salary (UZS)</LabelText>
                   <input
                     name="desiredSalaryMin"
                     type="number"
@@ -589,9 +594,10 @@ export default function EmployeeDashboard() {
                   </span>
                 ))}
               </div>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={addSkill}>
                 <label>
-                  Skill
+                  <LabelText required>Skill</LabelText>
                   <select name="slug" required>
                     {skillsMeta.map((s) => (
                       <option key={s.slug} value={s.slug}>
@@ -601,7 +607,7 @@ export default function EmployeeDashboard() {
                   </select>
                 </label>
                 <label>
-                  Level
+                  <LabelText>Level</LabelText>
                   <select name="level" defaultValue="INTERMEDIATE">
                     <option>BEGINNER</option>
                     <option>INTERMEDIATE</option>
@@ -625,7 +631,16 @@ export default function EmployeeDashboard() {
                   </p>
                 </div>
                 <form onSubmit={uploadCv} className="cv-upload-inline">
-                  <input type="file" accept="application/pdf" required disabled={uploading} />
+                  <label>
+                    <LabelText required>{t('uploadCv')}</LabelText>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      required
+                      disabled={uploading}
+                      aria-label={t('uploadCv')}
+                    />
+                  </label>
                   <button type="submit" disabled={uploading}>
                     {uploading ? 'Uploading…' : 'Upload CV & parse'}
                   </button>
@@ -662,9 +677,10 @@ export default function EmployeeDashboard() {
               {!(profile.skills || []).length && <p className="muted">No skills yet — add manually or import from CV.</p>}
               {openForm === 'skill' && (
                 <form className="form-stack" onSubmit={async (e) => { await addSkill(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
                   <div className="grid-2">
                     <label>
-                      Skill
+                      <LabelText required>Skill</LabelText>
                       <select name="slug" required>
                         {skillsMeta.map((s) => (
                           <option key={s.slug} value={s.slug}>{s.name}</option>
@@ -672,7 +688,7 @@ export default function EmployeeDashboard() {
                       </select>
                     </label>
                     <label>
-                      Level
+                      <LabelText>Level</LabelText>
                       <select name="level" defaultValue="INTERMEDIATE">
                         {LEVEL_ORDER.slice().reverse().map((l) => (
                           <option key={l}>{l}</option>
@@ -741,16 +757,29 @@ export default function EmployeeDashboard() {
               </div>
               {openForm === 'exp' && (
                 <form className="form-stack" onSubmit={async (e) => { await addExperience(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
                   <div className="grid-2">
-                    <label>Job title<input name="title" required /></label>
-                    <label>Company<input name="companyName" required /></label>
+                    <label>
+                      <LabelText required>Job title</LabelText>
+                      <input name="title" required />
+                    </label>
+                    <label>
+                      <LabelText required>Company</LabelText>
+                      <input name="companyName" required />
+                    </label>
                   </div>
                   <div className="grid-2">
-                    <label>Start date<input name="startDate" type="date" required /></label>
-                    <label>End date<input name="endDate" type="date" /></label>
+                    <label>
+                      <LabelText required>Start date</LabelText>
+                      <input name="startDate" type="date" required />
+                    </label>
+                    <label>
+                      <LabelText>End date</LabelText>
+                      <input name="endDate" type="date" />
+                    </label>
                   </div>
                   <label>
-                    City
+                    <LabelText>City</LabelText>
                     <select name="citySlug">
                       <option value="">—</option>
                       {cities.map((c) => (
@@ -758,9 +787,13 @@ export default function EmployeeDashboard() {
                       ))}
                     </select>
                   </label>
-                  <label>Description<textarea name="description" rows={3} /></label>
+                  <label>
+                    <LabelText>Description</LabelText>
+                    <textarea name="description" rows={3} />
+                  </label>
                   <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input name="isCurrent" type="checkbox" style={{ width: 'auto' }} /> Currently work here
+                    <input name="isCurrent" type="checkbox" style={{ width: 'auto' }} />
+                    <LabelText optional={false}>Currently work here</LabelText>
                   </label>
                   <button type="submit">Save experience</button>
                 </form>
@@ -795,10 +828,14 @@ export default function EmployeeDashboard() {
                 {!(profile.educations || []).length && <p className="muted">No education entries yet.</p>}
                 {openForm === 'edu' && (
                   <form className="form-stack" onSubmit={async (e) => { await addEducation(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <label>School / University<input name="school" required /></label>
+                    <p className="required-note">{t('requiredFieldsNote')}</p>
+                    <label>
+                      <LabelText required>School / University</LabelText>
+                      <input name="school" required />
+                    </label>
                     <div className="grid-2">
                       <label>
-                        Degree
+                        <LabelText>Degree</LabelText>
                         <select name="degree">
                           <option value="">—</option>
                           {['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'].map((d) => (
@@ -806,11 +843,20 @@ export default function EmployeeDashboard() {
                           ))}
                         </select>
                       </label>
-                      <label>Field<input name="field" /></label>
+                      <label>
+                        <LabelText>Field</LabelText>
+                        <input name="field" />
+                      </label>
                     </div>
                     <div className="grid-2">
-                      <label>Start<input name="startDate" type="date" /></label>
-                      <label>End<input name="endDate" type="date" /></label>
+                      <label>
+                        <LabelText>Start</LabelText>
+                        <input name="startDate" type="date" />
+                      </label>
+                      <label>
+                        <LabelText>End</LabelText>
+                        <input name="endDate" type="date" />
+                      </label>
                     </div>
                     <button type="submit">Save education</button>
                   </form>
@@ -838,9 +884,10 @@ export default function EmployeeDashboard() {
                 {!(profile.languages || []).length && <p className="muted">No languages yet.</p>}
                 {openForm === 'lang' && (
                   <form className="form-stack" onSubmit={async (e) => { await addLanguage(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                    <p className="required-note">{t('requiredFieldsNote')}</p>
                     <div className="grid-2">
                       <label>
-                        Language
+                        <LabelText required>Language</LabelText>
                         <select name="code" required>
                           {languagesMeta.map((l) => (
                             <option key={l.code} value={l.code}>{l.name}</option>
@@ -848,7 +895,7 @@ export default function EmployeeDashboard() {
                         </select>
                       </label>
                       <label>
-                        Level
+                        <LabelText>Level</LabelText>
                         <select name="level" defaultValue="B1">
                           {['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((l) => (
                             <option key={l}>{l}</option>
@@ -894,12 +941,25 @@ export default function EmployeeDashboard() {
                 {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
                 {openForm === 'cert' && (
                   <form className="form-stack" onSubmit={async (e) => { await addCertification(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <label>Name<input name="name" required /></label>
+                    <p className="required-note">{t('requiredFieldsNote')}</p>
+                    <label>
+                      <LabelText required>Name</LabelText>
+                      <input name="name" required />
+                    </label>
                     <div className="grid-2">
-                      <label>Issuer<input name="issuer" /></label>
-                      <label>Issued at<input name="issuedAt" type="date" /></label>
+                      <label>
+                        <LabelText>Issuer</LabelText>
+                        <input name="issuer" />
+                      </label>
+                      <label>
+                        <LabelText>Issued at</LabelText>
+                        <input name="issuedAt" type="date" />
+                      </label>
                     </div>
-                    <label>Credential URL<input name="credentialUrl" type="url" placeholder="https://…" /></label>
+                    <label>
+                      <LabelText>Credential URL</LabelText>
+                      <input name="credentialUrl" type="url" placeholder="https://…" />
+                    </label>
                     <button type="submit">Save certification</button>
                   </form>
                 )}
@@ -957,10 +1017,18 @@ export default function EmployeeDashboard() {
                 {!(profile.resumes || []).length && <p className="muted">No resumes yet — upload a PDF or create one.</p>}
                 {openForm === 'resume' && (
                   <form className="form-stack" onSubmit={async (e) => { await addResume(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <label>Title<input name="title" required placeholder="e.g. Frontend Developer CV" /></label>
-                    <label>Content (builder)<textarea name="content" rows={4} placeholder="Write or paste your CV…" /></label>
+                    <p className="required-note">{t('requiredFieldsNote')}</p>
+                    <label>
+                      <LabelText required>Title</LabelText>
+                      <input name="title" required placeholder="e.g. Frontend Developer CV" />
+                    </label>
+                    <label>
+                      <LabelText>Content (builder)</LabelText>
+                      <textarea name="content" rows={4} placeholder="Write or paste your CV…" />
+                    </label>
                     <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <input name="isPrimary" type="checkbox" style={{ width: 'auto' }} /> Set as primary
+                      <input name="isPrimary" type="checkbox" style={{ width: 'auto' }} />
+                      <LabelText optional={false}>Set as primary</LabelText>
                     </label>
                     <button type="submit">Create resume</button>
                   </form>

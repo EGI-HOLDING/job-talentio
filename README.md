@@ -42,9 +42,13 @@ pnpm dev
 
 | Role | Email | Password |
 |------|-------|----------|
-| Super Admin | admin@jobtalentio.local | Admin123! |
-| Recruiter | recruiter@demo.uz | Password123! |
-| Employee | employee@demo.uz | Password123! |
+| Super Admin | sarvar.adminov@jobtalentio.uz | Admin123! |
+| Recruiter (Apex Soft) | jasur.tursunov@apexsoft.uz | Password123! |
+| Employee | madina.karimova@gmail.com | Password123! |
+
+Other seeded users use realistic name-based emails (Gmail / Mail.ru / Yandex / Inbox.uz for employees; `@company.uz` for recruiters). Password for all non-admin demo users: `Password123!`.
+
+Seed volume (approx.): **20 companies**, **60 employees**, **90 job posts**, **~140 applications**.
 
 Local extras:
 
