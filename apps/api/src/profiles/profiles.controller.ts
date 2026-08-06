@@ -178,7 +178,7 @@ export class ProfilesController {
       skillMode: data.skillMode ?? 'OR',
       sort: data.sort ?? 'relevance',
       page: data.page ?? 1,
-      limit: data.limit ?? 20,
+      limit: data.limit ?? 12,
     });
   }
 
