@@ -17,7 +17,7 @@ export class MockPaymentProvider implements PaymentProvider {
       amountUzs: input.amountUzs,
       purpose: input.purpose,
       status: 'PENDING',
-      checkoutUrl: `http://localhost:3000/billing/mock-checkout?paymentId=pending`,
+      checkoutUrl: `${process.env.WEB_URL ?? 'http://localhost:3000'}/billing/mock-checkout?paymentId=pending`,
     };
     this.store.set(intent.id, intent);
     return intent;

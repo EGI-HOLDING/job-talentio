@@ -1,15 +1,202 @@
-# Cloud infrastructure is intentionally deferred until AWS accounts
-# and paid services (Payme/Click, SES) are ready.
-#
-# Planned stack (see product plan):
-# - Region: me-central-1 (UAE)
-# - ECS Fargate + ALB
-# - RDS PostgreSQL Multi-AZ (prod)
-# - ElastiCache Redis
-# - S3 + CloudFront + WAF
-# - Secrets Manager
-# - Terraform modules under this folder
-#
-# Local development uses docker/docker-compose.yml instead.
+# Cloud deploy — Railway + Cloudflare + Hostinger
 
-README.md
+Job Talentio deploys as a dual-environment Railway project:
+
+| Environment | Git branch | Purpose |
+|-------------|------------|---------|
+| `staging` | `develop` | QA / pre-production |
+| `production` | `main` | Live site |
+
+Local development still uses [docker/docker-compose.yml](../docker/docker-compose.yml) (Postgres, Redis, MinIO, Mailpit).
+
+## Architecture
+
+```
+Browser → Cloudflare (DNS/CDN/proxy)
+            ├─ jobtalent.io              → Railway web (prod)
+            ├─ admin.jobtalent.io        → Railway admin (prod)
+            ├─ api.jobtalent.io          → Railway api (prod)
+            ├─ staging.jobtalent.io      → Railway web (staging)
+            ├─ admin.staging.jobtalent.io→ Railway admin (staging)
+            └─ api.staging.jobtalent.io  → Railway api (staging)
+
+API → Postgres (Railway) + Redis (prod) + Cloudflare R2 + Hostinger SMTP
+```
+
+### Hobby plan limits (important)
+
+- **Custom domains:** max **2 per service**. Do **not** attach both apex and `www` to the same web service.
+- Use Cloudflare Redirect for `www.jobtalent.io` → `https://jobtalent.io`.
+- **Usage credit:** $5/month included. Two always-on environments usually exceed this; set a spending cap and keep staging resource limits low.
+
+| Service | Custom domain on Railway |
+|---------|--------------------------|
+| web (prod) | `jobtalent.io` |
+| admin (prod) | `admin.jobtalent.io` |
+| api (prod) | `api.jobtalent.io` |
+| web (staging) | `staging.jobtalent.io` |
+| admin (staging) | `admin.staging.jobtalent.io` |
+| api (staging) | `api.staging.jobtalent.io` |
+
+## Repo deploy assets
+
+| Path | Role |
+|------|------|
+| [apps/api/Dockerfile](../apps/api/Dockerfile) | NestJS + Prisma migrate deploy |
+| [apps/web/Dockerfile](../apps/web/Dockerfile) | Next.js standalone (portal) |
+| [apps/admin/Dockerfile](../apps/admin/Dockerfile) | Next.js standalone (super admin) |
+| [apps/*/railway.toml](../apps/api/railway.toml) | Build/healthcheck hints per service |
+
+Build context for every Dockerfile is the **monorepo root**.
+
+API healthcheck: `GET /api/health`
+
+---
+
+## 1. Railway project setup
+
+1. Create project `job-talentio` and connect GitHub `echestratus/job-talentio`.
+2. Create environment **staging** (duplicate or empty), keep **production**.
+3. Per environment, add services:
+   - **Postgres** (Railway plugin)
+   - **Redis** (production required; staging optional — alerts soft-fail without it)
+   - **api** — Dockerfile `apps/api/Dockerfile`, root `/`
+   - **web** — Dockerfile `apps/web/Dockerfile`, root `/`
+   - **admin** — Dockerfile `apps/admin/Dockerfile`, root `/`
+4. Branch mapping:
+   - staging → watch `develop`
+   - production → watch `main`
+5. For each app service, set Config-as-code path if needed:
+   - `apps/api/railway.toml` / `apps/web/railway.toml` / `apps/admin/railway.toml`
+6. Staging: lower memory/CPU limits (e.g. ~0.5 GB RAM). Set a workspace **usage/spending limit**.
+
+### Reference variables (api)
+
+Link plugin outputs into the `api` service:
+
+- `DATABASE_URL` ← Postgres
+- `REDIS_URL` ← Redis (omit on staging if unused)
+
+---
+
+## 2. Environment variables
+
+Set separately on **staging** and **production**. Values below are production examples.
+
+### api
+
+```bash
+NODE_ENV=production
+DEV_AUTH_ENABLED=false
+JWT_SECRET=<long-random-secret>
+JWT_EXPIRES_IN=7d
+WEB_URL=https://jobtalent.io
+ADMIN_URL=https://admin.jobtalent.io
+API_URL=https://api.jobtalent.io
+SUPERADMIN_EMAIL=<your-admin@jobtalent.io>
+SUPERADMIN_PASSWORD=<strong-password>
+PAYMENT_PROVIDER=mock
+
+# Cloudflare R2
+S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_ACCESS_KEY=<r2-access-key>
+S3_SECRET_KEY=<r2-secret-key>
+S3_BUCKET=job-talentio-prod
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_URL=https://cdn.jobtalent.io
+
+# Hostinger Email
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=noreply@jobtalent.io
+SMTP_PASS=<mailbox-password>
+SMTP_FROM="Job Talentio <noreply@jobtalent.io>"
+```
+
+Staging: use `https://staging.jobtalent.io`, `https://admin.staging.jobtalent.io`, `https://api.staging.jobtalent.io`, bucket `job-talentio-staging`, and a different `JWT_SECRET`.
+
+### web / admin (also required at **Docker build** time)
+
+```bash
+NEXT_PUBLIC_API_URL=https://api.jobtalent.io
+NEXT_PUBLIC_ADMIN_URL=https://admin.jobtalent.io   # web only
+NEXT_PUBLIC_APP_NAME=Job Talentio
+```
+
+After changing `NEXT_PUBLIC_*`, **redeploy** web/admin so values bake into the client bundle.
+
+Railway sets `PORT` automatically; apps already listen on `PORT`.
+
+---
+
+## 3. Cloudflare DNS (domain at Hostinger)
+
+1. Add `jobtalent.io` to Cloudflare; at Hostinger switch nameservers to Cloudflare.
+2. **Keep Hostinger email DNS** (MX, SPF, DKIM, DMARC) when migrating NS.
+3. In Railway, add custom domains per service (table above). Cloudflare DNS:
+
+| Type | Name | Content | Proxy |
+|------|------|---------|-------|
+| CNAME/A | `@` | Railway web target | Proxied |
+| CNAME | `admin` | Railway admin target | Proxied |
+| CNAME | `api` | Railway api target | Proxied |
+| CNAME | `staging` | Railway web (staging) | Proxied |
+| CNAME | `admin.staging` | Railway admin (staging) | Proxied |
+| CNAME | `api.staging` | Railway api (staging) | Proxied |
+
+4. Cloudflare **Redirect Rule:** `www.jobtalent.io/*` → `https://jobtalent.io/$1` (301). Do not add `www` as a Railway custom domain on Hobby.
+5. SSL/TLS mode: **Full (strict)** once Railway certificates are issued.
+6. Enable **WebSockets** (Socket.IO chat).
+7. Avoid caching HTML for app routes; cache R2/CDN static assets only.
+
+Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
+
+---
+
+## 4. Cloudflare R2
+
+1. Create buckets: `job-talentio-prod`, `job-talentio-staging`.
+2. Create API tokens with Object Read & Write.
+3. Enable public access (custom domain or r2.dev URL) and set `S3_PUBLIC_URL`.
+4. Wire credentials into each environment’s `api` service.
+
+---
+
+## 5. Hostinger Email (SMTP)
+
+1. Create mailbox e.g. `noreply@jobtalent.io` in hPanel.
+2. SMTP settings:
+
+| Setting | Value |
+|---------|-------|
+| Host | `smtp.hostinger.com` |
+| Port | `465` |
+| Encryption | SSL (`SMTP_SECURE=true`) |
+| User | full email address |
+| Pass | mailbox password |
+
+3. Prefer port **587** + `SMTP_SECURE=false` only if 465 is blocked.
+
+---
+
+## 6. Go-live checklist
+
+- [ ] Staging deploys from `develop`; production from `main`
+- [ ] `pnpm db:migrate:deploy` runs on api container start (Dockerfile CMD)
+- [ ] `GET https://api…/api/health` returns ok
+- [ ] Login employee / recruiter / admin
+- [ ] Upload (CV/logo) lands in the correct R2 bucket
+- [ ] Test email arrives via Hostinger
+- [ ] Chat WebSocket works through Cloudflare
+- [ ] `DEV_AUTH_ENABLED=false` on both envs
+- [ ] Spending cap set; staging limits reduced
+- [ ] Super Admin password rotated from defaults
+
+## Cost tips (Hobby)
+
+- Prefer smaller limits on staging services.
+- Skip Redis on staging if job-alert queues are not under test.
+- Pause staging when unused; custom domains remain configured.
+- Upgrade to Pro when production traffic or dual always-on cost becomes painful.
