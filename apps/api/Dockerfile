@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile=false
 RUN pnpm --filter @job-talentio/shared build
 RUN pnpm --filter @job-talentio/api prisma:generate
 RUN pnpm --filter @job-talentio/api build
+# Fail the image build if Nest emitted the wrong layout (e.g. dist/src/main.js).
+RUN test -f /app/apps/api/dist/main.js
 
 FROM base AS runner
 ENV NODE_ENV=production

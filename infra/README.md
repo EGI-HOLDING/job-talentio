@@ -138,7 +138,9 @@ SMTP_PASS=<mailbox-password>
 SMTP_FROM="Job Talentio <noreply@jobtalent.io>"
 ```
 
-Staging: use `https://staging.jobtalent.io`, `https://admin.staging.jobtalent.io`, `https://api.staging.jobtalent.io`, bucket `job-talentio-staging`, and a different `JWT_SECRET`.
+Staging domains (single-level hostnames for Cloudflare Universal SSL): `https://staging.jobtalent.io`, `https://admin-staging.jobtalent.io`, `https://api-staging.jobtalent.io`. Use a different `JWT_SECRET` from production.
+
+**Staging storage:** MinIO service `minio-staging` (volume `/data`, S3 API `:9000`, console `:9001`). API uses private endpoint `http://minio-staging.railway.internal:9000` with `S3_FORCE_PATH_STYLE=true`. Public object base URL: Railway MinIO domain + bucket. Production should switch to Cloudflare R2 when enabled.
 
 ### web / admin (also required at **Docker build** time)
 
@@ -178,12 +180,21 @@ Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 
 ---
 
-## 4. Cloudflare R2
+## 4. Object storage
 
-1. Create buckets: `job-talentio-prod`, `job-talentio-staging`.
+### Staging — MinIO (Railway)
+
+1. Service image `minio/minio:latest`, volume mount `/data`.
+2. Start command: `minio server /data --address :9000 --console-address :9001` (use **Deploy**, not Redeploy, after changing start command).
+3. Public domain target port `9000` (S3 API) or `9001` (console).
+4. API vars: `S3_ENDPOINT=http://minio-staging.railway.internal:9000`, root user/pass as access keys, bucket `job-talentio-staging` (API auto-creates on boot).
+
+### Production — Cloudflare R2 (when enabled)
+
+1. Create bucket `job-talentio-prod`.
 2. Create API tokens with Object Read & Write.
 3. Enable public access (custom domain or r2.dev URL) and set `S3_PUBLIC_URL`.
-4. Wire credentials into each environment’s `api` service.
+4. Wire credentials into the production `api` service.
 
 ---
 
