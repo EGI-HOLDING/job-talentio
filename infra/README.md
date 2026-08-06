@@ -55,7 +55,7 @@ API healthcheck: `GET /api/health`
 
 ## 1. Railway project setup
 
-1. Create project `job-talentio` and connect GitHub `echestratus/job-talentio`.
+1. Create project `job-talentio` and connect GitHub `EGI-HOLDING/job-talentio`.
 2. Create environment **staging** (duplicate or empty), keep **production**.
 3. Per environment, add services:
    - **Postgres** (Railway plugin)
@@ -69,6 +69,29 @@ API healthcheck: `GET /api/health`
 5. For each app service, set Config-as-code path if needed:
    - `apps/api/railway.toml` / `apps/web/railway.toml` / `apps/admin/railway.toml`
 6. Staging: lower memory/CPU limits (e.g. ~0.5 GB RAM). Set a workspace **usage/spending limit**.
+
+### Finish the API stack first (Postgres + Redis + variables)
+
+Do this **before** relying on web/admin. Postgres/Redis are **separate Railway services** — the API Dockerfile does **not** create them.
+
+1. **Canvas** (staging environment) → **+ Create** → **Database** → **PostgreSQL**. Wait until **Online**.
+2. **+ Create** → **Database** → **Redis** (recommended even on staging if you will test job alerts; otherwise skip).
+3. Open service **api** → **Variables**:
+   - **Add variable** → **Add reference** → pick Postgres → `DATABASE_URL` (prefer the **private**/internal URL if Railway shows both).
+   - If Redis exists: **Add reference** → Redis → `REDIS_URL` or `REDIS_PRIVATE_URL` (map the name to `REDIS_URL` on the api service).
+4. Still on **api** → **Variables**, add the shared app secrets from [env.api.staging.example](./env.api.staging.example) (copy values; do not commit real secrets).
+5. Confirm **api** build settings:
+   - Builder: **Dockerfile**
+   - Dockerfile path: `apps/api/Dockerfile`
+   - Root directory: empty (monorepo root)
+   - Config-as-code: `apps/api/railway.toml`
+   - Healthcheck path: `/api/health`
+   - Custom start command: empty
+   - Serverless: **off**
+6. **Deploy** / redeploy **api**. In deploy logs you should see `prisma migrate deploy` succeed, then the Nest process start.
+7. Open `https://<api-public-host>/api/health` (custom domain or `*.up.railway.app`) and expect `status: ok`.
+
+If migrate fails with connection errors, the usual cause is a missing/wrong `DATABASE_URL` reference or Postgres still provisioning.
 
 ### Reference variables (api)
 
