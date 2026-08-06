@@ -180,7 +180,7 @@ export default function HomePage() {
                   }
                   alt=""
                 />
-                <div>
+                <div className="hiring-card-body">
                   <strong>{c.name}</strong>
                   <span>{rolesLabel(t, c.openRoles)}</span>
                 </div>
