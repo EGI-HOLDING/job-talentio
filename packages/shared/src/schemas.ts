@@ -116,7 +116,8 @@ export const jobSearchSchema = z.object({
     .enum(['relevance', 'newest', 'salary_high', 'salary_low', 'experience', 'match'])
     .default('relevance'),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  /** Keep in sync with web jobs page DEFAULT_LIMIT (12). */
+  limit: z.coerce.number().int().min(1).max(50).default(12),
 });
 
 export const candidateSearchSchema = z.object({
@@ -135,7 +136,8 @@ export const candidateSearchSchema = z.object({
   matchJobId: z.string().optional(),
   sort: z.enum(['relevance', 'newest', 'match']).default('relevance'),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  /** Keep in sync with recruiter Find talent default page size (12). */
+  limit: z.coerce.number().int().min(1).max(50).default(12),
 });
 
 export const applicationStatusSchema = z.object({

@@ -127,7 +127,8 @@ function toParams(f: Filters, view?: string | null): URLSearchParams {
       return;
     }
     if (key === 'limit') {
-      if (Number(value) !== DEFAULT_LIMIT) p.set('limit', String(value));
+      // Always send limit — API default is not guaranteed to match UI default (12).
+      p.set('limit', String(value || DEFAULT_LIMIT));
       return;
     }
     if (key === 'sort') {

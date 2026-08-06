@@ -569,7 +569,7 @@ export class ProfilesService {
     }
 
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? 12;
     const and: Prisma.EmployeeProfileWhereInput[] = [
       { visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] } },
     ];
