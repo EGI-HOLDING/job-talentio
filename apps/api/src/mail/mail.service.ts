@@ -16,6 +16,11 @@ export class MailService {
       host: this.config.get('SMTP_HOST', 'localhost'),
       port: Number(this.config.get('SMTP_PORT', 1025)),
       secure,
+      // Hostinger (or any remote SMTP) can hang forever without these —
+      // that freezes Google sign-up on "Creating account…".
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       auth: this.config.get('SMTP_USER')
         ? {
             user: this.config.get('SMTP_USER'),
