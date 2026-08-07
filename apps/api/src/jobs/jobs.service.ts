@@ -271,10 +271,11 @@ export class JobsService {
       ] as JobBenefitInput[]),
     );
 
-    return this.prisma.jobPost.findUnique({
+    const created = await this.prisma.jobPost.findUnique({
       where: { id: job.id },
       include: this.jobInclude,
     });
+    return created ? this.withResolvedIcons(created) : created;
   }
 
   async update(user: AuthUser, jobId: string, data: Record<string, unknown>) {
@@ -342,10 +343,11 @@ export class JobsService {
       ]);
     }
 
-    return this.prisma.jobPost.findUnique({
+    const updated = await this.prisma.jobPost.findUnique({
       where: { id: jobId },
       include: this.jobInclude,
     });
+    return updated ? this.withResolvedIcons(updated) : updated;
   }
 
   async changeStatus(user: AuthUser, jobId: string, status: JobStatus) {
@@ -408,10 +410,10 @@ export class JobsService {
       }
     }
 
-    return updated;
+    return this.withResolvedIcons(updated);
   }
 
-  private withResolvedIcons<T extends {
+  withResolvedIcons<T extends {
     category?: { slug?: string; icon?: string | null } | null;
     benefits?: Array<{ benefit?: { slug?: string; icon?: string | null } | null }>;
   }>(job: T): T {
@@ -420,7 +422,7 @@ export class JobsService {
       category: job.category
         ? {
             ...job.category,
-            icon: resolveCategoryIcon(job.category.slug, job.category.icon) || job.category.icon,
+            icon: resolveCategoryIcon(job.category.slug, job.category.icon) || null,
           }
         : job.category,
       benefits: Array.isArray(job.benefits)
@@ -430,7 +432,7 @@ export class JobsService {
                   ...jb,
                   benefit: {
                     ...jb.benefit,
-                    icon: resolveBenefitIcon(jb.benefit.slug, jb.benefit.icon) || jb.benefit.icon,
+                    icon: resolveBenefitIcon(jb.benefit.slug, jb.benefit.icon) || null,
                   },
                 }
               : jb,
@@ -439,23 +441,43 @@ export class JobsService {
     };
   }
 
-  async get(id: string, viewerId?: string) {
+  private isCompanyMember(viewer: AuthUser | undefined, companyId: string) {
+    if (!viewer) return false;
+    if (viewer.role === 'SUPER_ADMIN') return true;
+    return (viewer.memberships ?? []).some((m) => m.companyId === companyId);
+  }
+
+  private stripPrivateCompanyFields<T extends { company?: { members?: unknown } | null }>(job: T): T {
+    if (!job.company || !('members' in job.company)) return job;
+    const { members: _members, ...company } = job.company as {
+      members?: unknown;
+    } & Record<string, unknown>;
+    return { ...job, company };
+  }
+
+  async get(id: string, viewer?: AuthUser) {
     const job = await this.prisma.jobPost.findUnique({
       where: { id },
       include: this.jobInclude,
     });
     if (!job) throw new NotFoundException('Job not found');
 
+    const member = this.isCompanyMember(viewer, job.companyId);
+    if (job.status !== 'PUBLISHED' && !member) {
+      throw new NotFoundException('Job not found');
+    }
+
     await this.prisma.jobView.create({
-      data: { jobPostId: id, viewerId: viewerId ?? null },
+      data: { jobPostId: id, viewerId: viewer?.id ?? null },
     });
 
-    return this.withResolvedIcons(job);
+    const resolved = this.withResolvedIcons(job);
+    return member ? resolved : this.stripPrivateCompanyFields(resolved);
   }
 
   async listMine(user: AuthUser, companyId: string) {
     await this.companies.assertMember(user, companyId);
-    return this.prisma.jobPost.findMany({
+    const rows = await this.prisma.jobPost.findMany({
       where: { companyId },
       orderBy: { updatedAt: 'desc' },
       include: {
@@ -465,6 +487,7 @@ export class JobsService {
         _count: { select: { applications: true, views: true } },
       },
     });
+    return rows.map((job) => this.withResolvedIcons(job));
   }
 
   async search(query: {
@@ -819,11 +842,12 @@ export class JobsService {
       throw new BadRequestException('Only published jobs can be boosted');
     }
     const boostUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-    return this.prisma.jobPost.update({
+    const updated = await this.prisma.jobPost.update({
       where: { id: jobId },
       data: { boostWeight: weight, boostUntil },
       include: this.jobInclude,
     });
+    return this.withResolvedIcons(updated);
   }
 
   async getStats(user: AuthUser, jobId: string) {
@@ -854,7 +878,11 @@ export class JobsService {
       where: { userId: user.id },
     });
     if (!profile) return [];
-    return this.matching.recommendJobsForProfile(profile.id);
+    const rows = await this.matching.recommendJobsForProfile(profile.id);
+    return rows.map((row) => ({
+      ...row,
+      job: this.withResolvedIcons(row.job),
+    }));
   }
 
   async recommendedCandidates(user: AuthUser, jobId: string) {
@@ -865,7 +893,13 @@ export class JobsService {
   }
 
   // Screening questions
-  async listQuestions(jobId: string) {
+  async listQuestions(jobId: string, viewer?: AuthUser) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+    const member = this.isCompanyMember(viewer, job.companyId);
+    if (job.status !== 'PUBLISHED' && !member) {
+      throw new NotFoundException('Job not found');
+    }
     return this.prisma.jobQuestion.findMany({
       where: { jobPostId: jobId },
       orderBy: { sortOrder: 'asc' },

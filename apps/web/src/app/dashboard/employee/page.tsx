@@ -10,6 +10,7 @@ import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
+import { categoryIconLabel } from '@/lib/icons';
 import { useI18n } from '@/lib/i18n';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
@@ -424,7 +425,10 @@ export default function EmployeeDashboard() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   className="company-logo"
-                  src={item.job.company?.logoUrl || ''}
+                  src={
+                    item.job.company?.logoUrl ||
+                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(item.job.company?.name || 'Co')}`
+                  }
                   alt=""
                 />
                 <div>
@@ -432,6 +436,12 @@ export default function EmployeeDashboard() {
                   <div className="job-meta">
                     <span>{item.job.company?.name}</span>
                     <span>{jobLocationLabel(item.job)}</span>
+                    {item.job.category && (
+                      <span>
+                        {categoryIconLabel(item.job.category.slug, item.job.category.icon)}
+                        {item.job.category.name}
+                      </span>
+                    )}
                   </div>
                   <div className="match-bar">
                     <span style={{ width: `${item.matchScore}%` }} />
@@ -472,7 +482,7 @@ export default function EmployeeDashboard() {
                       const rec = members.find((m: any) => m.role === 'OWNER') || members[0];
                       return rec ? (
                         <Link href={`/messages?peer=${rec.userId}&job=${a.jobPost.id}`} className="chip" style={{ fontSize: '0.78rem' }}>
-                          💬 Chat with recruiter
+                          Chat with recruiter
                         </Link>
                       ) : null;
                     })()}
@@ -546,7 +556,7 @@ export default function EmployeeDashboard() {
                             setDraftAlertSkills((prev) => prev.filter((x) => x.slug !== s.slug))
                           }
                         >
-                          ✕
+                          ×
                         </button>
                       </span>
                     ))}
@@ -640,7 +650,7 @@ export default function EmployeeDashboard() {
                       style={{ marginLeft: '0.35rem', padding: 0 }}
                       onClick={() => removeItem('skills', s.id)}
                     >
-                      ✕
+                      ×
                     </button>
                   </span>
                 ))}
@@ -696,7 +706,7 @@ export default function EmployeeDashboard() {
                         <span key={s.id} className={`badge skill skill-${lvl.toLowerCase()}`}>
                           {s.skill?.name}
                           <button type="button" className="ghost" style={{ marginLeft: 6, padding: 0 }} onClick={() => removeItem('skills', s.id)}>
-                            ✕
+                            ×
                           </button>
                         </span>
                       ))}
@@ -745,7 +755,7 @@ export default function EmployeeDashboard() {
                         <div className="timeline-meta">
                           {x.isCurrent && <span className="badge match">Current</span>}
                           <span className="badge">{formatDuration(x.startDate, x.endDate, x.isCurrent)}</span>
-                          <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>✕</button>
+                          <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>×</button>
                         </div>
                       </div>
                       <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
@@ -830,7 +840,7 @@ export default function EmployeeDashboard() {
                   <div key={x.id} className="detail-card">
                     <div className="detail-card-head">
                       <strong>{x.school}</strong>
-                      <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>✕</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>×</button>
                     </div>
                     <div className="chips" style={{ marginTop: '0.35rem' }}>
                       {x.degree && <span className={`badge degree-${String(x.degree).toLowerCase()}`}>{String(x.degree).replace(/_/g, ' ')}</span>}
@@ -838,7 +848,7 @@ export default function EmployeeDashboard() {
                     </div>
                     {(x.startDate || x.endDate) && (
                       <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
-                        {x.startDate ? new Date(x.startDate).getFullYear() : '?'} — {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
+                        {x.startDate ? new Date(x.startDate).getFullYear() : '—'} — {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
                       </div>
                     )}
                   </div>
@@ -895,7 +905,7 @@ export default function EmployeeDashboard() {
                         <strong>{x.language?.name}</strong>
                         <div className={`cefr cefr-${String(x.level || 'B1').toLowerCase()}`}>{x.level}</div>
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>✕</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>×</button>
                     </div>
                   ))}
                 </div>
@@ -948,7 +958,7 @@ export default function EmployeeDashboard() {
                           </a>
                         )}
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>✕</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
                     </div>
                   </div>
                 ))}
@@ -1004,7 +1014,7 @@ export default function EmployeeDashboard() {
                           </button>
                         )}
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>✕</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>×</button>
                     </div>
                     <div className="chips" style={{ marginTop: '0.5rem' }}>
                       {r.fileKey && (

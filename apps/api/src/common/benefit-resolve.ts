@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Benefit, PrismaClient } from '@prisma/client';
+import { resolveBenefitIcon } from '@job-talentio/shared';
 import {
   assertLookupName,
   catalogSlugify,
@@ -101,7 +102,7 @@ export async function resolveBenefit(
         name: displayName,
         slug: finalSlug,
         normalizedKey: key,
-        icon: opts.icon,
+        icon: resolveBenefitIcon(finalSlug, opts.icon) || null,
       },
     });
     return { benefit, created: true, matchedVia: 'created' };

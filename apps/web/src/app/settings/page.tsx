@@ -69,7 +69,7 @@ export default function SettingsPage() {
       saveSession(updated);
       setSession(updated);
       setLocale(prefLocale);
-      setMsg('✓ Profile saved');
+      setMsg('Profile saved');
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Failed to save');
     } finally {
@@ -86,7 +86,7 @@ export default function SettingsPage() {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      setPwMsg('✓ Password updated');
+      setPwMsg('Password updated');
       setCurrentPassword('');
       setNewPassword('');
     } catch (error) {

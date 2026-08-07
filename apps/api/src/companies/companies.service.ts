@@ -3,8 +3,10 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { CompanyMemberRole } from '@prisma/client';
+import { resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
@@ -110,7 +112,18 @@ export class CompaniesService {
       },
     });
     if (!company || company.isBanned) throw new NotFoundException('Company not found');
-    return company;
+    return {
+      ...company,
+      jobPosts: company.jobPosts.map((job) => ({
+        ...job,
+        category: job.category
+          ? {
+              ...job.category,
+              icon: resolveCategoryIcon(job.category.slug, job.category.icon) || null,
+            }
+          : job.category,
+      })),
+    };
   }
 
   async update(
@@ -168,13 +181,19 @@ export class CompaniesService {
     role: CompanyMemberRole = 'RECRUITER',
   ) {
     await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    // OWNER transfer is a separate flow — invites may only grant ADMIN or RECRUITER
+    if (role !== 'ADMIN' && role !== 'RECRUITER') {
+      throw new BadRequestException('Invite role must be ADMIN or RECRUITER');
+    }
     const invitee = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!invitee) throw new NotFoundException('User must register first');
+    if (invitee.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot invite a super admin as a company member');
+    }
     if (invitee.role === 'EMPLOYEE') {
-      await this.prisma.user.update({
-        where: { id: invitee.id },
-        data: { role: 'RECRUITER' },
-      });
+      throw new BadRequestException(
+        'User is registered as an employee. They must create a recruiter account before joining a company.',
+      );
     }
     try {
       return await this.prisma.companyMember.create({

@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveJwtSecret } from '../common/jwt-secret';
 
 @WebSocketGateway({
   cors: {
@@ -38,8 +39,16 @@ export class ChatGateway implements OnGatewayConnection {
         (client.handshake.auth?.token as string) ||
         (client.handshake.headers.authorization?.replace('Bearer ', '') ?? '');
       const payload = await this.jwt.verifyAsync<{ sub: string }>(token, {
-        secret: this.config.get('JWT_SECRET', 'local-dev-jwt-secret'),
+        secret: resolveJwtSecret(this.config),
       });
+      const banned = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { isBanned: true },
+      });
+      if (!banned || banned.isBanned) {
+        client.disconnect();
+        return;
+      }
       client.data.userId = payload.sub;
       client.join(`user:${payload.sub}`);
     } catch {
@@ -54,7 +63,10 @@ export class ChatGateway implements OnGatewayConnection {
   ) {
     const userId = client.data.userId as string;
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return;
+    if (!user || user.isBanned) {
+      client.disconnect();
+      return;
+    }
     const message = await this.chat.sendMessage(
       {
         id: user.id,

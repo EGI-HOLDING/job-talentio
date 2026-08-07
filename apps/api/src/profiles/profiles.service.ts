@@ -558,6 +558,17 @@ export class ProfilesService {
       throw new ForbiddenException();
     }
 
+    if (query.matchJobId) {
+      const matchJob = await this.prisma.jobPost.findUnique({
+        where: { id: query.matchJobId },
+        select: { id: true, companyId: true },
+      });
+      if (!matchJob) throw new NotFoundException('Match job not found');
+      if (user.role !== 'SUPER_ADMIN') {
+        await this.companies.assertMember(user, matchJob.companyId);
+      }
+    }
+
     const membership = user.memberships?.[0];
     let limited = true;
     if (membership) {
@@ -857,6 +868,14 @@ export class ProfilesService {
 
     let match: unknown = null;
     if (matchJobId) {
+      const matchJob = await this.prisma.jobPost.findUnique({
+        where: { id: matchJobId },
+        select: { id: true, companyId: true },
+      });
+      if (!matchJob) throw new NotFoundException('Match job not found');
+      if (user.role !== 'SUPER_ADMIN') {
+        await this.companies.assertMember(user, matchJob.companyId);
+      }
       try {
         match = await this.matching.scoreProfileAgainstJob(profileId, matchJobId);
       } catch {

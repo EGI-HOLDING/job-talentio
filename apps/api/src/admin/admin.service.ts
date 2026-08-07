@@ -50,6 +50,14 @@ export class AdminService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { isBanned: banned },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isBanned: true,
+        createdAt: true,
+      },
     });
     await this.prisma.auditLog.create({
       data: {

@@ -150,7 +150,7 @@ export class MetaService {
     const rows = await this.prisma.jobCategory.findMany({ orderBy: { name: 'asc' } });
     return rows.map((c) => ({
       ...c,
-      icon: resolveCategoryIcon(c.slug, c.icon) || c.icon,
+      icon: resolveCategoryIcon(c.slug, c.icon) || null,
     }));
   }
 
@@ -162,7 +162,7 @@ export class MetaService {
     const rows = await this.prisma.benefit.findMany({ orderBy: { name: 'asc' } });
     return rows.map((b) => ({
       ...b,
-      icon: resolveBenefitIcon(b.slug, b.icon) || b.icon,
+      icon: resolveBenefitIcon(b.slug, b.icon) || null,
     }));
   }
 
@@ -191,7 +191,7 @@ export class MetaService {
         id: b.id,
         name: b.name,
         slug: b.slug,
-        icon: resolveBenefitIcon(b.slug, b.icon) || b.icon,
+        icon: resolveBenefitIcon(b.slug, b.icon) || null,
         aliases: b.aliases.map((a) => a.alias),
         usageCount: b._count.jobPostBenefits,
       }))

@@ -23,6 +23,7 @@ import {
   resumeImportSchema,
   candidateSearchSchema,
 } from '@job-talentio/shared';
+import { resumeUploadOptions } from '../common/upload';
 import { ProfilesService } from './profiles.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
@@ -142,7 +143,7 @@ export class ProfilesController {
 
   @Post('me/resumes/:id/file')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', resumeUploadOptions))
   attachFile(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -160,7 +161,7 @@ export class ProfilesController {
 
   @Post('me/resumes/upload')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', resumeUploadOptions))
   upload(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: Express.Multer.File,

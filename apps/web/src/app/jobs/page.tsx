@@ -217,7 +217,8 @@ function JobsInner() {
     setLoading(true);
     setError('');
     const p = toParams(filters);
-    api<SearchResponse>(`/jobs?${p.toString()}`, { auth: false })
+    // Send auth when logged in so sort=match can use the employee profile
+    api<SearchResponse>(`/jobs?${p.toString()}`)
       .then((res) => {
         setData(res);
         // Keep URL in sync when the API clamps an out-of-range page.

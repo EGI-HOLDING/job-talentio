@@ -45,11 +45,18 @@ export class ChatService {
     if (!peer || peer.isBanned) throw new NotFoundException('User not found');
 
     let isColdOutreach = false;
-    let companyId = opts?.companyId;
+    let companyId: string | undefined;
 
     if (user.role === 'RECRUITER') {
-      const membership = user.memberships?.[0];
-      companyId = companyId ?? membership?.companyId;
+      const membershipIds = new Set((user.memberships ?? []).map((m) => m.companyId));
+      if (opts?.companyId) {
+        if (!membershipIds.has(opts.companyId)) {
+          throw new ForbiddenException('Not a member of this company');
+        }
+        companyId = opts.companyId;
+      } else {
+        companyId = user.memberships?.[0]?.companyId;
+      }
       if (!companyId) throw new ForbiddenException('No company');
 
       const hasApplication = opts?.jobPostId

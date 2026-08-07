@@ -148,8 +148,8 @@ function CandidateInner() {
               </p>
             ) : (
               <p style={{ marginTop: '0.4rem', fontSize: '0.9rem' }}>
-                {data.user.email && <span>✉ {data.user.email}</span>}
-                {data.phone && <span style={{ marginLeft: '1rem' }}>☎ {data.phone}</span>}
+                {data.user.email && <span>{data.user.email}</span>}
+                {data.phone && <span style={{ marginLeft: '1rem' }}>{data.phone}</span>}
               </p>
             )}
           </div>
