@@ -56,10 +56,13 @@ export function GoogleSignIn() {
     async (token: string, chosenRole?: 'EMPLOYEE' | 'RECRUITER', company?: string) => {
       setBusy(true);
       setError('');
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 25_000);
       try {
         const res = await api<GoogleResponse>('/auth/oauth/google', {
           method: 'POST',
           auth: false,
+          signal: controller.signal,
           body: JSON.stringify({
             idToken: token,
             role: chosenRole,
@@ -79,8 +82,14 @@ export function GoogleSignIn() {
         saveSession(res as Parameters<typeof saveSession>[0]);
         window.location.href = redirectAfterLogin(res.user.role);
       } catch (err) {
-        setError((err as Error).message || 'Google sign-in failed');
+        const aborted = err instanceof DOMException && err.name === 'AbortError';
+        setError(
+          aborted
+            ? 'Sign-in timed out. Please try again.'
+            : (err as Error).message || 'Google sign-in failed',
+        );
       } finally {
+        window.clearTimeout(timer);
         setBusy(false);
       }
     },

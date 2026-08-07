@@ -301,7 +301,8 @@ export class AuthService {
       },
     });
     const link = this.verificationLink(rawToken);
-    await this.mail.send(
+    // Do not await SMTP — a hung Hostinger connection must not block OAuth/register.
+    void this.mail.send(
       user.email,
       'Verify your email — Job Talentio',
       `<p>Salom ${user.fullName}!</p>
