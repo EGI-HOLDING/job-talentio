@@ -20,7 +20,7 @@ Browser → Cloudflare (DNS/CDN/proxy)
             ├─ admin-staging.jobtalent.io   → Railway admin (staging)
             └─ api-staging.jobtalent.io     → Railway api (staging)
 
-API → Postgres + Redis + MinIO (staging) / R2 (prod) + Hostinger SMTP
+API → Postgres + Redis + MinIO (staging) / R2 (prod) + Resend (or Hostinger SMTP on Pro+)
 ```
 
 ### Live staging URLs
@@ -144,13 +144,14 @@ S3_BUCKET=job-talentio-prod
 S3_FORCE_PATH_STYLE=true
 S3_PUBLIC_URL=https://cdn.jobtalent.io
 
-# Hostinger Email
-SMTP_HOST=smtp.hostinger.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=noreply@jobtalent.io
-SMTP_PASS=<mailbox-password>
-SMTP_FROM="Job Talentio <noreply@jobtalent.io>"
+# Platform email — Resend on Hobby (SMTP blocked); Hostinger SMTP on Pro+
+SMTP_FROM="Job Talentio <info@jobtalent.io>"
+RESEND_API_KEY=re_...
+# SMTP_HOST=smtp.hostinger.com
+# SMTP_PORT=465
+# SMTP_SECURE=true
+# SMTP_USER=info@jobtalent.io
+# SMTP_PASS=<mailbox-password>
 ```
 
 Staging domains (single-level hostnames for Cloudflare Universal SSL): `https://staging.jobtalent.io`, `https://admin-staging.jobtalent.io`, `https://api-staging.jobtalent.io`. Use a different `JWT_SECRET` from production.
@@ -213,9 +214,25 @@ Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 
 ---
 
-## 5. Hostinger Email (SMTP)
+## 5. Platform email (Resend on Railway + Hostinger mailbox)
 
-1. Create mailbox e.g. `noreply@jobtalent.io` in hPanel.
+**Important:** Railway Free / Hobby / Trial **blocks outbound SMTP**. Hostinger
+`smtp.hostinger.com` will time out from the API container even with valid
+credentials. Use one of:
+
+### A) Resend HTTPS (recommended on Hobby)
+
+1. Create an account at [resend.com](https://resend.com).
+2. Domains → add `jobtalent.io` → copy the DNS records into Hostinger/Cloudflare
+   (keep existing Hostinger MX for the mailbox).
+3. Create an API key; set Railway API vars:
+   - `RESEND_API_KEY=re_...`
+   - `SMTP_FROM="Job Talentio <info@jobtalent.io>"`
+4. Redeploy the API. Logs should show `Mail transport: Resend HTTPS API`.
+
+### B) Hostinger SMTP (Railway Pro+ only)
+
+1. Create mailbox e.g. `info@jobtalent.io` in hPanel.
 2. SMTP settings:
 
 | Setting | Value |
@@ -226,7 +243,8 @@ Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 | User | full email address |
 | Pass | mailbox password |
 
-3. Prefer port **587** + `SMTP_SECURE=false` only if 465 is blocked.
+3. After upgrading to Pro, **redeploy** the API so SMTP egress is enabled.
+4. Prefer port **587** + `SMTP_SECURE=false` only if 465 is blocked by the provider.
 
 ---
 
@@ -237,7 +255,7 @@ Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 - [ ] `GET https://api…/api/health` returns ok
 - [ ] Login employee / recruiter / admin
 - [ ] Upload (CV/logo) lands in the correct R2 bucket
-- [ ] Test email arrives via Hostinger
+- [ ] Test verification email arrives (Resend or Pro+ Hostinger SMTP)
 - [ ] Chat WebSocket works through Cloudflare
 - [ ] `DEV_AUTH_ENABLED=false` on both envs
 - [ ] `PAYMENTS_MOCK=false` on staging/prod (set `true` only for local mock auto-confirm)
