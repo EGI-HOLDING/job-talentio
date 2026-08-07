@@ -30,6 +30,32 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+/** Google Identity Services ID-token sign-in. role/companyName only needed for first sign-in. */
+export const googleOAuthSchema = z
+  .object({
+    idToken: z.string().min(20),
+    role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
+    companyName: z.string().trim().min(2).max(160).optional(),
+    locale: z.enum(['uz', 'ru', 'en']).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'RECRUITER' && (data.companyName?.trim() ?? '').length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['companyName'],
+        message: 'Company name is required for recruiter accounts',
+      });
+    }
+  });
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(20).max(200),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().trim().email(),
+});
+
 export const devLoginSchema = z.object({
   email: z.string().email(),
   // SUPER_ADMIN must never be mintable via dev-login

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useId, useState } from 'react';
 import { api, saveSession } from '@/lib/api';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
+import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
 import { useI18n } from '@/lib/i18n';
 
 export default function RegisterPage() {
@@ -158,6 +159,7 @@ export default function RegisterPage() {
             {loading ? t('creatingAccount') : t('createAccount')}
           </button>
         </form>
+        <GoogleSignIn />
         <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>
           {t('alreadyRegistered')}{' '}
           <Link href="/login" style={{ color: 'var(--accent)' }}>
