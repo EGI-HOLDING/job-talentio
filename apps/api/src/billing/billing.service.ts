@@ -21,6 +21,19 @@ export class BillingService {
     return process.env.PAYMENTS_MOCK === 'true';
   }
 
+  private checkoutUrlFor(paymentId: string) {
+    const base = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+    return `${base}/billing/mock-checkout?paymentId=${encodeURIComponent(paymentId)}`;
+  }
+
+  private wrapCheckoutResult(payment: { id: string; status: string }) {
+    return {
+      payment,
+      checkoutUrl:
+        payment.status === 'PENDING' ? this.checkoutUrlFor(payment.id) : null,
+    };
+  }
+
   async getSubscription(user: AuthUser, companyId: string) {
     await this.companies.assertMember(user, companyId);
     const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
@@ -31,8 +44,21 @@ export class BillingService {
     return { ...sub, activePublishedJobs: activeJobs, prices: PLAN_PRICES_UZS };
   }
 
+  async getPayment(user: AuthUser, paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
+    return payment;
+  }
+
   async upgrade(user: AuthUser, companyId: string, plan: 'STANDARD' | 'PREMIUM') {
     await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const current = await this.prisma.subscription.findUnique({ where: { companyId } });
+    if (!current) throw new NotFoundException('Subscription not found');
+    const order: PlanCode[] = [PlanCode.FREE, PlanCode.STANDARD, PlanCode.PREMIUM];
+    if (order.indexOf(current.plan) >= order.indexOf(plan as PlanCode)) {
+      throw new BadRequestException(`Already on ${current.plan} or higher`);
+    }
     const amount = PLAN_PRICES_UZS[plan];
     const intent = await this.payments.createPayment({
       companyId,
@@ -54,9 +80,10 @@ export class BillingService {
     });
 
     if (this.mockAutoConfirmEnabled()) {
-      return this.confirmPayment(user, payment.id, true);
+      const confirmed = await this.confirmPayment(user, payment.id, true);
+      return this.wrapCheckoutResult(confirmed);
     }
-    return payment;
+    return this.wrapCheckoutResult(payment);
   }
 
   async buyHotJob(user: AuthUser, companyId: string, jobId: string, days: 7 | 14 | 30) {
@@ -79,9 +106,10 @@ export class BillingService {
       },
     });
     if (this.mockAutoConfirmEnabled()) {
-      return this.confirmPayment(user, payment.id, true);
+      const confirmed = await this.confirmPayment(user, payment.id, true);
+      return this.wrapCheckoutResult(confirmed);
     }
-    return payment;
+    return this.wrapCheckoutResult(payment);
   }
 
   async confirmPayment(user: AuthUser, paymentId: string, allowAuto = false) {
@@ -89,9 +117,12 @@ export class BillingService {
     if (!payment) throw new NotFoundException('Payment not found');
     await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
 
-    if (!allowAuto && !this.mockAutoConfirmEnabled()) {
+    // Explicit mock checkout (provider=mock) is allowed for OWNER/ADMIN.
+    // Silent auto-confirm only when PAYMENTS_MOCK=true. Real providers will use webhooks later.
+    const isMockProvider = payment.provider === 'mock';
+    if (!allowAuto && !this.mockAutoConfirmEnabled() && !isMockProvider) {
       throw new BadRequestException(
-        'Manual payment confirmation is disabled until a real payment provider is configured. Set PAYMENTS_MOCK=true only for local development.',
+        'Manual payment confirmation is disabled until a real payment provider is configured.',
       );
     }
 
