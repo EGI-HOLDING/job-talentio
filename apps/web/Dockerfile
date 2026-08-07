@@ -7,9 +7,12 @@ FROM base AS build
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ARG NEXT_PUBLIC_ADMIN_URL=http://localhost:3001
 ARG NEXT_PUBLIC_APP_NAME=Job Talentio
+# Empty default hides the Google sign-in button
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_ADMIN_URL=$NEXT_PUBLIC_ADMIN_URL
 ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/shared ./packages/shared
