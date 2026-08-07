@@ -6,6 +6,7 @@ import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
+import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
@@ -664,9 +665,12 @@ export default function EmployeeDashboard() {
         )}
 
         {tab === 'profile' && profile && (
-          <div className="career-page">
-            <div className="card" style={{ marginBottom: '1rem' }}>
-              <h3 style={{ marginTop: 0 }}>Edit profile</h3>
+          <div className="career-page profile-page">
+            <div className="card profile-block">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Basics</h2>
+              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                How recruiters see you at a glance.
+              </p>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={updateProfile} key={`profile-${profile.updatedAt || profile.id}`}>
                 <label>
@@ -702,49 +706,56 @@ export default function EmployeeDashboard() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  <LabelText>Desired position</LabelText>
-                  <input name="desiredPosition" defaultValue={sanitizeMojibake(profile.desiredPosition) || ''} />
-                </label>
-                <label>
-                  <LabelText>Desired salary (UZS)</LabelText>
-                  <input
-                    name="desiredSalaryMin"
-                    type="number"
-                    defaultValue={profile.desiredSalaryMin || ''}
-                  />
-                </label>
-                <button type="submit">Save</button>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>Desired position</LabelText>
+                    <input name="desiredPosition" defaultValue={sanitizeMojibake(profile.desiredPosition) || ''} />
+                  </label>
+                  <label>
+                    <LabelText>Desired salary (UZS)</LabelText>
+                    <NumberInput
+                      name="desiredSalaryMin"
+                      defaultValue={profile.desiredSalaryMin}
+                      placeholder="e.g. 12.000.000"
+                      min={0}
+                      aria-label="Desired salary in UZS"
+                    />
+                  </label>
+                </div>
+                <button type="submit">Save basics</button>
               </form>
             </div>
 
-            <div className="card" style={{ marginBottom: '1rem' }}>
-              <div className="jobs-toolbar" style={{ marginBottom: 0 }}>
-                <div>
-                  <h2 className="section-title" style={{ margin: 0 }}>Career history</h2>
-                  <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
-                    Experience, education, skills, languages & resumes — detailed for recruiters to review.
-                  </p>
-                </div>
-                <form onSubmit={uploadCv} className="cv-upload-inline">
-                  <label>
-                    <LabelText required>{t('uploadCv')}</LabelText>
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      required
-                      disabled={uploading}
-                      aria-label={t('uploadCv')}
-                    />
-                  </label>
-                  <button type="submit" disabled={uploading}>
-                    {uploading ? 'Uploading…' : 'Upload CV & parse'}
-                  </button>
-                </form>
-              </div>
+            <div className="card profile-block">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Import from CV</h2>
+              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                Upload a PDF to parse skills, experience, and education into your profile. Review before importing.
+              </p>
+              <form onSubmit={uploadCv} className="cv-upload-inline">
+                <label>
+                  <LabelText required>{t('uploadCv')}</LabelText>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    required
+                    disabled={uploading}
+                    aria-label={t('uploadCv')}
+                  />
+                </label>
+                <button type="submit" disabled={uploading}>
+                  {uploading ? 'Uploading…' : 'Upload CV & parse'}
+                </button>
+              </form>
             </div>
 
-            <div className="card" style={{ marginBottom: '1rem' }}>
+            <div className="profile-block" style={{ marginBottom: '0.35rem' }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Career history</h2>
+              <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
+                Experience, education, skills, and languages — edit here for matching and recruiters.
+              </p>
+            </div>
+
+            <div className="card profile-block">
               <div className="cv-section-head">
                 <h3 style={{ margin: 0 }}>Skills</h3>
                 <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'skill' ? null : 'skill')}>
@@ -753,30 +764,29 @@ export default function EmployeeDashboard() {
               </div>
               {LEVEL_ORDER.map((lvl) =>
                 (skillsByLevel[lvl] || []).length ? (
-                  <div key={lvl} style={{ marginTop: '0.75rem' }}>
-                    <div className="muted" style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-                      {lvl}
-                    </div>
-                    <div className="chips">
+                  <div key={lvl} className="profile-skill-group">
+                    <div className="profile-group-label">{lvl}</div>
+                    <ul className="profile-list">
                       {skillsByLevel[lvl].map((s: any) => (
-                        <span key={s.id} className={`badge skill skill-${lvl.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          {s.skill?.name}
-                          <select
-                            aria-label={`Level for ${s.skill?.name}`}
-                            value={s.level || 'INTERMEDIATE'}
-                            onChange={(e) => updateSkillLevel(s.id, e.target.value)}
-                            style={{ width: 'auto', padding: '0.15rem 0.35rem', fontSize: '0.72rem', borderRadius: 6 }}
-                          >
-                            {SKILL_LEVELS.map((l) => (
-                              <option key={l} value={l}>{l}</option>
-                            ))}
-                          </select>
-                          <button type="button" className="ghost" style={{ marginLeft: 2, padding: 0 }} onClick={() => removeItem('skills', s.id)}>
-                            ×
-                          </button>
-                        </span>
+                        <li key={s.id} className="profile-list-row">
+                          <span className="profile-list-title">{s.skill?.name}</span>
+                          <div className="profile-list-actions">
+                            <select
+                              aria-label={`Level for ${s.skill?.name}`}
+                              value={s.level || 'INTERMEDIATE'}
+                              onChange={(e) => updateSkillLevel(s.id, e.target.value)}
+                            >
+                              {SKILL_LEVELS.map((l) => (
+                                <option key={l} value={l}>{l}</option>
+                              ))}
+                            </select>
+                            <button type="button" className="ghost" onClick={() => removeItem('skills', s.id)}>
+                              Remove
+                            </button>
+                          </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 ) : null,
               )}
@@ -795,7 +805,7 @@ export default function EmployeeDashboard() {
               )}
             </div>
 
-            <div className="card" style={{ marginBottom: '1rem' }}>
+            <div className="card profile-block">
               <div className="cv-section-head">
                 <h3 style={{ margin: 0 }}>Work experience</h3>
                 <button
@@ -864,22 +874,12 @@ export default function EmployeeDashboard() {
                   <p className="required-note">{t('requiredFieldsNote')}</p>
                   <div className="grid-2">
                     <label>
-                      <LabelText required>Job title</LabelText>
+                      <LabelText required>Title</LabelText>
                       <input name="title" required defaultValue={editingExp?.title || ''} />
                     </label>
                     <label>
                       <LabelText required>Company</LabelText>
                       <input name="companyName" required defaultValue={editingExp?.companyName || ''} />
-                    </label>
-                  </div>
-                  <div className="grid-2">
-                    <label>
-                      <LabelText required>Start date</LabelText>
-                      <input name="startDate" type="date" required defaultValue={dateInputValue(editingExp?.startDate)} />
-                    </label>
-                    <label>
-                      <LabelText>End date</LabelText>
-                      <input name="endDate" type="date" defaultValue={dateInputValue(editingExp?.endDate)} />
                     </label>
                   </div>
                   <label>
@@ -895,8 +895,18 @@ export default function EmployeeDashboard() {
                     <LabelText>Description</LabelText>
                     <textarea name="description" rows={3} defaultValue={editingExp?.description || ''} />
                   </label>
-                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input name="isCurrent" type="checkbox" style={{ width: 'auto' }} defaultChecked={Boolean(editingExp?.isCurrent)} />
+                  <div className="grid-2">
+                    <label>
+                      <LabelText required>Start</LabelText>
+                      <input name="startDate" type="date" required defaultValue={dateInputValue(editingExp?.startDate)} />
+                    </label>
+                    <label>
+                      <LabelText>End</LabelText>
+                      <input name="endDate" type="date" defaultValue={dateInputValue(editingExp?.endDate)} />
+                    </label>
+                  </div>
+                  <label className="check-row">
+                    <input name="isCurrent" type="checkbox" defaultChecked={Boolean(editingExp?.isCurrent)} />
                     <LabelText optional={false}>Currently work here</LabelText>
                   </label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -909,7 +919,7 @@ export default function EmployeeDashboard() {
               )}
             </div>
 
-            <div className="grid-2" style={{ marginBottom: '1rem' }}>
+            <div className="grid-2 profile-block">
               <div className="card">
                 <div className="cv-section-head">
                   <h3 style={{ margin: 0 }}>Education</h3>
@@ -921,26 +931,33 @@ export default function EmployeeDashboard() {
                     {showEduForm && !editingEduId ? 'Close' : '+ Add'}
                   </button>
                 </div>
-                {(profile.educations || []).map((x: any) => (
-                  <div key={x.id} className="detail-card">
-                    <div className="detail-card-head">
-                      <strong>{x.school}</strong>
-                      <div>
+                <ul className="profile-list">
+                  {(profile.educations || []).map((x: any) => (
+                    <li key={x.id} className="profile-list-row profile-list-row--stack">
+                      <div className="profile-list-main">
+                        <strong>{x.school}</strong>
+                        <div className="chips" style={{ marginTop: '0.4rem' }}>
+                          {x.degree && (
+                            <span className={`badge degree-${String(x.degree).toLowerCase()}`}>
+                              {String(x.degree).replace(/_/g, ' ')}
+                            </span>
+                          )}
+                          {x.field && <span className="badge skill">{x.field}</span>}
+                        </div>
+                        {(x.startDate || x.endDate) && (
+                          <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
+                            {x.startDate ? new Date(x.startDate).getFullYear() : '—'} —{' '}
+                            {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="profile-list-actions">
                         <button type="button" className="ghost" onClick={() => setOpenForm(`edit-edu:${x.id}`)}>Edit</button>
                         <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>×</button>
                       </div>
-                    </div>
-                    <div className="chips" style={{ marginTop: '0.35rem' }}>
-                      {x.degree && <span className={`badge degree-${String(x.degree).toLowerCase()}`}>{String(x.degree).replace(/_/g, ' ')}</span>}
-                      {x.field && <span className="badge skill">{x.field}</span>}
-                    </div>
-                    {(x.startDate || x.endDate) && (
-                      <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
-                        {x.startDate ? new Date(x.startDate).getFullYear() : '—'} — {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                    </li>
+                  ))}
+                </ul>
                 {!(profile.educations || []).length && <p className="muted">No education entries yet.</p>}
                 {showEduForm && (
                   <form
@@ -996,26 +1013,30 @@ export default function EmployeeDashboard() {
                     {openForm === 'lang' ? 'Close' : '+ Add'}
                   </button>
                 </div>
-                <div className="lang-grid">
+                <ul className="profile-list">
                   {(profile.languages || []).map((x: any) => (
-                    <div key={x.id} className="lang-pill">
-                      <div>
-                        <strong>{x.language?.name}</strong>
+                    <li key={x.id} className="profile-list-row">
+                      <div className="profile-list-main">
+                        <strong className="profile-list-title">{x.language?.name}</strong>
+                        <span className={`cefr cefr-${String(x.level || 'b1').toLowerCase()}`}>{x.level}</span>
+                      </div>
+                      <div className="profile-list-actions">
                         <select
                           aria-label={`Level for ${x.language?.name}`}
                           value={x.level || 'B1'}
                           onChange={(e) => updateLanguageLevel(x.id, e.target.value)}
-                          style={{ width: 'auto', marginTop: 4, padding: '0.2rem 0.4rem', fontSize: '0.78rem' }}
                         >
                           {LANG_LEVELS.map((l) => (
                             <option key={l} value={l}>{l}</option>
                           ))}
                         </select>
+                        <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>
+                          Remove
+                        </button>
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>×</button>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
                 {!(profile.languages || []).length && <p className="muted">No languages yet.</p>}
                 {openForm === 'lang' && (
                   <div style={{ marginTop: '1rem' }}>
@@ -1040,160 +1061,165 @@ export default function EmployeeDashboard() {
               </div>
             </div>
 
-            <div className="grid-2">
-              <div className="card">
-                <div className="cv-section-head">
-                  <h3 style={{ margin: 0 }}>Certifications</h3>
-                  <button
-                    type="button"
-                    className="chip"
-                    onClick={() => setOpenForm(showCertForm && !editingCertId ? null : 'cert')}
-                  >
-                    {showCertForm && !editingCertId ? 'Close' : '+ Add'}
-                  </button>
-                </div>
+            <div className="card profile-block">
+              <div className="cv-section-head">
+                <h3 style={{ margin: 0 }}>Certifications</h3>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => setOpenForm(showCertForm && !editingCertId ? null : 'cert')}
+                >
+                  {showCertForm && !editingCertId ? 'Close' : '+ Add'}
+                </button>
+              </div>
+              <ul className="profile-list">
                 {(profile.certifications || []).map((x: any) => (
-                  <div key={x.id} className="detail-card">
-                    <div className="detail-card-head">
-                      <div>
-                        <strong>{x.name}</strong>
-                        {x.issuer && <div className="muted" style={{ fontSize: '0.85rem' }}>{x.issuer}</div>}
-                        {x.issuedAt && (
-                          <div className="muted" style={{ fontSize: '0.8rem' }}>
-                            Issued {new Date(x.issuedAt).toLocaleDateString()}
-                          </div>
-                        )}
-                        {x.expiresAt && (
-                          <div className="muted" style={{ fontSize: '0.8rem' }}>
-                            Expires {new Date(x.expiresAt).toLocaleDateString()}
-                          </div>
-                        )}
-                        {x.credentialUrl && (
-                          <a href={x.credentialUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
-                            View credential →
-                          </a>
-                        )}
-                      </div>
-                      <div>
-                        <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>Edit</button>
-                        <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
-                {showCertForm && (
-                  <form
-                    className="form-stack"
-                    key={editingCertId || 'new-cert'}
-                    onSubmit={saveCertification}
-                    style={{ marginTop: '1rem' }}
-                  >
-                    <p className="required-note">{t('requiredFieldsNote')}</p>
-                    <label>
-                      <LabelText required>Name</LabelText>
-                      <input name="name" required defaultValue={editingCert?.name || ''} />
-                    </label>
-                    <div className="grid-2">
-                      <label>
-                        <LabelText>Issuer</LabelText>
-                        <input name="issuer" defaultValue={editingCert?.issuer || ''} />
-                      </label>
-                      <label>
-                        <LabelText>Issued at</LabelText>
-                        <input name="issuedAt" type="date" defaultValue={dateInputValue(editingCert?.issuedAt)} />
-                      </label>
-                    </div>
-                    <label>
-                      <LabelText>Expires at</LabelText>
-                      <input name="expiresAt" type="date" defaultValue={dateInputValue(editingCert?.expiresAt)} />
-                    </label>
-                    <label>
-                      <LabelText>Credential URL</LabelText>
-                      <input name="credentialUrl" type="url" placeholder="https://…" defaultValue={editingCert?.credentialUrl || ''} />
-                    </label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button type="submit">{editingCertId ? 'Update certification' : 'Save certification'}</button>
-                      {editingCertId && (
-                        <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                  <li key={x.id} className="profile-list-row profile-list-row--stack">
+                    <div className="profile-list-main">
+                      <strong>{x.name}</strong>
+                      {x.issuer && <div className="muted" style={{ fontSize: '0.85rem' }}>{x.issuer}</div>}
+                      {x.issuedAt && (
+                        <div className="muted" style={{ fontSize: '0.8rem' }}>
+                          Issued {new Date(x.issuedAt).toLocaleDateString()}
+                        </div>
+                      )}
+                      {x.expiresAt && (
+                        <div className="muted" style={{ fontSize: '0.8rem' }}>
+                          Expires {new Date(x.expiresAt).toLocaleDateString()}
+                        </div>
+                      )}
+                      {x.credentialUrl && (
+                        <a href={x.credentialUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
+                          View credential →
+                        </a>
                       )}
                     </div>
-                  </form>
-                )}
-              </div>
+                    <div className="profile-list-actions">
+                      <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>Edit</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
+              {showCertForm && (
+                <form
+                  className="form-stack"
+                  key={editingCertId || 'new-cert'}
+                  onSubmit={saveCertification}
+                  style={{ marginTop: '1rem' }}
+                >
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
+                  <label>
+                    <LabelText required>Name</LabelText>
+                    <input name="name" required defaultValue={editingCert?.name || ''} />
+                  </label>
+                  <div className="grid-2">
+                    <label>
+                      <LabelText>Issuer</LabelText>
+                      <input name="issuer" defaultValue={editingCert?.issuer || ''} />
+                    </label>
+                    <label>
+                      <LabelText>Issued at</LabelText>
+                      <input name="issuedAt" type="date" defaultValue={dateInputValue(editingCert?.issuedAt)} />
+                    </label>
+                  </div>
+                  <label>
+                    <LabelText>Expires at</LabelText>
+                    <input name="expiresAt" type="date" defaultValue={dateInputValue(editingCert?.expiresAt)} />
+                  </label>
+                  <label>
+                    <LabelText>Credential URL</LabelText>
+                    <input name="credentialUrl" type="url" placeholder="https://…" defaultValue={editingCert?.credentialUrl || ''} />
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button type="submit">{editingCertId ? 'Update certification' : 'Save certification'}</button>
+                    {editingCertId && (
+                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
 
-              <div className="card">
-                <div className="cv-section-head">
+            <div className="card profile-block">
+              <div className="cv-section-head">
+                <div>
                   <h3 style={{ margin: 0 }}>Resumes</h3>
-                  <Link href="/dashboard/employee/resume-builder" className="chip" style={{ fontWeight: 600 }}>
-                    Open resume builder
-                  </Link>
+                  <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
+                    Named CV versions for applications — build, export, or attach a PDF.
+                  </p>
                 </div>
+                <Link href="/dashboard/employee/resume-builder" className="chip" style={{ fontWeight: 600 }}>
+                  Open resume builder
+                </Link>
+              </div>
+              <ul className="profile-list">
                 {(profile.resumes || []).map((r: any) => (
-                  <div key={r.id} className="detail-card">
-                    <div className="detail-card-head">
-                      <div>
+                  <li key={r.id} className="profile-list-row profile-list-row--stack">
+                    <div className="profile-list-main">
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
                         <strong>{r.title}</strong>
-                        {r.isPrimary && <span className="badge match" style={{ marginLeft: 8 }}>Primary</span>}
+                        {r.isPrimary && <span className="badge match">Primary</span>}
                         {(r.hasFile || r.fileKey) && (
-                          <span className="badge skill" style={{ marginLeft: 6 }}>
-                            hasFile
-                          </span>
+                          <span className="badge skill">PDF attached</span>
                         )}
-                        {r.parsedData && (
-                          <button
-                            type="button"
-                            className="ghost"
-                            style={{ display: 'block', marginTop: 4 }}
-                            onClick={() => setCvReview({ resumeId: r.id, parsed: r.parsedData })}
-                          >
-                            Review parsed data →
+                      </div>
+                      {r.parsedData && (
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ display: 'inline-block', marginTop: 6, padding: 0 }}
+                          onClick={() => setCvReview({ resumeId: r.id, parsed: r.parsedData })}
+                        >
+                          Review parsed data →
+                        </button>
+                      )}
+                      <div className="chips" style={{ marginTop: '0.65rem' }}>
+                        <Link
+                          href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
+                          className="chip"
+                        >
+                          Edit in builder
+                        </Link>
+                        {!r.isPrimary && (
+                          <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
+                            Set primary
                           </button>
                         )}
+                        {(r.hasFile || r.fileKey) && (
+                          <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
+                            Download
+                          </button>
+                        )}
+                        <label className="chip" style={{ cursor: 'pointer' }}>
+                          {r.hasFile || r.fileKey ? 'Replace file' : 'Attach PDF'}
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            hidden
+                            disabled={uploading}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) attachFileToResume(r.id, f);
+                            }}
+                          />
+                        </label>
                       </div>
+                    </div>
+                    <div className="profile-list-actions">
                       <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>×</button>
                     </div>
-                    <div className="chips" style={{ marginTop: '0.5rem' }}>
-                      <Link
-                        href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
-                        className="chip"
-                      >
-                        Edit in builder
-                      </Link>
-                      {!r.isPrimary && (
-                        <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
-                          Set primary
-                        </button>
-                      )}
-                      {(r.hasFile || r.fileKey) && (
-                        <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
-                          Download
-                        </button>
-                      )}
-                      <label className="chip" style={{ cursor: 'pointer' }}>
-                        {r.hasFile || r.fileKey ? 'Replace file' : 'Attach PDF'}
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          hidden
-                          disabled={uploading}
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) attachFileToResume(r.id, f);
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </div>
+                  </li>
                 ))}
-                {!(profile.resumes || []).length && (
-                  <p className="muted">
-                    No resumes yet —{' '}
-                    <Link href="/dashboard/employee/resume-builder">create one in the builder</Link>
-                    {' '}or upload a PDF above.
-                  </p>
-                )}
-              </div>
+              </ul>
+              {!(profile.resumes || []).length && (
+                <p className="muted">
+                  No resumes yet —{' '}
+                  <Link href="/dashboard/employee/resume-builder">create one in the builder</Link>
+                  {' '}or import a PDF above.
+                </p>
+              )}
             </div>
           </div>
         )}

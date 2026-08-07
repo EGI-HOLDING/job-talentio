@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { FormAlert } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { formatUzs } from '@/lib/numberFormat';
 
 type Payment = {
   id: string;
@@ -20,10 +21,6 @@ function purposeLabel(purpose: string) {
   if (purpose.startsWith('plan_')) return `Plan upgrade: ${purpose.replace('plan_', '')}`;
   if (purpose.startsWith('hot_job_')) return `Hot job boost: ${purpose.replace('hot_job_', '')} days`;
   return purpose;
-}
-
-function formatUzs(n: number) {
-  return `${n.toLocaleString('uz-UZ')} UZS`;
 }
 
 function MockCheckoutInner() {

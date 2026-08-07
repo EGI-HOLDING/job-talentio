@@ -7,6 +7,7 @@ import { api, getSession, AuthSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { useI18n } from '@/lib/i18n';
+import { formatThousands } from '@/lib/numberFormat';
 
 type CandidateDetail = {
   id: string;
@@ -124,8 +125,8 @@ function CandidateInner() {
   if (!data) return <DetailPageSkeleton />;
 
   const salaryBits = [
-    data.desiredSalaryMin != null ? data.desiredSalaryMin.toLocaleString() : null,
-    data.desiredSalaryMax != null ? data.desiredSalaryMax.toLocaleString() : null,
+    data.desiredSalaryMin != null ? formatThousands(data.desiredSalaryMin) : null,
+    data.desiredSalaryMax != null ? formatThousands(data.desiredSalaryMax) : null,
   ].filter(Boolean);
   const salaryLabel =
     salaryBits.length > 0
