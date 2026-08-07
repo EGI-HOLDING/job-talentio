@@ -1,4 +1,5 @@
 import { PrismaClient, PlanCode, ExperienceLevel, EmploymentType, WorkMode, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
+import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -34,18 +35,18 @@ const CITIES = [
 ];
 
 const CATEGORIES = [
-  { name: 'IT & Software', slug: 'it-software', icon: '💻' },
-  { name: 'Finance & Banking', slug: 'finance', icon: '🏦' },
-  { name: 'Sales & Marketing', slug: 'sales-marketing', icon: '📈' },
-  { name: 'Design & Creative', slug: 'design', icon: '🎨' },
-  { name: 'HR & Recruiting', slug: 'hr', icon: '👥' },
-  { name: 'Education', slug: 'education', icon: '📚' },
-  { name: 'Healthcare', slug: 'healthcare', icon: '🏥' },
-  { name: 'Engineering', slug: 'engineering', icon: '⚙️' },
-  { name: 'Customer Support', slug: 'customer-support', icon: '🎧' },
-  { name: 'Logistics', slug: 'logistics', icon: '🚚' },
-  { name: 'Legal', slug: 'legal', icon: '⚖️' },
-  { name: 'Hospitality', slug: 'hospitality', icon: '🏨' },
+  { name: 'IT & Software', slug: 'it-software', icon: CATEGORY_ICONS['it-software'] },
+  { name: 'Finance & Banking', slug: 'finance', icon: CATEGORY_ICONS.finance },
+  { name: 'Sales & Marketing', slug: 'sales-marketing', icon: CATEGORY_ICONS['sales-marketing'] },
+  { name: 'Design & Creative', slug: 'design', icon: CATEGORY_ICONS.design },
+  { name: 'HR & Recruiting', slug: 'hr', icon: CATEGORY_ICONS.hr },
+  { name: 'Education', slug: 'education', icon: CATEGORY_ICONS.education },
+  { name: 'Healthcare', slug: 'healthcare', icon: CATEGORY_ICONS.healthcare },
+  { name: 'Engineering', slug: 'engineering', icon: CATEGORY_ICONS.engineering },
+  { name: 'Customer Support', slug: 'customer-support', icon: CATEGORY_ICONS['customer-support'] },
+  { name: 'Logistics', slug: 'logistics', icon: CATEGORY_ICONS.logistics },
+  { name: 'Legal', slug: 'legal', icon: CATEGORY_ICONS.legal },
+  { name: 'Hospitality', slug: 'hospitality', icon: CATEGORY_ICONS.hospitality },
 ];
 
 const INDUSTRIES = [
@@ -207,18 +208,18 @@ const LANGUAGES = [
 ];
 
 const BENEFITS = [
-  { name: 'Health Insurance', slug: 'health-insurance', icon: '🏥' },
-  { name: 'Remote Work', slug: 'remote-work', icon: '🏠' },
-  { name: 'Flexible Hours', slug: 'flexible-hours', icon: '⏰' },
-  { name: 'Meal Allowance', slug: 'meal-allowance', icon: '🍱' },
-  { name: 'Learning Budget', slug: 'learning-budget', icon: '📖' },
-  { name: 'Gym Membership', slug: 'gym', icon: '💪' },
-  { name: 'Paid Vacation', slug: 'paid-vacation', icon: '🌴' },
-  { name: 'Stock Options', slug: 'stock-options', icon: '📊' },
-  { name: 'Relocation Support', slug: 'relocation', icon: '✈️' },
-  { name: 'Equipment Budget', slug: 'equipment', icon: '💻' },
-  { name: 'Parental Leave', slug: 'parental-leave', icon: '👶' },
-  { name: 'Performance Bonus', slug: 'bonus', icon: '💰' },
+  { name: 'Health Insurance', slug: 'health-insurance', icon: BENEFIT_ICONS['health-insurance'] },
+  { name: 'Remote Work', slug: 'remote-work', icon: BENEFIT_ICONS['remote-work'] },
+  { name: 'Flexible Hours', slug: 'flexible-hours', icon: BENEFIT_ICONS['flexible-hours'] },
+  { name: 'Meal Allowance', slug: 'meal-allowance', icon: BENEFIT_ICONS['meal-allowance'] },
+  { name: 'Learning Budget', slug: 'learning-budget', icon: BENEFIT_ICONS['learning-budget'] },
+  { name: 'Gym Membership', slug: 'gym', icon: BENEFIT_ICONS.gym },
+  { name: 'Paid Vacation', slug: 'paid-vacation', icon: BENEFIT_ICONS['paid-vacation'] },
+  { name: 'Stock Options', slug: 'stock-options', icon: BENEFIT_ICONS['stock-options'] },
+  { name: 'Relocation Support', slug: 'relocation', icon: BENEFIT_ICONS.relocation },
+  { name: 'Equipment Budget', slug: 'equipment', icon: BENEFIT_ICONS.equipment },
+  { name: 'Parental Leave', slug: 'parental-leave', icon: BENEFIT_ICONS['parental-leave'] },
+  { name: 'Performance Bonus', slug: 'bonus', icon: BENEFIT_ICONS.bonus },
 ];
 
 const COMPANIES = [

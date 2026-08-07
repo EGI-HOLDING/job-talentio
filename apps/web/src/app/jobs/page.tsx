@@ -10,6 +10,7 @@ import { JobListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { api, getSession } from '@/lib/api';
+import { benefitIconLabel, categoryIconLabel } from '@/lib/icons';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
 
@@ -333,7 +334,8 @@ function JobsInner() {
                 checked={selectedCats.includes(c.slug)}
                 onChange={() => apply({ category: toggleCsv(filters.category, c.slug) })}
               />
-              {c.icon} {c.name}
+              {categoryIconLabel(c.slug, c.icon)}
+              {c.name}
               {catFacet[c.slug] !== undefined && (
                 <span className="facet-count">({catFacet[c.slug]})</span>
               )}
@@ -433,7 +435,8 @@ function JobsInner() {
                     checked={selectedBenefits.includes(b.slug)}
                     onChange={() => apply({ benefits: toggleCsv(filters.benefits, b.slug) })}
                   />
-                  {b.icon} {b.name}
+                  {benefitIconLabel(b.slug, b.icon)}
+                  {b.name}
                 </label>
               )}
             />

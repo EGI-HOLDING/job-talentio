@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { categoryIconLabel } from '@/lib/icons';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 
@@ -89,7 +90,8 @@ export default function HomePage() {
         <div className="chips">
           {categories.slice(0, 8).map((c) => (
             <Link key={c.slug} href={`/jobs?category=${c.slug}`} className="chip">
-              {c.icon} {c.name}
+              {categoryIconLabel(c.slug, c.icon)}
+              {c.name}
             </Link>
           ))}
         </div>
