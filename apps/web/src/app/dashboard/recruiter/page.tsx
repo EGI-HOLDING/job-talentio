@@ -6,8 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
+import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
 import { useI18n } from '@/lib/i18n';
 import { FilterFieldset, FormAlert, LabelText } from '@/components/ui/Field';
+import { NumberInput } from '@/components/ui/NumberInput';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
@@ -32,7 +34,7 @@ const PLAN_FEATURES: Record<PlanCode, string[]> = {
 };
 
 function formatUzs(n: number) {
-  return `${n.toLocaleString('uz-UZ')} UZS`;
+  return formatUzsShared(n);
 }
 
 function planRank(plan: PlanCode) {
@@ -654,11 +656,11 @@ function RecruiterDashboard() {
                 <div className="grid-2">
                   <label>
                     <LabelText>Salary min</LabelText>
-                    <input name="salaryMin" type="number" />
+                    <NumberInput name="salaryMin" placeholder="e.g. 8.000.000" min={0} />
                   </label>
                   <label>
                     <LabelText>Salary max</LabelText>
-                    <input name="salaryMax" type="number" />
+                    <NumberInput name="salaryMax" placeholder="e.g. 15.000.000" min={0} />
                   </label>
                 </div>
                 <label>

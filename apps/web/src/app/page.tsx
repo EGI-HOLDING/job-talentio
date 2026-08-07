@@ -8,6 +8,7 @@ import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
+import { formatSalaryRange } from '@/lib/numberFormat';
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -30,9 +31,7 @@ type HiringCompany = {
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return null;
-  const fmt = (n: number) => `${Math.round(n / 1_000_000)}M`;
-  if (min && max) return `${fmt(min)}–${fmt(max)} UZS`;
-  return `${fmt(min || max!)} UZS`;
+  return formatSalaryRange(min, max) || null;
 }
 
 function rolesLabel(t: (k: string) => string, n: number) {

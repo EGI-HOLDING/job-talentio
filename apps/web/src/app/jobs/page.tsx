@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FilterFieldset, FormField } from '@/components/ui/Field';
+import { NumberInput } from '@/components/ui/NumberInput';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { JobListSkeleton } from '@/components/ui/Skeleton';
@@ -12,6 +13,7 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { api, getSession } from '@/lib/api';
 import { benefitIconLabel, categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
+import { formatSalaryRange } from '@/lib/numberFormat';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
 
@@ -154,9 +156,7 @@ function toParams(f: Filters, view?: string | null): URLSearchParams {
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return 'Negotiable';
-  const fmt = (n: number) => n.toLocaleString('uz-UZ');
-  if (min && max) return `${fmt(min)} – ${fmt(max)} UZS`;
-  return `${fmt(min || max!)} UZS`;
+  return formatSalaryRange(min, max) || 'Negotiable';
 }
 
 function toggleCsv(csv: string, slug: string) {
@@ -474,19 +474,21 @@ function JobsInner() {
 
           <div className="filter-group grid-2">
             <FormField label={`${t('salary')} min`} optional>
-              <input
-                type="number"
-                value={filters.salaryMin}
-                onChange={(e) => apply({ salaryMin: e.target.value })}
-                placeholder="UZS"
+              <NumberInput
+                value={filters.salaryMin ? Number(filters.salaryMin) : null}
+                onValueChange={(n) => apply({ salaryMin: n == null ? '' : String(n) })}
+                placeholder="e.g. 5.000.000"
+                min={0}
+                aria-label={`${t('salary')} min`}
               />
             </FormField>
             <FormField label={`${t('salary')} max`} optional>
-              <input
-                type="number"
-                value={filters.salaryMax}
-                onChange={(e) => apply({ salaryMax: e.target.value })}
-                placeholder="UZS"
+              <NumberInput
+                value={filters.salaryMax ? Number(filters.salaryMax) : null}
+                onValueChange={(n) => apply({ salaryMax: n == null ? '' : String(n) })}
+                placeholder="e.g. 20.000.000"
+                min={0}
+                aria-label={`${t('salary')} max`}
               />
             </FormField>
           </div>

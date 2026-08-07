@@ -10,6 +10,7 @@ import { jobLocationLabel } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { useI18n } from '@/lib/i18n';
+import { formatSalaryRange } from '@/lib/numberFormat';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
 type Job = {
@@ -43,9 +44,7 @@ type Job = {
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return 'Negotiable';
-  const fmt = (n: number) => n.toLocaleString('uz-UZ');
-  if (min && max) return `${fmt(min)} – ${fmt(max)} UZS`;
-  return `${fmt(min || max!)} UZS`;
+  return formatSalaryRange(min, max) || 'Negotiable';
 }
 
 type MyApplicationState = {

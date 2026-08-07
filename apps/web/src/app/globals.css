@@ -1535,7 +1535,7 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.85rem;
 }
 .cv-check {
   display: flex;
@@ -1551,6 +1551,97 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
 .cv-check input { width: auto; margin-top: 0.2rem; }
 .cv-check strong { display: block; font-size: 0.9rem; }
 .cv-check span { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }
+
+/* Profile tab list layouts */
+.profile-page .profile-block {
+  margin-bottom: 1.25rem;
+}
+.profile-skill-group {
+  margin-top: 0.85rem;
+}
+.profile-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+.profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.profile-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+  min-height: 3rem;
+}
+.profile-list-row--stack {
+  align-items: flex-start;
+}
+.profile-list-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.profile-list-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.profile-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.profile-list-actions select {
+  width: auto;
+  min-width: 7.5rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+  border-radius: 8px;
+}
+.profile-list-main .cefr {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.check-row input {
+  width: auto;
+}
+
+@media (max-width: 720px) {
+  .profile-list-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .profile-list-actions {
+    justify-content: flex-start;
+  }
+}
 
 /* Settings layout */
 .settings-layout {
