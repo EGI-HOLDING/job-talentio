@@ -87,18 +87,29 @@ export function GoogleSignIn() {
     [locale],
   );
 
+  // GIS callback must always see the latest submitGoogle without re-initializing GIS
+  const submitRef = useRef(submitGoogle);
+  useEffect(() => {
+    submitRef.current = submitGoogle;
+  }, [submitGoogle]);
+
+  const initializedRef = useRef(false);
+
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID || !buttonRef.current) return;
 
     const init = () => {
-      if (!window.google || !buttonRef.current) return;
+      // initialize() must run exactly once per page — repeat calls break the flow
+      if (initializedRef.current || !window.google || !buttonRef.current) return;
+      initializedRef.current = true;
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: (res) => {
           setIdToken(res.credential);
-          submitGoogle(res.credential);
+          submitRef.current(res.credential);
         },
       });
+      buttonRef.current.innerHTML = '';
       window.google.accounts.id.renderButton(buttonRef.current, {
         theme: 'outline',
         size: 'large',
@@ -122,7 +133,8 @@ export function GoogleSignIn() {
     script.defer = true;
     script.onload = init;
     document.head.appendChild(script);
-  }, [submitGoogle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!GOOGLE_CLIENT_ID) return null;
 
