@@ -1165,7 +1165,10 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   gap: 0.4rem;
   font-size: 0.68rem;
   margin-top: 0.25rem;
-  opacity: 0.75;
+  opacity: 0.85;
+}
+.chat-bubble.mine .time {
+  color: rgba(255, 255, 255, 0.78);
 }
 .chat-bubble.theirs .time {
   justify-content: flex-start;
@@ -1173,13 +1176,16 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   opacity: 1;
 }
 .chat-receipt {
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  opacity: 0.9;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.88);
 }
+.chat-receipt.delivered {
+  color: rgba(255, 255, 255, 0.95);
+}
+/* Light mint on accent bubble — dark teal was unreadable on purple */
 .chat-receipt.read {
-  color: #0d9488;
-  opacity: 1;
+  color: #bbf7d0;
 }
 .chat-compose {
   display: flex;
