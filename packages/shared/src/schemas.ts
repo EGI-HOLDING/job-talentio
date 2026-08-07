@@ -286,3 +286,49 @@ export const reportSchema = z.object({
   entityId: z.string().min(1),
   reason: z.string().min(5).max(2000),
 });
+
+const applicationStatusEnum = z.enum([
+  'NEW',
+  'IN_REVIEW',
+  'INTERVIEW',
+  'OFFER',
+  'HIRED',
+  'REJECTED',
+  'WITHDRAWN',
+]);
+
+export const messageTemplateSchema = z.object({
+  companyId: z.string().min(1),
+  name: z.string().trim().min(2).max(120),
+  body: z.string().trim().min(1).max(5000),
+});
+
+export const messageTemplateUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  body: z.string().trim().min(1).max(5000).optional(),
+});
+
+/** Bulk move and/or message applicants in one pipeline stage. */
+export const bulkCampaignSchema = z
+  .object({
+    companyId: z.string().min(1),
+    jobPostId: z.string().min(1),
+    applicationIds: z.array(z.string().min(1)).min(1).max(50),
+    fromStatus: applicationStatusEnum.optional(),
+    toStatus: applicationStatusEnum.optional(),
+    templateId: z.string().min(1).optional(),
+    messageBody: z.string().trim().min(1).max(5000).optional(),
+    note: z.string().max(2000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.toStatus && !data.templateId && !data.messageBody) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide toStatus and/or a message (templateId or messageBody)',
+      });
+    }
+  });
+
+export const bulkCommsOptOutSchema = z.object({
+  optedOut: z.boolean(),
+});

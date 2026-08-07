@@ -15,8 +15,9 @@ import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
+import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 
-type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'billing' | 'company';
+type Tab = 'jobs' | 'pipeline' | 'candidates' | 'bulk' | 'analytics' | 'billing' | 'company';
 type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM';
 type CheckoutResponse = {
   payment: { id: string; status: string; amountUzs: number; purpose: string };
@@ -144,6 +145,14 @@ function RecruiterDashboard() {
     endsAt?: string | null;
   } | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
+  const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
+  const [bulkTemplates, setBulkTemplates] = useState<Array<{ id: string; name: string; body: string }>>(
+    [],
+  );
+  const [bulkToStatus, setBulkToStatus] = useState('');
+  const [bulkTemplateId, setBulkTemplateId] = useState('');
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const company = useMemo(
     () => memberships.find((m) => m.companyId === companyId)?.company,
@@ -300,12 +309,24 @@ function RecruiterDashboard() {
   }, []);
 
   useEffect(() => {
-    if (selectedJob) loadJobData(selectedJob).catch((e) => setError(e.message));
+    if (selectedJob) {
+      setSelectedAppIds([]);
+      loadJobData(selectedJob).catch((e) => setError(e.message));
+    }
   }, [selectedJob]);
 
   useEffect(() => {
-    if (companyId) loadSubscription(companyId).catch(() => setSubscription(null));
+    if (companyId) {
+      loadSubscription(companyId).catch(() => setSubscription(null));
+      loadBulkTemplates(companyId).catch(() => setBulkTemplates([]));
+    }
   }, [companyId]);
+
+  useEffect(() => {
+    if ((tab === 'pipeline' || tab === 'bulk') && companyId) {
+      loadBulkTemplates(companyId).catch(() => setBulkTemplates([]));
+    }
+  }, [tab, companyId]);
 
   useEffect(() => {
     if (tabFromUrl === 'billing') setTab('billing');
@@ -363,6 +384,73 @@ function RecruiterDashboard() {
       body: JSON.stringify({ status }),
     });
     await loadJobData(selectedJob);
+  }
+
+  async function loadBulkTemplates(cid: string) {
+    if (!cid) return;
+    try {
+      const list = await api<Array<{ id: string; name: string; body: string }>>(
+        `/bulk-comms/templates?companyId=${cid}`,
+      );
+      setBulkTemplates(list);
+    } catch {
+      setBulkTemplates([]);
+    }
+  }
+
+  function toggleAppSelected(appId: string) {
+    setSelectedAppIds((prev) =>
+      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId],
+    );
+  }
+
+  function toggleStageSelect(stage: string) {
+    const ids = (byStage[stage] || []).map((a: any) => a.id as string);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedAppIds.includes(id));
+    setSelectedAppIds((prev) => {
+      if (allSelected) return prev.filter((id) => !ids.includes(id));
+      const set = new Set(prev);
+      ids.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
+  }
+
+  async function runBulkAction() {
+    if (!companyId || !selectedJob || selectedAppIds.length === 0) return;
+    if (!bulkToStatus && !bulkTemplateId && !bulkMessage.trim()) {
+      flash('Choose a target stage and/or a message/template', 'error');
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const campaign = await api<any>('/bulk-comms/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          companyId,
+          jobPostId: selectedJob,
+          applicationIds: selectedAppIds,
+          toStatus: bulkToStatus || undefined,
+          templateId: bulkTemplateId || undefined,
+          messageBody: bulkMessage.trim() || undefined,
+        }),
+      });
+      const sent = campaign.recipients?.filter((r: any) => r.deliveryStatus === 'SENT').length ?? 0;
+      const skipped =
+        campaign.recipients?.filter((r: any) => r.deliveryStatus === 'SKIPPED_OPTED_OUT').length ?? 0;
+      const failed = campaign.recipients?.filter((r: any) => r.deliveryStatus === 'FAILED').length ?? 0;
+      flash(
+        `Bulk action done: ${sent} sent${skipped ? `, ${skipped} opted out` : ''}${
+          failed ? `, ${failed} failed` : ''
+        }`,
+      );
+      setSelectedAppIds([]);
+      setBulkMessage('');
+      await loadJobData(selectedJob);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Bulk action failed', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   async function scheduleInterview(e: FormEvent<HTMLFormElement>, appId: string) {
@@ -481,6 +569,7 @@ function RecruiterDashboard() {
             ['jobs', 'Jobs'],
             ['pipeline', 'Pipeline & match'],
             ['candidates', 'Find talent'],
+            ['bulk', 'Bulk comms'],
             ['analytics', 'Analytics'],
             ['billing', 'Plan & billing'],
             ['company', 'Company'],
@@ -779,13 +868,106 @@ function RecruiterDashboard() {
               </div>
             ) : (
               <>
+                {selectedAppIds.length > 0 && (
+                  <div className="bulk-action-bar card">
+                    <div className="bulk-action-bar-head">
+                      <strong>{selectedAppIds.length} selected</strong>
+                      <button type="button" className="chip" onClick={() => setSelectedAppIds([])}>
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        className="chip"
+                        onClick={() => setTab('bulk')}
+                      >
+                        Templates & history
+                      </button>
+                    </div>
+                    <div className="bulk-action-fields">
+                      <label>
+                        <span className="muted" style={{ fontSize: '0.78rem' }}>
+                          Move to stage
+                        </span>
+                        <select
+                          value={bulkToStatus}
+                          onChange={(e) => setBulkToStatus(e.target.value)}
+                          aria-label="Bulk target stage"
+                        >
+                          <option value="">— Keep stage —</option>
+                          {STAGES.map((s) => (
+                            <option key={s} value={s}>
+                              {STAGE_LABEL[s]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span className="muted" style={{ fontSize: '0.78rem' }}>
+                          Template
+                        </span>
+                        <select
+                          value={bulkTemplateId}
+                          onChange={(e) => {
+                            setBulkTemplateId(e.target.value);
+                            const t = bulkTemplates.find((x) => x.id === e.target.value);
+                            if (t) setBulkMessage(t.body);
+                          }}
+                          aria-label="Bulk message template"
+                        >
+                          <option value="">— Custom / none —</option>
+                          {bulkTemplates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="bulk-action-message">
+                        <span className="muted" style={{ fontSize: '0.78rem' }}>
+                          Message (optional)
+                        </span>
+                        <textarea
+                          value={bulkMessage}
+                          onChange={(e) => setBulkMessage(e.target.value)}
+                          rows={2}
+                          placeholder="Hi {{name}}, …"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="chip active"
+                        disabled={bulkBusy}
+                        onClick={() => runBulkAction()}
+                      >
+                        {bulkBusy ? 'Running…' : 'Apply to selected'}
+                      </button>
+                    </div>
+                    <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.78rem' }}>
+                      Candidates who opted out of bulk messaging are skipped for chat (GDPR) but can
+                      still be moved.
+                    </p>
+                  </div>
+                )}
+
                 <div className="pipeline">
                   {STAGES.map((stage) => {
                     const cards = byStage[stage] || [];
+                    const stageIds = cards.map((a: any) => a.id as string);
+                    const allSelected =
+                      stageIds.length > 0 && stageIds.every((id) => selectedAppIds.includes(id));
                     return (
                       <div key={stage} className="pipeline-col">
                         <h4>
-                          <span>{STAGE_LABEL[stage]}</span>
+                          <label className="pipeline-col-select">
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              disabled={cards.length === 0}
+                              onChange={() => toggleStageSelect(stage)}
+                              aria-label={`Select all in ${STAGE_LABEL[stage]}`}
+                            />
+                            <span>{STAGE_LABEL[stage]}</span>
+                          </label>
                           <span className="pipeline-col-count">{cards.length}</span>
                         </h4>
                         {cards.length === 0 && (
@@ -797,9 +979,21 @@ function RecruiterDashboard() {
                             a.profile?.user?.avatarUrl ||
                             `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
                           const score = a.matchScore != null ? Math.round(a.matchScore) : null;
+                          const selected = selectedAppIds.includes(a.id);
                           return (
-                            <div key={a.id} className="candidate-card">
+                            <div
+                              key={a.id}
+                              className={`candidate-card${selected ? ' selected' : ''}`}
+                            >
                               <div className="candidate-card-head">
+                                <label className="bulk-card-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleAppSelected(a.id)}
+                                    aria-label={`Select ${name}`}
+                                  />
+                                </label>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img className="avatar avatar-sm" src={avatar} alt="" />
                                 <div className="candidate-card-meta">
@@ -1356,6 +1550,10 @@ function RecruiterDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {tab === 'bulk' && companyId && (
+          <BulkCommsPanel companyId={companyId} jobPostId={selectedJob || undefined} />
         )}
 
         {tab === 'analytics' && (

@@ -146,6 +146,13 @@ enum QuestionType {
   NUMBER
 }
 
+enum BulkDeliveryStatus {
+  PENDING
+  SENT
+  SKIPPED_OPTED_OUT
+  FAILED
+}
+
 enum InterviewStatus {
   SCHEDULED
   COMPLETED
@@ -297,6 +304,8 @@ model User {
   followedCompanies CompanyFollower[]
   jobViews         JobView[]
   reports          Report[]            @relation("Reporter")
+  messageTemplates MessageTemplate[]   @relation("TemplateAuthor")
+  bulkCampaigns    BulkCampaign[]      @relation("BulkCampaignAuthor")
 }
 
 model Company {
@@ -316,11 +325,13 @@ model Company {
 
   city         City?             @relation(fields: [cityId], references: [id])
   industry     Industry?         @relation(fields: [industryId], references: [id])
-  members      CompanyMember[]
-  jobPosts     JobPost[]
-  subscription Subscription?
-  payments     Payment[]
-  followers    CompanyFollower[]
+  members          CompanyMember[]
+  jobPosts         JobPost[]
+  subscription     Subscription?
+  payments         Payment[]
+  followers        CompanyFollower[]
+  messageTemplates MessageTemplate[]
+  bulkCampaigns    BulkCampaign[]
 
   @@index([cityId])
   @@index([industryId])
@@ -404,10 +415,11 @@ model JobPost {
   category     JobCategory?     @relation(fields: [categoryId], references: [id])
   jobSkills    JobPostSkill[]
   benefits     JobPostBenefit[]
-  applications Application[]
-  savedBy      SavedJob[]
-  questions    JobQuestion[]
-  views        JobView[]
+  applications  Application[]
+  savedBy       SavedJob[]
+  questions     JobQuestion[]
+  views         JobView[]
+  bulkCampaigns BulkCampaign[]
 
   @@index([companyId, status])
   @@index([status, publishedAt])
@@ -450,11 +462,14 @@ model EmployeeProfile {
   summary          String?
   cityId           String?
   phone            String?           @unique
-  visibility       ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
-  desiredSalaryMin Int?
-  desiredPosition  String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  visibility          ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
+  desiredSalaryMin    Int?
+  desiredPosition     String?
+  /// GDPR: opt out of recruiter bulk messaging (pipeline status updates still allowed)
+  bulkCommsOptOut     Boolean           @default(false)
+  bulkCommsOptOutAt   DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   city           City?             @relation(fields: [cityId], references: [id])
@@ -799,4 +814,65 @@ model Report {
 
   @@index([status])
   @@index([entityType, entityId])
+}
+
+// ─── Bulk communication (recruiter) ──────────────────────────
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  companyId String
+  createdBy String
+  name      String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author    User           @relation("TemplateAuthor", fields: [createdBy], references: [id], onDelete: Cascade)
+  campaigns BulkCampaign[]
+
+  @@index([companyId, updatedAt])
+}
+
+model BulkCampaign {
+  id          String             @id @default(cuid())
+  companyId   String
+  jobPostId   String
+  createdById String
+  templateId  String?
+  messageBody String?
+  fromStatus  ApplicationStatus?
+  toStatus    ApplicationStatus?
+  note        String?
+  createdAt   DateTime           @default(now())
+
+  company    Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobPost    JobPost                  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  createdBy  User                     @relation("BulkCampaignAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  template   MessageTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  recipients BulkCampaignRecipient[]
+
+  @@index([companyId, createdAt])
+  @@index([jobPostId, createdAt])
+}
+
+model BulkCampaignRecipient {
+  id             String             @id @default(cuid())
+  campaignId     String
+  applicationId  String
+  userId         String
+  candidateName  String
+  deliveryStatus BulkDeliveryStatus @default(PENDING)
+  errorMessage   String?
+  conversationId String?
+  messageId      String?
+  statusMoved    Boolean            @default(false)
+  sentAt         DateTime?
+  createdAt      DateTime           @default(now())
+
+  campaign BulkCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([userId, createdAt])
+  @@index([applicationId])
 }

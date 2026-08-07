@@ -6,7 +6,7 @@ import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 
-type Section = 'account' | 'preferences' | 'security';
+type Section = 'account' | 'preferences' | 'privacy' | 'security';
 
 function passwordStrength(pw: string): { score: number; label: string; color: string } {
   let score = 0;
@@ -35,8 +35,11 @@ export default function SettingsPage() {
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bulkOptedOut, setBulkOptedOut] = useState(false);
+  const [privacyLoading, setPrivacyLoading] = useState(false);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
+  const isEmployee = session?.user.role === 'EMPLOYEE';
   const previewAvatar =
     avatarUrl ||
     (session
@@ -53,8 +56,36 @@ export default function SettingsPage() {
     setFullName(s.user.fullName);
     setAvatarUrl(s.user.avatarUrl || '');
     setPrefLocale((s.user.locale as Locale) || locale);
+    if (s.user.role === 'EMPLOYEE') {
+      api<{ optedOut: boolean }>('/bulk-comms/opt-out')
+        .then((r) => setBulkOptedOut(r.optedOut))
+        .catch(() => undefined);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function savePrivacy(e: React.FormEvent) {
+    e.preventDefault();
+    setPrivacyLoading(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const r = await api<{ optedOut: boolean }>('/bulk-comms/opt-out', {
+        method: 'PATCH',
+        body: JSON.stringify({ optedOut: bulkOptedOut }),
+      });
+      setBulkOptedOut(r.optedOut);
+      setMsg(
+        r.optedOut
+          ? 'You opted out of recruiter bulk messaging'
+          : 'You can receive recruiter bulk messages again',
+      );
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Failed to update privacy');
+    } finally {
+      setPrivacyLoading(false);
+    }
+  }
 
   async function saveAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -104,6 +135,7 @@ export default function SettingsPage() {
             [
               ['account', t('account')],
               ['preferences', t('language')],
+              ...(isEmployee ? [['privacy', 'Privacy'] as [Section, string]] : []),
               ['security', t('changePassword')],
             ] as Array<[Section, string]>
           ).map(([k, label]) => (
@@ -213,6 +245,44 @@ export default function SettingsPage() {
                 </FormField>
                 <button type="submit" disabled={saving}>
                   {saving ? t('saving') : t('save')}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {section === 'privacy' && isEmployee && (
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Privacy & messaging</h3>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Under GDPR you can opt out of recruiter bulk / mass messages. You will still receive
+                application status updates and one-to-one chat if you message a recruiter.
+              </p>
+              <form onSubmit={savePrivacy} className="form-stack">
+                <label
+                  style={{
+                    display: 'flex',
+                    gap: '0.65rem',
+                    alignItems: 'flex-start',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={bulkOptedOut}
+                    onChange={(e) => setBulkOptedOut(e.target.checked)}
+                    style={{ marginTop: '0.25rem' }}
+                  />
+                  <span>
+                    <strong>Opt out of bulk recruiter messaging</strong>
+                    <br />
+                    <span className="muted" style={{ fontSize: '0.88rem' }}>
+                      Recruiters cannot send mass messages to you from the pipeline. Pipeline stage
+                      changes may still notify you.
+                    </span>
+                  </span>
+                </label>
+                <button type="submit" disabled={privacyLoading}>
+                  {privacyLoading ? t('saving') : t('save')}
                 </button>
               </form>
             </div>
