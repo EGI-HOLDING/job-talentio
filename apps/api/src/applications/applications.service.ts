@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { ApplicationStatus } from '@prisma/client';
+import { ApplicationStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
@@ -52,6 +52,17 @@ export class ApplicationsService {
     });
     if (!job || job.status !== 'PUBLISHED') {
       throw new NotFoundException('Job not available');
+    }
+
+    // Pre-check: one application per employee per job (also enforced by @@unique)
+    const existing = await this.prisma.application.findUnique({
+      where: { jobPostId_profileId: { jobPostId, profileId: profile.id } },
+      select: { id: true, status: true, createdAt: true },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `You have already applied to this job (status: ${existing.status}).`,
+      );
     }
 
     // Validate required screening questions
@@ -119,9 +130,40 @@ export class ApplicationsService {
       }
 
       return application;
-    } catch {
-      throw new ConflictException('Already applied to this job');
+    } catch (err) {
+      // Race: concurrent double-submit still blocked by unique(jobPostId, profileId)
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('You have already applied to this job.');
+      }
+      throw err;
     }
+  }
+
+  /** Employee: whether they already applied to this job (for UI guard). */
+  async getMyApplicationForJob(user: AuthUser, jobPostId: string) {
+    if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException();
+    }
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    if (!profile) return { applied: false as const, application: null };
+
+    const application = await this.prisma.application.findUnique({
+      where: { jobPostId_profileId: { jobPostId, profileId: profile.id } },
+      select: {
+        id: true,
+        status: true,
+        matchScore: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      applied: Boolean(application),
+      application: application ?? null,
+    };
   }
 
   async myApplications(user: AuthUser) {

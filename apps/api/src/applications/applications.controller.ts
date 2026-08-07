@@ -26,6 +26,12 @@ export class ApplicationsController {
     return this.applications.myApplications(user);
   }
 
+  @Get('mine/jobs/:jobId')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  mineForJob(@Param('jobId') jobId: string, @CurrentUser() user: AuthUser) {
+    return this.applications.getMyApplicationForJob(user, jobId);
+  }
+
   @Get('jobs/:jobId')
   @Roles('RECRUITER', 'SUPER_ADMIN')
   forJob(
