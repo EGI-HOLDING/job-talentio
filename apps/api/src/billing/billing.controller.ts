@@ -36,6 +36,11 @@ export class BillingController {
     return this.billing.buyHotJob(user, companyId, jobId, data.days);
   }
 
+  @Get('payments/:paymentId')
+  payment(@Param('paymentId') paymentId: string, @CurrentUser() user: AuthUser) {
+    return this.billing.getPayment(user, paymentId);
+  }
+
   @Post('payments/:paymentId/confirm')
   confirm(@Param('paymentId') paymentId: string, @CurrentUser() user: AuthUser) {
     return this.billing.confirmPayment(user, paymentId);

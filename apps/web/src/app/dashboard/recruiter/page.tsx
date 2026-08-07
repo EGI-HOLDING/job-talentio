@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
@@ -15,7 +16,27 @@ import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
 
-type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'company';
+type Tab = 'jobs' | 'pipeline' | 'candidates' | 'analytics' | 'billing' | 'company';
+type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM';
+type CheckoutResponse = {
+  payment: { id: string; status: string; amountUzs: number; purpose: string };
+  checkoutUrl: string | null;
+};
+
+const PLAN_ORDER: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM'];
+const PLAN_FEATURES: Record<PlanCode, string[]> = {
+  FREE: ['1 active job', 'Blurred candidate contacts', 'No cold chat'],
+  STANDARD: ['5 active jobs', 'Full candidate contacts', 'No cold chat'],
+  PREMIUM: ['20 active jobs', 'Full candidate contacts', 'Cold chat (20/day)'],
+};
+
+function formatUzs(n: number) {
+  return `${n.toLocaleString('uz-UZ')} UZS`;
+}
+
+function planRank(plan: PlanCode) {
+  return PLAN_ORDER.indexOf(plan);
+}
 
 const STAGES = ['NEW', 'IN_REVIEW', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED', 'WITHDRAWN'] as const;
 const STAGE_LABEL: Record<(typeof STAGES)[number], string> = {
@@ -85,7 +106,12 @@ function RecruiterDashboard() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const jobFromUrl = searchParams.get('job') || '';
-  const [tab, setTab] = useState<Tab>(() => (jobFromUrl ? 'pipeline' : 'jobs'));
+  const tabFromUrl = searchParams.get('tab') || '';
+  const [tab, setTab] = useState<Tab>(() => {
+    if (tabFromUrl === 'billing') return 'billing';
+    if (jobFromUrl) return 'pipeline';
+    return 'jobs';
+  });
   const [memberships, setMemberships] = useState<any[]>([]);
   const [companyId, setCompanyId] = useState('');
   const [jobs, setJobs] = useState<any[]>([]);
@@ -111,17 +137,92 @@ function RecruiterDashboard() {
   const [msgTone, setMsgTone] = useState<'success' | 'error'>('success');
   const [breakdownId, setBreakdownId] = useState<string | null>(null);
   const [industries, setIndustries] = useState<any[]>([]);
+  const [subscription, setSubscription] = useState<{
+    plan: PlanCode;
+    activePublishedJobs: number;
+    prices: typeof PLAN_PRICES_UZS;
+    endsAt?: string | null;
+  } | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
 
   const company = useMemo(
     () => memberships.find((m) => m.companyId === companyId)?.company,
     [memberships, companyId],
   );
-  const planCode = (company?.subscription?.plan || 'FREE') as 'FREE' | 'STANDARD' | 'PREMIUM';
+  const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
   const canColdChat = planCode === 'PREMIUM';
+  const activeJobLimit = PLAN_LIMITS[planCode].activeJobs;
+  const activePublishedJobs =
+    subscription?.activePublishedJobs ??
+    jobs.filter((j) => j.status === 'PUBLISHED').length;
 
   function flash(message: string, tone: 'success' | 'error' = 'success') {
     setMsgTone(tone);
     setMsg(message);
+  }
+
+  async function refreshMemberships() {
+    const mine = await api<any[]>('/companies/mine');
+    setMemberships(mine);
+  }
+
+  async function loadSubscription(cid: string) {
+    if (!cid) return;
+    const sub = await api<{
+      plan: PlanCode;
+      activePublishedJobs: number;
+      prices: typeof PLAN_PRICES_UZS;
+      endsAt?: string | null;
+    }>(`/billing/companies/${cid}/subscription`);
+    setSubscription(sub);
+  }
+
+  async function startCheckout(res: CheckoutResponse, successMsg: string) {
+    if (res.checkoutUrl) {
+      try {
+        sessionStorage.setItem(`billing:payment:${res.payment.id}`, JSON.stringify(res.payment));
+      } catch {
+        /* ignore */
+      }
+      window.location.href = res.checkoutUrl;
+      return;
+    }
+    flash(successMsg);
+    await refreshMemberships();
+    await loadSubscription(companyId);
+    await loadJobs(companyId);
+  }
+
+  async function upgradePlan(plan: 'STANDARD' | 'PREMIUM') {
+    if (!companyId || billingBusy) return;
+    setBillingBusy(true);
+    try {
+      const res = await api<CheckoutResponse>(`/billing/companies/${companyId}/upgrade`, {
+        method: 'POST',
+        body: JSON.stringify({ plan }),
+      });
+      await startCheckout(res, `Upgraded to ${plan}`);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Upgrade failed', 'error');
+    } finally {
+      setBillingBusy(false);
+    }
+  }
+
+  async function buyHotBoost(jobId: string, days: 7 | 14 | 30) {
+    if (!companyId || billingBusy) return;
+    setBillingBusy(true);
+    try {
+      const res = await api<CheckoutResponse>(
+        `/billing/companies/${companyId}/jobs/${jobId}/hot`,
+        { method: 'POST', body: JSON.stringify({ days }) },
+      );
+      await startCheckout(res, `Hot boost ${days}d activated`);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Hot boost failed', 'error');
+    } finally {
+      setBillingBusy(false);
+    }
   }
 
   function applyCand(patch: Partial<CandFilters>) {
@@ -201,6 +302,14 @@ function RecruiterDashboard() {
   useEffect(() => {
     if (selectedJob) loadJobData(selectedJob).catch((e) => setError(e.message));
   }, [selectedJob]);
+
+  useEffect(() => {
+    if (companyId) loadSubscription(companyId).catch(() => setSubscription(null));
+  }, [companyId]);
+
+  useEffect(() => {
+    if (tabFromUrl === 'billing') setTab('billing');
+  }, [tabFromUrl]);
 
   async function createJob(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -373,6 +482,7 @@ function RecruiterDashboard() {
             ['pipeline', 'Pipeline & match'],
             ['candidates', 'Find talent'],
             ['analytics', 'Analytics'],
+            ['billing', 'Plan & billing'],
             ['company', 'Company'],
           ] as Array<[Tab, string]>
         ).map(([k, label]) => (
@@ -550,7 +660,11 @@ function RecruiterDashboard() {
                 <div key={j.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{j.title}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {j.status} · {jobLocationLabel(j)} · {j._count?.applications ?? 0} apps · {j._count?.views ?? 0} views
+                    {j.status} · {jobLocationLabel(j)} · {j._count?.applications ?? 0} apps ·{' '}
+                    {j._count?.views ?? 0} views
+                    {j.boostUntil && new Date(j.boostUntil) > new Date()
+                      ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                      : ''}
                   </p>
                   <div className="chips">
                     {j.status === 'DRAFT' && (
@@ -605,6 +719,19 @@ function RecruiterDashboard() {
                     >
                       Pipeline
                     </button>
+                    {j.status === 'PUBLISHED' &&
+                      HOT_JOB_DAYS.map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          className="chip"
+                          disabled={billingBusy}
+                          title={formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
+                          onClick={() => buyHotBoost(j.id, days)}
+                        >
+                          Boost {days}d
+                        </button>
+                      ))}
                   </div>
                 </div>
               ))}
@@ -877,13 +1004,15 @@ function RecruiterDashboard() {
                                   Chat
                                 </Link>
                               ) : (
-                                <span
+                                <button
+                                  type="button"
                                   className="chip muted"
-                                  title="Cold outreach requires Premium"
-                                  style={{ fontSize: '0.75rem', cursor: 'not-allowed', opacity: 0.7 }}
+                                  title="Cold outreach requires Premium — upgrade in Plan & billing"
+                                  style={{ fontSize: '0.75rem' }}
+                                  onClick={() => setTab('billing')}
                                 >
                                   Chat (Premium)
-                                </span>
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1191,13 +1320,15 @@ function RecruiterDashboard() {
                             Chat
                           </Link>
                         ) : (
-                          <span
+                          <button
+                            type="button"
                             className="chip muted"
-                            title="Cold outreach requires Premium"
-                            style={{ fontSize: '0.75rem', cursor: 'not-allowed', opacity: 0.7 }}
+                            title="Cold outreach requires Premium — upgrade in Plan & billing"
+                            style={{ fontSize: '0.75rem' }}
+                            onClick={() => setTab('billing')}
                           >
                             Chat (Premium)
-                          </span>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1265,9 +1396,131 @@ function RecruiterDashboard() {
             <div className="card">
               <h3>Plan</h3>
               <p>
-                Current plan: <strong>{company?.subscription?.plan || 'FREE'}</strong>
+                Current plan: <strong>{planCode}</strong>
               </p>
-              <p className="muted">Upgrade via billing endpoints / admin for local MVP.</p>
+              <p className="muted" style={{ marginBottom: '0.75rem' }}>
+                Published jobs: {activePublishedJobs} / {activeJobLimit}
+              </p>
+              <button type="button" className="chip active" onClick={() => setTab('billing')}>
+                Manage plan & billing
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'billing' && (
+          <div>
+            <h2 className="section-title">Plan & billing</h2>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Current plan: <strong>{planCode}</strong>
+              {subscription?.endsAt
+                ? ` · renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
+                : ''}
+              {' · '}
+              Published jobs: {activePublishedJobs} / {activeJobLimit}
+            </p>
+            <p className="muted" style={{ fontSize: '0.85rem' }}>
+              Demo checkout (mock payments). Real Payme/Click later.
+            </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '1rem',
+                marginTop: '1.25rem',
+              }}
+            >
+              {PLAN_ORDER.map((plan) => {
+                const price = PLAN_PRICES_UZS[plan];
+                const current = planCode === plan;
+                const canUpgrade =
+                  plan !== 'FREE' && planRank(plan) > planRank(planCode) && !billingBusy;
+                return (
+                  <div
+                    key={plan}
+                    className="card"
+                    style={{
+                      borderColor: current ? 'var(--accent, #0f766e)' : undefined,
+                      outline: current ? '2px solid var(--accent, #0f766e)' : undefined,
+                    }}
+                  >
+                    <h3 style={{ marginTop: 0 }}>{plan}</h3>
+                    <p style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.35rem 0' }}>
+                      {price === 0 ? 'Free' : `${formatUzs(price)}/mo`}
+                    </p>
+                    <ul style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.1rem' }}>
+                      {PLAN_FEATURES[plan].map((f) => (
+                        <li key={f} style={{ marginBottom: '0.25rem' }}>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    {current ? (
+                      <span className="chip muted">Current plan</span>
+                    ) : canUpgrade ? (
+                      <button
+                        type="button"
+                        disabled={billingBusy}
+                        onClick={() => upgradePlan(plan as 'STANDARD' | 'PREMIUM')}
+                      >
+                        Upgrade to {plan}
+                      </button>
+                    ) : (
+                      <span className="chip muted">
+                        {plan === 'FREE' ? 'Included' : 'Already on higher plan'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="card" style={{ marginTop: '1.25rem' }}>
+              <h3 style={{ marginTop: 0 }}>Hot job boosts</h3>
+              <p className="muted" style={{ marginBottom: '0.75rem' }}>
+                Boost a published job from the Jobs tab, or pick one below.
+              </p>
+              {!jobs.filter((j) => j.status === 'PUBLISHED').length && (
+                <p className="muted">No published jobs yet.</p>
+              )}
+              {jobs
+                .filter((j) => j.status === 'PUBLISHED')
+                .map((j) => (
+                  <div
+                    key={j.id}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.65rem 0',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                  >
+                    <div>
+                      <strong>{j.title}</strong>
+                      <div className="muted" style={{ fontSize: '0.85rem' }}>
+                        {jobLocationLabel(j)}
+                        {j.boostUntil && new Date(j.boostUntil) > new Date()
+                          ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                          : ''}
+                      </div>
+                    </div>
+                    <div className="chips">
+                      {HOT_JOB_DAYS.map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          className="chip"
+                          disabled={billingBusy}
+                          onClick={() => buyHotBoost(j.id, days)}
+                        >
+                          {days}d · {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
         )}

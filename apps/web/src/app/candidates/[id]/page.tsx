@@ -160,7 +160,9 @@ function CandidateInner() {
             )}
             {data.contactsBlurred ? (
               <p className="muted" style={{ marginTop: '0.4rem', fontSize: '0.85rem' }}>
-                Contacts hidden — upgrade to Standard/Premium, or unlock after the candidate applies.
+                Contacts hidden —{' '}
+                <Link href="/dashboard/recruiter?tab=billing">upgrade to Standard/Premium</Link>, or
+                unlock after the candidate applies.
               </p>
             ) : (
               <p style={{ marginTop: '0.4rem', fontSize: '0.9rem' }}>
@@ -179,13 +181,13 @@ function CandidateInner() {
                 {t('chatWithCandidate')}
               </Link>
             ) : (
-              <span
+              <Link
+                href="/dashboard/recruiter?tab=billing"
                 className="chip muted"
                 title="Cold outreach requires Premium"
-                style={{ cursor: 'not-allowed', opacity: 0.7 }}
               >
-                Chat (Premium)
-              </span>
+                Upgrade for Chat
+              </Link>
             )}
           </div>
         </div>
