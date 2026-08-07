@@ -22,8 +22,11 @@ type Message = {
   body: string;
   senderId: string;
   createdAt: string;
+  deliveredAt?: string | null;
+  readAt?: string | null;
   sender: { id: string; fullName: string };
 };
+
 
 function MessagesInner() {
   const router = useRouter();
@@ -182,10 +185,27 @@ function MessagesInner() {
               <div className="chat-thread">
                 {messages.map((m) => {
                   const mine = m.senderId === session.user.id;
+                  const receipt = mine
+                    ? m.readAt
+                      ? t('read')
+                      : m.deliveredAt
+                        ? t('delivered')
+                        : t('sent')
+                    : null;
                   return (
                     <div key={m.id} className={`chat-bubble ${mine ? 'mine' : 'theirs'}`}>
                       {m.body}
-                      <div className="time">{new Date(m.createdAt).toLocaleString()}</div>
+                      <div className="time">
+                        <span>{new Date(m.createdAt).toLocaleString()}</span>
+                        {receipt && (
+                          <span
+                            className={`chat-receipt${m.readAt ? ' read' : m.deliveredAt ? ' delivered' : ''}`}
+                            aria-label={receipt}
+                          >
+                            {receipt}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

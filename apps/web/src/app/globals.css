@@ -1159,12 +1159,26 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   border-radius: 14px 14px 14px 4px;
 }
 .chat-bubble .time {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
   font-size: 0.68rem;
   margin-top: 0.25rem;
   opacity: 0.75;
 }
 .chat-bubble.theirs .time {
+  justify-content: flex-start;
   color: var(--muted);
+  opacity: 1;
+}
+.chat-receipt {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  opacity: 0.9;
+}
+.chat-receipt.read {
+  color: #0d9488;
   opacity: 1;
 }
 .chat-compose {

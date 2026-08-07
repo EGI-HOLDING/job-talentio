@@ -16,6 +16,15 @@ export class ChatService {
     return a < b ? [a, b] : [b, a];
   }
 
+  private assertParticipant(
+    conversation: { userAId: string; userBId: string },
+    user: AuthUser,
+  ) {
+    if (conversation.userAId !== user.id && conversation.userBId !== user.id) {
+      if (user.role !== 'SUPER_ADMIN') throw new ForbiddenException();
+    }
+  }
+
   async canColdOutreach(recruiterUserId: string, companyId: string) {
     const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
     const plan = sub?.plan ?? 'FREE';
@@ -118,7 +127,7 @@ export class ChatService {
   }
 
   async listConversations(userId: string) {
-    return this.prisma.conversation.findMany({
+    const conversations = await this.prisma.conversation.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
       include: {
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -127,6 +136,36 @@ export class ChatService {
       },
       orderBy: { updatedAt: 'desc' },
     });
+
+    // Inbox fetch = Delivered for peer messages (not Read until the thread is opened)
+    if (conversations.length > 0) {
+      await this.prisma.chatMessage.updateMany({
+        where: {
+          conversationId: { in: conversations.map((c) => c.id) },
+          senderId: { not: userId },
+          deliveredAt: null,
+        },
+        data: { deliveredAt: new Date() },
+      });
+    }
+
+    return conversations;
+  }
+
+  /** Thread open/poll = Read (+ Delivered if somehow still missing). */
+  private async markPeerRead(conversationId: string, viewerId: string) {
+    const now = new Date();
+    await this.prisma.chatMessage.updateMany({
+      where: {
+        conversationId,
+        senderId: { not: viewerId },
+        OR: [{ deliveredAt: null }, { readAt: null }],
+      },
+      data: {
+        deliveredAt: now,
+        readAt: now,
+      },
+    });
   }
 
   async getMessages(user: AuthUser, conversationId: string) {
@@ -134,9 +173,12 @@ export class ChatService {
       where: { id: conversationId },
     });
     if (!conversation) throw new NotFoundException();
-    if (conversation.userAId !== user.id && conversation.userBId !== user.id) {
-      if (user.role !== 'SUPER_ADMIN') throw new ForbiddenException();
+    this.assertParticipant(conversation, user);
+
+    if (user.role !== 'SUPER_ADMIN') {
+      await this.markPeerRead(conversationId, user.id);
     }
+
     return this.prisma.chatMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'asc' },

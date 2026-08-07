@@ -27,6 +27,15 @@ type JobBenefitInput = { slug?: string; name?: string } | string;
 
 const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
+/** Best-practice status graph: close/pause from live posts; reopen CLOSED → PUBLISHED (or DRAFT to edit). */
+const ALLOWED_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
+  DRAFT: ['PUBLISHED', 'CLOSED'],
+  PUBLISHED: ['PAUSED', 'CLOSED'],
+  PAUSED: ['PUBLISHED', 'CLOSED'],
+  CLOSED: ['PUBLISHED', 'DRAFT'],
+  EXPIRED: ['PUBLISHED', 'CLOSED'],
+};
+
 @Injectable()
 export class JobsService {
   constructor(
@@ -358,9 +367,24 @@ export class JobsService {
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
 
-    if (status === 'PUBLISHED') {
-      this.assertLocationRules(job.workMode, job.cityId, true);
+    if (job.status === status) {
+      return this.withResolvedIcons(
+        await this.prisma.jobPost.findUniqueOrThrow({
+          where: { id: jobId },
+          include: this.jobInclude,
+        }),
+      );
+    }
 
+    const allowed = ALLOWED_STATUS_TRANSITIONS[job.status] ?? [];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `Cannot change job status from ${job.status} to ${status}. Allowed: ${allowed.join(', ') || 'none'}.`,
+      );
+    }
+
+    // Becoming active again (incl. reopen CLOSED → DRAFT/PUBLISHED) must pass dedupe
+    if (ACTIVE_JOB_STATUSES.includes(status)) {
       await this.assertNoDuplicateJob({
         companyId: job.companyId,
         title: job.title,
@@ -369,14 +393,17 @@ export class JobsService {
         cityId: job.cityId,
         excludeJobId: job.id,
       });
+    }
+
+    if (status === 'PUBLISHED') {
+      this.assertLocationRules(job.workMode, job.cityId, true);
 
       const plan = job.company.subscription?.plan ?? 'FREE';
       const limit = this.planLimits(plan).activeJobs;
       const active = await this.prisma.jobPost.count({
         where: { companyId: job.companyId, status: 'PUBLISHED' },
       });
-      const alreadyPublished = job.status === 'PUBLISHED';
-      if (!alreadyPublished && active >= limit) {
+      if (job.status !== 'PUBLISHED' && active >= limit) {
         throw new ForbiddenException(
           `Plan ${plan} allows ${limit} active published job(s). Upgrade to publish more.`,
         );
@@ -389,7 +416,9 @@ export class JobsService {
         status,
         publishedAt:
           status === 'PUBLISHED' ? job.publishedAt ?? new Date() : job.publishedAt,
-        closedAt: status === 'CLOSED' ? new Date() : job.closedAt,
+        // Stamp closedAt on close; clear when leaving CLOSED (reopen)
+        closedAt:
+          status === 'CLOSED' ? new Date() : job.status === 'CLOSED' ? null : job.closedAt,
         fingerprint:
           job.fingerprint ??
           jobFingerprint({ title: job.title, workMode: job.workMode, cityId: job.cityId }),
