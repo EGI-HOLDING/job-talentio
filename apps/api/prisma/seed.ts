@@ -762,13 +762,17 @@ async function main() {
     employeeUsers.push(user);
 
     const tpl = JOB_TITLES[i % JOB_TITLES.length];
-    const headline = tpl.title.replace('Senior ', '').replace('Junior ', '').replace('Intern — ', '');
+    const headline = tpl.title
+      .replace('Senior ', '')
+      .replace('Junior ', '')
+      .replace('Intern - ', '')
+      .replace('Intern — ', '');
     const yearsExp = tpl.years + (i % 3);
     const summaryVariants = [
       `${headline} with ${yearsExp}+ years of experience, currently based in ${city.name}. Open to hybrid and remote roles across Uzbekistan.`,
       `Results-driven ${headline.toLowerCase()} focused on ${tpl.skills.slice(0, 2).join(' & ')}. Previously delivered projects for fintech and e-commerce teams.`,
       `Bilingual professional (${i % 2 ? 'Uzbek/Russian' : 'Uzbek/English'}) seeking ${headline} opportunities in ${city.name} and beyond.`,
-      `Career switcher into ${tpl.cat.replace('-', ' ')} — strong foundation in ${tpl.skills[0]} and eager to grow inside a product team.`,
+      `Career switcher into ${tpl.cat.replace('-', ' ')} - strong foundation in ${tpl.skills[0]} and eager to grow inside a product team.`,
     ];
     const summary = summaryVariants[i % summaryVariants.length];
     const visibility = (['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'] as const)[i % 4];
@@ -916,7 +920,11 @@ async function main() {
     const status = i % 14 === 0 ? 'DRAFT' : i % 16 === 0 ? 'CLOSED' : 'PUBLISHED';
     const employmentTypes: EmploymentType[] = ['FULL_TIME', 'FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'];
     const workModes: WorkMode[] = ['ONSITE', 'HYBRID', 'REMOTE', 'HYBRID', 'ONSITE'];
-    const titleSuffix = i >= JOB_TITLES.length ? ['', ' (Team Lead track)', ' — Fintech', ' — Marketplace', ' (Remote-first)'][i % 5] : '';
+    // ASCII-only separators — em-dash (U+2014) previously corrupted to "???" in some seed environments
+    const titleSuffix =
+      i >= JOB_TITLES.length
+        ? ['', ' (Team Lead track)', ' - Fintech', ' - Marketplace', ' (Remote-first)'][i % 5]
+        : '';
     const title = `${tpl.title}${titleSuffix}`;
 
     const job = await prisma.jobPost.create({

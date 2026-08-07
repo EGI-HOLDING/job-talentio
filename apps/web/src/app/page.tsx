@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { categoryIconLabel } from '@/lib/icons';
+import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 
@@ -137,7 +138,7 @@ export default function HomePage() {
               />
               <div>
                 <span className="badge hot">{t('hot')}</span>
-                <h3>{job.title}</h3>
+                <h3>{sanitizeMojibake(job.title)}</h3>
                 <div className="job-meta">
                   <span>{job.company.name}</span>
                   <span>{jobLocationLabel(job)}</span>

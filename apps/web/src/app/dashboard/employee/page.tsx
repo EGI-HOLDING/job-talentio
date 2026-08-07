@@ -11,6 +11,7 @@ import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { categoryIconLabel } from '@/lib/icons';
+import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
@@ -398,7 +399,7 @@ export default function EmployeeDashboard() {
                 />
                 <div>
                   <h2 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>{profile?.user?.fullName}</h2>
-                  <p className="muted" style={{ margin: '0.25rem 0' }}>{profile?.headline}</p>
+                  <p className="muted" style={{ margin: '0.25rem 0' }}>{sanitizeMojibake(profile?.headline)}</p>
                   <p className="muted" style={{ margin: 0 }}>{profile?.city?.name}</p>
                 </div>
               </div>
@@ -432,7 +433,7 @@ export default function EmployeeDashboard() {
                   alt=""
                 />
                 <div>
-                  <h3>{item.job.title}</h3>
+                  <h3>{sanitizeMojibake(item.job.title)}</h3>
                   <div className="job-meta">
                     <span>{item.job.company?.name}</span>
                     <span>{jobLocationLabel(item.job)}</span>
@@ -462,7 +463,7 @@ export default function EmployeeDashboard() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
                   <div>
                     <Link href={`/jobs/${a.jobPost.id}`} style={{ fontWeight: 700, color: 'var(--accent)' }}>
-                      {a.jobPost.title}
+                      {sanitizeMojibake(a.jobPost.title)}
                     </Link>
                     <p className="muted" style={{ margin: '0.25rem 0' }}>
                       {a.jobPost.company?.name} · {a.status}
@@ -606,11 +607,11 @@ export default function EmployeeDashboard() {
               <form className="form-stack" onSubmit={updateProfile}>
                 <label>
                   <LabelText>Headline</LabelText>
-                  <input name="headline" defaultValue={profile.headline || ''} />
+                  <input name="headline" defaultValue={sanitizeMojibake(profile.headline) || ''} />
                 </label>
                 <label>
                   <LabelText>Summary</LabelText>
-                  <textarea name="summary" rows={4} defaultValue={profile.summary || ''} />
+                  <textarea name="summary" rows={4} defaultValue={sanitizeMojibake(profile.summary) || ''} />
                 </label>
                 <label>
                   <LabelText>City</LabelText>
@@ -625,7 +626,7 @@ export default function EmployeeDashboard() {
                 </label>
                 <label>
                   <LabelText>Desired position</LabelText>
-                  <input name="desiredPosition" defaultValue={profile.desiredPosition || ''} />
+                  <input name="desiredPosition" defaultValue={sanitizeMojibake(profile.desiredPosition) || ''} />
                 </label>
                 <label>
                   <LabelText>Desired salary (UZS)</LabelText>
