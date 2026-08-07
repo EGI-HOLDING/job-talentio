@@ -306,6 +306,21 @@ model User {
   reports          Report[]            @relation("Reporter")
   messageTemplates MessageTemplate[]   @relation("TemplateAuthor")
   bulkCampaigns    BulkCampaign[]      @relation("BulkCampaignAuthor")
+  emailVerificationTokens EmailVerificationToken[]
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  /// SHA-256 of the raw token sent by email — raw token is never stored
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Company {

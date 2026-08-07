@@ -194,6 +194,49 @@ const DICT = {
   imCandidate: { uz: 'Men nomzodman', ru: 'Я кандидат', en: "I'm a candidate" },
   imHiring: { uz: 'Men yollayman', ru: 'Я нанимаю', en: "I'm hiring" },
   companyName: { uz: 'Kompaniya nomi', ru: 'Название компании', en: 'Company name' },
+  orContinueWith: { uz: 'yoki davom eting', ru: 'или продолжить с', en: 'or continue with' },
+  continueLabel: { uz: 'Davom etish', ru: 'Продолжить', en: 'Continue' },
+  googleChooseRole: {
+    uz: 'Hisob turini tanlang',
+    ru: 'Выберите тип аккаунта',
+    en: 'Choose your account type',
+  },
+  verifyEmailTitle: {
+    uz: 'Emailingizni tasdiqlang',
+    ru: 'Подтвердите email',
+    en: 'Verify your email',
+  },
+  verifyEmailSentTo: {
+    uz: 'Tasdiqlash havolasi yuborildi:',
+    ru: 'Ссылка для подтверждения отправлена на',
+    en: 'We sent a verification link to',
+  },
+  verifyEmailInstruction: {
+    uz: 'Hisobni faollashtirish uchun emaildagi havolani oching.',
+    ru: 'Откройте ссылку в письме, чтобы активировать аккаунт.',
+    en: 'Open the link in the email to activate your account.',
+  },
+  verifyEmailResend: {
+    uz: 'Qayta yuborish',
+    ru: 'Отправить ещё раз',
+    en: 'Resend email',
+  },
+  verifyEmailResent: {
+    uz: 'Yuborildi ✓',
+    ru: 'Отправлено ✓',
+    en: 'Sent ✓',
+  },
+  verifyEmailSuccess: {
+    uz: 'Email tasdiqlandi! Yo‘naltirilmoqda…',
+    ru: 'Email подтверждён! Перенаправление…',
+    en: 'Email verified! Redirecting…',
+  },
+  verifyEmailFailed: {
+    uz: 'Havola yaroqsiz yoki muddati o‘tgan.',
+    ru: 'Ссылка недействительна или устарела.',
+    en: 'This link is invalid or expired.',
+  },
+  verifying: { uz: 'Tekshirilmoqda…', ru: 'Проверка…', en: 'Verifying…' },
   alreadyRegistered: {
     uz: 'Allaqachon ro‘yxatdan o‘tganmisiz?',
     ru: 'Уже зарегистрированы?',

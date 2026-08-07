@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useId, useState } from 'react';
 import { ADMIN_URL, api, saveSession } from '@/lib/api';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
+import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
 import { useI18n } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 
@@ -82,6 +83,7 @@ export default function LoginPage() {
             {loading ? t('signingIn') : t('signIn')}
           </button>
         </form>
+        <GoogleSignIn />
         <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>
           {t('noAccount')}{' '}
           <Link href="/register" style={{ color: 'var(--accent)' }}>

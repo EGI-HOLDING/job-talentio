@@ -8,11 +8,16 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { slugify } from '../common/utils';
-import { normalizeCompanyName, normalizeEmail } from '../common/dedupe';
+import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { UserRole } from '@prisma/client';
+
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 min between sends
 
 @Injectable()
 export class AuthService {
@@ -239,9 +244,209 @@ export class AuthService {
     return { ok: true };
   }
 
-  /** Optional Google OAuth stub — requires credentials later */
-  async oauthGoogleStub() {
-    throw new BadRequestException('Google sign-in is not available yet. Please use email and password.');
+  // ── Google Sign-In (GIS ID-token flow) ─────────────────────
+
+  private googleClient: OAuth2Client | null = null;
+
+  private getGoogleClient(): OAuth2Client {
+    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
+    if (!clientId) {
+      throw new BadRequestException(
+        'Google sign-in is not configured yet. Please use email and password.',
+      );
+    }
+    if (!this.googleClient) this.googleClient = new OAuth2Client(clientId);
+    return this.googleClient;
+  }
+
+  private async verifyGoogleIdToken(idToken: string) {
+    const client = this.getGoogleClient();
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: this.config.get<string>('GOOGLE_CLIENT_ID'),
+      });
+      const payload = ticket.getPayload();
+      if (!payload?.sub || !payload.email) {
+        throw new UnauthorizedException('Google token has no email');
+      }
+      return {
+        googleId: payload.sub,
+        email: payload.email.trim().toLowerCase(),
+        fullName: (payload.name || payload.email.split('@')[0]).trim(),
+        avatarUrl: payload.picture ?? null,
+      };
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      throw new UnauthorizedException('Invalid Google sign-in token');
+    }
+  }
+
+  private verificationLink(rawToken: string) {
+    const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
+    return `${webUrl}/verify-email?token=${rawToken}`;
+  }
+
+  /** Create a fresh verification token (invalidates previous ones) and email the link. */
+  private async sendVerificationEmail(user: { id: string; email: string; fullName: string }) {
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+    const rawToken = randomBytes(32).toString('hex');
+    await this.prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: sha256(rawToken),
+        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+      },
+    });
+    const link = this.verificationLink(rawToken);
+    await this.mail.send(
+      user.email,
+      'Verify your email — Job Talentio',
+      `<p>Salom ${user.fullName}!</p>
+       <p>Confirm this email address to activate your Job Talentio account:</p>
+       <p><a href="${link}">Verify my email</a></p>
+       <p>Or open this link: ${link}</p>
+       <p>The link expires in 24 hours. If you didn't request this, you can ignore this email.</p>`,
+    );
+  }
+
+  /**
+   * Google sign-in for job seekers and recruiters.
+   * New accounts (and any unverified account) must verify their email via a link
+   * sent from the platform mailbox before a session is issued.
+   */
+  async oauthGoogle(input: {
+    idToken: string;
+    role?: 'EMPLOYEE' | 'RECRUITER';
+    companyName?: string;
+    locale?: string;
+  }) {
+    const google = await this.verifyGoogleIdToken(input.idToken);
+
+    let user = await this.prisma.user.findUnique({ where: { googleId: google.googleId } });
+    if (!user) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email: google.email } });
+      if (byEmail) {
+        // Link Google identity to the existing account
+        user = await this.prisma.user.update({
+          where: { id: byEmail.id },
+          data: { googleId: google.googleId },
+        });
+      }
+    }
+
+    if (user) {
+      if (user.isBanned) throw new ForbiddenException('Account banned');
+      if (!user.emailVerified) {
+        await this.sendVerificationEmail(user);
+        return { requiresVerification: true as const, email: user.email };
+      }
+      return this.tokenFor(user.id);
+    }
+
+    // First Google sign-in: the frontend must supply a role (and company for recruiters)
+    if (!input.role) {
+      return {
+        requiresRegistration: true as const,
+        email: google.email,
+        fullName: google.fullName,
+      };
+    }
+
+    if (input.role === 'RECRUITER') {
+      const name = input.companyName?.trim() ?? '';
+      if (name.length < 2) {
+        throw new BadRequestException('Company name is required for recruiter accounts');
+      }
+      await this.assertCompanyNameAvailable(name);
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: google.email,
+          googleId: google.googleId,
+          fullName: google.fullName,
+          avatarUrl: google.avatarUrl,
+          role: input.role as UserRole,
+          locale: input.locale ?? 'uz',
+          emailVerified: false,
+        },
+      });
+
+      if (input.role === 'EMPLOYEE') {
+        await tx.employeeProfile.create({ data: { userId: newUser.id } });
+      }
+
+      if (input.role === 'RECRUITER') {
+        const name = input.companyName!.trim();
+        let slug = slugify(name) || `company-${Date.now()}`;
+        const slugExists = await tx.company.findUnique({ where: { slug } });
+        if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
+        const company = await tx.company.create({ data: { name, slug } });
+        await tx.subscription.create({
+          data: { companyId: company.id, plan: 'FREE', status: 'ACTIVE' },
+        });
+        await tx.companyMember.create({
+          data: { companyId: company.id, userId: newUser.id, role: 'OWNER' },
+        });
+      }
+
+      return newUser;
+    });
+
+    await this.sendVerificationEmail(created);
+    return { requiresVerification: true as const, email: created.email };
+  }
+
+  /** Confirm the emailed token, mark the account verified, and start a session. */
+  async verifyEmail(rawToken: string) {
+    const record = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: sha256(rawToken) },
+      include: { user: true },
+    });
+    if (!record || record.usedAt) {
+      throw new BadRequestException('Verification link is invalid or already used');
+    }
+    if (record.expiresAt < new Date()) {
+      throw new BadRequestException('Verification link expired. Request a new one.');
+    }
+    if (record.user.isBanned) throw new ForbiddenException('Account banned');
+
+    await this.prisma.$transaction([
+      this.prisma.emailVerificationToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { emailVerified: true },
+      }),
+    ]);
+
+    return this.tokenFor(record.userId);
+  }
+
+  /** Re-send the verification email. Always responds ok to avoid leaking accounts. */
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (!user || user.emailVerified || user.isBanned) return { ok: true };
+
+    const recent = await this.prisma.emailVerificationToken.findFirst({
+      where: {
+        userId: user.id,
+        usedAt: null,
+        createdAt: { gte: new Date(Date.now() - VERIFICATION_RESEND_COOLDOWN_MS) },
+      },
+    });
+    if (recent) return { ok: true };
+
+    await this.sendVerificationEmail(user);
+    return { ok: true };
   }
 
   /** Optional Telegram Login stub */
