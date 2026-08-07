@@ -143,6 +143,9 @@ const DICT = {
   newPassword: { uz: 'Yangi parol', ru: 'Новый пароль', en: 'New password' },
   send: { uz: 'Yuborish', ru: 'Отправить', en: 'Send' },
   writeMessage: { uz: 'Xabar yozing…', ru: 'Напишите сообщение…', en: 'Write a message…' },
+  sent: { uz: 'Yuborildi', ru: 'Отправлено', en: 'Sent' },
+  delivered: { uz: 'Yetkazildi', ru: 'Доставлено', en: 'Delivered' },
+  read: { uz: 'O‘qildi', ru: 'Прочитано', en: 'Read' },
   noConversations: {
     uz: 'Suhbatlar hali yo‘q',
     ru: 'Диалогов пока нет',

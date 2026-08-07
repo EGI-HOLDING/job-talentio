@@ -227,13 +227,17 @@ function RecruiterDashboard() {
     await loadJobs(companyId);
   }
 
-  async function publish(jobId: string) {
-    await api(`/jobs/${jobId}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ status: 'PUBLISHED' }),
-    });
-    setMsg('Job published');
-    await loadJobs(companyId);
+  async function changeJobStatus(jobId: string, status: string, okMsg: string) {
+    try {
+      await api(`/jobs/${jobId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      });
+      setMsg(okMsg);
+      await loadJobs(companyId);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Failed to update job status');
+    }
   }
 
   async function setStatus(appId: string, status: string) {
@@ -542,8 +546,45 @@ function RecruiterDashboard() {
                   </p>
                   <div className="chips">
                     {j.status === 'DRAFT' && (
-                      <button type="button" className="chip active" onClick={() => publish(j.id)}>
+                      <button
+                        type="button"
+                        className="chip active"
+                        onClick={() => changeJobStatus(j.id, 'PUBLISHED', 'Job published')}
+                      >
                         Publish
+                      </button>
+                    )}
+                    {(j.status === 'CLOSED' || j.status === 'PAUSED') && (
+                      <button
+                        type="button"
+                        className="chip active"
+                        onClick={() =>
+                          changeJobStatus(
+                            j.id,
+                            'PUBLISHED',
+                            j.status === 'CLOSED' ? 'Job reopened' : 'Job resumed',
+                          )
+                        }
+                      >
+                        {j.status === 'CLOSED' ? 'Reopen' : 'Resume'}
+                      </button>
+                    )}
+                    {j.status === 'PUBLISHED' && (
+                      <button
+                        type="button"
+                        className="chip"
+                        onClick={() => changeJobStatus(j.id, 'PAUSED', 'Job paused')}
+                      >
+                        Pause
+                      </button>
+                    )}
+                    {(j.status === 'DRAFT' || j.status === 'PUBLISHED' || j.status === 'PAUSED') && (
+                      <button
+                        type="button"
+                        className="chip"
+                        onClick={() => changeJobStatus(j.id, 'CLOSED', 'Job closed')}
+                      >
+                        Close
                       </button>
                     )}
                     <button

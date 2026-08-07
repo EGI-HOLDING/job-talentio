@@ -631,6 +631,9 @@ model ChatMessage {
   senderId       String
   body           String
   createdAt      DateTime  @default(now())
+  /// When the peer account received/fetched the message
+  deliveredAt    DateTime?
+  /// When the peer account opened/read the thread
   readAt         DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
