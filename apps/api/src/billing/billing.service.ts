@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PlanCode } from '@prisma/client';
 import { PLAN_PRICES_UZS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +15,11 @@ export class BillingService {
     private jobs: JobsService,
     private payments: MockPaymentProvider,
   ) {}
+
+  /** Auto-confirm mock payments only when explicitly enabled (local/dev). */
+  private mockAutoConfirmEnabled() {
+    return process.env.PAYMENTS_MOCK === 'true';
+  }
 
   async getSubscription(user: AuthUser, companyId: string) {
     await this.companies.assertMember(user, companyId);
@@ -48,12 +53,18 @@ export class BillingService {
       },
     });
 
-    // Local-first: auto-complete mock payment immediately
-    return this.confirmPayment(user, payment.id, true);
+    if (this.mockAutoConfirmEnabled()) {
+      return this.confirmPayment(user, payment.id, true);
+    }
+    return payment;
   }
 
   async buyHotJob(user: AuthUser, companyId: string, jobId: string, days: 7 | 14 | 30) {
     await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job || job.companyId !== companyId) {
+      throw new NotFoundException('Job not found');
+    }
     const key = `HOT_JOB_${days}D` as keyof typeof PLAN_PRICES_UZS;
     const amount = PLAN_PRICES_UZS[key];
     const payment = await this.prisma.payment.create({
@@ -67,14 +78,25 @@ export class BillingService {
         metadata: { jobId, days },
       },
     });
-    return this.confirmPayment(user, payment.id, true);
+    if (this.mockAutoConfirmEnabled()) {
+      return this.confirmPayment(user, payment.id, true);
+    }
+    return payment;
   }
 
   async confirmPayment(user: AuthUser, paymentId: string, allowAuto = false) {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Payment not found');
-    if (!allowAuto) {
-      await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
+    await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
+
+    if (!allowAuto && !this.mockAutoConfirmEnabled()) {
+      throw new BadRequestException(
+        'Manual payment confirmation is disabled until a real payment provider is configured. Set PAYMENTS_MOCK=true only for local development.',
+      );
+    }
+
+    if (payment.status === 'MOCKED' || payment.status === 'PAID') {
+      return payment;
     }
 
     const updated = await this.prisma.payment.update({

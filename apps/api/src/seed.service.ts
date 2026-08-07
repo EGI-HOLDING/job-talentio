@@ -20,7 +20,7 @@ export class SeedService implements OnModuleInit {
     const email = (
       this.config.get('SUPERADMIN_EMAIL') ?? 'sarvar.adminov@jobtalentio.uz'
     ).toLowerCase();
-    const password = this.config.get('SUPERADMIN_PASSWORD') ?? 'Admin123!';
+    const password = this.config.get('SUPERADMIN_PASSWORD');
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       if (existing.role !== 'SUPER_ADMIN') {
@@ -29,6 +29,12 @@ export class SeedService implements OnModuleInit {
           data: { role: 'SUPER_ADMIN' },
         });
       }
+      return;
+    }
+    if (!password || password === 'Admin123!' || password.length < 12) {
+      this.logger.warn(
+        'Skipping Super Admin seed: set SUPERADMIN_PASSWORD (min 12 chars, not the demo default) to create the first admin.',
+      );
       return;
     }
     const passwordHash = await bcrypt.hash(password, 10);

@@ -477,7 +477,7 @@ function RecruiterDashboard() {
                             )
                           }
                         >
-                          ✕
+                          ×
                         </button>
                       </span>
                     ))}
@@ -510,7 +510,7 @@ function RecruiterDashboard() {
                             )
                           }
                         >
-                          ✕
+                          ×
                         </button>
                       </span>
                     ))}
@@ -1105,7 +1105,7 @@ function RecruiterDashboard() {
                         <span>{p.headline || '—'}</span>
                         {p.city?.name && <span>{p.city.name}</span>}
                         <span>{p.experienceYears ?? 0}y exp</span>
-                        {p.contactsBlurred && <span>🔒 Contacts limited</span>}
+                        {p.contactsBlurred && <span>Contacts limited</span>}
                       </div>
                       <div className="chips" style={{ marginTop: '0.45rem' }}>
                         {(p.skills || []).slice(0, 6).map((s: any) => (
@@ -1128,7 +1128,7 @@ function RecruiterDashboard() {
                           className="chip"
                           style={{ fontSize: '0.75rem' }}
                         >
-                          💬 Chat
+                          Chat
                         </Link>
                       </div>
                     </div>

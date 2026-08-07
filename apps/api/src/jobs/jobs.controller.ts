@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -12,7 +13,6 @@ import {
 import {
   jobPostSchema,
   jobSearchSchema,
-  hotJobSchema,
   jobQuestionSchema,
 } from '@job-talentio/shared';
 import { JobStatus } from '@prisma/client';
@@ -92,7 +92,7 @@ export class JobsController {
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   get(@Param('id') id: string, @CurrentUser() user?: AuthUser) {
-    return this.jobs.get(id, user?.id);
+    return this.jobs.get(id, user);
   }
 
   @Get(':id/stats')
@@ -110,8 +110,9 @@ export class JobsController {
   }
 
   @Get(':id/questions')
-  listQuestions(@Param('id') id: string) {
-    return this.jobs.listQuestions(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  listQuestions(@Param('id') id: string, @CurrentUser() user?: AuthUser) {
+    return this.jobs.listQuestions(id, user);
   }
 
   @Post(':id/questions')
@@ -159,8 +160,10 @@ export class JobsController {
   @Post(':id/hot')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
-  hot(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() body: unknown) {
-    const data = parseDto(hotJobSchema, body);
-    return this.jobs.activateHotJob(user, id, data.days);
+  hot() {
+    // Free boost via this route is disabled — purchase through billing
+    throw new BadRequestException(
+      'Hot job boosts must be purchased via POST /billing/companies/:companyId/jobs/:jobId/hot',
+    );
   }
 }

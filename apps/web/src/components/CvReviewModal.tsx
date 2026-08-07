@@ -124,7 +124,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
             </p>
           </div>
           <button type="button" className="ghost" onClick={onClose} aria-label="Close dialog">
-            ✕
+            ×
           </button>
         </div>
 

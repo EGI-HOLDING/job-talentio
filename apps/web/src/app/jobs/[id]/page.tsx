@@ -188,7 +188,7 @@ export default function JobDetailPage() {
               className="secondary"
               style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
             >
-              💬 Chat with recruiter
+              Chat with recruiter
             </Link>
           )}
         </div>

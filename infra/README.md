@@ -124,14 +124,16 @@ Set separately on **staging** and **production**. Values below are production ex
 ```bash
 NODE_ENV=production
 DEV_AUTH_ENABLED=false
-JWT_SECRET=<long-random-secret>
+JWT_SECRET=<long-random-secret-min-32-chars>
 JWT_EXPIRES_IN=7d
 WEB_URL=https://jobtalent.io
 ADMIN_URL=https://admin.jobtalent.io
 API_URL=https://api.jobtalent.io
 SUPERADMIN_EMAIL=<your-admin@jobtalent.io>
-SUPERADMIN_PASSWORD=<strong-password>
+SUPERADMIN_PASSWORD=<strong-password-min-12-chars>
 PAYMENT_PROVIDER=mock
+# Keep false on staging/prod. true only for local mock auto-confirm of plan/hot purchases.
+PAYMENTS_MOCK=false
 
 # Cloudflare R2
 S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
@@ -238,6 +240,8 @@ Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 - [ ] Test email arrives via Hostinger
 - [ ] Chat WebSocket works through Cloudflare
 - [ ] `DEV_AUTH_ENABLED=false` on both envs
+- [ ] `PAYMENTS_MOCK=false` on staging/prod (set `true` only for local mock auto-confirm)
+- [ ] `JWT_SECRET` is unique, ≥32 chars, and not the local-dev default
 - [ ] Spending cap set; staging limits reduced
 - [ ] Super Admin password rotated from defaults
 

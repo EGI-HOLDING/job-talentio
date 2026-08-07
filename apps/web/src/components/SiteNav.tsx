@@ -108,7 +108,7 @@ export function SiteNav() {
                 setLangOpen((v) => !v);
               }}
             >
-              🌐 {LOCALE_LABELS[locale]}
+              {LOCALE_LABELS[locale]}
             </button>
             {langOpen && (
               <div
@@ -156,7 +156,14 @@ export function SiteNav() {
             <div className="nav-user" ref={ref}>
               <div style={{ position: 'relative' }}>
                 <button type="button" className="notif-btn" onClick={toggleNotifs} aria-label={t('notifications')}>
-                  🔔
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Z"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                   {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
                 </button>
                 {open && (

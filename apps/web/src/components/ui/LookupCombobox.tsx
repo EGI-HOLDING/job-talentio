@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { api } from '@/lib/api';
-import { benefitIconLabel, isBrokenIcon } from '@/lib/icons';
+import { benefitIconLabel } from '@/lib/icons';
 import { useI18n } from '@/lib/i18n';
 
 export type LookupSuggestion = {
@@ -189,11 +189,7 @@ export function LookupCombobox({
                 onClick={() => choose(s)}
               >
                 <span>
-                  {kind === 'benefits'
-                    ? benefitIconLabel(s.slug, s.icon)
-                    : s.icon && !isBrokenIcon(s.icon)
-                      ? `${s.icon} `
-                      : ''}
+                  {kind === 'benefits' ? benefitIconLabel(s.slug, s.icon) : ''}
                   {s.name}
                 </span>
                 {s.usageCount !== undefined && (

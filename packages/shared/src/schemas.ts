@@ -32,7 +32,8 @@ export const loginSchema = z.object({
 
 export const devLoginSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['EMPLOYEE', 'RECRUITER', 'SUPER_ADMIN']).optional(),
+  // SUPER_ADMIN must never be mintable via dev-login
+  role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
 });
 
 export const companySchema = z.object({
