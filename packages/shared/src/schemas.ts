@@ -156,6 +156,7 @@ export const applicationStatusSchema = z.object({
 
 export const applySchema = z.object({
   coverLetter: z.string().max(5000).optional(),
+  resumeId: z.string().min(1).optional(),
   answers: z
     .array(
       z.object({
@@ -197,6 +198,10 @@ export const skillSchema = z.object({
   level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).optional(),
 });
 
+export const skillLevelUpdateSchema = z.object({
+  level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']),
+});
+
 export const experienceSchema = z.object({
   companyName: z.string().min(1).max(160),
   title: z.string().min(1).max(160),
@@ -230,6 +235,10 @@ export const languageSchema = z.object({
   level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']),
 });
 
+export const languageLevelUpdateSchema = z.object({
+  level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']),
+});
+
 export const jobAlertSchema = z.object({
   name: z.string().min(1).max(120),
   query: z.string().max(200).optional(),
@@ -254,6 +263,57 @@ export const resumeImportSchema = z.object({
   educationIndexes: z.array(z.number().int().min(0)).max(10).default([]),
   languageIndexes: z.array(z.number().int().min(0)).max(15).default([]),
 });
+
+export const resumeTemplateKeys = ['classic', 'modern', 'compact'] as const;
+export type ResumeTemplateKey = (typeof resumeTemplateKeys)[number];
+
+export const resumeInclusionSectionsSchema = z.object({
+  summary: z.boolean().default(true),
+  skills: z.boolean().default(true),
+  experience: z.boolean().default(true),
+  education: z.boolean().default(true),
+  languages: z.boolean().default(true),
+  certifications: z.boolean().default(true),
+  phone: z.boolean().default(true),
+  email: z.boolean().default(true),
+});
+
+export const resumeInclusionSchema = z.object({
+  sections: resumeInclusionSectionsSchema.default({}),
+  experienceIds: z.array(z.string()).max(50).nullable().optional(),
+  educationIds: z.array(z.string()).max(30).nullable().optional(),
+  skillIds: z.array(z.string()).max(80).nullable().optional(),
+  languageIds: z.array(z.string()).max(30).nullable().optional(),
+  certificationIds: z.array(z.string()).max(40).nullable().optional(),
+});
+
+export const resumeBuilderSettingsSchema = z.object({
+  title: z.string().min(1).max(160).optional(),
+  templateKey: z.enum(resumeTemplateKeys).optional(),
+  themeAccent: z.string().max(32).optional().nullable(),
+  inclusion: resumeInclusionSchema.optional(),
+  isPrimary: z.boolean().optional(),
+});
+
+export const DEFAULT_RESUME_INCLUSION = {
+  sections: {
+    summary: true,
+    skills: true,
+    experience: true,
+    education: true,
+    languages: true,
+    certifications: true,
+    phone: true,
+    email: true,
+  },
+  experienceIds: null as string[] | null,
+  educationIds: null as string[] | null,
+  skillIds: null as string[] | null,
+  languageIds: null as string[] | null,
+  certificationIds: null as string[] | null,
+};
+
+export type ResumeInclusion = z.infer<typeof resumeInclusionSchema>;
 
 export const jobQuestionSchema = z.object({
   question: z.string().min(3).max(500),

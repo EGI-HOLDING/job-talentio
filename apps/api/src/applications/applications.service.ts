@@ -28,6 +28,7 @@ export class ApplicationsService {
     jobPostId: string,
     coverLetter?: string,
     answers?: Array<{ questionId: string; answer: string }>,
+    resumeId?: string,
   ) {
     if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Only employees can apply');
@@ -38,7 +39,7 @@ export class ApplicationsService {
         skills: { include: { skill: true } },
         experiences: true,
         educations: true,
-        resumes: { where: { isPrimary: true }, take: 1 },
+        resumes: true,
       },
     });
     if (!profile) throw new BadRequestException('Complete your employee profile first');
@@ -73,9 +74,25 @@ export class ApplicationsService {
       }
     }
 
+    let selectedResume =
+      (resumeId
+        ? profile.resumes.find((r) => r.id === resumeId)
+        : profile.resumes.find((r) => r.isPrimary) || profile.resumes[0]) || null;
+
+    if (resumeId && !selectedResume) {
+      throw new BadRequestException('Selected resume not found');
+    }
+    if (profile.resumes.length > 0 && selectedResume && !selectedResume.fileKey) {
+      throw new BadRequestException(
+        'Export or upload a CV file for this resume before applying.',
+      );
+    }
+    if (profile.resumes.length > 0 && !selectedResume) {
+      throw new BadRequestException('Select a resume to apply with');
+    }
+
     const breakdown = await this.matching.scoreProfileAgainstJob(profile.id, jobPostId);
 
-    const primaryResume = profile.resumes[0];
     const resumeSnapshot = {
       headline: profile.headline,
       summary: profile.summary,
@@ -86,11 +103,12 @@ export class ApplicationsService {
       })),
       experiences: profile.experiences,
       educations: profile.educations,
-      resume: primaryResume
+      resume: selectedResume
         ? {
-            id: primaryResume.id,
-            title: primaryResume.title,
-            hasFile: Boolean(primaryResume.fileKey),
+            id: selectedResume.id,
+            title: selectedResume.title,
+            hasFile: Boolean(selectedResume.fileKey),
+            templateKey: selectedResume.templateKey,
           }
         : null,
       snapshotAt: new Date().toISOString(),
@@ -101,6 +119,7 @@ export class ApplicationsService {
         data: {
           jobPostId,
           profileId: profile.id,
+          resumeId: selectedResume?.id ?? null,
           coverLetter,
           resumeSnapshot,
           matchScore: breakdown.total,
@@ -123,6 +142,7 @@ export class ApplicationsService {
         include: {
           jobPost: { include: { company: true } },
           answers: { include: { question: true } },
+          resume: true,
         },
       });
 

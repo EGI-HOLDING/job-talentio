@@ -3,3 +3,4 @@ export * from './schemas';
 export * from './types';
 export * from './location';
 export * from './icons';
+export * from './resume';

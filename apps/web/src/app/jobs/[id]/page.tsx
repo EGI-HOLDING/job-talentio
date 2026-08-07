@@ -65,8 +65,14 @@ export default function JobDetailPage() {
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resumes, setResumes] = useState<
+    Array<{ id: string; title: string; isPrimary?: boolean; hasFile?: boolean; fileKey?: string | null }>
+  >([]);
+  const [selectedResumeId, setSelectedResumeId] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
   const alreadyApplied = Boolean(myApplication);
+  const selectedResume = resumes.find((r) => r.id === selectedResumeId);
+  const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);
 
   useEffect(() => {
     api<Job>(`/jobs/${id}`)
@@ -138,6 +144,7 @@ export default function JobDetailPage() {
         body: JSON.stringify({
           coverLetter: fd.get('coverLetter'),
           answers,
+          resumeId: selectedResumeId || undefined,
         }),
       });
       setMyApplication({
@@ -236,10 +243,28 @@ export default function JobDetailPage() {
               <button
                 type="button"
                 className="cta"
-                onClick={() => {
+                onClick={async () => {
                   if (!session) {
                     window.location.href = '/login';
                     return;
+                  }
+                  try {
+                    const p = await api<{
+                      resumes?: Array<{
+                        id: string;
+                        title: string;
+                        isPrimary?: boolean;
+                        hasFile?: boolean;
+                        fileKey?: string | null;
+                      }>;
+                    }>('/profiles/me');
+                    const list = p.resumes || [];
+                    setResumes(list);
+                    const primary = list.find((r) => r.isPrimary) || list[0];
+                    setSelectedResumeId(primary?.id || '');
+                  } catch {
+                    setResumes([]);
+                    setSelectedResumeId('');
                   }
                   setShowApply(true);
                 }}
@@ -327,6 +352,28 @@ export default function JobDetailPage() {
             <p className="required-note">{t('requiredFieldsNote')}</p>
             <form className="form-stack" onSubmit={onApply}>
               <fieldset disabled={submitting} style={{ border: 0, margin: 0, padding: 0 }}>
+                <label>
+                  <LabelText>Resume</LabelText>
+                  <select
+                    value={selectedResumeId}
+                    onChange={(e) => setSelectedResumeId(e.target.value)}
+                    required={resumes.length > 0}
+                  >
+                    {resumes.length === 0 && <option value="">No resumes on profile</option>}
+                    {resumes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                        {r.isPrimary ? ' (primary)' : ''}
+                        {r.hasFile || r.fileKey ? '' : ' — no PDF'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selectedResumeId && !selectedHasFile && (
+                  <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hot)' }}>
+                    Selected resume has no PDF file yet. Export from the resume builder or attach a file before applying.
+                  </p>
+                )}
                 <FormField label={t('coverLetter')}>
                   <textarea name="coverLetter" rows={4} placeholder={t('coverLetter')} />
                 </FormField>
