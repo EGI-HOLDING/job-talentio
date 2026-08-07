@@ -1,0 +1,53 @@
+---
+description: SDLC + CI/CD for Job Talentio — local → PR → staging → production
+alwaysApply: true
+---
+
+# Development lifecycle (Job Talentio)
+
+Remote: `EGI-HOLDING/job-talentio`. Staging is live on Railway + Cloudflare. Follow this for every change.
+
+## Environments
+
+| Env | Git branch | Deploy | Public surfaces |
+|-----|------------|--------|-----------------|
+| Local | feature branch | Docker Compose + `pnpm dev` | localhost |
+| Staging | `develop` | Railway auto-deploy | `staging.jobtalent.io`, `admin-staging…`, `api-staging…` |
+| Production | `main` | Railway auto-deploy | `jobtalent.io`, `admin…`, `api…` |
+
+Details/env vars: `infra/README.md`. Never put secrets in git.
+
+## Required flow (no shortcuts)
+
+```
+local work → PR → develop → CI green → Railway staging → verify staging
+→ (when ready) PR develop→main → CI green → Railway production → smoke prod
+```
+
+1. **Branch** from up-to-date `develop` (`feature/` / `fix/` / `chore/` / `hotfix/` from `main`).
+2. **Implement** only the scoped change; keep PRs reviewable.
+3. **Validate locally** before push when feasible: shared build, typecheck, relevant app smoke.
+4. **PR into `develop`** (never feature → `main`). Include Summary + Test plan.
+5. **CI must pass** (`.github/workflows/ci.yml`: install, shared build, prisma generate, typecheck, test, build).
+6. **Staging is the QA gate** after merge to `develop`. Prefer checking:
+   - `GET https://api-staging.jobtalent.io/api/health`
+   - affected UI on `https://staging.jobtalent.io` (and admin if touched)
+7. **Production only via** PR `develop` → `main` when the user explicitly wants a release (or hotfix from `main`). Do not push/merge to `main` unprompted.
+8. After **hotfix** on `main`, sync back into `develop`.
+
+## Agent behavior (mandatory)
+
+- Sync `develop` before starting; work on a short-lived branch.
+- After a coherent unit of work: commit (no secrets) → push → PR to **`develop`**.
+- Treat CI failures as blockers; fix on the same branch.
+- Call out migration / env / `NEXT_PUBLIC_*` / Dockerfile changes in the PR (staging & prod need redeploy/config).
+- Do not invent ad-hoc deploy paths; use Railway Git deploy from `develop`/`main`.
+- Prefer squash merge for feature PRs; delete branch after merge.
+
+## Do not
+
+- Commit/push straight to `develop` or `main`
+- Skip CI or merge with red checks
+- Treat local-only success as production-ready without staging when the change is user-facing or API/deploy-sensitive
+- Commit `.env` / credentials; use `.env.example` + Railway env vars
+- Attach both apex and `www` as Railway custom domains (Hobby: 2/service; `www` via Cloudflare redirect)

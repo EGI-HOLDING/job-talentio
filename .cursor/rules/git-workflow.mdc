@@ -5,15 +5,18 @@ alwaysApply: true
 
 # Git workflow (Job Talentio)
 
+Also follow `.cursor/rules/development-lifecycle.mdc` (CI/CD + staging/prod gates).
+
 ## Long-lived branches
 
-| Branch | Role | Deploy target |
-|--------|------|---------------|
-| `develop` | Integration / staging | Staging |
-| `main` | Production-ready | Production |
+| Branch | Role | Railway env |
+|--------|------|-------------|
+| `develop` | Integration / staging | `staging` (auto-deploy) |
+| `main` | Production-ready | `production` (auto-deploy) |
 
 - Never commit directly to `main` or `develop`.
 - Never force-push `main` or `develop`.
+- Remote: `https://github.com/EGI-HOLDING/job-talentio.git`
 
 ## Day-to-day work
 
@@ -22,6 +25,9 @@ alwaysApply: true
    - Hotfix from `main`: `hotfix/<name>`
 2. Implement the requested work on that branch.
 3. **Ship automatically** (see below) — do not stop and ask.
+4. Wait for CI (`.github/workflows/ci.yml`); fix failures on the same branch.
+5. Prefer squash merge; delete the branch after merge.
+6. After merge, staging redeploys from `develop` — verify there before any prod release.
 
 ## Agent: auto commit + push + PR (mandatory)
 
@@ -46,7 +52,7 @@ Do **not**:
 
 If a PR for the branch already exists, push new commits and leave the existing PR (update the body only when scope changed materially).
 
-## Release to production
+## Release / hotfix
 
-1. Stable staging → PR `develop` → `main`.
-2. Tag `vX.Y.Z` if needed; sync hotfixes back into `develop`.
+- **Release:** user asks → PR `develop` → `main` → optional tag `vX.Y.Z`.
+- **Hotfix:** branch from `main` → PR to `main` → sync back to `develop`.
