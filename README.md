@@ -63,7 +63,10 @@ apps/web      Next.js portal
 apps/admin    Next.js Super Admin
 packages/shared  Shared Zod schemas & constants
 docker/       Postgres, Redis, MinIO, Mailpit
+docs/         Program map & guides
 ```
+
+Full module/route map (API, web pages, staging URLs, common change areas): **[docs/PROGRAM-MAP.md](docs/PROGRAM-MAP.md)**.
 
 ## Git workflow
 
@@ -86,7 +89,7 @@ Staging and production run on **Railway** (Hobby-safe domain layout), with **Clo
 
 | Env | Branch | Domains |
 |-----|--------|---------|
-| Staging | `develop` | `staging.jobtalent.io`, `admin.staging…`, `api.staging…` |
+| Staging | `develop` | `staging.jobtalent.io`, `admin-staging.jobtalent.io`, `api-staging.jobtalent.io` |
 | Production | `main` | `jobtalent.io`, `admin.jobtalent.io`, `api.jobtalent.io` |
 
 `www` redirects to apex via Cloudflare (not a Railway custom domain — Hobby allows 2 domains per service).
