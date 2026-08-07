@@ -37,7 +37,7 @@ function redirectAfterLogin(role: string) {
 
 /**
  * "Continue with Google" flow (GIS ID token):
- * button → /auth/oauth/google → role picker for new users → email verification gate.
+ * button → /auth/oauth/google → role picker for new users → session issued immediately.
  * Renders nothing when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured.
  */
 export function GoogleSignIn() {

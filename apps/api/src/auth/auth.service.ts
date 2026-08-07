@@ -315,8 +315,9 @@ export class AuthService {
 
   /**
    * Google sign-in for job seekers and recruiters.
-   * New accounts (and any unverified account) must verify their email via a link
-   * sent from the platform mailbox before a session is issued.
+   * Google already verified the email address, so we issue a session immediately
+   * (no platform email-verification gate). Platform email verify can be added later
+   * for password sign-ups if needed.
    */
   async oauthGoogle(input: {
     idToken: string;
@@ -333,16 +334,23 @@ export class AuthService {
         // Link Google identity to the existing account
         user = await this.prisma.user.update({
           where: { id: byEmail.id },
-          data: { googleId: google.googleId },
+          data: {
+            googleId: google.googleId,
+            emailVerified: true,
+            ...(google.avatarUrl && !byEmail.avatarUrl ? { avatarUrl: google.avatarUrl } : {}),
+          },
         });
       }
     }
 
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
+      // Unblock accounts that signed up via Google while verification was still required
       if (!user.emailVerified) {
-        await this.sendVerificationEmail(user);
-        return { requiresVerification: true as const, email: user.email };
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: true },
+        });
       }
       return this.tokenFor(user.id);
     }
@@ -373,7 +381,7 @@ export class AuthService {
           avatarUrl: google.avatarUrl,
           role: input.role as UserRole,
           locale: input.locale ?? 'uz',
-          emailVerified: false,
+          emailVerified: true,
         },
       });
 
@@ -398,8 +406,7 @@ export class AuthService {
       return newUser;
     });
 
-    await this.sendVerificationEmail(created);
-    return { requiresVerification: true as const, email: created.email };
+    return this.tokenFor(created.id);
   }
 
   /** Confirm the emailed token, mark the account verified, and start a session. */
