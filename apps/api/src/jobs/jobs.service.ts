@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JobStatus, PlanCode, Prisma, WorkMode } from '@prisma/client';
-import { PLAN_LIMITS } from '@job-talentio/shared';
+import { PLAN_LIMITS, resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
@@ -411,6 +411,34 @@ export class JobsService {
     return updated;
   }
 
+  private withResolvedIcons<T extends {
+    category?: { slug?: string; icon?: string | null } | null;
+    benefits?: Array<{ benefit?: { slug?: string; icon?: string | null } | null }>;
+  }>(job: T): T {
+    return {
+      ...job,
+      category: job.category
+        ? {
+            ...job.category,
+            icon: resolveCategoryIcon(job.category.slug, job.category.icon) || job.category.icon,
+          }
+        : job.category,
+      benefits: Array.isArray(job.benefits)
+        ? job.benefits.map((jb) =>
+            jb?.benefit
+              ? {
+                  ...jb,
+                  benefit: {
+                    ...jb.benefit,
+                    icon: resolveBenefitIcon(jb.benefit.slug, jb.benefit.icon) || jb.benefit.icon,
+                  },
+                }
+              : jb,
+          )
+        : job.benefits,
+    };
+  }
+
   async get(id: string, viewerId?: string) {
     const job = await this.prisma.jobPost.findUnique({
       where: { id },
@@ -422,7 +450,7 @@ export class JobsService {
       data: { jobPostId: id, viewerId: viewerId ?? null },
     });
 
-    return job;
+    return this.withResolvedIcons(job);
   }
 
   async listMine(user: AuthUser, companyId: string) {
@@ -739,7 +767,7 @@ export class JobsService {
     }
 
     return {
-      items: sorted,
+      items: sorted.map((job) => this.withResolvedIcons(job)),
       total,
       matchedTotal,
       truncated,

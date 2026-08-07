@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeSkillKey } from '../common/skill-resolve';
 
@@ -145,16 +146,24 @@ export class MetaService {
     });
   }
 
-  categories() {
-    return this.prisma.jobCategory.findMany({ orderBy: { name: 'asc' } });
+  async categories() {
+    const rows = await this.prisma.jobCategory.findMany({ orderBy: { name: 'asc' } });
+    return rows.map((c) => ({
+      ...c,
+      icon: resolveCategoryIcon(c.slug, c.icon) || c.icon,
+    }));
   }
 
   industries() {
     return this.prisma.industry.findMany({ orderBy: { name: 'asc' } });
   }
 
-  benefits() {
-    return this.prisma.benefit.findMany({ orderBy: { name: 'asc' } });
+  async benefits() {
+    const rows = await this.prisma.benefit.findMany({ orderBy: { name: 'asc' } });
+    return rows.map((b) => ({
+      ...b,
+      icon: resolveBenefitIcon(b.slug, b.icon) || b.icon,
+    }));
   }
 
   async suggestBenefits(q?: string, take = 10) {
@@ -182,7 +191,7 @@ export class MetaService {
         id: b.id,
         name: b.name,
         slug: b.slug,
-        icon: b.icon,
+        icon: resolveBenefitIcon(b.slug, b.icon) || b.icon,
         aliases: b.aliases.map((a) => a.alias),
         usageCount: b._count.jobPostBenefits,
       }))

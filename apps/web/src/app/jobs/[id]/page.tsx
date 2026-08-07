@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
+import { benefitIconLabel } from '@/lib/icons';
 import { jobLocationLabel } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
@@ -34,7 +35,7 @@ type Job = {
   city?: { name: string } | null;
   category?: { name: string } | null;
   jobSkills?: Array<{ skill: { name: string }; isRequired: boolean }>;
-  benefits?: Array<{ benefit: { name: string; icon?: string | null } }>;
+  benefits?: Array<{ benefit: { name: string; slug?: string; icon?: string | null } }>;
   questions?: Question[];
   _count?: { applications: number; views: number };
 };
@@ -218,7 +219,8 @@ export default function JobDetailPage() {
             <div className="chips" style={{ marginTop: '0.75rem' }}>
               {(job.benefits || []).map((b, i) => (
                 <span key={i} className="chip">
-                  {b.benefit.icon} {b.benefit.name}
+                  {benefitIconLabel(b.benefit.slug, b.benefit.icon)}
+                  {b.benefit.name}
                 </span>
               ))}
               {!job.benefits?.length && <span className="muted">No benefits listed</span>}
