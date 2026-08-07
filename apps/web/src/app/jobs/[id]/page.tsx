@@ -48,6 +48,13 @@ function formatSalary(min?: number | null, max?: number | null) {
   return `${fmt(min || max!)} UZS`;
 }
 
+type MyApplicationState = {
+  id: string;
+  status: string;
+  matchScore?: number | null;
+  createdAt: string;
+};
+
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
@@ -56,7 +63,10 @@ export default function JobDetailPage() {
   const [success, setSuccess] = useState('');
   const [showApply, setShowApply] = useState(false);
   const [following, setFollowing] = useState(false);
+  const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const session = typeof window !== 'undefined' ? getSession() : null;
+  const alreadyApplied = Boolean(myApplication);
 
   useEffect(() => {
     api<Job>(`/jobs/${id}`)
@@ -71,6 +81,17 @@ export default function JobDetailPage() {
             setFollowing(f.following);
           } catch {
             /* ignore */
+          }
+        }
+        if (session?.user.role === 'EMPLOYEE') {
+          try {
+            const mine = await api<{
+              applied: boolean;
+              application: MyApplicationState | null;
+            }>(`/applications/mine/jobs/${id}`);
+            setMyApplication(mine.application);
+          } catch {
+            /* ignore — guest / network */
           }
         }
       })
@@ -103,23 +124,47 @@ export default function JobDetailPage() {
       window.location.href = '/login';
       return;
     }
+    if (alreadyApplied || submitting) return;
+
     const fd = new FormData(e.currentTarget);
     const answers = (job?.questions || []).map((q) => ({
       questionId: q.id,
       answer: String(fd.get(`q_${q.id}`) || ''),
     }));
+    setSubmitting(true);
     try {
-      await api(`/applications/jobs/${id}`, {
+      const created = await api<MyApplicationState>(`/applications/jobs/${id}`, {
         method: 'POST',
         body: JSON.stringify({
           coverLetter: fd.get('coverLetter'),
           answers,
         }),
       });
+      setMyApplication({
+        id: created.id,
+        status: created.status || 'NEW',
+        matchScore: created.matchScore,
+        createdAt: created.createdAt || new Date().toISOString(),
+      });
       setSuccess('Application submitted! Match score was calculated for the recruiter.');
       setShowApply(false);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      if (/already applied/i.test(message)) {
+        try {
+          const mine = await api<{
+            applied: boolean;
+            application: MyApplicationState | null;
+          }>(`/applications/mine/jobs/${id}`);
+          setMyApplication(mine.application);
+          setShowApply(false);
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -172,10 +217,37 @@ export default function JobDetailPage() {
           <p className="salary">{formatSalary(job.salaryMin, job.salaryMax)}</p>
         </div>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {(session?.user.role === 'EMPLOYEE' || !session) && (
-            <button type="button" className="cta" onClick={() => setShowApply(true)}>
-              Apply now
-            </button>
+          {alreadyApplied ? (
+            <>
+              <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
+                Applied · {myApplication?.status}
+                {myApplication?.matchScore != null ? ` · Match ${myApplication.matchScore}%` : ''}
+              </div>
+              <Link
+                href="/dashboard/employee"
+                className="secondary"
+                style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
+              >
+                View my applications
+              </Link>
+            </>
+          ) : (
+            (session?.user.role === 'EMPLOYEE' || !session) && (
+              <button
+                type="button"
+                className="cta"
+                onClick={() => {
+                  if (!session) {
+                    window.location.href = '/login';
+                    return;
+                  }
+                  setShowApply(true);
+                }}
+                disabled={submitting}
+              >
+                Apply now
+              </button>
+            )
           )}
           <button type="button" className="secondary" onClick={saveJob}>
             Save job
@@ -236,10 +308,10 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {showApply && (
+      {showApply && !alreadyApplied && (
         <div
           className="modal-backdrop"
-          onClick={() => setShowApply(false)}
+          onClick={() => !submitting && setShowApply(false)}
           role="presentation"
         >
           <div
@@ -254,34 +326,41 @@ export default function JobDetailPage() {
             </h2>
             <p className="required-note">{t('requiredFieldsNote')}</p>
             <form className="form-stack" onSubmit={onApply}>
-              <FormField label={t('coverLetter')}>
-                <textarea name="coverLetter" rows={4} placeholder={t('coverLetter')} />
-              </FormField>
-              {(job.questions || []).map((q) => (
-                <label key={q.id}>
-                  <LabelText required={q.isRequired} optional={!q.isRequired}>
-                    {q.question}
-                  </LabelText>
-                  {q.type === 'YES_NO' ? (
-                    <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
-                      <option value="">Select…</option>
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
-                    </select>
-                  ) : (
-                    <input
-                      name={`q_${q.id}`}
-                      type={q.type === 'NUMBER' ? 'number' : 'text'}
-                      required={q.isRequired}
-                      aria-required={q.isRequired || undefined}
-                    />
-                  )}
-                </label>
-              ))}
-              <button type="submit" className="cta">
-                {t('submitApplication')}
+              <fieldset disabled={submitting} style={{ border: 0, margin: 0, padding: 0 }}>
+                <FormField label={t('coverLetter')}>
+                  <textarea name="coverLetter" rows={4} placeholder={t('coverLetter')} />
+                </FormField>
+                {(job.questions || []).map((q) => (
+                  <label key={q.id}>
+                    <LabelText required={q.isRequired} optional={!q.isRequired}>
+                      {q.question}
+                    </LabelText>
+                    {q.type === 'YES_NO' ? (
+                      <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
+                        <option value="">Select…</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    ) : (
+                      <input
+                        name={`q_${q.id}`}
+                        type={q.type === 'NUMBER' ? 'number' : 'text'}
+                        required={q.isRequired}
+                        aria-required={q.isRequired || undefined}
+                      />
+                    )}
+                  </label>
+                ))}
+              </fieldset>
+              <button type="submit" className="cta" disabled={submitting}>
+                {submitting ? 'Submitting…' : t('submitApplication')}
               </button>
-              <button type="button" className="secondary" onClick={() => setShowApply(false)}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={submitting}
+                onClick={() => setShowApply(false)}
+              >
                 {t('cancel')}
               </button>
             </form>
