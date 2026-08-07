@@ -17,7 +17,13 @@ export class ApplicationsController {
     @Body() body: unknown,
   ) {
     const data = parseDto(applySchema, body ?? {});
-    return this.applications.apply(user, jobId, data.coverLetter, data.answers);
+    return this.applications.apply(
+      user,
+      jobId,
+      data.coverLetter,
+      data.answers,
+      data.resumeId,
+    );
   }
 
   @Get('mine')

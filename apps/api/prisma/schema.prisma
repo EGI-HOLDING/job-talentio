@@ -554,18 +554,23 @@ model ProfileLanguage {
 }
 
 model Resume {
-  id         String   @id @default(cuid())
-  profileId  String
-  title      String
-  content    String?
-  fileKey    String?
-  fileUrl    String?
-  isPrimary  Boolean  @default(false)
-  parsedData Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                String   @id @default(cuid())
+  profileId         String
+  title             String
+  content           String?
+  fileKey           String?
+  fileUrl           String?
+  isPrimary         Boolean  @default(false)
+  parsedData        Json?
+  templateKey       String   @default("classic")
+  themeAccent       String?
+  inclusion         Json?
+  builderMeta       Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile      EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  applications Application[]
 
   @@index([profileId])
 }
@@ -574,6 +579,7 @@ model Application {
   id             String            @id @default(cuid())
   jobPostId      String
   profileId      String
+  resumeId       String?
   status         ApplicationStatus @default(NEW)
   coverLetter    String?
   resumeSnapshot Json?
@@ -584,6 +590,7 @@ model Application {
 
   jobPost   JobPost             @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   profile   EmployeeProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  resume    Resume?             @relation(fields: [resumeId], references: [id], onDelete: SetNull)
   events    PipelineEvent[]
   answers   ApplicationAnswer[]
   interviews Interview[]
@@ -592,6 +599,7 @@ model Application {
   @@index([profileId])
   @@index([status])
   @@index([matchScore])
+  @@index([resumeId])
 }
 
 model PipelineEvent {

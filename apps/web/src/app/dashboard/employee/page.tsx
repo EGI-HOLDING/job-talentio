@@ -14,7 +14,7 @@ import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
 
-type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
+type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
 
 function monthsBetween(start: string | Date, end?: string | Date | null) {
   const a = new Date(start);
@@ -29,6 +29,13 @@ function formatDuration(start: string, end?: string | null, isCurrent?: boolean)
   if (y && m) return `${y}y ${m}mo`;
   if (y) return `${y}y`;
   return `${m || 1}mo`;
+}
+
+function dateInputValue(d?: string | Date | null) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toISOString().slice(0, 10);
 }
 
 function completeness(profile: any) {
@@ -47,6 +54,8 @@ function completeness(profile: any) {
 }
 
 const LEVEL_ORDER = ['EXPERT', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'] as const;
+const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] as const;
+const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
 
 export default function EmployeeDashboard() {
   const { t } = useI18n();
@@ -66,6 +75,19 @@ export default function EmployeeDashboard() {
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
+
+  const editingExpId = openForm?.startsWith('edit-exp:') ? openForm.slice('edit-exp:'.length) : null;
+  const editingEduId = openForm?.startsWith('edit-edu:') ? openForm.slice('edit-edu:'.length) : null;
+  const editingCertId = openForm?.startsWith('edit-cert:') ? openForm.slice('edit-cert:'.length) : null;
+  const editingExp = editingExpId
+    ? (profile?.experiences || []).find((x: any) => x.id === editingExpId)
+    : null;
+  const editingEdu = editingEduId
+    ? (profile?.educations || []).find((x: any) => x.id === editingEduId)
+    : null;
+  const editingCert = editingCertId
+    ? (profile?.certifications || []).find((x: any) => x.id === editingCertId)
+    : null;
 
   async function load() {
     const session = getSession();
@@ -106,6 +128,8 @@ export default function EmployeeDashboard() {
         headline: fd.get('headline'),
         summary: fd.get('summary'),
         citySlug: fd.get('citySlug') || null,
+        phone: fd.get('phone') || undefined,
+        visibility: fd.get('visibility') || undefined,
         desiredPosition: fd.get('desiredPosition'),
         desiredSalaryMin: fd.get('desiredSalaryMin')
           ? Number(fd.get('desiredSalaryMin'))
@@ -138,63 +162,107 @@ export default function EmployeeDashboard() {
     await load();
   }
 
+  async function updateSkillLevel(id: string, level: string) {
+    await api(`/profiles/me/skills/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ level }),
+    });
+    await load();
+  }
+
+  async function updateLanguageLevel(id: string, level: string) {
+    await api(`/profiles/me/languages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ level }),
+    });
+    await load();
+  }
+
   async function removeItem(kind: string, id: string) {
     await api(`/profiles/me/${kind}/${id}`, { method: 'DELETE' });
     await load();
   }
 
-  async function addExperience(e: FormEvent<HTMLFormElement>) {
+  async function saveExperience(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/experiences', {
-      method: 'POST',
-      body: JSON.stringify({
-        companyName: fd.get('companyName'),
-        title: fd.get('title'),
-        description: fd.get('description') || undefined,
-        citySlug: fd.get('citySlug') || undefined,
-        startDate: fd.get('startDate'),
-        endDate: fd.get('endDate') || null,
-        isCurrent: fd.get('isCurrent') === 'on',
-      }),
-    });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Experience added');
+    const body = {
+      companyName: fd.get('companyName'),
+      title: fd.get('title'),
+      description: fd.get('description') || undefined,
+      citySlug: fd.get('citySlug') || undefined,
+      startDate: fd.get('startDate'),
+      endDate: fd.get('endDate') || null,
+      isCurrent: fd.get('isCurrent') === 'on',
+    };
+    if (editingExpId) {
+      await api(`/profiles/me/experiences/${editingExpId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      setMsg('Experience updated');
+    } else {
+      await api('/profiles/me/experiences', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setMsg('Experience added');
+    }
+    setOpenForm(null);
     await load();
   }
 
-  async function addEducation(e: FormEvent<HTMLFormElement>) {
+  async function saveEducation(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/educations', {
-      method: 'POST',
-      body: JSON.stringify({
-        school: fd.get('school'),
-        degree: fd.get('degree') || undefined,
-        field: fd.get('field') || undefined,
-        startDate: fd.get('startDate') || null,
-        endDate: fd.get('endDate') || null,
-      }),
-    });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Education added');
+    const body = {
+      school: fd.get('school'),
+      degree: fd.get('degree') || undefined,
+      field: fd.get('field') || undefined,
+      startDate: fd.get('startDate') || null,
+      endDate: fd.get('endDate') || null,
+    };
+    if (editingEduId) {
+      await api(`/profiles/me/educations/${editingEduId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      setMsg('Education updated');
+    } else {
+      await api('/profiles/me/educations', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setMsg('Education added');
+    }
+    setOpenForm(null);
     await load();
   }
 
-  async function addCertification(e: FormEvent<HTMLFormElement>) {
+  async function saveCertification(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/certifications', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: fd.get('name'),
-        issuer: fd.get('issuer') || undefined,
-        issuedAt: fd.get('issuedAt') || null,
-        credentialUrl: fd.get('credentialUrl') || '',
-      }),
-    });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Certification added');
+    const body = {
+      name: fd.get('name'),
+      issuer: fd.get('issuer') || undefined,
+      issuedAt: fd.get('issuedAt') || null,
+      expiresAt: fd.get('expiresAt') || null,
+      credentialUrl: fd.get('credentialUrl') || '',
+    };
+    if (editingCertId) {
+      await api(`/profiles/me/certifications/${editingCertId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      setMsg('Certification updated');
+    } else {
+      await api('/profiles/me/certifications', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setMsg('Certification added');
+    }
+    setOpenForm(null);
     await load();
   }
 
@@ -217,19 +285,12 @@ export default function EmployeeDashboard() {
     await load();
   }
 
-  async function addResume(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/resumes', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: fd.get('title'),
-        content: fd.get('content') || undefined,
-        isPrimary: fd.get('isPrimary') === 'on',
-      }),
+  async function setPrimaryResume(id: string) {
+    await api(`/profiles/me/resumes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPrimary: true }),
     });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Resume created');
+    setMsg('Primary resume updated');
     await load();
   }
 
@@ -317,6 +378,10 @@ export default function EmployeeDashboard() {
     return map;
   }, [profile]);
 
+  const showExpForm = openForm === 'exp' || Boolean(editingExpId);
+  const showEduForm = openForm === 'edu' || Boolean(editingEduId);
+  const showCertForm = openForm === 'cert' || Boolean(editingCertId);
+
   if (!profile && !error) return <DashboardSkeleton />;
 
   return (
@@ -329,7 +394,7 @@ export default function EmployeeDashboard() {
           onImported={async () => {
             setCvReview(null);
             setMsg('Selected CV data imported into your profile');
-            setTab('career');
+            setTab('profile');
             await load();
           }}
         />
@@ -343,7 +408,6 @@ export default function EmployeeDashboard() {
             ['saved', 'Saved jobs'],
             ['alerts', 'Job alerts'],
             ['profile', 'Profile'],
-            ['career', 'Career history'],
           ] as Array<[Tab, string]>
         ).map(([k, label]) => (
           <button key={k} type="button" className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
@@ -379,7 +443,7 @@ export default function EmployeeDashboard() {
                         key={m.label}
                         type="button"
                         className="chip"
-                        onClick={() => setTab(m.label.includes('resume') || m.label.includes('experience') || m.label.includes('education') || m.label.includes('language') ? 'career' : 'profile')}
+                        onClick={() => setTab('profile')}
                       >
                         + {m.label}
                       </button>
@@ -600,11 +664,11 @@ export default function EmployeeDashboard() {
         )}
 
         {tab === 'profile' && profile && (
-          <div className="grid-2">
-            <div className="card">
-              <h3>Edit profile</h3>
+          <div className="career-page">
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <h3 style={{ marginTop: 0 }}>Edit profile</h3>
               <p className="required-note">{t('requiredFieldsNote')}</p>
-              <form className="form-stack" onSubmit={updateProfile}>
+              <form className="form-stack" onSubmit={updateProfile} key={`profile-${profile.updatedAt || profile.id}`}>
                 <label>
                   <LabelText>Headline</LabelText>
                   <input name="headline" defaultValue={sanitizeMojibake(profile.headline) || ''} />
@@ -613,6 +677,20 @@ export default function EmployeeDashboard() {
                   <LabelText>Summary</LabelText>
                   <textarea name="summary" rows={4} defaultValue={sanitizeMojibake(profile.summary) || ''} />
                 </label>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>Phone</LabelText>
+                    <input name="phone" type="tel" defaultValue={profile.phone || ''} placeholder="+998…" />
+                  </label>
+                  <label>
+                    <LabelText>Visibility</LabelText>
+                    <select name="visibility" defaultValue={profile.visibility || 'TO_REGISTERED_RECRUITERS'}>
+                      <option value="PUBLIC">Public</option>
+                      <option value="TO_REGISTERED_RECRUITERS">Visible to registered recruiters</option>
+                      <option value="PRIVATE">Private</option>
+                    </select>
+                  </label>
+                </div>
                 <label>
                   <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={profile.city?.slug || ''}>
@@ -639,30 +717,7 @@ export default function EmployeeDashboard() {
                 <button type="submit">Save</button>
               </form>
             </div>
-            <div className="card">
-              <h3>Skills</h3>
-              <div className="chips" style={{ margin: '0.75rem 0' }}>
-                {(profile.skills || []).map((s: any) => (
-                  <span key={s.id} className="badge">
-                    {s.skill?.name || s.name} · {s.level}
-                    <button
-                      type="button"
-                      className="ghost"
-                      style={{ marginLeft: '0.35rem', padding: 0 }}
-                      onClick={() => removeItem('skills', s.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <p className="required-note">{t('requiredFieldsNote')}</p>
-              <SkillCombobox onPick={addSkillPick} />
-            </div>
-          </div>
-        )}
-        {tab === 'career' && profile && (
-          <div className="career-page">
+
             <div className="card" style={{ marginBottom: '1rem' }}>
               <div className="jobs-toolbar" style={{ marginBottom: 0 }}>
                 <div>
@@ -704,9 +759,19 @@ export default function EmployeeDashboard() {
                     </div>
                     <div className="chips">
                       {skillsByLevel[lvl].map((s: any) => (
-                        <span key={s.id} className={`badge skill skill-${lvl.toLowerCase()}`}>
+                        <span key={s.id} className={`badge skill skill-${lvl.toLowerCase()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           {s.skill?.name}
-                          <button type="button" className="ghost" style={{ marginLeft: 6, padding: 0 }} onClick={() => removeItem('skills', s.id)}>
+                          <select
+                            aria-label={`Level for ${s.skill?.name}`}
+                            value={s.level || 'INTERMEDIATE'}
+                            onChange={(e) => updateSkillLevel(s.id, e.target.value)}
+                            style={{ width: 'auto', padding: '0.15rem 0.35rem', fontSize: '0.72rem', borderRadius: 6 }}
+                          >
+                            {SKILL_LEVELS.map((l) => (
+                              <option key={l} value={l}>{l}</option>
+                            ))}
+                          </select>
+                          <button type="button" className="ghost" style={{ marginLeft: 2, padding: 0 }} onClick={() => removeItem('skills', s.id)}>
                             ×
                           </button>
                         </span>
@@ -733,8 +798,12 @@ export default function EmployeeDashboard() {
             <div className="card" style={{ marginBottom: '1rem' }}>
               <div className="cv-section-head">
                 <h3 style={{ margin: 0 }}>Work experience</h3>
-                <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'exp' ? null : 'exp')}>
-                  {openForm === 'exp' ? 'Close' : '+ Add'}
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => setOpenForm(showExpForm && !editingExpId ? null : 'exp')}
+                >
+                  {showExpForm && !editingExpId ? 'Close' : '+ Add'}
                 </button>
               </div>
               <div className="timeline">
@@ -756,6 +825,7 @@ export default function EmployeeDashboard() {
                         <div className="timeline-meta">
                           {x.isCurrent && <span className="badge match">Current</span>}
                           <span className="badge">{formatDuration(x.startDate, x.endDate, x.isCurrent)}</span>
+                          <button type="button" className="ghost" onClick={() => setOpenForm(`edit-exp:${x.id}`)}>Edit</button>
                           <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>×</button>
                         </div>
                       </div>
@@ -784,32 +854,37 @@ export default function EmployeeDashboard() {
                   </div>
                 ))}
               </div>
-              {openForm === 'exp' && (
-                <form className="form-stack" onSubmit={async (e) => { await addExperience(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+              {showExpForm && (
+                <form
+                  className="form-stack"
+                  key={editingExpId || 'new-exp'}
+                  onSubmit={saveExperience}
+                  style={{ marginTop: '1rem' }}
+                >
                   <p className="required-note">{t('requiredFieldsNote')}</p>
                   <div className="grid-2">
                     <label>
                       <LabelText required>Job title</LabelText>
-                      <input name="title" required />
+                      <input name="title" required defaultValue={editingExp?.title || ''} />
                     </label>
                     <label>
                       <LabelText required>Company</LabelText>
-                      <input name="companyName" required />
+                      <input name="companyName" required defaultValue={editingExp?.companyName || ''} />
                     </label>
                   </div>
                   <div className="grid-2">
                     <label>
                       <LabelText required>Start date</LabelText>
-                      <input name="startDate" type="date" required />
+                      <input name="startDate" type="date" required defaultValue={dateInputValue(editingExp?.startDate)} />
                     </label>
                     <label>
                       <LabelText>End date</LabelText>
-                      <input name="endDate" type="date" />
+                      <input name="endDate" type="date" defaultValue={dateInputValue(editingExp?.endDate)} />
                     </label>
                   </div>
                   <label>
                     <LabelText>City</LabelText>
-                    <select name="citySlug">
+                    <select name="citySlug" defaultValue={editingExp?.city?.slug || ''}>
                       <option value="">—</option>
                       {cities.map((c) => (
                         <option key={c.slug} value={c.slug}>{c.name}</option>
@@ -818,13 +893,18 @@ export default function EmployeeDashboard() {
                   </label>
                   <label>
                     <LabelText>Description</LabelText>
-                    <textarea name="description" rows={3} />
+                    <textarea name="description" rows={3} defaultValue={editingExp?.description || ''} />
                   </label>
                   <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input name="isCurrent" type="checkbox" style={{ width: 'auto' }} />
+                    <input name="isCurrent" type="checkbox" style={{ width: 'auto' }} defaultChecked={Boolean(editingExp?.isCurrent)} />
                     <LabelText optional={false}>Currently work here</LabelText>
                   </label>
-                  <button type="submit">Save experience</button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button type="submit">{editingExpId ? 'Update experience' : 'Save experience'}</button>
+                    {editingExpId && (
+                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                    )}
+                  </div>
                 </form>
               )}
             </div>
@@ -833,15 +913,22 @@ export default function EmployeeDashboard() {
               <div className="card">
                 <div className="cv-section-head">
                   <h3 style={{ margin: 0 }}>Education</h3>
-                  <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'edu' ? null : 'edu')}>
-                    {openForm === 'edu' ? 'Close' : '+ Add'}
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => setOpenForm(showEduForm && !editingEduId ? null : 'edu')}
+                  >
+                    {showEduForm && !editingEduId ? 'Close' : '+ Add'}
                   </button>
                 </div>
                 {(profile.educations || []).map((x: any) => (
                   <div key={x.id} className="detail-card">
                     <div className="detail-card-head">
                       <strong>{x.school}</strong>
-                      <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>×</button>
+                      <div>
+                        <button type="button" className="ghost" onClick={() => setOpenForm(`edit-edu:${x.id}`)}>Edit</button>
+                        <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>×</button>
+                      </div>
                     </div>
                     <div className="chips" style={{ marginTop: '0.35rem' }}>
                       {x.degree && <span className={`badge degree-${String(x.degree).toLowerCase()}`}>{String(x.degree).replace(/_/g, ' ')}</span>}
@@ -855,39 +942,49 @@ export default function EmployeeDashboard() {
                   </div>
                 ))}
                 {!(profile.educations || []).length && <p className="muted">No education entries yet.</p>}
-                {openForm === 'edu' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addEducation(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                {showEduForm && (
+                  <form
+                    className="form-stack"
+                    key={editingEduId || 'new-edu'}
+                    onSubmit={saveEducation}
+                    style={{ marginTop: '1rem' }}
+                  >
                     <p className="required-note">{t('requiredFieldsNote')}</p>
                     <label>
                       <LabelText required>School / University</LabelText>
-                      <input name="school" required />
+                      <input name="school" required defaultValue={editingEdu?.school || ''} />
                     </label>
                     <div className="grid-2">
                       <label>
                         <LabelText>Degree</LabelText>
-                        <select name="degree">
+                        <select name="degree" defaultValue={editingEdu?.degree || ''}>
                           <option value="">—</option>
                           {['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'].map((d) => (
-                            <option key={d}>{d}</option>
+                            <option key={d} value={d}>{d}</option>
                           ))}
                         </select>
                       </label>
                       <label>
                         <LabelText>Field</LabelText>
-                        <input name="field" />
+                        <input name="field" defaultValue={editingEdu?.field || ''} />
                       </label>
                     </div>
                     <div className="grid-2">
                       <label>
                         <LabelText>Start</LabelText>
-                        <input name="startDate" type="date" />
+                        <input name="startDate" type="date" defaultValue={dateInputValue(editingEdu?.startDate)} />
                       </label>
                       <label>
                         <LabelText>End</LabelText>
-                        <input name="endDate" type="date" />
+                        <input name="endDate" type="date" defaultValue={dateInputValue(editingEdu?.endDate)} />
                       </label>
                     </div>
-                    <button type="submit">Save education</button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="submit">{editingEduId ? 'Update education' : 'Save education'}</button>
+                      {editingEduId && (
+                        <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                      )}
+                    </div>
                   </form>
                 )}
               </div>
@@ -904,7 +1001,16 @@ export default function EmployeeDashboard() {
                     <div key={x.id} className="lang-pill">
                       <div>
                         <strong>{x.language?.name}</strong>
-                        <div className={`cefr cefr-${String(x.level || 'B1').toLowerCase()}`}>{x.level}</div>
+                        <select
+                          aria-label={`Level for ${x.language?.name}`}
+                          value={x.level || 'B1'}
+                          onChange={(e) => updateLanguageLevel(x.id, e.target.value)}
+                          style={{ width: 'auto', marginTop: 4, padding: '0.2rem 0.4rem', fontSize: '0.78rem' }}
+                        >
+                          {LANG_LEVELS.map((l) => (
+                            <option key={l} value={l}>{l}</option>
+                          ))}
+                        </select>
                       </div>
                       <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>×</button>
                     </div>
@@ -920,7 +1026,7 @@ export default function EmployeeDashboard() {
                       submitLabel={t('addLanguage')}
                       placeholder={t('languageSearchPlaceholder')}
                       defaultLevel="B1"
-                      levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((l) => ({
+                      levelOptions={LANG_LEVELS.map((l) => ({
                         value: l,
                         label: l,
                       }))}
@@ -938,8 +1044,12 @@ export default function EmployeeDashboard() {
               <div className="card">
                 <div className="cv-section-head">
                   <h3 style={{ margin: 0 }}>Certifications</h3>
-                  <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'cert' ? null : 'cert')}>
-                    {openForm === 'cert' ? 'Close' : '+ Add'}
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => setOpenForm(showCertForm && !editingCertId ? null : 'cert')}
+                  >
+                    {showCertForm && !editingCertId ? 'Close' : '+ Add'}
                   </button>
                 </div>
                 {(profile.certifications || []).map((x: any) => (
@@ -953,39 +1063,61 @@ export default function EmployeeDashboard() {
                             Issued {new Date(x.issuedAt).toLocaleDateString()}
                           </div>
                         )}
+                        {x.expiresAt && (
+                          <div className="muted" style={{ fontSize: '0.8rem' }}>
+                            Expires {new Date(x.expiresAt).toLocaleDateString()}
+                          </div>
+                        )}
                         {x.credentialUrl && (
                           <a href={x.credentialUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
                             View credential →
                           </a>
                         )}
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
+                      <div>
+                        <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>Edit</button>
+                        <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
+                      </div>
                     </div>
                   </div>
                 ))}
                 {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
-                {openForm === 'cert' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addCertification(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+                {showCertForm && (
+                  <form
+                    className="form-stack"
+                    key={editingCertId || 'new-cert'}
+                    onSubmit={saveCertification}
+                    style={{ marginTop: '1rem' }}
+                  >
                     <p className="required-note">{t('requiredFieldsNote')}</p>
                     <label>
                       <LabelText required>Name</LabelText>
-                      <input name="name" required />
+                      <input name="name" required defaultValue={editingCert?.name || ''} />
                     </label>
                     <div className="grid-2">
                       <label>
                         <LabelText>Issuer</LabelText>
-                        <input name="issuer" />
+                        <input name="issuer" defaultValue={editingCert?.issuer || ''} />
                       </label>
                       <label>
                         <LabelText>Issued at</LabelText>
-                        <input name="issuedAt" type="date" />
+                        <input name="issuedAt" type="date" defaultValue={dateInputValue(editingCert?.issuedAt)} />
                       </label>
                     </div>
                     <label>
-                      <LabelText>Credential URL</LabelText>
-                      <input name="credentialUrl" type="url" placeholder="https://…" />
+                      <LabelText>Expires at</LabelText>
+                      <input name="expiresAt" type="date" defaultValue={dateInputValue(editingCert?.expiresAt)} />
                     </label>
-                    <button type="submit">Save certification</button>
+                    <label>
+                      <LabelText>Credential URL</LabelText>
+                      <input name="credentialUrl" type="url" placeholder="https://…" defaultValue={editingCert?.credentialUrl || ''} />
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="submit">{editingCertId ? 'Update certification' : 'Save certification'}</button>
+                      {editingCertId && (
+                        <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                      )}
+                    </div>
                   </form>
                 )}
               </div>
@@ -993,9 +1125,9 @@ export default function EmployeeDashboard() {
               <div className="card">
                 <div className="cv-section-head">
                   <h3 style={{ margin: 0 }}>Resumes</h3>
-                  <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'resume' ? null : 'resume')}>
-                    {openForm === 'resume' ? 'Close' : '+ Create'}
-                  </button>
+                  <Link href="/dashboard/employee/resume-builder" className="chip" style={{ fontWeight: 600 }}>
+                    Open resume builder
+                  </Link>
                 </div>
                 {(profile.resumes || []).map((r: any) => (
                   <div key={r.id} className="detail-card">
@@ -1005,7 +1137,7 @@ export default function EmployeeDashboard() {
                         {r.isPrimary && <span className="badge match" style={{ marginLeft: 8 }}>Primary</span>}
                         {(r.hasFile || r.fileKey) && (
                           <span className="badge skill" style={{ marginLeft: 6 }}>
-                            PDF attached
+                            hasFile
                           </span>
                         )}
                         {r.parsedData && (
@@ -1022,6 +1154,17 @@ export default function EmployeeDashboard() {
                       <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>×</button>
                     </div>
                     <div className="chips" style={{ marginTop: '0.5rem' }}>
+                      <Link
+                        href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
+                        className="chip"
+                      >
+                        Edit in builder
+                      </Link>
+                      {!r.isPrimary && (
+                        <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
+                          Set primary
+                        </button>
+                      )}
                       {(r.hasFile || r.fileKey) && (
                         <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
                           Download
@@ -1043,24 +1186,12 @@ export default function EmployeeDashboard() {
                     </div>
                   </div>
                 ))}
-                {!(profile.resumes || []).length && <p className="muted">No resumes yet — upload a PDF or create one.</p>}
-                {openForm === 'resume' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addResume(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <p className="required-note">{t('requiredFieldsNote')}</p>
-                    <label>
-                      <LabelText required>Title</LabelText>
-                      <input name="title" required placeholder="e.g. Frontend Developer CV" />
-                    </label>
-                    <label>
-                      <LabelText>Content (builder)</LabelText>
-                      <textarea name="content" rows={4} placeholder="Write or paste your CV…" />
-                    </label>
-                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <input name="isPrimary" type="checkbox" style={{ width: 'auto' }} />
-                      <LabelText optional={false}>Set as primary</LabelText>
-                    </label>
-                    <button type="submit">Create resume</button>
-                  </form>
+                {!(profile.resumes || []).length && (
+                  <p className="muted">
+                    No resumes yet —{' '}
+                    <Link href="/dashboard/employee/resume-builder">create one in the builder</Link>
+                    {' '}or upload a PDF above.
+                  </p>
                 )}
               </div>
             </div>

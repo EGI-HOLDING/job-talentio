@@ -15,12 +15,15 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import {
   profileUpdateSchema,
   skillSchema,
+  skillLevelUpdateSchema,
   experienceSchema,
   educationSchema,
   certificationSchema,
   languageSchema,
+  languageLevelUpdateSchema,
   resumeSchema,
   resumeImportSchema,
+  resumeBuilderSettingsSchema,
   candidateSearchSchema,
 } from '@job-talentio/shared';
 import { resumeUploadOptions } from '../common/upload';
@@ -53,6 +56,17 @@ export class ProfilesController {
     return this.profiles.addSkill(user, data);
   }
 
+  @Patch('me/skills/:id')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  updateSkill(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(skillLevelUpdateSchema, body);
+    return this.profiles.updateSkillLevel(user, id, data.level);
+  }
+
   @Delete('me/skills/:id')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   removeSkill(@CurrentUser() user: AuthUser, @Param('id') id: string) {
@@ -64,6 +78,17 @@ export class ProfilesController {
   addExp(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(experienceSchema, body);
     return this.profiles.addExperience(user, data);
+  }
+
+  @Patch('me/experiences/:id')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  updateExp(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(experienceSchema.partial(), body);
+    return this.profiles.updateExperience(user, id, data);
   }
 
   @Delete('me/experiences/:id')
@@ -79,6 +104,17 @@ export class ProfilesController {
     return this.profiles.addEducation(user, data);
   }
 
+  @Patch('me/educations/:id')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  updateEdu(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(educationSchema.partial(), body);
+    return this.profiles.updateEducation(user, id, data);
+  }
+
   @Delete('me/educations/:id')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   removeEdu(@CurrentUser() user: AuthUser, @Param('id') id: string) {
@@ -90,6 +126,17 @@ export class ProfilesController {
   addCert(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(certificationSchema, body);
     return this.profiles.addCertification(user, data);
+  }
+
+  @Patch('me/certifications/:id')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  updateCert(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(certificationSchema.partial(), body);
+    return this.profiles.updateCertification(user, id, data);
   }
 
   @Delete('me/certifications/:id')
@@ -105,10 +152,30 @@ export class ProfilesController {
     return this.profiles.addLanguage(user, data);
   }
 
+  @Patch('me/languages/:id')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  updateLang(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(languageLevelUpdateSchema, body);
+    return this.profiles.updateLanguageLevel(user, id, data.level);
+  }
+
   @Delete('me/languages/:id')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   removeLang(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.profiles.removeLanguage(user, id);
+  }
+
+  @Get('me/resume-document')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  resumeDocument(
+    @CurrentUser() user: AuthUser,
+    @Query('resumeId') resumeId?: string,
+  ) {
+    return this.profiles.getResumeDocument(user, resumeId);
   }
 
   @Post('me/resumes')
@@ -116,6 +183,18 @@ export class ProfilesController {
   createResume(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(resumeSchema, body);
     return this.profiles.createResume(user, data);
+  }
+
+  @Post('me/resumes/from-builder')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  createFromBuilder(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const data = parseDto(
+      resumeBuilderSettingsSchema.extend({
+        title: resumeSchema.shape.title,
+      }),
+      body,
+    );
+    return this.profiles.createResumeFromBuilder(user, data);
   }
 
   @Patch('me/resumes/:id')
@@ -127,6 +206,23 @@ export class ProfilesController {
   ) {
     const data = parseDto(resumeSchema.partial(), body);
     return this.profiles.updateResume(user, id, data);
+  }
+
+  @Patch('me/resumes/:id/builder')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  updateBuilder(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(resumeBuilderSettingsSchema, body);
+    return this.profiles.updateResumeBuilder(user, id, data);
+  }
+
+  @Post('me/resumes/:id/export')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  exportResume(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.profiles.exportResumePdf(user, id);
   }
 
   @Delete('me/resumes/:id')

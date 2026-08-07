@@ -5,7 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { PLAN_LIMITS } from '@job-talentio/shared';
+import { PLAN_LIMITS, normalizeResumeInclusion, scoreResumeChecklist, DEFAULT_RESUME_INCLUSION } from '@job-talentio/shared';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -153,10 +153,24 @@ export class ProfilesService {
 
   async removeSkill(user: AuthUser, skillId: string) {
     const profile = await this.getProfileForUser(user.id);
-    await this.prisma.profileSkill.deleteMany({
+    const result = await this.prisma.profileSkill.deleteMany({
       where: { OR: [{ id: skillId, profileId: profile.id }, { skillId, profileId: profile.id }] },
     });
+    if (result.count === 0) throw new NotFoundException('Skill not found');
     return { ok: true };
+  }
+
+  async updateSkillLevel(user: AuthUser, id: string, level: string) {
+    const profile = await this.getProfileForUser(user.id);
+    const existing = await this.prisma.profileSkill.findFirst({
+      where: { id, profileId: profile.id },
+    });
+    if (!existing) throw new NotFoundException('Skill not found');
+    return this.prisma.profileSkill.update({
+      where: { id: existing.id },
+      data: { level: level as never },
+      include: { skill: true },
+    });
   }
 
   async addExperience(user: AuthUser, data: Record<string, unknown>) {
@@ -184,9 +198,54 @@ export class ProfilesService {
     });
   }
 
+  private async resolveExperienceCityId(citySlug?: unknown) {
+    if (!citySlug) return undefined;
+    const city = await this.prisma.city.findUnique({
+      where: { slug: String(citySlug) },
+    });
+    return city?.id ?? null;
+  }
+
+  async updateExperience(user: AuthUser, id: string, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    const existing = await this.prisma.workExperience.findFirst({
+      where: { id, profileId: profile.id },
+    });
+    if (!existing) throw new NotFoundException('Experience not found');
+
+    const cityId =
+      data.citySlug !== undefined
+        ? await this.resolveExperienceCityId(data.citySlug || null)
+        : undefined;
+
+    return this.prisma.workExperience.update({
+      where: { id },
+      data: {
+        ...(data.companyName !== undefined ? { companyName: String(data.companyName) } : {}),
+        ...(data.title !== undefined ? { title: String(data.title) } : {}),
+        ...(data.description !== undefined
+          ? { description: (data.description as string) || null }
+          : {}),
+        ...(cityId !== undefined ? { cityId } : {}),
+        ...(data.locationNote !== undefined
+          ? { locationNote: (data.locationNote as string) || null }
+          : {}),
+        ...(data.startDate !== undefined ? { startDate: new Date(String(data.startDate)) } : {}),
+        ...(data.endDate !== undefined
+          ? { endDate: data.endDate ? new Date(String(data.endDate)) : null }
+          : {}),
+        ...(data.isCurrent !== undefined ? { isCurrent: Boolean(data.isCurrent) } : {}),
+      },
+      include: { city: true },
+    });
+  }
+
   async removeExperience(user: AuthUser, id: string) {
     const profile = await this.getProfileForUser(user.id);
-    await this.prisma.workExperience.deleteMany({ where: { id, profileId: profile.id } });
+    const result = await this.prisma.workExperience.deleteMany({
+      where: { id, profileId: profile.id },
+    });
+    if (result.count === 0) throw new NotFoundException('Experience not found');
     return { ok: true };
   }
 
@@ -204,9 +263,34 @@ export class ProfilesService {
     });
   }
 
+  async updateEducation(user: AuthUser, id: string, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    const existing = await this.prisma.education.findFirst({
+      where: { id, profileId: profile.id },
+    });
+    if (!existing) throw new NotFoundException('Education not found');
+    return this.prisma.education.update({
+      where: { id },
+      data: {
+        ...(data.school !== undefined ? { school: String(data.school) } : {}),
+        ...(data.degree !== undefined ? { degree: (data.degree as never) || null } : {}),
+        ...(data.field !== undefined ? { field: (data.field as string) || null } : {}),
+        ...(data.startDate !== undefined
+          ? { startDate: data.startDate ? new Date(String(data.startDate)) : null }
+          : {}),
+        ...(data.endDate !== undefined
+          ? { endDate: data.endDate ? new Date(String(data.endDate)) : null }
+          : {}),
+      },
+    });
+  }
+
   async removeEducation(user: AuthUser, id: string) {
     const profile = await this.getProfileForUser(user.id);
-    await this.prisma.education.deleteMany({ where: { id, profileId: profile.id } });
+    const result = await this.prisma.education.deleteMany({
+      where: { id, profileId: profile.id },
+    });
+    if (result.count === 0) throw new NotFoundException('Education not found');
     return { ok: true };
   }
 
@@ -224,9 +308,36 @@ export class ProfilesService {
     });
   }
 
+  async updateCertification(user: AuthUser, id: string, data: Record<string, unknown>) {
+    const profile = await this.getProfileForUser(user.id);
+    const existing = await this.prisma.certification.findFirst({
+      where: { id, profileId: profile.id },
+    });
+    if (!existing) throw new NotFoundException('Certification not found');
+    return this.prisma.certification.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined ? { name: String(data.name) } : {}),
+        ...(data.issuer !== undefined ? { issuer: (data.issuer as string) || null } : {}),
+        ...(data.issuedAt !== undefined
+          ? { issuedAt: data.issuedAt ? new Date(String(data.issuedAt)) : null }
+          : {}),
+        ...(data.expiresAt !== undefined
+          ? { expiresAt: data.expiresAt ? new Date(String(data.expiresAt)) : null }
+          : {}),
+        ...(data.credentialUrl !== undefined
+          ? { credentialUrl: (data.credentialUrl as string) || null }
+          : {}),
+      },
+    });
+  }
+
   async removeCertification(user: AuthUser, id: string) {
     const profile = await this.getProfileForUser(user.id);
-    await this.prisma.certification.deleteMany({ where: { id, profileId: profile.id } });
+    const result = await this.prisma.certification.deleteMany({
+      where: { id, profileId: profile.id },
+    });
+    if (result.count === 0) throw new NotFoundException('Certification not found');
     return { ok: true };
   }
 
@@ -253,9 +364,25 @@ export class ProfilesService {
     return { ...row, languageCreated: created, matchedVia };
   }
 
+  async updateLanguageLevel(user: AuthUser, id: string, level: string) {
+    const profile = await this.getProfileForUser(user.id);
+    const existing = await this.prisma.profileLanguage.findFirst({
+      where: { id, profileId: profile.id },
+    });
+    if (!existing) throw new NotFoundException('Language not found');
+    return this.prisma.profileLanguage.update({
+      where: { id: existing.id },
+      data: { level: level as never },
+      include: { language: true },
+    });
+  }
+
   async removeLanguage(user: AuthUser, id: string) {
     const profile = await this.getProfileForUser(user.id);
-    await this.prisma.profileLanguage.deleteMany({ where: { id, profileId: profile.id } });
+    const result = await this.prisma.profileLanguage.deleteMany({
+      where: { id, profileId: profile.id },
+    });
+    if (result.count === 0) throw new NotFoundException('Language not found');
     return { ok: true };
   }
 
@@ -305,8 +432,280 @@ export class ProfilesService {
 
   async deleteResume(user: AuthUser, resumeId: string) {
     const profile = await this.getProfileForUser(user.id);
-    await this.prisma.resume.deleteMany({ where: { id: resumeId, profileId: profile.id } });
+    const result = await this.prisma.resume.deleteMany({
+      where: { id: resumeId, profileId: profile.id },
+    });
+    if (result.count === 0) throw new NotFoundException('Resume not found');
     return { ok: true };
+  }
+
+  private filterByIds<T extends { id: string }>(rows: T[], ids: string[] | null | undefined) {
+    if (ids == null) return rows;
+    const set = new Set(ids);
+    return rows.filter((r) => set.has(r.id));
+  }
+
+  async getResumeDocument(user: AuthUser, resumeId?: string) {
+    const profile = await this.getProfileForUser(user.id);
+    const full = await this.prisma.employeeProfile.findUnique({
+      where: { id: profile.id },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+        city: true,
+        skills: { include: { skill: true } },
+        experiences: { include: { city: true }, orderBy: { startDate: 'desc' } },
+        educations: { orderBy: { startDate: 'desc' } },
+        languages: { include: { language: true } },
+        certifications: true,
+        resumes: true,
+      },
+    });
+    if (!full) throw new NotFoundException('Profile not found');
+
+    let resume =
+      (resumeId
+        ? full.resumes.find((r) => r.id === resumeId)
+        : full.resumes.find((r) => r.isPrimary) || full.resumes[0]) || null;
+
+    const inclusion = normalizeResumeInclusion(
+      (resume?.inclusion as never) || DEFAULT_RESUME_INCLUSION,
+    );
+    const sections = inclusion.sections;
+
+    const skills = sections.skills
+      ? this.filterByIds(full.skills, inclusion.skillIds)
+      : [];
+    const experiences = sections.experience
+      ? this.filterByIds(full.experiences, inclusion.experienceIds)
+      : [];
+    const educations = sections.education
+      ? this.filterByIds(full.educations, inclusion.educationIds)
+      : [];
+    const languages = sections.languages
+      ? this.filterByIds(full.languages, inclusion.languageIds)
+      : [];
+    const certifications = sections.certifications
+      ? this.filterByIds(full.certifications, inclusion.certificationIds)
+      : [];
+
+    const document = {
+      fullName: full.user.fullName,
+      headline: full.headline,
+      summary: sections.summary ? full.summary : null,
+      email: sections.email ? full.user.email : null,
+      phone: sections.phone ? full.phone : null,
+      city: full.city?.name ?? null,
+      skills: skills.map((s) => ({
+        id: s.id,
+        name: s.skill.name,
+        level: s.level,
+      })),
+      experiences: experiences.map((e) => ({
+        id: e.id,
+        title: e.title,
+        companyName: e.companyName,
+        description: e.description,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        isCurrent: e.isCurrent,
+        location: e.city?.name || e.locationNote || null,
+      })),
+      educations: educations.map((e) => ({
+        id: e.id,
+        school: e.school,
+        degree: e.degree,
+        field: e.field,
+        startDate: e.startDate,
+        endDate: e.endDate,
+      })),
+      languages: languages.map((l) => ({
+        id: l.id,
+        name: l.language.name,
+        level: l.level,
+      })),
+      certifications: certifications.map((c) => ({
+        id: c.id,
+        name: c.name,
+        issuer: c.issuer,
+        issuedAt: c.issuedAt,
+        expiresAt: c.expiresAt,
+      })),
+    };
+
+    const checklist = scoreResumeChecklist({
+      headline: document.headline,
+      summary: document.summary,
+      email: document.email,
+      phone: document.phone,
+      skills: document.skills,
+      experiences: document.experiences,
+      educations: document.educations,
+      languages: document.languages,
+      certifications: document.certifications,
+    });
+
+    // Source lists for builder checkboxes (unfiltered)
+    const source = {
+      skills: full.skills.map((s) => ({ id: s.id, name: s.skill.name, level: s.level })),
+      experiences: full.experiences.map((e) => ({
+        id: e.id,
+        title: e.title,
+        companyName: e.companyName,
+      })),
+      educations: full.educations.map((e) => ({ id: e.id, school: e.school })),
+      languages: full.languages.map((l) => ({
+        id: l.id,
+        name: l.language.name,
+        level: l.level,
+      })),
+      certifications: full.certifications.map((c) => ({ id: c.id, name: c.name })),
+    };
+
+    return {
+      resume: resume
+        ? {
+            id: resume.id,
+            title: resume.title,
+            isPrimary: resume.isPrimary,
+            templateKey: resume.templateKey || 'classic',
+            themeAccent: resume.themeAccent,
+            inclusion,
+            hasFile: Boolean(resume.fileKey),
+          }
+        : null,
+      document,
+      source,
+      checklist,
+      profile: {
+        headline: full.headline,
+        summary: full.summary,
+        phone: full.phone,
+        visibility: full.visibility,
+      },
+    };
+  }
+
+  async createResumeFromBuilder(
+    user: AuthUser,
+    data: {
+      title: string;
+      templateKey?: string;
+      themeAccent?: string | null;
+      inclusion?: unknown;
+      isPrimary?: boolean;
+    },
+  ) {
+    const profile = await this.getProfileForUser(user.id);
+    if (data.isPrimary !== false) {
+      await this.prisma.resume.updateMany({
+        where: { profileId: profile.id },
+        data: { isPrimary: false },
+      });
+    }
+    const created = await this.prisma.resume.create({
+      data: {
+        profileId: profile.id,
+        title: data.title,
+        templateKey: data.templateKey || 'classic',
+        themeAccent: data.themeAccent ?? null,
+        inclusion: (normalizeResumeInclusion(data.inclusion as never) ||
+          DEFAULT_RESUME_INCLUSION) as never,
+        isPrimary: data.isPrimary !== false,
+      },
+    });
+    return this.sanitizeResume(created);
+  }
+
+  async updateResumeBuilder(
+    user: AuthUser,
+    resumeId: string,
+    data: {
+      title?: string;
+      templateKey?: string;
+      themeAccent?: string | null;
+      inclusion?: unknown;
+      isPrimary?: boolean;
+    },
+  ) {
+    const { resume } = await this.ownedResume(user.id, resumeId);
+    if (data.isPrimary) {
+      await this.prisma.resume.updateMany({
+        where: { profileId: resume.profileId },
+        data: { isPrimary: false },
+      });
+    }
+    const updated = await this.prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.templateKey !== undefined ? { templateKey: data.templateKey } : {}),
+        ...(data.themeAccent !== undefined ? { themeAccent: data.themeAccent } : {}),
+        ...(data.inclusion !== undefined
+          ? { inclusion: normalizeResumeInclusion(data.inclusion as never) as never }
+          : {}),
+        ...(data.isPrimary !== undefined ? { isPrimary: data.isPrimary } : {}),
+      },
+    });
+    return this.sanitizeResume(updated);
+  }
+
+  async exportResumePdf(user: AuthUser, resumeId: string) {
+    const payload = await this.getResumeDocument(user, resumeId);
+    if (!payload.resume) throw new NotFoundException('Resume not found');
+    const { buildResumePdfBuffer } = await import('./resume-pdf');
+    const buffer = await buildResumePdfBuffer({
+      fullName: payload.document.fullName,
+      headline: payload.document.headline,
+      email: payload.document.email,
+      phone: payload.document.phone,
+      city: payload.document.city,
+      summary: payload.document.summary,
+      templateKey: payload.resume.templateKey,
+      themeAccent: payload.resume.themeAccent,
+      skills: payload.document.skills.map((s) => s.name),
+      experiences: payload.document.experiences.map((e) => ({
+        title: e.title,
+        companyName: e.companyName,
+        startDate: e.startDate ? new Date(e.startDate).toISOString() : null,
+        endDate: e.endDate ? new Date(e.endDate).toISOString() : null,
+        isCurrent: e.isCurrent,
+        description: e.description,
+        location: e.location,
+      })),
+      educations: payload.document.educations.map((e) => ({
+        school: e.school,
+        degree: e.degree,
+        field: e.field,
+        startDate: e.startDate ? new Date(e.startDate).toISOString() : null,
+        endDate: e.endDate ? new Date(e.endDate).toISOString() : null,
+      })),
+      languages: payload.document.languages,
+      certifications: payload.document.certifications,
+    });
+
+    const uploaded = await this.storage.upload(
+      buffer,
+      `${payload.resume.title || 'resume'}.pdf`,
+      'application/pdf',
+      'cvs',
+    );
+    const updated = await this.prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        fileKey: uploaded.key,
+        fileUrl: null,
+        builderMeta: {
+          lastExportAt: new Date().toISOString(),
+          checklistScore: payload.checklist.score,
+        } as never,
+      },
+    });
+    const download = await this.storage.getPresignedGetUrl(uploaded.key, 900);
+    return {
+      ...this.sanitizeResume(updated),
+      downloadUrl: download,
+      checklist: payload.checklist,
+    };
   }
 
   private async ownedResume(userId: string, resumeId: string) {
