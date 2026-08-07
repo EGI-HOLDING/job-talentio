@@ -484,6 +484,20 @@ export class JobsService {
     return { ...job, company };
   }
 
+  /** Single safe contact for employee chat — never return full members list publicly. */
+  private async chatPeerUserIdForCompany(companyId: string): Promise<string | null> {
+    const owner = await this.prisma.companyMember.findFirst({
+      where: { companyId, role: 'OWNER' },
+      select: { userId: true },
+    });
+    if (owner) return owner.userId;
+    const admin = await this.prisma.companyMember.findFirst({
+      where: { companyId, role: 'ADMIN' },
+      select: { userId: true },
+    });
+    return admin?.userId ?? null;
+  }
+
   async get(id: string, viewer?: AuthUser) {
     const job = await this.prisma.jobPost.findUnique({
       where: { id },
@@ -501,7 +515,11 @@ export class JobsService {
     });
 
     const resolved = this.withResolvedIcons(job);
-    return member ? resolved : this.stripPrivateCompanyFields(resolved);
+    if (member) return resolved;
+
+    const stripped = this.stripPrivateCompanyFields(resolved);
+    const chatPeerUserId = await this.chatPeerUserIdForCompany(job.companyId);
+    return { ...stripped, chatPeerUserId };
   }
 
   async listMine(user: AuthUser, companyId: string) {

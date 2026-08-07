@@ -108,6 +108,7 @@ function RecruiterDashboard() {
   });
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [msgTone, setMsgTone] = useState<'success' | 'error'>('success');
   const [breakdownId, setBreakdownId] = useState<string | null>(null);
   const [industries, setIndustries] = useState<any[]>([]);
 
@@ -115,6 +116,13 @@ function RecruiterDashboard() {
     () => memberships.find((m) => m.companyId === companyId)?.company,
     [memberships, companyId],
   );
+  const planCode = (company?.subscription?.plan || 'FREE') as 'FREE' | 'STANDARD' | 'PREMIUM';
+  const canColdChat = planCode === 'PREMIUM';
+
+  function flash(message: string, tone: 'success' | 'error' = 'success') {
+    setMsgTone(tone);
+    setMsg(message);
+  }
 
   function applyCand(patch: Partial<CandFilters>) {
     setCandFilters((prev) => {
@@ -223,7 +231,7 @@ function RecruiterDashboard() {
     });
     setDraftJobSkills([]);
     setDraftJobBenefits([]);
-    setMsg('Job created as DRAFT');
+    flash('Job created as DRAFT');
     await loadJobs(companyId);
   }
 
@@ -233,10 +241,10 @@ function RecruiterDashboard() {
         method: 'POST',
         body: JSON.stringify({ status }),
       });
-      setMsg(okMsg);
+      flash(okMsg, 'success');
       await loadJobs(companyId);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : 'Failed to update job status');
+      flash(err instanceof Error ? err.message : 'Failed to update job status', 'error');
     }
   }
 
@@ -259,7 +267,7 @@ function RecruiterDashboard() {
         note: fd.get('note'),
       }),
     });
-    setMsg('Interview scheduled');
+    flash('Interview scheduled');
     await loadJobData(selectedJob);
   }
 
@@ -277,7 +285,7 @@ function RecruiterDashboard() {
         size: fd.get('size') || undefined,
       }),
     });
-    setMsg('Company profile updated');
+    flash('Company profile updated');
     const mine = await api<any[]>('/companies/mine');
     setMemberships(mine);
   }
@@ -393,7 +401,7 @@ function RecruiterDashboard() {
 
       <section>
         {error && <FormAlert>{error}</FormAlert>}
-        {msg && <FormAlert tone="success">{msg}</FormAlert>}
+        {msg && <FormAlert tone={msgTone}>{msg}</FormAlert>}
 
         {tab === 'jobs' && (
           <div className="grid-2">
@@ -852,21 +860,31 @@ function RecruiterDashboard() {
                                 </span>
                               ))}
                             </div>
-                            <div className="chips" style={{ marginTop: '0.55rem' }}>
-                              <Link
-                                href={`/candidates/${r.profile.id}?matchJobId=${selectedJob}`}
-                                className="chip"
-                                style={{ fontSize: '0.75rem' }}
-                              >
-                                View profile
-                              </Link>
-                              <Link
-                                href={`/messages?peer=${r.profile.user.id}&job=${selectedJob}`}
-                                className="chip"
-                                style={{ fontSize: '0.75rem' }}
-                              >
-                                Chat
-                              </Link>
+                              <div className="chips" style={{ marginTop: '0.55rem' }}>
+                                <Link
+                                  href={`/candidates/${r.profile.id}?matchJobId=${selectedJob}`}
+                                  className="chip"
+                                  style={{ fontSize: '0.75rem' }}
+                                >
+                                  View profile
+                                </Link>
+                              {canColdChat ? (
+                                <Link
+                                  href={`/messages?peer=${r.profile.user.id}&job=${selectedJob}`}
+                                  className="chip"
+                                  style={{ fontSize: '0.75rem' }}
+                                >
+                                  Chat
+                                </Link>
+                              ) : (
+                                <span
+                                  className="chip muted"
+                                  title="Cold outreach requires Premium"
+                                  style={{ fontSize: '0.75rem', cursor: 'not-allowed', opacity: 0.7 }}
+                                >
+                                  Chat (Premium)
+                                </span>
+                              )}
                             </div>
                           </div>
                           <MatchRing score={r.matchScore} />
@@ -1164,13 +1182,23 @@ function RecruiterDashboard() {
                         >
                           View profile
                         </Link>
-                        <Link
-                          href={`/messages?peer=${p.user?.id}${candFilters.matchJobId ? `&job=${candFilters.matchJobId}` : ''}`}
-                          className="chip"
-                          style={{ fontSize: '0.75rem' }}
-                        >
-                          Chat
-                        </Link>
+                        {canColdChat ? (
+                          <Link
+                            href={`/messages?peer=${p.user?.id}${candFilters.matchJobId ? `&job=${candFilters.matchJobId}` : ''}`}
+                            className="chip"
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            Chat
+                          </Link>
+                        ) : (
+                          <span
+                            className="chip muted"
+                            title="Cold outreach requires Premium"
+                            style={{ fontSize: '0.75rem', cursor: 'not-allowed', opacity: 0.7 }}
+                          >
+                            Chat (Premium)
+                          </span>
+                        )}
                       </div>
                     </div>
                     {p.matchScore != null && <MatchRing score={p.matchScore} />}

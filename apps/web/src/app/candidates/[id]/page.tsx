@@ -41,7 +41,8 @@ type CandidateDetail = {
   }>;
   certifications: Array<{ id: string; name: string; issuer?: string | null; issuedAt?: string | null }>;
   languages: Array<{ id: string; level?: string | null; language: { name: string } }>;
-  resumes: Array<{ id: string; title: string; fileUrl?: string | null }>;
+  resumes: Array<{ id: string; title: string; fileUrl?: string | null; hasFile?: boolean }>;
+  appliedToMyCompany?: boolean;
   match?: {
     total: number;
     skills: number;
@@ -69,6 +70,7 @@ function CandidateInner() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [data, setData] = useState<CandidateDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canColdChat, setCanColdChat] = useState(false);
   const matchJobId = search.get('matchJobId');
 
   useEffect(() => {
@@ -82,12 +84,26 @@ function CandidateInner() {
       return;
     }
     setSession(s);
-    api<CandidateDetail>(
-      `/profiles/candidates/${id}${matchJobId ? `?matchJobId=${matchJobId}` : ''}`,
-    )
-      .then(setData)
+    Promise.all([
+      api<CandidateDetail>(
+        `/profiles/candidates/${id}${matchJobId ? `?matchJobId=${matchJobId}` : ''}`,
+      ),
+      api<Array<{ company?: { subscription?: { plan?: string } } }>>('/companies/mine').catch(
+        () => [],
+      ),
+    ])
+      .then(([profile, mine]) => {
+        setData(profile);
+        const plan = mine[0]?.company?.subscription?.plan || 'FREE';
+        setCanColdChat(plan === 'PREMIUM' || s.user.role === 'SUPER_ADMIN');
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
   }, [id, matchJobId, router]);
+
+  async function downloadResume(resumeId: string) {
+    const res = await api<{ url: string }>(`/profiles/resumes/${resumeId}/download`);
+    window.open(res.url, '_blank', 'noopener,noreferrer');
+  }
 
   if (!session) return null;
   if (error) {
@@ -155,15 +171,59 @@ function CandidateInner() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', alignItems: 'flex-end' }}>
             {data.match && <MatchRing score={data.match.total} size="lg" label={t('match')} />}
-            <Link
-              href={`/messages?peer=${data.user.id}${matchJobId ? `&job=${matchJobId}` : ''}`}
-              className="chip"
-            >
-              {t('chatWithCandidate')}
-            </Link>
+            {data.appliedToMyCompany || canColdChat ? (
+              <Link
+                href={`/messages?peer=${data.user.id}${matchJobId ? `&job=${matchJobId}` : ''}`}
+                className="chip"
+              >
+                {t('chatWithCandidate')}
+              </Link>
+            ) : (
+              <span
+                className="chip muted"
+                title="Cold outreach requires Premium"
+                style={{ cursor: 'not-allowed', opacity: 0.7 }}
+              >
+                Chat (Premium)
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {!!data.resumes?.length && (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3 style={{ marginTop: 0 }}>Resumes</h3>
+          {data.resumes.map((r) => (
+            <div
+              key={r.id}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.55rem 0',
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              <span>{r.title}</span>
+              {r.hasFile && data.appliedToMyCompany ? (
+                <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
+                  Download CV
+                </button>
+              ) : r.hasFile ? (
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  Available after they apply
+                </span>
+              ) : (
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  No file
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {data.match && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>

@@ -137,6 +137,13 @@ export class ProfilesController {
 
   @Get('me/resumes/:id/download')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  downloadResumeMine(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.profiles.downloadResume(user, id);
+  }
+
+  /** Owner or recruiter of a company the candidate applied to. */
+  @Get('resumes/:id/download')
+  @Roles('EMPLOYEE', 'RECRUITER', 'SUPER_ADMIN')
   downloadResume(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.profiles.downloadResume(user, id);
   }

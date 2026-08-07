@@ -52,8 +52,25 @@ export class ProfilesService {
     return profile;
   }
 
+  /** Never expose storage object keys to clients. */
+  private sanitizeResume<T extends { fileKey?: string | null }>(resume: T) {
+    const { fileKey, ...rest } = resume as T & { fileKey?: string | null };
+    return { ...rest, hasFile: Boolean(fileKey) };
+  }
+
+  private sanitizeProfileResumes<T extends { resumes?: Array<{ fileKey?: string | null }> }>(
+    profile: T,
+  ): T {
+    if (!profile.resumes?.length) return profile;
+    return {
+      ...profile,
+      resumes: profile.resumes.map((r) => this.sanitizeResume(r)),
+    };
+  }
+
   async myProfile(user: AuthUser) {
-    return this.getProfileForUser(user.id);
+    const profile = await this.getProfileForUser(user.id);
+    return this.sanitizeProfileResumes(profile);
   }
 
   async updateProfile(user: AuthUser, data: Record<string, unknown>) {
@@ -302,8 +319,33 @@ export class ProfilesService {
   }
 
   async downloadResume(user: AuthUser, resumeId: string) {
-    const { resume } = await this.ownedResume(user.id, resumeId);
+    const resume = await this.prisma.resume.findUnique({
+      where: { id: resumeId },
+      include: { profile: { select: { id: true, userId: true } } },
+    });
+    if (!resume) throw new NotFoundException('Resume not found');
     if (!resume.fileKey) throw new NotFoundException('No file attached to this resume');
+
+    const isOwner = resume.profile.userId === user.id;
+    let allowed = isOwner || user.role === 'SUPER_ADMIN';
+
+    // Recruiter may download only if the candidate applied to their company
+    if (!allowed && user.role === 'RECRUITER') {
+      const companyIds = (user.memberships ?? []).map((m) => m.companyId).filter(Boolean);
+      if (companyIds.length) {
+        const applied = await this.prisma.application.findFirst({
+          where: {
+            profileId: resume.profile.id,
+            jobPost: { companyId: { in: companyIds } },
+          },
+          select: { id: true },
+        });
+        allowed = Boolean(applied);
+      }
+    }
+
+    if (!allowed) throw new ForbiddenException('Not allowed to download this resume');
+
     const url = await this.storage.getPresignedGetUrl(resume.fileKey, 900);
     return { url, expiresIn: 900, title: resume.title };
   }
@@ -347,7 +389,7 @@ export class ProfilesService {
     });
 
     return {
-      ...updated,
+      ...this.sanitizeResume(updated),
       parsedData: parsed,
       profileId: profile.id,
       needsReview: true,
@@ -356,8 +398,8 @@ export class ProfilesService {
 
   async uploadCv(user: AuthUser, file: Express.Multer.File) {
     if (!file) throw new BadRequestException('File required');
-    if (file.size > 8 * 1024 * 1024) {
-      throw new BadRequestException('File too large (max 8MB)');
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('File too large (max 5MB)');
     }
     const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     const isPdf =
@@ -410,7 +452,7 @@ export class ProfilesService {
     });
 
     return {
-      ...resume,
+      ...this.sanitizeResume(resume),
       parsedData: parsed,
       needsReview: true,
     };
@@ -883,16 +925,18 @@ export class ProfilesService {
       }
     }
 
+    const safe = this.sanitizeProfileResumes(profile);
     return {
-      ...profile,
+      ...safe,
       user: {
-        ...profile.user,
-        email: limited ? undefined : profile.user.email,
+        ...safe.user,
+        email: limited ? undefined : safe.user.email,
       },
-      phone: limited ? undefined : profile.phone,
+      phone: limited ? undefined : safe.phone,
       contactsBlurred: limited,
       experienceYears,
       match,
+      appliedToMyCompany,
     };
   }
 
