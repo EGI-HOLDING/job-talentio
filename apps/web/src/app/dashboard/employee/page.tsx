@@ -478,15 +478,15 @@ export default function EmployeeDashboard() {
                         Interview {new Date(iv.scheduledAt).toLocaleString()}
                       </div>
                     ))}
-                    {(() => {
-                      const members = a.jobPost.company?.members || [];
-                      const rec = members.find((m: any) => m.role === 'OWNER') || members[0];
-                      return rec ? (
-                        <Link href={`/messages?peer=${rec.userId}&job=${a.jobPost.id}`} className="chip" style={{ fontSize: '0.78rem' }}>
-                          Chat with recruiter
-                        </Link>
-                      ) : null;
-                    })()}
+                    {a.jobPost.company?.chatPeerUserId ? (
+                      <Link
+                        href={`/messages?peer=${a.jobPost.company.chatPeerUserId}&job=${a.jobPost.id}`}
+                        className="chip"
+                        style={{ fontSize: '0.78rem' }}
+                      >
+                        Chat with recruiter
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1003,7 +1003,11 @@ export default function EmployeeDashboard() {
                       <div>
                         <strong>{r.title}</strong>
                         {r.isPrimary && <span className="badge match" style={{ marginLeft: 8 }}>Primary</span>}
-                        {r.fileKey && <span className="badge skill" style={{ marginLeft: 6 }}>PDF attached</span>}
+                        {(r.hasFile || r.fileKey) && (
+                          <span className="badge skill" style={{ marginLeft: 6 }}>
+                            PDF attached
+                          </span>
+                        )}
                         {r.parsedData && (
                           <button
                             type="button"
@@ -1018,13 +1022,13 @@ export default function EmployeeDashboard() {
                       <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>×</button>
                     </div>
                     <div className="chips" style={{ marginTop: '0.5rem' }}>
-                      {r.fileKey && (
+                      {(r.hasFile || r.fileKey) && (
                         <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
                           Download
                         </button>
                       )}
                       <label className="chip" style={{ cursor: 'pointer' }}>
-                        {r.fileKey ? 'Replace file' : 'Attach PDF'}
+                        {r.hasFile || r.fileKey ? 'Replace file' : 'Attach PDF'}
                         <input
                           type="file"
                           accept="application/pdf"

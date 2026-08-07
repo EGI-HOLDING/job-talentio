@@ -75,6 +75,7 @@ export class ApplicationsService {
 
     const breakdown = await this.matching.scoreProfileAgainstJob(profile.id, jobPostId);
 
+    const primaryResume = profile.resumes[0];
     const resumeSnapshot = {
       headline: profile.headline,
       summary: profile.summary,
@@ -85,7 +86,13 @@ export class ApplicationsService {
       })),
       experiences: profile.experiences,
       educations: profile.educations,
-      resume: profile.resumes[0] ?? null,
+      resume: primaryResume
+        ? {
+            id: primaryResume.id,
+            title: primaryResume.title,
+            hasFile: Boolean(primaryResume.fileKey),
+          }
+        : null,
       snapshotAt: new Date().toISOString(),
     };
 
@@ -169,7 +176,7 @@ export class ApplicationsService {
   async myApplications(user: AuthUser) {
     const profile = await this.prisma.employeeProfile.findUnique({ where: { userId: user.id } });
     if (!profile) return [];
-    return this.prisma.application.findMany({
+    const rows = await this.prisma.application.findMany({
       where: { profileId: profile.id },
       include: {
         jobPost: {
@@ -180,7 +187,11 @@ export class ApplicationsService {
                 name: true,
                 slug: true,
                 logoUrl: true,
-                members: { select: { userId: true, role: true }, take: 5 },
+                members: {
+                  where: { role: { in: ['OWNER', 'ADMIN'] } },
+                  select: { userId: true, role: true },
+                  take: 5,
+                },
               },
             },
             city: true,
@@ -190,6 +201,23 @@ export class ApplicationsService {
         interviews: { orderBy: { scheduledAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
+    });
+
+    // Expose a single chat peer — do not return the members array to clients
+    return rows.map((app) => {
+      const members = app.jobPost.company.members ?? [];
+      const peer = members.find((m) => m.role === 'OWNER') ?? members[0];
+      const { members: _members, ...company } = app.jobPost.company;
+      return {
+        ...app,
+        jobPost: {
+          ...app.jobPost,
+          company: {
+            ...company,
+            chatPeerUserId: peer?.userId ?? null,
+          },
+        },
+      };
     });
   }
 

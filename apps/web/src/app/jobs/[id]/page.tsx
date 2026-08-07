@@ -24,13 +24,13 @@ type Job = {
   experienceYearsMin?: number | null;
   isHot?: boolean;
   boostUntil?: string | null;
+  chatPeerUserId?: string | null;
   company: {
     id: string;
     name: string;
     slug: string;
     logoUrl?: string | null;
     isVerified?: boolean;
-    members?: Array<{ userId: string; role: string }>;
     _count?: { followers: number };
   };
   city?: { name: string } | null;
@@ -255,9 +255,9 @@ export default function JobDetailPage() {
           <button type="button" className="secondary" onClick={toggleFollow}>
             {following ? 'Following company' : 'Follow company'}
           </button>
-          {session?.user.role === 'EMPLOYEE' && (job.company.members || []).length > 0 && (
+          {session?.user.role === 'EMPLOYEE' && job.chatPeerUserId && (
             <Link
-              href={`/messages?peer=${(job.company.members!.find((m) => m.role === 'OWNER') || job.company.members![0]).userId}&job=${job.id}`}
+              href={`/messages?peer=${job.chatPeerUserId}&job=${job.id}`}
               className="secondary"
               style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
             >
