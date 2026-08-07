@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { benefitIconLabel } from '@/lib/icons';
+import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
@@ -153,7 +154,7 @@ export default function JobDetailPage() {
             {job.experienceLevel && <span className="badge skill">{job.experienceLevel}</span>}
           </div>
           <h1 style={{ margin: '0 0 0.35rem', fontFamily: 'var(--font-display)', fontSize: '1.75rem' }}>
-            {job.title}
+            {sanitizeMojibake(job.title)}
           </h1>
           <div className="job-meta">
             <Link href={`/companies/${job.company.slug}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
@@ -200,7 +201,7 @@ export default function JobDetailPage() {
       <div className="grid-2" style={{ marginTop: '1.25rem' }}>
         <div className="card">
           <h2 className="section-title">About the role</h2>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{job.description}</div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sanitizeMojibake(job.description)}</div>
         </div>
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card">
@@ -249,7 +250,7 @@ export default function JobDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="apply-dialog-title">
-              {t('applyFor')} — {job.title}
+              {t('applyFor')} - {sanitizeMojibake(job.title)}
             </h2>
             <p className="required-note">{t('requiredFieldsNote')}</p>
             <form className="form-stack" onSubmit={onApply}>

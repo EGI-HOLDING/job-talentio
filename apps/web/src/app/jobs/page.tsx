@@ -11,6 +11,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { api, getSession } from '@/lib/api';
 import { benefitIconLabel, categoryIconLabel } from '@/lib/icons';
+import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
 
@@ -638,7 +639,7 @@ function JobsInner() {
                   {job.category && <span className="badge">{job.category.name}</span>}
                   {job.experienceLevel && <span className="badge skill">{job.experienceLevel}</span>}
                 </div>
-                <h3>{job.title}</h3>
+                <h3>{sanitizeMojibake(job.title)}</h3>
                 <div className="job-meta">
                   <span>{job.company.name}</span>
                   <span>{jobLocationLabel(job)}</span>
