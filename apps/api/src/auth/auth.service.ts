@@ -130,7 +130,8 @@ export class AuthService {
           fullName,
           role,
           locale: input.locale ?? 'uz',
-          emailVerified: true,
+          // Platform email verify is opt-in from profile/settings (same as Google sign-up)
+          emailVerified: false,
         },
       });
 
