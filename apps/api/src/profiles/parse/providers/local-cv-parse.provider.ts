@@ -23,6 +23,13 @@ export class LocalCvParseProvider implements CvParseProvider {
     return !['0', 'false', 'no', 'off'].includes(String(raw).trim().toLowerCase());
   }
 
+  /** Tesseract lang string, e.g. eng+rus. Safe subset only. */
+  private ocrLangs() {
+    const raw = (this.config?.get<string>('CV_PARSE_OCR_LANGS') || 'eng+rus').trim().toLowerCase();
+    if (/^[a-z]{3}(?:\+[a-z]{3})*$/.test(raw)) return raw;
+    return 'eng+rus';
+  }
+
   async parse(input: CvParseProviderInput): Promise<ParsedCvData> {
     const kind = detectKind(input.filename, input.mimeType);
     let text = '';
@@ -89,7 +96,8 @@ export class LocalCvParseProvider implements CvParseProvider {
       if (!png) return null;
 
       const Tesseract = await import('tesseract.js');
-      const recognize = Tesseract.recognize(png, 'eng', {
+      const langs = this.ocrLangs();
+      const recognize = Tesseract.recognize(png, langs, {
         logger: () => undefined,
       });
       const result = await Promise.race([
