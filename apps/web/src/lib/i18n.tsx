@@ -806,6 +806,12 @@ const DICT = {
     en: 'Pick a suggestion or type a new skill name',
   },
   addSkill: { uz: 'Ko‘nikma qo‘shish', ru: 'Добавить навык', en: 'Add skill' },
+  addResume: { uz: 'Resume qo‘shish', ru: 'Добавить резюме', en: 'Add resume' },
+  openResumeBuilder: {
+    uz: 'Resume builder',
+    ru: 'Конструктор резюме',
+    en: 'Open resume builder',
+  },
   addBenefit: { uz: 'Imtiyoz qo‘shish', ru: 'Добавить льготу', en: 'Add benefit' },
   addLanguage: { uz: 'Til qo‘shish', ru: 'Добавить язык', en: 'Add language' },
   confirmAddLookup: {
