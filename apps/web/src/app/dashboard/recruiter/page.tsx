@@ -4,7 +4,7 @@ import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
-import { api, getSession } from '@/lib/api';
+import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
 import { sanitizeMojibake } from '@/lib/text';
@@ -132,6 +132,9 @@ function RecruiterDashboard() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteBusy, setInviteBusy] = useState(false);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const [accountEmail, setAccountEmail] = useState('');
+  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const company = useMemo(
     () => companyDetail || memberships.find((m) => m.companyId === companyId)?.company,
@@ -143,6 +146,33 @@ function RecruiterDashboard() {
   const activePublishedJobs =
     subscription?.activePublishedJobs ??
     jobs.filter((j) => j.status === 'PUBLISHED').length;
+
+  async function requestEmailVerification() {
+    setVerifyBusy(true);
+    try {
+      const r = await api<{ message?: string; alreadyVerified?: boolean; email: string }>(
+        '/auth/request-verification',
+        { method: 'POST' },
+      );
+      if (r.alreadyVerified) {
+        setEmailVerified(true);
+        const session = getSession();
+        if (session) {
+          saveSession({
+            ...session,
+            user: { ...session.user, emailVerified: true },
+          });
+        }
+        flash(t('emailVerifiedBadge'));
+      } else {
+        flash(r.message || `${t('verifyEmailSentTo')} ${r.email}`);
+      }
+    } catch (err) {
+      flash(err instanceof Error ? err.message : t('verifyEmailFailed'), 'error');
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
 
   function flash(message: string, tone: 'success' | 'error' = 'success') {
     setMsgTone(tone);
@@ -219,7 +249,9 @@ function RecruiterDashboard() {
       window.location.href = '/login';
       return;
     }
-    const [mine, cities, skills, categories, benefits, inds, langs] = await Promise.all([
+    setAccountEmail(session.user.email);
+    setEmailVerified(session.user.emailVerified ?? null);
+    const [mine, cities, skills, categories, benefits, inds, langs, me] = await Promise.all([
       api<any[]>('/companies/mine'),
       api('/meta/cities', { auth: false }),
       api('/meta/skills?sort=popular&take=120', { auth: false }),
@@ -230,7 +262,13 @@ function RecruiterDashboard() {
         { auth: false },
       ).catch(() => ({ groups: [] })),
       api('/meta/languages', { auth: false }).catch(() => []),
+      api<AuthSession>('/auth/me').catch(() => null),
     ]);
+    if (me) {
+      saveSession(me);
+      setAccountEmail(me.user.email);
+      setEmailVerified(Boolean(me.user.emailVerified));
+    }
     setMemberships(mine);
     setMeta({
       cities: cities as any[],
@@ -592,6 +630,35 @@ function RecruiterDashboard() {
       <section>
         {error && <FormAlert>{error}</FormAlert>}
         {msg && <FormAlert tone={msgTone}>{msg}</FormAlert>}
+
+        {emailVerified === false && (
+          <div
+            className="card"
+            style={{
+              marginBottom: '1rem',
+              background: 'rgba(245, 158, 11, 0.12)',
+              borderColor: 'rgba(245, 158, 11, 0.35)',
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h3>
+            <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+              {accountEmail} - <strong>{t('emailUnverifiedBadge')}</strong>
+            </p>
+            <p className="muted" style={{ fontSize: '0.9rem' }}>
+              {t('verifyEmailProfileHint')}
+            </p>
+            <button type="button" disabled={verifyBusy} onClick={() => requestEmailVerification()}>
+              {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
+            </button>
+            <p className="muted" style={{ marginBottom: 0, marginTop: '0.65rem', fontSize: '0.85rem' }}>
+              Or open{' '}
+              <Link href="/settings" style={{ color: 'var(--accent)' }}>
+                {t('settings')}
+              </Link>
+              .
+            </p>
+          </div>
+        )}
 
         {tab === 'jobs' && (
           <div className="grid-2">
@@ -1529,6 +1596,31 @@ function RecruiterDashboard() {
 
         {tab === 'company' && company && (
           <div className="grid-2">
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h3>
+              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                {accountEmail || '-'} -{' '}
+                {emailVerified ? (
+                  <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
+                ) : (
+                  <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
+                )}
+              </p>
+              {!emailVerified && (
+                <>
+                  <p className="muted" style={{ fontSize: '0.9rem' }}>
+                    {t('verifyEmailProfileHint')}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={verifyBusy}
+                    onClick={() => requestEmailVerification()}
+                  >
+                    {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
+                  </button>
+                </>
+              )}
+            </div>
             <div className="card">
               <h2 className="section-title">{sanitizeMojibake(company.name)}</h2>
               <p className="muted">{sanitizeMojibake(company.description)}</p>
