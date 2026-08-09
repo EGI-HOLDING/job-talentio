@@ -189,7 +189,7 @@ export default function JobDetailPage() {
 
   return (
     <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>
-      <div className="job-detail-header">
+      <div className={`job-detail-header${job.isHot ? ' job-detail-header--hot' : ''}`}>
         <span className="company-logo-tile" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -224,6 +224,13 @@ export default function JobDetailPage() {
             )}
           </div>
           <p className="salary">{formatSalary(job.salaryMin, job.salaryMax)}</p>
+          {job.isHot && (
+            <div className="hot-urgency">
+              {job.boostUntil
+                ? `Boosted until ${new Date(job.boostUntil).toLocaleDateString()} - limited window`
+                : 'Limited-time hot boost'}
+            </div>
+          )}
         </div>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           {alreadyApplied ? (

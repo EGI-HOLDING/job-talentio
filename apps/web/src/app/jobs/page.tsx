@@ -27,6 +27,7 @@ type Job = {
   employmentType?: string;
   experienceLevel?: string | null;
   isHot?: boolean;
+  boostUntil?: string | null;
   matchScore?: number | null;
   company: { name: string; logoUrl?: string | null; slug: string };
   city?: { name: string; slug: string } | null;
@@ -706,7 +707,11 @@ function JobsInner() {
 
         {!loading &&
           data?.items.map((job) => (
-            <Link key={job.id} href={`/jobs/${job.id}`} className="job-card">
+            <Link
+              key={job.id}
+              href={`/jobs/${job.id}`}
+              className={`job-card${job.isHot ? ' job-card--hot' : ''}`}
+            >
               <span className="company-logo-tile" aria-hidden>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -732,6 +737,24 @@ function JobsInner() {
                     {formatSalary(job.salaryMin, job.salaryMax)}
                   </span>
                 </div>
+                {job.isHot && (
+                  <div className="hot-urgency">
+                    {job.boostUntil
+                      ? (() => {
+                          const days = Math.max(
+                            1,
+                            Math.ceil(
+                              (new Date(job.boostUntil).getTime() - Date.now()) /
+                                (24 * 60 * 60 * 1000),
+                            ),
+                          );
+                          if (days <= 1) return 'Ends today - apply soon';
+                          if (days <= 3) return `Only ${days} days left`;
+                          return `Hot for ${days} more days`;
+                        })()
+                      : 'Limited-time boost'}
+                  </div>
+                )}
                 <div className="chips">
                   {(job.jobSkills || []).slice(0, 5).map((js) => (
                     <span key={js.skill.slug} className="badge skill">

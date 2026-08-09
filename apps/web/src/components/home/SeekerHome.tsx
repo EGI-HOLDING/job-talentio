@@ -19,12 +19,22 @@ type Job = {
   id: string;
   title: string;
   isHot?: boolean;
+  boostUntil?: string | null;
   workMode?: string | null;
   salaryMin?: number | null;
   salaryMax?: number | null;
   company: { name: string; logoUrl?: string | null; slug: string };
   city?: { name: string } | null;
 };
+
+function hotUrgencyLabel(boostUntil?: string | null) {
+  if (!boostUntil) return 'Limited-time boost';
+  const end = new Date(boostUntil).getTime();
+  const days = Math.max(1, Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000)));
+  if (days <= 1) return 'Ends today - apply soon';
+  if (days <= 3) return `Only ${days} days left`;
+  return `Hot for ${days} more days`;
+}
 
 type FacetItem = { slug: string; name: string; count: number; logoUrl?: string | null };
 
@@ -164,7 +174,7 @@ export function SeekerHome() {
 
       <section className="section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h2 className="section-title">{t('hotJobs')}</h2>
+          <h2 className="section-title section-hot-title">{t('hotJobs')}</h2>
           <Link href="/jobs?hotOnly=true" className="muted">
             {t('viewAll')} →
           </Link>
@@ -174,7 +184,7 @@ export function SeekerHome() {
             <Link
               key={job.id}
               href={`/jobs/${job.id}`}
-              className="card job-card"
+              className="card job-card job-card--hot"
               style={{ margin: 0, gridTemplateColumns: '56px 1fr' }}
             >
               <span className="company-logo-tile" aria-hidden>
@@ -200,6 +210,7 @@ export function SeekerHome() {
                     </span>
                   )}
                 </div>
+                <div className="hot-urgency">{hotUrgencyLabel(job.boostUntil)}</div>
               </div>
             </Link>
           ))}
