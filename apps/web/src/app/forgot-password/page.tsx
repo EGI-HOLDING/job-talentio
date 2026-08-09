@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
           {error && <FormAlert>{error}</FormAlert>}
           {msg && <FormAlert tone="success">{msg}</FormAlert>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Sending…' : 'Send reset link'}
+            {loading ? 'Sending...' : 'Send reset link'}
           </button>
         </form>
         <p className="muted" style={{ marginTop: '1rem' }}>

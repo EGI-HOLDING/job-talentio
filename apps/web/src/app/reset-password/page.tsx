@@ -54,7 +54,7 @@ function ResetPasswordInner() {
             </FormField>
             {error && <FormAlert>{error}</FormAlert>}
             <button type="submit" disabled={loading || !token}>
-              {loading ? 'Saving…' : 'Update password'}
+              {loading ? 'Saving...' : 'Update password'}
             </button>
           </form>
         )}

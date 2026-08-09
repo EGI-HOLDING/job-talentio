@@ -1652,7 +1652,7 @@ function RecruiterDashboard() {
                   />
                 </label>
                 <button type="submit" disabled={inviteBusy}>
-                  {inviteBusy ? 'Inviting…' : 'Invite member'}
+                  {inviteBusy ? 'Inviting...' : 'Invite member'}
                 </button>
               </form>
             </div>

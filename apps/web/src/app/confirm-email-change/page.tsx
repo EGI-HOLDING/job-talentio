@@ -43,7 +43,7 @@ function ConfirmEmailChangeInner() {
     <div className="auth-wrap">
       <div className="auth-card" style={{ textAlign: 'center' }}>
         <h1>Confirm email change</h1>
-        {state === 'working' && <p className="muted">Confirming…</p>}
+        {state === 'working' && <p className="muted">Confirming...</p>}
         {state === 'ok' && <p style={{ color: '#047857', fontWeight: 600 }}>Email updated</p>}
         {state === 'error' && (
           <>

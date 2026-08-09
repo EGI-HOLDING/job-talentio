@@ -131,7 +131,7 @@ export function ImageCropUpload({
       const mime = mode === 'logo' ? 'image/png' : 'image/jpeg';
       const blob = await cropToBlob(src, area, mime, 1024);
       if (blob.size > 2 * 1024 * 1024) {
-        throw new Error('Cropped image is larger than 2MB — try a smaller crop');
+        throw new Error('Cropped image is larger than 2MB - try a smaller crop');
       }
       const data = await uploadBlob(blob);
       const url =
@@ -305,7 +305,7 @@ export function ImageCropUpload({
             </label>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
               <button type="button" className="cta" disabled={busy} onClick={confirmCrop}>
-                {busy ? 'Uploading…' : 'Save'}
+                {busy ? 'Uploading...' : 'Save'}
               </button>
               <button
                 type="button"
