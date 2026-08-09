@@ -231,6 +231,12 @@ export class ProfilesController {
     return this.profiles.deleteResume(user, id);
   }
 
+  @Post('me/resumes/:id/restore')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  restoreResume(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.profiles.restoreResume(user, id);
+  }
+
   @Get('me/resumes/:id/download')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   downloadResumeMine(@CurrentUser() user: AuthUser, @Param('id') id: string) {

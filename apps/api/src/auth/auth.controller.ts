@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   registerSchema,
   loginSchema,
@@ -8,10 +19,15 @@ import {
   googleOAuthSchema,
   verifyEmailSchema,
   resendVerificationSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changeEmailSchema,
+  confirmEmailChangeSchema,
 } from '@job-talentio/shared';
 import { AuthService } from './auth.service';
 import { parseDto } from '../common/utils';
 import { CurrentUser, JwtAuthGuard, AuthUser } from '../common/auth.decorators';
+import { imageUploadOptions } from '../common/upload';
 
 @Controller('auth')
 export class AuthController {
@@ -55,6 +71,19 @@ export class AuthController {
     return this.auth.updateAccount(user.id, data);
   }
 
+  @Post('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file', imageUploadOptions))
+  uploadAvatar(@CurrentUser() user: AuthUser, @UploadedFile() file: Express.Multer.File) {
+    return this.auth.uploadAvatar(user.id, file);
+  }
+
+  @Delete('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  clearAvatar(@CurrentUser() user: AuthUser) {
+    return this.auth.clearAvatar(user.id);
+  }
+
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
   changePassword(@CurrentUser() user: AuthUser, @Body() body: unknown) {
@@ -83,5 +112,30 @@ export class AuthController {
   @Post('oauth/telegram')
   telegram() {
     return this.auth.oauthTelegramStub();
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body() body: unknown) {
+    const data = parseDto(forgotPasswordSchema, body);
+    return this.auth.forgotPassword(data.email);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() body: unknown) {
+    const data = parseDto(resetPasswordSchema, body);
+    return this.auth.resetPassword(data.token, data.newPassword);
+  }
+
+  @Post('change-email')
+  @UseGuards(JwtAuthGuard)
+  changeEmail(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const data = parseDto(changeEmailSchema, body);
+    return this.auth.requestEmailChange(user.id, data.newEmail, data.currentPassword);
+  }
+
+  @Post('confirm-email-change')
+  confirmEmailChange(@Body() body: unknown) {
+    const data = parseDto(confirmEmailChangeSchema, body);
+    return this.auth.confirmEmailChange(data.token);
   }
 }

@@ -8,6 +8,7 @@ import {
 import { CompanyMemberRole, PlanCode, Prisma } from '@prisma/client';
 import { resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName } from '../common/dedupe';
@@ -15,7 +16,10 @@ import { sanitizeStoredText } from '../common/text-sanitize';
 
 @Injectable()
 export class CompaniesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   private async assertCompanyNameAvailable(name: string, excludeId?: string) {
     const normalized = normalizeCompanyName(name);
@@ -242,6 +246,57 @@ export class CompaniesService {
       },
       include: { subscription: true, city: true, industry: true },
     });
+  }
+
+  async uploadLogo(user: AuthUser, companyId: string, file: Express.Multer.File) {
+    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    if (!file?.buffer?.length) throw new BadRequestException('Image file is required');
+    const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+    const uploaded = await this.storage.upload(
+      file.buffer,
+      file.originalname || 'logo.png',
+      file.mimetype,
+      'logos',
+    );
+    const oldKey = this.storage.keyFromPublicUrl(company.logoUrl);
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: { logoUrl: uploaded.url },
+      include: { subscription: true, city: true, industry: true },
+    });
+    if (oldKey) await this.storage.delete(oldKey);
+    return updated;
+  }
+
+  async clearLogo(user: AuthUser, companyId: string) {
+    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+    const oldKey = this.storage.keyFromPublicUrl(company.logoUrl);
+    const updated = await this.prisma.company.update({
+      where: { id: companyId },
+      data: { logoUrl: null },
+      include: { subscription: true, city: true, industry: true },
+    });
+    if (oldKey) await this.storage.delete(oldKey);
+    return updated;
+  }
+
+  async removeMember(user: AuthUser, companyId: string, memberUserId: string) {
+    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    if (memberUserId === user.id) {
+      throw new BadRequestException('You cannot remove yourself');
+    }
+    const target = await this.prisma.companyMember.findUnique({
+      where: { companyId_userId: { companyId, userId: memberUserId } },
+    });
+    if (!target) throw new NotFoundException('Member not found');
+    if (target.role === 'OWNER') {
+      throw new BadRequestException('Cannot remove the company owner');
+    }
+    await this.prisma.companyMember.delete({
+      where: { companyId_userId: { companyId, userId: memberUserId } },
+    });
+    return { ok: true };
   }
 
   async invite(

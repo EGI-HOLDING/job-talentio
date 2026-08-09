@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
+import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 
 type Section = 'account' | 'preferences' | 'privacy' | 'security';
 
@@ -31,6 +32,8 @@ export default function SettingsPage() {
   const [prefLocale, setPrefLocale] = useState<Locale>('uz');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [emailChangePassword, setEmailChangePassword] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -125,6 +128,26 @@ export default function SettingsPage() {
     }
   }
 
+  async function requestEmailChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPwMsg(null);
+    setErr(null);
+    try {
+      const r = await api<{ message?: string }>('/auth/change-email', {
+        method: 'POST',
+        body: JSON.stringify({
+          newEmail,
+          currentPassword: emailChangePassword,
+        }),
+      });
+      setPwMsg(r.message || 'Check the new inbox to confirm the change');
+      setNewEmail('');
+      setEmailChangePassword('');
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Failed to start email change');
+    }
+  }
+
   if (!session) return null;
 
   return (
@@ -197,9 +220,29 @@ export default function SettingsPage() {
                 <FormField label={t('fullName')} required>
                   <input value={fullName} onChange={(e) => setFullName(e.target.value)} minLength={2} />
                 </FormField>
+                <ImageCropUpload
+                  mode="avatar"
+                  label="Profile photo"
+                  value={avatarUrl}
+                  uploadPath="/auth/me/avatar"
+                  clearPath="/auth/me/avatar"
+                  onUploaded={(url) => {
+                    setAvatarUrl(url || '');
+                    const s = getSession();
+                    if (s) {
+                      const next = {
+                        ...s,
+                        user: { ...s.user, avatarUrl: url || null },
+                      };
+                      saveSession(next);
+                      setSession(next);
+                    }
+                    setMsg('Photo updated');
+                  }}
+                />
                 <FormField
                   label={t('avatarUrl')}
-                  hint="Preview updates live above. Leave empty to use initials avatar."
+                  hint="Optional: paste an image URL, or upload & crop above."
                 >
                   <input
                     value={avatarUrl}
@@ -329,6 +372,33 @@ export default function SettingsPage() {
                   )}
                 </label>
                 <button type="submit">{t('changePassword')}</button>
+              </form>
+
+              <h3 style={{ marginTop: '2rem' }}>Change email</h3>
+              <p className="muted" style={{ marginTop: 0 }}>
+                We will email a confirmation link to the new address. Your login email updates after
+                you confirm.
+              </p>
+              <form onSubmit={requestEmailChange} className="form-stack">
+                <FormField label="New email" required>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                </FormField>
+                <label>
+                  <LabelText required>{t('currentPassword')}</LabelText>
+                  <PasswordInput
+                    value={emailChangePassword}
+                    onChange={(e) => setEmailChangePassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                  />
+                </label>
+                <button type="submit">Send confirmation</button>
               </form>
             </div>
           )}

@@ -23,6 +23,7 @@ type CandFilters = {
   city: string;
   skills: string;
   skillMode: 'AND' | 'OR';
+  jobTitle: string;
   degree: string;
   languages: string;
   experienceYearsMin: string;
@@ -39,6 +40,7 @@ const DEFAULT_CAND_FILTERS: CandFilters = {
   city: '',
   skills: '',
   skillMode: 'OR',
+  jobTitle: '',
   degree: '',
   languages: '',
   experienceYearsMin: '',
@@ -75,6 +77,7 @@ function filtersFromSearchParams(sp: URLSearchParams): CandFilters {
     city: sp.get('city') || '',
     skills: sp.get('skills') || '',
     skillMode: sp.get('skillMode') === 'AND' ? 'AND' : 'OR',
+    jobTitle: sp.get('jobTitle') || '',
     degree: sp.get('degree') || '',
     languages: sp.get('languages') || '',
     experienceYearsMin: sp.get('experienceYearsMin') || '',
@@ -97,6 +100,7 @@ function filtersToSearchParams(f: CandFilters): URLSearchParams {
   if (f.city) params.set('city', f.city);
   if (f.skills) params.set('skills', f.skills);
   if (f.skillMode !== 'OR') params.set('skillMode', f.skillMode);
+  if (f.jobTitle) params.set('jobTitle', f.jobTitle);
   if (f.degree) params.set('degree', f.degree);
   if (f.languages) params.set('languages', f.languages);
   if (f.experienceYearsMin) params.set('experienceYearsMin', f.experienceYearsMin);
@@ -217,9 +221,27 @@ export function FindTalentPanel() {
   const selectedCandCities = candFilters.city.split(',').filter(Boolean);
   const selectedCandSkills = candFilters.skills.split(',').filter(Boolean);
   const selectedCandLangs = candFilters.languages.split(',').filter(Boolean);
+  const selectedJobTitles = candFilters.jobTitle.split(',').filter(Boolean);
   const cityFacet = Object.fromEntries((candidates?.facets?.cities || []).map((c: any) => [c.slug, c.count]));
   const skillFacetList = candidates?.facets?.skills || [];
   const skillFacet = Object.fromEntries(skillFacetList.map((s: any) => [s.slug, s.count]));
+  const jobTitleFacetList: Array<{ slug: string; name: string; count: number }> =
+    candidates?.facets?.jobTitles || [];
+  const selectedTitleLabels = selectedJobTitles.map(
+    (slug) => jobTitleFacetList.find((t) => t.slug === slug)?.name || slug,
+  );
+  const hasActiveCandFilters = Boolean(
+    candFilters.q ||
+      candFilters.city ||
+      candFilters.skills ||
+      candFilters.jobTitle ||
+      candFilters.degree ||
+      candFilters.languages ||
+      candFilters.experienceYearsMin ||
+      candFilters.experienceYearsMax ||
+      candFilters.hasCertification ||
+      candFilters.matchJobId,
+  );
   const filteredSkills = useMemo(() => {
     const bySlug = new Map<string, { slug: string; name: string; count?: number }>();
     for (const s of skillFacetList) {
@@ -287,15 +309,7 @@ export function FindTalentPanel() {
               </option>
             ))}
           </select>
-          {(candFilters.q ||
-            candFilters.city ||
-            candFilters.skills ||
-            candFilters.degree ||
-            candFilters.languages ||
-            candFilters.experienceYearsMin ||
-            candFilters.experienceYearsMax ||
-            candFilters.hasCertification ||
-            candFilters.matchJobId) && (
+          {hasActiveCandFilters && (
             <button
               type="button"
               className="secondary"
@@ -309,6 +323,24 @@ export function FindTalentPanel() {
           )}
         </div>
       </div>
+
+      {selectedJobTitles.length > 0 && (
+        <div className="chips" style={{ marginBottom: '0.85rem' }}>
+          {selectedTitleLabels.map((label, i) => (
+            <button
+              key={selectedJobTitles[i]}
+              type="button"
+              className="chip"
+              onClick={() =>
+                applyCand({ jobTitle: toggleCsv(candFilters.jobTitle, selectedJobTitles[i]) })
+              }
+              title="Remove job title filter"
+            >
+              {label} ×
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="jobs-layout" style={{ padding: 0 }}>
         <aside className="filters">
@@ -373,6 +405,28 @@ export function FindTalentPanel() {
               )}
             />
           </FilterFieldset>
+
+          {jobTitleFacetList.length > 0 && (
+            <FilterFieldset legend="Job title" className="filter-group">
+              <ExpandableList
+                items={jobTitleFacetList}
+                initialCount={8}
+                step={8}
+                getKey={(t) => t.slug}
+                renderItem={(t) => (
+                  <label className="filter-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedJobTitles.includes(t.slug)}
+                      onChange={() => applyCand({ jobTitle: toggleCsv(candFilters.jobTitle, t.slug) })}
+                    />
+                    <LabelText optional={false}>{t.name}</LabelText>
+                    <span className="facet-count">({t.count})</span>
+                  </label>
+                )}
+              />
+            </FilterFieldset>
+          )}
 
           <AdvancedFiltersPanel
             storageKey="jt_talent_advanced_filters"
@@ -493,9 +547,30 @@ export function FindTalentPanel() {
           {candLoading && !candidates && <CandidateListSkeleton count={6} />}
           {!candLoading && (candidates?.items || []).length === 0 && (
             <div className="card">
-              <p className="muted" style={{ margin: 0 }}>
-                No talent matches these filters. Try clearing filters or broadening skills/city.
+              <p className="muted" style={{ marginTop: 0 }}>
+                No talent matches these filters
+                {selectedTitleLabels.length
+                  ? ` for ${selectedTitleLabels.join(', ')}`
+                  : ''}
+                . Try clearing filters or broadening skills/city/title.
               </p>
+              <div className="chips">
+                {hasActiveCandFilters && (
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => {
+                      setCandFilters(DEFAULT_CAND_FILTERS);
+                      syncUrl(DEFAULT_CAND_FILTERS);
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                )}
+                <Link href="/talent" className="chip">
+                  Browse all talent
+                </Link>
+              </div>
             </div>
           )}
           {(candidates?.items || []).map((p: any) => (

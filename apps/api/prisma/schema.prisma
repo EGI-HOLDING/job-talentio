@@ -387,12 +387,41 @@ model User {
   messageTemplates MessageTemplate[]   @relation("TemplateAuthor")
   bulkCampaigns    BulkCampaign[]      @relation("BulkCampaignAuthor")
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailChangeTokens       EmailChangeToken[]
 }
 
 model EmailVerificationToken {
   id        String    @id @default(cuid())
   userId    String
   /// SHA-256 of the raw token sent by email — raw token is never stored
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailChangeToken {
+  id        String    @id @default(cuid())
+  userId    String
+  newEmail  String
   tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
@@ -653,25 +682,28 @@ model ProfileLanguage {
 }
 
 model Resume {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   profileId         String
   title             String
   content           String?
   fileKey           String?
   fileUrl           String?
-  isPrimary         Boolean  @default(false)
+  isPrimary         Boolean   @default(false)
   parsedData        Json?
-  templateKey       String   @default("classic")
+  templateKey       String    @default("classic")
   themeAccent       String?
   inclusion         Json?
   builderMeta       Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  /** Soft-delete tombstone; hard-purged when no Application references remain. */
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   profile      EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   applications Application[]
 
   @@index([profileId])
+  @@index([profileId, deletedAt])
 }
 
 model Application {

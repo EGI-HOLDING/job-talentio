@@ -12,6 +12,7 @@ import { randomBytes } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { StorageService } from '../storage/storage.service';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { UserRole } from '@prisma/client';
@@ -26,6 +27,7 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     private mail: MailService,
+    private storage: StorageService,
   ) {}
 
   private async assertEmailAvailable(email: string) {
@@ -228,6 +230,35 @@ export class AuthService {
         avatarUrl: data.avatarUrl === '' ? null : data.avatarUrl,
       },
     });
+    return this.tokenFor(userId);
+  }
+
+  async uploadAvatar(userId: string, file: Express.Multer.File) {
+    if (!file?.buffer?.length) throw new BadRequestException('Image file is required');
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const uploaded = await this.storage.upload(
+      file.buffer,
+      file.originalname || 'avatar.jpg',
+      file.mimetype,
+      'avatars',
+    );
+    const oldKey = this.storage.keyFromPublicUrl(user.avatarUrl);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: uploaded.url },
+    });
+    if (oldKey) await this.storage.delete(oldKey);
+    return this.tokenFor(userId);
+  }
+
+  async clearAvatar(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const oldKey = this.storage.keyFromPublicUrl(user.avatarUrl);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: null },
+    });
+    if (oldKey) await this.storage.delete(oldKey);
     return this.tokenFor(userId);
   }
 
@@ -462,5 +493,129 @@ export class AuthService {
     throw new BadRequestException(
       'Telegram sign-in is not available yet. Please use email and password.',
     );
+  }
+
+  /** Always returns ok — do not leak whether the email exists. */
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (!user || user.isBanned || !user.passwordHash) return { ok: true };
+
+    await this.prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+    const rawToken = randomBytes(32).toString('hex');
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: sha256(rawToken),
+        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+      },
+    });
+    const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
+    const link = `${webUrl}/reset-password?token=${rawToken}`;
+    void this.mail.send(
+      user.email,
+      'Reset your password - Job Talentio',
+      `<p>Salom ${user.fullName}!</p>
+       <p>Reset your Job Talentio password:</p>
+       <p><a href="${link}">Choose a new password</a></p>
+       <p>Or open: ${link}</p>
+       <p>This link expires in 24 hours. If you did not request a reset, ignore this email.</p>`,
+    );
+    return { ok: true };
+  }
+
+  async resetPassword(rawToken: string, newPassword: string) {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: sha256(rawToken) },
+      include: { user: true },
+    });
+    if (!record || record.usedAt) {
+      throw new BadRequestException('Reset link is invalid or already used');
+    }
+    if (record.expiresAt < new Date()) {
+      throw new BadRequestException('Reset link expired. Request a new one.');
+    }
+    if (record.user.isBanned) throw new ForbiddenException('Account banned');
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.$transaction([
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  async requestEmailChange(userId: string, newEmail: string, currentPassword: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.passwordHash) {
+      throw new BadRequestException('Set a password before changing email');
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Current password is incorrect');
+
+    const email = newEmail.trim().toLowerCase();
+    if (email === user.email) throw new BadRequestException('That is already your email');
+    await this.assertEmailAvailable(email);
+
+    await this.prisma.emailChangeToken.deleteMany({
+      where: { userId, usedAt: null },
+    });
+    const rawToken = randomBytes(32).toString('hex');
+    await this.prisma.emailChangeToken.create({
+      data: {
+        userId,
+        newEmail: email,
+        tokenHash: sha256(rawToken),
+        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+      },
+    });
+    const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
+    const link = `${webUrl}/confirm-email-change?token=${rawToken}`;
+    void this.mail.send(
+      email,
+      'Confirm your new email - Job Talentio',
+      `<p>Salom ${user.fullName}!</p>
+       <p>Confirm this address as your new Job Talentio login email:</p>
+       <p><a href="${link}">Confirm email change</a></p>
+       <p>Or open: ${link}</p>
+       <p>This link expires in 24 hours.</p>`,
+    );
+    return { ok: true, message: 'Check the new inbox to confirm the change' };
+  }
+
+  async confirmEmailChange(rawToken: string) {
+    const record = await this.prisma.emailChangeToken.findUnique({
+      where: { tokenHash: sha256(rawToken) },
+      include: { user: true },
+    });
+    if (!record || record.usedAt) {
+      throw new BadRequestException('Link is invalid or already used');
+    }
+    if (record.expiresAt < new Date()) {
+      throw new BadRequestException('Link expired. Request a new email change.');
+    }
+    if (record.user.isBanned) throw new ForbiddenException('Account banned');
+    await this.assertEmailAvailable(record.newEmail);
+
+    await this.prisma.$transaction([
+      this.prisma.emailChangeToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { email: record.newEmail, emailVerified: true },
+      }),
+    ]);
+    return this.tokenFor(record.userId);
   }
 }

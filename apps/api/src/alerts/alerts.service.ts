@@ -109,6 +109,73 @@ export class AlertsService {
     return { ok: true };
   }
 
+  async update(
+    userId: string,
+    id: string,
+    data: {
+      name?: string;
+      query?: string | null;
+      citySlug?: string | null;
+      categorySlug?: string | null;
+      skillSlugs?: string[];
+      frequency?: 'DAILY' | 'WEEKLY';
+      isActive?: boolean;
+    },
+  ) {
+    const alert = await this.prisma.jobAlert.findFirst({ where: { id, userId } });
+    if (!alert) throw new NotFoundException();
+
+    let cityId: string | null | undefined = undefined;
+    let categoryId: string | null | undefined = undefined;
+    if (data.citySlug !== undefined) {
+      if (!data.citySlug) cityId = null;
+      else {
+        const city = await this.prisma.city.findUnique({ where: { slug: data.citySlug } });
+        cityId = city?.id ?? null;
+      }
+    }
+    if (data.categorySlug !== undefined) {
+      if (!data.categorySlug) categoryId = null;
+      else {
+        const cat = await this.prisma.jobCategory.findUnique({
+          where: { slug: data.categorySlug },
+        });
+        categoryId = cat?.id ?? null;
+      }
+    }
+
+    await this.prisma.jobAlert.update({
+      where: { id },
+      data: {
+        name: data.name?.trim(),
+        query: data.query === undefined ? undefined : data.query?.trim() || null,
+        cityId,
+        categoryId,
+        frequency: data.frequency,
+        isActive: data.isActive,
+      },
+    });
+
+    if (data.skillSlugs) {
+      await this.prisma.jobAlertSkill.deleteMany({ where: { alertId: id } });
+      for (const slug of [...new Set(data.skillSlugs.map((s) => s.trim()).filter(Boolean))]) {
+        try {
+          const { skill } = await resolveSkill(this.prisma, { slug, allowCreate: false });
+          await this.prisma.jobAlertSkill.create({
+            data: { alertId: id, skillId: skill.id },
+          });
+        } catch {
+          /* skip unknown */
+        }
+      }
+    }
+
+    return this.prisma.jobAlert.findUnique({
+      where: { id },
+      include: { city: true, category: true, skills: { include: { skill: true } } },
+    });
+  }
+
   async processDueAlerts() {
     const alerts = await this.prisma.jobAlert.findMany({
       where: { isActive: true },

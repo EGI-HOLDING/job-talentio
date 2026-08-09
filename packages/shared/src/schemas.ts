@@ -157,6 +157,8 @@ export const candidateSearchSchema = z.object({
   city: z.string().optional(),
   skills: z.string().optional(), // comma-separated slugs
   skillMode: z.enum(['AND', 'OR']).default('OR'),
+  /** Comma-separated JobTitle slugs (desired role / experience titles). */
+  jobTitle: z.string().optional(),
   degree: z.string().optional(),
   languages: z.string().optional(),
   experienceYearsMin: z.coerce.number().optional(),
@@ -287,6 +289,34 @@ export const jobAlertSchema = z.object({
   categorySlug: z.string().max(120).optional(),
   skillSlugs: z.array(z.string()).max(20).default([]),
   frequency: z.enum(['DAILY', 'WEEKLY']).default('DAILY'),
+});
+
+export const jobAlertUpdateSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  query: z.string().max(200).optional().nullable(),
+  citySlug: z.string().max(120).optional().nullable(),
+  categorySlug: z.string().max(120).optional().nullable(),
+  skillSlugs: z.array(z.string()).max(20).optional(),
+  frequency: z.enum(['DAILY', 'WEEKLY']).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20),
+  newPassword: z.string().min(8).max(128),
+});
+
+export const changeEmailSchema = z.object({
+  newEmail: z.string().email(),
+  currentPassword: z.string().min(1),
+});
+
+export const confirmEmailChangeSchema = z.object({
+  token: z.string().min(20),
 });
 
 export const resumeSchema = z.object({

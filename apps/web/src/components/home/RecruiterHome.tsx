@@ -47,25 +47,14 @@ export function RecruiterHome() {
       })
       .catch(() => undefined);
 
-    api<{ facets?: { cities?: FacetItem[]; skills?: FacetItem[] } }>(
-      '/profiles/candidates?limit=1&sort=newest',
-    )
+    api<{
+      facets?: { cities?: FacetItem[]; skills?: FacetItem[]; jobTitles?: FacetItem[] };
+    }>('/profiles/candidates?limit=1&sort=newest')
       .then((r) => {
         setCityFacets((r.facets?.cities || []).slice(0, 8));
         setSkillFacets((r.facets?.skills || []).slice(0, 8));
+        setTitleFacets((r.facets?.jobTitles || []).filter((t) => t.count > 0).slice(0, 8));
       })
-      .catch(() => undefined);
-
-    api<{ items: FacetItem[] }>('/meta/job-titles?page=1&limit=8', { auth: false })
-      .then((list) =>
-        setTitleFacets(
-          (list.items || []).map((row) => ({
-            slug: row.slug,
-            name: row.name,
-            count: row.count ?? 0,
-          })),
-        ),
-      )
       .catch(() => undefined);
   }, []);
 
@@ -188,7 +177,7 @@ export function RecruiterHome() {
               slug={item.slug}
               count={item.count}
               countLabel={talentCountLabel(t, item.count)}
-              href={`/talent?q=${encodeURIComponent(item.name)}`}
+              href={`/talent?jobTitle=${encodeURIComponent(item.slug)}`}
             />
           ))}
         </ExploreSection>

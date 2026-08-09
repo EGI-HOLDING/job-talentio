@@ -7,6 +7,7 @@ const ALLOWED_MIME = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
+const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /** Shared Multer limits for CV / resume uploads. */
 export const resumeUploadOptions: MulterOptions = {
@@ -14,6 +15,18 @@ export const resumeUploadOptions: MulterOptions = {
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME.has(file.mimetype)) {
       cb(new BadRequestException('Only PDF or Word documents are allowed') as never, false);
+      return;
+    }
+    cb(null, true);
+  },
+};
+
+/** Avatars and company logos (cropped client-side before upload). */
+export const imageUploadOptions: MulterOptions = {
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_IMAGE_MIME.has(file.mimetype)) {
+      cb(new BadRequestException('Only JPEG, PNG, or WebP images are allowed') as never, false);
       return;
     }
     cb(null, true);

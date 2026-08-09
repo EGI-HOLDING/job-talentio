@@ -85,4 +85,9 @@ export class ApplicationsController {
   listInterviews(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.applications.listInterviews(user, id);
   }
+
+  @Get(':id/resume-download')
+  downloadResume(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.applications.downloadResume(user, id);
+  }
 }

@@ -180,7 +180,50 @@ export default function EmployeeDashboard() {
   }
 
   async function removeItem(kind: string, id: string) {
-    await api(`/profiles/me/${kind}/${id}`, { method: 'DELETE' });
+    if (kind === 'resumes') {
+      if (
+        !confirm(
+          'Remove this CV from your library? If you already applied with it, the file stays available for those applications until no longer needed.',
+        )
+      ) {
+        return;
+      }
+    }
+    const res = await api<{ softDeleted?: boolean; message?: string }>(
+      `/profiles/me/${kind}/${id}`,
+      { method: 'DELETE' },
+    );
+    if (kind === 'resumes' && res?.softDeleted && res.message) {
+      setMsg(res.message);
+    }
+    await load();
+  }
+
+  async function withdrawApplication(appId: string) {
+    if (!confirm('Withdraw this application?')) return;
+    try {
+      await api(`/applications/${appId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: 'WITHDRAWN' }),
+      });
+      setMsg('Application withdrawn');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Withdraw failed');
+    }
+  }
+
+  async function deleteAlert(id: string) {
+    if (!confirm('Delete this job alert?')) return;
+    await api(`/alerts/${id}`, { method: 'DELETE' });
+    await load();
+  }
+
+  async function toggleAlert(id: string, isActive: boolean) {
+    await api(`/alerts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive: !isActive }),
+    });
     await load();
   }
 
@@ -545,15 +588,28 @@ export default function EmployeeDashboard() {
                         Interview {new Date(iv.scheduledAt).toLocaleString()}
                       </div>
                     ))}
-                    {a.jobPost.company?.chatPeerUserId ? (
-                      <Link
-                        href={`/messages?peer=${a.jobPost.company.chatPeerUserId}&job=${a.jobPost.id}`}
-                        className="chip"
-                        style={{ fontSize: '0.78rem' }}
-                      >
-                        Chat with recruiter
-                      </Link>
-                    ) : null}
+                    <div className="chips" style={{ justifyContent: 'flex-end' }}>
+                      {a.jobPost.company?.chatPeerUserId ? (
+                        <Link
+                          href={`/messages?peer=${a.jobPost.company.chatPeerUserId}&job=${a.jobPost.id}`}
+                          className="chip"
+                          style={{ fontSize: '0.78rem' }}
+                        >
+                          Chat with recruiter
+                        </Link>
+                      ) : null}
+                      {a.status !== 'WITHDRAWN' &&
+                        a.status !== 'HIRED' &&
+                        a.status !== 'REJECTED' && (
+                          <button
+                            type="button"
+                            className="chip"
+                            onClick={() => withdrawApplication(a.id)}
+                          >
+                            Withdraw
+                          </button>
+                        )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -658,8 +714,26 @@ export default function EmployeeDashboard() {
                 <div key={a.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{a.name}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {a.city?.name || 'Any city'} | {a.frequency}
+                    {a.city?.name || 'Any city'} | {a.frequency} |{' '}
+                    {a.isActive ? 'Active' : 'Paused'}
                   </p>
+                  {(a.skills || []).length > 0 && (
+                    <p className="muted" style={{ fontSize: '0.85rem', margin: '0.25rem 0' }}>
+                      Skills: {a.skills.map((s: any) => s.skill?.name).filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                  <div className="chips">
+                    <button
+                      type="button"
+                      className="chip"
+                      onClick={() => toggleAlert(a.id, a.isActive)}
+                    >
+                      {a.isActive ? 'Pause' : 'Resume'}
+                    </button>
+                    <button type="button" className="chip" onClick={() => deleteAlert(a.id)}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
