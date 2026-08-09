@@ -3,6 +3,7 @@ import { MetaController } from './meta.controller';
 import { MetaService } from './meta.service';
 import { GeoBackfillService } from './geo-backfill.service';
 import { IndustryBackfillService } from './industry-backfill.service';
+import { JobLanguageBackfillService } from './job-language-backfill.service';
 import { VipCompanyBackfillService } from './vip-company-backfill.service';
 import { CompanyLogoBackfillService } from './company-logo-backfill.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -14,6 +15,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     MetaService,
     GeoBackfillService,
     IndustryBackfillService,
+    JobLanguageBackfillService,
     VipCompanyBackfillService,
     CompanyLogoBackfillService,
   ],

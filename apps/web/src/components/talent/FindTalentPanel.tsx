@@ -12,6 +12,11 @@ import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
+import {
+  csvHasLanguageCode,
+  LanguageLevelCode,
+  parseLanguagesCsv,
+} from '@job-talentio/shared';
 
 type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 
@@ -57,6 +62,18 @@ function toggleCsv(csv: string, value: string) {
   if (set.has(value)) set.delete(value);
   else set.add(value);
   return Array.from(set).join(',');
+}
+
+function toggleLanguageCsv(csv: string, code: string, defaultLevel: LanguageLevelCode = 'B1') {
+  const tokens = parseLanguagesCsv(csv);
+  const key = code.toLowerCase();
+  const has = tokens.some((t) => t.code === key);
+  const next = has
+    ? tokens.filter((t) => t.code !== key)
+    : [...tokens, { code: key, minLevel: defaultLevel }];
+  return next
+    .map((t) => (t.minLevel === 'A1' ? t.code : `${t.code}:${t.minLevel}`))
+    .join(',');
 }
 
 function jobSelectLabel(j: {
@@ -220,7 +237,7 @@ export function FindTalentPanel() {
 
   const selectedCandCities = candFilters.city.split(',').filter(Boolean);
   const selectedCandSkills = candFilters.skills.split(',').filter(Boolean);
-  const selectedCandLangs = candFilters.languages.split(',').filter(Boolean);
+  const selectedCandLangs = parseLanguagesCsv(candFilters.languages);
   const selectedJobTitles = candFilters.jobTitle.split(',').filter(Boolean);
   const cityFacet = Object.fromEntries((candidates?.facets?.cities || []).map((c: any) => [c.slug, c.count]));
   const skillFacetList = candidates?.facets?.skills || [];
@@ -511,7 +528,7 @@ export function FindTalentPanel() {
               </label>
             </div>
 
-            <FilterFieldset legend="Languages" className="filter-group">
+            <FilterFieldset legend={t('languages')} className="filter-group">
               <ExpandableList
                 items={meta.languages}
                 initialCount={8}
@@ -521,10 +538,17 @@ export function FindTalentPanel() {
                   <label className="filter-check">
                     <input
                       type="checkbox"
-                      checked={selectedCandLangs.includes(l.code)}
-                      onChange={() => applyCand({ languages: toggleCsv(candFilters.languages, l.code) })}
+                      checked={csvHasLanguageCode(candFilters.languages, l.code)}
+                      onChange={() =>
+                        applyCand({ languages: toggleLanguageCsv(candFilters.languages, l.code, 'B1') })
+                      }
                     />
-                    <LabelText optional={false}>{l.name}</LabelText>
+                    <LabelText optional={false}>
+                      {l.name}
+                      {selectedCandLangs.some((tok) => tok.code === l.code)
+                        ? ` ${selectedCandLangs.find((tok) => tok.code === l.code)?.minLevel}+`
+                        : ''}
+                    </LabelText>
                   </label>
                 )}
               />

@@ -294,6 +294,7 @@ model Language {
 
   aliases          LanguageAlias[]
   profileLanguages ProfileLanguage[]
+  jobLanguages     JobPostLanguage[]
 }
 
 model LanguageAlias {
@@ -540,8 +541,9 @@ model JobPost {
   jobTitle     JobTitle?        @relation(fields: [jobTitleId], references: [id])
   city         City?            @relation(fields: [cityId], references: [id])
   category     JobCategory?     @relation(fields: [categoryId], references: [id])
-  jobSkills    JobPostSkill[]
-  benefits     JobPostBenefit[]
+  jobSkills     JobPostSkill[]
+  jobLanguages  JobPostLanguage[]
+  benefits      JobPostBenefit[]
   applications  Application[]
   savedBy       SavedJob[]
   questions     JobQuestion[]
@@ -556,6 +558,20 @@ model JobPost {
   @@index([experienceLevel])
   @@index([companyId, fingerprint])
   @@index([companyId, contentHash])
+}
+
+model JobPostLanguage {
+  id         String        @id @default(cuid())
+  jobPostId  String
+  languageId String
+  minLevel   LanguageLevel @default(B1)
+  isRequired Boolean       @default(true)
+
+  jobPost  JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@unique([jobPostId, languageId])
+  @@index([languageId])
 }
 
 model JobPostSkill {

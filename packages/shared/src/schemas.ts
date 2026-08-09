@@ -117,6 +117,22 @@ export const jobPostSchema = z.object({
     )
     .max(20)
     .optional(),
+  languages: z
+    .array(
+      z
+        .object({
+          code: z.string().min(2).max(8).optional(),
+          name: z.string().min(1).max(80).optional(),
+          minLevel: z
+            .enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'])
+            .optional()
+            .default('B1'),
+          isRequired: z.boolean().optional().default(true),
+        })
+        .refine((l) => Boolean(l.code || l.name), { message: 'code or name required' }),
+    )
+    .max(4)
+    .default([]),
   locale: z.enum(['uz', 'ru', 'en']).default('uz'),
 });
 
@@ -136,6 +152,8 @@ export const jobSearchSchema = z.object({
   skills: z.string().optional(), // comma-separated slugs
   skillMode: z.enum(['AND', 'OR']).default('OR'),
   benefits: z.string().optional(), // comma-separated slugs
+  /** Comma-separated language tokens: `en` or `en:B2` (level = floor, inclusive). */
+  languages: z.string().optional(),
   salaryMin: z.coerce.number().optional(),
   salaryMax: z.coerce.number().optional(),
   experienceYearsMax: z.coerce.number().optional(),

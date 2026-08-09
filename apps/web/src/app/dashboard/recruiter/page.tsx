@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
@@ -98,6 +98,14 @@ function RecruiterDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [draftJobSkills, setDraftJobSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [draftJobBenefits, setDraftJobBenefits] = useState<Array<{ slug: string; name: string }>>([]);
+  const [draftJobLanguages, setDraftJobLanguages] = useState<
+    Array<{ code: string; name: string; minLevel: string; isRequired: boolean }>
+  >([]);
+  const [editJobLanguages, setEditJobLanguages] = useState<
+    Array<{ code: string; name: string; minLevel: string; isRequired: boolean }>
+  >([]);
+  const [draftJobLocale, setDraftJobLocale] = useState<'uz' | 'ru' | 'en'>('uz');
+  const localeLangSuggested = useRef(false);
   const [draftJobLevel, setDraftJobLevel] = useState('');
   const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
     cities: [],
@@ -285,6 +293,16 @@ function RecruiterDashboard() {
     }
   }
 
+  useEffect(() => {
+    if (localeLangSuggested.current || draftJobLanguages.length > 0) return;
+    const lang = meta.languages.find((l) => l.code === draftJobLocale);
+    if (!lang) return;
+    localeLangSuggested.current = true;
+    setDraftJobLanguages([
+      { code: lang.code, name: lang.name, minLevel: 'B1', isRequired: true },
+    ]);
+  }, [meta.languages, draftJobLocale, draftJobLanguages.length]);
+
   async function loadJobs(cid: string) {
     const list = await api<any[]>(`/jobs/company/${cid}`);
     setJobs(list);
@@ -380,6 +398,7 @@ function RecruiterDashboard() {
         currency: fd.get('currency') || 'UZS',
         employmentType: fd.get('employmentType') || 'FULL_TIME',
         workMode: fd.get('workMode') || 'ONSITE',
+        locale: draftJobLocale,
         skills: draftJobSkills.map((s) =>
           s.slug
             ? { slug: s.slug, isRequired: true, weight: 1 }
@@ -388,10 +407,18 @@ function RecruiterDashboard() {
         benefits: draftJobBenefits.map((b) =>
           b.slug ? { slug: b.slug } : { name: b.name },
         ),
+        languages: draftJobLanguages.map((l) => ({
+          code: l.code,
+          name: l.name,
+          minLevel: l.minLevel,
+          isRequired: l.isRequired,
+        })),
       }),
     });
     setDraftJobSkills([]);
     setDraftJobBenefits([]);
+    setDraftJobLanguages([]);
+    localeLangSuggested.current = false;
     setDraftJobLevel('');
     flash('Job created as DRAFT');
     await loadJobs(companyId);
@@ -414,14 +441,32 @@ function RecruiterDashboard() {
           currency: fd.get('currency') || 'UZS',
           employmentType: fd.get('employmentType') || 'FULL_TIME',
           workMode: fd.get('workMode') || 'ONSITE',
+          languages: editJobLanguages.map((l) => ({
+            code: l.code,
+            name: l.name,
+            minLevel: l.minLevel,
+            isRequired: l.isRequired,
+          })),
         }),
       });
       setEditingJobId(null);
+      setEditJobLanguages([]);
       flash('Job updated');
       await loadJobs(companyId);
     } catch (err) {
       flash(err instanceof Error ? err.message : 'Job update failed', 'error');
     }
+  }
+
+  function hydrateEditLanguages(job: any) {
+    setEditJobLanguages(
+      (job.jobLanguages || []).map((jl: any) => ({
+        code: jl.language?.code || '',
+        name: jl.language?.name || jl.language?.code || '',
+        minLevel: jl.minLevel || 'B1',
+        isRequired: jl.isRequired !== false,
+      })).filter((l: { code: string }) => l.code),
+    );
   }
 
   async function changeJobStatus(jobId: string, status: string, okMsg: string) {
@@ -763,14 +808,40 @@ function RecruiterDashboard() {
                     </select>
                   </label>
                 </div>
-                <label>
-                  <LabelText>Currency</LabelText>
-                  <select name="currency" defaultValue="UZS">
-                    <option value="UZS">UZS</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                  </select>
-                </label>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>Currency</LabelText>
+                    <select name="currency" defaultValue="UZS">
+                      <option value="UZS">UZS</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                  </label>
+                  <label>
+                    <LabelText>{t('postLocale')}</LabelText>
+                    <select
+                      name="locale"
+                      value={draftJobLocale}
+                      onChange={(e) => {
+                        const next = e.target.value as 'uz' | 'ru' | 'en';
+                        setDraftJobLocale(next);
+                        if (!localeLangSuggested.current || draftJobLanguages.length <= 1) {
+                          const lang = meta.languages.find((l) => l.code === next);
+                          if (lang) {
+                            localeLangSuggested.current = true;
+                            setDraftJobLanguages([
+                              { code: lang.code, name: lang.name, minLevel: 'B1', isRequired: true },
+                            ]);
+                          }
+                        }
+                      }}
+                    >
+                      <option value="uz">uz</option>
+                      <option value="ru">ru</option>
+                      <option value="en">en</option>
+                    </select>
+                  </label>
+                </div>
                 <p className="muted" style={{ fontSize: '0.78rem', margin: '-0.35rem 0 0.5rem' }}>
                   Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.
                 </p>
@@ -842,6 +913,59 @@ function RecruiterDashboard() {
                     }}
                   />
                 </div>
+                <div>
+                  <LabelText>{t('languages')}</LabelText>
+                  <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
+                    {t('jobLanguagesHint')}
+                  </p>
+                  <div className="chips" style={{ margin: '0.4rem 0' }}>
+                    {draftJobLanguages.map((l) => (
+                      <span key={l.code} className="badge">
+                        {l.name} {l.minLevel}
+                        {l.isRequired ? '' : ` (${t('optional')})`}
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ marginLeft: 6, padding: 0 }}
+                          onClick={() =>
+                            setDraftJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
+                          }
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  {draftJobLanguages.length < 4 && (
+                    <LookupCombobox
+                      kind="languages"
+                      allowCreate={false}
+                      submitLabel={t('addLanguage')}
+                      placeholder={t('languageSearchPlaceholder')}
+                      levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((v) => ({
+                        value: v,
+                        label: v,
+                      }))}
+                      defaultLevel="B1"
+                      onPick={(item) => {
+                        const code = item.code || item.slug;
+                        if (!code) return;
+                        setDraftJobLanguages((prev) => {
+                          if (prev.some((p) => p.code === code) || prev.length >= 4) return prev;
+                          return [
+                            ...prev,
+                            {
+                              code,
+                              name: item.name,
+                              minLevel: item.level || 'B1',
+                              isRequired: true,
+                            },
+                          ];
+                        });
+                      }}
+                    />
+                  )}
+                </div>
                 <button type="submit">Create draft</button>
               </form>
             </div>
@@ -903,7 +1027,15 @@ function RecruiterDashboard() {
                     <button
                       type="button"
                       className="chip"
-                      onClick={() => setEditingJobId(editingJobId === j.id ? null : j.id)}
+                      onClick={() => {
+                        if (editingJobId === j.id) {
+                          setEditingJobId(null);
+                          setEditJobLanguages([]);
+                        } else {
+                          setEditingJobId(j.id);
+                          hydrateEditLanguages(j);
+                        }
+                      }}
                     >
                       {editingJobId === j.id ? 'Cancel edit' : 'Edit'}
                     </button>
@@ -1020,6 +1152,59 @@ function RecruiterDashboard() {
                           <option value="EUR">EUR</option>
                         </select>
                       </label>
+                      <div>
+                        <LabelText>{t('languages')}</LabelText>
+                        <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
+                          {t('jobLanguagesHint')}
+                        </p>
+                        <div className="chips" style={{ margin: '0.4rem 0' }}>
+                          {editJobLanguages.map((l) => (
+                            <span key={l.code} className="badge">
+                              {l.name} {l.minLevel}
+                              {l.isRequired ? '' : ` (${t('optional')})`}
+                              <button
+                                type="button"
+                                className="ghost"
+                                style={{ marginLeft: 6, padding: 0 }}
+                                onClick={() =>
+                                  setEditJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
+                                }
+                              >
+                                x
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                        {editJobLanguages.length < 4 && (
+                          <LookupCombobox
+                            kind="languages"
+                            allowCreate={false}
+                            submitLabel={t('addLanguage')}
+                            placeholder={t('languageSearchPlaceholder')}
+                            levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((v) => ({
+                              value: v,
+                              label: v,
+                            }))}
+                            defaultLevel="B1"
+                            onPick={(item) => {
+                              const code = item.code || item.slug;
+                              if (!code) return;
+                              setEditJobLanguages((prev) => {
+                                if (prev.some((p) => p.code === code) || prev.length >= 4) return prev;
+                                return [
+                                  ...prev,
+                                  {
+                                    code,
+                                    name: item.name,
+                                    minLevel: item.level || 'B1',
+                                    isRequired: true,
+                                  },
+                                ];
+                              });
+                            }}
+                          />
+                        )}
+                      </div>
                       <button type="submit">Save changes</button>
                     </form>
                   )}
@@ -1252,6 +1437,17 @@ function RecruiterDashboard() {
                                           <span>{Math.round(Number(value) || 0)}</span>
                                         </div>
                                       ))}
+                                      {(a.matchBreakdown.details?.matchedLanguages?.length > 0 ||
+                                        a.matchBreakdown.details?.missingRequiredLanguages?.length > 0) && (
+                                        <p className="muted" style={{ fontSize: '0.75rem', margin: '0.4rem 0 0' }}>
+                                          {a.matchBreakdown.details.matchedLanguages?.length
+                                            ? `OK: ${a.matchBreakdown.details.matchedLanguages.join(', ')}`
+                                            : ''}
+                                          {a.matchBreakdown.details.missingRequiredLanguages?.length
+                                            ? `${a.matchBreakdown.details.matchedLanguages?.length ? ' | ' : ''}Missing: ${a.matchBreakdown.details.missingRequiredLanguages.join(', ')}`
+                                            : ''}
+                                        </p>
+                                      )}
                                     </div>
                                   )}
                                   <div className="match-bar">

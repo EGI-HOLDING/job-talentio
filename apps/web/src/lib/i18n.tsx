@@ -829,6 +829,21 @@ const DICT = {
     ru: 'Поиск языка...',
     en: 'Search languages...',
   },
+  jobLanguagesHint: {
+    uz: 'Ixtiyoriy. Maksimum 4 til, CEFR daraja bilan (masalan English B2).',
+    ru: 'Необязательно. До 4 языков с уровнем CEFR (например English B2).',
+    en: 'Optional. Up to 4 languages with CEFR level (e.g. English B2).',
+  },
+  postLocale: {
+    uz: 'E’lon tili',
+    ru: 'Язык объявления',
+    en: 'Post locale',
+  },
+  minLevel: {
+    uz: 'Minimal daraja',
+    ru: 'Мин. уровень',
+    en: 'Min level',
+  },
 } as const;
 
 export type DictKey = keyof typeof DICT;

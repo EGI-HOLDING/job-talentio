@@ -18,6 +18,7 @@
     "prisma:backfill-geo": "tsx prisma/backfill-geo.ts",
     "backfill:geo": "node dist/scripts/backfill-geo.js",
     "backfill:industries": "node dist/scripts/backfill-industries.js",
+    "backfill:job-languages": "node dist/scripts/backfill-job-languages.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
