@@ -1,24 +1,33 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 /**
  * Railway Free/Hobby/Trial block outbound SMTP (ports 25/465/587).
  * Prefer Resend HTTPS when RESEND_API_KEY is set; fall back to SMTP for
  * local Mailpit and Railway Pro.
+ *
+ * Set RESEND_API_KEY in Railway (never commit the real key).
+ * Until jobtalent.io is verified in Resend, use:
+ *   SMTP_FROM="Job Talentio <onboarding@resend.dev>"
+ * After domain verify, switch to:
+ *   SMTP_FROM="Job Talentio <info@jobtalent.io>"
  */
 @Injectable()
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private resend: Resend | null = null;
   private from: string;
-  private resendApiKey: string | null = null;
 
   constructor(private config: ConfigService) {
     this.from = this.config.get('SMTP_FROM', 'Job Talentio <noreply@jobtalentio.local>');
-    this.resendApiKey = this.config.get<string>('RESEND_API_KEY')?.trim() || null;
+    const resendApiKey = this.config.get<string>('RESEND_API_KEY')?.trim() || null;
 
-    if (!this.resendApiKey) {
+    if (resendApiKey) {
+      this.resend = new Resend(resendApiKey);
+    } else {
       const secure =
         String(this.config.get('SMTP_SECURE', 'false')).toLowerCase() === 'true';
       this.transporter = nodemailer.createTransport({
@@ -39,8 +48,8 @@ export class MailService implements OnModuleInit {
   }
 
   onModuleInit() {
-    if (this.resendApiKey) {
-      this.logger.log('Mail transport: Resend HTTPS API (from ' + this.from + ')');
+    if (this.resend) {
+      this.logger.log('Mail transport: Resend SDK (from ' + this.from + ')');
     } else {
       this.logger.warn(
         'Mail transport: SMTP. On Railway Hobby/Trial, outbound SMTP is blocked — set RESEND_API_KEY to send mail.',
@@ -54,7 +63,7 @@ export class MailService implements OnModuleInit {
    */
   async send(to: string, subject: string, html: string) {
     try {
-      if (this.resendApiKey) {
+      if (this.resend) {
         return await this.sendViaResend(to, subject, html);
       }
       return await this.sendViaSmtp(to, subject, html);
@@ -65,29 +74,18 @@ export class MailService implements OnModuleInit {
   }
 
   private async sendViaResend(to: string, subject: string, html: string) {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: this.from,
-        to: [to],
-        subject,
-        html,
-      }),
+    if (!this.resend) throw new Error('Resend client not configured');
+    const { data, error } = await this.resend.emails.send({
+      from: this.from,
+      to: [to],
+      subject,
+      html,
     });
-    const body = (await res.json().catch(() => ({}))) as {
-      id?: string;
-      message?: string;
-      name?: string;
-    };
-    if (!res.ok) {
-      throw new Error(body.message || body.name || `Resend HTTP ${res.status}`);
+    if (error) {
+      throw new Error(error.message || 'Resend send failed');
     }
-    this.logger.log(`Email sent to ${to} via Resend: ${body.id ?? 'ok'}`);
-    return body;
+    this.logger.log(`Email sent to ${to} via Resend: ${data?.id ?? 'ok'}`);
+    return data;
   }
 
   private async sendViaSmtp(to: string, subject: string, html: string) {
