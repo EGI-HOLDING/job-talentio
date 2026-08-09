@@ -101,10 +101,21 @@ Do this **before** relying on web/admin. Postgres/Redis are **separate Railway s
    - Healthcheck path: `/api/health`
    - Custom start command: empty
    - Serverless: **off**
-6. **Deploy** / redeploy **api**. In deploy logs you should see `prisma migrate deploy` succeed, then the Nest process start.
+6. **Deploy** / redeploy **api**. In deploy logs you should see:
+   1. `prisma migrate deploy` succeed
+   2. `JobTitle backfill: scanned=… updated=…` (canonicalizes legacy titles like “Senior …”, fills `JobTitle` + `jobTitleId`)
+   3. Nest process start
 7. Open `https://<api-public-host>/api/health` (custom domain or `*.up.railway.app`) and expect `status: ok`.
 
 If migrate fails with connection errors, the usual cause is a missing/wrong `DATABASE_URL` reference or Postgres still provisioning.
+
+**JobTitle catalog / legacy titles:** API image CMD runs `node dist/scripts/backfill-job-titles.js` after migrate (idempotent). Nest also backfills on boot if any `JobPost.jobTitleId` is still null. For local DBs that skipped seed:
+
+```bash
+pnpm --filter @job-talentio/api prisma:backfill-job-titles
+# or after build:
+pnpm --filter @job-talentio/api backfill:job-titles
+```
 
 ### Reference variables (api)
 
@@ -252,6 +263,7 @@ credentials. Use one of:
 
 - [ ] Staging deploys from `develop`; production from `main`
 - [ ] `pnpm db:migrate:deploy` runs on api container start (Dockerfile CMD)
+- [ ] JobTitle backfill runs after migrate (`dist/scripts/backfill-job-titles.js`); explore titles / job cards show role-only titles
 - [ ] `GET https://api…/api/health` returns ok
 - [ ] Login employee / recruiter / admin
 - [ ] Upload (CV/logo) lands in the correct R2 bucket

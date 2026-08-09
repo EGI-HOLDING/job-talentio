@@ -29,4 +29,5 @@ COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 WORKDIR /app/apps/api
 EXPOSE 4000
 # Nest emits dist/main.js when only `src` is compiled (see tsconfig.build.json).
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
+# Backfill JobTitle links + strip seniority from legacy post titles after migrate.
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/scripts/backfill-job-titles.js && node dist/main.js"]
