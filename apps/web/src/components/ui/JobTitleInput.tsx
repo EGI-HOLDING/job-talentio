@@ -17,6 +17,8 @@ type JobTitleInputProps = {
 
 const PREFIX_SENIORITY =
   /^(junior|jr\.?|senior|sr\.?|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|principal|staff|intern(?:ship)?)\s+/i;
+const SUFFIX_SENIORITY =
+  /\s+(junior|jr\.?|senior|sr\.?|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|intern(?:ship)?)$/i;
 
 const LEVEL_MAP: Record<string, string> = {
   intern: 'INTERN',
@@ -34,11 +36,36 @@ const LEVEL_MAP: Record<string, string> = {
   staff: 'SENIOR',
 };
 
-function inferLevel(raw: string): string | null {
-  const m = raw.trim().match(PREFIX_SENIORITY) || raw.trim().match(/\s+(intern(?:ship)?)$/i);
-  if (!m) return null;
-  const key = (m[1] || 'intern').toLowerCase().replace(/\./g, '').replace(/[-\s]/g, '');
-  return LEVEL_MAP[key] || null;
+/** Soft UX: strip seniority from display title + infer level (matches API title-resolve). */
+export function softNormalizeJobTitle(raw: string): { roleTitle: string; inferredLevel: string | null } {
+  let s = raw.trim().replace(/\s+/g, ' ');
+  let inferred: string | null = null;
+
+  const takeLevel = (token: string) => {
+    const key = token
+      .toLowerCase()
+      .replace(/\./g, '')
+      .replace(/[-\s]/g, '');
+    if (!inferred && LEVEL_MAP[key]) inferred = LEVEL_MAP[key];
+  };
+
+  for (let i = 0; i < 3; i++) {
+    const pre = s.match(PREFIX_SENIORITY);
+    if (pre) {
+      takeLevel(pre[1]);
+      s = s.slice(pre[0].length).trim();
+      continue;
+    }
+    const suf = s.match(SUFFIX_SENIORITY);
+    if (suf) {
+      takeLevel(suf[1]);
+      s = s.slice(0, suf.index).trim();
+      continue;
+    }
+    break;
+  }
+
+  return { roleTitle: s || raw.trim(), inferredLevel: inferred };
 }
 
 export function JobTitleInput({
@@ -81,8 +108,14 @@ export function JobTitleInput({
 
   function onChange(next: string) {
     setValue(next);
-    const level = inferLevel(next);
-    if (level) onInferredLevel?.(level);
+    const { inferredLevel } = softNormalizeJobTitle(next);
+    if (inferredLevel) onInferredLevel?.(inferredLevel);
+  }
+
+  function onBlur() {
+    const { roleTitle, inferredLevel } = softNormalizeJobTitle(value);
+    if (roleTitle !== value.trim()) setValue(roleTitle);
+    if (inferredLevel) onInferredLevel?.(inferredLevel);
   }
 
   return (
@@ -91,6 +124,7 @@ export function JobTitleInput({
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         required={required}
         minLength={minLength}
         placeholder={placeholder}
