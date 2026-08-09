@@ -255,9 +255,9 @@ const DICT = {
     en: 'VIP employers featured for hiring',
   },
   vipBadge: {
-    uz: 'VIP',
-    ru: 'VIP',
-    en: 'VIP',
+    uz: 'VIP Elite',
+    ru: 'VIP Elite',
+    en: 'VIP Elite',
   },
   exploreCompaniesTabs: {
     uz: 'Kompaniyalar bo‘yicha ko‘rish',
