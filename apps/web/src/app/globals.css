@@ -263,7 +263,23 @@ label { display: grid; gap: 0.35rem; color: var(--muted); font-size: 0.875rem; f
   color: var(--text);
 }
 .notif-item.unread { background: var(--surface-2); }
-.notif-item:hover { background: #f8fafc; }
+.notif-item:hover { background: #f8fafc; color: var(--text); }
+/* Buttons reuse .notif-item (lang switch, notifications) - beat global button:hover white text */
+button.notif-item,
+button.notif-item:hover {
+  background: transparent;
+  color: var(--text);
+  border-radius: 0;
+  font-weight: inherit;
+  padding: 0.85rem 1rem;
+}
+button.notif-item:hover {
+  background: #f8fafc;
+  color: var(--text);
+}
+button.notif-item.unread {
+  background: var(--surface-2);
+}
 .notif-item strong { display: block; font-size: 0.9rem; }
 .notif-item span { color: var(--muted); font-size: 0.8rem; }
 
