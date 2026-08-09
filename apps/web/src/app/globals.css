@@ -924,8 +924,17 @@ button.chip.chip-hot:hover,
   color: var(--text);
   font-weight: 600;
 }
+.pagination-page:hover:not(:disabled):not(.is-active):not(.active) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .pagination-page.active,
-.pagination-page.is-active {
+.pagination-page.is-active,
+.pagination-page.active:hover,
+.pagination-page.is-active:hover,
+.pagination-page:disabled.is-active,
+.pagination-page:disabled.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -933,6 +942,29 @@ button.chip.chip-hot:hover,
 .pagination-page:disabled:not(.is-active):not(.active) {
   opacity: 0.45;
   cursor: not-allowed;
+  background: #fff;
+  color: var(--text);
+}
+.pagination-nav {
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+}
+.pagination-nav:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pagination-nav:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #fff;
+  color: var(--text);
+  border-color: var(--border);
 }
 .pagination-ellipsis { color: var(--muted); padding: 0 0.25rem; }
 .pagination-jump {

@@ -44,7 +44,7 @@ export function Pagination({
       <div className="pagination-controls">
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="pagination-nav"
           disabled={disabled || current <= 1}
           onClick={() => onPageChange(1)}
           aria-label="First page"
@@ -54,7 +54,7 @@ export function Pagination({
         </button>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="pagination-nav"
           disabled={disabled || current <= 1}
           onClick={() => onPageChange(current - 1)}
           aria-label="Previous page"
@@ -86,7 +86,7 @@ export function Pagination({
 
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="pagination-nav"
           disabled={disabled || current >= safeTotalPages}
           onClick={() => onPageChange(current + 1)}
           aria-label="Next page"
@@ -95,7 +95,7 @@ export function Pagination({
         </button>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="pagination-nav"
           disabled={disabled || current >= safeTotalPages}
           onClick={() => onPageChange(safeTotalPages)}
           aria-label="Last page"
