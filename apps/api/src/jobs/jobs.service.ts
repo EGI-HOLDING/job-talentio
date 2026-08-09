@@ -5,8 +5,14 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { JobStatus, PlanCode, Prisma, WorkMode } from '@prisma/client';
-import { PLAN_LIMITS, resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
+import { JobStatus, LanguageLevel, PlanCode, Prisma, WorkMode } from '@prisma/client';
+import {
+  PLAN_LIMITS,
+  levelsAtOrAbove,
+  parseLanguagesCsv,
+  resolveBenefitIcon,
+  resolveCategoryIcon,
+} from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
@@ -22,9 +28,16 @@ import {
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
+import { resolveLanguage } from '../common/language-resolve';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
+type JobLanguageInput = {
+  code?: string;
+  name?: string;
+  minLevel?: LanguageLevel | string;
+  isRequired?: boolean;
+};
 
 const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
@@ -145,6 +158,7 @@ export class JobsService {
     category: true,
     jobTitle: { select: { id: true, name: true, slug: true } },
     jobSkills: { include: { skill: true } },
+    jobLanguages: { include: { language: true } },
     benefits: { include: { benefit: true } },
     questions: { orderBy: { sortOrder: 'asc' as const } },
     _count: { select: { applications: true, views: true } },
@@ -237,6 +251,34 @@ export class JobsService {
     }
   }
 
+  private async syncLanguages(jobPostId: string, languages: JobLanguageInput[]) {
+    await this.prisma.jobPostLanguage.deleteMany({ where: { jobPostId } });
+    const seen = new Set<string>();
+    for (const item of languages.slice(0, 4)) {
+      if (!item.code && !item.name) continue;
+      try {
+        const { language } = await resolveLanguage(this.prisma, {
+          code: item.code,
+          name: item.name,
+          allowCreate: true,
+        });
+        if (seen.has(language.id)) continue;
+        seen.add(language.id);
+        const minLevel = (item.minLevel as LanguageLevel | undefined) || 'B1';
+        await this.prisma.jobPostLanguage.create({
+          data: {
+            jobPostId,
+            languageId: language.id,
+            minLevel,
+            isRequired: item.isRequired ?? true,
+          },
+        });
+      } catch {
+        /* skip invalid */
+      }
+    }
+  }
+
   async create(user: AuthUser, companyId: string, data: Record<string, unknown>) {
     await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
     const workMode = ((data.workMode as string) || 'ONSITE') as WorkMode;
@@ -294,6 +336,7 @@ export class JobsService {
         ...((data.benefitSlugs as string[]) || []),
       ] as JobBenefitInput[]),
     );
+    await this.syncLanguages(job.id, (data.languages as JobLanguageInput[]) || []);
 
     const created = await this.prisma.jobPost.findUnique({
       where: { id: job.id },
@@ -385,6 +428,9 @@ export class JobsService {
         ...((data.benefits as JobBenefitInput[]) || []),
         ...((data.benefitSlugs as string[]) || []),
       ]);
+    }
+    if (data.languages) {
+      await this.syncLanguages(jobId, data.languages as JobLanguageInput[]);
     }
 
     const updated = await this.prisma.jobPost.findUnique({
@@ -566,6 +612,7 @@ export class JobsService {
         city: true,
         category: true,
         jobSkills: { include: { skill: true } },
+        jobLanguages: { include: { language: true } },
         _count: { select: { applications: true, views: true } },
       },
     });
@@ -586,6 +633,7 @@ export class JobsService {
     skills?: string;
     skillMode?: 'AND' | 'OR';
     benefits?: string;
+    languages?: string;
     salaryMin?: number;
     salaryMax?: number;
     experienceYearsMax?: number;
@@ -678,6 +726,20 @@ export class JobsService {
       and.push({ benefits: { some: { benefit: { slug: { in: benefitSlugs } } } } });
     }
 
+    const languageTokens = parseLanguagesCsv(query.languages);
+    if (languageTokens.length) {
+      and.push({
+        OR: languageTokens.map((token) => ({
+          jobLanguages: {
+            some: {
+              language: { code: token.code },
+              minLevel: { in: levelsAtOrAbove(token.minLevel) as LanguageLevel[] },
+            },
+          },
+        })),
+      });
+    }
+
     if (query.hotOnly) and.push({ boostUntil: { gt: new Date() } });
 
     if (query.postedWithin) {
@@ -724,6 +786,7 @@ export class JobsService {
       category: true,
       jobTitle: { select: { id: true, name: true, slug: true } },
       jobSkills: { include: { skill: true }, take: 8 },
+      jobLanguages: { include: { language: true }, take: 4 },
       benefits: { include: { benefit: true }, take: 6 },
     } as const;
 
@@ -856,6 +919,7 @@ export class JobsService {
           },
         },
         jobSkills: { select: { skill: { select: { slug: true, name: true } } } },
+        jobLanguages: { select: { language: { select: { code: true, name: true } } } },
       },
       take: 1000,
     });
@@ -872,6 +936,7 @@ export class JobsService {
       { slug: string; name: string; groupSlug?: string; groupName?: string; count: number }
     > = {};
     const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const languageFacets: Record<string, { code: string; name: string; count: number }> = {};
     const experienceFacets: Record<string, number> = {};
     for (const j of facetJobs) {
       if (j.city) {
@@ -925,6 +990,13 @@ export class JobsService {
           ? { ...skillFacets[sk.slug], count: skillFacets[sk.slug].count + 1 }
           : { slug: sk.slug, name: sk.name, count: 1 };
       }
+      for (const jl of j.jobLanguages) {
+        const lang = jl.language;
+        if (!lang) continue;
+        languageFacets[lang.code] = languageFacets[lang.code]
+          ? { ...languageFacets[lang.code], count: languageFacets[lang.code].count + 1 }
+          : { code: lang.code, name: lang.name, count: 1 };
+      }
     }
 
     return {
@@ -943,6 +1015,7 @@ export class JobsService {
         companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
         industries: Object.values(industryFacets).sort((a, b) => b.count - a.count),
         skills: Object.values(skillFacets).sort((a, b) => b.count - a.count),
+        languages: Object.values(languageFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,
       },
     };

@@ -5,6 +5,7 @@ import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resol
 import { jobFingerprint } from '../src/common/dedupe';
 import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
 import { backfillIndustries } from '../src/common/industry-backfill';
+import { backfillJobLanguages } from '../src/common/job-language-backfill';
 import { COMPANY_INDUSTRY_OVERRIDES } from '../src/common/industry-catalog';
 import { companyLogoUrl } from '../src/common/company-logo-map';
 
@@ -1018,6 +1019,8 @@ async function main() {
 
     jobRecords.push(job);
   }
+
+  await backfillJobLanguages(prisma, { log: (msg) => console.warn(msg) });
 
   // Job title aliases (Front End ≡ Frontend, CPP ≡ C++, …)
   for (const row of JOB_TITLE_ALIASES) {

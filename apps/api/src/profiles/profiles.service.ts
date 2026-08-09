@@ -5,8 +5,15 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { PLAN_LIMITS, normalizeResumeInclusion, scoreResumeChecklist, DEFAULT_RESUME_INCLUSION } from '@job-talentio/shared';
-import { Prisma } from '@prisma/client';
+import {
+  PLAN_LIMITS,
+  normalizeResumeInclusion,
+  scoreResumeChecklist,
+  DEFAULT_RESUME_INCLUSION,
+  levelsAtOrAbove,
+  parseLanguagesCsv,
+} from '@job-talentio/shared';
+import { LanguageLevel, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CompaniesService } from '../companies/companies.service';
@@ -1203,9 +1210,18 @@ export class ProfilesService {
       and.push({ educations: { some: { degree: query.degree as never } } });
     }
 
-    const langCodes = (query.languages || '').split(',').map((s) => s.trim()).filter(Boolean);
-    if (langCodes.length) {
-      and.push({ languages: { some: { language: { code: { in: langCodes } } } } });
+    const languageTokens = parseLanguagesCsv(query.languages);
+    if (languageTokens.length) {
+      and.push({
+        OR: languageTokens.map((token) => ({
+          languages: {
+            some: {
+              language: { code: token.code },
+              level: { in: levelsAtOrAbove(token.minLevel) as LanguageLevel[] },
+            },
+          },
+        })),
+      });
     }
 
     if (query.hasCertification) {

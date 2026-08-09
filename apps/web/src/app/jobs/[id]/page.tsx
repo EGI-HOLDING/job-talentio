@@ -37,6 +37,11 @@ type Job = {
   city?: { name: string } | null;
   category?: { name: string } | null;
   jobSkills?: Array<{ skill: { name: string }; isRequired: boolean }>;
+  jobLanguages?: Array<{
+    language: { name: string; code: string };
+    minLevel: string;
+    isRequired: boolean;
+  }>;
   benefits?: Array<{ benefit: { name: string; slug?: string; icon?: string | null } }>;
   questions?: Question[];
   _count?: { applications: number; views: number };
@@ -333,6 +338,19 @@ export default function JobDetailPage() {
               {!job.benefits?.length && <span className="muted">No benefits listed</span>}
             </div>
           </div>
+          {(job.jobLanguages || []).length > 0 && (
+            <div className="card">
+              <h3>{t('languages')}</h3>
+              <div className="chips" style={{ marginTop: '0.75rem' }}>
+                {(job.jobLanguages || []).map((jl, i) => (
+                  <span key={i} className={`badge ${jl.isRequired ? '' : 'skill'}`}>
+                    {jl.language.name} {jl.minLevel}+
+                    {jl.isRequired ? ' *' : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {job.experienceYearsMin != null && (
             <div className="card">
               <h3>Experience</h3>

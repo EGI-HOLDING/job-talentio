@@ -16,8 +16,14 @@ import { sanitizeMojibake } from '@/lib/text';
 import { formatSalaryRange } from '@/lib/numberFormat';
 import { useI18n } from '@/lib/i18n';
 import { jobLocationLabel } from '@/lib/location';
+import {
+  csvHasLanguageCode,
+  LanguageLevelCode,
+  parseLanguagesCsv,
+} from '@job-talentio/shared';
 
-type MetaItem = { id: string; name: string; slug: string; icon?: string | null };
+type MetaItem = { id: string; name: string; slug: string; icon?: string | null; code?: string };
+type LangMeta = { id: string; name: string; code: string };
 type Job = {
   id: string;
   title: string;
@@ -34,6 +40,7 @@ type Job = {
   category?: { name: string; slug: string } | null;
   jobSkills?: Array<{ skill: { name: string; slug: string } }>;
   benefits?: Array<{ benefit: { name: string; icon?: string | null } }>;
+  jobLanguages?: Array<{ language: { name: string; code: string }; minLevel: string }>;
 };
 
 type SearchResponse = {
@@ -52,6 +59,7 @@ type SearchResponse = {
     companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>;
     industries?: Array<{ slug: string; name: string; count: number; groupSlug?: string }>;
     skills?: Array<{ slug: string; name: string; count: number }>;
+    languages?: Array<{ code: string; name: string; count: number }>;
     experienceLevels: Record<string, number>;
   };
 };
@@ -66,6 +74,7 @@ type Filters = {
   skills: string;
   skillMode: string;
   benefits: string;
+  languages: string;
   employmentType: string;
   workMode: string;
   experienceLevel: string;
@@ -77,6 +86,18 @@ type Filters = {
   page: number;
   limit: number;
 };
+
+function toggleLanguageCsv(csv: string, code: string, defaultLevel: LanguageLevelCode = 'B1') {
+  const tokens = parseLanguagesCsv(csv);
+  const key = code.toLowerCase();
+  const has = tokens.some((t) => t.code === key);
+  const next = has
+    ? tokens.filter((t) => t.code !== key)
+    : [...tokens, { code: key, minLevel: defaultLevel }];
+  return next
+    .map((t) => (t.minLevel === 'A1' ? t.code : `${t.code}:${t.minLevel}`))
+    .join(',');
+}
 
 const PAGE_SIZE_OPTIONS = [12, 24, 36] as const;
 const DEFAULT_LIMIT = 12;
@@ -92,6 +113,7 @@ const EMPTY: Filters = {
   skills: '',
   skillMode: 'OR',
   benefits: '',
+  languages: '',
   employmentType: '',
   workMode: '',
   experienceLevel: '',
@@ -119,6 +141,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     skills: sp.get('skills') ?? '',
     skillMode: sp.get('skillMode') ?? 'OR',
     benefits: sp.get('benefits') ?? '',
+    languages: sp.get('languages') ?? '',
     employmentType: sp.get('employmentType') ?? '',
     workMode: sp.get('workMode') ?? '',
     experienceLevel: sp.get('experienceLevel') ?? '',
@@ -188,6 +211,7 @@ function JobsInner() {
   const [categories, setCategories] = useState<MetaItem[]>([]);
   const [skills, setSkills] = useState<MetaItem[]>([]);
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
+  const [languages, setLanguages] = useState<LangMeta[]>([]);
   const [skillQ, setSkillQ] = useState('');
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
@@ -200,12 +224,14 @@ function JobsInner() {
       api<MetaItem[]>('/meta/categories', { auth: false }),
       api<MetaItem[]>('/meta/skills?sort=popular&take=120', { auth: false }),
       api<MetaItem[]>('/meta/benefits', { auth: false }),
+      api<LangMeta[]>('/meta/languages', { auth: false }),
     ])
-      .then(([c, cat, sk, b]) => {
+      .then(([c, cat, sk, b, langs]) => {
         setCities(c);
         setCategories(cat);
         setSkills(sk);
         setBenefits(b);
+        setLanguages(langs || []);
       })
       .catch(() => undefined);
     api<SearchResponse>('/jobs?limit=1&sort=newest', { auth: false })
@@ -244,6 +270,7 @@ function JobsInner() {
   const selectedCities = filters.city.split(',').filter(Boolean);
   const selectedCats = filters.category.split(',').filter(Boolean);
   const selectedBenefits = filters.benefits.split(',').filter(Boolean);
+  const selectedLanguageTokens = parseLanguagesCsv(filters.languages);
   const selectedLevels = filters.experienceLevel.split(',').filter(Boolean);
   const selectedCompanies = filters.companySlug.split(',').filter(Boolean);
 
@@ -305,6 +332,7 @@ function JobsInner() {
     filters.skills,
     filters.experienceLevel,
     filters.benefits,
+    filters.languages,
     filters.workMode,
     filters.postedWithin,
     filters.salaryMin,
@@ -468,6 +496,43 @@ function JobsInner() {
                   />
                   {benefitIconLabel(b.slug, b.icon)}
                   {b.name}
+                </label>
+              )}
+            />
+          </FilterFieldset>
+
+          <FilterFieldset legend={t('languages')} className="filter-group">
+            <ExpandableList
+              items={(() => {
+                const byCode = new Map<string, LangMeta & { count?: number }>();
+                for (const l of data?.facets?.languages || []) {
+                  byCode.set(l.code, { id: l.code, code: l.code, name: l.name, count: l.count });
+                }
+                for (const l of languages) {
+                  if (!byCode.has(l.code)) byCode.set(l.code, { ...l, count: undefined });
+                  else {
+                    const cur = byCode.get(l.code)!;
+                    byCode.set(l.code, { ...cur, name: l.name || cur.name });
+                  }
+                }
+                return [...byCode.values()].sort(
+                  (a, b) => (b.count || 0) - (a.count || 0) || a.name.localeCompare(b.name),
+                );
+              })()}
+              initialCount={8}
+              step={10}
+              getKey={(l) => l.code}
+              renderItem={(l) => (
+                <label className="filter-check">
+                  <input
+                    type="checkbox"
+                    checked={csvHasLanguageCode(filters.languages, l.code)}
+                    onChange={() => apply({ languages: toggleLanguageCsv(filters.languages, l.code, 'B1') })}
+                  />
+                  {l.name}
+                  {'count' in l && l.count !== undefined && (
+                    <span className="facet-count">({l.count})</span>
+                  )}
                 </label>
               )}
             />
@@ -666,6 +731,17 @@ function JobsInner() {
               {selectedSkills.map((s) => (
                 <button key={s} type="button" className="chip active" onClick={() => apply({ skills: toggleCsv(filters.skills, s) })}>
                   {skills.find((sk) => sk.slug === s)?.name || s} x
+                </button>
+              ))}
+              {selectedLanguageTokens.map((tok) => (
+                <button
+                  key={`${tok.code}:${tok.minLevel}`}
+                  type="button"
+                  className="chip active"
+                  onClick={() => apply({ languages: toggleLanguageCsv(filters.languages, tok.code) })}
+                >
+                  {(languages.find((l) => l.code === tok.code)?.name || tok.code)}{' '}
+                  {tok.minLevel}+ x
                 </button>
               ))}
               {filters.hotOnly && (

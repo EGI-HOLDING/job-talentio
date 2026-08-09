@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import {
   DegreeLevel,
   ExperienceLevel,
+  LanguageLevel,
   SkillLevel,
   WorkMode,
 } from '@prisma/client';
+import { languageLevelRank } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type MatchBreakdown = {
@@ -17,6 +19,8 @@ export type MatchBreakdown = {
   details: {
     matchedSkills: string[];
     missingRequiredSkills: string[];
+    matchedLanguages: string[];
+    missingRequiredLanguages: string[];
     experienceYears: number;
     requiredYears: number | null;
   };
@@ -70,6 +74,7 @@ export class MatchingService {
         where: { id: jobPostId },
         include: {
           jobSkills: { include: { skill: true } },
+          jobLanguages: { include: { language: true } },
           city: true,
         },
       }),
@@ -86,7 +91,7 @@ export class MatchingService {
       skills: Array<{ skillId: string; level: SkillLevel; skill: { name: string; slug: string } }>;
       experiences: Array<{ startDate: Date; endDate: Date | null; isCurrent: boolean }>;
       educations: Array<{ degree: DegreeLevel | null }>;
-      languages: Array<{ language: { code: string } }>;
+      languages: Array<{ language: { code: string }; level: LanguageLevel }>;
       certifications: unknown[];
     },
     job: {
@@ -99,6 +104,12 @@ export class MatchingService {
         isRequired: boolean;
         weight: number;
         skill: { name: string; slug: string };
+      }>;
+      jobLanguages?: Array<{
+        languageId: string;
+        minLevel: LanguageLevel;
+        isRequired: boolean;
+        language: { code: string; name: string };
       }>;
     },
   ): MatchBreakdown {
@@ -175,14 +186,49 @@ export class MatchingService {
     else if (maxDegree >= DEGREE_RANK.HIGH_SCHOOL) educationScore = 4;
     else educationScore = 2;
 
-    // Language & signals — 10 points
+    // Language — 10 points (requirement-based when job lists languages)
+    const matchedLanguages: string[] = [];
+    const missingRequiredLanguages: string[] = [];
     let languageScore = 4;
-    const codes = new Set(profile.languages.map((l) => l.language.code));
-    if (codes.has('uz') || codes.has('ru')) languageScore += 2;
-    if (codes.has('en')) languageScore += 2;
-    if (profile.headline && profile.summary) languageScore += 1;
-    if (profile.certifications.length > 0) languageScore += 1;
-    languageScore = Math.min(10, languageScore);
+    const jobLangs = job.jobLanguages ?? [];
+    if (jobLangs.length > 0) {
+      const profileByCode = new Map(
+        profile.languages.map((l) => [l.language.code.toLowerCase(), l]),
+      );
+      let earned = 0;
+      let weightTotal = 0;
+      for (const jl of jobLangs) {
+        const w = jl.isRequired ? 1.5 : 0.75;
+        weightTotal += w;
+        const pl = profileByCode.get(jl.language.code.toLowerCase());
+        const label = `${jl.language.name} ${jl.minLevel}+`;
+        if (!pl) {
+          if (jl.isRequired) missingRequiredLanguages.push(label);
+          continue;
+        }
+        const profileRank = languageLevelRank(pl.level);
+        const needRank = languageLevelRank(jl.minLevel);
+        if (profileRank >= needRank) {
+          earned += w;
+          matchedLanguages.push(label);
+        } else if (profileRank >= needRank - 1) {
+          earned += w * 0.55;
+          matchedLanguages.push(`${jl.language.name} ${pl.level}`);
+        } else if (jl.isRequired) {
+          missingRequiredLanguages.push(label);
+        }
+      }
+      languageScore = weightTotal
+        ? Math.min(10, Math.round((earned / weightTotal) * 10))
+        : 5;
+    } else {
+      const codes = new Set(profile.languages.map((l) => l.language.code));
+      if (codes.has('uz') || codes.has('ru')) languageScore += 2;
+      if (codes.has('en')) languageScore += 2;
+      if (profile.headline && profile.summary) languageScore += 1;
+      if (profile.certifications.length > 0) languageScore += 1;
+      languageScore = Math.min(10, languageScore);
+    }
 
     const total = Math.min(
       100,
@@ -199,6 +245,8 @@ export class MatchingService {
       details: {
         matchedSkills,
         missingRequiredSkills,
+        matchedLanguages,
+        missingRequiredLanguages,
         experienceYears,
         requiredYears,
       },
@@ -223,6 +271,7 @@ export class MatchingService {
       where: { id: jobPostId },
       include: {
         jobSkills: { include: { skill: true } },
+        jobLanguages: { include: { language: true } },
         city: true,
         applications: { select: { profileId: true } },
       },
@@ -305,6 +354,7 @@ export class MatchingService {
         city: true,
         category: true,
         jobSkills: { include: { skill: true } },
+        jobLanguages: { include: { language: true } },
       },
       take: 200,
       orderBy: { publishedAt: 'desc' },
