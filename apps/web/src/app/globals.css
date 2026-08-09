@@ -358,15 +358,15 @@ a.chip.active,
 }
 .chip-hot,
 button.chip.chip-hot {
-  background: linear-gradient(135deg, #fff1f2 0%, #ffedd5 100%);
-  border-color: color-mix(in srgb, var(--hot) 45%, #fdba74);
+  background: var(--hot-soft);
+  border-color: color-mix(in srgb, var(--hot) 22%, var(--border));
   color: var(--hot-deep);
-  font-weight: 700;
+  font-weight: 600;
 }
 button.chip.chip-hot:hover,
 .chip-hot:hover {
-  background: linear-gradient(135deg, #ffe4e6 0%, #fed7aa 100%);
-  border-color: var(--hot);
+  background: #ffe4e6;
+  border-color: color-mix(in srgb, var(--hot) 40%, var(--border));
   color: var(--hot-deep);
 }
 
@@ -870,61 +870,32 @@ img.company-logo {
   box-shadow: var(--shadow);
 }
 
-/* Hot jobs: fiery outlier treatment - urgent, short-window boost */
+/* Hot jobs: light rose outline - urgent without flash */
 .job-card--hot,
 a.job-card.job-card--hot,
 a.card.job-card--hot {
-  border-color: color-mix(in srgb, var(--hot) 55%, #fdba74);
-  background:
-    linear-gradient(135deg, #fff7ed 0%, #fff1f2 42%, #ffffff 100%);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--hot) 18%, transparent),
-    0 10px 28px var(--hot-glow);
+  border-color: color-mix(in srgb, var(--hot) 28%, var(--border));
+  background: #fff;
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 .job-card--hot::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 4px;
+  width: 3px;
   border-radius: var(--radius) 0 0 var(--radius);
-  background: linear-gradient(
-    180deg,
-    var(--hot-amber) 0%,
-    var(--hot-ember) 42%,
-    var(--hot) 78%,
-    var(--hot-deep) 100%
-  );
-  box-shadow: 0 0 14px var(--hot-glow);
-}
-.job-card--hot::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  top: -40%;
-  right: -18%;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--hot-ember) 35%, transparent) 0%,
-    transparent 70%
-  );
-  opacity: 0.85;
+  background: color-mix(in srgb, var(--hot) 72%, #fda4af);
 }
 .job-card--hot:hover {
-  border-color: var(--hot);
-  transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--hot) 35%, transparent),
-    0 16px 36px var(--hot-glow);
+  border-color: color-mix(in srgb, var(--hot) 48%, var(--border));
+  box-shadow: var(--shadow-lg);
 }
 .job-card--hot h3 {
-  color: #7f1d1d;
+  color: var(--text);
 }
 .job-card--hot .job-meta {
-  color: #9a3412;
+  color: var(--muted);
 }
 .hot-urgency {
   display: inline-flex;
@@ -932,23 +903,16 @@ a.card.job-card--hot {
   gap: 0.35rem;
   margin-top: 0.35rem;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--hot-deep);
 }
 .hot-urgency::before {
   content: "";
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
   background: var(--hot);
-  box-shadow: 0 0 0 0 var(--hot-glow);
-  animation: hot-pulse 1.6s ease-out infinite;
-}
-@keyframes hot-pulse {
-  0% { box-shadow: 0 0 0 0 var(--hot-glow); opacity: 1; }
-  70% { box-shadow: 0 0 0 8px transparent; opacity: 0.85; }
-  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
 }
 .section-hot-title {
   display: inline-flex;
@@ -957,14 +921,14 @@ a.card.job-card--hot {
 }
 .section-hot-title::after {
   content: "HOT";
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: 0.65rem;
+  font-weight: 600;
   letter-spacing: 0.06em;
-  padding: 0.18rem 0.45rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--hot-ember), var(--hot) 55%, var(--hot-deep));
-  box-shadow: 0 4px 14px var(--hot-glow);
+  color: var(--hot-deep);
+  background: var(--hot-soft);
+  border: 1px solid color-mix(in srgb, var(--hot) 22%, var(--border));
 }
 .job-card img.company-logo:not(.company-logo-tile img) {
   width: 56px;
@@ -1001,23 +965,13 @@ a.card.job-card--hot {
   color: var(--accent);
 }
 .badge.hot {
-  color: #fff;
-  background: linear-gradient(135deg, var(--hot-ember) 0%, var(--hot) 48%, var(--hot-deep) 100%);
-  border: 1px solid color-mix(in srgb, var(--hot-deep) 35%, transparent);
-  box-shadow: 0 4px 12px var(--hot-glow);
+  color: var(--hot-deep);
+  background: var(--hot-soft);
+  border: 1px solid color-mix(in srgb, var(--hot) 22%, var(--border));
+  box-shadow: none;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  animation: hot-badge-flicker 2.4s ease-in-out infinite;
-}
-@keyframes hot-badge-flicker {
-  0%, 100% { filter: brightness(1); box-shadow: 0 4px 12px var(--hot-glow); }
-  50% { filter: brightness(1.08); box-shadow: 0 6px 18px rgba(249, 115, 22, 0.35); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .badge.hot,
-  .hot-urgency::before {
-    animation: none;
-  }
+  font-weight: 600;
 }
 /* VIP employer mark - light, elegant, no flash */
 .vip-badge,
@@ -1276,10 +1230,9 @@ a.card.job-card--hot {
   box-shadow: var(--shadow);
 }
 .job-detail-header.job-detail-header--hot {
-  border-color: color-mix(in srgb, var(--hot) 40%, #fdba74);
-  background:
-    linear-gradient(135deg, #fff7ed 0%, #fff1f2 50%, #ffffff 100%);
-  box-shadow: 0 12px 32px var(--hot-glow);
+  border-color: color-mix(in srgb, var(--hot) 28%, var(--border));
+  background: #fff;
+  box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
 }
@@ -1287,8 +1240,8 @@ a.card.job-card--hot {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 5px;
-  background: linear-gradient(180deg, var(--hot-amber), var(--hot), var(--hot-deep));
+  width: 3px;
+  background: color-mix(in srgb, var(--hot) 72%, #fda4af);
 }
 .job-detail-header > img {
   width: 88px;
