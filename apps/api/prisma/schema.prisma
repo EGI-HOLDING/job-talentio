@@ -23,6 +23,7 @@ enum PlanCode {
   FREE
   STANDARD
   PREMIUM
+  VIP
 }
 
 enum SubscriptionStatus {

@@ -13,7 +13,7 @@ import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
 
-type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM';
+type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 
 const CAND_PAGE_SIZES = [12, 24, 36] as const;
 const DEGREE_OPTS = ['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'] as const;
@@ -129,7 +129,7 @@ export function FindTalentPanel() {
     languages: any[];
   }>({ cities: [], skills: [], languages: [] });
 
-  const canColdChat = planCode === 'PREMIUM';
+  const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
 
   const syncUrl = useCallback(
     (f: CandFilters) => {

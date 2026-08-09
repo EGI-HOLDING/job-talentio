@@ -827,6 +827,17 @@ button.chip.chip-hot:hover,
   color: var(--accent);
 }
 .badge.hot { background: var(--hot-soft); color: #b45309; }
+.badge.vip-badge {
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+}
+.explore-company-search {
+  max-width: 36rem;
+}
 .badge.match { background: #d1fae5; color: #047857; }
 .badge.skill {
   background: #f1f5f9;

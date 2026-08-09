@@ -8,6 +8,8 @@ type ExploreCompanyCardProps = {
   logoUrl?: string | null;
   count?: number;
   countLabel?: string;
+  plan?: string | null;
+  vipLabel?: string;
 };
 
 export function ExploreCompanyCard({
@@ -16,7 +18,10 @@ export function ExploreCompanyCard({
   logoUrl,
   count,
   countLabel,
+  plan,
+  vipLabel = 'VIP',
 }: ExploreCompanyCardProps) {
+  const isVip = plan === 'VIP';
   return (
     <Link
       href={`/jobs?companySlug=${encodeURIComponent(slug)}`}
@@ -32,7 +37,10 @@ export function ExploreCompanyCard({
         alt=""
       />
       <div className="explore-card-body">
-        <strong>{name}</strong>
+        <strong>
+          {name}
+          {isVip ? <span className="badge vip-badge">{vipLabel}</span> : null}
+        </strong>
         {typeof count === 'number' && countLabel ? <span>{countLabel}</span> : null}
       </div>
     </Link>

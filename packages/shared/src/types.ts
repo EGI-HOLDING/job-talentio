@@ -4,7 +4,7 @@ export type UserRole = 'EMPLOYEE' | 'RECRUITER' | 'SUPER_ADMIN';
 
 export type CompanyMemberRole = 'OWNER' | 'ADMIN' | 'RECRUITER';
 
-export type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM';
+export type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 
 export type JobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'EXPIRED';
 

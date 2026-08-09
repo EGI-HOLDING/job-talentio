@@ -96,7 +96,7 @@ function CandidateInner() {
       .then(([profile, mine]) => {
         setData(profile);
         const plan = mine[0]?.company?.subscription?.plan || 'FREE';
-        setCanColdChat(plan === 'PREMIUM' || s.user.role === 'SUPER_ADMIN');
+        setCanColdChat(plan === 'PREMIUM' || plan === 'VIP' || s.user.role === 'SUPER_ADMIN');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
   }, [id, matchJobId, router]);

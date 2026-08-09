@@ -166,7 +166,13 @@ export class JobsService {
     const hotActive = job.boostUntil && job.boostUntil.getTime() > now;
     const hotBoost = hotActive ? 2000 * (job.boostWeight || 1) : 0;
     const planBoost =
-      job.plan === 'PREMIUM' ? 80 : job.plan === 'STANDARD' ? 40 : 0;
+      job.plan === 'VIP'
+        ? 120
+        : job.plan === 'PREMIUM'
+          ? 80
+          : job.plan === 'STANDARD'
+            ? 40
+            : 0;
     const qualityPenalty =
       job.description.length < 80 || job.skillCount === 0 ? 120 : 0;
     return baseRecency + freshnessDecay + hotBoost + planBoost - qualityPenalty;

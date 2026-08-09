@@ -282,7 +282,7 @@ export default function AdminPage() {
                   <td>{c.subscription?.plan}</td>
                   <td>{c._count?.jobPosts}</td>
                   <td className="row">
-                    {(['FREE', 'STANDARD', 'PREMIUM'] as const).map((plan) => (
+                    {(['FREE', 'STANDARD', 'PREMIUM', 'VIP'] as const).map((plan) => (
                       <button
                         key={plan}
                         className="secondary"

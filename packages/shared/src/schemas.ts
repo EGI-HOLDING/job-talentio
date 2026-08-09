@@ -204,7 +204,17 @@ export const chatMessageSchema = z.object({
 });
 
 export const planUpgradeSchema = z.object({
-  plan: z.enum(['STANDARD', 'PREMIUM']),
+  plan: z.enum(['STANDARD', 'PREMIUM', 'VIP']),
+});
+
+/** Public hiring-company directory (explore / Top Companies). */
+export const companyBrowseSchema = z.object({
+  q: z.string().optional(),
+  industrySlug: z.string().optional(),
+  plan: z.enum(['VIP', 'PREMIUM', 'STANDARD', 'FREE']).optional(),
+  sort: z.enum(['jobs', 'name']).default('jobs'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(48).default(24),
 });
 
 export const hotJobSchema = z.object({

@@ -8,6 +8,7 @@ type ExploreSectionProps = {
   subtitle?: string;
   viewAllHref: string;
   viewAllLabel: string;
+  gridClassName?: string;
   children: ReactNode;
 };
 
@@ -16,6 +17,7 @@ export function ExploreSection({
   subtitle,
   viewAllHref,
   viewAllLabel,
+  gridClassName,
   children,
 }: ExploreSectionProps) {
   return (
@@ -30,7 +32,7 @@ export function ExploreSection({
           <span aria-hidden>→</span>
         </Link>
       </div>
-      <div className="explore-grid">{children}</div>
+      <div className={`explore-grid ${gridClassName || ''}`.trim()}>{children}</div>
     </section>
   );
 }

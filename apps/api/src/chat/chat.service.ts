@@ -40,7 +40,9 @@ export class ChatService {
         createdAt: { gte: start },
       },
     });
-    const quota = PLAN_LIMITS.PREMIUM.coldChatDailyQuota ?? 20;
+    const limits = PLAN_LIMITS[plan];
+    const quota =
+      ('coldChatDailyQuota' in limits ? limits.coldChatDailyQuota : undefined) ?? 20;
     return used < quota;
   }
 

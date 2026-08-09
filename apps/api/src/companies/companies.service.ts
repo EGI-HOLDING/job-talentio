@@ -5,7 +5,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { CompanyMemberRole } from '@prisma/client';
+import { CompanyMemberRole, PlanCode, Prisma } from '@prisma/client';
 import { resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
@@ -71,6 +71,74 @@ export class CompaniesService {
         },
       },
     });
+  }
+
+  /** Public directory of hiring companies (published jobs). */
+  async browse(query: {
+    q?: string;
+    industrySlug?: string;
+    plan?: PlanCode;
+    sort: 'jobs' | 'name';
+    page: number;
+    limit: number;
+  }) {
+    const limit = Math.min(Math.max(query.limit || 24, 1), 48);
+    const page = Math.max(1, query.page || 1);
+    const q = query.q?.trim();
+
+    const where: Prisma.CompanyWhereInput = {
+      isBanned: false,
+      jobPosts: { some: { status: 'PUBLISHED' } },
+      ...(query.plan ? { subscription: { plan: query.plan } } : {}),
+      ...(query.industrySlug ? { industry: { slug: query.industrySlug } } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { slug: { contains: q.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const total = await this.prisma.company.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+    const safePage = Math.min(page, total === 0 ? 1 : totalPages);
+
+    const rows = await this.prisma.company.findMany({
+      where,
+      select: {
+        slug: true,
+        name: true,
+        logoUrl: true,
+        industry: { select: { slug: true, name: true } },
+        subscription: { select: { plan: true } },
+        _count: {
+          select: { jobPosts: { where: { status: 'PUBLISHED' } } },
+        },
+      },
+      orderBy:
+        query.sort === 'name'
+          ? [{ name: 'asc' }]
+          : [{ jobPosts: { _count: 'desc' } }, { name: 'asc' }],
+      skip: (safePage - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      items: rows.map((c) => ({
+        slug: c.slug,
+        name: c.name,
+        logoUrl: c.logoUrl,
+        industry: c.industry,
+        plan: c.subscription?.plan ?? 'FREE',
+        openJobsCount: c._count.jobPosts,
+      })),
+      total,
+      page: safePage,
+      limit,
+      totalPages,
+    };
   }
 
   async get(companyId: string) {
