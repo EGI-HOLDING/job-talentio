@@ -1011,120 +1011,34 @@ a.card.job-card--hot {
     animation: none;
   }
 }
-/* VIP employer mark - champagne metal, exclusive (not a plain yellow chip) */
-.vip-badge {
-  --vip-gold: #d4af37;
-  --vip-gold-hi: #f3e0a0;
-  --vip-gold-lo: #8a6914;
-  --vip-ink: #1a1408;
+/* VIP employer mark - light, elegant, no flash */
+.vip-badge,
+.badge.vip-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.32rem;
-  margin-left: 0.45rem;
+  margin-left: 0.4rem;
   vertical-align: middle;
-  padding: 0.2rem 0.55rem 0.2rem 0.4rem;
-  border-radius: 7px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  line-height: 1;
-  color: var(--vip-ink);
-  background:
-    linear-gradient(
-      145deg,
-      #fff4c8 0%,
-      var(--vip-gold-hi) 22%,
-      var(--vip-gold) 48%,
-      var(--vip-gold-lo) 78%,
-      #c9a227 100%
-    );
-  border: 1px solid color-mix(in srgb, var(--vip-gold-hi) 70%, #fff);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(80, 50, 0, 0.28),
-    0 3px 10px rgba(138, 105, 20, 0.35),
-    0 0 0 1px rgba(26, 20, 8, 0.08);
-  position: relative;
-  overflow: hidden;
+  line-height: 1.2;
+  color: #7a5c2e;
+  background: #faf6ef;
+  border: 1px solid #e8dfcc;
+  box-shadow: none;
   white-space: nowrap;
 }
-.vip-badge__gem {
-  width: 0.42rem;
-  height: 0.42rem;
-  flex-shrink: 0;
-  transform: rotate(45deg);
-  border-radius: 1px;
-  background: linear-gradient(145deg, #fffaf0 0%, var(--vip-gold) 45%, #5c4208 100%);
-  border: 1px solid rgba(255, 248, 220, 0.75);
-  box-shadow: 0 0 0 1px rgba(90, 60, 0, 0.25);
-}
-.vip-badge__label {
-  position: relative;
-  z-index: 1;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.vip-badge::after {
-  content: "";
-  position: absolute;
-  inset: -20% -40%;
-  background: linear-gradient(
-    105deg,
-    transparent 42%,
-    rgba(255, 255, 255, 0.55) 50%,
-    transparent 58%
-  );
-  transform: translateX(-130%) skewX(-12deg);
-  animation: vip-sheen 3.6s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes vip-sheen {
-  0%, 55% { transform: translateX(-130%) skewX(-12deg); opacity: 0; }
-  70% { opacity: 1; }
-  100% { transform: translateX(130%) skewX(-12deg); opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vip-badge::after {
-    animation: none;
-    opacity: 0;
-  }
-}
-/* Legacy class still used in a few places - map to same look */
-.badge.vip-badge {
-  margin-left: 0.45rem;
-  vertical-align: middle;
-  padding: 0.2rem 0.55rem;
-  border-radius: 7px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #1a1408;
-  background:
-    linear-gradient(145deg, #fff4c8 0%, #f3e0a0 22%, #d4af37 48%, #8a6914 78%, #c9a227 100%);
-  border: 1px solid color-mix(in srgb, #f3e0a0 70%, #fff);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 3px 10px rgba(138, 105, 20, 0.35);
-}
 .explore-card--vip {
-  border-color: color-mix(in srgb, #d4af37 45%, var(--border));
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, #d4af37 10%, #fff) 0%,
-      #fff 55%,
-      color-mix(in srgb, #1a1408 3%, #fff) 100%
-    );
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, #d4af37 16%, transparent),
-    var(--shadow);
+  border-color: color-mix(in srgb, #c4a574 28%, var(--border));
+  background: #fff;
+  box-shadow: var(--shadow);
 }
 .explore-card--vip:hover {
-  border-color: color-mix(in srgb, #d4af37 70%, var(--border));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, #d4af37 28%, transparent),
-    0 14px 32px rgba(138, 105, 20, 0.16);
+  border-color: color-mix(in srgb, #c4a574 48%, var(--border));
+  box-shadow: var(--shadow-lg);
 }
 .explore-company-search {
   max-width: 36rem;

@@ -20,7 +20,7 @@ export function ExploreCompanyCard({
   count,
   countLabel,
   plan,
-  vipLabel = 'VIP Elite',
+  vipLabel = 'VIP',
 }: ExploreCompanyCardProps) {
   const isVip = plan === 'VIP';
   return (
