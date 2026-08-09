@@ -255,6 +255,24 @@ function extractSummary(text: string): string | undefined {
   return para.length > 80 ? para : undefined;
 }
 
+/** Postgres rejects UTF-8 null bytes (0x00) in text/json columns. */
+export function stripNullBytes(input: string): string {
+  return input.replace(/\u0000/g, '');
+}
+
+export function stripNullBytesDeep<T>(value: T): T {
+  if (typeof value === 'string') return stripNullBytes(value) as T;
+  if (Array.isArray(value)) return value.map((v) => stripNullBytesDeep(v)) as T;
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = stripNullBytesDeep(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 /**
  * Local heuristic CV parser (no external ML).
  * Pass known skill names from DB so matching stays accurate.
@@ -263,10 +281,10 @@ export function parseCvText(
   rawText: string,
   knownSkills: Array<{ name: string; slug: string }> = [],
 ): ParsedCvData {
-  const text = rawText.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').trim();
+  const text = stripNullBytes(rawText).replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').trim();
   const collapsed = text.replace(/\n{3,}/g, '\n\n');
 
-  return {
+  return stripNullBytesDeep({
     email: extractEmail(collapsed),
     phone: extractPhone(collapsed),
     headline: extractHeadline(collapsed),
@@ -276,5 +294,5 @@ export function parseCvText(
     educations: extractEducations(collapsed),
     languages: extractLanguages(collapsed),
     textPreview: collapsed.replace(/\s+/g, ' ').trim().slice(0, 2000),
-  };
+  });
 }

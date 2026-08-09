@@ -345,13 +345,20 @@ export default function EmployeeDashboard() {
     if (!input?.files?.[0]) return;
     setUploading(true);
     setError('');
+    const picked = input.files[0];
+    // #region agent log
+    fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'employee/page.tsx:uploadCv:start',message:'client upload start',data:{mime:picked.type||null,size:picked.size,nameEndsPdf:picked.name.toLowerCase().endsWith('.pdf')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     try {
       const fd = new FormData();
-      fd.append('file', input.files[0]);
+      fd.append('file', picked);
       const resume = await api<{ id: string; parsedData: ParsedCv; needsReview?: boolean }>(
         '/profiles/me/resumes/upload',
         { method: 'POST', body: fd },
       );
+      // #region agent log
+      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'employee/page.tsx:uploadCv:ok',message:'client upload ok',data:{hasParsed:Boolean(resume.parsedData),resumeIdLen:resume.id?.length??0},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       form.reset();
       setMsg('CV uploaded - review what to import');
       await load();
@@ -359,6 +366,9 @@ export default function EmployeeDashboard() {
         setCvReview({ resumeId: resume.id, parsed: resume.parsedData });
       }
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'employee/page.tsx:uploadCv:error',message:'client upload error',data:{errMsg:err instanceof Error ? err.message.slice(0,400) : String(err).slice(0,400)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
