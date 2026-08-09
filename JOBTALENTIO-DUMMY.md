@@ -101,6 +101,8 @@ Semua password non-admin: `Password123!`
 | Farida Ganiyeva | `f.ganiyeva@jobtalent.io` |
 | Gulchehra Nurmatova | `gulchehra.nurmatova99@jobtalent.io` |
 
-Dummy employees use `@jobtalent.io` and are seeded with **email verified** (for pipeline notification tests). Password: `Password123!`
+Dummy **employees** use `@jobtalent.io` and are seeded **email verified**.  
+Dummy **recruiters** keep their company emails and are also seeded **email verified**.  
+Password (non-admin): `Password123!`
 
 **Quick smoke test:** employee `madina.karimova@jobtalent.io` | recruiter `jasur.tursunov@apexsoft.uz` | admin `sarvar.adminov@jobtalentio.uz`
