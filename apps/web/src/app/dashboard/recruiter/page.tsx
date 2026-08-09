@@ -56,8 +56,8 @@ function jobSelectLabel(j: {
   city?: { name: string } | null;
 }) {
   const location = jobLocationLabel(j);
-  const status = j.status && j.status !== 'PUBLISHED' ? ` Â· ${j.status}` : '';
-  return `${j.title} â€” ${location}${status}`;
+  const status = j.status && j.status !== 'PUBLISHED' ? ` · ${j.status}` : '';
+  return `${j.title} - ${location}${status}`;
 }
 
 function RecruiterDashboard() {
@@ -67,10 +67,7 @@ function RecruiterDashboard() {
   const tabFromUrl = searchParams.get('tab') || '';
   const focusFromUrl = searchParams.get('focus') || '';
   const [tab, setTab] = useState<Tab>(() => {
-    if (tabFromUrl === 'candidates') {
-      if (typeof window !== 'undefined') window.location.replace('/talent');
-      return 'jobs';
-    }
+    if (tabFromUrl === 'candidates') return 'jobs';
     if (
       tabFromUrl === 'billing' ||
       tabFromUrl === 'pipeline' ||
@@ -303,8 +300,7 @@ function RecruiterDashboard() {
 
   useEffect(() => {
     if (tab === 'jobs' && focusFromUrl === 'create') {
-      const el = document.getElementById('create-job-form');
-      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('create-job-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [tab, focusFromUrl]);
 
@@ -541,7 +537,7 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>City</LabelText>
                   <select name="citySlug">
-                    <option value="">â€”</option>
+                    <option value="">-</option>
                     {meta.cities.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -552,7 +548,7 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>Category</LabelText>
                   <select name="categorySlug">
-                    <option value="">â€”</option>
+                    <option value="">-</option>
                     {meta.categories.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -567,7 +563,7 @@ function RecruiterDashboard() {
                     value={draftJobLevel}
                     onChange={(e) => setDraftJobLevel(e.target.value)}
                   >
-                    <option value="">â€”</option>
+                    <option value="">-</option>
                     {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
                       <option key={l} value={l}>
                         {l}
@@ -616,7 +612,7 @@ function RecruiterDashboard() {
                             )
                           }
                         >
-                          Ã—
+                          x
                         </button>
                       </span>
                     ))}
@@ -649,7 +645,7 @@ function RecruiterDashboard() {
                             )
                           }
                         >
-                          Ã—
+                          x
                         </button>
                       </span>
                     ))}
@@ -677,10 +673,10 @@ function RecruiterDashboard() {
                 <div key={j.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{j.title}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {j.status} Â· {jobLocationLabel(j)} Â· {j._count?.applications ?? 0} apps Â·{' '}
+                    {j.status} · {jobLocationLabel(j)} · {j._count?.applications ?? 0} apps ·{' '}
                     {j._count?.views ?? 0} views
                     {j.boostUntil && new Date(j.boostUntil) > new Date()
-                      ? ` Â· Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                      ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
                       : ''}
                   </p>
                   <div className="chips">
@@ -821,7 +817,7 @@ function RecruiterDashboard() {
                           onChange={(e) => setBulkToStatus(e.target.value)}
                           aria-label="Bulk target stage"
                         >
-                          <option value="">â€” Keep stage â€”</option>
+                          <option value="">- Keep stage -</option>
                           {STAGES.map((s) => (
                             <option key={s} value={s}>
                               {STAGE_LABEL[s]}
@@ -842,7 +838,7 @@ function RecruiterDashboard() {
                           }}
                           aria-label="Bulk message template"
                         >
-                          <option value="">â€” Custom / none â€”</option>
+                          <option value="">- Custom / none -</option>
                           {bulkTemplates.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.name}
@@ -858,7 +854,7 @@ function RecruiterDashboard() {
                           value={bulkMessage}
                           onChange={(e) => setBulkMessage(e.target.value)}
                           rows={2}
-                          placeholder="Hi {{name}}, â€¦"
+                          placeholder="Hi {{name}}, ..."
                         />
                       </label>
                       <button
@@ -867,7 +863,7 @@ function RecruiterDashboard() {
                         disabled={bulkBusy}
                         onClick={() => runBulkAction()}
                       >
-                        {bulkBusy ? 'Runningâ€¦' : 'Apply to selected'}
+                        {bulkBusy ? 'Running...' : 'Apply to selected'}
                       </button>
                     </div>
                     <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.78rem' }}>
@@ -945,7 +941,7 @@ function RecruiterDashboard() {
                                       whiteSpace: 'nowrap',
                                     }}
                                   >
-                                    {a.profile?.headline || 'â€”'}
+                                    {a.profile?.headline || '-'}
                                   </div>
                                 </div>
                                 {score != null && <MatchRing score={score} size="sm" />}
@@ -958,7 +954,7 @@ function RecruiterDashboard() {
                                     style={{ marginTop: '0.55rem', border: 0, width: '100%', cursor: 'pointer' }}
                                     onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
                                   >
-                                    Match {score}% Â· details
+                                    Match {score}% · details
                                   </button>
                                   {breakdownId === a.id && a.matchBreakdown && (
                                     <div className="match-breakdown">
@@ -1100,7 +1096,7 @@ function RecruiterDashboard() {
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {r.profile.headline || 'â€”'}
+                              {r.profile.headline || '-'}
                             </p>
                             <div className="chips">
                               {(r.profile.skills || []).slice(0, 4).map((s: any) => (
@@ -1129,7 +1125,7 @@ function RecruiterDashboard() {
                                 <button
                                   type="button"
                                   className="chip muted"
-                                  title="Cold outreach requires Premium â€” upgrade in Plan & billing"
+                                  title="Cold outreach requires Premium - upgrade in Plan & billing"
                                   style={{ fontSize: '0.75rem' }}
                                   onClick={() => setTab('billing')}
                                 >
@@ -1148,6 +1144,7 @@ function RecruiterDashboard() {
             )}
           </div>
         )}
+
 
         {tab === 'bulk' && companyId && (
           <BulkCommsPanel companyId={companyId} jobPostId={selectedJob || undefined} />
@@ -1209,9 +1206,9 @@ function RecruiterDashboard() {
             <p className="muted" style={{ marginTop: 0 }}>
               Current plan: <strong>{planCode}</strong>
               {subscription?.endsAt
-                ? ` Â· renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
+                ? ` · renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
                 : ''}
-              {' Â· '}
+              {' · '}
               Published jobs: {activePublishedJobs} / {activeJobLimit}
             </p>
             <p className="muted" style={{ fontSize: '0.85rem' }}>
@@ -1297,7 +1294,7 @@ function RecruiterDashboard() {
                       <div className="muted" style={{ fontSize: '0.85rem' }}>
                         {jobLocationLabel(j)}
                         {j.boostUntil && new Date(j.boostUntil) > new Date()
-                          ? ` Â· Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                          ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
                           : ''}
                       </div>
                     </div>
@@ -1310,7 +1307,7 @@ function RecruiterDashboard() {
                           disabled={billingBusy}
                           onClick={() => buyHotBoost(j.id, days)}
                         >
-                          {days}d Â· {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
+                          {days}d · {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
                         </button>
                       ))}
                     </div>
@@ -1326,7 +1323,7 @@ function RecruiterDashboard() {
               <h2 className="section-title">{company.name}</h2>
               <p className="muted">{company.description}</p>
               <p>
-                Members: {company._count?.members} Â· Jobs: {company._count?.jobPosts} Â· Followers:{' '}
+                Members: {company._count?.members} · Jobs: {company._count?.jobPosts} · Followers:{' '}
                 {company._count?.followers}
               </p>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
@@ -1347,12 +1344,12 @@ function RecruiterDashboard() {
                 </label>
                 <label>
                   <LabelText>Website</LabelText>
-                  <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://â€¦" />
+                  <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://..." />
                 </label>
                 <label>
                   <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={company.city?.slug || ''}>
-                    <option value="">â€”</option>
+                    <option value="">-</option>
                     {meta.cities.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -1363,7 +1360,7 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>Industry</LabelText>
                   <select name="industrySlug" defaultValue={company.industry?.slug || ''}>
-                    <option value="">â€”</option>
+                    <option value="">-</option>
                     {industries.map((i) => (
                       <option key={i.slug} value={i.slug}>
                         {i.name}
@@ -1374,11 +1371,11 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>Company size</LabelText>
                   <select name="size" defaultValue={company.size || ''}>
-                    <option value="">â€”</option>
-                    <option value="SIZE_1_10">1â€“10</option>
-                    <option value="SIZE_11_50">11â€“50</option>
-                    <option value="SIZE_51_200">51â€“200</option>
-                    <option value="SIZE_201_1000">201â€“1000</option>
+                    <option value="">-</option>
+                    <option value="SIZE_1_10">1-10</option>
+                    <option value="SIZE_11_50">11-50</option>
+                    <option value="SIZE_51_200">51-200</option>
+                    <option value="SIZE_201_1000">201-1000</option>
                     <option value="SIZE_1000_PLUS">1000+</option>
                   </select>
                 </label>
@@ -1394,7 +1391,7 @@ function RecruiterDashboard() {
 
 export default function RecruiterDashboardPage() {
   return (
-    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loadingâ€¦</div>}>
+    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loading...</div>}>
       <RecruiterDashboard />
     </Suspense>
   );

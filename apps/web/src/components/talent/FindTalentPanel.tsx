@@ -65,7 +65,7 @@ function jobSelectLabel(j: {
 }) {
   const location = jobLocationLabel(j);
   const status = j.status && j.status !== 'PUBLISHED' ? ` · ${j.status}` : '';
-  return `${j.title} — ${location}${status}`;
+  return `${j.title} - ${location}${status}`;
 }
 
 function filtersFromSearchParams(sp: URLSearchParams): CandFilters {
