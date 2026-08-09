@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
@@ -75,6 +76,8 @@ export default function EmployeeDashboard() {
   const [uploading, setUploading] = useState(false);
   const [draftAlertSkills, setDraftAlertSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
+  const [deleteCvId, setDeleteCvId] = useState<string | null>(null);
+  const [deleteCvBusy, setDeleteCvBusy] = useState(false);
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
@@ -215,13 +218,8 @@ export default function EmployeeDashboard() {
 
   async function removeItem(kind: string, id: string) {
     if (kind === 'resumes') {
-      if (
-        !confirm(
-          'Remove this CV from your library? If you already applied with it, the file stays available for those applications until no longer needed.',
-        )
-      ) {
-        return;
-      }
+      setDeleteCvId(id);
+      return;
     }
     const res = await api<{ softDeleted?: boolean; message?: string }>(
       `/profiles/me/${kind}/${id}`,
@@ -231,6 +229,26 @@ export default function EmployeeDashboard() {
       setMsg(res.message);
     }
     await load();
+  }
+
+  async function confirmDeleteCv() {
+    if (!deleteCvId) return;
+    setDeleteCvBusy(true);
+    setError('');
+    try {
+      const res = await api<{ softDeleted?: boolean; message?: string }>(
+        `/profiles/me/resumes/${deleteCvId}`,
+        { method: 'DELETE' },
+      );
+      if (res?.softDeleted && res.message) setMsg(res.message);
+      else setMsg('CV removed from your library');
+      setDeleteCvId(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeleteCvBusy(false);
+    }
   }
 
   async function withdrawApplication(appId: string) {
@@ -485,6 +503,20 @@ export default function EmployeeDashboard() {
             setTab('profile');
             await load();
           }}
+        />
+      )}
+      {deleteCvId && (
+        <ConfirmModal
+          title={t('deleteCvTitle')}
+          message={t('deleteCvMessage')}
+          confirmLabel={t('deleteCvConfirm')}
+          cancelLabel={t('cancel')}
+          danger
+          busy={deleteCvBusy}
+          onCancel={() => {
+            if (!deleteCvBusy) setDeleteCvId(null);
+          }}
+          onConfirm={confirmDeleteCv}
         />
       )}
       <aside className="dash-nav">
@@ -789,7 +821,7 @@ export default function EmployeeDashboard() {
             <div className="card profile-block">
               <h2 className="section-title" style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h2>
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                {profile.user?.email} ·{' '}
+                {profile.user?.email} -{' '}
                 {profile.user?.emailVerified ? (
                   <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
                 ) : (
@@ -1354,7 +1386,14 @@ export default function EmployeeDashboard() {
                       </div>
                     </div>
                     <div className="profile-list-actions">
-                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>x</button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        aria-label={t('deleteCvTitle')}
+                        onClick={() => removeItem('resumes', r.id)}
+                      >
+                        x
+                      </button>
                     </div>
                   </li>
                 ))}

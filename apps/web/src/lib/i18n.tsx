@@ -643,6 +643,21 @@ const DICT = {
     en: 'Submit application',
   },
   cancel: { uz: 'Bekor qilish', ru: 'Отмена', en: 'Cancel' },
+  deleteCvTitle: {
+    uz: 'CVni o‘chirish',
+    ru: 'Удалить CV',
+    en: 'Delete CV',
+  },
+  deleteCvMessage: {
+    uz: 'Bu CV kutubxonangizdan olib tashlansinmi? Agar u bilan ariza topshirgan bo‘lsangiz, fayl shu arizalar uchun kerak bo‘lguncha saqlanadi.',
+    ru: 'Убрать это CV из библиотеки? Если вы уже откликались с ним, файл останется доступен для этих откликов, пока он нужен.',
+    en: 'Remove this CV from your library? If you already applied with it, the file stays available for those applications until no longer needed.',
+  },
+  deleteCvConfirm: {
+    uz: 'O‘chirish',
+    ru: 'Удалить',
+    en: 'Delete',
+  },
   applyFor: { uz: 'Ariza', ru: 'Отклик', en: 'Apply' },
   employee: { uz: 'Xodim', ru: 'Сотрудник', en: 'Employee' },
   recruiter: { uz: 'Rekruter', ru: 'Рекрутер', en: 'Recruiter' },
