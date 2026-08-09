@@ -21,7 +21,7 @@ function TalentPageInner() {
 
 export default function TalentPage() {
   return (
-    <Suspense fallback={<div className="shell muted">Loading…</div>}>
+    <Suspense fallback={<div className="shell muted">Loading...</div>}>
       <TalentPageInner />
     </Suspense>
   );

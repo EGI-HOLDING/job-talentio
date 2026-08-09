@@ -34,6 +34,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: ASCII UI / mojibake guard
+        run: pnpm check:ascii-ui
+
       - name: Test
         run: pnpm test
 

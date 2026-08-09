@@ -9,9 +9,9 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 
 type GoogleResponse =
-  | { requiresVerification: true; email: string }
-  | { requiresRegistration: true; email: string; fullName: string }
-  | { accessToken: string; user: { role: string; locale?: string } };
+ | { requiresVerification: true; email: string }
+ | { requiresRegistration: true; email: string; fullName: string }
+ | { accessToken: string; user: { role: string; locale?: string } };
 
 declare global {
   interface Window {
@@ -108,7 +108,7 @@ export function GoogleSignIn() {
     if (!GOOGLE_CLIENT_ID || !buttonRef.current) return;
 
     const init = () => {
-      // initialize() must run exactly once per page — repeat calls break the flow
+      // initialize() must run exactly once per page - repeat calls break the flow
       if (initializedRef.current || !window.google || !buttonRef.current) return;
       initializedRef.current = true;
       window.google.accounts.id.initialize({
@@ -184,7 +184,7 @@ export function GoogleSignIn() {
         <div className="google-verify-card">
           <strong>{t('googleChooseRole')}</strong>
           <p className="muted" style={{ margin: '0.4rem 0 0.75rem', fontSize: '0.9rem' }}>
-            {needsRole.fullName} · {needsRole.email}
+            {needsRole.fullName} | {needsRole.email}
           </p>
           <div className="chips" role="radiogroup" style={{ marginBottom: '0.75rem' }}>
             <button

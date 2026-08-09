@@ -1,23 +1,28 @@
-/** Fix classic UTF-8→Latin-1 mojibake and placeholder corruption in stored text. */
+/**
+ * Fix classic UTF-8 to Windows-1252 mojibake and normalize risky Unicode punctuation.
+ * Patterns use \u escapes so source stays ASCII-safe under encoding mishaps.
+ */
 export function sanitizeStoredText(input?: string | null): string {
   if (!input) return '';
-  let s = input
+  return input
     .replace(/\uFFFD+/g, '')
-    // UTF-8 em/en dash / ellipsis misread as Windows-1252
-    .replace(/â€”/g, '-')
-    .replace(/â€“/g, '-')
-    .replace(/â€˜/g, "'")
-    .replace(/â€™/g, "'")
-    .replace(/â€œ/g, '"')
-    .replace(/â€/g, '"')
-    .replace(/â€¦/g, '...')
-    .replace(/Ã—/g, 'x')
-    .replace(/\u2014|\u2013/g, '-')
+    .replace(/\u00E2\u20AC\u201D/g, '-')
+    .replace(/\u00E2\u20AC\u201C/g, '-')
+    .replace(/\u00E2\u20AC\u2122/g, "'")
+    .replace(/\u00E2\u20AC\u02DC/g, "'")
+    .replace(/\u00E2\u20AC\u0153/g, '"')
+    .replace(/\u00E2\u20AC\u009D/g, '"')
+    .replace(/\u00E2\u20AC\u00A6/g, '...')
+    .replace(/\u00C3\u00D7/g, 'x')
+    .replace(/\u00C2\u00B7/g, ' | ')
+    .replace(/\u00C2 /g, ' ')
+    .replace(/\u2014|\u2013|\u2212/g, '-')
     .replace(/\u2026/g, '...')
+    .replace(/\u00B7|\u2022/g, ' | ')
     .replace(/\?{3,}/g, ' - ')
     .replace(/\s+-\s+/g, ' - ')
+    .replace(/ \|  \| /g, ' | ')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return s;
 }

@@ -204,7 +204,7 @@ export default function SettingsPage() {
                   <input
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://…"
+                    placeholder="https://..."
                     type="url"
                   />
                 </FormField>

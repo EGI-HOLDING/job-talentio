@@ -68,7 +68,7 @@ function VerifyEmailInner() {
               <Link href="/login" style={{ color: 'var(--accent)' }}>
                 {t('signIn')}
               </Link>{' '}
-              — you can request a new link by signing in with Google again.
+              - you can request a new link by signing in with Google again.
             </p>
           </>
         )}

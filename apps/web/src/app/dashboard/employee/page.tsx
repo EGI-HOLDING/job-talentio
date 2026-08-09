@@ -310,7 +310,7 @@ export default function EmployeeDashboard() {
         { method: 'POST', body: fd },
       );
       form.reset();
-      setMsg('CV uploaded — review what to import');
+      setMsg('CV uploaded - review what to import');
       await load();
       if (resume.parsedData) {
         setCvReview({ resumeId: resume.id, parsed: resume.parsedData });
@@ -336,7 +336,7 @@ export default function EmployeeDashboard() {
         `/profiles/me/resumes/${resumeId}/file`,
         { method: 'POST', body: fd },
       );
-      setMsg('File attached — review parsed data');
+      setMsg('File attached - review parsed data');
       await load();
       if (resume.parsedData) setCvReview({ resumeId: resume.id, parsed: resume.parsedData });
     } catch (err) {
@@ -531,7 +531,7 @@ export default function EmployeeDashboard() {
                       {sanitizeMojibake(a.jobPost.title)}
                     </Link>
                     <p className="muted" style={{ margin: '0.25rem 0' }}>
-                      {a.jobPost.company?.name} · {a.status}
+                      {a.jobPost.company?.name} | {a.status}
                     </p>
                     {a.matchScore != null && (
                       <span className="badge match">Match {a.matchScore}%</span>
@@ -571,7 +571,7 @@ export default function EmployeeDashboard() {
                       {s.jobPost.title}
                     </Link>
                     <p className="muted" style={{ margin: '0.25rem 0' }}>
-                      {s.jobPost.company?.name} · {jobLocationLabel(s.jobPost)} · {s.jobPost.status}
+                      {s.jobPost.company?.name} | {jobLocationLabel(s.jobPost)} | {s.jobPost.status}
                     </p>
                   </div>
                   <button type="button" className="secondary" onClick={() => unsaveJob(s.jobPost.id)}>
@@ -622,7 +622,7 @@ export default function EmployeeDashboard() {
                             setDraftAlertSkills((prev) => prev.filter((x) => x.slug !== s.slug))
                           }
                         >
-                          ×
+                          x
                         </button>
                       </span>
                     ))}
@@ -656,7 +656,7 @@ export default function EmployeeDashboard() {
                 <div key={a.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{a.name}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {a.city?.name || 'Any city'} · {a.frequency}
+                    {a.city?.name || 'Any city'} | {a.frequency}
                   </p>
                 </div>
               ))}
@@ -684,7 +684,7 @@ export default function EmployeeDashboard() {
                 <div className="grid-2">
                   <label>
                     <LabelText>Phone</LabelText>
-                    <input name="phone" type="tel" defaultValue={profile.phone || ''} placeholder="+998…" />
+                    <input name="phone" type="tel" defaultValue={profile.phone || ''} placeholder="+998..." />
                   </label>
                   <label>
                     <LabelText>Visibility</LabelText>
@@ -698,7 +698,7 @@ export default function EmployeeDashboard() {
                 <label>
                   <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={profile.city?.slug || ''}>
-                    <option value="">—</option>
+                    <option value="">-</option>
                     {cities.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -743,7 +743,7 @@ export default function EmployeeDashboard() {
                   />
                 </label>
                 <button type="submit" disabled={uploading}>
-                  {uploading ? 'Uploading…' : 'Upload CV & parse'}
+                  {uploading ? 'Uploading...' : 'Upload CV & parse'}
                 </button>
               </form>
             </div>
@@ -751,7 +751,7 @@ export default function EmployeeDashboard() {
             <div className="profile-block" style={{ marginBottom: '0.35rem' }}>
               <h2 className="section-title" style={{ margin: 0 }}>Career history</h2>
               <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
-                Experience, education, skills, and languages — edit here for matching and recruiters.
+                Experience, education, skills, and languages - edit here for matching and recruiters.
               </p>
             </div>
 
@@ -790,7 +790,7 @@ export default function EmployeeDashboard() {
                   </div>
                 ) : null,
               )}
-              {!(profile.skills || []).length && <p className="muted">No skills yet — add manually or import from CV.</p>}
+              {!(profile.skills || []).length && <p className="muted">No skills yet - add manually or import from CV.</p>}
               {openForm === 'skill' && (
                 <div style={{ marginTop: '1rem' }}>
                   <p className="required-note">{t('requiredFieldsNote')}</p>
@@ -829,19 +829,19 @@ export default function EmployeeDashboard() {
                           <strong>{x.title}</strong>
                           <div className="muted" style={{ fontSize: '0.85rem' }}>
                             {x.companyName}
-                            {x.city ? ` · ${x.city.name}` : ''}
+                            {x.city ? ` | ${x.city.name}` : ''}
                           </div>
                         </div>
                         <div className="timeline-meta">
                           {x.isCurrent && <span className="badge match">Current</span>}
                           <span className="badge">{formatDuration(x.startDate, x.endDate, x.isCurrent)}</span>
                           <button type="button" className="ghost" onClick={() => setOpenForm(`edit-exp:${x.id}`)}>Edit</button>
-                          <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>×</button>
+                          <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>x</button>
                         </div>
                       </div>
                       <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
                         {new Date(x.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
-                        {' — '}
+                        {' - '}
                         {x.isCurrent || !x.endDate
                           ? 'Present'
                           : new Date(x.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
@@ -851,7 +851,7 @@ export default function EmployeeDashboard() {
                           <p style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
                             {expandedExp === x.id || x.description.length < 180
                               ? x.description
-                              : `${x.description.slice(0, 180)}…`}
+                              : `${x.description.slice(0, 180)}...`}
                           </p>
                           {x.description.length >= 180 && (
                             <button type="button" className="ghost" onClick={() => setExpandedExp(expandedExp === x.id ? null : x.id)}>
@@ -885,7 +885,7 @@ export default function EmployeeDashboard() {
                   <label>
                     <LabelText>City</LabelText>
                     <select name="citySlug" defaultValue={editingExp?.city?.slug || ''}>
-                      <option value="">—</option>
+                      <option value="">-</option>
                       {cities.map((c) => (
                         <option key={c.slug} value={c.slug}>{c.name}</option>
                       ))}
@@ -946,14 +946,14 @@ export default function EmployeeDashboard() {
                         </div>
                         {(x.startDate || x.endDate) && (
                           <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
-                            {x.startDate ? new Date(x.startDate).getFullYear() : '—'} —{' '}
+                            {x.startDate ? new Date(x.startDate).getFullYear() : '-'} -{' '}
                             {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
                           </div>
                         )}
                       </div>
                       <div className="profile-list-actions">
                         <button type="button" className="ghost" onClick={() => setOpenForm(`edit-edu:${x.id}`)}>Edit</button>
-                        <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>×</button>
+                        <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>x</button>
                       </div>
                     </li>
                   ))}
@@ -975,7 +975,7 @@ export default function EmployeeDashboard() {
                       <label>
                         <LabelText>Degree</LabelText>
                         <select name="degree" defaultValue={editingEdu?.degree || ''}>
-                          <option value="">—</option>
+                          <option value="">-</option>
                           {['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'].map((d) => (
                             <option key={d} value={d}>{d}</option>
                           ))}
@@ -1096,7 +1096,7 @@ export default function EmployeeDashboard() {
                     </div>
                     <div className="profile-list-actions">
                       <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>Edit</button>
-                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>x</button>
                     </div>
                   </li>
                 ))}
@@ -1130,7 +1130,7 @@ export default function EmployeeDashboard() {
                   </label>
                   <label>
                     <LabelText>Credential URL</LabelText>
-                    <input name="credentialUrl" type="url" placeholder="https://…" defaultValue={editingCert?.credentialUrl || ''} />
+                    <input name="credentialUrl" type="url" placeholder="https://..." defaultValue={editingCert?.credentialUrl || ''} />
                   </label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button type="submit">{editingCertId ? 'Update certification' : 'Save certification'}</button>
@@ -1147,7 +1147,7 @@ export default function EmployeeDashboard() {
                 <div>
                   <h3 style={{ margin: 0 }}>Resumes</h3>
                   <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-                    Named CV versions for applications — build, export, or attach a PDF.
+                    Named CV versions for applications - build, export, or attach a PDF.
                   </p>
                 </div>
                 <Link href="/dashboard/employee/resume-builder" className="chip" style={{ fontWeight: 600 }}>
@@ -1208,14 +1208,14 @@ export default function EmployeeDashboard() {
                       </div>
                     </div>
                     <div className="profile-list-actions">
-                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>×</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>x</button>
                     </div>
                   </li>
                 ))}
               </ul>
               {!(profile.resumes || []).length && (
                 <p className="muted">
-                  No resumes yet —{' '}
+                  No resumes yet -{' '}
                   <Link href="/dashboard/employee/resume-builder">create one in the builder</Link>
                   {' '}or import a PDF above.
                 </p>

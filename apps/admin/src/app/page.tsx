@@ -166,7 +166,7 @@ export default function AdminPage() {
               </p>
             )}
             <button type="submit" disabled={loading} aria-busy={loading}>
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
         </div>
@@ -204,19 +204,19 @@ export default function AdminPage() {
           <div className="grid">
             <div>
               <div className="muted">Users</div>
-              <div className="metric">{metrics?.users ?? '—'}</div>
+              <div className="metric">{metrics?.users ?? '-'}</div>
             </div>
             <div>
               <div className="muted">Companies</div>
-              <div className="metric">{metrics?.companies ?? '—'}</div>
+              <div className="metric">{metrics?.companies ?? '-'}</div>
             </div>
             <div>
               <div className="muted">Published jobs</div>
-              <div className="metric">{metrics?.publishedJobs ?? '—'}</div>
+              <div className="metric">{metrics?.publishedJobs ?? '-'}</div>
             </div>
             <div>
               <div className="muted">Applications</div>
-              <div className="metric">{metrics?.applications ?? '—'}</div>
+              <div className="metric">{metrics?.applications ?? '-'}</div>
             </div>
             <div>
               <div className="muted">Revenue (UZS)</div>
@@ -461,7 +461,7 @@ export default function AdminPage() {
               {logs.map((l) => (
                 <tr key={l.id}>
                   <td>{new Date(l.createdAt).toLocaleString()}</td>
-                  <td>{l.actor?.email || '—'}</td>
+                  <td>{l.actor?.email || '-'}</td>
                   <td>{l.action}</td>
                   <td>
                     {l.entityType} {l.entityId?.slice(0, 8)}

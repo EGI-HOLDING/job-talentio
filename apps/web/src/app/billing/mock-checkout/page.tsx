@@ -110,7 +110,7 @@ function MockCheckoutInner() {
       <div className="card">
         <h1 style={{ marginTop: 0, fontSize: '1.35rem' }}>Demo checkout</h1>
         <p className="muted" style={{ fontSize: '0.9rem' }}>
-          Mock payment — no real charge. Confirm to activate the plan or boost.
+          Mock payment - no real charge. Confirm to activate the plan or boost.
         </p>
         {error && <FormAlert>{error}</FormAlert>}
         {payment && (
@@ -142,7 +142,7 @@ function MockCheckoutInner() {
                 disabled={busy}
                 onClick={confirmPay}
               >
-                {busy ? 'Processing…' : 'Pay (demo)'}
+                {busy ? 'Processing...' : 'Pay (demo)'}
               </button>
             )}
           </>

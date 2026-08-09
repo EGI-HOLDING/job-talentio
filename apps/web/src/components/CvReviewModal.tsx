@@ -124,7 +124,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
             </p>
           </div>
           <button type="button" className="ghost" onClick={onClose} aria-label="Close dialog">
-            ×
+            x
           </button>
         </div>
 
@@ -169,7 +169,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                 <div className="cv-check muted" style={{ paddingLeft: '1.75rem' }}>
                   <div>
                     <strong>Email detected</strong>
-                    <span>{parsed.email} (kept as reference — account email unchanged)</span>
+                    <span>{parsed.email} (kept as reference - account email unchanged)</span>
                   </div>
                 </div>
               )}
@@ -218,11 +218,11 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                   />
                   <div>
                     <strong>
-                      {x.title} · {x.companyName}
+                      {x.title} | {x.companyName}
                     </strong>
                     <span>
-                      {x.startDate?.slice(0, 7) || '?'} — {x.isCurrent ? 'now' : x.endDate?.slice(0, 7) || '?'}
-                      {x.description ? ` · ${x.description.slice(0, 120)}` : ''}
+                      {x.startDate?.slice(0, 7) || '?'} - {x.isCurrent ? 'now' : x.endDate?.slice(0, 7) || '?'}
+                      {x.description ? ` | ${x.description.slice(0, 120)}` : ''}
                     </span>
                   </div>
                 </label>
@@ -243,7 +243,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                   <div>
                     <strong>{x.school}</strong>
                     <span>
-                      {[x.degree, x.field].filter(Boolean).join(' · ') || 'Education'}
+                      {[x.degree, x.field].filter(Boolean).join(' | ') || 'Education'}
                     </span>
                   </div>
                 </label>
@@ -271,7 +271,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
           )}
 
           {!selectedCount && (
-            <p className="muted">Nothing selected — tick items above or close without importing.</p>
+            <p className="muted">Nothing selected - tick items above or close without importing.</p>
           )}
         </div>
 
@@ -280,7 +280,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
             Skip for now
           </button>
           <button type="button" onClick={importSelected} disabled={busy || selectedCount === 0}>
-            {busy ? 'Importing…' : `Import selected (${selectedCount})`}
+            {busy ? 'Importing...' : `Import selected (${selectedCount})`}
           </button>
         </div>
       </div>

@@ -934,7 +934,7 @@ button.chip.chip-hot:hover,
   border-radius: inherit;
 }
 
-/* Pagination — windowed controls stay compact even at ~1000 pages */
+/* Pagination - windowed controls stay compact even at ~1000 pages */
 .pagination-wrap {
   margin-top: 1.5rem;
   padding-top: 1rem;
@@ -1641,7 +1641,7 @@ button.chip.chip-hot:hover,
 .chat-receipt.delivered {
   color: rgba(255, 255, 255, 0.95);
 }
-/* Light mint on accent bubble — dark teal was unreadable on purple */
+/* Light mint on accent bubble - dark teal was unreadable on purple */
 .chat-receipt.read {
   color: #bbf7d0;
 }

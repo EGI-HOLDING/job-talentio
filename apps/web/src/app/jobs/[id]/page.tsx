@@ -96,7 +96,7 @@ export default function JobDetailPage() {
             }>(`/applications/mine/jobs/${id}`);
             setMyApplication(mine.application);
           } catch {
-            /* ignore — guest / network */
+            /* ignore - guest / network */
           }
         }
       })
@@ -216,7 +216,7 @@ export default function JobDetailPage() {
             {job.employmentType && <span>{job.employmentType.replace('_', ' ')}</span>}
             {job._count && (
               <span className="muted">
-                {job._count.views} views · {job._count.applications} applicants
+                {job._count.views} views | {job._count.applications} applicants
               </span>
             )}
           </div>
@@ -226,8 +226,8 @@ export default function JobDetailPage() {
           {alreadyApplied ? (
             <>
               <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
-                Applied · {myApplication?.status}
-                {myApplication?.matchScore != null ? ` · Match ${myApplication.matchScore}%` : ''}
+                Applied | {myApplication?.status}
+                {myApplication?.matchScore != null ? ` | Match ${myApplication.matchScore}%` : ''}
               </div>
               <Link
                 href="/dashboard/employee"
@@ -363,7 +363,7 @@ export default function JobDetailPage() {
                       <option key={r.id} value={r.id}>
                         {r.title}
                         {r.isPrimary ? ' (primary)' : ''}
-                        {r.hasFile || r.fileKey ? '' : ' — no PDF'}
+                        {r.hasFile || r.fileKey ? '' : ' - no PDF'}
                       </option>
                     ))}
                   </select>
@@ -383,7 +383,7 @@ export default function JobDetailPage() {
                     </LabelText>
                     {q.type === 'YES_NO' ? (
                       <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
-                        <option value="">Select…</option>
+                        <option value="">Select...</option>
                         <option value="Yes">Yes</option>
                         <option value="No">No</option>
                       </select>
@@ -399,7 +399,7 @@ export default function JobDetailPage() {
                 ))}
               </fieldset>
               <button type="submit" className="cta" disabled={submitting}>
-                {submitting ? 'Submitting…' : t('submitApplication')}
+                {submitting ? 'Submitting...' : t('submitApplication')}
               </button>
               <button
                 type="button"

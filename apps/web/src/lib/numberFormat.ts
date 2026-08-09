@@ -1,4 +1,4 @@
-/** Thousand separator for money/integers — always "." (e.g. 1.299.000). */
+/** Thousand separator for money/integers - always "." (e.g. 1.299.000). */
 
 export function formatThousands(
   value: number | string | null | undefined,
@@ -35,7 +35,7 @@ export function formatSalaryRange(
 ): string {
   if (min == null && max == null) return '';
   if (min != null && max != null) {
-    return `${formatThousands(min)} – ${formatThousands(max)} ${currency}`;
+    return `${formatThousands(min)} - ${formatThousands(max)} ${currency}`;
   }
   if (min != null) return `from ${formatThousands(min)} ${currency}`;
   return `up to ${formatThousands(max!)} ${currency}`;

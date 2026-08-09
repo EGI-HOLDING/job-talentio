@@ -1,12 +1,12 @@
 /**
  * Build a compact page window that stays small even for 1000+ pages.
- * Example page=50 / total=1000 → [1, '…', 48, 49, 50, 51, 52, '…', 1000]
+ * Example page=50 / total=1000 → [1, '...', 48, 49, 50, 51, 52, '...', 1000]
  */
 export function buildPageWindow(
   page: number,
   totalPages: number,
   siblingCount = 1,
-): Array<number | '…'> {
+): Array<number | '...'> {
   const total = Math.max(1, Math.floor(totalPages));
   const current = Math.min(Math.max(1, Math.floor(page)), total);
 
@@ -18,16 +18,16 @@ export function buildPageWindow(
   const left = Math.max(2, current - siblings);
   const right = Math.min(total - 1, current + siblings);
 
-  const out: Array<number | '…'> = [1];
+  const out: Array<number | '...'> = [1];
 
-  if (left > 2) out.push('…');
+  if (left > 2) out.push('...');
   else if (left === 2) out.push(2);
 
   for (let p = left; p <= right; p++) {
     if (p !== 1 && p !== total) out.push(p);
   }
 
-  if (right < total - 1) out.push('…');
+  if (right < total - 1) out.push('...');
   else if (right === total - 1) out.push(total - 1);
 
   if (total > 1) out.push(total);
@@ -51,5 +51,5 @@ export function pageRangeLabel(page: number, limit: number, total: number): stri
   if (total <= 0) return '0 of 0';
   const start = (page - 1) * limit + 1;
   const end = Math.min(page * limit, total);
-  return `${start}–${end} of ${total}`;
+  return `${start}-${end} of ${total}`;
 }

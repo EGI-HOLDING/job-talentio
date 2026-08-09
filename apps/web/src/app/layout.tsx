@@ -6,13 +6,14 @@ import { I18nProvider } from '@/lib/i18n';
 
 export const metadata: Metadata = {
   title: 'Job Talentio',
-  description: 'Job portal for Uzbekistan — find work and hire talent',
+  description: 'Job portal for Uzbekistan - find work and hire talent',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="uz" suppressHydrationWarning>
       <head>
+        <meta charSet="utf-8" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link

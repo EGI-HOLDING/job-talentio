@@ -36,7 +36,7 @@ const LEVEL_MAP: Record<string, string> = {
 
 /** Soft UX: strip seniority from display title + infer level (matches API title-resolve). */
 export function softNormalizeJobTitle(raw: string): { roleTitle: string; inferredLevel: string | null } {
-  let s = raw.trim().replace(/[–—]/g, '-').replace(/\s+/g, ' ');
+  let s = raw.trim().replace(/[\u2013\u2014/]/g, '-').replace(/\s+/g, ' ');
   let inferred: string | null = null;
 
   const takeLevel = (token: string) => {
@@ -70,7 +70,7 @@ export function softNormalizeJobTitle(raw: string): { roleTitle: string; inferre
     .replace(/\(\s*\)/g, '')
     .replace(/^\.+\s*|\s*\.+(?=\s|$)/g, ' ')
     .replace(/\s+/g, ' ')
-    .replace(/^[\s\-–,|/]+|[\s\-–,|/]+$/g, '')
+    .replace(/^[\s\-,|/]+|[\s\-,|/]+$/g, '')
     .trim();
 
   return { roleTitle: s || raw.trim(), inferredLevel: inferred };
