@@ -8,6 +8,7 @@ import {
   jobTitleSlugify,
 } from './title-resolve';
 import { jobFingerprint } from './dedupe';
+import { sanitizeStoredText } from './text-sanitize';
 
 type Db = Pick<PrismaClient, 'jobPost' | 'jobTitle' | 'jobTitleAlias'>;
 
@@ -65,9 +66,12 @@ export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
     }),
   ]);
 
+  const dirtyText = (s: string) =>
+    titleHasSeniorityToken(s) || /â€”|â€“|â€¦|Ã—/.test(s);
+
   return (
-    postSamples.some((p) => titleHasSeniorityToken(p.title)) ||
-    titleSamples.some((t) => titleHasSeniorityToken(t.name))
+    postSamples.some((p) => dirtyText(p.title)) ||
+    titleSamples.some((t) => dirtyText(t.name))
   );
 }
 
@@ -108,9 +112,10 @@ async function cleanJobTitleCatalog(
   let merged = 0;
 
   for (const row of titles) {
-    if (!titleHasSeniorityToken(row.name)) continue;
+    const sanitizedName = sanitizeStoredText(row.name);
+    if (!titleHasSeniorityToken(row.name) && sanitizedName === row.name) continue;
     try {
-      const { roleTitle } = stripSeniorityFromTitle(row.name);
+      const { roleTitle } = stripSeniorityFromTitle(sanitizedName || row.name);
       if (roleTitle.length < 2) {
         log(`Skip JobTitle ${row.id} ("${row.name}"): empty after strip`);
         continue;
@@ -204,8 +209,9 @@ export async function backfillJobTitles(
 
   for (const post of posts) {
     try {
-      const resolved = await resolveJobTitle(db, { name: post.title });
-      const nextTitle = resolved.jobTitle.name;
+      const cleanedRawTitle = sanitizeStoredText(post.title);
+      const resolved = await resolveJobTitle(db, { name: cleanedRawTitle || post.title });
+      const nextTitle = sanitizeStoredText(resolved.jobTitle.name);
       const nextLevel = post.experienceLevel ?? resolved.inferredLevel ?? null;
       const nextFingerprint = jobFingerprint({
         title: nextTitle,
@@ -213,17 +219,19 @@ export async function backfillJobTitles(
         cityId: post.cityId,
       });
 
-      const nextDescription = scrubDescriptionSeniority(
-        post.description,
+      let nextDescription = scrubDescriptionSeniority(
+        sanitizeStoredText(post.description) || post.description,
         post.title,
         nextTitle,
       );
+      nextDescription = scrubDescriptionSeniority(nextDescription, cleanedRawTitle, nextTitle);
 
       const needsUpdate =
         post.jobTitleId !== resolved.jobTitle.id ||
         post.title !== nextTitle ||
         post.description !== nextDescription ||
         titleHasSeniorityToken(post.title) ||
+        titleHasSeniorityToken(cleanedRawTitle) ||
         (!post.experienceLevel && !!resolved.inferredLevel);
 
       if (!needsUpdate) {
@@ -231,20 +239,38 @@ export async function backfillJobTitles(
         continue;
       }
 
-      await db.jobPost.update({
-        where: { id: post.id },
-        data: {
-          jobTitleId: resolved.jobTitle.id,
-          title: nextTitle,
-          description: nextDescription,
-          ...(post.experienceLevel
-            ? {}
-            : nextLevel
-              ? { experienceLevel: nextLevel }
-              : {}),
-          fingerprint: nextFingerprint,
-        },
-      });
+      try {
+        await db.jobPost.update({
+          where: { id: post.id },
+          data: {
+            jobTitleId: resolved.jobTitle.id,
+            title: nextTitle,
+            description: nextDescription,
+            ...(post.experienceLevel
+              ? {}
+              : nextLevel
+                ? { experienceLevel: nextLevel }
+                : {}),
+            fingerprint: nextFingerprint,
+          },
+        });
+      } catch {
+        // Fingerprint collision within company — still persist clean title/link
+        await db.jobPost.update({
+          where: { id: post.id },
+          data: {
+            jobTitleId: resolved.jobTitle.id,
+            title: nextTitle,
+            description: nextDescription,
+            ...(post.experienceLevel
+              ? {}
+              : nextLevel
+                ? { experienceLevel: nextLevel }
+                : {}),
+            fingerprint: `${nextFingerprint}:${post.id.slice(-8)}`,
+          },
+        });
+      }
       updated += 1;
     } catch (err) {
       errors += 1;

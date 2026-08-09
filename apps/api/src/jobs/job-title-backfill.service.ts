@@ -14,11 +14,14 @@ export class JobTitleBackfillService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     try {
       const needs = await needsJobTitleBackfill(this.prisma);
-      if (!needs) return;
-
-      this.logger.log(
-        'Job posts/catalog still need JobTitle normalize — running backfill',
-      );
+      if (!needs) {
+        // Still scrub mojibake / link stragglers cheaply when catalog looks clean
+        this.logger.log('JobTitle backfill: light pass (idempotent)');
+      } else {
+        this.logger.log(
+          'Job posts/catalog still need JobTitle normalize - running backfill',
+        );
+      }
       const result = await backfillJobTitles(this.prisma, {
         log: (msg) => this.logger.warn(msg),
       });
