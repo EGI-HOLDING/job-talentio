@@ -263,7 +263,7 @@ export default function SettingsPage() {
                   }}
                 >
                   <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>
-                    {session.user.email} ·{' '}
+                    {session.user.email} -{' '}
                     {session.user.emailVerified
                       ? t('emailVerifiedBadge')
                       : t('emailUnverifiedBadge')}
