@@ -1498,7 +1498,7 @@ export default function EmployeeDashboard() {
                           href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
                           className="chip"
                         >
-                          {(r.hasFile || r.fileKey) ? t('editInBuilder') : t('openInBuilder')}
+                          {r.builderMeta?.lastExportAt ? t('editInBuilder') : t('openInBuilder')}
                         </Link>
                         {!r.isPrimary && (
                           <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
