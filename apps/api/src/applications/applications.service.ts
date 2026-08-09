@@ -259,9 +259,10 @@ export class ApplicationsService {
     if (opts?.status) where.status = opts.status;
     if (opts?.minMatch !== undefined) where.matchScore = { gte: opts.minMatch };
 
-    return this.prisma.application.findMany({
+    const rows = await this.prisma.application.findMany({
       where,
       include: {
+        resume: { select: { id: true, title: true, fileKey: true } },
         profile: {
           include: {
             user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
@@ -279,6 +280,29 @@ export class ApplicationsService {
         opts?.sort === 'newest'
           ? [{ createdAt: 'desc' }]
           : [{ matchScore: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    return rows.map((row) => {
+      const { resume, resumeSnapshot, ...rest } = row;
+      const snap = resumeSnapshot as
+        | {
+            resume?: { title?: string | null; fileKey?: string | null; hasFile?: boolean };
+            [key: string]: unknown;
+          }
+        | null;
+      const snapResume = snap?.resume;
+      const hasResumeFile = Boolean(resume?.fileKey || snapResume?.fileKey);
+      let safeSnapshot: unknown = resumeSnapshot;
+      if (snap && snapResume && 'fileKey' in snapResume) {
+        const { fileKey: _fileKey, ...resumeWithoutKey } = snapResume;
+        safeSnapshot = { ...snap, resume: { ...resumeWithoutKey, hasFile: hasResumeFile } };
+      }
+      return {
+        ...rest,
+        resumeSnapshot: safeSnapshot,
+        resumeTitle: resume?.title ?? snapResume?.title ?? null,
+        hasResumeFile,
+      };
     });
   }
 

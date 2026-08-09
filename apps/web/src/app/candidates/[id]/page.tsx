@@ -44,6 +44,11 @@ type CandidateDetail = {
   languages: Array<{ id: string; level?: string | null; language: { name: string } }>;
   resumes: Array<{ id: string; title: string; fileUrl?: string | null; hasFile?: boolean }>;
   appliedToMyCompany?: boolean;
+  applicationForJob?: {
+    id: string;
+    resumeTitle: string | null;
+    hasResumeFile: boolean;
+  } | null;
   match?: {
     total: number;
     skills: number;
@@ -72,6 +77,7 @@ function CandidateInner() {
   const [data, setData] = useState<CandidateDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canColdChat, setCanColdChat] = useState(false);
+  const [cvError, setCvError] = useState<string | null>(null);
   const matchJobId = search.get('matchJobId');
 
   useEffect(() => {
@@ -104,6 +110,16 @@ function CandidateInner() {
   async function downloadResume(resumeId: string) {
     const res = await api<{ url: string }>(`/profiles/resumes/${resumeId}/download`);
     window.open(res.url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function viewApplicationCv(applicationId: string) {
+    setCvError(null);
+    try {
+      const res = await api<{ url: string }>(`/applications/${applicationId}/resume-download`);
+      window.open(res.url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setCvError(e instanceof Error ? e.message : t('viewCvFailed'));
+    }
   }
 
   if (!session) return null;
@@ -194,9 +210,44 @@ function CandidateInner() {
         </div>
       </div>
 
-      {!!data.resumes?.length && (
+      {(data.applicationForJob || !!data.resumes?.length) && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <h3 style={{ marginTop: 0 }}>Resumes</h3>
+          {cvError && (
+            <p style={{ color: '#be123c', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>{cvError}</p>
+          )}
+          {data.applicationForJob && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.55rem 0',
+                borderBottom: '1px solid var(--border)',
+              }}
+            >
+              <span>
+                {t('appliedWithResume').replace(
+                  '{title}',
+                  data.applicationForJob.resumeTitle || t('resumes'),
+                )}
+              </span>
+              {data.applicationForJob.hasResumeFile ? (
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => viewApplicationCv(data.applicationForJob!.id)}
+                >
+                  {t('viewCv')}
+                </button>
+              ) : (
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  {t('noCvAttached')}
+                </span>
+              )}
+            </div>
+          )}
           {data.resumes.map((r) => (
             <div
               key={r.id}
@@ -212,7 +263,7 @@ function CandidateInner() {
               <span>{r.title}</span>
               {r.hasFile && data.appliedToMyCompany ? (
                 <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
-                  Download CV
+                  {t('viewCv')}
                 </button>
               ) : r.hasFile ? (
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
@@ -220,7 +271,7 @@ function CandidateInner() {
                 </span>
               ) : (
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
-                  No file
+                  {t('noCvAttached')}
                 </span>
               )}
             </div>

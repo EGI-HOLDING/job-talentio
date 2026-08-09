@@ -490,6 +490,15 @@ function RecruiterDashboard() {
     await loadJobData(selectedJob);
   }
 
+  async function viewApplicationCv(appId: string) {
+    try {
+      const res = await api<{ url: string }>(`/applications/${appId}/resume-download`);
+      window.open(res.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      flash(err instanceof Error ? err.message : t('viewCvFailed'), 'error');
+    }
+  }
+
   async function loadBulkTemplates(cid: string) {
     if (!cid) return;
     try {
@@ -1456,6 +1465,16 @@ function RecruiterDashboard() {
                                 </>
                               )}
                               <div className="chips" style={{ marginTop: '0.55rem' }}>
+                                {a.hasResumeFile ? (
+                                  <button
+                                    type="button"
+                                    className="chip"
+                                    style={{ fontSize: '0.72rem' }}
+                                    onClick={() => viewApplicationCv(a.id)}
+                                  >
+                                    {t('viewCv')}
+                                  </button>
+                                ) : null}
                                 <Link
                                   href={`/candidates/${a.profile?.id}?matchJobId=${selectedJob}`}
                                   className="chip"

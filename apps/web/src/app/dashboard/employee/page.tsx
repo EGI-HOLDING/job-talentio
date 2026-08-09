@@ -1482,24 +1482,31 @@ export default function EmployeeDashboard() {
                         </button>
                       )}
                       <div className="chips" style={{ marginTop: '0.65rem' }}>
+                        {(r.hasFile || r.fileKey) ? (
+                          <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
+                            {t('viewPdf')}
+                          </button>
+                        ) : (
+                          <Link
+                            href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
+                            className="chip"
+                          >
+                            {t('previewResume')}
+                          </Link>
+                        )}
                         <Link
                           href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
                           className="chip"
                         >
-                          Edit in builder
+                          {(r.hasFile || r.fileKey) ? t('editInBuilder') : t('openInBuilder')}
                         </Link>
                         {!r.isPrimary && (
                           <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
                             Set primary
                           </button>
                         )}
-                        {(r.hasFile || r.fileKey) && (
-                          <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
-                            Download
-                          </button>
-                        )}
                         <label className="chip" style={{ cursor: 'pointer' }}>
-                          {r.hasFile || r.fileKey ? 'Replace file' : 'Attach PDF'}
+                          {(r.hasFile || r.fileKey) ? t('replaceFile') : t('attachPdf')}
                           <input
                             type="file"
                             accept="application/pdf"

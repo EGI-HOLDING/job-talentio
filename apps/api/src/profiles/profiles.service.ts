@@ -1664,6 +1664,11 @@ export class ProfilesService {
     const experienceYears = this.matching.totalExperienceYears(profile.experiences);
 
     let match: unknown = null;
+    let applicationForJob: {
+      id: string;
+      resumeTitle: string | null;
+      hasResumeFile: boolean;
+    } | null = null;
     if (matchJobId) {
       const matchJob = await this.prisma.jobPost.findUnique({
         where: { id: matchJobId },
@@ -1677,6 +1682,23 @@ export class ProfilesService {
         match = await this.matching.scoreProfileAgainstJob(profileId, matchJobId);
       } catch {
         match = null;
+      }
+
+      const application = await this.prisma.application.findUnique({
+        where: {
+          jobPostId_profileId: { jobPostId: matchJobId, profileId },
+        },
+        include: { resume: { select: { title: true, fileKey: true } } },
+      });
+      if (application) {
+        const snap = application.resumeSnapshot as
+          | { resume?: { title?: string | null; fileKey?: string | null } }
+          | null;
+        applicationForJob = {
+          id: application.id,
+          resumeTitle: application.resume?.title ?? snap?.resume?.title ?? null,
+          hasResumeFile: Boolean(application.resume?.fileKey || snap?.resume?.fileKey),
+        };
       }
     }
 
@@ -1692,6 +1714,7 @@ export class ProfilesService {
       experienceYears,
       match,
       appliedToMyCompany,
+      applicationForJob,
     };
   }
 
