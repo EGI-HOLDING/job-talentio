@@ -59,4 +59,18 @@ export class MetaController {
   languages() {
     return this.meta.languages();
   }
+
+  @Get('job-titles/suggest')
+  suggestJobTitles(@Query('q') q?: string, @Query('take') take?: string) {
+    return this.meta.suggestJobTitles(q, take ? Number(take) : 10);
+  }
+
+  @Get('job-titles')
+  jobTitles(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.meta.jobTitles(q, page ? Number(page) : 1, limit ? Number(limit) : 24);
+  }
 }

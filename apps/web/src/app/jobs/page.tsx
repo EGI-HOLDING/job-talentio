@@ -47,6 +47,7 @@ type SearchResponse = {
   facets?: {
     cities: Array<{ slug: string; name: string; count: number }>;
     categories: Array<{ slug: string; name: string; count: number }>;
+    jobTitles?: Array<{ slug: string; name: string; count: number }>;
     companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>;
     skills?: Array<{ slug: string; name: string; count: number }>;
     experienceLevels: Record<string, number>;
@@ -58,6 +59,7 @@ type Filters = {
   city: string;
   category: string;
   companySlug: string;
+  jobTitle: string;
   skills: string;
   skillMode: string;
   benefits: string;
@@ -82,6 +84,7 @@ const EMPTY: Filters = {
   city: '',
   category: '',
   companySlug: '',
+  jobTitle: '',
   skills: '',
   skillMode: 'OR',
   benefits: '',
@@ -107,6 +110,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     city: sp.get('city') ?? '',
     category: sp.get('category') ?? '',
     companySlug: sp.get('companySlug') ?? '',
+    jobTitle: sp.get('jobTitle') ?? '',
     skills: sp.get('skills') ?? '',
     skillMode: sp.get('skillMode') ?? 'OR',
     benefits: sp.get('benefits') ?? '',
@@ -271,8 +275,18 @@ function JobsInner() {
       ? { slug: singleCompanySlug, name: singleCompanySlug, count: data?.total ?? 0 }
       : null);
 
+  const titleFacetList = data?.facets?.jobTitles || [];
+  const singleJobTitleSlug =
+    filters.jobTitle && !filters.jobTitle.includes(',') ? filters.jobTitle : '';
+  const activeJobTitle =
+    (singleJobTitleSlug && titleFacetList.find((x) => x.slug === singleJobTitleSlug)) ||
+    (singleJobTitleSlug
+      ? { slug: singleJobTitleSlug, name: singleJobTitleSlug, count: data?.total ?? 0 }
+      : null);
+
   const advancedActiveCount = [
     filters.companySlug,
+    filters.jobTitle,
     filters.skills,
     filters.experienceLevel,
     filters.benefits,
@@ -519,7 +533,7 @@ function JobsInner() {
                 </p>
               </div>
               {!browseCompanies && (
-                <Link href="/jobs?view=companies" className="hiring-view-all">
+                <Link href="/explore/companies" className="hiring-view-all">
                   {t('viewAll')} <span aria-hidden>→</span>
                 </Link>
               )}
@@ -567,6 +581,31 @@ function JobsInner() {
                 onClick={() => apply({ companySlug: '' }, { keepBrowse: true })}
               >
                 {t('clearCompanyFilter')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeJobTitle && singleJobTitleSlug && (
+          <div className="company-filter-banner">
+            <div>
+              <strong>
+                {t('jobTitleFilter')}: {activeJobTitle.name}
+              </strong>
+              <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+                {rolesLabel(data?.total ?? activeJobTitle.count)}
+              </p>
+            </div>
+            <div className="company-filter-actions">
+              <Link href="/explore/titles" className="chip">
+                {t('exploreTitlesTitle')}
+              </Link>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => apply({ jobTitle: '' })}
+              >
+                {t('clearJobTitleFilter')}
               </button>
             </div>
           </div>

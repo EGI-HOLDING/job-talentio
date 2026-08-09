@@ -75,6 +75,7 @@ export const companySchema = z.object({
 
 export const jobPostSchema = z.object({
   title: z.string().min(3).max(200),
+  jobTitleSlug: z.string().max(120).optional(),
   description: z.string().min(20).max(20000),
   citySlug: z.string().max(120).optional(),
   categorySlug: z.string().max(120).optional(),
@@ -125,6 +126,8 @@ export const jobSearchSchema = z.object({
   category: z.string().optional(),
   company: z.string().optional(),
   companySlug: z.string().optional(), // exact company slug (comma-separated ok)
+  /** Canonical JobTitle slug (comma-separated ok) */
+  jobTitle: z.string().optional(),
   employmentType: z.string().optional(),
   workMode: z.string().optional(),
   experienceLevel: z.string().optional(),

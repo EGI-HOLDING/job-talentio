@@ -54,6 +54,7 @@ const DICT = {
     en: 'Hot jobs will appear after seed data loads.',
   },
   viewAll: { uz: 'Barchasini ko‘rish', ru: 'Смотреть все', en: 'View all' },
+  home: { uz: 'Bosh sahifa', ru: 'Главная', en: 'Home' },
   hiringNow: { uz: 'Hozir ishga olmoqda', ru: 'Сейчас нанимают', en: 'Hiring now' },
   hiringNowSubtitle: {
     uz: 'Kompaniyalar ochiq vakansiyalar bilan',
@@ -64,6 +65,111 @@ const DICT = {
     uz: '{n} ochiq ish',
     ru: '{n} вакансий',
     en: '{n} open roles',
+  },
+  exploreByCategory: {
+    uz: 'Kategoriya bo‘yicha ishlar',
+    ru: 'Вакансии по категориям',
+    en: 'Jobs by category',
+  },
+  exploreByCategorySubtitle: {
+    uz: 'Soha bo‘yicha ochiq ishlarni ko‘ring',
+    ru: 'Смотрите открытые роли по отраслям',
+    en: 'Browse open roles by field',
+  },
+  exploreByCity: {
+    uz: 'Shahar bo‘yicha ishlar',
+    ru: 'Вакансии по городам',
+    en: 'Jobs by city',
+  },
+  exploreByCitySubtitle: {
+    uz: 'O‘zbekiston shaharlaridagi vakansiyalar',
+    ru: 'Вакансии в городах Узбекистана',
+    en: 'Openings across Uzbekistan cities',
+  },
+  exploreByCompany: {
+    uz: 'Kompaniya bo‘yicha ishlar',
+    ru: 'Вакансии по компаниям',
+    en: 'Jobs by company',
+  },
+  exploreByCompanySubtitle: {
+    uz: 'Hozir ishga olayotgan kompaniyalar',
+    ru: 'Компании, которые сейчас нанимают',
+    en: 'Companies hiring right now',
+  },
+  exploreByTitle: {
+    uz: 'Lavozim bo‘yicha ishlar',
+    ru: 'Вакансии по должностям',
+    en: 'Jobs by title',
+  },
+  exploreByTitleSubtitle: {
+    uz: 'Masalan Frontend Developer, Java Developer',
+    ru: 'Например Frontend Developer, Java Developer',
+    en: 'e.g. Frontend Developer, Java Developer',
+  },
+  exploreCategoriesTitle: {
+    uz: 'Barcha kategoriyalar',
+    ru: 'Все категории',
+    en: 'All categories',
+  },
+  exploreCategoriesSubtitle: {
+    uz: 'Kategoriyani tanlang — tegishli ishlar ochiladi',
+    ru: 'Выберите категорию, чтобы увидеть вакансии',
+    en: 'Pick a category to see matching jobs',
+  },
+  exploreCitiesTitle: {
+    uz: 'Barcha shaharlar',
+    ru: 'Все города',
+    en: 'All cities',
+  },
+  exploreCitiesSubtitle: {
+    uz: 'Shaharni tanlang — u yerdagi ishlar ochiladi',
+    ru: 'Выберите город, чтобы увидеть вакансии',
+    en: 'Pick a city to see local openings',
+  },
+  exploreCompaniesTitle: {
+    uz: 'Barcha kompaniyalar',
+    ru: 'Все компании',
+    en: 'All companies',
+  },
+  exploreCompaniesSubtitle: {
+    uz: 'Kompaniyani tanlang — uning ochiq ishlari ochiladi',
+    ru: 'Выберите компанию, чтобы увидеть её вакансии',
+    en: 'Pick a company to see its open roles',
+  },
+  exploreTitlesTitle: {
+    uz: 'Barcha lavozimlar',
+    ru: 'Все должности',
+    en: 'All job titles',
+  },
+  exploreTitlesSubtitle: {
+    uz: 'Lavozimni tanlang — mos ishlar ochiladi',
+    ru: 'Выберите должность, чтобы увидеть вакансии',
+    en: 'Pick a title to see matching jobs',
+  },
+  exploreTitlesSearch: {
+    uz: 'Lavozim qidirish…',
+    ru: 'Поиск должности…',
+    en: 'Search job titles…',
+  },
+  exploreEmpty: {
+    uz: 'Hozircha ma’lumot yo‘q',
+    ru: 'Пока нет данных',
+    en: 'Nothing to show yet',
+  },
+  jobTitleFilter: {
+    uz: 'Lavozim',
+    ru: 'Должность',
+    en: 'Job title',
+  },
+  clearJobTitleFilter: {
+    uz: 'Lavozim filtrini tozalash',
+    ru: 'Сбросить фильтр должности',
+    en: 'Clear title filter',
+  },
+  jobTitleHint: {
+    uz: 'Taklifdan tanlang yoki yangi lavozim yozing (Junior/Senior alohida Levelda)',
+    ru: 'Выберите из подсказок или введите новую должность (Junior/Senior — в Level)',
+    en: 'Pick a suggestion or type a new title (Junior/Senior belong in Level)',
   },
   browseByCompany: {
     uz: 'Kompaniya bo‘yicha qidirish',

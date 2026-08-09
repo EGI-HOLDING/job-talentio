@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeSkillKey } from '../common/skill-resolve';
+import { normalizeJobTitleKey } from '../common/title-resolve';
 
 @Injectable()
 export class MetaService {
@@ -251,5 +252,93 @@ export class MetaService {
       orderBy: { name: 'asc' },
       take: limit,
     });
+  }
+
+  async jobTitles(q?: string, page = 1, limit = 24) {
+    const take = Math.min(Math.max(limit || 24, 1), 100);
+    const skip = (Math.max(page || 1, 1) - 1) * take;
+    const term = q?.trim();
+    const where: Prisma.JobTitleWhereInput = term
+      ? {
+          OR: [
+            { name: { contains: term, mode: 'insensitive' } },
+            { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+            { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
+          ],
+        }
+      : {};
+
+    const [total, rows] = await Promise.all([
+      this.prisma.jobTitle.count({ where }),
+      this.prisma.jobTitle.findMany({
+        where,
+        include: {
+          _count: {
+            select: { jobPosts: { where: { status: 'PUBLISHED' } } },
+          },
+        },
+        orderBy: [{ jobPosts: { _count: 'desc' } }, { name: 'asc' }],
+        skip,
+        take,
+      }),
+    ]);
+
+    const items = rows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      count: t._count.jobPosts,
+    }));
+
+    return {
+      items,
+      total,
+      page: Math.max(page || 1, 1),
+      limit: take,
+      totalPages: Math.max(1, Math.ceil(total / take) || 1),
+    };
+  }
+
+  async suggestJobTitles(q?: string, take = 10) {
+    const limit = Math.min(Math.max(take || 10, 1), 20);
+    const term = q?.trim();
+    const key = term ? normalizeJobTitleKey(term) : '';
+
+    const where: Prisma.JobTitleWhereInput = term
+      ? {
+          OR: [
+            { name: { contains: term, mode: 'insensitive' } },
+            { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+            ...(key
+              ? [
+                  { normalizedKey: key },
+                  { aliases: { some: { aliasKey: key } } },
+                  { aliases: { some: { alias: { contains: term, mode: 'insensitive' as const } } } },
+                ]
+              : []),
+          ],
+        }
+      : {};
+
+    const rows = await this.prisma.jobTitle.findMany({
+      where: Object.keys(where).length ? where : undefined,
+      include: {
+        _count: { select: { jobPosts: { where: { status: 'PUBLISHED' } } } },
+        aliases: { take: 3, select: { alias: true } },
+      },
+      orderBy: { name: 'asc' },
+      take: limit * 2,
+    });
+
+    return rows
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        aliases: t.aliases.map((a) => a.alias),
+        usageCount: t._count.jobPosts,
+      }))
+      .sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name))
+      .slice(0, limit);
   }
 }

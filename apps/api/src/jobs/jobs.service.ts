@@ -21,6 +21,7 @@ import {
 } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveBenefit } from '../common/benefit-resolve';
+import { resolveJobTitle } from '../common/title-resolve';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -142,6 +143,7 @@ export class JobsService {
     },
     city: true,
     category: true,
+    jobTitle: { select: { id: true, name: true, slug: true } },
     jobSkills: { include: { skill: true } },
     benefits: { include: { benefit: true } },
     questions: { orderBy: { sortOrder: 'asc' as const } },
@@ -238,8 +240,14 @@ export class JobsService {
         ? null
         : await this.resolveCityId(data.citySlug as string | undefined);
     const categoryId = await this.resolveCategoryId(data.categorySlug as string | undefined);
-    const title = String(data.title).trim();
+    const resolvedTitle = await resolveJobTitle(this.prisma, {
+      name: String(data.title).trim(),
+      slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
+    });
+    const title = resolvedTitle.jobTitle.name;
     const description = String(data.description).trim();
+    const experienceLevel =
+      (data.experienceLevel as never) ?? resolvedTitle.inferredLevel ?? null;
 
     const hashes = await this.assertNoDuplicateJob({
       companyId,
@@ -252,6 +260,7 @@ export class JobsService {
     const job = await this.prisma.jobPost.create({
       data: {
         companyId,
+        jobTitleId: resolvedTitle.jobTitle.id,
         title,
         description,
         cityId,
@@ -263,7 +272,7 @@ export class JobsService {
         salaryPeriod: (data.salaryPeriod as never) || 'MONTHLY',
         currency: (data.currency as string) || 'UZS',
         experienceYearsMin: (data.experienceYearsMin as number) ?? null,
-        experienceLevel: (data.experienceLevel as never) ?? null,
+        experienceLevel,
         locale: (data.locale as string) || 'uz',
         status: 'DRAFT',
         fingerprint: hashes.fingerprint,
@@ -303,7 +312,18 @@ export class JobsService {
       cityId = null;
     }
 
-    const title = data.title !== undefined ? String(data.title).trim() : job.title;
+    let title = job.title;
+    let jobTitleId = job.jobTitleId;
+    let inferredLevel: typeof job.experienceLevel = null;
+    if (data.title !== undefined || data.jobTitleSlug !== undefined) {
+      const resolvedTitle = await resolveJobTitle(this.prisma, {
+        name: data.title !== undefined ? String(data.title).trim() : job.title,
+        slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
+      });
+      title = resolvedTitle.jobTitle.name;
+      jobTitleId = resolvedTitle.jobTitle.id;
+      inferredLevel = resolvedTitle.inferredLevel;
+    }
     const description =
       data.description !== undefined ? String(data.description).trim() : job.description;
     const resolvedCityId = cityId === undefined ? job.cityId : cityId;
@@ -321,10 +341,19 @@ export class JobsService {
       this.assertLocationRules(workMode, resolvedCityId, true);
     }
 
+    const nextExperienceLevel =
+      data.experienceLevel !== undefined
+        ? (data.experienceLevel as never)
+        : inferredLevel && !job.experienceLevel
+          ? inferredLevel
+          : undefined;
+
     await this.prisma.jobPost.update({
       where: { id: jobId },
       data: {
-        title: data.title !== undefined ? title : undefined,
+        title: data.title !== undefined || data.jobTitleSlug !== undefined ? title : undefined,
+        jobTitleId:
+          data.title !== undefined || data.jobTitleSlug !== undefined ? jobTitleId : undefined,
         description: data.description !== undefined ? description : undefined,
         cityId,
         categoryId:
@@ -337,7 +366,7 @@ export class JobsService {
         salaryMax: data.salaryMax as number | null | undefined,
         salaryPeriod: data.salaryPeriod as never,
         experienceYearsMin: data.experienceYearsMin as number | null | undefined,
-        experienceLevel: data.experienceLevel as never,
+        experienceLevel: nextExperienceLevel as never,
         locale: data.locale as string | undefined,
         fingerprint: hashes.fingerprint,
         contentHash: hashes.contentHash,
@@ -543,6 +572,7 @@ export class JobsService {
     category?: string;
     company?: string;
     companySlug?: string;
+    jobTitle?: string;
     employmentType?: string;
     workMode?: string;
     experienceLevel?: string;
@@ -566,6 +596,14 @@ export class JobsService {
 
     const categorySlugs = (query.category || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (categorySlugs.length) and.push({ category: { slug: { in: categorySlugs } } });
+
+    const jobTitleSlugs = (query.jobTitle || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (jobTitleSlugs.length) {
+      and.push({ jobTitle: { slug: { in: jobTitleSlugs } } });
+    }
 
     if (query.company) {
       and.push({ company: { name: { contains: query.company, mode: 'insensitive' } } });
@@ -670,6 +708,7 @@ export class JobsService {
       },
       city: true,
       category: true,
+      jobTitle: { select: { id: true, name: true, slug: true } },
       jobSkills: { include: { skill: true }, take: 8 },
       benefits: { include: { benefit: true }, take: 6 },
     } as const;
@@ -783,9 +822,11 @@ export class JobsService {
       select: {
         cityId: true,
         categoryId: true,
+        jobTitleId: true,
         experienceLevel: true,
         city: { select: { slug: true, name: true } },
         category: { select: { slug: true, name: true } },
+        jobTitle: { select: { slug: true, name: true } },
         company: { select: { slug: true, name: true, logoUrl: true } },
         jobSkills: { select: { skill: { select: { slug: true, name: true } } } },
       },
@@ -794,6 +835,7 @@ export class JobsService {
 
     const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const categoryFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const jobTitleFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const companyFacets: Record<
       string,
       { slug: string; name: string; logoUrl?: string | null; count: number }
@@ -812,6 +854,12 @@ export class JobsService {
         categoryFacets[key] = categoryFacets[key]
           ? { ...categoryFacets[key], count: categoryFacets[key].count + 1 }
           : { slug: j.category.slug, name: j.category.name, count: 1 };
+      }
+      if (j.jobTitle) {
+        const key = j.jobTitle.slug;
+        jobTitleFacets[key] = jobTitleFacets[key]
+          ? { ...jobTitleFacets[key], count: jobTitleFacets[key].count + 1 }
+          : { slug: j.jobTitle.slug, name: j.jobTitle.name, count: 1 };
       }
       if (j.company) {
         const key = j.company.slug;
@@ -848,6 +896,7 @@ export class JobsService {
       facets: {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count),
         categories: Object.values(categoryFacets).sort((a, b) => b.count - a.count),
+        jobTitles: Object.values(jobTitleFacets).sort((a, b) => b.count - a.count),
         companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
         skills: Object.values(skillFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,

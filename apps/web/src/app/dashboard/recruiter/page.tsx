@@ -14,6 +14,7 @@ import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
+import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
@@ -128,6 +129,7 @@ function RecruiterDashboard() {
   const [skillQ, setSkillQ] = useState('');
   const [draftJobSkills, setDraftJobSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [draftJobBenefits, setDraftJobBenefits] = useState<Array<{ slug: string; name: string }>>([]);
+  const [draftJobLevel, setDraftJobLevel] = useState('');
   const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
     cities: [],
     skills: [],
@@ -363,6 +365,7 @@ function RecruiterDashboard() {
     });
     setDraftJobSkills([]);
     setDraftJobBenefits([]);
+    setDraftJobLevel('');
     flash('Job created as DRAFT');
     await loadJobs(companyId);
   }
@@ -612,7 +615,18 @@ function RecruiterDashboard() {
               <form className="form-stack" onSubmit={createJob}>
                 <label>
                   <LabelText required>Title</LabelText>
-                  <input name="title" required minLength={3} />
+                  <JobTitleInput
+                    name="title"
+                    required
+                    minLength={3}
+                    placeholder="e.g. Frontend Developer"
+                    onInferredLevel={(level) => {
+                      setDraftJobLevel((prev) => prev || level);
+                    }}
+                  />
+                  <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                    {t('jobTitleHint')}
+                  </span>
                 </label>
                 <label>
                   <LabelText required>Description</LabelText>
@@ -642,10 +656,16 @@ function RecruiterDashboard() {
                 </label>
                 <label>
                   <LabelText>Level</LabelText>
-                  <select name="experienceLevel">
+                  <select
+                    name="experienceLevel"
+                    value={draftJobLevel}
+                    onChange={(e) => setDraftJobLevel(e.target.value)}
+                  >
                     <option value="">—</option>
                     {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
-                      <option key={l}>{l}</option>
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
                     ))}
                   </select>
                 </label>
