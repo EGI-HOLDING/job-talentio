@@ -432,7 +432,7 @@ export default function JobDetailPage() {
                     {resumes.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.title}
-                        {r.targetJobTitle?.name ? ` · ${r.targetJobTitle.name}` : ''}
+                        {r.targetJobTitle?.name ? ` - ${r.targetJobTitle.name}` : ''}
                         {r.isPrimary ? ' (primary)' : ''}
                         {r.hasFile || r.fileKey ? '' : ' - no PDF'}
                       </option>

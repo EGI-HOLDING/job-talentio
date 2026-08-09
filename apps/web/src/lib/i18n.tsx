@@ -881,9 +881,9 @@ const DICT = {
     en: 'Upload PDF',
   },
   resumeBuilderEmptyHint: {
-    uz: 'PDF ixtiyoriy — builderda keyin to‘ldirasiz va export qilasiz.',
-    ru: 'PDF не обязателен — заполните в конструкторе и экспортируйте позже.',
-    en: 'PDF is optional — fill the builder and export when ready.',
+    uz: 'PDF ixtiyoriy - builderda keyin to‘ldirasiz va export qilasiz.',
+    ru: 'PDF не обязателен - заполните в конструкторе и экспортируйте позже.',
+    en: 'PDF is optional - fill the builder and export when ready.',
   },
   resumeDropPdf: {
     uz: 'PDF ni shu yerga tashlang yoki tanlang',
