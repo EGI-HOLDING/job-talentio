@@ -17,6 +17,7 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
+import { isParseInFlight, waitForResumeParse } from '@/lib/cvParse';
 import { MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
@@ -132,6 +133,18 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, []);
+
+  // Soft-refresh while any resume parse is still running (badge + review link).
+  useEffect(() => {
+    const pending = (profile?.resumes || []).some((r: { parseStatus?: string }) =>
+      isParseInFlight(r.parseStatus),
+    );
+    if (!pending) return;
+    const id = window.setInterval(() => {
+      load().catch(() => undefined);
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [profile?.resumes]);
 
   async function requestEmailVerification() {
     setVerifyBusy(true);
@@ -433,15 +446,23 @@ export default function EmployeeDashboard() {
     try {
       const fd = new FormData();
       fd.append('file', cvFile);
-      const resume = await api<{ id: string; parsedData: ParsedCv; needsReview?: boolean }>(
+      const resume = await api<{ id: string }>(
         '/profiles/me/resumes/upload',
         { method: 'POST', body: fd },
       );
       setCvFile(null);
-      setMsg('CV uploaded - review what to import');
+      setMsg(t('cvParsing'));
       await load();
-      if (resume.parsedData) {
-        setCvReview({ resumeId: resume.id, parsed: resume.parsedData });
+      setUploading(false);
+      const parse = await waitForResumeParse(resume.id);
+      await load();
+      if (parse.parseStatus === 'READY' && parse.parsedData) {
+        setMsg(t('cvParseReady'));
+        setCvReview({ resumeId: resume.id, parsed: parse.parsedData as ParsedCv });
+      } else if (parse.parseStatus === 'FAILED') {
+        setError(parse.parseError || t('cvParseFailed'));
+      } else {
+        setMsg(t('cvParsing'));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -457,16 +478,22 @@ export default function EmployeeDashboard() {
 
   async function attachFileToResume(resumeId: string, file: File) {
     setUploading(true);
+    setError('');
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const resume = await api<{ id: string; parsedData: ParsedCv }>(
-        `/profiles/me/resumes/${resumeId}/file`,
-        { method: 'POST', body: fd },
-      );
-      setMsg('File attached - review parsed data');
+      await api(`/profiles/me/resumes/${resumeId}/file`, { method: 'POST', body: fd });
+      setMsg(t('cvParsing'));
       await load();
-      if (resume.parsedData) setCvReview({ resumeId: resume.id, parsed: resume.parsedData });
+      setUploading(false);
+      const parse = await waitForResumeParse(resumeId);
+      await load();
+      if (parse.parseStatus === 'READY' && parse.parsedData) {
+        setMsg(t('cvParseReady'));
+        setCvReview({ resumeId, parsed: parse.parsedData as ParsedCv });
+      } else if (parse.parseStatus === 'FAILED') {
+        setError(parse.parseError || t('cvParseFailed'));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Attach failed');
     } finally {
@@ -1470,20 +1497,28 @@ export default function EmployeeDashboard() {
                         {(r.hasFile || r.fileKey) && (
                           <span className="badge skill">PDF attached</span>
                         )}
+                        {isParseInFlight(r.parseStatus) && (
+                          <span className="badge match">{t('cvParseBadge')}</span>
+                        )}
                       </div>
                       {r.targetJobTitle?.name && (
                         <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
                           {t('resumeTargetRole')}: {r.targetJobTitle.name}
                         </p>
                       )}
-                      {r.parsedData && (
+                      {r.parseStatus === 'FAILED' && r.parseError && (
+                        <p style={{ color: '#be123c', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
+                          {t('cvParseFailed')}: {r.parseError}
+                        </p>
+                      )}
+                      {r.parsedData && r.parseStatus === 'READY' && (
                         <button
                           type="button"
                           className="ghost"
                           style={{ display: 'inline-block', marginTop: 6, padding: 0 }}
                           onClick={() => setCvReview({ resumeId: r.id, parsed: r.parsedData })}
                         >
-                          Review parsed data →
+                          {t('reviewParsedData')}
                         </button>
                       )}
                       <div className="chips" style={{ marginTop: '0.65rem' }}>

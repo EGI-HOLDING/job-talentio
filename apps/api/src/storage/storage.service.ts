@@ -81,6 +81,20 @@ export class StorageService implements OnModuleInit {
     return getSignedUrl(this.client, command, { expiresIn });
   }
 
+  /** Download object bytes for background workers (CV parse, etc.). */
+  async getObjectBuffer(key: string): Promise<Buffer> {
+    const res = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
+    const body = res.Body;
+    if (!body) throw new Error(`Empty S3 body for ${key}`);
+    const bytes = await body.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
   /** Best-effort object removal (avatars, logos, purged CVs). */
   async delete(key: string | null | undefined): Promise<void> {
     const k = (key || '').trim();
