@@ -1286,6 +1286,16 @@ a.card.job-card--hot {
   box-shadow: var(--shadow-lg);
 }
 .modal h2 { margin: 0 0 1rem; font-family: var(--font-display); }
+.confirm-modal {
+  width: min(440px, 100%);
+}
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+}
 
 /* Dashboard */
 .dash-grid {
