@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
+import { isDemoMailbox } from '../common/demo-mailboxes';
 
 /**
  * Railway Free/Hobby/Trial block outbound SMTP (ports 25/465/587).
@@ -13,6 +14,8 @@ import { Resend } from 'resend';
  *   SMTP_FROM="Job Talentio <onboarding@resend.dev>"
  * After domain verify, switch to:
  *   SMTP_FROM="Job Talentio <info@jobtalent.io>"
+ *
+ * Seed/dummy mailboxes (see demo-mailboxes.ts) never receive outbound mail.
  */
 @Injectable()
 export class MailService implements OnModuleInit {
@@ -59,9 +62,13 @@ export class MailService implements OnModuleInit {
 
   /**
    * Best-effort email. Provider outages must not fail user-facing flows
-   * after the DB write already succeeded.
+   * after the DB write already succeeded. Dummy/seed inboxes are skipped.
    */
   async send(to: string, subject: string, html: string) {
+    if (isDemoMailbox(to)) {
+      this.logger.log(`Skip email to demo mailbox ${to}: ${subject}`);
+      return { skipped: true as const, to, subject };
+    }
     try {
       if (this.resend) {
         return await this.sendViaResend(to, subject, html);
