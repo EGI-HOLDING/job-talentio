@@ -253,7 +253,16 @@ export class MetaService {
       const groups = await this.prisma.industryGroup.findMany({
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
         include: {
-          industries: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] },
+          industries: {
+            orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+            include: {
+              _count: {
+                select: {
+                  companies: { where: { isBanned: false } },
+                },
+              },
+            },
+          },
         },
       });
       return {
@@ -266,14 +275,26 @@ export class MetaService {
             slug: i.slug,
             name: i.name,
             sortOrder: i.sortOrder,
+            companyCount: i._count.companies,
           })),
         })),
       };
     }
-    return this.prisma.industry.findMany({
+    const rows = await this.prisma.industry.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      include: { group: { select: { slug: true, name: true } } },
+      include: {
+        group: { select: { slug: true, name: true } },
+        _count: {
+          select: {
+            companies: { where: { isBanned: false } },
+          },
+        },
+      },
     });
+    return rows.map(({ _count, ...i }) => ({
+      ...i,
+      companyCount: _count.companies,
+    }));
   }
 
   async benefits() {
