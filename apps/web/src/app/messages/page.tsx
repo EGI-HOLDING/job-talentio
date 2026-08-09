@@ -163,7 +163,7 @@ function MessagesInner() {
                 onClick={() => openConversation(c.id)}
               >
                 <strong>{peer.fullName}</strong>
-                <span className="preview">{last ? last.body : '—'}</span>
+                <span className="preview">{last ? last.body : '-'}</span>
               </button>
             );
           })}

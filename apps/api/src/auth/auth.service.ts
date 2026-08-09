@@ -304,7 +304,7 @@ export class AuthService {
     // Do not await SMTP — a hung Hostinger connection must not block OAuth/register.
     void this.mail.send(
       user.email,
-      'Verify your email — Job Talentio',
+      'Verify your email - Job Talentio',
       `<p>Salom ${user.fullName}!</p>
        <p>Confirm this email address to activate your Job Talentio account:</p>
        <p><a href="${link}">Verify my email</a></p>

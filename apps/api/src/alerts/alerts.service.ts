@@ -169,7 +169,7 @@ export class AlertsService {
       const list = jobs
         .map(
           (j) =>
-            `<li><strong>${j.title}</strong> — ${j.company.name} (${j.city?.name ?? '—'})</li>`,
+            `<li><strong>${j.title}</strong> - ${j.company.name} (${j.city?.name ?? '-'})</li>`,
         )
         .join('');
       await this.mail.send(

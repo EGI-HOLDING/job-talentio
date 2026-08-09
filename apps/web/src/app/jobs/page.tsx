@@ -136,7 +136,7 @@ function toParams(f: Filters, view?: string | null): URLSearchParams {
       return;
     }
     if (key === 'limit') {
-      // Always send limit — API default is not guaranteed to match UI default (12).
+      // Always send limit - API default is not guaranteed to match UI default (12).
       p.set('limit', String(value || DEFAULT_LIMIT));
       return;
     }
@@ -382,7 +382,7 @@ function JobsInner() {
                 </label>
               )}
             />
-            {!companyFacetList.length && <p className="muted" style={{ fontSize: '0.8rem' }}>—</p>}
+            {!companyFacetList.length && <p className="muted" style={{ fontSize: '0.8rem' }}>-</p>}
           </FilterFieldset>
 
           <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
@@ -613,21 +613,21 @@ function JobsInner() {
 
         <div className="jobs-toolbar">
           <div>
-            <strong>{data?.total ?? '—'}</strong> <span className="muted">{t('jobsFound')}</span>
+            <strong>{data?.total ?? '-'}</strong> <span className="muted">{t('jobsFound')}</span>
             <div className="chips" style={{ marginTop: '0.5rem' }}>
               {selectedCities.map((s) => (
                 <button key={s} type="button" className="chip active" onClick={() => apply({ city: toggleCsv(filters.city, s) })}>
-                  {cities.find((c) => c.slug === s)?.name || s} ×
+                  {cities.find((c) => c.slug === s)?.name || s} x
                 </button>
               ))}
               {selectedSkills.map((s) => (
                 <button key={s} type="button" className="chip active" onClick={() => apply({ skills: toggleCsv(filters.skills, s) })}>
-                  {skills.find((sk) => sk.slug === s)?.name || s} ×
+                  {skills.find((sk) => sk.slug === s)?.name || s} x
                 </button>
               ))}
               {filters.hotOnly && (
                 <button type="button" className="chip chip-hot" onClick={() => apply({ hotOnly: false })}>
-                  Hot ×
+                  Hot x
                 </button>
               )}
             </div>

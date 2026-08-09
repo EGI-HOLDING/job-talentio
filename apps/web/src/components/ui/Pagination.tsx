@@ -64,9 +64,9 @@ export function Pagination({
 
         <div className="pagination-pages" role="list">
           {items.map((item, idx) =>
-            item === '…' ? (
+            item === '...' ? (
               <span key={`e-${idx}`} className="pagination-ellipsis" aria-hidden>
-                …
+                ...
               </span>
             ) : (
               <button
@@ -130,7 +130,7 @@ export function Pagination({
             placeholder={String(current)}
             className="pagination-jump-input"
             disabled={disabled}
-            aria-label={`Go to page (1–${safeTotalPages})`}
+            aria-label={`Go to page (1-${safeTotalPages})`}
           />
           <button type="submit" className="btn btn-ghost btn-sm" disabled={disabled}>
             Go

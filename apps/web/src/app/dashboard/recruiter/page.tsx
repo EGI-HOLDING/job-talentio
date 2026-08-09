@@ -7,6 +7,7 @@ import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
+import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -56,7 +57,7 @@ function jobSelectLabel(j: {
   city?: { name: string } | null;
 }) {
   const location = jobLocationLabel(j);
-  const status = j.status && j.status !== 'PUBLISHED' ? ` · ${j.status}` : '';
+  const status = j.status && j.status !== 'PUBLISHED' ? ` | ${j.status}` : '';
   return `${j.title} - ${location}${status}`;
 }
 
@@ -673,10 +674,10 @@ function RecruiterDashboard() {
                 <div key={j.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{j.title}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {j.status} · {jobLocationLabel(j)} · {j._count?.applications ?? 0} apps ·{' '}
+                    {j.status} | {jobLocationLabel(j)} | {j._count?.applications ?? 0} apps | {' '}
                     {j._count?.views ?? 0} views
                     {j.boostUntil && new Date(j.boostUntil) > new Date()
-                      ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                      ? ` | Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
                       : ''}
                   </p>
                   <div className="chips">
@@ -954,7 +955,7 @@ function RecruiterDashboard() {
                                     style={{ marginTop: '0.55rem', border: 0, width: '100%', cursor: 'pointer' }}
                                     onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
                                   >
-                                    Match {score}% · details
+                                    Match {score}% | details
                                   </button>
                                   {breakdownId === a.id && a.matchBreakdown && (
                                     <div className="match-breakdown">
@@ -1206,9 +1207,9 @@ function RecruiterDashboard() {
             <p className="muted" style={{ marginTop: 0 }}>
               Current plan: <strong>{planCode}</strong>
               {subscription?.endsAt
-                ? ` · renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
+                ? ` | renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
                 : ''}
-              {' · '}
+              {' | '}
               Published jobs: {activePublishedJobs} / {activeJobLimit}
             </p>
             <p className="muted" style={{ fontSize: '0.85rem' }}>
@@ -1294,7 +1295,7 @@ function RecruiterDashboard() {
                       <div className="muted" style={{ fontSize: '0.85rem' }}>
                         {jobLocationLabel(j)}
                         {j.boostUntil && new Date(j.boostUntil) > new Date()
-                          ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                          ? ` | Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
                           : ''}
                       </div>
                     </div>
@@ -1307,7 +1308,7 @@ function RecruiterDashboard() {
                           disabled={billingBusy}
                           onClick={() => buyHotBoost(j.id, days)}
                         >
-                          {days}d · {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
+                          {days}d | {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
                         </button>
                       ))}
                     </div>
@@ -1320,10 +1321,10 @@ function RecruiterDashboard() {
         {tab === 'company' && company && (
           <div className="grid-2">
             <div className="card">
-              <h2 className="section-title">{company.name}</h2>
-              <p className="muted">{company.description}</p>
+              <h2 className="section-title">{sanitizeMojibake(company.name)}</h2>
+              <p className="muted">{sanitizeMojibake(company.description)}</p>
               <p>
-                Members: {company._count?.members} · Jobs: {company._count?.jobPosts} · Followers:{' '}
+                Members: {company._count?.members} | Jobs: {company._count?.jobPosts} | Followers:{' '}
                 {company._count?.followers}
               </p>
               <p className="muted" style={{ fontSize: '0.85rem' }}>

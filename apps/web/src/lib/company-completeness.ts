@@ -14,13 +14,13 @@ export type CompanyCompletenessInput = {
 export type CompletenessItem = {
   key: string;
   labelKey:
-    | 'trustItemName'
-    | 'trustItemLogo'
-    | 'trustItemDescription'
-    | 'trustItemWebsite'
-    | 'trustItemCity'
-    | 'trustItemIndustry'
-    | 'trustItemSize';
+   | 'trustItemName'
+   | 'trustItemLogo'
+   | 'trustItemDescription'
+   | 'trustItemWebsite'
+   | 'trustItemCity'
+   | 'trustItemIndustry'
+   | 'trustItemSize';
   done: boolean;
 };
 

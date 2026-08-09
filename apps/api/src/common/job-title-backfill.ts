@@ -67,7 +67,8 @@ export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
   ]);
 
   const dirtyText = (s: string) =>
-    titleHasSeniorityToken(s) || /â€”|â€“|â€¦|Ã—/.test(s);
+    titleHasSeniorityToken(s) ||
+    /[\u2013\u2014\u2026]|\u00E2\u20AC[\u201D\u201C\u00A6]|\u00C3\u00D7/.test(s);
 
   return (
     postSamples.some((p) => dirtyText(p.title)) ||

@@ -354,30 +354,30 @@ export class ApplicationsService {
   private stageEmail(jobTitle: string, status: ApplicationStatus, note?: string) {
     const messages: Partial<Record<ApplicationStatus, { subject: string; intro: string }>> = {
       IN_REVIEW: {
-        subject: `Your application is being reviewed — ${jobTitle}`,
+        subject: `Your application is being reviewed - ${jobTitle}`,
         intro: 'Good news! The recruiter is now reviewing your application.',
       },
       INTERVIEW: {
-        subject: `Interview stage — ${jobTitle}`,
+        subject: `Interview stage - ${jobTitle}`,
         intro:
           'Congratulations! You have moved to the interview stage. The recruiter will contact you with the schedule details.',
       },
       OFFER: {
-        subject: `You received an offer — ${jobTitle}`,
+        subject: `You received an offer - ${jobTitle}`,
         intro: 'Great news! The company has extended you an offer for this position.',
       },
       HIRED: {
-        subject: `Welcome aboard — ${jobTitle}`,
+        subject: `Welcome aboard - ${jobTitle}`,
         intro: 'Congratulations! You have been hired for this position.',
       },
       REJECTED: {
-        subject: `Application update — ${jobTitle}`,
+        subject: `Application update - ${jobTitle}`,
         intro:
           'Thank you for your interest. Unfortunately, the company decided not to move forward with your application this time.',
       },
     };
     const m = messages[status] ?? {
-      subject: `Application update — ${jobTitle}`,
+      subject: `Application update - ${jobTitle}`,
       intro: `Your application status is now ${status}.`,
     };
     return {

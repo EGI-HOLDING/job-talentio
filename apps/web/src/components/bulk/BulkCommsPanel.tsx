@@ -175,7 +175,7 @@ export function BulkCommsPanel({
                 required
                 rows={6}
                 maxLength={5000}
-                placeholder="Hi {{name}}, thanks for applying to {{jobTitle}} at {{companyName}}…"
+                placeholder="Hi {{name}}, thanks for applying to {{jobTitle}} at {{companyName}}..."
               />
             </label>
             <div className="chips">
@@ -257,14 +257,14 @@ export function BulkCommsPanel({
                           {c.toStatus ? ` → ${c.toStatus}` : ''}
                         </strong>
                         <div className="muted" style={{ fontSize: '0.8rem' }}>
-                          {new Date(c.createdAt).toLocaleString()} · {c.createdBy?.fullName || '—'} ·{' '}
+                          {new Date(c.createdAt).toLocaleString()} | {c.createdBy?.fullName || '-'} | {' '}
                           {c.recipients.length} recipient(s)
-                          {c.template ? ` · ${c.template.name}` : ''}
+                          {c.template ? ` | ${c.template.name}` : ''}
                         </div>
                         <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
                           Sent {sent}
-                          {skipped ? ` · Opted out ${skipped}` : ''}
-                          {failed ? ` · Failed ${failed}` : ''}
+                          {skipped ? ` | Opted out ${skipped}` : ''}
+                          {failed ? ` | Failed ${failed}` : ''}
                         </div>
                       </div>
                       <span className="muted">{open ? 'Hide' : 'Details'}</span>
@@ -301,9 +301,9 @@ export function BulkCommsPanel({
                                     </div>
                                   )}
                                 </td>
-                                <td>{r.statusMoved ? 'Yes' : '—'}</td>
+                                <td>{r.statusMoved ? 'Yes' : '-'}</td>
                                 <td>
-                                  {r.sentAt ? new Date(r.sentAt).toLocaleString() : '—'}
+                                  {r.sentAt ? new Date(r.sentAt).toLocaleString() : '-'}
                                 </td>
                               </tr>
                             ))}

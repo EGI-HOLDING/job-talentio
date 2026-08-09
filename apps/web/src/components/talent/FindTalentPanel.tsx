@@ -64,7 +64,7 @@ function jobSelectLabel(j: {
   city?: { name: string } | null;
 }) {
   const location = jobLocationLabel(j);
-  const status = j.status && j.status !== 'PUBLISHED' ? ` · ${j.status}` : '';
+  const status = j.status && j.status !== 'PUBLISHED' ? ` | ${j.status}` : '';
   return `${j.title} - ${location}${status}`;
 }
 
@@ -323,7 +323,7 @@ export function FindTalentPanel() {
           >
             <label>
               <LabelText>Keywords</LabelText>
-              <input name="q" defaultValue={candFilters.q} key={candFilters.q} placeholder="Name, headline, skill…" />
+              <input name="q" defaultValue={candFilters.q} key={candFilters.q} placeholder="Name, headline, skill..." />
             </label>
             <button type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
               Search
@@ -396,7 +396,7 @@ export function FindTalentPanel() {
                 <input
                   value={skillQ}
                   onChange={(e) => setSkillQ(e.target.value)}
-                  placeholder="Filter skills…"
+                  placeholder="Filter skills..."
                 />
               </label>
               <ExpandableList
@@ -512,7 +512,7 @@ export function FindTalentPanel() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <h3 style={{ margin: 0 }}>{p.user?.fullName}</h3>
                 <div className="job-meta">
-                  <span>{p.headline || '—'}</span>
+                  <span>{p.headline || '-'}</span>
                   {p.city?.name && <span>{p.city.name}</span>}
                   <span>{p.experienceYears ?? 0}y exp</span>
                   {p.contactsBlurred && <span>Contacts limited</span>}
@@ -521,7 +521,7 @@ export function FindTalentPanel() {
                   {(p.skills || []).slice(0, 6).map((s: any) => (
                     <span key={s.id} className="badge skill">
                       {s.skill?.name}
-                      {s.level ? ` · ${s.level}` : ''}
+                      {s.level ? ` | ${s.level}` : ''}
                     </span>
                   ))}
                 </div>

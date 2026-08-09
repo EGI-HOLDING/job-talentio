@@ -41,7 +41,7 @@ function dateRange(start?: string | null, end?: string | null, isCurrent?: boole
   const a = fmtDate(start);
   const b = isCurrent ? 'Present' : fmtDate(end) || '';
   if (!a && !b) return '';
-  return [a, b].filter(Boolean).join(' – ');
+  return [a, b].filter(Boolean).join(' - ');
 }
 
 export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffer> {
@@ -94,7 +94,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
       docData.city,
     ]
       .filter(Boolean)
-      .join(' · ');
+      .join(' | ');
     if (contact) {
       doc.fontSize(9).fillColor('#555555').font('Helvetica').text(contact);
       doc.moveDown(0.6);
@@ -115,16 +115,16 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
 
     if (docData.skills.length) {
       section('Skills');
-      doc.text(docData.skills.join(' · '), { width: pageWidth });
+      doc.text(docData.skills.join(' | '), { width: pageWidth });
     }
 
     if (docData.experiences.length) {
       section('Experience');
       for (const e of docData.experiences) {
-        doc.font('Helvetica-Bold').text(`${e.title} · ${e.companyName}`, { width: pageWidth });
+        doc.font('Helvetica-Bold').text(`${e.title} | ${e.companyName}`, { width: pageWidth });
         const meta = [dateRange(e.startDate, e.endDate, e.isCurrent), e.location]
           .filter(Boolean)
-          .join(' · ');
+          .join(' | ');
         if (meta) doc.font('Helvetica').fillColor('#555555').fontSize(9).text(meta);
         doc.fillColor('#111111').fontSize(10);
         if (e.description) {
@@ -140,7 +140,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
         doc.font('Helvetica-Bold').text(e.school, { width: pageWidth });
         const bits = [e.degree, e.field, dateRange(e.startDate, e.endDate)]
           .filter(Boolean)
-          .join(' · ');
+          .join(' | ');
         if (bits) doc.font('Helvetica').fillColor('#555555').fontSize(9).text(bits);
         doc.fillColor('#111111').fontSize(10);
         doc.moveDown(0.25);
@@ -150,7 +150,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
     if (docData.languages.length) {
       section('Languages');
       doc.font('Helvetica').text(
-        docData.languages.map((l) => (l.level ? `${l.name} (${l.level})` : l.name)).join(' · '),
+        docData.languages.map((l) => (l.level ? `${l.name} (${l.level})` : l.name)).join(' | '),
         { width: pageWidth },
       );
     }
@@ -158,7 +158,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
     if (docData.certifications.length) {
       section('Certifications');
       for (const c of docData.certifications) {
-        doc.font('Helvetica').text(c.issuer ? `${c.name} — ${c.issuer}` : c.name, {
+        doc.font('Helvetica').text(c.issuer ? `${c.name} - ${c.issuer}` : c.name, {
           width: pageWidth,
         });
       }

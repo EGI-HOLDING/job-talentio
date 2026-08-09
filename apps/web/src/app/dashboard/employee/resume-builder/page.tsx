@@ -224,12 +224,12 @@ function ResumeBuilderInner() {
           </h1>
         </div>
         <div className="resume-builder-actions">
-          {saving && <span className="muted" style={{ fontSize: '0.85rem' }}>Saving…</span>}
+          {saving && <span className="muted" style={{ fontSize: '0.85rem' }}>Saving...</span>}
           <button type="button" className="secondary" onClick={setPrimary} disabled={!resumeId}>
             Set primary
           </button>
           <button type="button" className="cta" onClick={exportPdf} disabled={!resumeId || exporting}>
-            {exporting ? 'Exporting…' : 'Export PDF'}
+            {exporting ? 'Exporting...' : 'Export PDF'}
           </button>
         </div>
       </div>
@@ -294,7 +294,7 @@ function ResumeBuilderInner() {
                       />
                       <span>
                         {e.title}
-                        <span className="muted"> · {e.companyName}</span>
+                        <span className="muted"> | {e.companyName}</span>
                       </span>
                     </label>
                   ))}
@@ -400,7 +400,7 @@ function ResumeBuilderInner() {
               themeAccent={payload?.resume?.themeAccent}
             />
           ) : (
-            <p className="muted">Loading preview…</p>
+            <p className="muted">Loading preview...</p>
           )}
         </div>
 

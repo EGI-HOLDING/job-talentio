@@ -873,7 +873,7 @@ export class ProfilesService {
     const { profile, resume } = await this.ownedResume(user.id, resumeId);
     const parsed = resume.parsedData as ParsedCvData | null;
     if (!parsed || typeof parsed !== 'object') {
-      throw new BadRequestException('No parsed CV data on this resume — upload a CV first');
+      throw new BadRequestException('No parsed CV data on this resume - upload a CV first');
     }
 
     const profilePatch: Record<string, unknown> = {};

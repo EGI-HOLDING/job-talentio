@@ -54,7 +54,7 @@ export function titleHasSeniorityToken(input: string): boolean {
 export function stripSeniorityFromTitle(input: string): StripSeniorityResult {
   let s = input
     .trim()
-    .replace(/[–—]/g, '-')
+    .replace(/[\u2013\u2014/]/g, '-')
     .replace(/\s+/g, ' ');
   let inferred: ExperienceLevel | null = null;
 
@@ -90,7 +90,7 @@ export function stripSeniorityFromTitle(input: string): StripSeniorityResult {
     .replace(/^\.+\s*|\s*\.+(?=\s|$)/g, ' ')
     .replace(/\s*([|/])\s*/g, ' $1 ')
     .replace(/\s+/g, ' ')
-    .replace(/^[\s\-–,|/]+|[\s\-–,|/]+$/g, '')
+    .replace(/^[\s\-,|/]+|[\s\-,|/]+$/g, '')
     .trim();
 
   if (!s) {

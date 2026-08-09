@@ -23,9 +23,9 @@ const DICT = {
     en: 'Browse talent',
   },
   findTalentSearching: {
-    uz: 'Talent qidirilmoqda…',
-    ru: 'Поиск талантов…',
-    en: 'Searching talent…',
+    uz: 'Talent qidirilmoqda...',
+    ru: 'Поиск талантов...',
+    en: 'Searching talent...',
   },
   findTalentCount: {
     uz: '{n} talent topildi',
@@ -33,9 +33,9 @@ const DICT = {
     en: '{n} talent profiles found',
   },
   findTalentSearchPlaceholder: {
-    uz: 'Ko‘nikma, lavozim yoki ism…',
-    ru: 'Навык, должность или имя…',
-    en: 'Skill, job title, or name…',
+    uz: 'Ko‘nikma, lavozim yoki ism...',
+    ru: 'Навык, должность или имя...',
+    en: 'Skill, job title, or name...',
   },
   recruiterHeroBadge: {
     uz: 'Ish beruvchilar uchun',
@@ -151,9 +151,9 @@ const DICT = {
   search: { uz: 'Qidirish', ru: 'Поиск', en: 'Search' },
   searchJobs: { uz: 'Ish qidirish', ru: 'Найти вакансии', en: 'Search jobs' },
   searchPlaceholder: {
-    uz: 'Lavozim, ko‘nikma yoki kompaniya…',
-    ru: 'Должность, навык или компания…',
-    en: 'Job title, skill, or company…',
+    uz: 'Lavozim, ko‘nikma yoki kompaniya...',
+    ru: 'Должность, навык или компания...',
+    en: 'Job title, skill, or company...',
   },
   heroTitle: {
     uz: 'O‘zingizga mos ish toping. Ishga yaroqli kadr yollang.',
@@ -166,9 +166,9 @@ const DICT = {
     en: 'Job Talentio connects candidates and companies across Uzbekistan with smart matching, advanced search, and a lightweight ATS.',
   },
   heroBadge: {
-    uz: 'O‘zbekiston · uz / ru / en',
-    ru: 'Узбекистан · uz / ru / en',
-    en: 'Uzbekistan · uz / ru / en',
+    uz: 'O‘zbekiston | uz / ru / en',
+    ru: 'Узбекистан | uz / ru / en',
+    en: 'Uzbekistan | uz / ru / en',
   },
   openRoles: { uz: 'Ochiq ish o‘rinlari', ru: 'Открытые вакансии', en: 'Open roles' },
   companiesStat: { uz: 'Kompaniyalar', ru: 'Компании', en: 'Companies' },
@@ -240,7 +240,7 @@ const DICT = {
     en: 'All categories',
   },
   exploreCategoriesSubtitle: {
-    uz: 'Kategoriyani tanlang — tegishli ishlar ochiladi',
+    uz: 'Kategoriyani tanlang - tegishli ishlar ochiladi',
     ru: 'Выберите категорию, чтобы увидеть вакансии',
     en: 'Pick a category to see matching jobs',
   },
@@ -250,7 +250,7 @@ const DICT = {
     en: 'All cities',
   },
   exploreCitiesSubtitle: {
-    uz: 'Shaharni tanlang — u yerdagi ishlar ochiladi',
+    uz: 'Shaharni tanlang - u yerdagi ishlar ochiladi',
     ru: 'Выберите город, чтобы увидеть вакансии',
     en: 'Pick a city to see local openings',
   },
@@ -265,9 +265,9 @@ const DICT = {
     en: 'By province',
   },
   exploreCitiesAlphabetical: {
-    uz: 'A–Z',
-    ru: 'А–Я',
-    en: 'A–Z',
+    uz: 'A-Z',
+    ru: 'А-Я',
+    en: 'A-Z',
   },
   exploreCitiesOtherProvince: {
     uz: 'Boshqa',
@@ -280,7 +280,7 @@ const DICT = {
     en: 'All companies',
   },
   exploreCompaniesSubtitle: {
-    uz: 'Kompaniyani tanlang — uning ochiq ishlari ochiladi',
+    uz: 'Kompaniyani tanlang - uning ochiq ishlari ochiladi',
     ru: 'Выберите компанию, чтобы увидеть её вакансии',
     en: 'Pick a company to see its open roles',
   },
@@ -290,14 +290,14 @@ const DICT = {
     en: 'All job titles',
   },
   exploreTitlesSubtitle: {
-    uz: 'Lavozimni tanlang — mos ishlar ochiladi',
+    uz: 'Lavozimni tanlang - mos ishlar ochiladi',
     ru: 'Выберите должность, чтобы увидеть вакансии',
     en: 'Pick a title to see matching jobs',
   },
   exploreTitlesSearch: {
-    uz: 'Lavozim qidirish…',
-    ru: 'Поиск должности…',
-    en: 'Search job titles…',
+    uz: 'Lavozim qidirish...',
+    ru: 'Поиск должности...',
+    en: 'Search job titles...',
   },
   exploreEmpty: {
     uz: 'Hozircha ma’lumot yo‘q',
@@ -316,7 +316,7 @@ const DICT = {
   },
   jobTitleHint: {
     uz: 'Taklifdan tanlang yoki yangi lavozim yozing (Junior/Senior alohida Levelda)',
-    ru: 'Выберите из подсказок или введите новую должность (Junior/Senior — в Level)',
+    ru: 'Выберите из подсказок или введите новую должность (Junior/Senior - в Level)',
     en: 'Pick a suggestion or type a new title (Junior/Senior belong in Level)',
   },
   browseByCompany: {
@@ -325,7 +325,7 @@ const DICT = {
     en: 'Browse jobs by company',
   },
   browseByCompanyHint: {
-    uz: 'Kompaniyani tanlang — uning barcha ochiq ishlari chiqadi.',
+    uz: 'Kompaniyani tanlang - uning barcha ochiq ishlari chiqadi.',
     ru: 'Выберите компанию, чтобы увидеть все её открытые вакансии.',
     en: 'Pick a company to see all of its open roles.',
   },
@@ -391,12 +391,12 @@ const DICT = {
   password: { uz: 'Parol', ru: 'Пароль', en: 'Password' },
   language: { uz: 'Til', ru: 'Язык', en: 'Language' },
   save: { uz: 'Saqlash', ru: 'Сохранить', en: 'Save' },
-  saving: { uz: 'Saqlanmoqda…', ru: 'Сохранение…', en: 'Saving…' },
+  saving: { uz: 'Saqlanmoqda...', ru: 'Сохранение...', en: 'Saving...' },
   changePassword: { uz: 'Parolni o‘zgartirish', ru: 'Сменить пароль', en: 'Change password' },
   currentPassword: { uz: 'Joriy parol', ru: 'Текущий пароль', en: 'Current password' },
   newPassword: { uz: 'Yangi parol', ru: 'Новый пароль', en: 'New password' },
   send: { uz: 'Yuborish', ru: 'Отправить', en: 'Send' },
-  writeMessage: { uz: 'Xabar yozing…', ru: 'Напишите сообщение…', en: 'Write a message…' },
+  writeMessage: { uz: 'Xabar yozing...', ru: 'Напишите сообщение...', en: 'Write a message...' },
   sent: { uz: 'Yuborildi', ru: 'Отправлено', en: 'Sent' },
   delivered: { uz: 'Yetkazildi', ru: 'Доставлено', en: 'Delivered' },
   read: { uz: 'O‘qildi', ru: 'Прочитано', en: 'Read' },
@@ -437,7 +437,7 @@ const DICT = {
     en: 'Sign in to Job Talentio',
   },
   signIn: { uz: 'Kirish', ru: 'Войти', en: 'Sign in' },
-  signingIn: { uz: 'Kirilmoqda…', ru: 'Вход…', en: 'Signing in…' },
+  signingIn: { uz: 'Kirilmoqda...', ru: 'Вход...', en: 'Signing in...' },
   noAccount: { uz: 'Hisobingiz yo‘qmi?', ru: 'Нет аккаунта?', en: 'No account?' },
   createAccount: { uz: 'Hisob yaratish', ru: 'Создать аккаунт', en: 'Create account' },
   joinTalentio: {
@@ -481,16 +481,16 @@ const DICT = {
     en: 'Sent ✓',
   },
   verifyEmailSuccess: {
-    uz: 'Email tasdiqlandi! Yo‘naltirilmoqda…',
-    ru: 'Email подтверждён! Перенаправление…',
-    en: 'Email verified! Redirecting…',
+    uz: 'Email tasdiqlandi! Yo‘naltirilmoqda...',
+    ru: 'Email подтверждён! Перенаправление...',
+    en: 'Email verified! Redirecting...',
   },
   verifyEmailFailed: {
     uz: 'Havola yaroqsiz yoki muddati o‘tgan.',
     ru: 'Ссылка недействительна или устарела.',
     en: 'This link is invalid or expired.',
   },
-  verifying: { uz: 'Tekshirilmoqda…', ru: 'Проверка…', en: 'Verifying…' },
+  verifying: { uz: 'Tekshirilmoqda...', ru: 'Проверка...', en: 'Verifying...' },
   alreadyRegistered: {
     uz: 'Allaqachon ro‘yxatdan o‘tganmisiz?',
     ru: 'Уже зарегистрированы?',
@@ -519,9 +519,9 @@ const DICT = {
     en: 'Language applies immediately. Save writes it to your account.',
   },
   footer: {
-    uz: 'Job Talentio — O‘zbekiston bo‘ylab ish o‘rinlari',
-    ru: 'Job Talentio — вакансии по всему Узбекистану',
-    en: 'Job Talentio — jobs across Uzbekistan',
+    uz: 'Job Talentio - O‘zbekiston bo‘ylab ish o‘rinlari',
+    ru: 'Job Talentio - вакансии по всему Узбекистану',
+    en: 'Job Talentio - jobs across Uzbekistan',
   },
   experienceLevel: { uz: 'Tajriba darajasi', ru: 'Уровень опыта', en: 'Experience level' },
   workMode: { uz: 'Ish tartibi', ru: 'Формат работы', en: 'Work mode' },
@@ -565,9 +565,9 @@ const DICT = {
     en: 'I agree to the Terms of Service and Privacy Policy',
   },
   creatingAccount: {
-    uz: 'Hisob yaratilmoqda…',
-    ru: 'Создание аккаунта…',
-    en: 'Creating account…',
+    uz: 'Hisob yaratilmoqda...',
+    ru: 'Создание аккаунта...',
+    en: 'Creating account...',
   },
   companyNameRequired: {
     uz: 'Rekruter uchun kompaniya nomi majburiy',
@@ -631,9 +631,9 @@ const DICT = {
     en: '{n} active filters',
   },
   skillSearchPlaceholder: {
-    uz: 'Ko‘nikma qidiring…',
-    ru: 'Поиск навыка…',
-    en: 'Search skills…',
+    uz: 'Ko‘nikma qidiring...',
+    ru: 'Поиск навыка...',
+    en: 'Search skills...',
   },
   skillNoMatchAdd: {
     uz: 'Topilmadi. “{name}” ni yangi ko‘nikma sifatida qo‘shish mumkin.',
@@ -669,14 +669,14 @@ const DICT = {
     en: '“{name}” is not in the catalog ({kind}). Add it as a new entry?',
   },
   benefitSearchPlaceholder: {
-    uz: 'Imtiyoz qidiring…',
-    ru: 'Поиск льготы…',
-    en: 'Search benefits…',
+    uz: 'Imtiyoz qidiring...',
+    ru: 'Поиск льготы...',
+    en: 'Search benefits...',
   },
   languageSearchPlaceholder: {
-    uz: 'Til qidiring…',
-    ru: 'Поиск языка…',
-    en: 'Search languages…',
+    uz: 'Til qidiring...',
+    ru: 'Поиск языка...',
+    en: 'Search languages...',
   },
 } as const;
 

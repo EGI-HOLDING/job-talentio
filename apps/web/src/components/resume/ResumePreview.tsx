@@ -54,12 +54,12 @@ function dateRange(start?: string | Date | null, end?: string | Date | null, isC
   const a = fmtDate(start);
   const b = isCurrent ? 'Present' : fmtDate(end);
   if (!a && !b) return '';
-  return [a, b].filter(Boolean).join(' – ');
+  return [a, b].filter(Boolean).join(' - ');
 }
 
 export function ResumePreview({ document: doc, templateKey, themeAccent }: Props) {
   const accent = themeAccent || '#0f766e';
-  const contact = [doc.email, doc.phone, doc.city].filter(Boolean).join(' · ');
+  const contact = [doc.email, doc.phone, doc.city].filter(Boolean).join(' | ');
 
   return (
     <div
@@ -83,7 +83,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
         <section className="resume-preview__section">
           <h2>Skills</h2>
           <p className="resume-preview__skills">
-            {doc.skills.map((s) => s.name).join(' · ')}
+            {doc.skills.map((s) => s.name).join(' | ')}
           </p>
         </section>
       ) : null}
@@ -96,7 +96,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
               <div className="resume-preview__item-head">
                 <strong>
                   {e.title}
-                  {e.companyName ? ` — ${e.companyName}` : ''}
+                  {e.companyName ? ` - ${e.companyName}` : ''}
                 </strong>
                 <span className="resume-preview__dates">
                   {dateRange(e.startDate, e.endDate, e.isCurrent)}
@@ -125,7 +125,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
               <div className="resume-preview__muted">
                 {[e.degree ? String(e.degree).replace(/_/g, ' ') : null, e.field]
                   .filter(Boolean)
-                  .join(' · ')}
+                  .join(' | ')}
               </div>
             </div>
           ))}
@@ -136,7 +136,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
         <section className="resume-preview__section">
           <h2>Languages</h2>
           <p className="resume-preview__skills">
-            {doc.languages.map((l) => `${l.name}${l.level ? ` (${l.level})` : ''}`).join(' · ')}
+            {doc.languages.map((l) => `${l.name}${l.level ? ` (${l.level})` : ''}`).join(' | ')}
           </p>
         </section>
       ) : null}

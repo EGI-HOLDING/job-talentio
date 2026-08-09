@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName } from '../common/dedupe';
+import { sanitizeStoredText } from '../common/text-sanitize';
 
 @Injectable()
 export class CompaniesService {
@@ -163,8 +164,9 @@ export class CompaniesService {
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
-        name: data.name,
-        description: data.description,
+        name: data.name !== undefined ? sanitizeStoredText(data.name) : undefined,
+        description:
+          data.description !== undefined ? sanitizeStoredText(data.description) : undefined,
         website: data.website || null,
         cityId,
         industryId,

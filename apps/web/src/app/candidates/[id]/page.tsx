@@ -130,7 +130,7 @@ function CandidateInner() {
   ].filter(Boolean);
   const salaryLabel =
     salaryBits.length > 0
-      ? `${salaryBits.join(' – ')} ${data.desiredSalaryCurrency || 'UZS'}`
+      ? `${salaryBits.join(' - ')} ${data.desiredSalaryCurrency || 'UZS'}`
       : null;
 
   return (
@@ -150,9 +150,9 @@ function CandidateInner() {
           <div style={{ flex: 1, minWidth: 220 }}>
             <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{data.user.fullName}</h1>
             <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-              {data.headline || '—'}
-              {data.city ? ` · ${data.city.name}` : ''}
-              {` · ${data.experienceYears} ${t('years')} ${t('experience').toLowerCase()}`}
+              {data.headline || '-'}
+              {data.city ? ` | ${data.city.name}` : ''}
+              {` | ${data.experienceYears} ${t('years')} ${t('experience').toLowerCase()}`}
             </p>
             {salaryLabel && (
               <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
@@ -161,7 +161,7 @@ function CandidateInner() {
             )}
             {data.contactsBlurred ? (
               <p className="muted" style={{ marginTop: '0.4rem', fontSize: '0.85rem' }}>
-                Contacts hidden —{' '}
+                Contacts hidden -{' '}
                 <Link href="/dashboard/recruiter?tab=billing">upgrade to Standard/Premium</Link>, or
                 unlock after the candidate applies.
               </p>
@@ -277,11 +277,11 @@ function CandidateInner() {
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <h3>{t('skills')}</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-          {data.skills.length === 0 && <span className="muted">—</span>}
+          {data.skills.length === 0 && <span className="muted">-</span>}
           {data.skills.map((s) => (
             <span key={s.id} className="chip">
               {s.skill.name}
-              {s.level ? ` · ${s.level}` : ''}
+              {s.level ? ` | ${s.level}` : ''}
             </span>
           ))}
         </div>
@@ -289,13 +289,13 @@ function CandidateInner() {
 
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <h3>{t('experience')}</h3>
-        {data.experiences.length === 0 && <p className="muted">—</p>}
+        {data.experiences.length === 0 && <p className="muted">-</p>}
         {data.experiences.map((e) => (
           <div key={e.id} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border)' }}>
-            <strong>{e.title}</strong> · {e.companyName}
+            <strong>{e.title}</strong> | {e.companyName}
             <div className="muted" style={{ fontSize: '0.85rem' }}>
-              {fmtDate(e.startDate)} — {fmtDate(e.endDate)}
-              {e.city ? ` · ${e.city.name}` : ''}
+              {fmtDate(e.startDate)} - {fmtDate(e.endDate)}
+              {e.city ? ` | ${e.city.name}` : ''}
             </div>
             {e.description && <p style={{ marginTop: '0.35rem', fontSize: '0.9rem' }}>{e.description}</p>}
           </div>
@@ -304,12 +304,12 @@ function CandidateInner() {
 
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <h3>{t('education')}</h3>
-        {data.educations.length === 0 && <p className="muted">—</p>}
+        {data.educations.length === 0 && <p className="muted">-</p>}
         {data.educations.map((e) => (
           <div key={e.id} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
             <strong>{e.school}</strong>
             <div className="muted" style={{ fontSize: '0.85rem' }}>
-              {[e.degree, e.field].filter(Boolean).join(' · ')} · {fmtDate(e.startDate)} — {fmtDate(e.endDate)}
+              {[e.degree, e.field].filter(Boolean).join(' | ')} | {fmtDate(e.startDate)} - {fmtDate(e.endDate)}
             </div>
           </div>
         ))}
@@ -318,19 +318,19 @@ function CandidateInner() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
         <div className="card">
           <h3>{t('languages')}</h3>
-          {data.languages.length === 0 && <p className="muted">—</p>}
+          {data.languages.length === 0 && <p className="muted">-</p>}
           {data.languages.map((l) => (
             <div key={l.id} style={{ padding: '0.4rem 0' }}>
-              {l.language.name} {l.level && <span className="muted">· {l.level}</span>}
+              {l.language.name} {l.level && <span className="muted"> | {l.level}</span>}
             </div>
           ))}
         </div>
         <div className="card">
           <h3>{t('certifications')}</h3>
-          {data.certifications.length === 0 && <p className="muted">—</p>}
+          {data.certifications.length === 0 && <p className="muted">-</p>}
           {data.certifications.map((c) => (
             <div key={c.id} style={{ padding: '0.4rem 0' }}>
-              {c.name} {c.issuer && <span className="muted">· {c.issuer}</span>}
+              {c.name} {c.issuer && <span className="muted"> | {c.issuer}</span>}
             </div>
           ))}
         </div>
