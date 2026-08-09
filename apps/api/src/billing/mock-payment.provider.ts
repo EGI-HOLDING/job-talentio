@@ -12,12 +12,15 @@ export class MockPaymentProvider implements PaymentProvider {
     purpose: string;
     metadata?: Record<string, unknown>;
   }): Promise<PaymentIntent> {
+    const id = `mock_${randomUUID()}`;
+    const base = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
     const intent: PaymentIntent = {
-      id: `mock_${randomUUID()}`,
+      id,
       amountUzs: input.amountUzs,
       purpose: input.purpose,
       status: 'PENDING',
-      checkoutUrl: `http://localhost:3000/billing/mock-checkout?paymentId=pending`,
+      // Real DB payment id is substituted by BillingService.wrapCheckoutResult
+      checkoutUrl: `${base}/billing/mock-checkout?paymentId=${encodeURIComponent(id)}`,
     };
     this.store.set(intent.id, intent);
     return intent;

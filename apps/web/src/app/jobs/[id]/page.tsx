@@ -4,7 +4,13 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
+import { benefitIconLabel } from '@/lib/icons';
+import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
+import { FormField, LabelText } from '@/components/ui/Field';
+import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { useI18n } from '@/lib/i18n';
+import { formatSalaryRange } from '@/lib/numberFormat';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
 type Job = {
@@ -19,38 +25,53 @@ type Job = {
   experienceYearsMin?: number | null;
   isHot?: boolean;
   boostUntil?: string | null;
+  chatPeerUserId?: string | null;
   company: {
     id: string;
     name: string;
     slug: string;
     logoUrl?: string | null;
     isVerified?: boolean;
-    members?: Array<{ userId: string; role: string }>;
     _count?: { followers: number };
   };
   city?: { name: string } | null;
   category?: { name: string } | null;
   jobSkills?: Array<{ skill: { name: string }; isRequired: boolean }>;
-  benefits?: Array<{ benefit: { name: string; icon?: string | null } }>;
+  benefits?: Array<{ benefit: { name: string; slug?: string; icon?: string | null } }>;
   questions?: Question[];
   _count?: { applications: number; views: number };
 };
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return 'Negotiable';
-  const fmt = (n: number) => n.toLocaleString('uz-UZ');
-  if (min && max) return `${fmt(min)} – ${fmt(max)} UZS`;
-  return `${fmt(min || max!)} UZS`;
+  return formatSalaryRange(min, max) || 'Negotiable';
 }
+
+type MyApplicationState = {
+  id: string;
+  status: string;
+  matchScore?: number | null;
+  createdAt: string;
+};
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useI18n();
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showApply, setShowApply] = useState(false);
   const [following, setFollowing] = useState(false);
+  const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [resumes, setResumes] = useState<
+    Array<{ id: string; title: string; isPrimary?: boolean; hasFile?: boolean; fileKey?: string | null }>
+  >([]);
+  const [selectedResumeId, setSelectedResumeId] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
+  const alreadyApplied = Boolean(myApplication);
+  const selectedResume = resumes.find((r) => r.id === selectedResumeId);
+  const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);
 
   useEffect(() => {
     api<Job>(`/jobs/${id}`)
@@ -65,6 +86,17 @@ export default function JobDetailPage() {
             setFollowing(f.following);
           } catch {
             /* ignore */
+          }
+        }
+        if (session?.user.role === 'EMPLOYEE') {
+          try {
+            const mine = await api<{
+              applied: boolean;
+              application: MyApplicationState | null;
+            }>(`/applications/mine/jobs/${id}`);
+            setMyApplication(mine.application);
+          } catch {
+            /* ignore — guest / network */
           }
         }
       })
@@ -97,23 +129,48 @@ export default function JobDetailPage() {
       window.location.href = '/login';
       return;
     }
+    if (alreadyApplied || submitting) return;
+
     const fd = new FormData(e.currentTarget);
     const answers = (job?.questions || []).map((q) => ({
       questionId: q.id,
       answer: String(fd.get(`q_${q.id}`) || ''),
     }));
+    setSubmitting(true);
     try {
-      await api(`/applications/jobs/${id}`, {
+      const created = await api<MyApplicationState>(`/applications/jobs/${id}`, {
         method: 'POST',
         body: JSON.stringify({
           coverLetter: fd.get('coverLetter'),
           answers,
+          resumeId: selectedResumeId || undefined,
         }),
+      });
+      setMyApplication({
+        id: created.id,
+        status: created.status || 'NEW',
+        matchScore: created.matchScore,
+        createdAt: created.createdAt || new Date().toISOString(),
       });
       setSuccess('Application submitted! Match score was calculated for the recruiter.');
       setShowApply(false);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      if (/already applied/i.test(message)) {
+        try {
+          const mine = await api<{
+            applied: boolean;
+            application: MyApplicationState | null;
+          }>(`/applications/mine/jobs/${id}`);
+          setMyApplication(mine.application);
+          setShowApply(false);
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -126,7 +183,7 @@ export default function JobDetailPage() {
     setSuccess('Job saved to your list.');
   }
 
-  if (!job && !error) return <div className="shell" style={{ padding: '2rem' }}>Loading…</div>;
+  if (!job && !error) return <DetailPageSkeleton />;
   if (error && !job) return <div className="shell"><div className="error">{error}</div></div>;
   if (!job) return null;
 
@@ -148,7 +205,7 @@ export default function JobDetailPage() {
             {job.experienceLevel && <span className="badge skill">{job.experienceLevel}</span>}
           </div>
           <h1 style={{ margin: '0 0 0.35rem', fontFamily: 'var(--font-display)', fontSize: '1.75rem' }}>
-            {job.title}
+            {sanitizeMojibake(job.title)}
           </h1>
           <div className="job-meta">
             <Link href={`/companies/${job.company.slug}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
@@ -166,10 +223,55 @@ export default function JobDetailPage() {
           <p className="salary">{formatSalary(job.salaryMin, job.salaryMax)}</p>
         </div>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {(session?.user.role === 'EMPLOYEE' || !session) && (
-            <button type="button" className="cta" onClick={() => setShowApply(true)}>
-              Apply now
-            </button>
+          {alreadyApplied ? (
+            <>
+              <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
+                Applied · {myApplication?.status}
+                {myApplication?.matchScore != null ? ` · Match ${myApplication.matchScore}%` : ''}
+              </div>
+              <Link
+                href="/dashboard/employee"
+                className="secondary"
+                style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
+              >
+                View my applications
+              </Link>
+            </>
+          ) : (
+            (session?.user.role === 'EMPLOYEE' || !session) && (
+              <button
+                type="button"
+                className="cta"
+                onClick={async () => {
+                  if (!session) {
+                    window.location.href = '/login';
+                    return;
+                  }
+                  try {
+                    const p = await api<{
+                      resumes?: Array<{
+                        id: string;
+                        title: string;
+                        isPrimary?: boolean;
+                        hasFile?: boolean;
+                        fileKey?: string | null;
+                      }>;
+                    }>('/profiles/me');
+                    const list = p.resumes || [];
+                    setResumes(list);
+                    const primary = list.find((r) => r.isPrimary) || list[0];
+                    setSelectedResumeId(primary?.id || '');
+                  } catch {
+                    setResumes([]);
+                    setSelectedResumeId('');
+                  }
+                  setShowApply(true);
+                }}
+                disabled={submitting}
+              >
+                Apply now
+              </button>
+            )
           )}
           <button type="button" className="secondary" onClick={saveJob}>
             Save job
@@ -177,13 +279,13 @@ export default function JobDetailPage() {
           <button type="button" className="secondary" onClick={toggleFollow}>
             {following ? 'Following company' : 'Follow company'}
           </button>
-          {session?.user.role === 'EMPLOYEE' && (job.company.members || []).length > 0 && (
+          {session?.user.role === 'EMPLOYEE' && job.chatPeerUserId && (
             <Link
-              href={`/messages?peer=${(job.company.members!.find((m) => m.role === 'OWNER') || job.company.members![0]).userId}&job=${job.id}`}
+              href={`/messages?peer=${job.chatPeerUserId}&job=${job.id}`}
               className="secondary"
               style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
             >
-              💬 Chat with recruiter
+              Chat with recruiter
             </Link>
           )}
         </div>
@@ -195,7 +297,7 @@ export default function JobDetailPage() {
       <div className="grid-2" style={{ marginTop: '1.25rem' }}>
         <div className="card">
           <h2 className="section-title">About the role</h2>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{job.description}</div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sanitizeMojibake(job.description)}</div>
         </div>
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card">
@@ -214,7 +316,8 @@ export default function JobDetailPage() {
             <div className="chips" style={{ marginTop: '0.75rem' }}>
               {(job.benefits || []).map((b, i) => (
                 <span key={i} className="chip">
-                  {b.benefit.icon} {b.benefit.name}
+                  {benefitIconLabel(b.benefit.slug, b.benefit.icon)}
+                  {b.benefit.name}
                 </span>
               ))}
               {!job.benefits?.length && <span className="muted">No benefits listed</span>}
@@ -229,38 +332,82 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {showApply && (
-        <div className="modal-backdrop" onClick={() => setShowApply(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Apply — {job.title}</h2>
+      {showApply && !alreadyApplied && (
+        <div
+          className="modal-backdrop"
+          onClick={() => !submitting && setShowApply(false)}
+          role="presentation"
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="apply-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="apply-dialog-title">
+              {t('applyFor')} - {sanitizeMojibake(job.title)}
+            </h2>
+            <p className="required-note">{t('requiredFieldsNote')}</p>
             <form className="form-stack" onSubmit={onApply}>
-              <label>
-                Cover letter
-                <textarea name="coverLetter" rows={4} placeholder="Why are you a great fit?" />
-              </label>
-              {(job.questions || []).map((q) => (
-                <label key={q.id}>
-                  {q.question} {q.isRequired && '*'}
-                  {q.type === 'YES_NO' ? (
-                    <select name={`q_${q.id}`} required={q.isRequired}>
-                      <option value="">Select…</option>
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
-                    </select>
-                  ) : (
-                    <input
-                      name={`q_${q.id}`}
-                      type={q.type === 'NUMBER' ? 'number' : 'text'}
-                      required={q.isRequired}
-                    />
-                  )}
+              <fieldset disabled={submitting} style={{ border: 0, margin: 0, padding: 0 }}>
+                <label>
+                  <LabelText>Resume</LabelText>
+                  <select
+                    value={selectedResumeId}
+                    onChange={(e) => setSelectedResumeId(e.target.value)}
+                    required={resumes.length > 0}
+                  >
+                    {resumes.length === 0 && <option value="">No resumes on profile</option>}
+                    {resumes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                        {r.isPrimary ? ' (primary)' : ''}
+                        {r.hasFile || r.fileKey ? '' : ' — no PDF'}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-              ))}
-              <button type="submit" className="cta">
-                Submit application
+                {selectedResumeId && !selectedHasFile && (
+                  <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hot)' }}>
+                    Selected resume has no PDF file yet. Export from the resume builder or attach a file before applying.
+                  </p>
+                )}
+                <FormField label={t('coverLetter')}>
+                  <textarea name="coverLetter" rows={4} placeholder={t('coverLetter')} />
+                </FormField>
+                {(job.questions || []).map((q) => (
+                  <label key={q.id}>
+                    <LabelText required={q.isRequired} optional={!q.isRequired}>
+                      {q.question}
+                    </LabelText>
+                    {q.type === 'YES_NO' ? (
+                      <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
+                        <option value="">Select…</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    ) : (
+                      <input
+                        name={`q_${q.id}`}
+                        type={q.type === 'NUMBER' ? 'number' : 'text'}
+                        required={q.isRequired}
+                        aria-required={q.isRequired || undefined}
+                      />
+                    )}
+                  </label>
+                ))}
+              </fieldset>
+              <button type="submit" className="cta" disabled={submitting}>
+                {submitting ? 'Submitting…' : t('submitApplication')}
               </button>
-              <button type="button" className="secondary" onClick={() => setShowApply(false)}>
-                Cancel
+              <button
+                type="button"
+                className="secondary"
+                disabled={submitting}
+                onClick={() => setShowApply(false)}
+              >
+                {t('cancel')}
               </button>
             </form>
           </div>

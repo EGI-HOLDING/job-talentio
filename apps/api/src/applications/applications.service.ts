@@ -5,7 +5,8 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { ApplicationStatus } from '@prisma/client';
+import { ApplicationStatus, Prisma } from '@prisma/client';
+import { DEFAULT_PIPELINE } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
@@ -28,6 +29,7 @@ export class ApplicationsService {
     jobPostId: string,
     coverLetter?: string,
     answers?: Array<{ questionId: string; answer: string }>,
+    resumeId?: string,
   ) {
     if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Only employees can apply');
@@ -38,7 +40,7 @@ export class ApplicationsService {
         skills: { include: { skill: true } },
         experiences: true,
         educations: true,
-        resumes: { where: { isPrimary: true }, take: 1 },
+        resumes: true,
       },
     });
     if (!profile) throw new BadRequestException('Complete your employee profile first');
@@ -54,12 +56,40 @@ export class ApplicationsService {
       throw new NotFoundException('Job not available');
     }
 
+    // Pre-check: one application per employee per job (also enforced by @@unique)
+    const existing = await this.prisma.application.findUnique({
+      where: { jobPostId_profileId: { jobPostId, profileId: profile.id } },
+      select: { id: true, status: true, createdAt: true },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `You have already applied to this job (status: ${existing.status}).`,
+      );
+    }
+
     // Validate required screening questions
     const answerMap = new Map((answers || []).map((a) => [a.questionId, a.answer]));
     for (const q of job.questions) {
       if (q.isRequired && !answerMap.get(q.id)?.trim()) {
         throw new BadRequestException(`Answer required for: ${q.question}`);
       }
+    }
+
+    let selectedResume =
+      (resumeId
+        ? profile.resumes.find((r) => r.id === resumeId)
+        : profile.resumes.find((r) => r.isPrimary) || profile.resumes[0]) || null;
+
+    if (resumeId && !selectedResume) {
+      throw new BadRequestException('Selected resume not found');
+    }
+    if (profile.resumes.length > 0 && selectedResume && !selectedResume.fileKey) {
+      throw new BadRequestException(
+        'Export or upload a CV file for this resume before applying.',
+      );
+    }
+    if (profile.resumes.length > 0 && !selectedResume) {
+      throw new BadRequestException('Select a resume to apply with');
     }
 
     const breakdown = await this.matching.scoreProfileAgainstJob(profile.id, jobPostId);
@@ -74,7 +104,14 @@ export class ApplicationsService {
       })),
       experiences: profile.experiences,
       educations: profile.educations,
-      resume: profile.resumes[0] ?? null,
+      resume: selectedResume
+        ? {
+            id: selectedResume.id,
+            title: selectedResume.title,
+            hasFile: Boolean(selectedResume.fileKey),
+            templateKey: selectedResume.templateKey,
+          }
+        : null,
       snapshotAt: new Date().toISOString(),
     };
 
@@ -83,6 +120,7 @@ export class ApplicationsService {
         data: {
           jobPostId,
           profileId: profile.id,
+          resumeId: selectedResume?.id ?? null,
           coverLetter,
           resumeSnapshot,
           matchScore: breakdown.total,
@@ -105,6 +143,7 @@ export class ApplicationsService {
         include: {
           jobPost: { include: { company: true } },
           answers: { include: { question: true } },
+          resume: true,
         },
       });
 
@@ -119,15 +158,46 @@ export class ApplicationsService {
       }
 
       return application;
-    } catch {
-      throw new ConflictException('Already applied to this job');
+    } catch (err) {
+      // Race: concurrent double-submit still blocked by unique(jobPostId, profileId)
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('You have already applied to this job.');
+      }
+      throw err;
     }
+  }
+
+  /** Employee: whether they already applied to this job (for UI guard). */
+  async getMyApplicationForJob(user: AuthUser, jobPostId: string) {
+    if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException();
+    }
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    if (!profile) return { applied: false as const, application: null };
+
+    const application = await this.prisma.application.findUnique({
+      where: { jobPostId_profileId: { jobPostId, profileId: profile.id } },
+      select: {
+        id: true,
+        status: true,
+        matchScore: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      applied: Boolean(application),
+      application: application ?? null,
+    };
   }
 
   async myApplications(user: AuthUser) {
     const profile = await this.prisma.employeeProfile.findUnique({ where: { userId: user.id } });
     if (!profile) return [];
-    return this.prisma.application.findMany({
+    const rows = await this.prisma.application.findMany({
       where: { profileId: profile.id },
       include: {
         jobPost: {
@@ -138,7 +208,11 @@ export class ApplicationsService {
                 name: true,
                 slug: true,
                 logoUrl: true,
-                members: { select: { userId: true, role: true }, take: 5 },
+                members: {
+                  where: { role: { in: ['OWNER', 'ADMIN'] } },
+                  select: { userId: true, role: true },
+                  take: 5,
+                },
               },
             },
             city: true,
@@ -148,6 +222,23 @@ export class ApplicationsService {
         interviews: { orderBy: { scheduledAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
+    });
+
+    // Expose a single chat peer — do not return the members array to clients
+    return rows.map((app) => {
+      const members = app.jobPost.company.members ?? [];
+      const peer = members.find((m) => m.role === 'OWNER') ?? members[0];
+      const { members: _members, ...company } = app.jobPost.company;
+      return {
+        ...app,
+        jobPost: {
+          ...app.jobPost,
+          company: {
+            ...company,
+            chatPeerUserId: peer?.userId ?? null,
+          },
+        },
+      };
     });
   }
 
@@ -236,15 +327,65 @@ export class ApplicationsService {
       linkUrl: `/dashboard/employee`,
     });
 
-    await this.mail.send(
-      application.profile.user.email,
-      `Application update: ${application.jobPost.title}`,
-      `<p>Your application status is now <strong>${status}</strong>.</p>${
-        note ? `<p>Note: ${note}</p>` : ''
-      }`,
-    );
+    // Email only when the candidate moves forward (right) in the pipeline.
+    // Moving back (left, e.g. INTERVIEW → IN_REVIEW) stays in-app only.
+    if (this.isForwardMove(application.status, status)) {
+      const { subject, html } = this.stageEmail(
+        application.jobPost.title,
+        status,
+        note,
+      );
+      await this.mail.send(application.profile.user.email, subject, html);
+    }
 
     return updated;
+  }
+
+  /** Right of the previous stage in DEFAULT_PIPELINE order = forward move. */
+  private isForwardMove(from: ApplicationStatus, to: ApplicationStatus) {
+    const order = DEFAULT_PIPELINE as readonly string[];
+    const fromIdx = order.indexOf(from);
+    const toIdx = order.indexOf(to);
+    if (fromIdx === -1 || toIdx === -1) return false;
+    return toIdx > fromIdx;
+  }
+
+  /** Stage-specific candidate email for forward pipeline moves. */
+  private stageEmail(jobTitle: string, status: ApplicationStatus, note?: string) {
+    const messages: Partial<Record<ApplicationStatus, { subject: string; intro: string }>> = {
+      IN_REVIEW: {
+        subject: `Your application is being reviewed — ${jobTitle}`,
+        intro: 'Good news! The recruiter is now reviewing your application.',
+      },
+      INTERVIEW: {
+        subject: `Interview stage — ${jobTitle}`,
+        intro:
+          'Congratulations! You have moved to the interview stage. The recruiter will contact you with the schedule details.',
+      },
+      OFFER: {
+        subject: `You received an offer — ${jobTitle}`,
+        intro: 'Great news! The company has extended you an offer for this position.',
+      },
+      HIRED: {
+        subject: `Welcome aboard — ${jobTitle}`,
+        intro: 'Congratulations! You have been hired for this position.',
+      },
+      REJECTED: {
+        subject: `Application update — ${jobTitle}`,
+        intro:
+          'Thank you for your interest. Unfortunately, the company decided not to move forward with your application this time.',
+      },
+    };
+    const m = messages[status] ?? {
+      subject: `Application update — ${jobTitle}`,
+      intro: `Your application status is now ${status}.`,
+    };
+    return {
+      subject: m.subject,
+      html: `<p>${m.intro}</p><p>Position: <strong>${jobTitle}</strong></p>${
+        note ? `<p>Note: ${note}</p>` : ''
+      }<p><a href="${process.env.WEB_URL ?? 'https://staging.jobtalent.io'}/dashboard/employee">Open your dashboard</a></p>`,
+    };
   }
 
   async rescore(user: AuthUser, applicationId: string) {

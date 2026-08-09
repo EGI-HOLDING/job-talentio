@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JobStatus, PlanCode, Prisma, WorkMode } from '@prisma/client';
-import { PLAN_LIMITS } from '@job-talentio/shared';
+import { PLAN_LIMITS, resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
@@ -19,10 +19,23 @@ import {
   normalizeJobTitle,
   titlesNearlyIdentical,
 } from '../common/dedupe';
+import { resolveSkill } from '../common/skill-resolve';
+import { resolveBenefit } from '../common/benefit-resolve';
+import { resolveJobTitle } from '../common/title-resolve';
 
-type JobSkillInput = { slug: string; isRequired?: boolean; weight?: number };
+type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
+type JobBenefitInput = { slug?: string; name?: string } | string;
 
 const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
+
+/** Best-practice status graph: close/pause from live posts; reopen CLOSED → PUBLISHED (or DRAFT to edit). */
+const ALLOWED_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
+  DRAFT: ['PUBLISHED', 'CLOSED'],
+  PUBLISHED: ['PAUSED', 'CLOSED'],
+  PAUSED: ['PUBLISHED', 'CLOSED'],
+  CLOSED: ['PUBLISHED', 'DRAFT'],
+  EXPIRED: ['PUBLISHED', 'CLOSED'],
+};
 
 @Injectable()
 export class JobsService {
@@ -130,6 +143,7 @@ export class JobsService {
     },
     city: true,
     category: true,
+    jobTitle: { select: { id: true, name: true, slug: true } },
     jobSkills: { include: { skill: true } },
     benefits: { include: { benefit: true } },
     questions: { orderBy: { sortOrder: 'asc' as const } },
@@ -172,15 +186,16 @@ export class JobsService {
 
   private async syncSkills(jobPostId: string, skills: JobSkillInput[]) {
     await this.prisma.jobPostSkill.deleteMany({ where: { jobPostId } });
+    const seen = new Set<string>();
     for (const s of skills) {
-      const skill =
-        (await this.prisma.skill.findUnique({ where: { slug: s.slug } })) ??
-        (await this.prisma.skill.create({
-          data: {
-            name: s.slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-            slug: s.slug || slugify(s.slug),
-          },
-        }));
+      if (!s.slug && !s.name) continue;
+      const { skill } = await resolveSkill(this.prisma, {
+        slug: s.slug,
+        name: s.name,
+        allowCreate: true,
+      });
+      if (seen.has(skill.id)) continue;
+      seen.add(skill.id);
       await this.prisma.jobPostSkill.create({
         data: {
           jobPostId,
@@ -192,14 +207,27 @@ export class JobsService {
     }
   }
 
-  private async syncBenefits(jobPostId: string, benefitSlugs: string[]) {
+  private async syncBenefits(jobPostId: string, benefits: JobBenefitInput[]) {
     await this.prisma.jobPostBenefit.deleteMany({ where: { jobPostId } });
-    for (const slug of benefitSlugs) {
-      const benefit = await this.prisma.benefit.findUnique({ where: { slug } });
-      if (!benefit) continue;
-      await this.prisma.jobPostBenefit.create({
-        data: { jobPostId, benefitId: benefit.id },
-      });
+    const seen = new Set<string>();
+    for (const b of benefits) {
+      const slug = typeof b === 'string' ? b : b.slug;
+      const name = typeof b === 'string' ? undefined : b.name;
+      if (!slug && !name) continue;
+      try {
+        const { benefit } = await resolveBenefit(this.prisma, {
+          slug,
+          name,
+          allowCreate: true,
+        });
+        if (seen.has(benefit.id)) continue;
+        seen.add(benefit.id);
+        await this.prisma.jobPostBenefit.create({
+          data: { jobPostId, benefitId: benefit.id },
+        });
+      } catch {
+        /* skip invalid */
+      }
     }
   }
 
@@ -212,8 +240,14 @@ export class JobsService {
         ? null
         : await this.resolveCityId(data.citySlug as string | undefined);
     const categoryId = await this.resolveCategoryId(data.categorySlug as string | undefined);
-    const title = String(data.title).trim();
+    const resolvedTitle = await resolveJobTitle(this.prisma, {
+      name: String(data.title).trim(),
+      slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
+    });
+    const title = resolvedTitle.jobTitle.name;
     const description = String(data.description).trim();
+    const experienceLevel =
+      (data.experienceLevel as never) ?? resolvedTitle.inferredLevel ?? null;
 
     const hashes = await this.assertNoDuplicateJob({
       companyId,
@@ -226,6 +260,7 @@ export class JobsService {
     const job = await this.prisma.jobPost.create({
       data: {
         companyId,
+        jobTitleId: resolvedTitle.jobTitle.id,
         title,
         description,
         cityId,
@@ -237,7 +272,7 @@ export class JobsService {
         salaryPeriod: (data.salaryPeriod as never) || 'MONTHLY',
         currency: (data.currency as string) || 'UZS',
         experienceYearsMin: (data.experienceYearsMin as number) ?? null,
-        experienceLevel: (data.experienceLevel as never) ?? null,
+        experienceLevel,
         locale: (data.locale as string) || 'uz',
         status: 'DRAFT',
         fingerprint: hashes.fingerprint,
@@ -246,12 +281,19 @@ export class JobsService {
     });
 
     await this.syncSkills(job.id, (data.skills as JobSkillInput[]) || []);
-    await this.syncBenefits(job.id, (data.benefitSlugs as string[]) || []);
+    await this.syncBenefits(
+      job.id,
+      ([
+        ...((data.benefits as JobBenefitInput[]) || []),
+        ...((data.benefitSlugs as string[]) || []),
+      ] as JobBenefitInput[]),
+    );
 
-    return this.prisma.jobPost.findUnique({
+    const created = await this.prisma.jobPost.findUnique({
       where: { id: job.id },
       include: this.jobInclude,
     });
+    return created ? this.withResolvedIcons(created) : created;
   }
 
   async update(user: AuthUser, jobId: string, data: Record<string, unknown>) {
@@ -270,7 +312,18 @@ export class JobsService {
       cityId = null;
     }
 
-    const title = data.title !== undefined ? String(data.title).trim() : job.title;
+    let title = job.title;
+    let jobTitleId = job.jobTitleId;
+    let inferredLevel: typeof job.experienceLevel = null;
+    if (data.title !== undefined || data.jobTitleSlug !== undefined) {
+      const resolvedTitle = await resolveJobTitle(this.prisma, {
+        name: data.title !== undefined ? String(data.title).trim() : job.title,
+        slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
+      });
+      title = resolvedTitle.jobTitle.name;
+      jobTitleId = resolvedTitle.jobTitle.id;
+      inferredLevel = resolvedTitle.inferredLevel;
+    }
     const description =
       data.description !== undefined ? String(data.description).trim() : job.description;
     const resolvedCityId = cityId === undefined ? job.cityId : cityId;
@@ -288,10 +341,19 @@ export class JobsService {
       this.assertLocationRules(workMode, resolvedCityId, true);
     }
 
+    const nextExperienceLevel =
+      data.experienceLevel !== undefined
+        ? (data.experienceLevel as never)
+        : inferredLevel && !job.experienceLevel
+          ? inferredLevel
+          : undefined;
+
     await this.prisma.jobPost.update({
       where: { id: jobId },
       data: {
-        title: data.title !== undefined ? title : undefined,
+        title: data.title !== undefined || data.jobTitleSlug !== undefined ? title : undefined,
+        jobTitleId:
+          data.title !== undefined || data.jobTitleSlug !== undefined ? jobTitleId : undefined,
         description: data.description !== undefined ? description : undefined,
         cityId,
         categoryId:
@@ -304,7 +366,7 @@ export class JobsService {
         salaryMax: data.salaryMax as number | null | undefined,
         salaryPeriod: data.salaryPeriod as never,
         experienceYearsMin: data.experienceYearsMin as number | null | undefined,
-        experienceLevel: data.experienceLevel as never,
+        experienceLevel: nextExperienceLevel as never,
         locale: data.locale as string | undefined,
         fingerprint: hashes.fingerprint,
         contentHash: hashes.contentHash,
@@ -312,12 +374,18 @@ export class JobsService {
     });
 
     if (data.skills) await this.syncSkills(jobId, data.skills as JobSkillInput[]);
-    if (data.benefitSlugs) await this.syncBenefits(jobId, data.benefitSlugs as string[]);
+    if (data.benefits || data.benefitSlugs) {
+      await this.syncBenefits(jobId, [
+        ...((data.benefits as JobBenefitInput[]) || []),
+        ...((data.benefitSlugs as string[]) || []),
+      ]);
+    }
 
-    return this.prisma.jobPost.findUnique({
+    const updated = await this.prisma.jobPost.findUnique({
       where: { id: jobId },
       include: this.jobInclude,
     });
+    return updated ? this.withResolvedIcons(updated) : updated;
   }
 
   async changeStatus(user: AuthUser, jobId: string, status: JobStatus) {
@@ -328,9 +396,24 @@ export class JobsService {
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
 
-    if (status === 'PUBLISHED') {
-      this.assertLocationRules(job.workMode, job.cityId, true);
+    if (job.status === status) {
+      return this.withResolvedIcons(
+        await this.prisma.jobPost.findUniqueOrThrow({
+          where: { id: jobId },
+          include: this.jobInclude,
+        }),
+      );
+    }
 
+    const allowed = ALLOWED_STATUS_TRANSITIONS[job.status] ?? [];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(
+        `Cannot change job status from ${job.status} to ${status}. Allowed: ${allowed.join(', ') || 'none'}.`,
+      );
+    }
+
+    // Becoming active again (incl. reopen CLOSED → DRAFT/PUBLISHED) must pass dedupe
+    if (ACTIVE_JOB_STATUSES.includes(status)) {
       await this.assertNoDuplicateJob({
         companyId: job.companyId,
         title: job.title,
@@ -339,14 +422,17 @@ export class JobsService {
         cityId: job.cityId,
         excludeJobId: job.id,
       });
+    }
+
+    if (status === 'PUBLISHED') {
+      this.assertLocationRules(job.workMode, job.cityId, true);
 
       const plan = job.company.subscription?.plan ?? 'FREE';
       const limit = this.planLimits(plan).activeJobs;
       const active = await this.prisma.jobPost.count({
         where: { companyId: job.companyId, status: 'PUBLISHED' },
       });
-      const alreadyPublished = job.status === 'PUBLISHED';
-      if (!alreadyPublished && active >= limit) {
+      if (job.status !== 'PUBLISHED' && active >= limit) {
         throw new ForbiddenException(
           `Plan ${plan} allows ${limit} active published job(s). Upgrade to publish more.`,
         );
@@ -359,7 +445,9 @@ export class JobsService {
         status,
         publishedAt:
           status === 'PUBLISHED' ? job.publishedAt ?? new Date() : job.publishedAt,
-        closedAt: status === 'CLOSED' ? new Date() : job.closedAt,
+        // Stamp closedAt on close; clear when leaving CLOSED (reopen)
+        closedAt:
+          status === 'CLOSED' ? new Date() : job.status === 'CLOSED' ? null : job.closedAt,
         fingerprint:
           job.fingerprint ??
           jobFingerprint({ title: job.title, workMode: job.workMode, cityId: job.cityId }),
@@ -380,26 +468,92 @@ export class JobsService {
       }
     }
 
-    return updated;
+    return this.withResolvedIcons(updated);
   }
 
-  async get(id: string, viewerId?: string) {
+  withResolvedIcons<T extends {
+    category?: { slug?: string; icon?: string | null } | null;
+    benefits?: Array<{ benefit?: { slug?: string; icon?: string | null } | null }>;
+  }>(job: T): T {
+    return {
+      ...job,
+      category: job.category
+        ? {
+            ...job.category,
+            icon: resolveCategoryIcon(job.category.slug, job.category.icon) || null,
+          }
+        : job.category,
+      benefits: Array.isArray(job.benefits)
+        ? job.benefits.map((jb) =>
+            jb?.benefit
+              ? {
+                  ...jb,
+                  benefit: {
+                    ...jb.benefit,
+                    icon: resolveBenefitIcon(jb.benefit.slug, jb.benefit.icon) || null,
+                  },
+                }
+              : jb,
+          )
+        : job.benefits,
+    };
+  }
+
+  private isCompanyMember(viewer: AuthUser | undefined, companyId: string) {
+    if (!viewer) return false;
+    if (viewer.role === 'SUPER_ADMIN') return true;
+    return (viewer.memberships ?? []).some((m) => m.companyId === companyId);
+  }
+
+  private stripPrivateCompanyFields<T extends { company?: { members?: unknown } | null }>(job: T): T {
+    if (!job.company || !('members' in job.company)) return job;
+    const { members: _members, ...company } = job.company as {
+      members?: unknown;
+    } & Record<string, unknown>;
+    return { ...job, company };
+  }
+
+  /** Single safe contact for employee chat — never return full members list publicly. */
+  private async chatPeerUserIdForCompany(companyId: string): Promise<string | null> {
+    const owner = await this.prisma.companyMember.findFirst({
+      where: { companyId, role: 'OWNER' },
+      select: { userId: true },
+    });
+    if (owner) return owner.userId;
+    const admin = await this.prisma.companyMember.findFirst({
+      where: { companyId, role: 'ADMIN' },
+      select: { userId: true },
+    });
+    return admin?.userId ?? null;
+  }
+
+  async get(id: string, viewer?: AuthUser) {
     const job = await this.prisma.jobPost.findUnique({
       where: { id },
       include: this.jobInclude,
     });
     if (!job) throw new NotFoundException('Job not found');
 
+    const member = this.isCompanyMember(viewer, job.companyId);
+    if (job.status !== 'PUBLISHED' && !member) {
+      throw new NotFoundException('Job not found');
+    }
+
     await this.prisma.jobView.create({
-      data: { jobPostId: id, viewerId: viewerId ?? null },
+      data: { jobPostId: id, viewerId: viewer?.id ?? null },
     });
 
-    return job;
+    const resolved = this.withResolvedIcons(job);
+    if (member) return resolved;
+
+    const stripped = this.stripPrivateCompanyFields(resolved);
+    const chatPeerUserId = await this.chatPeerUserIdForCompany(job.companyId);
+    return { ...stripped, chatPeerUserId };
   }
 
   async listMine(user: AuthUser, companyId: string) {
     await this.companies.assertMember(user, companyId);
-    return this.prisma.jobPost.findMany({
+    const rows = await this.prisma.jobPost.findMany({
       where: { companyId },
       orderBy: { updatedAt: 'desc' },
       include: {
@@ -409,6 +563,7 @@ export class JobsService {
         _count: { select: { applications: true, views: true } },
       },
     });
+    return rows.map((job) => this.withResolvedIcons(job));
   }
 
   async search(query: {
@@ -416,6 +571,8 @@ export class JobsService {
     city?: string;
     category?: string;
     company?: string;
+    companySlug?: string;
+    jobTitle?: string;
     employmentType?: string;
     workMode?: string;
     experienceLevel?: string;
@@ -440,8 +597,23 @@ export class JobsService {
     const categorySlugs = (query.category || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (categorySlugs.length) and.push({ category: { slug: { in: categorySlugs } } });
 
+    const jobTitleSlugs = (query.jobTitle || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (jobTitleSlugs.length) {
+      and.push({ jobTitle: { slug: { in: jobTitleSlugs } } });
+    }
+
     if (query.company) {
       and.push({ company: { name: { contains: query.company, mode: 'insensitive' } } });
+    }
+    const companySlugs = (query.companySlug || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (companySlugs.length) {
+      and.push({ company: { slug: { in: companySlugs } } });
     }
     if (query.employmentType) and.push({ employmentType: query.employmentType as never });
     if (query.workMode) and.push({ workMode: query.workMode as never });
@@ -517,84 +689,131 @@ export class JobsService {
 
     const where: Prisma.JobPostWhereInput = { AND: and };
     const sort = query.sort ?? 'relevance';
+    const limit = query.limit;
+    /** In-memory rank/match must scan a bounded window so deep pages stay consistent. */
+    const RELEVANCE_SCAN_CAP = 1000;
+    const MATCH_SCAN_CAP = 250;
+    const needsInMemoryRank = sort === 'relevance' || sort === 'match';
+    const scanCap = sort === 'match' ? MATCH_SCAN_CAP : RELEVANCE_SCAN_CAP;
 
-    const fetchTake =
-      sort === 'relevance' || sort === 'match'
-        ? Math.min(300, Math.max(query.limit * 5, 80))
-        : query.limit;
-    const fetchSkip =
-      sort === 'relevance' || sort === 'match' ? 0 : (query.page - 1) * query.limit;
-
-    const [items, total] = await Promise.all([
-      this.prisma.jobPost.findMany({
-        where,
-        include: {
-          company: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              logoUrl: true,
-              subscription: { select: { plan: true } },
-            },
-          },
-          city: true,
-          category: true,
-          jobSkills: { include: { skill: true }, take: 8 },
-          benefits: { include: { benefit: true }, take: 6 },
+    const jobInclude = {
+      company: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logoUrl: true,
+          subscription: { select: { plan: true } },
         },
-        skip: fetchSkip,
-        take: fetchTake,
-        orderBy:
-          sort === 'newest'
-            ? [{ publishedAt: 'desc' }, { createdAt: 'desc' }]
-            : sort === 'salary_high'
-              ? [{ salaryMax: 'desc' }, { salaryMin: 'desc' }]
-              : sort === 'salary_low'
-                ? [{ salaryMin: 'asc' }, { salaryMax: 'asc' }]
-                : sort === 'experience'
-                  ? [{ experienceYearsMin: 'asc' }, { publishedAt: 'desc' }]
-                  : [{ publishedAt: 'desc' }],
-      }),
-      this.prisma.jobPost.count({ where }),
-    ]);
+      },
+      city: true,
+      category: true,
+      jobTitle: { select: { id: true, name: true, slug: true } },
+      jobSkills: { include: { skill: true }, take: 8 },
+      benefits: { include: { benefit: true }, take: 6 },
+    } as const;
 
-    let withScore = items.map((job) => ({
-      ...job,
-      rankScore: this.computeRankScore({
+    const dbOrderBy =
+      sort === 'newest'
+        ? ([{ publishedAt: 'desc' }, { createdAt: 'desc' }] as const)
+        : sort === 'salary_high'
+          ? ([{ salaryMax: 'desc' }, { salaryMin: 'desc' }] as const)
+          : sort === 'salary_low'
+            ? ([{ salaryMin: 'asc' }, { salaryMax: 'asc' }] as const)
+            : sort === 'experience'
+              ? ([{ experienceYearsMin: 'asc' }, { publishedAt: 'desc' }] as const)
+              : ([{ publishedAt: 'desc' }] as const);
+
+    const matchedTotal = await this.prisma.jobPost.count({ where });
+    let page = Math.max(1, query.page);
+    let truncated = false;
+    let total = matchedTotal;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sorted: any[] = [];
+
+    if (!needsInMemoryRank) {
+      const totalPages = Math.max(1, Math.ceil(matchedTotal / limit) || 1);
+      page = Math.min(page, matchedTotal === 0 ? 1 : totalPages);
+      const items = await this.prisma.jobPost.findMany({
+        where,
+        include: jobInclude,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [...dbOrderBy] as Prisma.JobPostOrderByWithRelationInput[],
+      });
+      sorted = items.map((job) => ({
         ...job,
-        plan: job.company.subscription?.plan,
-        skillCount: job.jobSkills.length,
-      }),
-      isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
-      matchScore: null as number | null,
-    }));
-
-    if ((sort === 'match' || query.profileId) && query.profileId) {
-      withScore = await Promise.all(
-        withScore.map(async (job) => {
-          try {
-            const breakdown = await this.matching.scoreProfileAgainstJob(
-              query.profileId!,
-              job.id,
-            );
-            return { ...job, matchScore: breakdown.total };
-          } catch {
-            return job;
-          }
+        rankScore: this.computeRankScore({
+          ...job,
+          plan: job.company.subscription?.plan,
+          skillCount: job.jobSkills.length,
         }),
-      );
-    }
+        isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
+        matchScore: null as number | null,
+      }));
 
-    let sorted = withScore;
-    if (sort === 'relevance') {
-      sorted = withScore.sort((a, b) => b.rankScore - a.rankScore);
-      const start = (query.page - 1) * query.limit;
-      sorted = sorted.slice(start, start + query.limit);
-    } else if (sort === 'match') {
-      sorted = withScore.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
-      const start = (query.page - 1) * query.limit;
-      sorted = sorted.slice(start, start + query.limit);
+      if (query.profileId) {
+        sorted = await Promise.all(
+          sorted.map(async (job) => {
+            try {
+              const breakdown = await this.matching.scoreProfileAgainstJob(
+                query.profileId!,
+                job.id,
+              );
+              return { ...job, matchScore: breakdown.total };
+            } catch {
+              return job;
+            }
+          }),
+        );
+      }
+    } else {
+      truncated = matchedTotal > scanCap;
+      const items = await this.prisma.jobPost.findMany({
+        where,
+        include: jobInclude,
+        skip: 0,
+        take: scanCap,
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      let withScore = items.map((job) => ({
+        ...job,
+        rankScore: this.computeRankScore({
+          ...job,
+          plan: job.company.subscription?.plan,
+          skillCount: job.jobSkills.length,
+        }),
+        isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
+        matchScore: null as number | null,
+      }));
+
+      if ((sort === 'match' || query.profileId) && query.profileId) {
+        withScore = await Promise.all(
+          withScore.map(async (job) => {
+            try {
+              const breakdown = await this.matching.scoreProfileAgainstJob(
+                query.profileId!,
+                job.id,
+              );
+              return { ...job, matchScore: breakdown.total };
+            } catch {
+              return job;
+            }
+          }),
+        );
+      }
+
+      withScore =
+        sort === 'match'
+          ? withScore.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+          : withScore.sort((a, b) => b.rankScore - a.rankScore);
+
+      // Paginate the ranked window only — never advertise pages beyond what we ranked.
+      total = withScore.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+      page = Math.min(page, total === 0 ? 1 : totalPages);
+      sorted = withScore.slice((page - 1) * limit, page * limit);
     }
 
     // Facet counts on the full filtered set (without pagination)
@@ -603,15 +822,25 @@ export class JobsService {
       select: {
         cityId: true,
         categoryId: true,
+        jobTitleId: true,
         experienceLevel: true,
         city: { select: { slug: true, name: true } },
         category: { select: { slug: true, name: true } },
+        jobTitle: { select: { slug: true, name: true } },
+        company: { select: { slug: true, name: true, logoUrl: true } },
+        jobSkills: { select: { skill: { select: { slug: true, name: true } } } },
       },
       take: 1000,
     });
 
     const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const categoryFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const jobTitleFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const companyFacets: Record<
+      string,
+      { slug: string; name: string; logoUrl?: string | null; count: number }
+    > = {};
+    const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const experienceFacets: Record<string, number> = {};
     for (const j of facetJobs) {
       if (j.city) {
@@ -626,21 +855,50 @@ export class JobsService {
           ? { ...categoryFacets[key], count: categoryFacets[key].count + 1 }
           : { slug: j.category.slug, name: j.category.name, count: 1 };
       }
+      if (j.jobTitle) {
+        const key = j.jobTitle.slug;
+        jobTitleFacets[key] = jobTitleFacets[key]
+          ? { ...jobTitleFacets[key], count: jobTitleFacets[key].count + 1 }
+          : { slug: j.jobTitle.slug, name: j.jobTitle.name, count: 1 };
+      }
+      if (j.company) {
+        const key = j.company.slug;
+        companyFacets[key] = companyFacets[key]
+          ? { ...companyFacets[key], count: companyFacets[key].count + 1 }
+          : {
+              slug: j.company.slug,
+              name: j.company.name,
+              logoUrl: j.company.logoUrl,
+              count: 1,
+            };
+      }
       if (j.experienceLevel) {
         experienceFacets[j.experienceLevel] = (experienceFacets[j.experienceLevel] || 0) + 1;
+      }
+      for (const js of j.jobSkills) {
+        const sk = js.skill;
+        if (!sk) continue;
+        skillFacets[sk.slug] = skillFacets[sk.slug]
+          ? { ...skillFacets[sk.slug], count: skillFacets[sk.slug].count + 1 }
+          : { slug: sk.slug, name: sk.name, count: 1 };
       }
     }
 
     return {
-      items: sorted,
+      items: sorted.map((job) => this.withResolvedIcons(job)),
       total,
-      page: query.page,
-      limit: query.limit,
+      matchedTotal,
+      truncated,
+      page,
+      limit,
       sort,
-      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
       facets: {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count),
         categories: Object.values(categoryFacets).sort((a, b) => b.count - a.count),
+        jobTitles: Object.values(jobTitleFacets).sort((a, b) => b.count - a.count),
+        companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
+        skills: Object.values(skillFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,
       },
     };
@@ -680,11 +938,12 @@ export class JobsService {
       throw new BadRequestException('Only published jobs can be boosted');
     }
     const boostUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-    return this.prisma.jobPost.update({
+    const updated = await this.prisma.jobPost.update({
       where: { id: jobId },
       data: { boostWeight: weight, boostUntil },
       include: this.jobInclude,
     });
+    return this.withResolvedIcons(updated);
   }
 
   async getStats(user: AuthUser, jobId: string) {
@@ -715,7 +974,11 @@ export class JobsService {
       where: { userId: user.id },
     });
     if (!profile) return [];
-    return this.matching.recommendJobsForProfile(profile.id);
+    const rows = await this.matching.recommendJobsForProfile(profile.id);
+    return rows.map((row) => ({
+      ...row,
+      job: this.withResolvedIcons(row.job),
+    }));
   }
 
   async recommendedCandidates(user: AuthUser, jobId: string) {
@@ -726,7 +989,13 @@ export class JobsService {
   }
 
   // Screening questions
-  async listQuestions(jobId: string) {
+  async listQuestions(jobId: string, viewer?: AuthUser) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+    const member = this.isCompanyMember(viewer, job.companyId);
+    if (job.status !== 'PUBLISHED' && !member) {
+      throw new NotFoundException('Job not found');
+    }
     return this.prisma.jobQuestion.findMany({
       where: { jobPostId: jobId },
       orderBy: { sortOrder: 'asc' },

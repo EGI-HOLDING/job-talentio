@@ -5,6 +5,9 @@ import {
   devLoginSchema,
   accountUpdateSchema,
   changePasswordSchema,
+  googleOAuthSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
 } from '@job-talentio/shared';
 import { AuthService } from './auth.service';
 import { parseDto } from '../common/utils';
@@ -18,8 +21,12 @@ export class AuthController {
   register(@Body() body: unknown) {
     const data = parseDto(registerSchema, body);
     return this.auth.register({
-      ...data,
-      companyName: (body as { companyName?: string }).companyName,
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      role: data.role,
+      locale: data.locale,
+      companyName: data.companyName,
     });
   }
 
@@ -56,8 +63,21 @@ export class AuthController {
   }
 
   @Post('oauth/google')
-  google() {
-    return this.auth.oauthGoogleStub();
+  google(@Body() body: unknown) {
+    const data = parseDto(googleOAuthSchema, body);
+    return this.auth.oauthGoogle(data);
+  }
+
+  @Post('verify-email')
+  verifyEmail(@Body() body: unknown) {
+    const data = parseDto(verifyEmailSchema, body);
+    return this.auth.verifyEmail(data.token);
+  }
+
+  @Post('resend-verification')
+  resendVerification(@Body() body: unknown) {
+    const data = parseDto(resendVerificationSchema, body);
+    return this.auth.resendVerification(data.email);
   }
 
   @Post('oauth/telegram')

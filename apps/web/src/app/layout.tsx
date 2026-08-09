@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { SiteNav } from '@/components/SiteNav';
+import { SiteFooter } from '@/components/SiteFooter';
 import { I18nProvider } from '@/lib/i18n';
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="uz">
+    <html lang="uz" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -23,9 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <I18nProvider>
           <SiteNav />
           <main>{children}</main>
-          <footer className="footer">
-            <div className="shell">© {new Date().getFullYear()} Job Talentio — jobs across Uzbekistan</div>
-          </footer>
+          <SiteFooter />
         </I18nProvider>
       </body>
     </html>

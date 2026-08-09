@@ -4,7 +4,15 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
+import { useI18n } from '@/lib/i18n';
+import { formatSalaryRange } from '@/lib/numberFormat';
+import { ExploreSection } from '@/components/explore/ExploreSection';
+import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
+import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
+import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
+import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -18,29 +26,62 @@ type Job = {
   city?: { name: string } | null;
 };
 
+type FacetItem = { slug: string; name: string; count: number; logoUrl?: string | null };
+
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return null;
-  const fmt = (n: number) => `${Math.round(n / 1_000_000)}M`;
-  if (min && max) return `${fmt(min)}–${fmt(max)} UZS`;
-  return `${fmt(min || max!)} UZS`;
+  return formatSalaryRange(min, max) || null;
+}
+
+function rolesLabel(t: (k: string) => string, n: number) {
+  return t('openRolesCount').replace('{n}', String(n));
 }
 
 export default function HomePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [hotJobs, setHotJobs] = useState<Job[]>([]);
-  const [companies, setCompanies] = useState<Array<{ name: string; logoUrl?: string | null; slug: string }>>([]);
+  const [cityFacets, setCityFacets] = useState<FacetItem[]>([]);
+  const [companyFacets, setCompanyFacets] = useState<FacetItem[]>([]);
+  const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     api<Category[]>('/meta/categories', { auth: false }).then(setCategories).catch(() => undefined);
     api<{ items: Job[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false })
+      .then((r) => setHotJobs(r.items))
+      .catch(() => undefined);
+    api<{
+      facets?: {
+        cities?: FacetItem[];
+        companies?: FacetItem[];
+        categories?: FacetItem[];
+        jobTitles?: FacetItem[];
+      };
+    }>('/jobs?limit=1&sort=newest', { auth: false })
       .then((r) => {
-        setHotJobs(r.items);
-        setCompanies(
-          Array.from(
-            new Map(r.items.map((j) => [j.company.slug, j.company])).values(),
-          ),
-        );
+        setCityFacets((r.facets?.cities || []).slice(0, 8));
+        setCompanyFacets((r.facets?.companies || []).slice(0, 8));
+        const titles = (r.facets?.jobTitles || []).slice(0, 8);
+        setTitleFacets(titles);
+        const map: Record<string, number> = {};
+        for (const c of r.facets?.categories || []) map[c.slug] = c.count;
+        setCategoryCounts(map);
+        // Fallback when facets empty (pre-backfill / no published titles yet)
+        if (!titles.length) {
+          return api<{ items: FacetItem[] }>('/meta/job-titles?page=1&limit=8', { auth: false }).then(
+            (list) => {
+              setTitleFacets(
+                (list.items || []).map((t) => ({
+                  slug: t.slug,
+                  name: t.name,
+                  count: t.count ?? 0,
+                })),
+              );
+            },
+          );
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -54,53 +95,47 @@ export default function HomePage() {
   return (
     <div className="shell">
       <section className="hero">
-        <span className="badge">Uzbekistan · uz / ru / en</span>
-        <h1>Find work that fits. Hire talent that delivers.</h1>
-        <p>
-          Job Talentio connects candidates and companies across Uzbekistan with smart matching,
-          advanced search, and a lightweight ATS.
-        </p>
+        <span className="badge">{t('heroBadge')}</span>
+        <h1>{t('heroTitle')}</h1>
+        <p>{t('heroSubtitle')}</p>
         <form className="hero-search" onSubmit={onSearch}>
-          <input name="q" placeholder="Job title, skill, or company…" aria-label="Search jobs" />
+          <input
+            name="q"
+            placeholder={t('searchPlaceholder')}
+            aria-label={t('searchJobs')}
+          />
           <button type="submit" className="cta">
-            Search jobs
+            {t('searchJobs')}
           </button>
         </form>
-        <div className="chips">
-          {categories.slice(0, 8).map((c) => (
-            <Link key={c.slug} href={`/jobs?category=${c.slug}`} className="chip">
-              {c.icon} {c.name}
-            </Link>
-          ))}
-        </div>
       </section>
 
       <section className="section">
         <div className="stats-row">
           <div className="stat">
-            <strong>40+</strong>
-            <span>Open roles</span>
+            <strong>90+</strong>
+            <span>{t('openRoles')}</span>
           </div>
           <div className="stat">
-            <strong>10</strong>
-            <span>Companies</span>
+            <strong>20</strong>
+            <span>{t('companiesStat')}</span>
           </div>
           <div className="stat">
-            <strong>30+</strong>
-            <span>Talent profiles</span>
+            <strong>60+</strong>
+            <span>{t('talentProfiles')}</span>
           </div>
           <div className="stat">
             <strong>15</strong>
-            <span>Cities covered</span>
+            <span>{t('citiesCovered')}</span>
           </div>
         </div>
       </section>
 
       <section className="section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h2 className="section-title">Hot jobs</h2>
+          <h2 className="section-title">{t('hotJobs')}</h2>
           <Link href="/jobs?hotOnly=true" className="muted">
-            View all →
+            {t('viewAll')} →
           </Link>
         </div>
         <div className="grid-2">
@@ -114,8 +149,8 @@ export default function HomePage() {
                 style={{ width: 48, height: 48 }}
               />
               <div>
-                <span className="badge hot">Hot</span>
-                <h3>{job.title}</h3>
+                <span className="badge hot">{t('hot')}</span>
+                <h3>{sanitizeMojibake(job.title)}</h3>
                 <div className="job-meta">
                   <span>{job.company.name}</span>
                   <span>{jobLocationLabel(job)}</span>
@@ -128,36 +163,98 @@ export default function HomePage() {
               </div>
             </Link>
           ))}
-          {!hotJobs.length && <p className="muted">Hot jobs will appear after seed data loads.</p>}
+          {!hotJobs.length && <p className="muted">{t('hotJobsEmpty')}</p>}
         </div>
       </section>
 
-      {companies.length > 0 && (
-        <section className="section">
-          <h2 className="section-title">Hiring now</h2>
-          <div className="logo-strip">
-            {companies.map((c) => (
-              <Link key={c.slug} href={`/companies/${c.slug}`} title={c.name}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.logoUrl || ''} alt={c.name} />
-              </Link>
-            ))}
-          </div>
-        </section>
+      <ExploreSection
+        title={t('exploreByCategory')}
+        subtitle={t('exploreByCategorySubtitle')}
+        viewAllHref="/explore/categories"
+        viewAllLabel={t('viewAll')}
+      >
+        {categories.slice(0, 8).map((c) => (
+          <ExploreCategoryCard
+            key={c.slug}
+            name={c.name}
+            slug={c.slug}
+            icon={c.icon}
+            count={categoryCounts[c.slug] ?? 0}
+            countLabel={rolesLabel(t, categoryCounts[c.slug] ?? 0)}
+          />
+        ))}
+      </ExploreSection>
+
+      {cityFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByCity')}
+          subtitle={t('exploreByCitySubtitle')}
+          viewAllHref="/explore/cities"
+          viewAllLabel={t('viewAll')}
+        >
+          {cityFacets.map((c) => (
+            <ExploreCityCard
+              key={c.slug}
+              name={c.name}
+              slug={c.slug}
+              count={c.count}
+              countLabel={rolesLabel(t, c.count)}
+            />
+          ))}
+        </ExploreSection>
+      )}
+
+      {companyFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByCompany')}
+          subtitle={t('exploreByCompanySubtitle')}
+          viewAllHref="/explore/companies"
+          viewAllLabel={t('viewAll')}
+        >
+          {companyFacets.map((c) => (
+            <ExploreCompanyCard
+              key={c.slug}
+              name={c.name}
+              slug={c.slug}
+              logoUrl={c.logoUrl}
+              count={c.count}
+              countLabel={rolesLabel(t, c.count)}
+            />
+          ))}
+        </ExploreSection>
+      )}
+
+      {titleFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByTitle')}
+          subtitle={t('exploreByTitleSubtitle')}
+          viewAllHref="/explore/titles"
+          viewAllLabel={t('viewAll')}
+        >
+          {titleFacets.map((item) => (
+            <ExploreTitleCard
+              key={item.slug}
+              name={item.name}
+              slug={item.slug}
+              count={item.count}
+              countLabel={rolesLabel(t, item.count)}
+            />
+          ))}
+        </ExploreSection>
       )}
 
       <section className="section grid-3" style={{ paddingBottom: '3rem' }}>
         <div className="card">
-          <h3>For candidates</h3>
-          <p className="muted">Profile, skills, CV upload, match scores, alerts, and chat.</p>
+          <h3>{t('forCandidates')}</h3>
+          <p className="muted">{t('forCandidatesDesc')}</p>
         </div>
         <div className="card">
-          <h3>For companies</h3>
-          <p className="muted">Pipeline, candidate matching, Hot Jobs, screening questions.</p>
+          <h3>{t('forCompanies')}</h3>
+          <p className="muted">{t('forCompaniesDesc')}</p>
         </div>
         <div className="card">
-          <h3>Enterprise-ready</h3>
-          <p className="muted">Normalized data, analytics, notifications, moderation tools.</p>
+          <h3>{t('enterpriseReady')}</h3>
+          <p className="muted">{t('enterpriseReadyDesc')}</p>
         </div>
       </section>
     </div>

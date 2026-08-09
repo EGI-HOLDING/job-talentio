@@ -16,6 +16,7 @@ import { MetaModule } from './meta/meta.module';
 import { MatchingModule } from './matching/matching.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
+import { BulkCommsModule } from './bulk-comms/bulk-comms.module';
 import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
 
@@ -36,6 +37,7 @@ import { SeedService } from './seed.service';
     ProfilesModule,
     BillingModule,
     ChatModule,
+    BulkCommsModule,
     AlertsModule,
     AdminModule,
   ],

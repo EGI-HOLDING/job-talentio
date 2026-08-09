@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PlanCode } from '@prisma/client';
 import { PLAN_PRICES_UZS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,6 +16,24 @@ export class BillingService {
     private payments: MockPaymentProvider,
   ) {}
 
+  /** Auto-confirm mock payments only when explicitly enabled (local/dev). */
+  private mockAutoConfirmEnabled() {
+    return process.env.PAYMENTS_MOCK === 'true';
+  }
+
+  private checkoutUrlFor(paymentId: string) {
+    const base = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+    return `${base}/billing/mock-checkout?paymentId=${encodeURIComponent(paymentId)}`;
+  }
+
+  private wrapCheckoutResult(payment: { id: string; status: string }) {
+    return {
+      payment,
+      checkoutUrl:
+        payment.status === 'PENDING' ? this.checkoutUrlFor(payment.id) : null,
+    };
+  }
+
   async getSubscription(user: AuthUser, companyId: string) {
     await this.companies.assertMember(user, companyId);
     const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
@@ -26,8 +44,21 @@ export class BillingService {
     return { ...sub, activePublishedJobs: activeJobs, prices: PLAN_PRICES_UZS };
   }
 
+  async getPayment(user: AuthUser, paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
+    return payment;
+  }
+
   async upgrade(user: AuthUser, companyId: string, plan: 'STANDARD' | 'PREMIUM') {
     await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const current = await this.prisma.subscription.findUnique({ where: { companyId } });
+    if (!current) throw new NotFoundException('Subscription not found');
+    const order: PlanCode[] = [PlanCode.FREE, PlanCode.STANDARD, PlanCode.PREMIUM];
+    if (order.indexOf(current.plan) >= order.indexOf(plan as PlanCode)) {
+      throw new BadRequestException(`Already on ${current.plan} or higher`);
+    }
     const amount = PLAN_PRICES_UZS[plan];
     const intent = await this.payments.createPayment({
       companyId,
@@ -48,12 +79,19 @@ export class BillingService {
       },
     });
 
-    // Local-first: auto-complete mock payment immediately
-    return this.confirmPayment(user, payment.id, true);
+    if (this.mockAutoConfirmEnabled()) {
+      const confirmed = await this.confirmPayment(user, payment.id, true);
+      return this.wrapCheckoutResult(confirmed);
+    }
+    return this.wrapCheckoutResult(payment);
   }
 
   async buyHotJob(user: AuthUser, companyId: string, jobId: string, days: 7 | 14 | 30) {
     await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job || job.companyId !== companyId) {
+      throw new NotFoundException('Job not found');
+    }
     const key = `HOT_JOB_${days}D` as keyof typeof PLAN_PRICES_UZS;
     const amount = PLAN_PRICES_UZS[key];
     const payment = await this.prisma.payment.create({
@@ -67,14 +105,29 @@ export class BillingService {
         metadata: { jobId, days },
       },
     });
-    return this.confirmPayment(user, payment.id, true);
+    if (this.mockAutoConfirmEnabled()) {
+      const confirmed = await this.confirmPayment(user, payment.id, true);
+      return this.wrapCheckoutResult(confirmed);
+    }
+    return this.wrapCheckoutResult(payment);
   }
 
   async confirmPayment(user: AuthUser, paymentId: string, allowAuto = false) {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Payment not found');
-    if (!allowAuto) {
-      await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
+    await this.companies.assertMember(user, payment.companyId, ['OWNER', 'ADMIN']);
+
+    // Explicit mock checkout (provider=mock) is allowed for OWNER/ADMIN.
+    // Silent auto-confirm only when PAYMENTS_MOCK=true. Real providers will use webhooks later.
+    const isMockProvider = payment.provider === 'mock';
+    if (!allowAuto && !this.mockAutoConfirmEnabled() && !isMockProvider) {
+      throw new BadRequestException(
+        'Manual payment confirmation is disabled until a real payment provider is configured.',
+      );
+    }
+
+    if (payment.status === 'MOCKED' || payment.status === 'PAID') {
+      return payment;
     }
 
     const updated = await this.prisma.payment.update({

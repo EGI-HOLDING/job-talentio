@@ -1,5 +1,20 @@
 import { PrismaClient, PlanCode, ExperienceLevel, EmploymentType, WorkMode, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
+import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
 import * as bcrypt from 'bcryptjs';
+import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
+import { jobFingerprint } from '../src/common/dedupe';
+import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
+
+/** Orthographic aliases → canonical title name (seeded after jobs resolve). */
+const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
+  { alias: 'Front End Developer', canonical: 'Frontend Developer' },
+  { alias: 'Front-End Developer', canonical: 'Frontend Developer' },
+  { alias: 'Frontend Dev', canonical: 'Frontend Developer' },
+  { alias: 'CPP Developer', canonical: 'C++ Developer' },
+  { alias: 'C Plus Plus Developer', canonical: 'C++ Developer' },
+  { alias: 'Full Stack Developer', canonical: 'Full-stack Developer' },
+  { alias: 'Fullstack Developer', canonical: 'Full-stack Developer' },
+];
 
 const prisma = new PrismaClient();
 
@@ -15,37 +30,38 @@ function logo(name: string, color: string) {
   return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`;
 }
 
-const CITIES = [
-  { name: 'Tashkent', slug: 'tashkent', region: 'Tashkent' },
-  { name: 'Samarkand', slug: 'samarkand', region: 'Samarkand' },
-  { name: 'Bukhara', slug: 'bukhara', region: 'Bukhara' },
-  { name: 'Andijan', slug: 'andijan', region: 'Andijan' },
-  { name: 'Namangan', slug: 'namangan', region: 'Namangan' },
-  { name: 'Fergana', slug: 'fergana', region: 'Fergana' },
-  { name: 'Nukus', slug: 'nukus', region: 'Karakalpakstan' },
-  { name: 'Urgench', slug: 'urgench', region: 'Khorezm' },
-  { name: 'Navoi', slug: 'navoi', region: 'Navoi' },
-  { name: 'Karshi', slug: 'karshi', region: 'Kashkadarya' },
-  { name: 'Termez', slug: 'termez', region: 'Surkhandarya' },
-  { name: 'Jizzakh', slug: 'jizzakh', region: 'Jizzakh' },
-  { name: 'Gulistan', slug: 'gulistan', region: 'Sirdarya' },
-  { name: 'Chirchiq', slug: 'chirchiq', region: 'Tashkent Region' },
-  { name: 'Angren', slug: 'angren', region: 'Tashkent Region' },
+/** Primary hubs used for round-robin seed of jobs/companies/profiles */
+const SEED_CITY_SLUGS = [
+  'tashkent',
+  'samarkand',
+  'bukhara',
+  'andijan',
+  'namangan',
+  'fergana',
+  'nukus',
+  'urgench',
+  'navoi',
+  'karshi',
+  'termez',
+  'jizzakh',
+  'gulistan',
+  'chirchiq',
+  'angren',
 ];
 
 const CATEGORIES = [
-  { name: 'IT & Software', slug: 'it-software', icon: '💻' },
-  { name: 'Finance & Banking', slug: 'finance', icon: '🏦' },
-  { name: 'Sales & Marketing', slug: 'sales-marketing', icon: '📈' },
-  { name: 'Design & Creative', slug: 'design', icon: '🎨' },
-  { name: 'HR & Recruiting', slug: 'hr', icon: '👥' },
-  { name: 'Education', slug: 'education', icon: '📚' },
-  { name: 'Healthcare', slug: 'healthcare', icon: '🏥' },
-  { name: 'Engineering', slug: 'engineering', icon: '⚙️' },
-  { name: 'Customer Support', slug: 'customer-support', icon: '🎧' },
-  { name: 'Logistics', slug: 'logistics', icon: '🚚' },
-  { name: 'Legal', slug: 'legal', icon: '⚖️' },
-  { name: 'Hospitality', slug: 'hospitality', icon: '🏨' },
+  { name: 'IT & Software', slug: 'it-software', icon: CATEGORY_ICONS['it-software'] },
+  { name: 'Finance & Banking', slug: 'finance', icon: CATEGORY_ICONS.finance },
+  { name: 'Sales & Marketing', slug: 'sales-marketing', icon: CATEGORY_ICONS['sales-marketing'] },
+  { name: 'Design & Creative', slug: 'design', icon: CATEGORY_ICONS.design },
+  { name: 'HR & Recruiting', slug: 'hr', icon: CATEGORY_ICONS.hr },
+  { name: 'Education', slug: 'education', icon: CATEGORY_ICONS.education },
+  { name: 'Healthcare', slug: 'healthcare', icon: CATEGORY_ICONS.healthcare },
+  { name: 'Engineering', slug: 'engineering', icon: CATEGORY_ICONS.engineering },
+  { name: 'Customer Support', slug: 'customer-support', icon: CATEGORY_ICONS['customer-support'] },
+  { name: 'Logistics', slug: 'logistics', icon: CATEGORY_ICONS.logistics },
+  { name: 'Legal', slug: 'legal', icon: CATEGORY_ICONS.legal },
+  { name: 'Hospitality', slug: 'hospitality', icon: CATEGORY_ICONS.hospitality },
 ];
 
 const INDUSTRIES = [
@@ -69,6 +85,7 @@ const SKILLS: Array<{ name: string; category: string }> = [
   { name: 'Go', category: 'Programming' },
   { name: 'PHP', category: 'Programming' },
   { name: 'C#', category: 'Programming' },
+  { name: 'C++', category: 'Programming' },
   { name: 'Kotlin', category: 'Programming' },
   { name: 'Swift', category: 'Programming' },
   { name: 'React', category: 'Frontend' },
@@ -132,7 +149,65 @@ const SKILLS: Array<{ name: string; category: string }> = [
   { name: 'Legal Research', category: 'Legal' },
   { name: 'Contract Law', category: 'Legal' },
   { name: 'Supply Chain', category: 'Logistics' },
+  { name: 'Nursing', category: 'Healthcare' },
+  { name: 'Patient Care', category: 'Healthcare' },
+  { name: 'Clinical Research', category: 'Healthcare' },
+  { name: 'Pharmacy', category: 'Healthcare' },
+  { name: 'Teaching', category: 'Education' },
+  { name: 'Curriculum Design', category: 'Education' },
+  { name: 'Hospitality Management', category: 'Hospitality' },
+  { name: 'Food Safety', category: 'Hospitality' },
+  { name: 'AutoCAD', category: 'Engineering' },
+  { name: 'Mechanical Design', category: 'Engineering' },
+  { name: 'Electrical Engineering', category: 'Engineering' },
 ];
+
+/** alias string → skill slug */
+const SKILL_ALIASES: Array<{ alias: string; skillSlug: string }> = [
+  { alias: 'React.JS', skillSlug: 'react' },
+  { alias: 'ReactJS', skillSlug: 'react' },
+  { alias: 'CPP', skillSlug: 'cplusplus' },
+  { alias: 'C plus plus', skillSlug: 'cplusplus' },
+  { alias: 'NodeJS', skillSlug: 'node-js' },
+  { alias: 'Node', skillSlug: 'node-js' },
+  { alias: 'NextJS', skillSlug: 'next-js' },
+  { alias: 'VueJS', skillSlug: 'vue-js' },
+  { alias: 'k8s', skillSlug: 'kubernetes' },
+  { alias: 'Postgres', skillSlug: 'postgresql' },
+  { alias: 'JS', skillSlug: 'javascript' },
+  { alias: 'TS', skillSlug: 'typescript' },
+];
+
+function skillSlugifySeed(name: string) {
+  let s = name.trim().toLowerCase();
+  s = s.replace(/c\+\+/gi, 'cplusplus').replace(/c#/gi, 'csharp');
+  return slugify(s);
+}
+
+function normalizeSkillKeySeed(input: string): string {
+  let s = input
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '');
+  s = s
+    .replace(/c\+\+/g, 'cplusplus')
+    .replace(/c#/g, 'csharp')
+    .replace(/\.js\b/g, 'js')
+    .replace(/\.ts\b/g, 'ts');
+  s = s.replace(/[^a-z0-9]+/g, '');
+  const synonyms: Record<string, string> = {
+    reactjs: 'react',
+    cpp: 'cplusplus',
+    cplusplus: 'cplusplus',
+    nodejs: 'nodejs',
+    nextjs: 'nextjs',
+    vuejs: 'vuejs',
+    js: 'javascript',
+    ts: 'typescript',
+  };
+  return synonyms[s] ?? s;
+}
 
 const LANGUAGES = [
   { name: 'Uzbek', code: 'uz' },
@@ -148,57 +223,266 @@ const LANGUAGES = [
 ];
 
 const BENEFITS = [
-  { name: 'Health Insurance', slug: 'health-insurance', icon: '🏥' },
-  { name: 'Remote Work', slug: 'remote-work', icon: '🏠' },
-  { name: 'Flexible Hours', slug: 'flexible-hours', icon: '⏰' },
-  { name: 'Meal Allowance', slug: 'meal-allowance', icon: '🍱' },
-  { name: 'Learning Budget', slug: 'learning-budget', icon: '📖' },
-  { name: 'Gym Membership', slug: 'gym', icon: '💪' },
-  { name: 'Paid Vacation', slug: 'paid-vacation', icon: '🌴' },
-  { name: 'Stock Options', slug: 'stock-options', icon: '📊' },
-  { name: 'Relocation Support', slug: 'relocation', icon: '✈️' },
-  { name: 'Equipment Budget', slug: 'equipment', icon: '💻' },
-  { name: 'Parental Leave', slug: 'parental-leave', icon: '👶' },
-  { name: 'Performance Bonus', slug: 'bonus', icon: '💰' },
+  { name: 'Health Insurance', slug: 'health-insurance', icon: BENEFIT_ICONS['health-insurance'] },
+  { name: 'Remote Work', slug: 'remote-work', icon: BENEFIT_ICONS['remote-work'] },
+  { name: 'Flexible Hours', slug: 'flexible-hours', icon: BENEFIT_ICONS['flexible-hours'] },
+  { name: 'Meal Allowance', slug: 'meal-allowance', icon: BENEFIT_ICONS['meal-allowance'] },
+  { name: 'Learning Budget', slug: 'learning-budget', icon: BENEFIT_ICONS['learning-budget'] },
+  { name: 'Gym Membership', slug: 'gym', icon: BENEFIT_ICONS.gym },
+  { name: 'Paid Vacation', slug: 'paid-vacation', icon: BENEFIT_ICONS['paid-vacation'] },
+  { name: 'Stock Options', slug: 'stock-options', icon: BENEFIT_ICONS['stock-options'] },
+  { name: 'Relocation Support', slug: 'relocation', icon: BENEFIT_ICONS.relocation },
+  { name: 'Equipment Budget', slug: 'equipment', icon: BENEFIT_ICONS.equipment },
+  { name: 'Parental Leave', slug: 'parental-leave', icon: BENEFIT_ICONS['parental-leave'] },
+  { name: 'Performance Bonus', slug: 'bonus', icon: BENEFIT_ICONS.bonus },
 ];
 
 const COMPANIES = [
-  { name: 'Demo Tech Tashkent', slug: 'demo-tech-tashkent', industry: 'it', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize },
-  { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: 'fintech', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize },
-  { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: 'ecommerce', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize },
-  { name: 'Tashkent Soft Labs', slug: 'tashkent-soft-labs', industry: 'it', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '2563eb', size: 'SIZE_11_50' as CompanySize },
-  { name: 'Samarkand Digital', slug: 'samarkand-digital', industry: 'media', plan: 'FREE' as PlanCode, city: 'samarkand', color: 'db2777', size: 'SIZE_11_50' as CompanySize },
-  { name: 'Orient Bank Digital', slug: 'orient-bank', industry: 'banking', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0f766e', size: 'SIZE_1000_PLUS' as CompanySize },
-  { name: 'Fergana Logistics', slug: 'fergana-logistics', industry: 'logistics', plan: 'STANDARD' as PlanCode, city: 'fergana', color: '7c3aed', size: 'SIZE_51_200' as CompanySize },
-  { name: 'EduNest Uzbekistan', slug: 'edunest-uz', industry: 'education', plan: 'FREE' as PlanCode, city: 'tashkent', color: 'ea580c', size: 'SIZE_11_50' as CompanySize },
-  { name: 'MediCare IT', slug: 'medicare-it', industry: 'healthcare', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '0891b2', size: 'SIZE_51_200' as CompanySize },
-  { name: 'Navoi Engineering', slug: 'navoi-engineering', industry: 'manufacturing', plan: 'FREE' as PlanCode, city: 'navoi', color: '64748b', size: 'SIZE_201_1000' as CompanySize },
+  { name: 'Apex Soft Tashkent', slug: 'demo-tech-tashkent', industry: 'it', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize, mailDomain: 'apexsoft.uz' },
+  { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: 'fintech', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize, mailDomain: 'uzpay.uz' },
+  { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: 'ecommerce', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'silkroad.uz' },
+  { name: 'Tashkent Soft Labs', slug: 'tashkent-soft-labs', industry: 'it', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '2563eb', size: 'SIZE_11_50' as CompanySize, mailDomain: 'softlabs.uz' },
+  { name: 'Samarkand Digital', slug: 'samarkand-digital', industry: 'media', plan: 'FREE' as PlanCode, city: 'samarkand', color: 'db2777', size: 'SIZE_11_50' as CompanySize, mailDomain: 'samdigital.uz' },
+  { name: 'Orient Bank Digital', slug: 'orient-bank', industry: 'banking', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0f766e', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'orientbank.uz' },
+  { name: 'Fergana Logistics', slug: 'fergana-logistics', industry: 'logistics', plan: 'STANDARD' as PlanCode, city: 'fergana', color: '7c3aed', size: 'SIZE_51_200' as CompanySize, mailDomain: 'ferganalogistics.uz' },
+  { name: 'EduNest Uzbekistan', slug: 'edunest-uz', industry: 'education', plan: 'FREE' as PlanCode, city: 'tashkent', color: 'ea580c', size: 'SIZE_11_50' as CompanySize, mailDomain: 'edunest.uz' },
+  { name: 'MediCare IT', slug: 'medicare-it', industry: 'healthcare', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '0891b2', size: 'SIZE_51_200' as CompanySize, mailDomain: 'medicare-it.uz' },
+  { name: 'Navoi Engineering', slug: 'navoi-engineering', industry: 'manufacturing', plan: 'FREE' as PlanCode, city: 'navoi', color: '64748b', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'navoieng.uz' },
+  { name: 'Andijan AgroTech', slug: 'andijan-agrotech', industry: 'manufacturing', plan: 'STANDARD' as PlanCode, city: 'andijan', color: '65a30d', size: 'SIZE_51_200' as CompanySize, mailDomain: 'agrotech.uz' },
+  { name: 'Bukhara Heritage Hotels', slug: 'bukhara-heritage', industry: 'media', plan: 'FREE' as PlanCode, city: 'bukhara', color: 'b45309', size: 'SIZE_11_50' as CompanySize, mailDomain: 'bukhotels.uz' },
+  { name: 'ClickPay Solutions', slug: 'clickpay-solutions', industry: 'fintech', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0ea5e9', size: 'SIZE_51_200' as CompanySize, mailDomain: 'clickpay.uz' },
+  { name: 'Namangan Textile Group', slug: 'namangan-textile', industry: 'manufacturing', plan: 'STANDARD' as PlanCode, city: 'namangan', color: 'be185d', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'namtextile.uz' },
+  { name: 'UzTelecom Digital', slug: 'uztelecom-digital', industry: 'telecom', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '1d4ed8', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'uztelecom.uz' },
+  { name: 'Khorezm Green Energy', slug: 'khorezm-green', industry: 'manufacturing', plan: 'FREE' as PlanCode, city: 'urgench', color: '15803d', size: 'SIZE_11_50' as CompanySize, mailDomain: 'khorezmgreen.uz' },
+  { name: 'Tashkent Legal Partners', slug: 'tashkent-legal', industry: 'banking', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '334155', size: 'SIZE_11_50' as CompanySize, mailDomain: 'tlpartners.uz' },
+  { name: 'Caravan Marketplace', slug: 'caravan-marketplace', industry: 'ecommerce', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: 'c2410c', size: 'SIZE_51_200' as CompanySize, mailDomain: 'caravan.uz' },
+  { name: 'Nukus Smart City', slug: 'nukus-smart-city', industry: 'it', plan: 'FREE' as PlanCode, city: 'nukus', color: '0369a1', size: 'SIZE_11_50' as CompanySize, mailDomain: 'nukussmart.uz' },
+  { name: 'Chirchiq Pharma Lab', slug: 'chirchiq-pharma', industry: 'healthcare', plan: 'STANDARD' as PlanCode, city: 'chirchiq', color: '0f766e', size: 'SIZE_51_200' as CompanySize, mailDomain: 'chirchiqpharma.uz' },
 ];
 
-const FIRST_NAMES = ['Madina', 'Dilshod', 'Aziza', 'Jasur', 'Nilufar', 'Bobur', 'Sevara', 'Timur', 'Malika', 'Sardor', 'Kamola', 'Rustam', 'Zarina', 'Alisher', 'Dilnoza', 'Farrukh', 'Gulnora', 'Islom', 'Lola', 'Muzaffar', 'Nargiza', 'Oybek', 'Parvina', 'Quvonch', 'Rayhon', 'Shohruh', 'Umida', 'Valijon', 'Yulduz', 'Zafar'];
-const LAST_NAMES = ['Karimova', 'Rahimov', 'Tursunov', 'Usmarova', 'Saidov', 'Yusupova', 'Ergashev', 'Abdullayeva', 'Nazarov', 'Ismoilova'];
+const PERSONAL_MAIL_DOMAINS = ['gmail.com', 'mail.ru', 'yandex.ru', 'inbox.uz', 'yahoo.com'] as const;
 
+type SeedPerson = { first: string; last: string; email: string };
+
+function personalEmail(first: string, last: string, i: number): string {
+  const f = first.toLowerCase();
+  const l = last.toLowerCase();
+  const local = [`${f}.${l}`, `${f}_${l}`, `${f[0]}.${l}`, `${f}.${l}${90 + (i % 10)}`][i % 4];
+  return `${local}@${PERSONAL_MAIL_DOMAINS[i % PERSONAL_MAIL_DOMAINS.length]}`;
+}
+
+function workEmail(first: string, last: string, domain: string): string {
+  return `${first.toLowerCase()}.${last.toLowerCase()}@${domain}`;
+}
+
+/** Job seekers — realistic personal inboxes (UZ-style providers). */
+const EMPLOYEE_PEOPLE: SeedPerson[] = [
+  { first: 'Madina', last: 'Karimova', email: 'madina.karimova@gmail.com' },
+  { first: 'Dilshod', last: 'Rahimov', email: 'dilshod_rahimov@mail.ru' },
+  { first: 'Aziza', last: 'Tursunova', email: 'a.tursunova@yandex.ru' },
+  { first: 'Jasur', last: 'Umarov', email: 'jasur.umarov93@inbox.uz' },
+  { first: 'Nilufar', last: 'Saidova', email: 'nilufar.saidova@yahoo.com' },
+  { first: 'Bobur', last: 'Yusupov', email: 'bobur_yusupov@gmail.com' },
+  { first: 'Sevara', last: 'Ergasheva', email: 's.ergasheva@mail.ru' },
+  { first: 'Timur', last: 'Abdullayev', email: 'timur.abdullayev97@yandex.ru' },
+  { first: 'Malika', last: 'Nazarova', email: 'malika.nazarova@inbox.uz' },
+  { first: 'Sardor', last: 'Ismoilov', email: 'sardor_ismoilov@yahoo.com' },
+  { first: 'Kamola', last: 'Hasanova', email: 'k.hasanova@gmail.com' },
+  { first: 'Rustam', last: 'Aliyev', email: 'rustam.aliyev91@mail.ru' },
+  { first: 'Zarina', last: 'Qosimova', email: 'zarina.qosimova@yandex.ru' },
+  { first: 'Alisher', last: 'Mirzayev', email: 'alisher_mirzayev@inbox.uz' },
+  { first: 'Dilnoza', last: 'Shukurova', email: 'd.shukurova@yahoo.com' },
+  { first: 'Farrukh', last: 'Karimov', email: 'farrukh.karimov95@gmail.com' },
+  { first: 'Gulnora', last: 'Rakhimova', email: 'gulnora.rakhimova@mail.ru' },
+  { first: 'Islom', last: 'Tursunov', email: 'islom_tursunov@yandex.ru' },
+  { first: 'Lola', last: 'Bekova', email: 'l.bekova@inbox.uz' },
+  { first: 'Muzaffar', last: 'Ergashev', email: 'muzaffar.ergashev99@yahoo.com' },
+  { first: 'Nargiza', last: 'Abdullayeva', email: 'nargiza.abdullayeva@gmail.com' },
+  { first: 'Oybek', last: 'Nazarov', email: 'oybek_nazarov@mail.ru' },
+  { first: 'Parvina', last: 'Ismoilova', email: 'p.ismoilova@yandex.ru' },
+  { first: 'Quvonch', last: 'Yuldashev', email: 'quvonch.yuldashev93@inbox.uz' },
+  { first: 'Rayhon', last: 'Sattorova', email: 'rayhon.sattorova@yahoo.com' },
+  { first: 'Shohruh', last: 'Hakimov', email: 'shohruh_hakimov@gmail.com' },
+  { first: 'Umida', last: 'Rasulova', email: 'u.rasulova@mail.ru' },
+  { first: 'Valijon', last: 'Sobirov', email: 'valijon.sobirov97@yandex.ru' },
+  { first: 'Yulduz', last: 'Ganiyeva', email: 'yulduz.ganiyeva@inbox.uz' },
+  { first: 'Zafar', last: 'Mahmudov', email: 'zafar_mahmudov@yahoo.com' },
+  { first: 'Asal', last: 'Ibragimova', email: 'a.ibragimova@gmail.com' },
+  { first: 'Bekzod', last: 'Xolmatov', email: 'bekzod.xolmatov91@mail.ru' },
+  { first: 'Dildora', last: 'Jumaniyozova', email: 'dildora.jumaniyozova@yandex.ru' },
+  { first: 'Eldor', last: 'Qodirov', email: 'eldor_qodirov@inbox.uz' },
+  { first: 'Feruza', last: 'Mamatova', email: 'f.mamatova@yahoo.com' },
+  { first: 'Golib', last: 'Saidov', email: 'golib.saidov95@gmail.com' },
+  { first: 'Hilola', last: 'Usmanova', email: 'hilola.usmanova@mail.ru' },
+  { first: 'Izzat', last: 'Rahmatov', email: 'izzat_rahmatov@yandex.ru' },
+  { first: 'Jahongir', last: 'Olimov', email: 'j.olimov@inbox.uz' },
+  { first: 'Komila', last: 'Davlatova', email: 'komila.davlatova99@yahoo.com' },
+  { first: 'Laziz', last: 'Shodiyev', email: 'laziz.shodiyev@gmail.com' },
+  { first: 'Mohira', last: 'Yunusova', email: 'mohira_yunusova@mail.ru' },
+  { first: 'Nodir', last: 'Abdullayev', email: 'n.abdullayev@yandex.ru' },
+  { first: 'Oydin', last: 'Karimova', email: 'oydin.karimova93@inbox.uz' },
+  { first: 'Polat', last: 'Toshmatov', email: 'polat.toshmatov@yahoo.com' },
+  { first: 'Qunduz', last: 'Mirzayeva', email: 'qunduz_mirzayeva@gmail.com' },
+  { first: 'Rano', last: 'Ismoilova', email: 'r.ismoilova@mail.ru' },
+  { first: 'Suhrob', last: 'Ergashev', email: 'suhrob.ergashev97@yandex.ru' },
+  { first: 'Tohir', last: 'Nazarov', email: 'tohir.nazarov@inbox.uz' },
+  { first: 'Ulugbek', last: 'Rahimov', email: 'ulugbek_rahimov@yahoo.com' },
+  { first: 'Vasila', last: 'Tursunova', email: 'v.tursunova@gmail.com' },
+  { first: 'Xurshida', last: 'Aliyeva', email: 'xurshida.aliyeva91@mail.ru' },
+  { first: 'Yoqub', last: 'Hasanov', email: 'yoqub.hasanov@yandex.ru' },
+  { first: 'Zilola', last: 'Qurbonova', email: 'zilola_qurbonova@inbox.uz' },
+  { first: 'Anvar', last: 'Sodiqov', email: 'a.sodiqov@yahoo.com' },
+  { first: 'Barno', last: 'Murodova', email: 'barno.murodova95@gmail.com' },
+  { first: 'Davron', last: 'Ismoilov', email: 'davron.ismoilov@mail.ru' },
+  { first: 'Ezoza', last: 'Raximova', email: 'ezoza_raximova@yandex.ru' },
+  { first: 'Farida', last: 'Ganiyeva', email: 'f.ganiyeva@inbox.uz' },
+  { first: 'Gulchehra', last: 'Nurmatova', email: 'gulchehra.nurmatova99@yahoo.com' },
+];
+
+/** Company owners — corporate @company.uz addresses. */
+const RECRUITER_PEOPLE: SeedPerson[] = (
+  [
+    ['Jasur', 'Tursunov'],
+    ['Sevara', 'Abdullayeva'],
+    ['Timur', 'Nazarov'],
+    ['Kamola', 'Ergasheva'],
+    ['Rustam', 'Ismoilov'],
+    ['Farrukh', 'Saidov'],
+    ['Islom', 'Rahimov'],
+    ['Muzaffar', 'Yusupov'],
+    ['Oybek', 'Karimov'],
+    ['Shohruh', 'Umarov'],
+    ['Dilfuza', 'Ahmadova'],
+    ['Azamat', 'Berdiyev'],
+    ['Shahnoza', 'Qodirova'],
+    ['Javlon', 'Mamatov'],
+    ['Nodira', 'Usmanova'],
+    ['Bahodir', 'Xolmatov'],
+    ['Gulbahor', 'Saidova'],
+    ['Akmal', 'Rakhimov'],
+    ['Lola', 'Nazarova'],
+    ['Sardor', 'Aliyev'],
+  ] as const
+).map(([first, last], i) => ({
+  first,
+  last,
+  email: workEmail(first, last, COMPANIES[i].mailDomain),
+}));
+
+const HR_PEOPLE: SeedPerson[] = [
+  { first: 'Nargiza', last: 'Hasanova', email: workEmail('Nargiza', 'Hasanova', COMPANIES[0].mailDomain) },
+  { first: 'Bekzod', last: 'Aliyev', email: workEmail('Bekzod', 'Aliyev', COMPANIES[1].mailDomain) },
+  { first: 'Madina', last: 'Sobirova', email: workEmail('Madina', 'Sobirova', COMPANIES[2].mailDomain) },
+  { first: 'Jamshid', last: 'Qodirov', email: workEmail('Jamshid', 'Qodirov', COMPANIES[5].mailDomain) },
+];
+
+/** Quick-login accounts after seed (Password123! except admin). */
+const DEMO = {
+  admin: {
+    email: (process.env.SUPERADMIN_EMAIL ?? 'sarvar.adminov@jobtalentio.uz').toLowerCase(),
+    password: process.env.SUPERADMIN_PASSWORD ?? 'Admin123!',
+    fullName: 'Sarvar Adminov',
+  },
+  employee: EMPLOYEE_PEOPLE[0],
+  recruiter: RECRUITER_PEOPLE[0],
+};
+
+const PREVIOUS_EMPLOYERS = [
+  'Startup Hub Tashkent',
+  'IT Park Uzbekistan',
+  'Click',
+  'Payme',
+  'Uzum',
+  'Olcha.uz',
+  'EPAM Uzbekistan',
+  'Itransition',
+  'Beeline Uzbekistan',
+  'Ucell',
+  'Kapitalbank',
+  'Asakabank',
+  'Artel Electronics',
+  'Coca-Cola IHM Uzbekistan',
+  'Humans',
+];
+
+const EDUCATION_FIELDS = [
+  'Computer Science',
+  'Software Engineering',
+  'Information Systems',
+  'Economics',
+  'Finance',
+  'Marketing',
+  'Business Administration',
+  'Industrial Engineering',
+  'Law',
+  'Applied Mathematics',
+  'Design',
+  'Communications',
+];
+
+/** ~4 templates per category → even mix when JOB_COUNT is a multiple of length */
+/** Role-only titles — seniority lives on experienceLevel */
 const JOB_TITLES = [
-  { title: 'Senior Full-stack Developer', skills: ['typescript', 'react', 'nestjs', 'postgresql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'Frontend React Engineer', skills: ['react', 'typescript', 'next-js', 'figma'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Backend NestJS Developer', skills: ['nestjs', 'nodejs', 'postgresql', 'redis'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Python Data Analyst', skills: ['python', 'sql', 'data-analysis', 'tableau'], cat: 'it-software', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // IT & Software (4)
+  { title: 'Full-stack Developer', skills: ['typescript', 'react', 'nestjs', 'postgresql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 5 },
   { title: 'DevOps Engineer', skills: ['docker', 'kubernetes', 'aws', 'ci-cd'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Mobile Flutter Developer', skills: ['flutter', 'mobile-development', 'react-native'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'QA Automation Engineer', skills: ['qa-testing', 'cypress', 'selenium'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Product Manager', skills: ['product-management', 'agile', 'scrum'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Java Developer', skills: ['java', 'spring-boot', 'sql'], cat: 'it-software', level: 'JUNIOR' as ExperienceLevel, years: 0 },
+  { title: 'C++ Systems Engineer', skills: ['cplusplus', 'linux', 'problem-solving'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  // Finance (4)
+  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Accountant', skills: ['accounting', '1c', 'excel'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Credit Risk Analyst', skills: ['financial-analysis', 'excel', 'sql'], cat: 'finance', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Banking Associate', skills: ['excel', 'communication', 'customer-support'], cat: 'finance', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Sales & Marketing (4)
   { title: 'Digital Marketing Specialist', skills: ['digital-marketing', 'seo', 'smm'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
   { title: 'Sales Manager', skills: ['sales', 'communication', 'excel'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'SEO Specialist', skills: ['seo', 'google-analytics', 'content-writing'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'SMM Manager', skills: ['smm', 'digital-marketing', 'content-writing'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  // Design (4)
+  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Graphic Designer', skills: ['adobe-photoshop', 'figma', 'ui-ux'], cat: 'design', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Product Designer', skills: ['figma', 'ui-ux', 'product-management'], cat: 'design', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Motion Designer', skills: ['adobe-photoshop', 'figma', 'communication'], cat: 'design', level: 'INTERN' as ExperienceLevel, years: 0 },
+  // HR (4)
   { title: 'HR Recruiter', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Talent Acquisition Partner', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'HR Business Partner', skills: ['hr-management', 'leadership', 'communication'], cat: 'hr', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  { title: 'People Operations Specialist', skills: ['hr-management', 'excel', 'teamwork'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  // Education (4)
+  { title: 'English Teacher (Corporate)', skills: ['english', 'teaching', 'communication'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Curriculum Designer', skills: ['curriculum-design', 'teaching', 'english'], cat: 'education', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Online Course Instructor', skills: ['teaching', 'content-writing', 'communication'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Teaching Assistant', skills: ['teaching', 'uzbek', 'teamwork'], cat: 'education', level: 'JUNIOR' as ExperienceLevel, years: 0 },
+  // Healthcare (4)
+  { title: 'Registered Nurse', skills: ['nursing', 'patient-care', 'communication'], cat: 'healthcare', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Clinical Research Associate', skills: ['clinical-research', 'excel', 'english'], cat: 'healthcare', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Pharmacy Specialist', skills: ['pharmacy', 'patient-care', 'communication'], cat: 'healthcare', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  { title: 'Patient Care Coordinator', skills: ['patient-care', 'customer-support', 'communication'], cat: 'healthcare', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Engineering (4)
+  { title: 'Engineering Project Lead', skills: ['project-management', 'leadership', 'autocad'], cat: 'engineering', level: 'LEAD' as ExperienceLevel, years: 8 },
+  { title: 'Mechanical Design Engineer', skills: ['mechanical-design', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Electrical Engineer', skills: ['electrical-engineering', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Site Engineer', skills: ['autocad', 'excel', 'teamwork'], cat: 'engineering', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Customer Support (4)
   { title: 'Customer Support Lead', skills: ['customer-support', 'communication', 'leadership'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  { title: 'Support Specialist', skills: ['customer-support', 'communication', 'russian'], cat: 'customer-support', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'Technical Support Engineer', skills: ['customer-support', 'problem-solving', 'english'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Call Center Supervisor', skills: ['customer-support', 'leadership', 'communication'], cat: 'customer-support', level: 'SENIOR' as ExperienceLevel, years: 4 },
+  // Logistics (4)
   { title: 'Logistics Coordinator', skills: ['supply-chain', 'excel', 'communication'], cat: 'logistics', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Machine Learning Engineer', skills: ['machine-learning', 'python', 'sql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Junior Java Developer', skills: ['java', 'spring-boot', 'sql'], cat: 'it-software', level: 'JUNIOR' as ExperienceLevel, years: 0 },
-  { title: 'Content Writer', skills: ['content-writing', 'english', 'seo'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Engineering Project Lead', skills: ['project-management', 'leadership', 'excel'], cat: 'engineering', level: 'LEAD' as ExperienceLevel, years: 8 },
+  { title: 'Warehouse Supervisor', skills: ['supply-chain', 'leadership', 'excel'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Supply Chain Analyst', skills: ['supply-chain', 'excel', 'data-analysis'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Fleet Operations Manager', skills: ['supply-chain', 'leadership', 'project-management'], cat: 'logistics', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  // Legal (4)
+  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  { title: 'Compliance Officer', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
+  { title: 'Contract Specialist', skills: ['contract-law', 'excel', 'communication'], cat: 'legal', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Paralegal Assistant', skills: ['legal-research', 'communication', 'english'], cat: 'legal', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  // Hospitality (4)
+  { title: 'Hotel Front Office Manager', skills: ['hospitality-management', 'customer-support', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 3 },
+  { title: 'Restaurant Supervisor', skills: ['food-safety', 'hospitality-management', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 2 },
+  { title: 'Guest Relations Officer', skills: ['hospitality-management', 'communication', 'english'], cat: 'hospitality', level: 'JUNIOR' as ExperienceLevel, years: 1 },
+  { title: 'F&B Operations Lead', skills: ['food-safety', 'leadership', 'hospitality-management'], cat: 'hospitality', level: 'SENIOR' as ExperienceLevel, years: 4 },
 ];
 
 const SCHOOLS = ['TUIT', 'NUUz', 'Westminster International University in Tashkent', 'INHA University in Tashkent', 'Amity University Tashkent', 'Turin Polytechnic University in Tashkent'];
@@ -208,17 +492,20 @@ async function main() {
   console.log('Seeding Job Talentio...');
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
-  // Lookups
-  const cities = await Promise.all(
-    CITIES.map((c) =>
-      prisma.city.upsert({
-        where: { slug: c.slug },
-        update: c,
-        create: c,
-      }),
-    ),
+  // Geo hierarchy (Country → Province → City)
+  const geo = await upsertUzbekistanGeo(prisma);
+  console.log(
+    `Geo: country=${geo.countryId} provinces=${geo.provincesUpserted} cities=${geo.citiesUpserted}`,
   );
-  const cityMap = Object.fromEntries(cities.map((c) => [c.slug, c]));
+  const cityMapRows = await prisma.city.findMany({
+    where: { slug: { in: SEED_CITY_SLUGS } },
+  });
+  const cityMap = Object.fromEntries(cityMapRows.map((c) => [c.slug, c]));
+  const cities = SEED_CITY_SLUGS.map((slug) => {
+    const row = cityMap[slug];
+    if (!row) throw new Error(`Missing seed city slug: ${slug}`);
+    return row;
+  });
 
   const categories = await Promise.all(
     CATEGORIES.map((c) =>
@@ -244,46 +531,106 @@ async function main() {
 
   const skills = await Promise.all(
     SKILLS.map((s) => {
-      const slug = slugify(s.name);
+      const slug = skillSlugifySeed(s.name);
+      const normalizedKey = normalizeSkillKeySeed(s.name);
       return prisma.skill.upsert({
         where: { slug },
-        update: { name: s.name, category: s.category },
-        create: { name: s.name, slug, category: s.category },
+        update: { name: s.name, category: s.category, normalizedKey },
+        create: { name: s.name, slug, category: s.category, normalizedKey },
       });
     }),
   );
   const skillMap = Object.fromEntries(skills.map((s) => [s.slug, s]));
 
+  for (const a of SKILL_ALIASES) {
+    const skill = skillMap[a.skillSlug];
+    if (!skill) continue;
+    const aliasKey = normalizeSkillKeySeed(a.alias);
+    if (!aliasKey || aliasKey === skill.normalizedKey) continue;
+    await prisma.skillAlias.upsert({
+      where: { aliasKey },
+      update: { alias: a.alias, skillId: skill.id },
+      create: { alias: a.alias, aliasKey, skillId: skill.id },
+    });
+  }
+
   const languages = await Promise.all(
     LANGUAGES.map((l) =>
       prisma.language.upsert({
         where: { code: l.code },
-        update: { name: l.name },
-        create: l,
+        update: { name: l.name, normalizedKey: l.code },
+        create: { ...l, normalizedKey: l.code },
       }),
     ),
   );
   const langMap = Object.fromEntries(languages.map((l) => [l.code, l]));
+  for (const [alias, code] of [
+    ['Uzbekcha', 'uz'],
+    ['O\'zbek', 'uz'],
+    ['Русский', 'ru'],
+    ['English language', 'en'],
+  ] as const) {
+    const lang = langMap[code];
+    if (!lang) continue;
+    const aliasKey = alias.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, '');
+    if (!aliasKey) continue;
+    await prisma.languageAlias.upsert({
+      where: { aliasKey },
+      update: { alias, languageId: lang.id },
+      create: { alias, aliasKey, languageId: lang.id },
+    });
+  }
 
   const benefits = await Promise.all(
-    BENEFITS.map((b) =>
-      prisma.benefit.upsert({
+    BENEFITS.map((b) => {
+      const normalizedKey = b.slug.replace(/-/g, '');
+      return prisma.benefit.upsert({
         where: { slug: b.slug },
-        update: b,
-        create: b,
-      }),
-    ),
+        update: { ...b, normalizedKey },
+        create: { ...b, normalizedKey },
+      });
+    }),
   );
+  const benefitMap = Object.fromEntries(benefits.map((b) => [b.slug, b]));
+  for (const [alias, slug] of [
+    ['WFH', 'remote-work'],
+    ['Work from home', 'remote-work'],
+    ['Medical insurance', 'health-insurance'],
+    ['Healthcare', 'health-insurance'],
+    ['Annual leave', 'paid-vacation'],
+  ] as const) {
+    const benefit = benefitMap[slug];
+    if (!benefit) continue;
+    const aliasKey = alias.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    await prisma.benefitAlias.upsert({
+      where: { aliasKey },
+      update: { alias, benefitId: benefit.id },
+      create: { alias, aliasKey, benefitId: benefit.id },
+    });
+  }
+
+  // Remove legacy sequential demo emails from earlier seeds
+  await prisma.user.deleteMany({
+    where: {
+      OR: [
+        { email: { endsWith: '@demo.uz' } },
+        { email: 'admin@jobtalentio.local' },
+      ],
+    },
+  });
 
   // Admin
-  const adminEmail = (process.env.SUPERADMIN_EMAIL ?? 'admin@jobtalentio.local').toLowerCase();
   await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: { role: 'SUPER_ADMIN', passwordHash: await bcrypt.hash(process.env.SUPERADMIN_PASSWORD ?? 'Admin123!', 10) },
+    where: { email: DEMO.admin.email },
+    update: {
+      role: 'SUPER_ADMIN',
+      fullName: DEMO.admin.fullName,
+      passwordHash: await bcrypt.hash(DEMO.admin.password, 10),
+    },
     create: {
-      email: adminEmail,
-      passwordHash: await bcrypt.hash(process.env.SUPERADMIN_PASSWORD ?? 'Admin123!', 10),
-      fullName: 'Super Admin',
+      email: DEMO.admin.email,
+      passwordHash: await bcrypt.hash(DEMO.admin.password, 10),
+      fullName: DEMO.admin.fullName,
       role: 'SUPER_ADMIN',
       emailVerified: true,
       avatarUrl: avatar(1),
@@ -292,38 +639,46 @@ async function main() {
 
   // Companies + recruiters
   const companyRecords = [];
+  const recruiterUsers = [];
   for (let i = 0; i < COMPANIES.length; i++) {
     const c = COMPANIES[i];
-    const email = i === 0 ? 'recruiter@demo.uz' : `recruiter${i + 1}@demo.uz`;
+    const person = RECRUITER_PEOPLE[i];
     const recruiter = await prisma.user.upsert({
-      where: { email },
+      where: { email: person.email },
       update: {
-        fullName: `${FIRST_NAMES[i]} ${LAST_NAMES[i % LAST_NAMES.length]}`,
+        fullName: `${person.first} ${person.last}`,
         avatarUrl: avatar(10 + i),
         role: 'RECRUITER',
         passwordHash,
       },
       create: {
-        email,
+        email: person.email,
         passwordHash,
-        fullName: `${FIRST_NAMES[i]} ${LAST_NAMES[i % LAST_NAMES.length]}`,
+        fullName: `${person.first} ${person.last}`,
         role: 'RECRUITER',
         locale: 'uz',
         emailVerified: true,
         avatarUrl: avatar(10 + i),
       },
     });
+    recruiterUsers.push(recruiter);
 
     // Extra recruiter for some companies
     let extra = null;
-    if (i < 2) {
+    const hrIndex = HR_PEOPLE.findIndex((_, idx) => [0, 1, 2, 5][idx] === i);
+    if (hrIndex >= 0) {
+      const hr = HR_PEOPLE[hrIndex];
       extra = await prisma.user.upsert({
-        where: { email: `hr${i + 1}@demo.uz` },
-        update: { passwordHash, role: 'RECRUITER' },
-        create: {
-          email: `hr${i + 1}@demo.uz`,
+        where: { email: hr.email },
+        update: {
           passwordHash,
-          fullName: `${FIRST_NAMES[20 + i]} HR`,
+          role: 'RECRUITER',
+          fullName: `${hr.first} ${hr.last}`,
+        },
+        create: {
+          email: hr.email,
+          passwordHash,
+          fullName: `${hr.first} ${hr.last}`,
           role: 'RECRUITER',
           emailVerified: true,
           avatarUrl: avatar(20 + i),
@@ -399,42 +754,55 @@ async function main() {
 
   // Employees
   const employeeProfiles = [];
-  for (let i = 0; i < 30; i++) {
-    const email = i === 0 ? 'employee@demo.uz' : `employee${i + 1}@demo.uz`;
+  const employeeUsers = [];
+  for (let i = 0; i < EMPLOYEE_PEOPLE.length; i++) {
+    const person = EMPLOYEE_PEOPLE[i];
     const city = cities[i % cities.length];
-    const skillPick = skills.slice(i % 10, (i % 10) + 5 + (i % 4));
+    const skillStart = (i * 3) % Math.max(1, skills.length - 8);
+    const skillPick = skills.slice(skillStart, skillStart + 4 + (i % 5));
     const user = await prisma.user.upsert({
-      where: { email },
+      where: { email: person.email },
       update: {
         passwordHash,
-        fullName: `${FIRST_NAMES[i]} ${LAST_NAMES[i % LAST_NAMES.length]}`,
+        fullName: `${person.first} ${person.last}`,
         avatarUrl: avatar(30 + (i % 40)),
         role: 'EMPLOYEE',
       },
       create: {
-        email,
+        email: person.email,
         passwordHash,
-        fullName: `${FIRST_NAMES[i]} ${LAST_NAMES[i % LAST_NAMES.length]}`,
+        fullName: `${person.first} ${person.last}`,
         role: 'EMPLOYEE',
-        locale: i % 3 === 0 ? 'ru' : 'uz',
+        locale: (['uz', 'ru', 'en', 'uz'] as const)[i % 4],
         emailVerified: true,
         avatarUrl: avatar(30 + (i % 40)),
       },
     });
+    employeeUsers.push(user);
 
-    const headline = JOB_TITLES[i % JOB_TITLES.length].title.replace('Senior ', '').replace('Junior ', '');
+    const tpl = JOB_TITLES[i % JOB_TITLES.length];
+    const headline = tpl.title;
+    const yearsExp = tpl.years + (i % 3);
+    const summaryVariants = [
+      `${headline} with ${yearsExp}+ years of experience, currently based in ${city.name}. Open to hybrid and remote roles across Uzbekistan.`,
+      `Results-driven ${headline.toLowerCase()} focused on ${tpl.skills.slice(0, 2).join(' & ')}. Previously delivered projects for fintech and e-commerce teams.`,
+      `Bilingual professional (${i % 2 ? 'Uzbek/Russian' : 'Uzbek/English'}) seeking ${headline} opportunities in ${city.name} and beyond.`,
+      `Career switcher into ${tpl.cat.replace('-', ' ')} - strong foundation in ${tpl.skills[0]} and eager to grow inside a product team.`,
+    ];
+    const summary = summaryVariants[i % summaryVariants.length];
+    const visibility = (['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'] as const)[i % 4];
     let profile = await prisma.employeeProfile.findUnique({ where: { userId: user.id } });
     if (!profile) {
       profile = await prisma.employeeProfile.create({
         data: {
           userId: user.id,
           headline,
-          summary: `Experienced professional based in ${city.name}. Passionate about building products and growing career in Uzbekistan tech ecosystem.`,
+          summary,
           cityId: city.id,
-          phone: `+99890${String(1000000 + i).slice(0, 7)}`,
+          phone: `+9989${String(10 + (i % 90)).padStart(2, '0')}${String(1000000 + i * 17).slice(0, 7)}`,
           desiredPosition: headline,
-          desiredSalaryMin: 8_000_000 + i * 500_000,
-          visibility: 'TO_REGISTERED_RECRUITERS',
+          desiredSalaryMin: 6_000_000 + yearsExp * 1_500_000 + (i % 5) * 500_000,
+          visibility,
         },
       });
     } else {
@@ -442,10 +810,11 @@ async function main() {
         where: { id: profile.id },
         data: {
           headline,
-          summary: `Experienced professional based in ${city.name}. Passionate about building products and growing career in Uzbekistan tech ecosystem.`,
+          summary,
           cityId: city.id,
           desiredPosition: headline,
-          desiredSalaryMin: 8_000_000 + i * 500_000,
+          desiredSalaryMin: 6_000_000 + yearsExp * 1_500_000 + (i % 5) * 500_000,
+          visibility,
         },
       });
     }
@@ -469,7 +838,7 @@ async function main() {
         profileId: profile.id,
         companyName: COMPANIES[i % COMPANIES.length].name,
         title: headline,
-        description: 'Delivered features, collaborated with cross-functional teams.',
+        description: `Owned delivery for ${tpl.skills.slice(0, 2).join(' / ')} initiatives and collaborated with cross-functional teams.`,
         cityId: city.id,
         startDate: new Date(2021 - (i % 4), i % 12, 1),
         isCurrent: true,
@@ -479,11 +848,24 @@ async function main() {
       await prisma.workExperience.create({
         data: {
           profileId: profile.id,
-          companyName: 'Startup Hub Tashkent',
-          title: 'Junior Specialist',
+          companyName: PREVIOUS_EMPLOYERS[i % PREVIOUS_EMPLOYERS.length],
+          title: i % 3 === 0 ? 'Specialist' : `Associate ${headline}`,
           cityId: cityMap.tashkent.id,
-          startDate: new Date(2018, 0, 1),
+          startDate: new Date(2017 + (i % 3), 0, 1),
           endDate: new Date(2020, 11, 1),
+          isCurrent: false,
+        },
+      });
+    }
+    if (i % 5 === 0) {
+      await prisma.workExperience.create({
+        data: {
+          profileId: profile.id,
+          companyName: PREVIOUS_EMPLOYERS[(i + 3) % PREVIOUS_EMPLOYERS.length],
+          title: 'Trainee',
+          cityId: cities[(i + 2) % cities.length].id,
+          startDate: new Date(2016, 6, 1),
+          endDate: new Date(2016, 11, 30),
           isCurrent: false,
         },
       });
@@ -496,7 +878,7 @@ async function main() {
         profileId: profile.id,
         school: SCHOOLS[i % SCHOOLS.length],
         degree: (['BACHELOR', 'MASTER', 'BACHELOR', 'VOCATIONAL'] as DegreeLevel[])[i % 4],
-        field: 'Computer Science',
+        field: EDUCATION_FIELDS[i % EDUCATION_FIELDS.length],
         startDate: new Date(2015, 8, 1),
         endDate: new Date(2019, 5, 1),
       },
@@ -540,22 +922,43 @@ async function main() {
     employeeProfiles.push(profile);
   }
 
-  // Jobs
+  // Starter JobTitle catalog (role-only) — populated even before job posts exist
+  const uniqueSeedTitles = [
+    ...new Set([
+      ...JOB_TITLES.map((t) => t.title),
+      'Frontend Developer',
+      'C++ Developer',
+      'Backend Developer',
+      'React Developer',
+    ]),
+  ];
+  for (const name of uniqueSeedTitles) {
+    await resolveJobTitle(prisma, { name });
+  }
+
+  // Jobs — refresh listings on each seed so counts stay predictable
+  await prisma.jobPost.deleteMany({});
   const jobRecords = [];
-  for (let i = 0; i < 40; i++) {
+  // 96 = 2×48 templates → every category twice; cities round-robin all 15
+  const JOB_COUNT = 96;
+  for (let i = 0; i < JOB_COUNT; i++) {
     const tpl = JOB_TITLES[i % JOB_TITLES.length];
     const company = companyRecords[i % companyRecords.length];
     const city = cities[i % cities.length];
-    const isHot = i < 6;
-    const status = i % 15 === 0 ? 'DRAFT' : i % 17 === 0 ? 'CLOSED' : 'PUBLISHED';
+    const isHot = i < 10;
+    const status = i % 14 === 0 ? 'DRAFT' : i % 16 === 0 ? 'CLOSED' : 'PUBLISHED';
     const employmentTypes: EmploymentType[] = ['FULL_TIME', 'FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'];
     const workModes: WorkMode[] = ['ONSITE', 'HYBRID', 'REMOTE', 'HYBRID', 'ONSITE'];
+    // ASCII-only separators — em-dash (U+2014) previously corrupted to "???" in some seed environments
+    const resolvedTitle = await resolveJobTitle(prisma, { name: tpl.title });
+    const title = resolvedTitle.jobTitle.name;
 
     const job = await prisma.jobPost.create({
       data: {
         companyId: company.id,
-        title: tpl.title,
-        description: `We are looking for a ${tpl.title} to join ${company.name}.\n\nResponsibilities:\n- Deliver high-quality work\n- Collaborate with product and design\n- Mentor teammates\n\nRequirements:\n- Strong skills in ${tpl.skills.join(', ')}\n- ${tpl.years}+ years experience preferred\n- Good communication in Uzbek/Russian/English\n\nJoin one of Uzbekistan's growing tech teams!`,
+        jobTitleId: resolvedTitle.jobTitle.id,
+        title,
+        description: `${company.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan and Central Asia.\n\nResponsibilities:\n- Own delivery for ${tpl.skills.slice(0, 2).join(' and ')} workstreams\n- Collaborate with product, design, and operations\n- Improve quality, documentation, and mentoring\n\nRequirements:\n- Hands-on experience with ${tpl.skills.join(', ')}\n- ${tpl.years}+ years relevant experience preferred\n- Communication in Uzbek/Russian/English\n\nBenefits include competitive pay, learning budget, and modern tooling.`,
         cityId: city.id,
         categoryId: catMap[tpl.cat].id,
         employmentType: employmentTypes[i % employmentTypes.length],
@@ -570,6 +973,11 @@ async function main() {
         publishedAt: status === 'PUBLISHED' ? new Date(Date.now() - i * 86_400_000) : null,
         boostWeight: isHot ? 1.2 : 0,
         boostUntil: isHot ? new Date(Date.now() + 14 * 86_400_000) : null,
+        fingerprint: jobFingerprint({
+          title,
+          workMode: workModes[i % workModes.length],
+          cityId: city.id,
+        }),
       },
     });
 
@@ -607,10 +1015,26 @@ async function main() {
     jobRecords.push(job);
   }
 
+  // Job title aliases (Front End ≡ Frontend, CPP ≡ C++, …)
+  for (const row of JOB_TITLE_ALIASES) {
+    const resolved = await resolveJobTitle(prisma, { name: row.canonical });
+    const aliasKey = normalizeJobTitleKey(row.alias);
+    if (!aliasKey || aliasKey === resolved.jobTitle.normalizedKey) continue;
+    await prisma.jobTitleAlias.upsert({
+      where: { aliasKey },
+      update: { alias: row.alias, jobTitleId: resolved.jobTitle.id },
+      create: {
+        alias: row.alias,
+        aliasKey,
+        jobTitleId: resolved.jobTitle.id,
+      },
+    });
+  }
+
   // Applications + matching-ish scores
   const publishedJobs = jobRecords.filter((j) => j.status === 'PUBLISHED');
   let appCount = 0;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 140; i++) {
     const job = publishedJobs[i % publishedJobs.length];
     const profile = employeeProfiles[i % employeeProfiles.length];
     try {
@@ -662,7 +1086,7 @@ async function main() {
   }
 
   // Saved jobs, alerts, follows, views, notifications, chats, reports
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 35; i++) {
     await prisma.savedJob.upsert({
       where: {
         profileId_jobPostId: {
@@ -678,10 +1102,8 @@ async function main() {
     });
   }
 
-  for (let i = 0; i < 10; i++) {
-    const user = await prisma.user.findUnique({
-      where: { email: i === 0 ? 'employee@demo.uz' : `employee${i + 1}@demo.uz` },
-    });
+  for (let i = 0; i < 20; i++) {
+    const user = employeeUsers[i];
     if (!user) continue;
     const alert = await prisma.jobAlert.create({
       data: {
@@ -701,10 +1123,8 @@ async function main() {
     }
   }
 
-  for (let i = 0; i < 20; i++) {
-    const user = await prisma.user.findUnique({
-      where: { email: i === 0 ? 'employee@demo.uz' : `employee${(i % 30) + 1}@demo.uz` },
-    });
+  for (let i = 0; i < 45; i++) {
+    const user = employeeUsers[i % employeeUsers.length];
     if (!user) continue;
     await prisma.companyFollower.upsert({
       where: {
@@ -722,7 +1142,7 @@ async function main() {
   }
 
   // Job views
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 400; i++) {
     await prisma.jobView.create({
       data: {
         jobPostId: publishedJobs[i % publishedJobs.length].id,
@@ -732,9 +1152,9 @@ async function main() {
     });
   }
 
-  // Notifications for demo employee & recruiter
-  const emp = await prisma.user.findUnique({ where: { email: 'employee@demo.uz' } });
-  const rec = await prisma.user.findUnique({ where: { email: 'recruiter@demo.uz' } });
+  // Notifications for primary demo employee & recruiter
+  const emp = employeeUsers[0];
+  const rec = recruiterUsers[0];
   if (emp) {
     await prisma.notification.createMany({
       data: [
@@ -811,9 +1231,12 @@ async function main() {
 
   console.log(`Seed complete:
   - ${cities.length} cities, ${categories.length} categories, ${skills.length} skills
-  - ${companyRecords.length} companies, 30 employees, ${jobRecords.length} jobs
+  - ${companyRecords.length} companies, ${employeeUsers.length} employees, ${jobRecords.length} jobs
   - ~${appCount} applications
-  Demo: admin@jobtalentio.local / recruiter@demo.uz / employee@demo.uz (Password123! for demo users)`);
+  Quick login:
+    Admin     ${DEMO.admin.email} / ${DEMO.admin.password}
+    Recruiter ${DEMO.recruiter.email} / Password123!
+    Employee  ${DEMO.employee.email} / Password123!`);
 }
 
 main()

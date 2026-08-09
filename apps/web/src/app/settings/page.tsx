@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
+import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 
-type Section = 'account' | 'preferences' | 'security';
+type Section = 'account' | 'preferences' | 'privacy' | 'security';
 
 function passwordStrength(pw: string): { score: number; label: string; color: string } {
   let score = 0;
@@ -30,14 +31,15 @@ export default function SettingsPage() {
   const [prefLocale, setPrefLocale] = useState<Locale>('uz');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pwMsg, setPwMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bulkOptedOut, setBulkOptedOut] = useState(false);
+  const [privacyLoading, setPrivacyLoading] = useState(false);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
+  const isEmployee = session?.user.role === 'EMPLOYEE';
   const previewAvatar =
     avatarUrl ||
     (session
@@ -54,8 +56,36 @@ export default function SettingsPage() {
     setFullName(s.user.fullName);
     setAvatarUrl(s.user.avatarUrl || '');
     setPrefLocale((s.user.locale as Locale) || locale);
+    if (s.user.role === 'EMPLOYEE') {
+      api<{ optedOut: boolean }>('/bulk-comms/opt-out')
+        .then((r) => setBulkOptedOut(r.optedOut))
+        .catch(() => undefined);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function savePrivacy(e: React.FormEvent) {
+    e.preventDefault();
+    setPrivacyLoading(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const r = await api<{ optedOut: boolean }>('/bulk-comms/opt-out', {
+        method: 'PATCH',
+        body: JSON.stringify({ optedOut: bulkOptedOut }),
+      });
+      setBulkOptedOut(r.optedOut);
+      setMsg(
+        r.optedOut
+          ? 'You opted out of recruiter bulk messaging'
+          : 'You can receive recruiter bulk messages again',
+      );
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Failed to update privacy');
+    } finally {
+      setPrivacyLoading(false);
+    }
+  }
 
   async function saveAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +100,7 @@ export default function SettingsPage() {
       saveSession(updated);
       setSession(updated);
       setLocale(prefLocale);
-      setMsg('✓ Profile saved');
+      setMsg('Profile saved');
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Failed to save');
     } finally {
@@ -87,7 +117,7 @@ export default function SettingsPage() {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      setPwMsg('✓ Password updated');
+      setPwMsg('Password updated');
       setCurrentPassword('');
       setNewPassword('');
     } catch (error) {
@@ -105,6 +135,7 @@ export default function SettingsPage() {
             [
               ['account', t('account')],
               ['preferences', t('language')],
+              ...(isEmployee ? [['privacy', 'Privacy'] as [Section, string]] : []),
               ['security', t('changePassword')],
             ] as Array<[Section, string]>
           ).map(([k, label]) => (
@@ -139,35 +170,46 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {err && <div className="error" style={{ marginBottom: '1rem' }}>{err}</div>}
-          {msg && <div className="success" style={{ marginBottom: '1rem' }}>{msg}</div>}
-          {pwMsg && <div className="success" style={{ marginBottom: '1rem' }}>{pwMsg}</div>}
+          {err && (
+            <div style={{ marginBottom: '1rem' }}>
+              <FormAlert>{err}</FormAlert>
+            </div>
+          )}
+          {msg && (
+            <div style={{ marginBottom: '1rem' }}>
+              <FormAlert tone="success">{msg}</FormAlert>
+            </div>
+          )}
+          {pwMsg && (
+            <div style={{ marginBottom: '1rem' }}>
+              <FormAlert tone="success">{pwMsg}</FormAlert>
+            </div>
+          )}
 
           {section === 'account' && (
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('account')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                Update how you appear across Job Talentio.
+                {t('updateProfileHint')}
               </p>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form onSubmit={saveAccount} className="form-stack">
-                <label>
-                  {t('fullName')}
-                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} />
-                </label>
-                <label>
-                  Avatar URL
+                <FormField label={t('fullName')} required>
+                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} minLength={2} />
+                </FormField>
+                <FormField
+                  label={t('avatarUrl')}
+                  hint="Preview updates live above. Leave empty to use initials avatar."
+                >
                   <input
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
                     placeholder="https://…"
                     type="url"
                   />
-                </label>
-                <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>
-                  Preview updates live above. Leave empty to use initials avatar.
-                </p>
+                </FormField>
                 <button type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : t('save')}
+                  {saving ? t('saving') : t('save')}
                 </button>
               </form>
             </div>
@@ -177,8 +219,9 @@ export default function SettingsPage() {
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('language')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                Preferred language for the interface and alerts.
+                {t('languagePreference')}
               </p>
+              <p className="required-note">{t('languageApplied')}</p>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -186,16 +229,60 @@ export default function SettingsPage() {
                 }}
                 className="form-stack"
               >
-                <label>
-                  {t('language')}
-                  <select value={prefLocale} onChange={(e) => setPrefLocale(e.target.value as Locale)}>
+                <FormField label={t('language')} required>
+                  <select
+                    value={prefLocale}
+                    onChange={(e) => {
+                      const next = e.target.value as Locale;
+                      setPrefLocale(next);
+                      setLocale(next);
+                    }}
+                  >
                     <option value="uz">O&apos;zbekcha</option>
                     <option value="ru">Русский</option>
                     <option value="en">English</option>
                   </select>
-                </label>
+                </FormField>
                 <button type="submit" disabled={saving}>
-                  {saving ? 'Saving…' : t('save')}
+                  {saving ? t('saving') : t('save')}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {section === 'privacy' && isEmployee && (
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Privacy & messaging</h3>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Under GDPR you can opt out of recruiter bulk / mass messages. You will still receive
+                application status updates and one-to-one chat if you message a recruiter.
+              </p>
+              <form onSubmit={savePrivacy} className="form-stack">
+                <label
+                  style={{
+                    display: 'flex',
+                    gap: '0.65rem',
+                    alignItems: 'flex-start',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={bulkOptedOut}
+                    onChange={(e) => setBulkOptedOut(e.target.checked)}
+                    style={{ marginTop: '0.25rem' }}
+                  />
+                  <span>
+                    <strong>Opt out of bulk recruiter messaging</strong>
+                    <br />
+                    <span className="muted" style={{ fontSize: '0.88rem' }}>
+                      Recruiters cannot send mass messages to you from the pipeline. Pipeline stage
+                      changes may still notify you.
+                    </span>
+                  </span>
+                </label>
+                <button type="submit" disabled={privacyLoading}>
+                  {privacyLoading ? t('saving') : t('save')}
                 </button>
               </form>
             </div>
@@ -207,41 +294,35 @@ export default function SettingsPage() {
               <p className="muted" style={{ marginTop: 0 }}>
                 Use at least 8 characters with mixed case and a number.
               </p>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form onSubmit={changePassword} className="form-stack">
                 <label>
-                  {t('currentPassword')}
-                  <div className="pw-field">
-                    <input
-                      type={showCurrent ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      required
-                    />
-                    <button type="button" onClick={() => setShowCurrent((v) => !v)}>
-                      {showCurrent ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
+                  <LabelText required>{t('currentPassword')}</LabelText>
+                  <PasswordInput
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                    aria-required="true"
+                    autoComplete="current-password"
+                  />
                 </label>
                 <label>
-                  {t('newPassword')}
-                  <div className="pw-field">
-                    <input
-                      type={showNew ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                    <button type="button" onClick={() => setShowNew((v) => !v)}>
-                      {showNew ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
+                  <LabelText required>{t('newPassword')}</LabelText>
+                  <PasswordInput
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    aria-required="true"
+                    minLength={8}
+                    autoComplete="new-password"
+                    aria-describedby={newPassword ? 'pw-strength' : undefined}
+                  />
                   {newPassword && (
                     <>
-                      <div className="pw-strength">
+                      <div className="pw-strength" aria-hidden="true">
                         <span style={{ width: `${strength.score}%`, background: strength.color }} />
                       </div>
-                      <span className="muted" style={{ fontSize: '0.8rem' }}>
+                      <span id="pw-strength" className="muted" style={{ fontSize: '0.8rem' }}>
                         Strength: {strength.label}
                       </span>
                     </>

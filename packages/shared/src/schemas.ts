@@ -1,22 +1,65 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8).max(128),
-  fullName: z.string().min(2).max(120),
-  role: z.enum(['EMPLOYEE', 'RECRUITER']),
-  locale: z.enum(['uz', 'ru', 'en']).default('uz'),
-  acceptTerms: z.literal(true),
-});
+export const registerSchema = z
+  .object({
+    email: z.string().trim().email(),
+    password: z.string().min(8).max(128),
+    fullName: z.string().trim().min(2).max(120),
+    role: z.enum(['EMPLOYEE', 'RECRUITER']),
+    locale: z.enum(['uz', 'ru', 'en']).default('uz'),
+    acceptTerms: z
+      .boolean()
+      .refine((v) => v === true, { message: 'You must accept the terms to create an account' }),
+    companyName: z.string().trim().min(2).max(160).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'RECRUITER') {
+      const name = data.companyName?.trim() ?? '';
+      if (name.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['companyName'],
+          message: 'Company name is required for recruiter accounts',
+        });
+      }
+    }
+  });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().trim().email(),
+  password: z.string().min(1, 'Password is required'),
+});
+
+/** Google Identity Services ID-token sign-in. role/companyName only needed for first sign-in. */
+export const googleOAuthSchema = z
+  .object({
+    idToken: z.string().min(20),
+    role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
+    companyName: z.string().trim().min(2).max(160).optional(),
+    locale: z.enum(['uz', 'ru', 'en']).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'RECRUITER' && (data.companyName?.trim() ?? '').length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['companyName'],
+        message: 'Company name is required for recruiter accounts',
+      });
+    }
+  });
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(20).max(200),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().trim().email(),
 });
 
 export const devLoginSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['EMPLOYEE', 'RECRUITER', 'SUPER_ADMIN']).optional(),
+  // SUPER_ADMIN must never be mintable via dev-login
+  role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
 });
 
 export const companySchema = z.object({
@@ -32,6 +75,7 @@ export const companySchema = z.object({
 
 export const jobPostSchema = z.object({
   title: z.string().min(3).max(200),
+  jobTitleSlug: z.string().max(120).optional(),
   description: z.string().min(20).max(20000),
   citySlug: z.string().max(120).optional(),
   categorySlug: z.string().max(120).optional(),
@@ -50,15 +94,29 @@ export const jobPostSchema = z.object({
     .nullable(),
   skills: z
     .array(
-      z.object({
-        slug: z.string().min(1).max(80),
-        isRequired: z.boolean().optional().default(true),
-        weight: z.number().min(0.1).max(5).optional().default(1),
-      }),
+      z
+        .object({
+          slug: z.string().min(1).max(80).optional(),
+          name: z.string().min(1).max(80).optional(),
+          isRequired: z.boolean().optional().default(true),
+          weight: z.number().min(0.1).max(5).optional().default(1),
+        })
+        .refine((s) => Boolean(s.slug || s.name), { message: 'slug or name required' }),
     )
     .max(30)
     .default([]),
   benefitSlugs: z.array(z.string()).max(20).default([]),
+  benefits: z
+    .array(
+      z
+        .object({
+          slug: z.string().min(1).max(80).optional(),
+          name: z.string().min(1).max(80).optional(),
+        })
+        .refine((b) => Boolean(b.slug || b.name), { message: 'slug or name required' }),
+    )
+    .max(20)
+    .optional(),
   locale: z.enum(['uz', 'ru', 'en']).default('uz'),
 });
 
@@ -67,6 +125,9 @@ export const jobSearchSchema = z.object({
   city: z.string().optional(), // slug or comma-separated slugs
   category: z.string().optional(),
   company: z.string().optional(),
+  companySlug: z.string().optional(), // exact company slug (comma-separated ok)
+  /** Canonical JobTitle slug (comma-separated ok) */
+  jobTitle: z.string().optional(),
   employmentType: z.string().optional(),
   workMode: z.string().optional(),
   experienceLevel: z.string().optional(),
@@ -85,7 +146,8 @@ export const jobSearchSchema = z.object({
     .enum(['relevance', 'newest', 'salary_high', 'salary_low', 'experience', 'match'])
     .default('relevance'),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  /** Keep in sync with web jobs page DEFAULT_LIMIT (12). */
+  limit: z.coerce.number().int().min(1).max(50).default(12),
 });
 
 export const candidateSearchSchema = z.object({
@@ -104,7 +166,8 @@ export const candidateSearchSchema = z.object({
   matchJobId: z.string().optional(),
   sort: z.enum(['relevance', 'newest', 'match']).default('relevance'),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  /** Keep in sync with recruiter Find talent default page size (12). */
+  limit: z.coerce.number().int().min(1).max(50).default(12),
 });
 
 export const applicationStatusSchema = z.object({
@@ -122,6 +185,7 @@ export const applicationStatusSchema = z.object({
 
 export const applySchema = z.object({
   coverLetter: z.string().max(5000).optional(),
+  resumeId: z.string().min(1).optional(),
   answers: z
     .array(
       z.object({
@@ -163,6 +227,10 @@ export const skillSchema = z.object({
   level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).optional(),
 });
 
+export const skillLevelUpdateSchema = z.object({
+  level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']),
+});
+
 export const experienceSchema = z.object({
   companyName: z.string().min(1).max(160),
   title: z.string().min(1).max(160),
@@ -196,6 +264,10 @@ export const languageSchema = z.object({
   level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']),
 });
 
+export const languageLevelUpdateSchema = z.object({
+  level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']),
+});
+
 export const jobAlertSchema = z.object({
   name: z.string().min(1).max(120),
   query: z.string().max(200).optional(),
@@ -220,6 +292,57 @@ export const resumeImportSchema = z.object({
   educationIndexes: z.array(z.number().int().min(0)).max(10).default([]),
   languageIndexes: z.array(z.number().int().min(0)).max(15).default([]),
 });
+
+export const resumeTemplateKeys = ['classic', 'modern', 'compact'] as const;
+export type ResumeTemplateKey = (typeof resumeTemplateKeys)[number];
+
+export const resumeInclusionSectionsSchema = z.object({
+  summary: z.boolean().default(true),
+  skills: z.boolean().default(true),
+  experience: z.boolean().default(true),
+  education: z.boolean().default(true),
+  languages: z.boolean().default(true),
+  certifications: z.boolean().default(true),
+  phone: z.boolean().default(true),
+  email: z.boolean().default(true),
+});
+
+export const resumeInclusionSchema = z.object({
+  sections: resumeInclusionSectionsSchema.default({}),
+  experienceIds: z.array(z.string()).max(50).nullable().optional(),
+  educationIds: z.array(z.string()).max(30).nullable().optional(),
+  skillIds: z.array(z.string()).max(80).nullable().optional(),
+  languageIds: z.array(z.string()).max(30).nullable().optional(),
+  certificationIds: z.array(z.string()).max(40).nullable().optional(),
+});
+
+export const resumeBuilderSettingsSchema = z.object({
+  title: z.string().min(1).max(160).optional(),
+  templateKey: z.enum(resumeTemplateKeys).optional(),
+  themeAccent: z.string().max(32).optional().nullable(),
+  inclusion: resumeInclusionSchema.optional(),
+  isPrimary: z.boolean().optional(),
+});
+
+export const DEFAULT_RESUME_INCLUSION = {
+  sections: {
+    summary: true,
+    skills: true,
+    experience: true,
+    education: true,
+    languages: true,
+    certifications: true,
+    phone: true,
+    email: true,
+  },
+  experienceIds: null as string[] | null,
+  educationIds: null as string[] | null,
+  skillIds: null as string[] | null,
+  languageIds: null as string[] | null,
+  certificationIds: null as string[] | null,
+};
+
+export type ResumeInclusion = z.infer<typeof resumeInclusionSchema>;
 
 export const jobQuestionSchema = z.object({
   question: z.string().min(3).max(500),
@@ -251,4 +374,50 @@ export const reportSchema = z.object({
   entityType: z.enum(['JOB_POST', 'USER', 'COMPANY', 'CHAT_MESSAGE']),
   entityId: z.string().min(1),
   reason: z.string().min(5).max(2000),
+});
+
+const applicationStatusEnum = z.enum([
+  'NEW',
+  'IN_REVIEW',
+  'INTERVIEW',
+  'OFFER',
+  'HIRED',
+  'REJECTED',
+  'WITHDRAWN',
+]);
+
+export const messageTemplateSchema = z.object({
+  companyId: z.string().min(1),
+  name: z.string().trim().min(2).max(120),
+  body: z.string().trim().min(1).max(5000),
+});
+
+export const messageTemplateUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  body: z.string().trim().min(1).max(5000).optional(),
+});
+
+/** Bulk move and/or message applicants in one pipeline stage. */
+export const bulkCampaignSchema = z
+  .object({
+    companyId: z.string().min(1),
+    jobPostId: z.string().min(1),
+    applicationIds: z.array(z.string().min(1)).min(1).max(50),
+    fromStatus: applicationStatusEnum.optional(),
+    toStatus: applicationStatusEnum.optional(),
+    templateId: z.string().min(1).optional(),
+    messageBody: z.string().trim().min(1).max(5000).optional(),
+    note: z.string().max(2000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.toStatus && !data.templateId && !data.messageBody) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide toStatus and/or a message (templateId or messageBody)',
+      });
+    }
+  });
+
+export const bulkCommsOptOutSchema = z.object({
+  optedOut: z.boolean(),
 });

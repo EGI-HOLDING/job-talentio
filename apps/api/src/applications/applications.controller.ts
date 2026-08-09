@@ -17,13 +17,25 @@ export class ApplicationsController {
     @Body() body: unknown,
   ) {
     const data = parseDto(applySchema, body ?? {});
-    return this.applications.apply(user, jobId, data.coverLetter, data.answers);
+    return this.applications.apply(
+      user,
+      jobId,
+      data.coverLetter,
+      data.answers,
+      data.resumeId,
+    );
   }
 
   @Get('mine')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   mine(@CurrentUser() user: AuthUser) {
     return this.applications.myApplications(user);
+  }
+
+  @Get('mine/jobs/:jobId')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  mineForJob(@Param('jobId') jobId: string, @CurrentUser() user: AuthUser) {
+    return this.applications.getMyApplicationForJob(user, jobId);
   }
 
   @Get('jobs/:jobId')

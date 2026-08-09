@@ -5,8 +5,17 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
+import { FormAlert, LabelText } from '@/components/ui/Field';
+import { NumberInput } from '@/components/ui/NumberInput';
+import { SkillCombobox } from '@/components/ui/SkillCombobox';
+import { LookupCombobox } from '@/components/ui/LookupCombobox';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
+import { MatchRing } from '@/components/ui/MatchRing';
+import { categoryIconLabel } from '@/lib/icons';
+import { sanitizeMojibake } from '@/lib/text';
+import { useI18n } from '@/lib/i18n';
 
-type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile' | 'career';
+type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
 
 function monthsBetween(start: string | Date, end?: string | Date | null) {
   const a = new Date(start);
@@ -21,6 +30,13 @@ function formatDuration(start: string, end?: string | null, isCurrent?: boolean)
   if (y && m) return `${y}y ${m}mo`;
   if (y) return `${y}y`;
   return `${m || 1}mo`;
+}
+
+function dateInputValue(d?: string | Date | null) {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toISOString().slice(0, 10);
 }
 
 function completeness(profile: any) {
@@ -39,8 +55,11 @@ function completeness(profile: any) {
 }
 
 const LEVEL_ORDER = ['EXPERT', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'] as const;
+const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] as const;
+const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
 
 export default function EmployeeDashboard() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('overview');
   const [profile, setProfile] = useState<any>(null);
   const [apps, setApps] = useState<any[]>([]);
@@ -53,9 +72,23 @@ export default function EmployeeDashboard() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [draftAlertSkills, setDraftAlertSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
+
+  const editingExpId = openForm?.startsWith('edit-exp:') ? openForm.slice('edit-exp:'.length) : null;
+  const editingEduId = openForm?.startsWith('edit-edu:') ? openForm.slice('edit-edu:'.length) : null;
+  const editingCertId = openForm?.startsWith('edit-cert:') ? openForm.slice('edit-cert:'.length) : null;
+  const editingExp = editingExpId
+    ? (profile?.experiences || []).find((x: any) => x.id === editingExpId)
+    : null;
+  const editingEdu = editingEduId
+    ? (profile?.educations || []).find((x: any) => x.id === editingEduId)
+    : null;
+  const editingCert = editingCertId
+    ? (profile?.certifications || []).find((x: any) => x.id === editingCertId)
+    : null;
 
   async function load() {
     const session = getSession();
@@ -96,6 +129,8 @@ export default function EmployeeDashboard() {
         headline: fd.get('headline'),
         summary: fd.get('summary'),
         citySlug: fd.get('citySlug') || null,
+        phone: fd.get('phone') || undefined,
+        visibility: fd.get('visibility') || undefined,
         desiredPosition: fd.get('desiredPosition'),
         desiredSalaryMin: fd.get('desiredSalaryMin')
           ? Number(fd.get('desiredSalaryMin'))
@@ -106,12 +141,40 @@ export default function EmployeeDashboard() {
     await load();
   }
 
-  async function addSkill(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  async function addSkillPick(skill: {
+    slug: string;
+    name: string;
+    isNew?: boolean;
+    level?: string;
+  }) {
     await api('/profiles/me/skills', {
       method: 'POST',
-      body: JSON.stringify({ slug: fd.get('slug'), level: fd.get('level') }),
+      body: JSON.stringify(
+        skill.slug
+          ? { slug: skill.slug, level: skill.level || 'INTERMEDIATE' }
+          : { name: skill.name, level: skill.level || 'INTERMEDIATE' },
+      ),
+    });
+    setMsg(
+      skill.isNew
+        ? `Skill “${skill.name}” resolved and saved`
+        : `Skill “${skill.name}” added`,
+    );
+    await load();
+  }
+
+  async function updateSkillLevel(id: string, level: string) {
+    await api(`/profiles/me/skills/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ level }),
+    });
+    await load();
+  }
+
+  async function updateLanguageLevel(id: string, level: string) {
+    await api(`/profiles/me/languages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ level }),
     });
     await load();
   }
@@ -121,86 +184,114 @@ export default function EmployeeDashboard() {
     await load();
   }
 
-  async function addExperience(e: FormEvent<HTMLFormElement>) {
+  async function saveExperience(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/experiences', {
-      method: 'POST',
-      body: JSON.stringify({
-        companyName: fd.get('companyName'),
-        title: fd.get('title'),
-        description: fd.get('description') || undefined,
-        citySlug: fd.get('citySlug') || undefined,
-        startDate: fd.get('startDate'),
-        endDate: fd.get('endDate') || null,
-        isCurrent: fd.get('isCurrent') === 'on',
-      }),
-    });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Experience added');
+    const body = {
+      companyName: fd.get('companyName'),
+      title: fd.get('title'),
+      description: fd.get('description') || undefined,
+      citySlug: fd.get('citySlug') || undefined,
+      startDate: fd.get('startDate'),
+      endDate: fd.get('endDate') || null,
+      isCurrent: fd.get('isCurrent') === 'on',
+    };
+    if (editingExpId) {
+      await api(`/profiles/me/experiences/${editingExpId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      setMsg('Experience updated');
+    } else {
+      await api('/profiles/me/experiences', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setMsg('Experience added');
+    }
+    setOpenForm(null);
     await load();
   }
 
-  async function addEducation(e: FormEvent<HTMLFormElement>) {
+  async function saveEducation(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/educations', {
-      method: 'POST',
-      body: JSON.stringify({
-        school: fd.get('school'),
-        degree: fd.get('degree') || undefined,
-        field: fd.get('field') || undefined,
-        startDate: fd.get('startDate') || null,
-        endDate: fd.get('endDate') || null,
-      }),
-    });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Education added');
+    const body = {
+      school: fd.get('school'),
+      degree: fd.get('degree') || undefined,
+      field: fd.get('field') || undefined,
+      startDate: fd.get('startDate') || null,
+      endDate: fd.get('endDate') || null,
+    };
+    if (editingEduId) {
+      await api(`/profiles/me/educations/${editingEduId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      setMsg('Education updated');
+    } else {
+      await api('/profiles/me/educations', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setMsg('Education added');
+    }
+    setOpenForm(null);
     await load();
   }
 
-  async function addCertification(e: FormEvent<HTMLFormElement>) {
+  async function saveCertification(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/certifications', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: fd.get('name'),
-        issuer: fd.get('issuer') || undefined,
-        issuedAt: fd.get('issuedAt') || null,
-        credentialUrl: fd.get('credentialUrl') || '',
-      }),
-    });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Certification added');
+    const body = {
+      name: fd.get('name'),
+      issuer: fd.get('issuer') || undefined,
+      issuedAt: fd.get('issuedAt') || null,
+      expiresAt: fd.get('expiresAt') || null,
+      credentialUrl: fd.get('credentialUrl') || '',
+    };
+    if (editingCertId) {
+      await api(`/profiles/me/certifications/${editingCertId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      setMsg('Certification updated');
+    } else {
+      await api('/profiles/me/certifications', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setMsg('Certification added');
+    }
+    setOpenForm(null);
     await load();
   }
 
-  async function addLanguage(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  async function addLanguagePick(item: {
+    slug: string;
+    name: string;
+    code?: string;
+    isNew?: boolean;
+    level?: string;
+  }) {
     await api('/profiles/me/languages', {
       method: 'POST',
-      body: JSON.stringify({ code: fd.get('code'), level: fd.get('level') }),
+      body: JSON.stringify(
+        item.code || item.slug
+          ? { code: item.code || item.slug, level: item.level || 'B1' }
+          : { name: item.name, level: item.level || 'B1' },
+      ),
     });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Language added');
+    setMsg(item.isNew ? `Language “${item.name}” resolved and saved` : `Language “${item.name}” added`);
     await load();
   }
 
-  async function addResume(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    await api('/profiles/me/resumes', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: fd.get('title'),
-        content: fd.get('content') || undefined,
-        isPrimary: fd.get('isPrimary') === 'on',
-      }),
+  async function setPrimaryResume(id: string) {
+    await api(`/profiles/me/resumes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPrimary: true }),
     });
-    (e.target as HTMLFormElement).reset();
-    setMsg('Resume created');
+    setMsg('Primary resume updated');
     await load();
   }
 
@@ -269,13 +360,11 @@ export default function EmployeeDashboard() {
         name: fd.get('name'),
         query: fd.get('query'),
         citySlug: fd.get('citySlug') || undefined,
-        skillSlugs: String(fd.get('skills') || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        skillSlugs: draftAlertSkills.map((s) => s.slug).filter(Boolean),
         frequency: fd.get('frequency'),
       }),
     });
+    setDraftAlertSkills([]);
     await load();
   }
 
@@ -290,7 +379,11 @@ export default function EmployeeDashboard() {
     return map;
   }, [profile]);
 
-  if (!profile && !error) return <div className="shell" style={{ padding: '2rem' }}>Loading…</div>;
+  const showExpForm = openForm === 'exp' || Boolean(editingExpId);
+  const showEduForm = openForm === 'edu' || Boolean(editingEduId);
+  const showCertForm = openForm === 'cert' || Boolean(editingCertId);
+
+  if (!profile && !error) return <DashboardSkeleton />;
 
   return (
     <div className="shell dash-grid">
@@ -302,7 +395,7 @@ export default function EmployeeDashboard() {
           onImported={async () => {
             setCvReview(null);
             setMsg('Selected CV data imported into your profile');
-            setTab('career');
+            setTab('profile');
             await load();
           }}
         />
@@ -316,7 +409,6 @@ export default function EmployeeDashboard() {
             ['saved', 'Saved jobs'],
             ['alerts', 'Job alerts'],
             ['profile', 'Profile'],
-            ['career', 'Career history'],
           ] as Array<[Tab, string]>
         ).map(([k, label]) => (
           <button key={k} type="button" className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
@@ -326,8 +418,8 @@ export default function EmployeeDashboard() {
       </aside>
 
       <section>
-        {error && <div className="error">{error}</div>}
-        {msg && <div className="success">{msg}</div>}
+        {error && <FormAlert>{error}</FormAlert>}
+        {msg && <FormAlert tone="success">{msg}</FormAlert>}
 
         {tab === 'overview' && (
           <div>
@@ -352,7 +444,7 @@ export default function EmployeeDashboard() {
                         key={m.label}
                         type="button"
                         className="chip"
-                        onClick={() => setTab(m.label.includes('resume') || m.label.includes('experience') || m.label.includes('education') || m.label.includes('language') ? 'career' : 'profile')}
+                        onClick={() => setTab('profile')}
                       >
                         + {m.label}
                       </button>
@@ -372,7 +464,7 @@ export default function EmployeeDashboard() {
                 />
                 <div>
                   <h2 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>{profile?.user?.fullName}</h2>
-                  <p className="muted" style={{ margin: '0.25rem 0' }}>{profile?.headline}</p>
+                  <p className="muted" style={{ margin: '0.25rem 0' }}>{sanitizeMojibake(profile?.headline)}</p>
                   <p className="muted" style={{ margin: 0 }}>{profile?.city?.name}</p>
                 </div>
               </div>
@@ -399,20 +491,29 @@ export default function EmployeeDashboard() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   className="company-logo"
-                  src={item.job.company?.logoUrl || ''}
+                  src={
+                    item.job.company?.logoUrl ||
+                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(item.job.company?.name || 'Co')}`
+                  }
                   alt=""
                 />
                 <div>
-                  <h3>{item.job.title}</h3>
+                  <h3>{sanitizeMojibake(item.job.title)}</h3>
                   <div className="job-meta">
                     <span>{item.job.company?.name}</span>
                     <span>{jobLocationLabel(item.job)}</span>
+                    {item.job.category && (
+                      <span>
+                        {categoryIconLabel(item.job.category.slug, item.job.category.icon)}
+                        {item.job.category.name}
+                      </span>
+                    )}
                   </div>
                   <div className="match-bar">
                     <span style={{ width: `${item.matchScore}%` }} />
                   </div>
                 </div>
-                <div className="match-ring">{item.matchScore}%</div>
+                <MatchRing score={item.matchScore} />
               </Link>
             ))}
             {!recommended.length && <p className="muted">Add skills to your profile to get recommendations.</p>}
@@ -427,7 +528,7 @@ export default function EmployeeDashboard() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
                   <div>
                     <Link href={`/jobs/${a.jobPost.id}`} style={{ fontWeight: 700, color: 'var(--accent)' }}>
-                      {a.jobPost.title}
+                      {sanitizeMojibake(a.jobPost.title)}
                     </Link>
                     <p className="muted" style={{ margin: '0.25rem 0' }}>
                       {a.jobPost.company?.name} · {a.status}
@@ -442,15 +543,15 @@ export default function EmployeeDashboard() {
                         Interview {new Date(iv.scheduledAt).toLocaleString()}
                       </div>
                     ))}
-                    {(() => {
-                      const members = a.jobPost.company?.members || [];
-                      const rec = members.find((m: any) => m.role === 'OWNER') || members[0];
-                      return rec ? (
-                        <Link href={`/messages?peer=${rec.userId}&job=${a.jobPost.id}`} className="chip" style={{ fontSize: '0.78rem' }}>
-                          💬 Chat with recruiter
-                        </Link>
-                      ) : null;
-                    })()}
+                    {a.jobPost.company?.chatPeerUserId ? (
+                      <Link
+                        href={`/messages?peer=${a.jobPost.company.chatPeerUserId}&job=${a.jobPost.id}`}
+                        className="chip"
+                        style={{ fontSize: '0.78rem' }}
+                      >
+                        Chat with recruiter
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -486,17 +587,18 @@ export default function EmployeeDashboard() {
           <div className="grid-2">
             <div className="card">
               <h3>Create alert</h3>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={createAlert}>
                 <label>
-                  Name
+                  <LabelText required>Name</LabelText>
                   <input name="name" required />
                 </label>
                 <label>
-                  Keywords
+                  <LabelText>Keywords</LabelText>
                   <input name="query" />
                 </label>
                 <label>
-                  City
+                  <LabelText>City</LabelText>
                   <select name="citySlug">
                     <option value="">Any</option>
                     {cities.map((c) => (
@@ -506,12 +608,41 @@ export default function EmployeeDashboard() {
                     ))}
                   </select>
                 </label>
+                <div>
+                  <LabelText>Skills</LabelText>
+                  <div className="chips" style={{ margin: '0.4rem 0' }}>
+                    {draftAlertSkills.map((s) => (
+                      <span key={s.slug} className="badge">
+                        {s.name}
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ marginLeft: 6, padding: 0 }}
+                          onClick={() =>
+                            setDraftAlertSkills((prev) => prev.filter((x) => x.slug !== s.slug))
+                          }
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <SkillCombobox
+                    levelSelect={false}
+                    allowCreate={false}
+                    submitLabel="Add skill to alert"
+                    onPick={(skill) => {
+                      if (!skill.slug) return;
+                      setDraftAlertSkills((prev) =>
+                        prev.some((p) => p.slug === skill.slug)
+                          ? prev
+                          : [...prev, { slug: skill.slug, name: skill.name }],
+                      );
+                    }}
+                  />
+                </div>
                 <label>
-                  Skill slugs (comma)
-                  <input name="skills" placeholder="typescript,react" />
-                </label>
-                <label>
-                  Frequency
+                  <LabelText>Frequency</LabelText>
                   <select name="frequency" defaultValue="DAILY">
                     <option value="DAILY">Daily</option>
                     <option value="WEEKLY">Weekly</option>
@@ -534,20 +665,38 @@ export default function EmployeeDashboard() {
         )}
 
         {tab === 'profile' && profile && (
-          <div className="grid-2">
-            <div className="card">
-              <h3>Edit profile</h3>
-              <form className="form-stack" onSubmit={updateProfile}>
+          <div className="career-page profile-page">
+            <div className="card profile-block">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Basics</h2>
+              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                How recruiters see you at a glance.
+              </p>
+              <p className="required-note">{t('requiredFieldsNote')}</p>
+              <form className="form-stack" onSubmit={updateProfile} key={`profile-${profile.updatedAt || profile.id}`}>
                 <label>
-                  Headline
-                  <input name="headline" defaultValue={profile.headline || ''} />
+                  <LabelText>Headline</LabelText>
+                  <input name="headline" defaultValue={sanitizeMojibake(profile.headline) || ''} />
                 </label>
                 <label>
-                  Summary
-                  <textarea name="summary" rows={4} defaultValue={profile.summary || ''} />
+                  <LabelText>Summary</LabelText>
+                  <textarea name="summary" rows={4} defaultValue={sanitizeMojibake(profile.summary) || ''} />
                 </label>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>Phone</LabelText>
+                    <input name="phone" type="tel" defaultValue={profile.phone || ''} placeholder="+998…" />
+                  </label>
+                  <label>
+                    <LabelText>Visibility</LabelText>
+                    <select name="visibility" defaultValue={profile.visibility || 'TO_REGISTERED_RECRUITERS'}>
+                      <option value="PUBLIC">Public</option>
+                      <option value="TO_REGISTERED_RECRUITERS">Visible to registered recruiters</option>
+                      <option value="PRIVATE">Private</option>
+                    </select>
+                  </label>
+                </div>
                 <label>
-                  City
+                  <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={profile.city?.slug || ''}>
                     <option value="">—</option>
                     {cities.map((c) => (
@@ -557,83 +706,56 @@ export default function EmployeeDashboard() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  Desired position
-                  <input name="desiredPosition" defaultValue={profile.desiredPosition || ''} />
-                </label>
-                <label>
-                  Desired salary (UZS)
-                  <input
-                    name="desiredSalaryMin"
-                    type="number"
-                    defaultValue={profile.desiredSalaryMin || ''}
-                  />
-                </label>
-                <button type="submit">Save</button>
-              </form>
-            </div>
-            <div className="card">
-              <h3>Skills</h3>
-              <div className="chips" style={{ margin: '0.75rem 0' }}>
-                {(profile.skills || []).map((s: any) => (
-                  <span key={s.id} className="badge">
-                    {s.skill?.name || s.name} · {s.level}
-                    <button
-                      type="button"
-                      className="ghost"
-                      style={{ marginLeft: '0.35rem', padding: 0 }}
-                      onClick={() => removeItem('skills', s.id)}
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <form className="form-stack" onSubmit={addSkill}>
-                <label>
-                  Skill
-                  <select name="slug" required>
-                    {skillsMeta.map((s) => (
-                      <option key={s.slug} value={s.slug}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Level
-                  <select name="level" defaultValue="INTERMEDIATE">
-                    <option>BEGINNER</option>
-                    <option>INTERMEDIATE</option>
-                    <option>ADVANCED</option>
-                    <option>EXPERT</option>
-                  </select>
-                </label>
-                <button type="submit">Add skill</button>
-              </form>
-            </div>
-          </div>
-        )}
-        {tab === 'career' && profile && (
-          <div className="career-page">
-            <div className="card" style={{ marginBottom: '1rem' }}>
-              <div className="jobs-toolbar" style={{ marginBottom: 0 }}>
-                <div>
-                  <h2 className="section-title" style={{ margin: 0 }}>Career history</h2>
-                  <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
-                    Experience, education, skills, languages & resumes — detailed for recruiters to review.
-                  </p>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>Desired position</LabelText>
+                    <input name="desiredPosition" defaultValue={sanitizeMojibake(profile.desiredPosition) || ''} />
+                  </label>
+                  <label>
+                    <LabelText>Desired salary (UZS)</LabelText>
+                    <NumberInput
+                      name="desiredSalaryMin"
+                      defaultValue={profile.desiredSalaryMin}
+                      placeholder="e.g. 12.000.000"
+                      min={0}
+                      aria-label="Desired salary in UZS"
+                    />
+                  </label>
                 </div>
-                <form onSubmit={uploadCv} className="cv-upload-inline">
-                  <input type="file" accept="application/pdf" required disabled={uploading} />
-                  <button type="submit" disabled={uploading}>
-                    {uploading ? 'Uploading…' : 'Upload CV & parse'}
-                  </button>
-                </form>
-              </div>
+                <button type="submit">Save basics</button>
+              </form>
             </div>
 
-            <div className="card" style={{ marginBottom: '1rem' }}>
+            <div className="card profile-block">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Import from CV</h2>
+              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                Upload a PDF to parse skills, experience, and education into your profile. Review before importing.
+              </p>
+              <form onSubmit={uploadCv} className="cv-upload-inline">
+                <label>
+                  <LabelText required>{t('uploadCv')}</LabelText>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    required
+                    disabled={uploading}
+                    aria-label={t('uploadCv')}
+                  />
+                </label>
+                <button type="submit" disabled={uploading}>
+                  {uploading ? 'Uploading…' : 'Upload CV & parse'}
+                </button>
+              </form>
+            </div>
+
+            <div className="profile-block" style={{ marginBottom: '0.35rem' }}>
+              <h2 className="section-title" style={{ margin: 0 }}>Career history</h2>
+              <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
+                Experience, education, skills, and languages — edit here for matching and recruiters.
+              </p>
+            </div>
+
+            <div className="card profile-block">
               <div className="cv-section-head">
                 <h3 style={{ margin: 0 }}>Skills</h3>
                 <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'skill' ? null : 'skill')}>
@@ -642,54 +764,56 @@ export default function EmployeeDashboard() {
               </div>
               {LEVEL_ORDER.map((lvl) =>
                 (skillsByLevel[lvl] || []).length ? (
-                  <div key={lvl} style={{ marginTop: '0.75rem' }}>
-                    <div className="muted" style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-                      {lvl}
-                    </div>
-                    <div className="chips">
+                  <div key={lvl} className="profile-skill-group">
+                    <div className="profile-group-label">{lvl}</div>
+                    <ul className="profile-list">
                       {skillsByLevel[lvl].map((s: any) => (
-                        <span key={s.id} className={`badge skill skill-${lvl.toLowerCase()}`}>
-                          {s.skill?.name}
-                          <button type="button" className="ghost" style={{ marginLeft: 6, padding: 0 }} onClick={() => removeItem('skills', s.id)}>
-                            ✕
-                          </button>
-                        </span>
+                        <li key={s.id} className="profile-list-row">
+                          <span className="profile-list-title">{s.skill?.name}</span>
+                          <div className="profile-list-actions">
+                            <select
+                              aria-label={`Level for ${s.skill?.name}`}
+                              value={s.level || 'INTERMEDIATE'}
+                              onChange={(e) => updateSkillLevel(s.id, e.target.value)}
+                            >
+                              {SKILL_LEVELS.map((l) => (
+                                <option key={l} value={l}>{l}</option>
+                              ))}
+                            </select>
+                            <button type="button" className="ghost" onClick={() => removeItem('skills', s.id)}>
+                              Remove
+                            </button>
+                          </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 ) : null,
               )}
               {!(profile.skills || []).length && <p className="muted">No skills yet — add manually or import from CV.</p>}
               {openForm === 'skill' && (
-                <form className="form-stack" onSubmit={async (e) => { await addSkill(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                  <div className="grid-2">
-                    <label>
-                      Skill
-                      <select name="slug" required>
-                        {skillsMeta.map((s) => (
-                          <option key={s.slug} value={s.slug}>{s.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Level
-                      <select name="level" defaultValue="INTERMEDIATE">
-                        {LEVEL_ORDER.slice().reverse().map((l) => (
-                          <option key={l}>{l}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <button type="submit">Save skill</button>
-                </form>
+                <div style={{ marginTop: '1rem' }}>
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
+                  <SkillCombobox
+                    onPick={async (s) => {
+                      await addSkillPick(s);
+                      setOpenForm(null);
+                    }}
+                    submitLabel="Save skill"
+                  />
+                </div>
               )}
             </div>
 
-            <div className="card" style={{ marginBottom: '1rem' }}>
+            <div className="card profile-block">
               <div className="cv-section-head">
                 <h3 style={{ margin: 0 }}>Work experience</h3>
-                <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'exp' ? null : 'exp')}>
-                  {openForm === 'exp' ? 'Close' : '+ Add'}
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => setOpenForm(showExpForm && !editingExpId ? null : 'exp')}
+                >
+                  {showExpForm && !editingExpId ? 'Close' : '+ Add'}
                 </button>
               </div>
               <div className="timeline">
@@ -711,7 +835,8 @@ export default function EmployeeDashboard() {
                         <div className="timeline-meta">
                           {x.isCurrent && <span className="badge match">Current</span>}
                           <span className="badge">{formatDuration(x.startDate, x.endDate, x.isCurrent)}</span>
-                          <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>✕</button>
+                          <button type="button" className="ghost" onClick={() => setOpenForm(`edit-exp:${x.id}`)}>Edit</button>
+                          <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>×</button>
                         </div>
                       </div>
                       <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
@@ -739,80 +864,144 @@ export default function EmployeeDashboard() {
                   </div>
                 ))}
               </div>
-              {openForm === 'exp' && (
-                <form className="form-stack" onSubmit={async (e) => { await addExperience(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
+              {showExpForm && (
+                <form
+                  className="form-stack"
+                  key={editingExpId || 'new-exp'}
+                  onSubmit={saveExperience}
+                  style={{ marginTop: '1rem' }}
+                >
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
                   <div className="grid-2">
-                    <label>Job title<input name="title" required /></label>
-                    <label>Company<input name="companyName" required /></label>
-                  </div>
-                  <div className="grid-2">
-                    <label>Start date<input name="startDate" type="date" required /></label>
-                    <label>End date<input name="endDate" type="date" /></label>
+                    <label>
+                      <LabelText required>Title</LabelText>
+                      <input name="title" required defaultValue={editingExp?.title || ''} />
+                    </label>
+                    <label>
+                      <LabelText required>Company</LabelText>
+                      <input name="companyName" required defaultValue={editingExp?.companyName || ''} />
+                    </label>
                   </div>
                   <label>
-                    City
-                    <select name="citySlug">
+                    <LabelText>City</LabelText>
+                    <select name="citySlug" defaultValue={editingExp?.city?.slug || ''}>
                       <option value="">—</option>
                       {cities.map((c) => (
                         <option key={c.slug} value={c.slug}>{c.name}</option>
                       ))}
                     </select>
                   </label>
-                  <label>Description<textarea name="description" rows={3} /></label>
-                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input name="isCurrent" type="checkbox" style={{ width: 'auto' }} /> Currently work here
+                  <label>
+                    <LabelText>Description</LabelText>
+                    <textarea name="description" rows={3} defaultValue={editingExp?.description || ''} />
                   </label>
-                  <button type="submit">Save experience</button>
+                  <div className="grid-2">
+                    <label>
+                      <LabelText required>Start</LabelText>
+                      <input name="startDate" type="date" required defaultValue={dateInputValue(editingExp?.startDate)} />
+                    </label>
+                    <label>
+                      <LabelText>End</LabelText>
+                      <input name="endDate" type="date" defaultValue={dateInputValue(editingExp?.endDate)} />
+                    </label>
+                  </div>
+                  <label className="check-row">
+                    <input name="isCurrent" type="checkbox" defaultChecked={Boolean(editingExp?.isCurrent)} />
+                    <LabelText optional={false}>Currently work here</LabelText>
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button type="submit">{editingExpId ? 'Update experience' : 'Save experience'}</button>
+                    {editingExpId && (
+                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                    )}
+                  </div>
                 </form>
               )}
             </div>
 
-            <div className="grid-2" style={{ marginBottom: '1rem' }}>
+            <div className="grid-2 profile-block">
               <div className="card">
                 <div className="cv-section-head">
                   <h3 style={{ margin: 0 }}>Education</h3>
-                  <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'edu' ? null : 'edu')}>
-                    {openForm === 'edu' ? 'Close' : '+ Add'}
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => setOpenForm(showEduForm && !editingEduId ? null : 'edu')}
+                  >
+                    {showEduForm && !editingEduId ? 'Close' : '+ Add'}
                   </button>
                 </div>
-                {(profile.educations || []).map((x: any) => (
-                  <div key={x.id} className="detail-card">
-                    <div className="detail-card-head">
-                      <strong>{x.school}</strong>
-                      <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>✕</button>
-                    </div>
-                    <div className="chips" style={{ marginTop: '0.35rem' }}>
-                      {x.degree && <span className={`badge degree-${String(x.degree).toLowerCase()}`}>{String(x.degree).replace(/_/g, ' ')}</span>}
-                      {x.field && <span className="badge skill">{x.field}</span>}
-                    </div>
-                    {(x.startDate || x.endDate) && (
-                      <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
-                        {x.startDate ? new Date(x.startDate).getFullYear() : '?'} — {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
+                <ul className="profile-list">
+                  {(profile.educations || []).map((x: any) => (
+                    <li key={x.id} className="profile-list-row profile-list-row--stack">
+                      <div className="profile-list-main">
+                        <strong>{x.school}</strong>
+                        <div className="chips" style={{ marginTop: '0.4rem' }}>
+                          {x.degree && (
+                            <span className={`badge degree-${String(x.degree).toLowerCase()}`}>
+                              {String(x.degree).replace(/_/g, ' ')}
+                            </span>
+                          )}
+                          {x.field && <span className="badge skill">{x.field}</span>}
+                        </div>
+                        {(x.startDate || x.endDate) && (
+                          <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
+                            {x.startDate ? new Date(x.startDate).getFullYear() : '—'} —{' '}
+                            {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="profile-list-actions">
+                        <button type="button" className="ghost" onClick={() => setOpenForm(`edit-edu:${x.id}`)}>Edit</button>
+                        <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>×</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
                 {!(profile.educations || []).length && <p className="muted">No education entries yet.</p>}
-                {openForm === 'edu' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addEducation(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <label>School / University<input name="school" required /></label>
+                {showEduForm && (
+                  <form
+                    className="form-stack"
+                    key={editingEduId || 'new-edu'}
+                    onSubmit={saveEducation}
+                    style={{ marginTop: '1rem' }}
+                  >
+                    <p className="required-note">{t('requiredFieldsNote')}</p>
+                    <label>
+                      <LabelText required>School / University</LabelText>
+                      <input name="school" required defaultValue={editingEdu?.school || ''} />
+                    </label>
                     <div className="grid-2">
                       <label>
-                        Degree
-                        <select name="degree">
+                        <LabelText>Degree</LabelText>
+                        <select name="degree" defaultValue={editingEdu?.degree || ''}>
                           <option value="">—</option>
                           {['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'].map((d) => (
-                            <option key={d}>{d}</option>
+                            <option key={d} value={d}>{d}</option>
                           ))}
                         </select>
                       </label>
-                      <label>Field<input name="field" /></label>
+                      <label>
+                        <LabelText>Field</LabelText>
+                        <input name="field" defaultValue={editingEdu?.field || ''} />
+                      </label>
                     </div>
                     <div className="grid-2">
-                      <label>Start<input name="startDate" type="date" /></label>
-                      <label>End<input name="endDate" type="date" /></label>
+                      <label>
+                        <LabelText>Start</LabelText>
+                        <input name="startDate" type="date" defaultValue={dateInputValue(editingEdu?.startDate)} />
+                      </label>
+                      <label>
+                        <LabelText>End</LabelText>
+                        <input name="endDate" type="date" defaultValue={dateInputValue(editingEdu?.endDate)} />
+                      </label>
                     </div>
-                    <button type="submit">Save education</button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="submit">{editingEduId ? 'Update education' : 'Save education'}</button>
+                      {editingEduId && (
+                        <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                      )}
+                    </div>
                   </form>
                 )}
               </div>
@@ -824,148 +1013,213 @@ export default function EmployeeDashboard() {
                     {openForm === 'lang' ? 'Close' : '+ Add'}
                   </button>
                 </div>
-                <div className="lang-grid">
+                <ul className="profile-list">
                   {(profile.languages || []).map((x: any) => (
-                    <div key={x.id} className="lang-pill">
-                      <div>
-                        <strong>{x.language?.name}</strong>
-                        <div className={`cefr cefr-${String(x.level || 'B1').toLowerCase()}`}>{x.level}</div>
+                    <li key={x.id} className="profile-list-row">
+                      <div className="profile-list-main">
+                        <strong className="profile-list-title">{x.language?.name}</strong>
+                        <span className={`cefr cefr-${String(x.level || 'b1').toLowerCase()}`}>{x.level}</span>
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>✕</button>
-                    </div>
+                      <div className="profile-list-actions">
+                        <select
+                          aria-label={`Level for ${x.language?.name}`}
+                          value={x.level || 'B1'}
+                          onChange={(e) => updateLanguageLevel(x.id, e.target.value)}
+                        >
+                          {LANG_LEVELS.map((l) => (
+                            <option key={l} value={l}>{l}</option>
+                          ))}
+                        </select>
+                        <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>
+                          Remove
+                        </button>
+                      </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
                 {!(profile.languages || []).length && <p className="muted">No languages yet.</p>}
                 {openForm === 'lang' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addLanguage(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <div className="grid-2">
-                      <label>
-                        Language
-                        <select name="code" required>
-                          {languagesMeta.map((l) => (
-                            <option key={l.code} value={l.code}>{l.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Level
-                        <select name="level" defaultValue="B1">
-                          {['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((l) => (
-                            <option key={l}>{l}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <button type="submit">Save language</button>
-                  </form>
+                  <div style={{ marginTop: '1rem' }}>
+                    <p className="required-note">{t('requiredFieldsNote')}</p>
+                    <LookupCombobox
+                      kind="languages"
+                      allowCreate
+                      submitLabel={t('addLanguage')}
+                      placeholder={t('languageSearchPlaceholder')}
+                      defaultLevel="B1"
+                      levelOptions={LANG_LEVELS.map((l) => ({
+                        value: l,
+                        label: l,
+                      }))}
+                      onPick={async (item) => {
+                        await addLanguagePick(item);
+                        setOpenForm(null);
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="grid-2">
-              <div className="card">
-                <div className="cv-section-head">
-                  <h3 style={{ margin: 0 }}>Certifications</h3>
-                  <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'cert' ? null : 'cert')}>
-                    {openForm === 'cert' ? 'Close' : '+ Add'}
-                  </button>
-                </div>
-                {(profile.certifications || []).map((x: any) => (
-                  <div key={x.id} className="detail-card">
-                    <div className="detail-card-head">
-                      <div>
-                        <strong>{x.name}</strong>
-                        {x.issuer && <div className="muted" style={{ fontSize: '0.85rem' }}>{x.issuer}</div>}
-                        {x.issuedAt && (
-                          <div className="muted" style={{ fontSize: '0.8rem' }}>
-                            Issued {new Date(x.issuedAt).toLocaleDateString()}
-                          </div>
-                        )}
-                        {x.credentialUrl && (
-                          <a href={x.credentialUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
-                            View credential →
-                          </a>
-                        )}
-                      </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>✕</button>
-                    </div>
-                  </div>
-                ))}
-                {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
-                {openForm === 'cert' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addCertification(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <label>Name<input name="name" required /></label>
-                    <div className="grid-2">
-                      <label>Issuer<input name="issuer" /></label>
-                      <label>Issued at<input name="issuedAt" type="date" /></label>
-                    </div>
-                    <label>Credential URL<input name="credentialUrl" type="url" placeholder="https://…" /></label>
-                    <button type="submit">Save certification</button>
-                  </form>
-                )}
+            <div className="card profile-block">
+              <div className="cv-section-head">
+                <h3 style={{ margin: 0 }}>Certifications</h3>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => setOpenForm(showCertForm && !editingCertId ? null : 'cert')}
+                >
+                  {showCertForm && !editingCertId ? 'Close' : '+ Add'}
+                </button>
               </div>
+              <ul className="profile-list">
+                {(profile.certifications || []).map((x: any) => (
+                  <li key={x.id} className="profile-list-row profile-list-row--stack">
+                    <div className="profile-list-main">
+                      <strong>{x.name}</strong>
+                      {x.issuer && <div className="muted" style={{ fontSize: '0.85rem' }}>{x.issuer}</div>}
+                      {x.issuedAt && (
+                        <div className="muted" style={{ fontSize: '0.8rem' }}>
+                          Issued {new Date(x.issuedAt).toLocaleDateString()}
+                        </div>
+                      )}
+                      {x.expiresAt && (
+                        <div className="muted" style={{ fontSize: '0.8rem' }}>
+                          Expires {new Date(x.expiresAt).toLocaleDateString()}
+                        </div>
+                      )}
+                      {x.credentialUrl && (
+                        <a href={x.credentialUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
+                          View credential →
+                        </a>
+                      )}
+                    </div>
+                    <div className="profile-list-actions">
+                      <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>Edit</button>
+                      <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>×</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
+              {showCertForm && (
+                <form
+                  className="form-stack"
+                  key={editingCertId || 'new-cert'}
+                  onSubmit={saveCertification}
+                  style={{ marginTop: '1rem' }}
+                >
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
+                  <label>
+                    <LabelText required>Name</LabelText>
+                    <input name="name" required defaultValue={editingCert?.name || ''} />
+                  </label>
+                  <div className="grid-2">
+                    <label>
+                      <LabelText>Issuer</LabelText>
+                      <input name="issuer" defaultValue={editingCert?.issuer || ''} />
+                    </label>
+                    <label>
+                      <LabelText>Issued at</LabelText>
+                      <input name="issuedAt" type="date" defaultValue={dateInputValue(editingCert?.issuedAt)} />
+                    </label>
+                  </div>
+                  <label>
+                    <LabelText>Expires at</LabelText>
+                    <input name="expiresAt" type="date" defaultValue={dateInputValue(editingCert?.expiresAt)} />
+                  </label>
+                  <label>
+                    <LabelText>Credential URL</LabelText>
+                    <input name="credentialUrl" type="url" placeholder="https://…" defaultValue={editingCert?.credentialUrl || ''} />
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button type="submit">{editingCertId ? 'Update certification' : 'Save certification'}</button>
+                    {editingCertId && (
+                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
 
-              <div className="card">
-                <div className="cv-section-head">
+            <div className="card profile-block">
+              <div className="cv-section-head">
+                <div>
                   <h3 style={{ margin: 0 }}>Resumes</h3>
-                  <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'resume' ? null : 'resume')}>
-                    {openForm === 'resume' ? 'Close' : '+ Create'}
-                  </button>
+                  <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
+                    Named CV versions for applications — build, export, or attach a PDF.
+                  </p>
                 </div>
+                <Link href="/dashboard/employee/resume-builder" className="chip" style={{ fontWeight: 600 }}>
+                  Open resume builder
+                </Link>
+              </div>
+              <ul className="profile-list">
                 {(profile.resumes || []).map((r: any) => (
-                  <div key={r.id} className="detail-card">
-                    <div className="detail-card-head">
-                      <div>
+                  <li key={r.id} className="profile-list-row profile-list-row--stack">
+                    <div className="profile-list-main">
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
                         <strong>{r.title}</strong>
-                        {r.isPrimary && <span className="badge match" style={{ marginLeft: 8 }}>Primary</span>}
-                        {r.fileKey && <span className="badge skill" style={{ marginLeft: 6 }}>PDF attached</span>}
-                        {r.parsedData && (
-                          <button
-                            type="button"
-                            className="ghost"
-                            style={{ display: 'block', marginTop: 4 }}
-                            onClick={() => setCvReview({ resumeId: r.id, parsed: r.parsedData })}
-                          >
-                            Review parsed data →
-                          </button>
+                        {r.isPrimary && <span className="badge match">Primary</span>}
+                        {(r.hasFile || r.fileKey) && (
+                          <span className="badge skill">PDF attached</span>
                         )}
                       </div>
-                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>✕</button>
-                    </div>
-                    <div className="chips" style={{ marginTop: '0.5rem' }}>
-                      {r.fileKey && (
-                        <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
-                          Download
+                      {r.parsedData && (
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ display: 'inline-block', marginTop: 6, padding: 0 }}
+                          onClick={() => setCvReview({ resumeId: r.id, parsed: r.parsedData })}
+                        >
+                          Review parsed data →
                         </button>
                       )}
-                      <label className="chip" style={{ cursor: 'pointer' }}>
-                        {r.fileKey ? 'Replace file' : 'Attach PDF'}
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          hidden
-                          disabled={uploading}
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) attachFileToResume(r.id, f);
-                          }}
-                        />
-                      </label>
+                      <div className="chips" style={{ marginTop: '0.65rem' }}>
+                        <Link
+                          href={`/dashboard/employee/resume-builder?resumeId=${r.id}`}
+                          className="chip"
+                        >
+                          Edit in builder
+                        </Link>
+                        {!r.isPrimary && (
+                          <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
+                            Set primary
+                          </button>
+                        )}
+                        {(r.hasFile || r.fileKey) && (
+                          <button type="button" className="chip" onClick={() => downloadResume(r.id)}>
+                            Download
+                          </button>
+                        )}
+                        <label className="chip" style={{ cursor: 'pointer' }}>
+                          {r.hasFile || r.fileKey ? 'Replace file' : 'Attach PDF'}
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            hidden
+                            disabled={uploading}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) attachFileToResume(r.id, f);
+                            }}
+                          />
+                        </label>
+                      </div>
                     </div>
-                  </div>
+                    <div className="profile-list-actions">
+                      <button type="button" className="ghost" onClick={() => removeItem('resumes', r.id)}>×</button>
+                    </div>
+                  </li>
                 ))}
-                {!(profile.resumes || []).length && <p className="muted">No resumes yet — upload a PDF or create one.</p>}
-                {openForm === 'resume' && (
-                  <form className="form-stack" onSubmit={async (e) => { await addResume(e); setOpenForm(null); }} style={{ marginTop: '1rem' }}>
-                    <label>Title<input name="title" required placeholder="e.g. Frontend Developer CV" /></label>
-                    <label>Content (builder)<textarea name="content" rows={4} placeholder="Write or paste your CV…" /></label>
-                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <input name="isPrimary" type="checkbox" style={{ width: 'auto' }} /> Set as primary
-                    </label>
-                    <button type="submit">Create resume</button>
-                  </form>
-                )}
-              </div>
+              </ul>
+              {!(profile.resumes || []).length && (
+                <p className="muted">
+                  No resumes yet —{' '}
+                  <Link href="/dashboard/employee/resume-builder">create one in the builder</Link>
+                  {' '}or import a PDF above.
+                </p>
+              )}
             </div>
           </div>
         )}
