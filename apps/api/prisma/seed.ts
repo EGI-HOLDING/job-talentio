@@ -612,13 +612,14 @@ async function main() {
       role: 'SUPER_ADMIN',
       fullName: DEMO.admin.fullName,
       passwordHash: await bcrypt.hash(DEMO.admin.password, 10),
+      emailVerified: false,
     },
     create: {
       email: DEMO.admin.email,
       passwordHash: await bcrypt.hash(DEMO.admin.password, 10),
       fullName: DEMO.admin.fullName,
       role: 'SUPER_ADMIN',
-      emailVerified: true,
+      emailVerified: false,
       avatarUrl: avatar(1),
     },
   });
@@ -636,6 +637,7 @@ async function main() {
         avatarUrl: avatar(10 + i),
         role: 'RECRUITER',
         passwordHash,
+        emailVerified: false,
       },
       create: {
         email: person.email,
@@ -643,7 +645,7 @@ async function main() {
         fullName: `${person.first} ${person.last}`,
         role: 'RECRUITER',
         locale: 'uz',
-        emailVerified: true,
+        emailVerified: false,
         avatarUrl: avatar(10 + i),
       },
     });
@@ -660,13 +662,14 @@ async function main() {
           passwordHash,
           role: 'RECRUITER',
           fullName: `${hr.first} ${hr.last}`,
+          emailVerified: false,
         },
         create: {
           email: hr.email,
           passwordHash,
           fullName: `${hr.first} ${hr.last}`,
           role: 'RECRUITER',
-          emailVerified: true,
+          emailVerified: false,
           avatarUrl: avatar(20 + i),
         },
       });
@@ -754,6 +757,7 @@ async function main() {
         fullName: `${person.first} ${person.last}`,
         avatarUrl: avatar(30 + (i % 40)),
         role: 'EMPLOYEE',
+        emailVerified: false,
       },
       create: {
         email: person.email,
@@ -761,7 +765,7 @@ async function main() {
         fullName: `${person.first} ${person.last}`,
         role: 'EMPLOYEE',
         locale: (['uz', 'ru', 'en', 'uz'] as const)[i % 4],
-        emailVerified: true,
+        emailVerified: false,
         avatarUrl: avatar(30 + (i % 40)),
       },
     });

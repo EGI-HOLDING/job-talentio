@@ -191,7 +191,7 @@ export class AuthService {
           email: normalized,
           fullName: normalized.split('@')[0],
           role: resolvedRole,
-          emailVerified: true,
+          emailVerified: false,
         },
       });
       if (resolvedRole === 'EMPLOYEE') {

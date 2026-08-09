@@ -44,7 +44,7 @@ export class SeedService implements OnModuleInit {
         passwordHash,
         fullName: 'Sarvar Adminov',
         role: 'SUPER_ADMIN',
-        emailVerified: true,
+        emailVerified: false,
       },
     });
     this.logger.log(`Seeded Super Admin: ${email}`);
