@@ -12,7 +12,7 @@ async function main() {
       log: (msg) => console.warn(msg),
     });
     console.log(
-      `JobTitle backfill: scanned=${result.scanned} updated=${result.updated} skipped=${result.skipped} errors=${result.errors}`,
+      `JobTitle backfill: scanned=${result.scanned} updated=${result.updated} skipped=${result.skipped} catalogCleaned=${result.catalogCleaned} catalogMerged=${result.catalogMerged} errors=${result.errors}`,
     );
     // Per-row errors are non-fatal; only throw if nothing could be scanned due to DB failure
   } finally {

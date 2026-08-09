@@ -103,7 +103,7 @@ Do this **before** relying on web/admin. Postgres/Redis are **separate Railway s
    - Serverless: **off**
 6. **Deploy** / redeploy **api**. In deploy logs you should see:
    1. `prisma migrate deploy` succeed
-   2. `JobTitle backfill: scanned=… updated=…` (canonicalizes legacy titles like “Senior …”, fills `JobTitle` + `jobTitleId`)
+   2. `JobTitle backfill: scanned=… updated=… catalogCleaned=… catalogMerged=…` (purges Senior/Junior/… from `JobPost.title` + `JobTitle.name`, fills `jobTitleId`)
    3. Nest process start
 7. Open `https://<api-public-host>/api/health` (custom domain or `*.up.railway.app`) and expect `status: ok`.
 
