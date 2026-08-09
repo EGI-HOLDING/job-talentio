@@ -16,6 +16,7 @@ import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
+import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
@@ -127,10 +128,14 @@ function RecruiterDashboard() {
   const [bulkTemplateId, setBulkTemplateId] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [companyDetail, setCompanyDetail] = useState<any>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
   const company = useMemo(
-    () => memberships.find((m) => m.companyId === companyId)?.company,
-    [memberships, companyId],
+    () => companyDetail || memberships.find((m) => m.companyId === companyId)?.company,
+    [memberships, companyId, companyDetail],
   );
   const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
   const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
@@ -284,6 +289,7 @@ function RecruiterDashboard() {
     if (companyId) {
       loadSubscription(companyId).catch(() => setSubscription(null));
       loadBulkTemplates(companyId).catch(() => setBulkTemplates([]));
+      loadCompanyDetail(companyId).catch(() => setCompanyDetail(null));
     }
   }, [companyId]);
 
@@ -332,6 +338,9 @@ function RecruiterDashboard() {
           : null,
         salaryMin: fd.get('salaryMin') ? Number(fd.get('salaryMin')) : null,
         salaryMax: fd.get('salaryMax') ? Number(fd.get('salaryMax')) : null,
+        salaryPeriod: fd.get('salaryPeriod') || 'MONTHLY',
+        currency: fd.get('currency') || 'UZS',
+        employmentType: fd.get('employmentType') || 'FULL_TIME',
         workMode: fd.get('workMode') || 'ONSITE',
         skills: draftJobSkills.map((s) =>
           s.slug
@@ -348,6 +357,33 @@ function RecruiterDashboard() {
     setDraftJobLevel('');
     flash('Job created as DRAFT');
     await loadJobs(companyId);
+  }
+
+  async function updateJob(e: FormEvent<HTMLFormElement>, jobId: string) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    try {
+      await api(`/jobs/${jobId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: fd.get('title'),
+          description: fd.get('description'),
+          citySlug: fd.get('citySlug') || undefined,
+          experienceLevel: fd.get('experienceLevel') || undefined,
+          salaryMin: fd.get('salaryMin') ? Number(fd.get('salaryMin')) : null,
+          salaryMax: fd.get('salaryMax') ? Number(fd.get('salaryMax')) : null,
+          salaryPeriod: fd.get('salaryPeriod') || 'MONTHLY',
+          currency: fd.get('currency') || 'UZS',
+          employmentType: fd.get('employmentType') || 'FULL_TIME',
+          workMode: fd.get('workMode') || 'ONSITE',
+        }),
+      });
+      setEditingJobId(null);
+      flash('Job updated');
+      await loadJobs(companyId);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Job update failed', 'error');
+    }
   }
 
   async function changeJobStatus(jobId: string, status: string, okMsg: string) {
@@ -453,6 +489,12 @@ function RecruiterDashboard() {
     await loadJobData(selectedJob);
   }
 
+  async function loadCompanyDetail(cid: string) {
+    if (!cid) return;
+    const detail = await api(`/companies/${cid}`);
+    setCompanyDetail(detail);
+  }
+
   async function updateCompany(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -468,8 +510,38 @@ function RecruiterDashboard() {
       }),
     });
     flash('Company profile updated');
-    const mine = await api<any[]>('/companies/mine');
-    setMemberships(mine);
+    await refreshMemberships();
+    await loadCompanyDetail(companyId);
+  }
+
+  async function inviteMember(e: FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim() || inviteBusy) return;
+    setInviteBusy(true);
+    try {
+      await api(`/companies/${companyId}/invite`, {
+        method: 'POST',
+        body: JSON.stringify({ email: inviteEmail.trim(), role: 'RECRUITER' }),
+      });
+      setInviteEmail('');
+      flash('Team member invited');
+      await loadCompanyDetail(companyId);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Invite failed', 'error');
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function removeMember(userId: string) {
+    if (!confirm('Remove this team member?')) return;
+    try {
+      await api(`/companies/${companyId}/members/${userId}`, { method: 'DELETE' });
+      flash('Member removed');
+      await loadCompanyDetail(companyId);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Remove failed', 'error');
+    }
   }
 
   const byStage = useMemo(() => {
@@ -605,6 +677,33 @@ function RecruiterDashboard() {
                     <option>REMOTE</option>
                   </select>
                 </label>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>Employment type</LabelText>
+                    <select name="employmentType" defaultValue="FULL_TIME">
+                      <option value="FULL_TIME">Full-time</option>
+                      <option value="PART_TIME">Part-time</option>
+                      <option value="CONTRACT">Contract</option>
+                      <option value="INTERNSHIP">Internship</option>
+                    </select>
+                  </label>
+                  <label>
+                    <LabelText>Salary period</LabelText>
+                    <select name="salaryPeriod" defaultValue="MONTHLY">
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="YEARLY">Yearly</option>
+                      <option value="HOURLY">Hourly</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  <LabelText>Currency</LabelText>
+                  <select name="currency" defaultValue="UZS">
+                    <option value="UZS">UZS</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </label>
                 <p className="muted" style={{ fontSize: '0.78rem', margin: '-0.35rem 0 0.5rem' }}>
                   Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.
                 </p>
@@ -737,6 +836,13 @@ function RecruiterDashboard() {
                     <button
                       type="button"
                       className="chip"
+                      onClick={() => setEditingJobId(editingJobId === j.id ? null : j.id)}
+                    >
+                      {editingJobId === j.id ? 'Cancel edit' : 'Edit'}
+                    </button>
+                    <button
+                      type="button"
+                      className="chip"
                       onClick={() => {
                         setSelectedJob(j.id);
                         setTab('pipeline');
@@ -758,6 +864,98 @@ function RecruiterDashboard() {
                         </button>
                       ))}
                   </div>
+                  {editingJobId === j.id && (
+                    <form
+                      className="form-stack"
+                      style={{ marginTop: '0.75rem' }}
+                      onSubmit={(e) => updateJob(e, j.id)}
+                    >
+                      <label>
+                        <LabelText required>Title</LabelText>
+                        <input name="title" defaultValue={j.title} required minLength={2} />
+                      </label>
+                      <label>
+                        <LabelText required>Description</LabelText>
+                        <textarea
+                          name="description"
+                          rows={4}
+                          defaultValue={j.description || ''}
+                          required
+                          minLength={20}
+                        />
+                      </label>
+                      <label>
+                        <LabelText>City</LabelText>
+                        <select name="citySlug" defaultValue={j.city?.slug || ''}>
+                          <option value="">-</option>
+                          {meta.cities.map((c) => (
+                            <option key={c.slug} value={c.slug}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="grid-2">
+                        <label>
+                          <LabelText>Level</LabelText>
+                          <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                            <option value="">-</option>
+                            {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
+                              <option key={l} value={l}>
+                                {l}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <LabelText>Work mode</LabelText>
+                          <select name="workMode" defaultValue={j.workMode || 'HYBRID'}>
+                            <option>ONSITE</option>
+                            <option>HYBRID</option>
+                            <option>REMOTE</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="grid-2">
+                        <label>
+                          <LabelText>Employment type</LabelText>
+                          <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
+                            <option value="FULL_TIME">Full-time</option>
+                            <option value="PART_TIME">Part-time</option>
+                            <option value="CONTRACT">Contract</option>
+                            <option value="INTERNSHIP">Internship</option>
+                          </select>
+                        </label>
+                        <label>
+                          <LabelText>Salary period</LabelText>
+                          <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
+                            <option value="MONTHLY">Monthly</option>
+                            <option value="YEARLY">Yearly</option>
+                            <option value="HOURLY">Hourly</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="grid-2">
+                        <label>
+                          <LabelText>Salary min</LabelText>
+                          <NumberInput name="salaryMin" defaultValue={j.salaryMin ?? undefined} min={0} />
+                        </label>
+                        <label>
+                          <LabelText>Salary max</LabelText>
+                          <NumberInput name="salaryMax" defaultValue={j.salaryMax ?? undefined} min={0} />
+                        </label>
+                      </div>
+                      <label>
+                        <LabelText>Currency</LabelText>
+                        <select name="currency" defaultValue={j.currency || 'UZS'}>
+                          <option value="UZS">UZS</option>
+                          <option value="USD">USD</option>
+                          <option value="EUR">EUR</option>
+                        </select>
+                      </label>
+                      <button type="submit">Save changes</button>
+                    </form>
+                  )}
                 </div>
               ))}
             </div>
@@ -1335,12 +1533,26 @@ function RecruiterDashboard() {
               <h2 className="section-title">{sanitizeMojibake(company.name)}</h2>
               <p className="muted">{sanitizeMojibake(company.description)}</p>
               <p>
-                Members: {company._count?.members} | Jobs: {company._count?.jobPosts} | Followers:{' '}
-                {company._count?.followers}
+                Members: {company.members?.length ?? company._count?.members} | Jobs:{' '}
+                {company._count?.jobPosts} | Followers: {company._count?.followers}
               </p>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
                 Public page: <a href={`/companies/${company.slug}`}>/companies/{company.slug}</a>
               </p>
+              <div style={{ marginTop: '1rem' }}>
+                <ImageCropUpload
+                  mode="logo"
+                  label="Company logo"
+                  value={company.logoUrl}
+                  uploadPath={`/companies/${companyId}/logo`}
+                  clearPath={`/companies/${companyId}/logo`}
+                  onUploaded={async () => {
+                    await refreshMemberships();
+                    await loadCompanyDetail(companyId);
+                    flash('Logo updated');
+                  }}
+                />
+              </div>
             </div>
             <div className="card">
               <h3>Edit company profile</h3>
@@ -1396,6 +1608,52 @@ function RecruiterDashboard() {
                   </select>
                 </label>
                 <button type="submit">Save company</button>
+              </form>
+            </div>
+            <div className="card" style={{ gridColumn: '1 / -1' }}>
+              <h3>Team</h3>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem' }}>
+                {(company.members || []).map((m: any) => (
+                  <li
+                    key={m.userId || m.user?.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '0.75rem',
+                      padding: '0.45rem 0',
+                      borderBottom: '1px solid var(--border, #e5e7eb)',
+                    }}
+                  >
+                    <span>
+                      {m.user?.fullName || m.user?.email}{' '}
+                      <span className="muted">({m.role})</span>
+                    </span>
+                    {m.role !== 'OWNER' && (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => removeMember(m.userId || m.user?.id)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <form className="form-stack" onSubmit={inviteMember}>
+                <label>
+                  <LabelText>Invite by email (must already be a recruiter account)</LabelText>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="recruiter@company.uz"
+                    required
+                  />
+                </label>
+                <button type="submit" disabled={inviteBusy}>
+                  {inviteBusy ? 'Inviting...' : 'Invite member'}
+                </button>
               </form>
             </div>
           </div>

@@ -78,6 +78,11 @@ export default function LoginPage() {
           <FormField label={t('password')} required>
             <PasswordInput name="password" autoComplete="current-password" required />
           </FormField>
+          <p style={{ margin: '-0.35rem 0 0', fontSize: '0.88rem' }}>
+            <Link href="/forgot-password" style={{ color: 'var(--accent)' }}>
+              Forgot password?
+            </Link>
+          </p>
           <FormAlert>{error}</FormAlert>
           <button type="submit" disabled={loading} aria-busy={loading}>
             {loading ? t('signingIn') : t('signIn')}

@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { jobAlertSchema } from '@job-talentio/shared';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { jobAlertSchema, jobAlertUpdateSchema } from '@job-talentio/shared';
 import { AlertsService } from './alerts.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
@@ -26,6 +26,13 @@ export class AlertsController {
   create(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(jobAlertSchema, body);
     return this.alerts.create(user, data);
+  }
+
+  @Patch(':id')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const data = parseDto(jobAlertUpdateSchema, body);
+    return this.alerts.update(user.id, id, data);
   }
 
   @Delete(':id')

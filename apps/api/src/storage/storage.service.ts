@@ -4,6 +4,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
   CreateBucketCommand,
   HeadBucketCommand,
 } from '@aws-sdk/client-s3';
@@ -78,5 +79,25 @@ export class StorageService implements OnModuleInit {
       Key: key,
     });
     return getSignedUrl(this.client, command, { expiresIn });
+  }
+
+  /** Best-effort object removal (avatars, logos, purged CVs). */
+  async delete(key: string | null | undefined): Promise<void> {
+    const k = (key || '').trim();
+    if (!k) return;
+    try {
+      await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: k }));
+    } catch (err) {
+      this.logger.warn(`S3 delete skipped for ${k}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Extract object key from a public URL served by this bucket, if possible. */
+  keyFromPublicUrl(url: string | null | undefined): string | null {
+    const u = (url || '').trim();
+    if (!u) return null;
+    const base = this.publicUrl.replace(/\/$/, '');
+    if (u.startsWith(`${base}/`)) return u.slice(base.length + 1);
+    return null;
   }
 }

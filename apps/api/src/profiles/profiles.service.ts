@@ -17,6 +17,7 @@ import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
+import { normalizeJobTitleKey } from '../common/title-resolve';
 import { parseCvText, ParsedCvData } from './cv-parser';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
@@ -36,7 +37,10 @@ export class ProfilesService {
     educations: true,
     certifications: true,
     languages: { include: { language: true } },
-    resumes: { orderBy: { updatedAt: 'desc' as const } },
+    resumes: {
+      where: { deletedAt: null },
+      orderBy: { updatedAt: 'desc' as const },
+    },
     city: true,
     user: {
       select: { id: true, fullName: true, email: true, locale: true, avatarUrl: true },
@@ -430,13 +434,93 @@ export class ProfilesService {
     });
   }
 
+  /** Hard-delete soft-deleted resume (+ S3) when no applications still reference it. */
+  async purgeResumeIfOrphan(resumeId: string): Promise<{ purged: boolean }> {
+    const resume = await this.prisma.resume.findUnique({
+      where: { id: resumeId },
+      include: { _count: { select: { applications: true } } },
+    });
+    if (!resume || !resume.deletedAt) return { purged: false };
+    if (resume._count.applications > 0) return { purged: false };
+    const fileKey = resume.fileKey;
+    await this.prisma.resume.delete({ where: { id: resumeId } });
+    if (fileKey) await this.storage.delete(fileKey);
+    return { purged: true };
+  }
+
+  /** After applications cascade away, purge any soft-deleted resumes that became orphaned. */
+  async purgeOrphanSoftDeletedResumes(resumeIds: string[]) {
+    const unique = [...new Set(resumeIds.filter(Boolean))];
+    for (const id of unique) {
+      await this.purgeResumeIfOrphan(id);
+    }
+  }
+
+  /** Sweep all soft-deleted resumes with zero application refs (e.g. after job hard-delete). */
+  async purgeAllOrphanSoftDeletedResumes() {
+    const soft = await this.prisma.resume.findMany({
+      where: { deletedAt: { not: null } },
+      select: { id: true },
+    });
+    let purged = 0;
+    for (const row of soft) {
+      const r = await this.purgeResumeIfOrphan(row.id);
+      if (r.purged) purged += 1;
+    }
+    return { purged };
+  }
+
   async deleteResume(user: AuthUser, resumeId: string) {
     const profile = await this.getProfileForUser(user.id);
-    const result = await this.prisma.resume.deleteMany({
-      where: { id: resumeId, profileId: profile.id },
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: resumeId, profileId: profile.id, deletedAt: null },
     });
-    if (result.count === 0) throw new NotFoundException('Resume not found');
-    return { ok: true };
+    if (!resume) throw new NotFoundException('Resume not found');
+
+    const appCount = await this.prisma.application.count({ where: { resumeId } });
+    if (appCount === 0) {
+      const fileKey = resume.fileKey;
+      await this.prisma.resume.delete({ where: { id: resumeId } });
+      if (fileKey) await this.storage.delete(fileKey);
+      return { ok: true, softDeleted: false, hardDeleted: true };
+    }
+
+    await this.prisma.resume.update({
+      where: { id: resumeId },
+      data: { deletedAt: new Date(), isPrimary: false },
+    });
+    const nextPrimary = await this.prisma.resume.findFirst({
+      where: { profileId: profile.id, deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (nextPrimary) {
+      await this.prisma.resume.update({
+        where: { id: nextPrimary.id },
+        data: { isPrimary: true },
+      });
+    }
+    return {
+      ok: true,
+      softDeleted: true,
+      hardDeleted: false,
+      message:
+        'Removed from your library. The file stays available for applications already submitted.',
+    };
+  }
+
+  async restoreResume(user: AuthUser, resumeId: string) {
+    const profile = await this.getProfileForUser(user.id);
+    const resume = await this.prisma.resume.findFirst({
+      where: { id: resumeId, profileId: profile.id, deletedAt: { not: null } },
+    });
+    if (!resume) throw new NotFoundException('Resume not found');
+    await this.prisma.resume.update({
+      where: { id: resumeId },
+      data: { deletedAt: null },
+    });
+    return this.sanitizeResume(
+      await this.prisma.resume.findUniqueOrThrow({ where: { id: resumeId } }),
+    );
   }
 
   private filterByIds<T extends { id: string }>(rows: T[], ids: string[] | null | undefined) {
@@ -457,7 +541,7 @@ export class ProfilesService {
         educations: { orderBy: { startDate: 'desc' } },
         languages: { include: { language: true } },
         certifications: true,
-        resumes: true,
+        resumes: { where: { deletedAt: null }, orderBy: { updatedAt: 'desc' } },
       },
     });
     if (!full) throw new NotFoundException('Profile not found');
@@ -711,7 +795,7 @@ export class ProfilesService {
   private async ownedResume(userId: string, resumeId: string) {
     const profile = await this.getProfileForUser(userId);
     const resume = await this.prisma.resume.findFirst({
-      where: { id: resumeId, profileId: profile.id },
+      where: { id: resumeId, profileId: profile.id, deletedAt: null },
     });
     if (!resume) throw new NotFoundException('Resume not found');
     return { profile, resume };
@@ -726,6 +810,7 @@ export class ProfilesService {
     if (!resume.fileKey) throw new NotFoundException('No file attached to this resume');
 
     const isOwner = resume.profile.userId === user.id;
+    // Soft-deleted library items stay downloadable for recruiters (and restore for owner).
     let allowed = isOwner || user.role === 'SUPER_ADMIN';
 
     // Recruiter may download only if the candidate applied to their company
@@ -746,7 +831,7 @@ export class ProfilesService {
     if (!allowed) throw new ForbiddenException('Not allowed to download this resume');
 
     const url = await this.storage.getPresignedGetUrl(resume.fileKey, 900);
-    return { url, expiresIn: 900, title: resume.title };
+    return { url, expiresIn: 900, title: resume.title, softDeleted: Boolean(resume.deletedAt) };
   }
 
   async attachFileToResume(user: AuthUser, resumeId: string, file: Express.Multer.File) {
@@ -977,6 +1062,31 @@ export class ProfilesService {
     return { ok: true, imported, profile: refreshed };
   }
 
+  private profileTitleTexts(p: {
+    desiredPosition?: string | null;
+    headline?: string | null;
+    experiences?: Array<{ title?: string | null }>;
+  }): string[] {
+    const texts = [p.desiredPosition, p.headline, ...(p.experiences || []).map((e) => e.title)];
+    return texts.map((t) => (t || '').trim()).filter(Boolean);
+  }
+
+  private profileMatchesTitleKeys(
+    p: {
+      desiredPosition?: string | null;
+      headline?: string | null;
+      experiences?: Array<{ title?: string | null }>;
+    },
+    keys: Set<string>,
+  ): boolean {
+    if (!keys.size) return true;
+    for (const text of this.profileTitleTexts(p)) {
+      const key = normalizeJobTitleKey(text);
+      if (key && keys.has(key)) return true;
+    }
+    return false;
+  }
+
   async searchCandidates(
     user: AuthUser,
     query: {
@@ -984,6 +1094,7 @@ export class ProfilesService {
       city?: string;
       skills?: string;
       skillMode?: 'AND' | 'OR';
+      jobTitle?: string;
       degree?: string;
       languages?: string;
       experienceYearsMin?: number;
@@ -1076,14 +1187,49 @@ export class ProfilesService {
       });
     }
 
+    const titleSlugs = (query.jobTitle || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const titleKeySet = new Set<string>();
+    if (titleSlugs.length) {
+      const catalog = await this.prisma.jobTitle.findMany({
+        where: { slug: { in: titleSlugs } },
+        include: { aliases: true },
+      });
+      for (const t of catalog) {
+        if (t.normalizedKey) titleKeySet.add(t.normalizedKey);
+        const keyFromName = normalizeJobTitleKey(t.name);
+        if (keyFromName) titleKeySet.add(keyFromName);
+      }
+      const terms = [
+        ...new Set(
+          catalog.flatMap((t) => [t.name, ...t.aliases.map((a) => a.alias)].filter(Boolean)),
+        ),
+      ];
+      if (terms.length) {
+        and.push({
+          OR: terms.flatMap((term) => [
+            { desiredPosition: { contains: term, mode: 'insensitive' as const } },
+            { headline: { contains: term, mode: 'insensitive' as const } },
+            { experiences: { some: { title: { contains: term, mode: 'insensitive' as const } } } },
+          ]),
+        });
+      } else {
+        // Unknown slugs → empty result
+        and.push({ id: '__no_such_job_title__' });
+      }
+    }
+
     const where: Prisma.EmployeeProfileWhereInput = { AND: and };
     const sort = query.sort ?? 'relevance';
     const needsExperienceFilter =
       query.experienceYearsMin !== undefined || query.experienceYearsMax !== undefined;
     const needsMatchRank = Boolean(query.matchJobId) && sort === 'match';
-    /** Experience years + match scoring happen in memory — bound the scan window. */
+    const needsTitleKeyFilter = titleKeySet.size > 0;
+    /** Experience years + match scoring + title-key precision happen in memory — bound the scan window. */
     const SCAN_CAP = needsMatchRank ? 250 : 1000;
-    const needsScan = needsExperienceFilter || needsMatchRank;
+    const needsScan = needsExperienceFilter || needsMatchRank || needsTitleKeyFilter;
 
     const candidateInclude = {
       user: {
@@ -1112,6 +1258,9 @@ export class ProfilesService {
     let facetSource: Array<{
       city?: { slug: string; name: string } | null;
       skills: Array<{ skill: { slug: string; name: string } }>;
+      desiredPosition?: string | null;
+      headline?: string | null;
+      experiences?: Array<{ title?: string | null }>;
     }> = [];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1163,6 +1312,9 @@ export class ProfilesService {
         select: {
           city: { select: { slug: true, name: true } },
           skills: { select: { skill: { select: { slug: true, name: true } } } },
+          desiredPosition: true,
+          headline: true,
+          experiences: { select: { title: true }, take: 5, orderBy: { startDate: 'desc' } },
         },
         take: 1000,
         orderBy: { updatedAt: 'desc' },
@@ -1177,6 +1329,10 @@ export class ProfilesService {
       });
 
       let scored = items.map(mapProfile);
+
+      if (needsTitleKeyFilter) {
+        scored = scored.filter((p) => this.profileMatchesTitleKeys(p, titleKeySet));
+      }
 
       if (query.experienceYearsMin !== undefined) {
         scored = scored.filter((p) => p.experienceYears >= query.experienceYearsMin!);
@@ -1211,6 +1367,19 @@ export class ProfilesService {
 
     const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    const titleFacets: Record<string, { slug: string; name: string; count: number }> = {};
+
+    const catalogTitles = await this.prisma.jobTitle.findMany({
+      select: { slug: true, name: true, normalizedKey: true },
+    });
+    const catalogByKey = new Map<string, { slug: string; name: string }>();
+    for (const t of catalogTitles) {
+      const key = t.normalizedKey || normalizeJobTitleKey(t.name);
+      if (key && !catalogByKey.has(key)) {
+        catalogByKey.set(key, { slug: t.slug, name: t.name });
+      }
+    }
+
     for (const p of facetSource) {
       if (p.city) {
         const key = p.city.slug;
@@ -1223,6 +1392,17 @@ export class ProfilesService {
         skillFacets[key] = skillFacets[key]
           ? { ...skillFacets[key], count: skillFacets[key].count + 1 }
           : { slug: s.skill.slug, name: s.skill.name, count: 1 };
+      }
+      const seenKeys = new Set<string>();
+      for (const text of this.profileTitleTexts(p)) {
+        const key = normalizeJobTitleKey(text);
+        if (!key || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        const cat = catalogByKey.get(key);
+        if (!cat) continue;
+        titleFacets[cat.slug] = titleFacets[cat.slug]
+          ? { ...titleFacets[cat.slug], count: titleFacets[cat.slug].count + 1 }
+          : { slug: cat.slug, name: cat.name, count: 1 };
       }
     }
 
@@ -1238,6 +1418,7 @@ export class ProfilesService {
       facets: {
         cities: Object.values(cityFacets).sort((a, b) => b.count - a.count).slice(0, 80),
         skills: Object.values(skillFacets).sort((a, b) => b.count - a.count).slice(0, 80),
+        jobTitles: Object.values(titleFacets).sort((a, b) => b.count - a.count).slice(0, 80),
       },
     };
   }

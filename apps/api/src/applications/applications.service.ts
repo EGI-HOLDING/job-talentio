@@ -8,6 +8,7 @@ import {
 import { ApplicationStatus, Prisma } from '@prisma/client';
 import { DEFAULT_PIPELINE } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -18,6 +19,7 @@ import { MailService } from '../mail/mail.service';
 export class ApplicationsService {
   constructor(
     private prisma: PrismaService,
+    private storage: StorageService,
     private companies: CompaniesService,
     private matching: MatchingService,
     private notifications: NotificationsService,
@@ -40,7 +42,7 @@ export class ApplicationsService {
         skills: { include: { skill: true } },
         experiences: true,
         educations: true,
-        resumes: true,
+        resumes: { where: { deletedAt: null } },
       },
     });
     if (!profile) throw new BadRequestException('Complete your employee profile first');
@@ -109,6 +111,8 @@ export class ApplicationsService {
             id: selectedResume.id,
             title: selectedResume.title,
             hasFile: Boolean(selectedResume.fileKey),
+            fileKey: selectedResume.fileKey ?? null,
+            fileUrl: selectedResume.fileUrl ?? null,
             templateKey: selectedResume.templateKey,
           }
         : null,
@@ -471,5 +475,36 @@ export class ApplicationsService {
       where: { applicationId },
       orderBy: { scheduledAt: 'asc' },
     });
+  }
+
+  /** Download CV for an application — live resume file, else snapshot fileKey. */
+  async downloadResume(user: AuthUser, applicationId: string) {
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: {
+        jobPost: { select: { companyId: true, title: true } },
+        profile: { select: { userId: true } },
+        resume: true,
+      },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    const isOwner = application.profile.userId === user.id;
+    if (!isOwner && user.role !== 'SUPER_ADMIN') {
+      await this.companies.assertMember(user, application.jobPost.companyId);
+    }
+
+    let fileKey = application.resume?.fileKey ?? null;
+    let title = application.resume?.title ?? 'Resume';
+    if (!fileKey) {
+      const snap = application.resumeSnapshot as
+        | { resume?: { fileKey?: string | null; title?: string | null } }
+        | null;
+      fileKey = snap?.resume?.fileKey ?? null;
+      if (snap?.resume?.title) title = snap.resume.title;
+    }
+    if (!fileKey) throw new NotFoundException('No resume file available for this application');
+
+    const url = await this.storage.getPresignedGetUrl(fileKey, 900);
+    return { url, expiresIn: 900, title };
   }
 }

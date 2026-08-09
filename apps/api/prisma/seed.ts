@@ -768,7 +768,8 @@ async function main() {
     employeeUsers.push(user);
 
     const tpl = JOB_TITLES[i % JOB_TITLES.length];
-    const headline = tpl.title;
+    const resolvedRole = await resolveJobTitle(prisma, { name: tpl.title });
+    const headline = resolvedRole.jobTitle.name;
     const yearsExp = tpl.years + (i % 3);
     const summaryVariants = [
       `${headline} with ${yearsExp}+ years of experience, currently based in ${city.name}. Open to hybrid and remote roles across Uzbekistan.`,
@@ -925,6 +926,18 @@ async function main() {
 
   // Jobs — refresh listings on each seed so counts stay predictable
   await prisma.jobPost.deleteMany({});
+  // Applications cascade with jobs; hard-purge soft-deleted resumes that lost all refs
+  {
+    const soft = await prisma.resume.findMany({
+      where: { deletedAt: { not: null } },
+      include: { _count: { select: { applications: true } } },
+    });
+    for (const r of soft) {
+      if (r._count.applications === 0) {
+        await prisma.resume.delete({ where: { id: r.id } });
+      }
+    }
+  }
   const jobRecords = [];
   // 96 = 2×48 templates → every category twice; cities round-robin all 15
   const JOB_COUNT = 96;
