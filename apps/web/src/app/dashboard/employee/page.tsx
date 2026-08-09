@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
@@ -62,7 +63,9 @@ const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
 
 export default function EmployeeDashboard() {
   const { t } = useI18n();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('overview');
+  const [addingResume, setAddingResume] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [apps, setApps] = useState<any[]>([]);
   const [recommended, setRecommended] = useState<any[]>([]);
@@ -390,6 +393,28 @@ export default function EmployeeDashboard() {
     });
     setMsg('Primary resume updated');
     await load();
+  }
+
+  async function addResume() {
+    setAddingResume(true);
+    setError('');
+    try {
+      const existing = profile?.resumes?.length || 0;
+      const created = await api<{ id: string }>('/profiles/me/resumes/from-builder', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: existing ? `Resume ${existing + 1}` : 'My Resume',
+          isPrimary: existing === 0,
+        }),
+      });
+      setMsg('Resume created');
+      await load();
+      router.push(`/dashboard/employee/resume-builder?resumeId=${encodeURIComponent(created.id)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create resume');
+    } finally {
+      setAddingResume(false);
+    }
   }
 
   function pickCvFile(file: File | null | undefined) {
@@ -1388,9 +1413,26 @@ export default function EmployeeDashboard() {
                     Named CV versions for applications - build, export, or attach a PDF.
                   </p>
                 </div>
-                <Link href="/dashboard/employee/resume-builder" className="chip" style={{ fontWeight: 600 }}>
-                  Open resume builder
-                </Link>
+                <div className="chips" style={{ justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="chip"
+                    style={{ fontWeight: 600 }}
+                    disabled={addingResume}
+                    onClick={addResume}
+                  >
+                    {addingResume ? 'Adding...' : `+ ${t('addResume')}`}
+                  </button>
+                  {(profile.resumes || []).length > 0 && (
+                    <Link
+                      href="/dashboard/employee/resume-builder"
+                      className="chip"
+                      style={{ fontWeight: 600 }}
+                    >
+                      {t('openResumeBuilder')}
+                    </Link>
+                  )}
+                </div>
               </div>
               <ul className="profile-list">
                 {(profile.resumes || []).map((r: any) => (
@@ -1460,9 +1502,7 @@ export default function EmployeeDashboard() {
               </ul>
               {!(profile.resumes || []).length && (
                 <p className="muted">
-                  No resumes yet -{' '}
-                  <Link href="/dashboard/employee/resume-builder">create one in the builder</Link>
-                  {' '}or import a PDF above.
+                  No resumes yet - use <strong>+ {t('addResume')}</strong> above, or import a PDF in Import from CV.
                 </p>
               )}
             </div>
