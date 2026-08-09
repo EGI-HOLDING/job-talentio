@@ -99,7 +99,7 @@ const DICT = {
   exploreByTitle: {
     uz: 'Lavozim bo‘yicha ishlar',
     ru: 'Вакансии по должностям',
-    en: 'Jobs by title',
+    en: 'Jobs by job title',
   },
   exploreByTitleSubtitle: {
     uz: 'Masalan Frontend Developer, Java Developer',
