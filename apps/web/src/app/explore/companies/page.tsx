@@ -261,14 +261,16 @@ function ExploreCompaniesPageInner() {
               )}
             </div>
             {data && data.total > 0 && (
-              <Pagination
-                page={data.page}
-                totalPages={data.totalPages}
-                total={data.total}
-                limit={data.limit}
-                onPageChange={(p) => setParams({ page: String(p) })}
-                disabled={loading}
-              />
+              <div className="pagination-wrap">
+                <Pagination
+                  page={data.page}
+                  totalPages={data.totalPages}
+                  total={data.total}
+                  limit={data.limit}
+                  onPageChange={(p) => setParams({ page: String(p) })}
+                  disabled={loading}
+                />
+              </div>
             )}
           </>
         )}
