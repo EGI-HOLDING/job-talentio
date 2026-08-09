@@ -44,6 +44,8 @@ export default function SettingsPage() {
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
+  const isRecruiter = session?.user.role === 'RECRUITER';
+  const canVerifyEmail = isEmployee || isRecruiter;
   const previewAvatar =
     avatarUrl ||
     (session
@@ -251,7 +253,7 @@ export default function SettingsPage() {
               <p className="muted" style={{ marginTop: 0 }}>
                 {t('updateProfileHint')}
               </p>
-              {isEmployee && (
+              {canVerifyEmail && (
                 <div
                   style={{
                     marginBottom: '1.25rem',

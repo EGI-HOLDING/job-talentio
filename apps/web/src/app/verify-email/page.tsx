@@ -65,10 +65,10 @@ function VerifyEmailInner() {
           <>
             <p style={{ color: '#be123c' }}>{message || t('verifyEmailFailed')}</p>
             <p className="muted" style={{ fontSize: '0.9rem' }}>
-              <Link href="/dashboard/employee" style={{ color: 'var(--accent)' }}>
-                {t('dashboard')}
+              <Link href="/settings" style={{ color: 'var(--accent)' }}>
+                {t('settings')}
               </Link>{' '}
-              - open Profile and request a new verification email.
+              - request a new verification email from your account.
             </p>
           </>
         )}
