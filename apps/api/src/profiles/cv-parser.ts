@@ -23,6 +23,11 @@ export type ParsedLanguage = {
   level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'NATIVE';
 };
 
+export type ParsedCvMeta = {
+  provider: string;
+  ocrUsed?: boolean;
+};
+
 export type ParsedCvData = {
   email?: string;
   phone?: string;
@@ -33,6 +38,8 @@ export type ParsedCvData = {
   educations: ParsedEducation[];
   languages: ParsedLanguage[];
   textPreview: string;
+  /** Parser diagnostics; UI review should ignore. */
+  meta?: ParsedCvMeta;
 };
 
 const DEGREE_MAP: Array<{ re: RegExp; degree: ParsedEducation['degree'] }> = [

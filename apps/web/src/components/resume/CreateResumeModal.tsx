@@ -61,8 +61,14 @@ export function CreateResumeModal({
 
   function pickFile(next: File | null | undefined) {
     if (!next) return;
+    const lower = next.name.toLowerCase();
     const ok =
-      next.type === 'application/pdf' || next.name.toLowerCase().endsWith('.pdf');
+      next.type === 'application/pdf' ||
+      next.type === 'application/msword' ||
+      next.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      lower.endsWith('.pdf') ||
+      lower.endsWith('.docx') ||
+      lower.endsWith('.doc');
     if (!ok) {
       setError(t('resumePdfOnly'));
       return;
@@ -227,7 +233,7 @@ export function CreateResumeModal({
               >
                 <input
                   type="file"
-                  accept="application/pdf,.pdf"
+                  accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                   onChange={(e) => pickFile(e.target.files?.[0])}
                   aria-label={t('resumeMethodUpload')}
                 />

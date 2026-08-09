@@ -422,9 +422,16 @@ export default function EmployeeDashboard() {
 
   function pickCvFile(file: File | null | undefined) {
     if (!file) return;
-    const okMime = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const lower = file.name.toLowerCase();
+    const okMime =
+      file.type === 'application/pdf' ||
+      file.type === 'application/msword' ||
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      lower.endsWith('.pdf') ||
+      lower.endsWith('.docx') ||
+      lower.endsWith('.doc');
     if (!okMime) {
-      setError('Only PDF files are supported');
+      setError(t('resumePdfOnly'));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -438,7 +445,7 @@ export default function EmployeeDashboard() {
   async function uploadCv(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!cvFile) {
-      setError('Choose a PDF file first');
+      setError(t('resumePdfRequired'));
       return;
     }
     setUploading(true);
@@ -1015,7 +1022,7 @@ export default function EmployeeDashboard() {
                 >
                   <input
                     type="file"
-                    accept="application/pdf"
+                    accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                     disabled={uploading}
                     aria-label={t('uploadCv')}
                     onChange={(e) => {
@@ -1549,7 +1556,7 @@ export default function EmployeeDashboard() {
                           {(r.hasFile || r.fileKey) ? t('replaceFile') : t('attachPdf')}
                           <input
                             type="file"
-                            accept="application/pdf"
+                            accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                             hidden
                             disabled={uploading}
                             onChange={(e) => {
