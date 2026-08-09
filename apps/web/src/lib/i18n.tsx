@@ -508,14 +508,14 @@ const DICT = {
   messageInput: { uz: 'Xabar matni', ru: 'Текст сообщения', en: 'Message text' },
   uploadCv: { uz: 'CV yuklash', ru: 'Загрузить CV', en: 'Upload CV' },
   uploadCvHint: {
-    uz: 'PDF faylni bu yerga tashlang yoki tanlang (maks. 5 MB)',
-    ru: 'Перетащите PDF сюда или выберите файл (макс. 5 МБ)',
-    en: 'Drop a PDF here or browse (max 5 MB)',
+    uz: 'PDF yoki DOCX ni bu yerga tashlang yoki tanlang (maks. 5 MB)',
+    ru: 'Перетащите PDF или DOCX сюда или выберите файл (макс. 5 МБ)',
+    en: 'Drop a PDF or DOCX here or browse (max 5 MB)',
   },
   uploadCvBrowse: {
     uz: 'Fayl tanlash',
     ru: 'Выбрать файл',
-    en: 'Browse PDF',
+    en: 'Browse file',
   },
   uploadCvParse: {
     uz: 'Yuklash',
@@ -858,9 +858,9 @@ const DICT = {
     en: 'Preview',
   },
   attachPdf: {
-    uz: 'PDF biriktirish',
-    ru: 'Прикрепить PDF',
-    en: 'Attach PDF',
+    uz: 'Fayl biriktirish',
+    ru: 'Прикрепить файл',
+    en: 'Attach file',
   },
   replaceFile: {
     uz: 'Faylni almashtirish',
@@ -961,19 +961,19 @@ const DICT = {
     en: 'PDF is optional - fill the builder and export when ready.',
   },
   resumeDropPdf: {
-    uz: 'PDF ni shu yerga tashlang yoki tanlang',
-    ru: 'Перетащите PDF сюда или выберите файл',
-    en: 'Drop a PDF here or choose a file',
+    uz: 'PDF/DOCX ni shu yerga tashlang yoki tanlang',
+    ru: 'Перетащите PDF/DOCX сюда или выберите файл',
+    en: 'Drop a PDF or DOCX here or choose a file',
   },
   resumePdfHint: {
-    uz: 'Faqat PDF, maksimal 5MB',
-    ru: 'Только PDF, до 5 МБ',
-    en: 'PDF only, max 5MB',
+    uz: 'PDF yoki DOCX, maksimal 5MB',
+    ru: 'PDF или DOCX, до 5 МБ',
+    en: 'PDF or DOCX, max 5MB',
   },
   resumePdfOnly: {
-    uz: 'Faqat PDF fayllar qo‘llab-quvvatlanadi',
-    ru: 'Поддерживаются только PDF',
-    en: 'Only PDF files are supported',
+    uz: 'Faqat PDF yoki DOCX qo‘llab-quvvatlanadi',
+    ru: 'Поддерживаются только PDF или DOCX',
+    en: 'Only PDF or DOCX files are supported',
   },
   resumeFileTooLarge: {
     uz: 'Fayl juda katta (maks. 5MB)',
@@ -981,9 +981,9 @@ const DICT = {
     en: 'File too large (max 5MB)',
   },
   resumePdfRequired: {
-    uz: 'PDF yuklash uchun fayl tanlang',
-    ru: 'Выберите PDF для загрузки',
-    en: 'Choose a PDF file to upload',
+    uz: 'PDF yoki DOCX fayl tanlang',
+    ru: 'Выберите PDF или DOCX',
+    en: 'Choose a PDF or DOCX file to upload',
   },
   resumeCreateFailed: {
     uz: 'Resume yaratib bo‘lmadi',

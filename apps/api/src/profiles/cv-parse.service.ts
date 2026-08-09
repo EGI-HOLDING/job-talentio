@@ -1,10 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { parseCvText, stripNullBytesDeep } from './cv-parser';
-
-const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
+import { CV_PARSE_PROVIDER, type CvParseProvider } from './parse/cv-parse.provider';
 
 export const CV_PARSE_QUEUE = 'cv-parse';
 
@@ -20,6 +18,7 @@ export class CvParseService {
   constructor(
     private prisma: PrismaService,
     private storage: StorageService,
+    @Inject(CV_PARSE_PROVIDER) private provider: CvParseProvider,
   ) {}
 
   setQueue(queue: Queue<CvParseJobPayload>) {
@@ -83,28 +82,16 @@ export class CvParseService {
       });
 
       const key = resume.fileKey;
-      const isPdf = /\.pdf$/i.test(key) || key.toLowerCase().includes('.pdf');
-      let parsed = parseCvText('', knownSkills);
+      const filename = filenameFromKey(key);
+      const mimeType = mimeFromFilename(filename);
+      const buffer = await this.storage.getObjectBuffer(key);
 
-      if (isPdf) {
-        const buffer = await this.storage.getObjectBuffer(key);
-        try {
-          const result = await pdfParse(buffer);
-          parsed = parseCvText(result.text || '', knownSkills);
-        } catch {
-          parsed = {
-            ...parseCvText('', knownSkills),
-            textPreview: 'Could not extract text from this PDF',
-          };
-        }
-      } else {
-        parsed = {
-          ...parseCvText('', knownSkills),
-          textPreview: 'Structured parse currently supports PDF; file is stored for download.',
-        };
-      }
-
-      parsed = stripNullBytesDeep(parsed);
+      const parsed = await this.provider.parse({
+        buffer,
+        filename,
+        mimeType,
+        knownSkills,
+      });
 
       await this.prisma.resume.update({
         where: { id: resumeId },
@@ -128,4 +115,21 @@ export class CvParseService {
       });
     }
   }
+}
+
+function filenameFromKey(key: string): string {
+  const base = key.split('/').pop() || key;
+  // keys look like: uuid-original_name.pdf
+  const dash = base.indexOf('-');
+  return dash >= 0 ? base.slice(dash + 1) : base;
+}
+
+function mimeFromFilename(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (lower.endsWith('.doc')) return 'application/msword';
+  return 'application/octet-stream';
 }

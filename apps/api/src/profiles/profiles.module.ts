@@ -5,6 +5,8 @@ import IORedis from 'ioredis';
 import { ProfilesController } from './profiles.controller';
 import { ProfilesService } from './profiles.service';
 import { CvParseService, CV_PARSE_QUEUE, CvParseJobPayload } from './cv-parse.service';
+import { CV_PARSE_PROVIDER } from './parse/cv-parse.provider';
+import { createCvParseProvider } from './parse/cv-parse.factory';
 import { CompaniesModule } from '../companies/companies.module';
 import { MatchingModule } from '../matching/matching.module';
 import { StorageModule } from '../storage/storage.module';
@@ -12,7 +14,15 @@ import { StorageModule } from '../storage/storage.module';
 @Module({
   imports: [CompaniesModule, MatchingModule, StorageModule],
   controllers: [ProfilesController],
-  providers: [ProfilesService, CvParseService],
+  providers: [
+    ProfilesService,
+    {
+      provide: CV_PARSE_PROVIDER,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => createCvParseProvider(config),
+    },
+    CvParseService,
+  ],
   exports: [ProfilesService, CvParseService],
 })
 export class ProfilesModule implements OnModuleInit {
@@ -46,7 +56,8 @@ export class ProfilesModule implements OnModuleInit {
         this.logger.warn(`CV parse job ${job?.id} failed: ${err.message}`);
       });
 
-      this.logger.log('CV parse worker started');
+      const providerName = this.config.get('CV_PARSE_PROVIDER', 'local');
+      this.logger.log(`CV parse worker started (provider=${providerName})`);
     } catch (err) {
       this.logger.warn(`CV parse queue unavailable: ${(err as Error).message}`);
     }
