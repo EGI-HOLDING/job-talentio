@@ -51,11 +51,16 @@ export class BillingService {
     return payment;
   }
 
-  async upgrade(user: AuthUser, companyId: string, plan: 'STANDARD' | 'PREMIUM') {
+  async upgrade(user: AuthUser, companyId: string, plan: 'STANDARD' | 'PREMIUM' | 'VIP') {
     await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN']);
     const current = await this.prisma.subscription.findUnique({ where: { companyId } });
     if (!current) throw new NotFoundException('Subscription not found');
-    const order: PlanCode[] = [PlanCode.FREE, PlanCode.STANDARD, PlanCode.PREMIUM];
+    const order: PlanCode[] = [
+      PlanCode.FREE,
+      PlanCode.STANDARD,
+      PlanCode.PREMIUM,
+      PlanCode.VIP,
+    ];
     if (order.indexOf(current.plan) >= order.indexOf(plan as PlanCode)) {
       throw new BadRequestException(`Already on ${current.plan} or higher`);
     }

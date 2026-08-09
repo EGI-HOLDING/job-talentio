@@ -244,6 +244,51 @@ const DICT = {
     ru: 'Компании, которые сейчас нанимают',
     en: 'Companies hiring right now',
   },
+  topCompanies: {
+    uz: 'Top kompaniyalar',
+    ru: 'Топ компании',
+    en: 'Top Companies',
+  },
+  topCompaniesSubtitle: {
+    uz: 'VIP ish beruvchilar - eng faol yollovchilar',
+    ru: 'VIP работодатели - самые активные наниматели',
+    en: 'VIP employers featured for hiring',
+  },
+  vipBadge: {
+    uz: 'VIP',
+    ru: 'VIP',
+    en: 'VIP',
+  },
+  exploreCompaniesTabs: {
+    uz: 'Kompaniyalar bo‘yicha ko‘rish',
+    ru: 'Просмотр компаний',
+    en: 'Browse companies',
+  },
+  exploreCompaniesTabIndustry: {
+    uz: 'Sanoat bo‘yicha',
+    ru: 'По отраслям',
+    en: 'By industry',
+  },
+  exploreCompaniesTabVip: {
+    uz: 'VIP',
+    ru: 'VIP',
+    en: 'VIP',
+  },
+  exploreCompaniesTabAll: {
+    uz: 'Barchasi',
+    ru: 'Все',
+    en: 'All',
+  },
+  exploreCompaniesSearch: {
+    uz: 'Kompaniya qidirish...',
+    ru: 'Поиск компании...',
+    en: 'Search companies...',
+  },
+  exploreCompaniesVipEmpty: {
+    uz: 'Hozircha VIP ish beruvchi yo‘q',
+    ru: 'Пока нет VIP работодателей',
+    en: 'No VIP employers yet',
+  },
   exploreByTitle: {
     uz: 'Lavozim bo‘yicha ishlar',
     ru: 'Вакансии по должностям',

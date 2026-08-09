@@ -13,7 +13,6 @@ import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
 import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
-import { ExploreIndustryCard } from '@/components/explore/ExploreIndustryCard';
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -28,6 +27,14 @@ type Job = {
 };
 
 type FacetItem = { slug: string; name: string; count: number; logoUrl?: string | null };
+
+type VipCompany = {
+  slug: string;
+  name: string;
+  logoUrl?: string | null;
+  plan?: string;
+  openJobsCount: number;
+};
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return null;
@@ -44,9 +51,8 @@ export function SeekerHome() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [hotJobs, setHotJobs] = useState<Job[]>([]);
   const [cityFacets, setCityFacets] = useState<FacetItem[]>([]);
-  const [companyFacets, setCompanyFacets] = useState<FacetItem[]>([]);
+  const [topCompanies, setTopCompanies] = useState<VipCompany[]>([]);
   const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
-  const [industryFacets, setIndustryFacets] = useState<FacetItem[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -54,19 +60,18 @@ export function SeekerHome() {
     api<{ items: Job[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false })
       .then((r) => setHotJobs(r.items))
       .catch(() => undefined);
+    api<{ items: VipCompany[] }>('/companies?plan=VIP&limit=8&sort=jobs', { auth: false })
+      .then((r) => setTopCompanies(r.items || []))
+      .catch(() => undefined);
     api<{
       facets?: {
         cities?: FacetItem[];
-        companies?: FacetItem[];
         categories?: FacetItem[];
         jobTitles?: FacetItem[];
-        industries?: FacetItem[];
       };
     }>('/jobs?limit=1&sort=newest', { auth: false })
       .then((r) => {
         setCityFacets((r.facets?.cities || []).slice(0, 8));
-        setCompanyFacets((r.facets?.companies || []).slice(0, 8));
-        setIndustryFacets((r.facets?.industries || []).slice(0, 8));
         const titles = (r.facets?.jobTitles || []).slice(0, 8);
         setTitleFacets(titles);
         const map: Record<string, number> = {};
@@ -134,6 +139,29 @@ export function SeekerHome() {
         </div>
       </section>
 
+      {topCompanies.length > 0 && (
+        <ExploreSection
+          title={t('topCompanies')}
+          subtitle={t('topCompaniesSubtitle')}
+          viewAllHref="/explore/companies?tab=vip"
+          viewAllLabel={t('viewAll')}
+          gridClassName="explore-grid--company"
+        >
+          {topCompanies.map((c) => (
+            <ExploreCompanyCard
+              key={c.slug}
+              name={c.name}
+              slug={c.slug}
+              logoUrl={c.logoUrl}
+              plan={c.plan || 'VIP'}
+              vipLabel={t('vipBadge')}
+              count={c.openJobsCount}
+              countLabel={rolesLabel(t, c.openJobsCount)}
+            />
+          ))}
+        </ExploreSection>
+      )}
+
       <section className="section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <h2 className="section-title">{t('hotJobs')}</h2>
@@ -196,25 +224,6 @@ export function SeekerHome() {
         ))}
       </ExploreSection>
 
-      {industryFacets.length > 0 && (
-        <ExploreSection
-          title={t('exploreByIndustry')}
-          subtitle={t('exploreByIndustrySubtitle')}
-          viewAllHref="/explore/industries"
-          viewAllLabel={t('viewAll')}
-        >
-          {industryFacets.map((item) => (
-            <ExploreIndustryCard
-              key={item.slug}
-              name={item.name}
-              slug={item.slug}
-              count={item.count}
-              countLabel={rolesLabel(t, item.count)}
-            />
-          ))}
-        </ExploreSection>
-      )}
-
       {cityFacets.length > 0 && (
         <ExploreSection
           title={t('exploreByCity')}
@@ -227,26 +236,6 @@ export function SeekerHome() {
               key={c.slug}
               name={c.name}
               slug={c.slug}
-              count={c.count}
-              countLabel={rolesLabel(t, c.count)}
-            />
-          ))}
-        </ExploreSection>
-      )}
-
-      {companyFacets.length > 0 && (
-        <ExploreSection
-          title={t('exploreByCompany')}
-          subtitle={t('exploreByCompanySubtitle')}
-          viewAllHref="/explore/companies"
-          viewAllLabel={t('viewAll')}
-        >
-          {companyFacets.map((c) => (
-            <ExploreCompanyCard
-              key={c.slug}
-              name={c.name}
-              slug={c.slug}
-              logoUrl={c.logoUrl}
               count={c.count}
               countLabel={rolesLabel(t, c.count)}
             />

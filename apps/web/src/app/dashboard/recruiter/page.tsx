@@ -18,17 +18,23 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
-type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM';
+type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 type CheckoutResponse = {
   payment: { id: string; status: string; amountUzs: number; purpose: string };
   checkoutUrl: string | null;
 };
 
-const PLAN_ORDER: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM'];
+const PLAN_ORDER: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM', 'VIP'];
 const PLAN_FEATURES: Record<PlanCode, string[]> = {
   FREE: ['1 active job', 'Blurred candidate contacts', 'No cold chat'],
   STANDARD: ['5 active jobs', 'Full candidate contacts', 'No cold chat'],
   PREMIUM: ['20 active jobs', 'Full candidate contacts', 'Cold chat (20/day)'],
+  VIP: [
+    '50 active jobs',
+    'Full candidate contacts',
+    'Cold chat (50/day)',
+    'VIP badge + Top Companies',
+  ],
 };
 
 function formatUzs(n: number) {
@@ -127,7 +133,7 @@ function RecruiterDashboard() {
     [memberships, companyId],
   );
   const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
-  const canColdChat = planCode === 'PREMIUM';
+  const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
   const activeJobLimit = PLAN_LIMITS[planCode].activeJobs;
   const activePublishedJobs =
     subscription?.activePublishedJobs ??
@@ -170,7 +176,7 @@ function RecruiterDashboard() {
     await loadJobs(companyId);
   }
 
-  async function upgradePlan(plan: 'STANDARD' | 'PREMIUM') {
+  async function upgradePlan(plan: 'STANDARD' | 'PREMIUM' | 'VIP') {
     if (!companyId || billingBusy) return;
     setBillingBusy(true);
     try {
@@ -1259,7 +1265,7 @@ function RecruiterDashboard() {
                       <button
                         type="button"
                         disabled={billingBusy}
-                        onClick={() => upgradePlan(plan as 'STANDARD' | 'PREMIUM')}
+                        onClick={() => upgradePlan(plan as 'STANDARD' | 'PREMIUM' | 'VIP')}
                       >
                         Upgrade to {plan}
                       </button>

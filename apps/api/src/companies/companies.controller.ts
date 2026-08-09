@@ -6,9 +6,10 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { companySchema } from '@job-talentio/shared';
+import { companyBrowseSchema, companySchema } from '@job-talentio/shared';
 import { CompanyMemberRole } from '@prisma/client';
 import { CompaniesService } from './companies.service';
 import {
@@ -24,6 +25,20 @@ import { parseDto } from '../common/utils';
 @Controller('companies')
 export class CompaniesController {
   constructor(private companies: CompaniesService) {}
+
+  /** Public hiring directory - must stay before :id routes. */
+  @Get()
+  browse(@Query() query: unknown) {
+    const data = parseDto(companyBrowseSchema, query);
+    return this.companies.browse({
+      q: data.q,
+      industrySlug: data.industrySlug,
+      plan: data.plan,
+      sort: data.sort ?? 'jobs',
+      page: data.page ?? 1,
+      limit: data.limit ?? 24,
+    });
+  }
 
   @Get('mine')
   @UseGuards(JwtAuthGuard, RolesGuard)
