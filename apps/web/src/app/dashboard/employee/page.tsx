@@ -74,6 +74,8 @@ export default function EmployeeDashboard() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [cvDragOver, setCvDragOver] = useState(false);
   const [draftAlertSkills, setDraftAlertSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
   const [deleteCvId, setDeleteCvId] = useState<string | null>(null);
@@ -390,37 +392,43 @@ export default function EmployeeDashboard() {
     await load();
   }
 
+  function pickCvFile(file: File | null | undefined) {
+    if (!file) return;
+    const okMime = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!okMime) {
+      setError('Only PDF files are supported');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large (max 5MB)');
+      return;
+    }
+    setError('');
+    setCvFile(file);
+  }
+
   async function uploadCv(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = e.currentTarget;
-    const input = form.querySelector<HTMLInputElement>('input[type=file]');
-    if (!input?.files?.[0]) return;
+    if (!cvFile) {
+      setError('Choose a PDF file first');
+      return;
+    }
     setUploading(true);
     setError('');
-    const picked = input.files[0];
-    // #region agent log
-    fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'employee/page.tsx:uploadCv:start',message:'client upload start',data:{mime:picked.type||null,size:picked.size,nameEndsPdf:picked.name.toLowerCase().endsWith('.pdf')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       const fd = new FormData();
-      fd.append('file', picked);
+      fd.append('file', cvFile);
       const resume = await api<{ id: string; parsedData: ParsedCv; needsReview?: boolean }>(
         '/profiles/me/resumes/upload',
         { method: 'POST', body: fd },
       );
-      // #region agent log
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'employee/page.tsx:uploadCv:ok',message:'client upload ok',data:{hasParsed:Boolean(resume.parsedData),resumeIdLen:resume.id?.length??0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      form.reset();
+      setCvFile(null);
       setMsg('CV uploaded - review what to import');
       await load();
       if (resume.parsedData) {
         setCvReview({ resumeId: resume.id, parsed: resume.parsedData });
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'employee/page.tsx:uploadCv:error',message:'client upload error',data:{errMsg:err instanceof Error ? err.message.slice(0,400) : String(err).slice(0,400)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
@@ -909,20 +917,72 @@ export default function EmployeeDashboard() {
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
                 Upload a PDF to parse skills, experience, and education into your profile. Review before importing.
               </p>
-              <form onSubmit={uploadCv} className="cv-upload-inline">
-                <label>
-                  <LabelText required>{t('uploadCv')}</LabelText>
+              <form onSubmit={uploadCv} className="cv-upload-form">
+                <div
+                  className={`cv-upload-drop${cvFile ? ' is-selected' : ''}${cvDragOver ? ' is-dragover' : ''}${uploading ? ' is-disabled' : ''}`}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    setCvDragOver(true);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setCvDragOver(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setCvDragOver(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setCvDragOver(false);
+                    pickCvFile(e.dataTransfer.files?.[0]);
+                  }}
+                >
                   <input
                     type="file"
                     accept="application/pdf"
-                    required
                     disabled={uploading}
                     aria-label={t('uploadCv')}
+                    onChange={(e) => {
+                      pickCvFile(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
                   />
-                </label>
-                <button type="submit" disabled={uploading}>
-                  {uploading ? 'Uploading...' : 'Upload CV & parse'}
-                </button>
+                  {cvFile ? (
+                    <div className="cv-upload-selected">
+                      <span className="cv-upload-icon" aria-hidden>
+                        PDF
+                      </span>
+                      <div className="cv-upload-selected-meta">
+                        <span className="muted" style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                          {t('uploadCvSelected')}
+                        </span>
+                        <strong title={cvFile.name}>{cvFile.name}</strong>
+                        <span>{(cvFile.size / 1024).toFixed(0)} KB</span>
+                      </div>
+                      <span className="cv-upload-browse">{t('uploadCvChange')}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="cv-upload-icon" aria-hidden>
+                        PDF
+                      </span>
+                      <strong>{t('uploadCv')}</strong>
+                      <span className="cv-upload-hint">{t('uploadCvHint')}</span>
+                      <span className="cv-upload-browse">{t('uploadCvBrowse')}</span>
+                    </>
+                  )}
+                </div>
+                <div className="cv-upload-actions">
+                  <button type="submit" className="cta" disabled={uploading || !cvFile}>
+                    {uploading ? 'Uploading...' : t('uploadCvParse')}
+                  </button>
+                  {cvFile && !uploading && (
+                    <button type="button" className="ghost" onClick={() => setCvFile(null)}>
+                      {t('cancel')}
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
 
