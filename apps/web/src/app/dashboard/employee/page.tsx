@@ -789,7 +789,7 @@ export default function EmployeeDashboard() {
             <div className="card profile-block">
               <h2 className="section-title" style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h2>
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                {profile.user?.email} ·{' '}
+                {profile.user?.email} -{' '}
                 {profile.user?.emailVerified ? (
                   <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
                 ) : (
