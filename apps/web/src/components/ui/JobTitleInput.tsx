@@ -15,10 +15,8 @@ type JobTitleInputProps = {
   onInferredLevel?: (level: string) => void;
 };
 
-const PREFIX_SENIORITY =
-  /^(junior|jr\.?|senior|sr\.?|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|principal|staff|intern(?:ship)?)\s+/i;
-const SUFFIX_SENIORITY =
-  /\s+(junior|jr\.?|senior|sr\.?|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|intern(?:ship)?)$/i;
+const SENIORITY_TOKEN_RE =
+  /\b(?:junior|senior|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|principal|staff|intern(?:ship)?|jr\.?|sr\.?)(?=\s|[|/(),-]|$)/gi;
 
 const LEVEL_MAP: Record<string, string> = {
   intern: 'INTERN',
@@ -38,7 +36,7 @@ const LEVEL_MAP: Record<string, string> = {
 
 /** Soft UX: strip seniority from display title + infer level (matches API title-resolve). */
 export function softNormalizeJobTitle(raw: string): { roleTitle: string; inferredLevel: string | null } {
-  let s = raw.trim().replace(/\s+/g, ' ');
+  let s = raw.trim().replace(/[–—]/g, '-').replace(/\s+/g, ' ');
   let inferred: string | null = null;
 
   const takeLevel = (token: string) => {
@@ -49,21 +47,31 @@ export function softNormalizeJobTitle(raw: string): { roleTitle: string; inferre
     if (!inferred && LEVEL_MAP[key]) inferred = LEVEL_MAP[key];
   };
 
-  for (let i = 0; i < 3; i++) {
-    const pre = s.match(PREFIX_SENIORITY);
-    if (pre) {
-      takeLevel(pre[1]);
-      s = s.slice(pre[0].length).trim();
-      continue;
-    }
-    const suf = s.match(SUFFIX_SENIORITY);
-    if (suf) {
-      takeLevel(suf[1]);
-      s = s.slice(0, suf.index).trim();
-      continue;
-    }
-    break;
-  }
+  // Drop parentheses that only contain seniority: "(Senior)", "(Jr.)"
+  s = s.replace(/\(\s*([^)]+?)\s*\)/g, (_m, inner: string) => {
+    const innerText = String(inner).trim();
+    SENIORITY_TOKEN_RE.lastIndex = 0;
+    const without = innerText
+      .replace(SENIORITY_TOKEN_RE, (token) => {
+        takeLevel(token);
+        return ' ';
+      })
+      .replace(/\s+/g, ' ')
+      .trim();
+    return without ? ` (${without}) ` : ' ';
+  });
+
+  SENIORITY_TOKEN_RE.lastIndex = 0;
+  s = s.replace(SENIORITY_TOKEN_RE, (token) => {
+    takeLevel(token);
+    return ' ';
+  });
+  s = s
+    .replace(/\(\s*\)/g, '')
+    .replace(/^\.+\s*|\s*\.+(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s\-–,|/]+|[\s\-–,|/]+$/g, '')
+    .trim();
 
   return { roleTitle: s || raw.trim(), inferredLevel: inferred };
 }

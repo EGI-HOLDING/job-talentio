@@ -844,7 +844,7 @@ async function main() {
         data: {
           profileId: profile.id,
           companyName: PREVIOUS_EMPLOYERS[i % PREVIOUS_EMPLOYERS.length],
-          title: i % 3 === 0 ? 'Junior Specialist' : `Associate ${headline}`,
+          title: i % 3 === 0 ? 'Specialist' : `Associate ${headline}`,
           cityId: cityMap.tashkent.id,
           startDate: new Date(2017 + (i % 3), 0, 1),
           endDate: new Date(2020, 11, 1),
@@ -857,7 +857,7 @@ async function main() {
         data: {
           profileId: profile.id,
           companyName: PREVIOUS_EMPLOYERS[(i + 3) % PREVIOUS_EMPLOYERS.length],
-          title: 'Intern',
+          title: 'Trainee',
           cityId: cities[(i + 2) % cities.length].id,
           startDate: new Date(2016, 6, 1),
           endDate: new Date(2016, 11, 30),

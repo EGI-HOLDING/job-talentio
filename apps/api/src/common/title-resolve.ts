@@ -31,25 +31,31 @@ const SENIORITY_LEVEL: Record<string, ExperienceLevel> = {
   sr: 'SENIOR',
   principal: 'SENIOR',
   staff: 'SENIOR',
-  lead: 'LEAD',
   executive: 'EXECUTIVE',
 };
 
-/** Tokens stripped only at start/end — never Manager/Director/Partner or "Team Lead" role names. */
-const PREFIX_SENIORITY =
-  /^(junior|jr\.?|senior|sr\.?|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|principal|staff|intern(?:ship)?)\s+/i;
-const SUFFIX_SENIORITY =
-  /\s+(junior|jr\.?|senior|sr\.?|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|intern(?:ship)?)$/i;
-/** "X Intern" / "Intern X" already covered; also "Motion Design Intern" */
-const TRAILING_INTERN = /\s+intern(?:ship)?$/i;
+/**
+ * Whole-word seniority tokens (not Lead/Manager — those are role names).
+ * Use trailing lookahead so "Sr." / "Jr." consume the period (plain `\b` would stop at `Sr`).
+ */
+const SENIORITY_TOKEN_RE =
+  /\b(?:junior|senior|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|principal|staff|intern(?:ship)?|jr\.?|sr\.?)(?=\s|[|/(),-]|$)/gi;
 
 export type StripSeniorityResult = {
   roleTitle: string;
   inferredLevel: ExperienceLevel | null;
 };
 
+export function titleHasSeniorityToken(input: string): boolean {
+  SENIORITY_TOKEN_RE.lastIndex = 0;
+  return SENIORITY_TOKEN_RE.test(input);
+}
+
 export function stripSeniorityFromTitle(input: string): StripSeniorityResult {
-  let s = input.trim().replace(/\s+/g, ' ');
+  let s = input
+    .trim()
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ');
   let inferred: ExperienceLevel | null = null;
 
   const takeLevel = (token: string) => {
@@ -61,29 +67,46 @@ export function stripSeniorityFromTitle(input: string): StripSeniorityResult {
     if (level && !inferred) inferred = level;
   };
 
-  for (let i = 0; i < 3; i++) {
-    const pre = s.match(PREFIX_SENIORITY);
-    if (pre) {
-      takeLevel(pre[1]);
-      s = s.slice(pre[0].length).trim();
-      continue;
-    }
-    const suf = s.match(SUFFIX_SENIORITY) || s.match(TRAILING_INTERN);
-    if (suf) {
-      takeLevel(suf[1] || 'intern');
-      s = s.slice(0, suf.index).trim();
-      continue;
-    }
-    break;
+  // Drop parentheses that only contain seniority: "(Senior)", "(Jr.)"
+  s = s.replace(/\(\s*([^)]+?)\s*\)/g, (_m, inner: string) => {
+    const innerText = String(inner).trim();
+    SENIORITY_TOKEN_RE.lastIndex = 0;
+    const without = innerText.replace(SENIORITY_TOKEN_RE, (token) => {
+      takeLevel(token);
+      return ' ';
+    }).replace(/\s+/g, ' ').trim();
+    return without ? ` (${without}) ` : ' ';
+  });
+
+  // Remove every whole-word seniority token anywhere in the title
+  SENIORITY_TOKEN_RE.lastIndex = 0;
+  s = s.replace(SENIORITY_TOKEN_RE, (token) => {
+    takeLevel(token);
+    return ' ';
+  });
+
+  s = s
+    .replace(/\(\s*\)/g, '')
+    .replace(/^\.+\s*|\s*\.+(?=\s|$)/g, ' ')
+    .replace(/\s*([|/])\s*/g, ' $1 ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s\-–,|/]+|[\s\-–,|/]+$/g, '')
+    .trim();
+
+  if (!s) {
+    SENIORITY_TOKEN_RE.lastIndex = 0;
+    s = input
+      .replace(SENIORITY_TOKEN_RE, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
-  // Parenthetical leftovers like "(Remote-first)" stay; strip empty parens
-  s = s.replace(/\(\s*\)/g, '').replace(/\s+/g, ' ').trim();
-  return { roleTitle: s || input.trim(), inferredLevel: inferred };
+  return { roleTitle: s, inferredLevel: inferred };
 }
 
 export function normalizeJobTitleKey(input: string): string {
-  let s = input
+  const { roleTitle } = stripSeniorityFromTitle(input);
+  let s = roleTitle
     .trim()
     .toLowerCase()
     .normalize('NFKD')
@@ -108,19 +131,19 @@ export function normalizeJobTitleKey(input: string): string {
 }
 
 export function jobTitleSlugify(input: string): string {
-  let s = input.trim().toLowerCase();
+  const { roleTitle } = stripSeniorityFromTitle(input);
+  let s = roleTitle.trim().toLowerCase();
   s = s
     .replace(/c\+\+/gi, 'cplusplus')
     .replace(/\bcpp\b/gi, 'cplusplus')
     .replace(/front[\s-]*end/gi, 'frontend')
     .replace(/back[\s-]*end/gi, 'backend')
     .replace(/full[\s-]*stack/gi, 'fullstack');
-  return slugify(s) || normalizeJobTitleKey(input).slice(0, 60);
+  return slugify(s) || normalizeJobTitleKey(roleTitle).slice(0, 60);
 }
 
-function canonicalDisplayName(roleTitle: string): string {
-  let s = roleTitle.trim().replace(/\s+/g, ' ');
-  // Prefer readable tech tokens
+export function canonicalDisplayName(roleTitle: string): string {
+  let s = stripSeniorityFromTitle(roleTitle).roleTitle.trim().replace(/\s+/g, ' ');
   s = s
     .replace(/\bcpp\b/gi, 'C++')
     .replace(/\bc\+\+\b/gi, 'C++')
@@ -146,9 +169,52 @@ export type ResolveJobTitleResult = {
   created: boolean;
   matchedVia: 'slug' | 'normalizedKey' | 'alias' | 'name' | 'created';
   inferredLevel: ExperienceLevel | null;
-  /** Original input after seniority strip (before catalog name overwrite). */
   roleTitle: string;
 };
+
+/** If catalog display name still has Senior/Junior/…, rewrite it in place (or point at clean twin). */
+async function ensureCleanCatalogName(
+  db: Db,
+  jobTitle: JobTitle,
+  roleTitle: string,
+): Promise<JobTitle> {
+  const clean = canonicalDisplayName(roleTitle);
+  const key = normalizeJobTitleKey(roleTitle);
+
+  if (!titleHasSeniorityToken(jobTitle.name) && jobTitle.name === clean) {
+    return jobTitle;
+  }
+
+  // Prefer an already-clean twin with the same key
+  if (key) {
+    const twin = await db.jobTitle.findUnique({ where: { normalizedKey: key } });
+    if (twin && twin.id !== jobTitle.id && !titleHasSeniorityToken(twin.name)) {
+      return twin;
+    }
+  }
+
+  if (!titleHasSeniorityToken(jobTitle.name) && !titleHasSeniorityToken(clean)) {
+    if (normalizeJobTitleKey(jobTitle.name) === key && jobTitle.name !== clean) {
+      return db.jobTitle
+        .update({ where: { id: jobTitle.id }, data: { name: clean } })
+        .catch(() => jobTitle);
+    }
+    return jobTitle;
+  }
+
+  const slug = jobTitleSlugify(roleTitle) || key.slice(0, 60);
+  return db.jobTitle
+    .update({
+      where: { id: jobTitle.id },
+      data: { name: clean, ...(key ? { normalizedKey: key } : {}), ...(slug ? { slug } : {}) },
+    })
+    .catch(async () => {
+      const existing = key
+        ? await db.jobTitle.findUnique({ where: { normalizedKey: key } })
+        : null;
+      return existing ?? { ...jobTitle, name: clean };
+    });
+}
 
 /**
  * Strict find-or-create for role titles. Seniority is stripped; synonyms/aliases collapse variants.
@@ -167,64 +233,46 @@ export async function resolveJobTitle(
     throw new BadRequestException('Job title is too short after removing seniority words');
   }
 
-  const slug = opts.slug
-    ? jobTitleSlugify(opts.slug)
-    : jobTitleSlugify(roleTitle);
+  const slug = opts.slug ? jobTitleSlugify(opts.slug) : jobTitleSlugify(roleTitle);
   const key = normalizeJobTitleKey(roleTitle);
   if (!key || key.length < 2) {
     throw new BadRequestException('Job title is too short or invalid');
   }
 
+  const finish = async (
+    jobTitle: JobTitle,
+    matchedVia: ResolveJobTitleResult['matchedVia'],
+    created: boolean,
+  ): Promise<ResolveJobTitleResult> => {
+    const cleaned = await ensureCleanCatalogName(db, jobTitle, roleTitle);
+    await ensureAlias(db, cleaned.id, raw, key);
+    return { jobTitle: cleaned, created, matchedVia, inferredLevel, roleTitle };
+  };
+
   const bySlug = slug ? await db.jobTitle.findUnique({ where: { slug } }) : null;
-  if (bySlug) {
-    await ensureAlias(db, bySlug.id, raw, key);
-    return {
-      jobTitle: bySlug,
-      created: false,
-      matchedVia: 'slug',
-      inferredLevel,
-      roleTitle,
-    };
-  }
+  if (bySlug) return finish(bySlug, 'slug', false);
 
   const byKey = await db.jobTitle.findUnique({ where: { normalizedKey: key } });
-  if (byKey) {
-    await ensureAlias(db, byKey.id, raw, key);
-    return {
-      jobTitle: byKey,
-      created: false,
-      matchedVia: 'normalizedKey',
-      inferredLevel,
-      roleTitle,
-    };
-  }
+  if (byKey) return finish(byKey, 'normalizedKey', false);
 
   const byAlias = await db.jobTitleAlias.findUnique({
     where: { aliasKey: key },
     include: { jobTitle: true },
   });
-  if (byAlias?.jobTitle) {
-    return {
-      jobTitle: byAlias.jobTitle,
-      created: false,
-      matchedVia: 'alias',
-      inferredLevel,
-      roleTitle,
-    };
-  }
+  if (byAlias?.jobTitle) return finish(byAlias.jobTitle, 'alias', false);
 
-  const byName = await db.jobTitle.findFirst({
-    where: { name: { equals: roleTitle, mode: 'insensitive' } },
+  // Also match dirty catalog names that still contain seniority
+  const byDirtyName = await db.jobTitle.findFirst({
+    where: {
+      OR: [
+        { name: { equals: roleTitle, mode: 'insensitive' } },
+        { name: { equals: raw, mode: 'insensitive' } },
+        { name: { contains: roleTitle, mode: 'insensitive' } },
+      ],
+    },
   });
-  if (byName) {
-    await ensureAlias(db, byName.id, raw, key);
-    return {
-      jobTitle: byName,
-      created: false,
-      matchedVia: 'name',
-      inferredLevel,
-      roleTitle,
-    };
+  if (byDirtyName && normalizeJobTitleKey(byDirtyName.name) === key) {
+    return finish(byDirtyName, 'name', false);
   }
 
   if (!allowCreate) {
@@ -248,35 +296,16 @@ export async function resolveJobTitle(
         normalizedKey: key,
       },
     });
-    if (normalizeJobTitleKey(displayName) !== key || raw !== displayName) {
-      await ensureAlias(db, jobTitle.id, raw, key);
-    }
-    // Also alias common orthographic variant of the same key
     const altKey = normalizeJobTitleKey(raw);
     if (altKey && altKey !== key) {
       await ensureAlias(db, jobTitle.id, raw, altKey);
     }
-    return {
-      jobTitle,
-      created: true,
-      matchedVia: 'created',
-      inferredLevel,
-      roleTitle,
-    };
+    return finish(jobTitle, 'created', true);
   } catch {
     const again =
       (await db.jobTitle.findUnique({ where: { slug: finalSlug } })) ||
       (await db.jobTitle.findUnique({ where: { normalizedKey: key } }));
-    if (again) {
-      await ensureAlias(db, again.id, raw, key);
-      return {
-        jobTitle: again,
-        created: false,
-        matchedVia: 'slug',
-        inferredLevel,
-        roleTitle,
-      };
-    }
+    if (again) return finish(again, 'slug', false);
     throw new BadRequestException('Could not create job title');
   }
 }
