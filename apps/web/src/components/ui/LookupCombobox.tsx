@@ -13,6 +13,7 @@ export type LookupSuggestion = {
   aliases?: string[];
   usageCount?: number;
   icon?: string | null;
+  provinceLabel?: string;
 };
 
 type LookupKind = 'skills' | 'benefits' | 'languages' | 'cities';
@@ -191,6 +192,11 @@ export function LookupCombobox({
                 <span>
                   {kind === 'benefits' ? benefitIconLabel(s.slug, s.icon) : ''}
                   {s.name}
+                  {kind === 'cities' && s.provinceLabel ? (
+                    <span className="muted" style={{ display: 'block', fontSize: '0.8rem' }}>
+                      {s.provinceLabel}
+                    </span>
+                  ) : null}
                 </span>
                 {s.usageCount !== undefined && (
                   <span className="muted" style={{ fontSize: '0.8rem' }}>

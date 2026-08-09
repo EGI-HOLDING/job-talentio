@@ -15,6 +15,8 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:backfill-job-titles": "tsx prisma/backfill-job-titles.ts",
     "backfill:job-titles": "node dist/scripts/backfill-job-titles.js",
+    "prisma:backfill-geo": "tsx prisma/backfill-geo.ts",
+    "backfill:geo": "node dist/scripts/backfill-geo.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {

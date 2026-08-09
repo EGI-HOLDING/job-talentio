@@ -172,6 +172,12 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum ProvinceType {
+  REGION
+  CITY
+  REPUBLIC
+}
+
 // ─── Lookup tables ───────────────────────────────────────────
 
 model Skill {
@@ -200,17 +206,51 @@ model SkillAlias {
   @@index([skillId])
 }
 
-model City {
-  id     String  @id @default(cuid())
-  name   String
-  slug   String  @unique
-  region String?
+model Country {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  iso2         String   @unique @db.Char(2)
+  iso3         String   @db.Char(3)
+  phoneCode    String
+  currencyCode String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  jobPosts       JobPost[]
-  profiles       EmployeeProfile[]
-  companies      Company[]
-  jobAlerts      JobAlert[]
+  provinces Province[]
+}
+
+model Province {
+  id        String       @id @default(cuid())
+  countryId String
+  name      String
+  slug      String
+  type      ProvinceType @default(REGION)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  cities  City[]
+
+  @@unique([countryId, slug])
+  @@index([countryId])
+}
+
+model City {
+  id         String @id @default(cuid())
+  name       String
+  slug       String @unique
+  provinceId String
+
+  province        Province          @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  jobPosts        JobPost[]
+  profiles        EmployeeProfile[]
+  companies       Company[]
+  jobAlerts       JobAlert[]
   workExperiences WorkExperience[]
+
+  @@index([provinceId])
 }
 
 model JobCategory {

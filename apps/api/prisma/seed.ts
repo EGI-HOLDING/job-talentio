@@ -3,6 +3,7 @@ import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
 import * as bcrypt from 'bcryptjs';
 import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
 import { jobFingerprint } from '../src/common/dedupe';
+import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -29,22 +30,23 @@ function logo(name: string, color: string) {
   return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`;
 }
 
-const CITIES = [
-  { name: 'Tashkent', slug: 'tashkent', region: 'Tashkent' },
-  { name: 'Samarkand', slug: 'samarkand', region: 'Samarkand' },
-  { name: 'Bukhara', slug: 'bukhara', region: 'Bukhara' },
-  { name: 'Andijan', slug: 'andijan', region: 'Andijan' },
-  { name: 'Namangan', slug: 'namangan', region: 'Namangan' },
-  { name: 'Fergana', slug: 'fergana', region: 'Fergana' },
-  { name: 'Nukus', slug: 'nukus', region: 'Karakalpakstan' },
-  { name: 'Urgench', slug: 'urgench', region: 'Khorezm' },
-  { name: 'Navoi', slug: 'navoi', region: 'Navoi' },
-  { name: 'Karshi', slug: 'karshi', region: 'Kashkadarya' },
-  { name: 'Termez', slug: 'termez', region: 'Surkhandarya' },
-  { name: 'Jizzakh', slug: 'jizzakh', region: 'Jizzakh' },
-  { name: 'Gulistan', slug: 'gulistan', region: 'Sirdarya' },
-  { name: 'Chirchiq', slug: 'chirchiq', region: 'Tashkent Region' },
-  { name: 'Angren', slug: 'angren', region: 'Tashkent Region' },
+/** Primary hubs used for round-robin seed of jobs/companies/profiles */
+const SEED_CITY_SLUGS = [
+  'tashkent',
+  'samarkand',
+  'bukhara',
+  'andijan',
+  'namangan',
+  'fergana',
+  'nukus',
+  'urgench',
+  'navoi',
+  'karshi',
+  'termez',
+  'jizzakh',
+  'gulistan',
+  'chirchiq',
+  'angren',
 ];
 
 const CATEGORIES = [
@@ -490,17 +492,20 @@ async function main() {
   console.log('Seeding Job Talentio...');
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
-  // Lookups
-  const cities = await Promise.all(
-    CITIES.map((c) =>
-      prisma.city.upsert({
-        where: { slug: c.slug },
-        update: c,
-        create: c,
-      }),
-    ),
+  // Geo hierarchy (Country → Province → City)
+  const geo = await upsertUzbekistanGeo(prisma);
+  console.log(
+    `Geo: country=${geo.countryId} provinces=${geo.provincesUpserted} cities=${geo.citiesUpserted}`,
   );
-  const cityMap = Object.fromEntries(cities.map((c) => [c.slug, c]));
+  const cityMapRows = await prisma.city.findMany({
+    where: { slug: { in: SEED_CITY_SLUGS } },
+  });
+  const cityMap = Object.fromEntries(cityMapRows.map((c) => [c.slug, c]));
+  const cities = SEED_CITY_SLUGS.map((slug) => {
+    const row = cityMap[slug];
+    if (!row) throw new Error(`Missing seed city slug: ${slug}`);
+    return row;
+  });
 
   const categories = await Promise.all(
     CATEGORIES.map((c) =>

@@ -102,8 +102,9 @@ Do this **before** relying on web/admin. Postgres/Redis are **separate Railway s
    - Custom start command: empty
    - Serverless: **off**
 6. **Deploy** / redeploy **api**. In deploy logs you should see:
-   1. `prisma migrate deploy` succeed
-   2. `JobTitle backfill: scanned=… updated=… catalogCleaned=… catalogMerged=…` (purges Senior/Junior/… from `JobPost.title` + `JobTitle.name`, fills `jobTitleId`)
+   1. `prisma migrate deploy` succeed (includes Country → Province → City)
+   2. `Geo backfill: countries=… provinces=… cities=…` (expands UZ city catalog)
+   3. `JobTitle backfill: scanned=… updated=… catalogCleaned=… catalogMerged=…` (purges Senior/Junior/… from `JobPost.title` + `JobTitle.name`, fills `jobTitleId`)
    3. Nest process start
 7. Open `https://<api-public-host>/api/health` (custom domain or `*.up.railway.app`) and expect `status: ok`.
 
@@ -263,6 +264,7 @@ credentials. Use one of:
 
 - [ ] Staging deploys from `develop`; production from `main`
 - [ ] `pnpm db:migrate:deploy` runs on api container start (Dockerfile CMD)
+- [ ] Geo backfill runs after migrate (`dist/scripts/backfill-geo.js`); `/meta/countries` + `/meta/provinces` + `/explore/cities` group by province
 - [ ] JobTitle backfill runs after migrate (`dist/scripts/backfill-job-titles.js`); explore titles / job cards show role-only titles
 - [ ] `GET https://api…/api/health` returns ok
 - [ ] Login employee / recruiter / admin

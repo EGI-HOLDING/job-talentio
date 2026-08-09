@@ -133,18 +133,111 @@ export class MetaService {
       .slice(0, limit);
   }
 
-  cities(q?: string) {
-    return this.prisma.city.findMany({
-      where: q
-        ? {
-            OR: [
-              { name: { contains: q, mode: 'insensitive' } },
-              { slug: { contains: q, mode: 'insensitive' } },
-            ],
-          }
-        : undefined,
+  countries() {
+    return this.prisma.country.findMany({
+      where: { isActive: true },
       orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        iso2: true,
+        iso3: true,
+        phoneCode: true,
+        currencyCode: true,
+      },
     });
+  }
+
+  async provinces(country?: string) {
+    const raw = (country || 'uz').trim().toLowerCase();
+    const where =
+      raw === 'uz' || raw === 'uzbekistan'
+        ? { OR: [{ iso2: 'UZ' }, { slug: 'uzbekistan' }] }
+        : raw.length === 2
+          ? { iso2: raw.toUpperCase() }
+          : { slug: raw };
+    const c = await this.prisma.country.findFirst({ where });
+    if (!c) return [];
+    return this.prisma.province.findMany({
+      where: { countryId: c.id, NOT: { slug: 'other-uzbekistan' } },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        type: true,
+        country: { select: { slug: true, name: true, iso2: true } },
+      },
+    });
+  }
+
+  private citySelect = {
+    id: true,
+    name: true,
+    slug: true,
+    province: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        type: true,
+        country: { select: { slug: true, name: true, iso2: true } },
+      },
+    },
+  } as const;
+
+  async cities(q?: string, province?: string, group?: string) {
+    const term = q?.trim();
+    const provinceSlug = province?.trim();
+    const rows = await this.prisma.city.findMany({
+      where: {
+        AND: [
+          term
+            ? {
+                OR: [
+                  { name: { contains: term, mode: 'insensitive' } },
+                  { slug: { contains: term, mode: 'insensitive' } },
+                  { province: { name: { contains: term, mode: 'insensitive' } } },
+                ],
+              }
+            : {},
+          provinceSlug ? { province: { slug: provinceSlug } } : {},
+          { province: { NOT: { slug: 'other-uzbekistan' } } },
+        ],
+      },
+      orderBy: [{ province: { name: 'asc' } }, { name: 'asc' }],
+      select: this.citySelect,
+    });
+
+    if (group === 'province') {
+      const sections = new Map<
+        string,
+        { province: { slug: string; name: string; type: string }; cities: typeof rows }
+      >();
+      for (const city of rows) {
+        const key = city.province.slug;
+        if (!sections.has(key)) {
+          sections.set(key, {
+            province: {
+              slug: city.province.slug,
+              name: city.province.name,
+              type: city.province.type,
+            },
+            cities: [],
+          });
+        }
+        sections.get(key)!.cities.push(city);
+      }
+      return {
+        group: 'province' as const,
+        sections: [...sections.values()].sort((a, b) =>
+          a.province.name.localeCompare(b.province.name),
+        ),
+      };
+    }
+
+    return rows;
   }
 
   async categories() {
@@ -240,18 +333,27 @@ export class MetaService {
   async suggestCities(q?: string, take = 10) {
     const limit = Math.min(Math.max(take || 10, 1), 20);
     const term = q?.trim();
-    return this.prisma.city.findMany({
+    const rows = await this.prisma.city.findMany({
       where: term
         ? {
             OR: [
               { name: { contains: term, mode: 'insensitive' } },
               { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+              { province: { name: { contains: term, mode: 'insensitive' } } },
             ],
           }
         : undefined,
       orderBy: { name: 'asc' },
       take: limit,
+      select: this.citySelect,
     });
+    return rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      province: c.province,
+      provinceLabel: c.province.name,
+    }));
   }
 
   async jobTitles(q?: string, page = 1, limit = 24) {

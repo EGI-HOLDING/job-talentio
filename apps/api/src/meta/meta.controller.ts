@@ -20,14 +20,28 @@ export class MetaController {
     return this.meta.skills(q, category, sort, take ? Number(take) : 100);
   }
 
+  @Get('countries')
+  countries() {
+    return this.meta.countries();
+  }
+
+  @Get('provinces')
+  provinces(@Query('country') country?: string) {
+    return this.meta.provinces(country);
+  }
+
   @Get('cities/suggest')
   suggestCities(@Query('q') q?: string, @Query('take') take?: string) {
     return this.meta.suggestCities(q, take ? Number(take) : 10);
   }
 
   @Get('cities')
-  cities(@Query('q') q?: string) {
-    return this.meta.cities(q);
+  cities(
+    @Query('q') q?: string,
+    @Query('province') province?: string,
+    @Query('group') group?: string,
+  ) {
+    return this.meta.cities(q, province, group);
   }
 
   @Get('categories')
