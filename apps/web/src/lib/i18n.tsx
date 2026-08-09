@@ -812,6 +812,56 @@ const DICT = {
     ru: 'Конструктор резюме',
     en: 'Open resume builder',
   },
+  openInBuilder: {
+    uz: 'Builderda ochish',
+    ru: 'Открыть в конструкторе',
+    en: 'Open in builder',
+  },
+  editInBuilder: {
+    uz: 'Builderda tahrirlash',
+    ru: 'Редактировать в конструкторе',
+    en: 'Edit in builder',
+  },
+  viewPdf: {
+    uz: 'PDF ni ko‘rish',
+    ru: 'Смотреть PDF',
+    en: 'View PDF',
+  },
+  previewResume: {
+    uz: 'Ko‘rib chiqish',
+    ru: 'Предпросмотр',
+    en: 'Preview',
+  },
+  attachPdf: {
+    uz: 'PDF biriktirish',
+    ru: 'Прикрепить PDF',
+    en: 'Attach PDF',
+  },
+  replaceFile: {
+    uz: 'Faylni almashtirish',
+    ru: 'Заменить файл',
+    en: 'Replace file',
+  },
+  viewCv: {
+    uz: 'CV ni ko‘rish',
+    ru: 'Смотреть CV',
+    en: 'View CV',
+  },
+  appliedWithResume: {
+    uz: 'Ariza bilan: {title}',
+    ru: 'Отклик с: {title}',
+    en: 'Applied with: {title}',
+  },
+  noCvAttached: {
+    uz: 'CV biriktirilmagan',
+    ru: 'CV не прикреплено',
+    en: 'No CV attached',
+  },
+  viewCvFailed: {
+    uz: 'CV ochib bo‘lmadi',
+    ru: 'Не удалось открыть CV',
+    en: 'Could not open CV',
+  },
   addBenefit: { uz: 'Imtiyoz qo‘shish', ru: 'Добавить льготу', en: 'Add benefit' },
   addLanguage: { uz: 'Til qo‘shish', ru: 'Добавить язык', en: 'Add language' },
   confirmAddLookup: {
