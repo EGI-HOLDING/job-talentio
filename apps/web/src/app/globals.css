@@ -280,6 +280,14 @@ button.notif-item:hover {
 button.notif-item.unread {
   background: var(--surface-2);
 }
+/* Language menu: hover text matches brand / nav link accent */
+.lang-switch button.notif-item:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.lang-switch button.notif-item:hover strong {
+  color: var(--accent);
+}
 .notif-item strong { display: block; font-size: 0.9rem; }
 .notif-item span { color: var(--muted); font-size: 0.8rem; }
 
