@@ -572,6 +572,7 @@ export class JobsService {
     category?: string;
     company?: string;
     companySlug?: string;
+    industrySlug?: string;
     jobTitle?: string;
     employmentType?: string;
     workMode?: string;
@@ -614,6 +615,13 @@ export class JobsService {
       .filter(Boolean);
     if (companySlugs.length) {
       and.push({ company: { slug: { in: companySlugs } } });
+    }
+    const industrySlugs = (query.industrySlug || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (industrySlugs.length) {
+      and.push({ company: { industry: { slug: { in: industrySlugs } } } });
     }
     if (query.employmentType) and.push({ employmentType: query.employmentType as never });
     if (query.workMode) and.push({ workMode: query.workMode as never });
@@ -827,7 +835,20 @@ export class JobsService {
         city: { select: { slug: true, name: true } },
         category: { select: { slug: true, name: true } },
         jobTitle: { select: { slug: true, name: true } },
-        company: { select: { slug: true, name: true, logoUrl: true } },
+        company: {
+          select: {
+            slug: true,
+            name: true,
+            logoUrl: true,
+            industry: {
+              select: {
+                slug: true,
+                name: true,
+                group: { select: { slug: true, name: true } },
+              },
+            },
+          },
+        },
         jobSkills: { select: { skill: { select: { slug: true, name: true } } } },
       },
       take: 1000,
@@ -839,6 +860,10 @@ export class JobsService {
     const companyFacets: Record<
       string,
       { slug: string; name: string; logoUrl?: string | null; count: number }
+    > = {};
+    const industryFacets: Record<
+      string,
+      { slug: string; name: string; groupSlug?: string; groupName?: string; count: number }
     > = {};
     const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
     const experienceFacets: Record<string, number> = {};
@@ -871,6 +896,18 @@ export class JobsService {
               logoUrl: j.company.logoUrl,
               count: 1,
             };
+        if (j.company.industry) {
+          const ik = j.company.industry.slug;
+          industryFacets[ik] = industryFacets[ik]
+            ? { ...industryFacets[ik], count: industryFacets[ik].count + 1 }
+            : {
+                slug: j.company.industry.slug,
+                name: j.company.industry.name,
+                groupSlug: j.company.industry.group?.slug,
+                groupName: j.company.industry.group?.name,
+                count: 1,
+              };
+        }
       }
       if (j.experienceLevel) {
         experienceFacets[j.experienceLevel] = (experienceFacets[j.experienceLevel] || 0) + 1;
@@ -898,6 +935,7 @@ export class JobsService {
         categories: Object.values(categoryFacets).sort((a, b) => b.count - a.count),
         jobTitles: Object.values(jobTitleFacets).sort((a, b) => b.count - a.count),
         companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
+        industries: Object.values(industryFacets).sort((a, b) => b.count - a.count),
         skills: Object.values(skillFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,
       },

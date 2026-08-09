@@ -15,7 +15,7 @@ type Company = {
   logoUrl?: string | null;
   isVerified?: boolean;
   city?: { name: string } | null;
-  industry?: { name: string } | null;
+  industry?: { name: string; slug: string } | null;
   size?: string | null;
   _count?: { followers: number; jobPosts: number };
   jobPosts: Array<{
@@ -85,7 +85,11 @@ export default function CompanyPage() {
             {company.name} {company.isVerified ? '✓' : ''}
           </h1>
           <div className="job-meta">
-            {company.industry && <span>{company.industry.name}</span>}
+            {company.industry && (
+              <Link href={`/jobs?industrySlug=${encodeURIComponent(company.industry.slug)}`}>
+                {company.industry.name}
+              </Link>
+            )}
             {company.city && <span>{company.city.name}</span>}
             {company.size && <span>{company.size.replace('SIZE_', '').replace(/_/g, '-')}</span>}
             <span>{company._count?.followers ?? 0} followers</span>

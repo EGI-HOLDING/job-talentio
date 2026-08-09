@@ -50,8 +50,8 @@ export class MetaController {
   }
 
   @Get('industries')
-  industries() {
-    return this.meta.industries();
+  industries(@Query('group') group?: string) {
+    return this.meta.industries(group);
   }
 
   @Get('benefits/suggest')

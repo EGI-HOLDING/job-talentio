@@ -263,12 +263,26 @@ model JobCategory {
   jobAlerts JobAlert[]
 }
 
-model Industry {
-  id   String @id @default(cuid())
-  name String
-  slug String @unique
+model IndustryGroup {
+  id        String @id @default(cuid())
+  name      String
+  slug      String @unique
+  sortOrder Int    @default(0)
 
+  industries Industry[]
+}
+
+model Industry {
+  id        String @id @default(cuid())
+  name      String
+  slug      String @unique
+  sortOrder Int    @default(0)
+  groupId   String
+
+  group     IndustryGroup @relation(fields: [groupId], references: [id])
   companies Company[]
+
+  @@index([groupId])
 }
 
 model Language {

@@ -4,6 +4,8 @@ import * as bcrypt from 'bcryptjs';
 import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
 import { jobFingerprint } from '../src/common/dedupe';
 import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
+import { backfillIndustries } from '../src/common/industry-backfill';
+import { COMPANY_INDUSTRY_OVERRIDES } from '../src/common/industry-catalog';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -62,19 +64,6 @@ const CATEGORIES = [
   { name: 'Logistics', slug: 'logistics', icon: CATEGORY_ICONS.logistics },
   { name: 'Legal', slug: 'legal', icon: CATEGORY_ICONS.legal },
   { name: 'Hospitality', slug: 'hospitality', icon: CATEGORY_ICONS.hospitality },
-];
-
-const INDUSTRIES = [
-  { name: 'Information Technology', slug: 'it' },
-  { name: 'Fintech', slug: 'fintech' },
-  { name: 'E-commerce', slug: 'ecommerce' },
-  { name: 'Telecommunications', slug: 'telecom' },
-  { name: 'Banking', slug: 'banking' },
-  { name: 'Education', slug: 'education' },
-  { name: 'Healthcare', slug: 'healthcare' },
-  { name: 'Manufacturing', slug: 'manufacturing' },
-  { name: 'Logistics', slug: 'logistics' },
-  { name: 'Media', slug: 'media' },
 ];
 
 const SKILLS: Array<{ name: string; category: string }> = [
@@ -238,26 +227,26 @@ const BENEFITS = [
 ];
 
 const COMPANIES = [
-  { name: 'Apex Soft Tashkent', slug: 'demo-tech-tashkent', industry: 'it', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize, mailDomain: 'apexsoft.uz' },
-  { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: 'fintech', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize, mailDomain: 'uzpay.uz' },
-  { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: 'ecommerce', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'silkroad.uz' },
-  { name: 'Tashkent Soft Labs', slug: 'tashkent-soft-labs', industry: 'it', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '2563eb', size: 'SIZE_11_50' as CompanySize, mailDomain: 'softlabs.uz' },
-  { name: 'Samarkand Digital', slug: 'samarkand-digital', industry: 'media', plan: 'FREE' as PlanCode, city: 'samarkand', color: 'db2777', size: 'SIZE_11_50' as CompanySize, mailDomain: 'samdigital.uz' },
-  { name: 'Orient Bank Digital', slug: 'orient-bank', industry: 'banking', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0f766e', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'orientbank.uz' },
-  { name: 'Fergana Logistics', slug: 'fergana-logistics', industry: 'logistics', plan: 'STANDARD' as PlanCode, city: 'fergana', color: '7c3aed', size: 'SIZE_51_200' as CompanySize, mailDomain: 'ferganalogistics.uz' },
-  { name: 'EduNest Uzbekistan', slug: 'edunest-uz', industry: 'education', plan: 'FREE' as PlanCode, city: 'tashkent', color: 'ea580c', size: 'SIZE_11_50' as CompanySize, mailDomain: 'edunest.uz' },
-  { name: 'MediCare IT', slug: 'medicare-it', industry: 'healthcare', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '0891b2', size: 'SIZE_51_200' as CompanySize, mailDomain: 'medicare-it.uz' },
-  { name: 'Navoi Engineering', slug: 'navoi-engineering', industry: 'manufacturing', plan: 'FREE' as PlanCode, city: 'navoi', color: '64748b', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'navoieng.uz' },
-  { name: 'Andijan AgroTech', slug: 'andijan-agrotech', industry: 'manufacturing', plan: 'STANDARD' as PlanCode, city: 'andijan', color: '65a30d', size: 'SIZE_51_200' as CompanySize, mailDomain: 'agrotech.uz' },
-  { name: 'Bukhara Heritage Hotels', slug: 'bukhara-heritage', industry: 'media', plan: 'FREE' as PlanCode, city: 'bukhara', color: 'b45309', size: 'SIZE_11_50' as CompanySize, mailDomain: 'bukhotels.uz' },
-  { name: 'ClickPay Solutions', slug: 'clickpay-solutions', industry: 'fintech', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0ea5e9', size: 'SIZE_51_200' as CompanySize, mailDomain: 'clickpay.uz' },
-  { name: 'Namangan Textile Group', slug: 'namangan-textile', industry: 'manufacturing', plan: 'STANDARD' as PlanCode, city: 'namangan', color: 'be185d', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'namtextile.uz' },
-  { name: 'UzTelecom Digital', slug: 'uztelecom-digital', industry: 'telecom', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '1d4ed8', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'uztelecom.uz' },
-  { name: 'Khorezm Green Energy', slug: 'khorezm-green', industry: 'manufacturing', plan: 'FREE' as PlanCode, city: 'urgench', color: '15803d', size: 'SIZE_11_50' as CompanySize, mailDomain: 'khorezmgreen.uz' },
-  { name: 'Tashkent Legal Partners', slug: 'tashkent-legal', industry: 'banking', plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '334155', size: 'SIZE_11_50' as CompanySize, mailDomain: 'tlpartners.uz' },
-  { name: 'Caravan Marketplace', slug: 'caravan-marketplace', industry: 'ecommerce', plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: 'c2410c', size: 'SIZE_51_200' as CompanySize, mailDomain: 'caravan.uz' },
-  { name: 'Nukus Smart City', slug: 'nukus-smart-city', industry: 'it', plan: 'FREE' as PlanCode, city: 'nukus', color: '0369a1', size: 'SIZE_11_50' as CompanySize, mailDomain: 'nukussmart.uz' },
-  { name: 'Chirchiq Pharma Lab', slug: 'chirchiq-pharma', industry: 'healthcare', plan: 'STANDARD' as PlanCode, city: 'chirchiq', color: '0f766e', size: 'SIZE_51_200' as CompanySize, mailDomain: 'chirchiqpharma.uz' },
+  { name: 'Apex Soft Tashkent', slug: 'demo-tech-tashkent', industry: COMPANY_INDUSTRY_OVERRIDES['demo-tech-tashkent'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize, mailDomain: 'apexsoft.uz' },
+  { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: COMPANY_INDUSTRY_OVERRIDES['uzpay-fintech'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize, mailDomain: 'uzpay.uz' },
+  { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: COMPANY_INDUSTRY_OVERRIDES['silk-road-commerce'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'silkroad.uz' },
+  { name: 'Tashkent Soft Labs', slug: 'tashkent-soft-labs', industry: COMPANY_INDUSTRY_OVERRIDES['tashkent-soft-labs'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '2563eb', size: 'SIZE_11_50' as CompanySize, mailDomain: 'softlabs.uz' },
+  { name: 'Samarkand Digital', slug: 'samarkand-digital', industry: COMPANY_INDUSTRY_OVERRIDES['samarkand-digital'], plan: 'FREE' as PlanCode, city: 'samarkand', color: 'db2777', size: 'SIZE_11_50' as CompanySize, mailDomain: 'samdigital.uz' },
+  { name: 'Orient Bank Digital', slug: 'orient-bank', industry: COMPANY_INDUSTRY_OVERRIDES['orient-bank'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0f766e', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'orientbank.uz' },
+  { name: 'Fergana Logistics', slug: 'fergana-logistics', industry: COMPANY_INDUSTRY_OVERRIDES['fergana-logistics'], plan: 'STANDARD' as PlanCode, city: 'fergana', color: '7c3aed', size: 'SIZE_51_200' as CompanySize, mailDomain: 'ferganalogistics.uz' },
+  { name: 'EduNest Uzbekistan', slug: 'edunest-uz', industry: COMPANY_INDUSTRY_OVERRIDES['edunest-uz'], plan: 'FREE' as PlanCode, city: 'tashkent', color: 'ea580c', size: 'SIZE_11_50' as CompanySize, mailDomain: 'edunest.uz' },
+  { name: 'MediCare IT', slug: 'medicare-it', industry: COMPANY_INDUSTRY_OVERRIDES['medicare-it'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '0891b2', size: 'SIZE_51_200' as CompanySize, mailDomain: 'medicare-it.uz' },
+  { name: 'Navoi Engineering', slug: 'navoi-engineering', industry: COMPANY_INDUSTRY_OVERRIDES['navoi-engineering'], plan: 'FREE' as PlanCode, city: 'navoi', color: '64748b', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'navoieng.uz' },
+  { name: 'Andijan AgroTech', slug: 'andijan-agrotech', industry: COMPANY_INDUSTRY_OVERRIDES['andijan-agrotech'], plan: 'STANDARD' as PlanCode, city: 'andijan', color: '65a30d', size: 'SIZE_51_200' as CompanySize, mailDomain: 'agrotech.uz' },
+  { name: 'Bukhara Heritage Hotels', slug: 'bukhara-heritage', industry: COMPANY_INDUSTRY_OVERRIDES['bukhara-heritage'], plan: 'FREE' as PlanCode, city: 'bukhara', color: 'b45309', size: 'SIZE_11_50' as CompanySize, mailDomain: 'bukhotels.uz' },
+  { name: 'ClickPay Solutions', slug: 'clickpay-solutions', industry: COMPANY_INDUSTRY_OVERRIDES['clickpay-solutions'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '0ea5e9', size: 'SIZE_51_200' as CompanySize, mailDomain: 'clickpay.uz' },
+  { name: 'Namangan Textile Group', slug: 'namangan-textile', industry: COMPANY_INDUSTRY_OVERRIDES['namangan-textile'], plan: 'STANDARD' as PlanCode, city: 'namangan', color: 'be185d', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'namtextile.uz' },
+  { name: 'UzTelecom Digital', slug: 'uztelecom-digital', industry: COMPANY_INDUSTRY_OVERRIDES['uztelecom-digital'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '1d4ed8', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'uztelecom.uz' },
+  { name: 'Khorezm Green Energy', slug: 'khorezm-green', industry: COMPANY_INDUSTRY_OVERRIDES['khorezm-green'], plan: 'FREE' as PlanCode, city: 'urgench', color: '15803d', size: 'SIZE_11_50' as CompanySize, mailDomain: 'khorezmgreen.uz' },
+  { name: 'Tashkent Legal Partners', slug: 'tashkent-legal', industry: COMPANY_INDUSTRY_OVERRIDES['tashkent-legal'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '334155', size: 'SIZE_11_50' as CompanySize, mailDomain: 'tlpartners.uz' },
+  { name: 'Caravan Marketplace', slug: 'caravan-marketplace', industry: COMPANY_INDUSTRY_OVERRIDES['caravan-marketplace'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: 'c2410c', size: 'SIZE_51_200' as CompanySize, mailDomain: 'caravan.uz' },
+  { name: 'Nukus Smart City', slug: 'nukus-smart-city', industry: COMPANY_INDUSTRY_OVERRIDES['nukus-smart-city'], plan: 'FREE' as PlanCode, city: 'nukus', color: '0369a1', size: 'SIZE_11_50' as CompanySize, mailDomain: 'nukussmart.uz' },
+  { name: 'Chirchiq Pharma Lab', slug: 'chirchiq-pharma', industry: COMPANY_INDUSTRY_OVERRIDES['chirchiq-pharma'], plan: 'STANDARD' as PlanCode, city: 'chirchiq', color: '0f766e', size: 'SIZE_51_200' as CompanySize, mailDomain: 'chirchiqpharma.uz' },
 ];
 
 const PERSONAL_MAIL_DOMAINS = ['gmail.com', 'mail.ru', 'yandex.ru', 'inbox.uz', 'yahoo.com'] as const;
@@ -518,15 +507,8 @@ async function main() {
   );
   const catMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
 
-  const industries = await Promise.all(
-    INDUSTRIES.map((i) =>
-      prisma.industry.upsert({
-        where: { slug: i.slug },
-        update: i,
-        create: i,
-      }),
-    ),
-  );
+  await backfillIndustries(prisma, { log: (msg) => console.warn(msg) });
+  const industries = await prisma.industry.findMany();
   const indMap = Object.fromEntries(industries.map((i) => [i.slug, i]));
 
   const skills = await Promise.all(
