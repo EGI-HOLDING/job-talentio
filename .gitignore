@@ -14,3 +14,7 @@ uploads
 .idea
 .vscode
 *.tsbuildinfo
+
+# Local-only source assets / notes (not shipped; keep on developer machines)
+assets/company-logos/
+docs/AFFINDA-AND-LLM.md
