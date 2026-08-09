@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, getSession } from '@/lib/api';
+import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
@@ -41,6 +41,7 @@ function dateInputValue(d?: string | Date | null) {
 
 function completeness(profile: any) {
   const checks = [
+    { ok: Boolean(profile?.user?.emailVerified), label: 'Verify your email' },
     { ok: Boolean(profile?.user?.avatarUrl), label: 'Add a profile photo' },
     { ok: Boolean(profile?.headline), label: 'Add a headline' },
     { ok: Boolean(profile?.city), label: 'Set your city' },
@@ -76,6 +77,7 @@ export default function EmployeeDashboard() {
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const editingExpId = openForm?.startsWith('edit-exp:') ? openForm.slice('edit-exp:'.length) : null;
   const editingEduId = openForm?.startsWith('edit-edu:') ? openForm.slice('edit-edu:'.length) : null;
@@ -119,6 +121,38 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, []);
+
+  async function requestEmailVerification() {
+    setVerifyBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      const r = await api<{ message?: string; alreadyVerified?: boolean; email: string }>(
+        '/auth/request-verification',
+        { method: 'POST' },
+      );
+      if (r.alreadyVerified) {
+        const session = getSession();
+        if (session) {
+          const next: AuthSession = {
+            ...session,
+            user: { ...session.user, emailVerified: true },
+          };
+          saveSession(next);
+        }
+        setProfile((p: any) =>
+          p ? { ...p, user: { ...p.user, emailVerified: true } } : p,
+        );
+        setMsg(t('emailVerifiedBadge'));
+      } else {
+        setMsg(r.message || `${t('verifyEmailSentTo')} ${r.email}`);
+      }
+    } catch (e) {
+      setError((e as Error).message || t('verifyEmailFailed'));
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
 
   async function updateProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -752,6 +786,32 @@ export default function EmployeeDashboard() {
 
         {tab === 'profile' && profile && (
           <div className="career-page profile-page">
+            <div className="card profile-block">
+              <h2 className="section-title" style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h2>
+              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                {profile.user?.email} ·{' '}
+                {profile.user?.emailVerified ? (
+                  <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
+                ) : (
+                  <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
+                )}
+              </p>
+              {!profile.user?.emailVerified ? (
+                <>
+                  <p className="muted" style={{ fontSize: '0.9rem' }}>
+                    {t('verifyEmailProfileHint')}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={verifyBusy}
+                    onClick={() => requestEmailVerification()}
+                  >
+                    {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
+                  </button>
+                </>
+              ) : null}
+            </div>
+
             <div className="card profile-block">
               <h2 className="section-title" style={{ marginTop: 0 }}>Basics</h2>
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>

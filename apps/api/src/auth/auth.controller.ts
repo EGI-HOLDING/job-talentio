@@ -109,6 +109,13 @@ export class AuthController {
     return this.auth.resendVerification(data.email);
   }
 
+  /** Logged-in user requests a verification email (job seeker profile CTA). */
+  @Post('request-verification')
+  @UseGuards(JwtAuthGuard)
+  requestVerification(@CurrentUser() user: AuthUser) {
+    return this.auth.requestVerification(user.id);
+  }
+
   @Post('oauth/telegram')
   telegram() {
     return this.auth.oauthTelegramStub();

@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [bulkOptedOut, setBulkOptedOut] = useState(false);
   const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
@@ -59,6 +60,14 @@ export default function SettingsPage() {
     setFullName(s.user.fullName);
     setAvatarUrl(s.user.avatarUrl || '');
     setPrefLocale((s.user.locale as Locale) || locale);
+    api<AuthSession>('/auth/me')
+      .then((fresh) => {
+        saveSession(fresh);
+        setSession(fresh);
+        setFullName(fresh.user.fullName);
+        setAvatarUrl(fresh.user.avatarUrl || '');
+      })
+      .catch(() => undefined);
     if (s.user.role === 'EMPLOYEE') {
       api<{ optedOut: boolean }>('/bulk-comms/opt-out')
         .then((r) => setBulkOptedOut(r.optedOut))
@@ -148,6 +157,33 @@ export default function SettingsPage() {
     }
   }
 
+  async function requestEmailVerification() {
+    setVerifyBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const r = await api<{ message?: string; alreadyVerified?: boolean; email: string }>(
+        '/auth/request-verification',
+        { method: 'POST' },
+      );
+      if (r.alreadyVerified && session) {
+        const next = {
+          ...session,
+          user: { ...session.user, emailVerified: true },
+        };
+        saveSession(next);
+        setSession(next);
+        setMsg(t('emailVerifiedBadge'));
+      } else {
+        setMsg(r.message || `${t('verifyEmailSentTo')} ${r.email}`);
+      }
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : t('verifyEmailFailed'));
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
   if (!session) return null;
 
   return (
@@ -215,6 +251,39 @@ export default function SettingsPage() {
               <p className="muted" style={{ marginTop: 0 }}>
                 {t('updateProfileHint')}
               </p>
+              {isEmployee && (
+                <div
+                  style={{
+                    marginBottom: '1.25rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: 12,
+                    background: session.user.emailVerified
+                      ? 'rgba(16, 185, 129, 0.08)'
+                      : 'rgba(245, 158, 11, 0.12)',
+                  }}
+                >
+                  <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>
+                    {session.user.email} ·{' '}
+                    {session.user.emailVerified
+                      ? t('emailVerifiedBadge')
+                      : t('emailUnverifiedBadge')}
+                  </p>
+                  {!session.user.emailVerified && (
+                    <>
+                      <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
+                        {t('verifyEmailProfileHint')}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={verifyBusy}
+                        onClick={() => requestEmailVerification()}
+                      >
+                        {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form onSubmit={saveAccount} className="form-stack">
                 <FormField label={t('fullName')} required>

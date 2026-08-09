@@ -93,6 +93,7 @@ export class AuthService {
         role: user.role,
         locale: user.locale,
         avatarUrl: user.avatarUrl,
+        emailVerified: user.emailVerified,
         memberships: user.memberships,
         employeeProfileId: user.employeeProfile?.id ?? null,
       },
@@ -332,23 +333,26 @@ export class AuthService {
       },
     });
     const link = this.verificationLink(rawToken);
-    // Do not await SMTP — a hung Hostinger connection must not block OAuth/register.
-    void this.mail.send(
+    const sent = await this.mail.send(
       user.email,
       'Verify your email - Job Talentio',
       `<p>Salom ${user.fullName}!</p>
-       <p>Confirm this email address to activate your Job Talentio account:</p>
+       <p>Confirm this email address on Job Talentio:</p>
        <p><a href="${link}">Verify my email</a></p>
        <p>Or open this link: ${link}</p>
        <p>The link expires in 24 hours. If you didn't request this, you can ignore this email.</p>`,
     );
+    if (!sent) {
+      throw new BadRequestException(
+        'Could not send verification email. Please try again in a moment.',
+      );
+    }
   }
 
   /**
    * Google sign-in for job seekers and recruiters.
-   * Google already verified the email address, so we issue a session immediately
-   * (no platform email-verification gate). Platform email verify can be added later
-   * for password sign-ups if needed.
+   * Issues a session immediately. Platform email stays unverified until the user
+   * requests verification from their profile (job seekers).
    */
   async oauthGoogle(input: {
     idToken: string;
@@ -362,12 +366,11 @@ export class AuthService {
     if (!user) {
       const byEmail = await this.prisma.user.findUnique({ where: { email: google.email } });
       if (byEmail) {
-        // Link Google identity to the existing account
+        // Link Google identity; keep existing emailVerified status
         user = await this.prisma.user.update({
           where: { id: byEmail.id },
           data: {
             googleId: google.googleId,
-            emailVerified: true,
             ...(google.avatarUrl && !byEmail.avatarUrl ? { avatarUrl: google.avatarUrl } : {}),
           },
         });
@@ -376,13 +379,6 @@ export class AuthService {
 
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
-      // Unblock accounts that signed up via Google while verification was still required
-      if (!user.emailVerified) {
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { emailVerified: true },
-        });
-      }
       return this.tokenFor(user.id);
     }
 
@@ -412,7 +408,7 @@ export class AuthService {
           avatarUrl: google.avatarUrl,
           role: input.role as UserRole,
           locale: input.locale ?? 'uz',
-          emailVerified: true,
+          emailVerified: false,
         },
       });
 
@@ -484,8 +480,46 @@ export class AuthService {
     });
     if (recent) return { ok: true };
 
-    await this.sendVerificationEmail(user);
+    try {
+      await this.sendVerificationEmail(user);
+    } catch {
+      // Public endpoint — do not leak delivery failures
+    }
     return { ok: true };
+  }
+
+  /**
+   * Authenticated: job seeker (or any user) requests a platform verification email
+   * from their profile. Does not block login while unverified.
+   */
+  async requestVerification(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.isBanned) throw new ForbiddenException('Account banned');
+    if (user.emailVerified) {
+      return { ok: true as const, email: user.email, alreadyVerified: true as const };
+    }
+
+    const recent = await this.prisma.emailVerificationToken.findFirst({
+      where: {
+        userId: user.id,
+        usedAt: null,
+        createdAt: { gte: new Date(Date.now() - VERIFICATION_RESEND_COOLDOWN_MS) },
+      },
+    });
+    if (recent) {
+      return {
+        ok: true as const,
+        email: user.email,
+        message: 'Verification email was already sent. Check your inbox (and spam).',
+      };
+    }
+
+    await this.sendVerificationEmail(user);
+    return {
+      ok: true as const,
+      email: user.email,
+      message: 'Verification email sent. Check your inbox (and spam).',
+    };
   }
 
   /** Optional Telegram Login stub */

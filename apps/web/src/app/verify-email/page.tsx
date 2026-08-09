@@ -65,10 +65,10 @@ function VerifyEmailInner() {
           <>
             <p style={{ color: '#be123c' }}>{message || t('verifyEmailFailed')}</p>
             <p className="muted" style={{ fontSize: '0.9rem' }}>
-              <Link href="/login" style={{ color: 'var(--accent)' }}>
-                {t('signIn')}
+              <Link href="/dashboard/employee" style={{ color: 'var(--accent)' }}>
+                {t('dashboard')}
               </Link>{' '}
-              - you can request a new link by signing in with Google again.
+              - open Profile and request a new verification email.
             </p>
           </>
         )}
