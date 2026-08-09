@@ -190,14 +190,17 @@ export default function JobDetailPage() {
   return (
     <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>
       <div className="job-detail-header">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={
-            job.company.logoUrl ||
-            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(job.company.name)}`
-          }
-          alt=""
-        />
+        <span className="company-logo-tile" aria-hidden>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="company-logo"
+            src={
+              job.company.logoUrl ||
+              `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(job.company.name)}`
+            }
+            alt=""
+          />
+        </span>
         <div>
           <div className="chips" style={{ marginBottom: '0.5rem' }}>
             {job.isHot && <span className="badge hot">Hot Job</span>}

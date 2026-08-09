@@ -72,14 +72,17 @@ export default function CompanyPage() {
   return (
     <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>
       <div className="job-detail-header">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={
-            company.logoUrl ||
-            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(company.name)}`
-          }
-          alt=""
-        />
+        <span className="company-logo-tile" aria-hidden>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="company-logo"
+            src={
+              company.logoUrl ||
+              `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(company.name)}`
+            }
+            alt=""
+          />
+        </span>
         <div>
           <h1 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>
             {company.name} {company.isVerified ? '✓' : ''}
