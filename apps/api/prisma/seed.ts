@@ -629,7 +629,7 @@ async function main() {
         avatarUrl: avatar(10 + i),
         role: 'RECRUITER',
         passwordHash,
-        emailVerified: false,
+        emailVerified: true,
       },
       create: {
         email: person.email,
@@ -637,7 +637,7 @@ async function main() {
         fullName: `${person.first} ${person.last}`,
         role: 'RECRUITER',
         locale: 'uz',
-        emailVerified: false,
+        emailVerified: true,
         avatarUrl: avatar(10 + i),
       },
     });
@@ -654,14 +654,14 @@ async function main() {
           passwordHash,
           role: 'RECRUITER',
           fullName: `${hr.first} ${hr.last}`,
-          emailVerified: false,
+          emailVerified: true,
         },
         create: {
           email: hr.email,
           passwordHash,
           fullName: `${hr.first} ${hr.last}`,
           role: 'RECRUITER',
-          emailVerified: false,
+          emailVerified: true,
           avatarUrl: avatar(20 + i),
         },
       });
