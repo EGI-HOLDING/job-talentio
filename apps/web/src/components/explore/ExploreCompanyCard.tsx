@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { VipBadge } from '@/components/ui/VipBadge';
 
 type ExploreCompanyCardProps = {
   name: string;
@@ -19,13 +20,13 @@ export function ExploreCompanyCard({
   count,
   countLabel,
   plan,
-  vipLabel = 'VIP',
+  vipLabel = 'VIP Elite',
 }: ExploreCompanyCardProps) {
   const isVip = plan === 'VIP';
   return (
     <Link
       href={`/jobs?companySlug=${encodeURIComponent(slug)}`}
-      className="explore-card explore-card--company"
+      className={`explore-card explore-card--company${isVip ? ' explore-card--vip' : ''}`}
       title={name}
     >
       <span className="company-logo-tile" aria-hidden>
@@ -42,7 +43,7 @@ export function ExploreCompanyCard({
       <div className="explore-card-body">
         <strong>
           {name}
-          {isVip ? <span className="badge vip-badge">{vipLabel}</span> : null}
+          {isVip ? <VipBadge label={vipLabel} /> : null}
         </strong>
         {typeof count === 'number' && countLabel ? <span>{countLabel}</span> : null}
       </div>
