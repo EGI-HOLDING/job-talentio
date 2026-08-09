@@ -1,9 +1,9 @@
 /**
- * Local/dev wrapper. Prefer compiled: `node dist/scripts/backfill-job-titles.js`
- * after `pnpm build`.
+ * Deployable entrypoint: `node dist/scripts/backfill-job-titles.js`
+ * Also: `pnpm prisma:backfill-job-titles` (via prisma wrapper).
  */
 import { PrismaClient } from '@prisma/client';
-import { backfillJobTitles } from '../src/common/job-title-backfill';
+import { backfillJobTitles } from '../common/job-title-backfill';
 
 async function main() {
   const prisma = new PrismaClient();
@@ -14,6 +14,7 @@ async function main() {
     console.log(
       `JobTitle backfill: scanned=${result.scanned} updated=${result.updated} skipped=${result.skipped} errors=${result.errors}`,
     );
+    // Per-row errors are non-fatal; only throw if nothing could be scanned due to DB failure
   } finally {
     await prisma.$disconnect();
   }

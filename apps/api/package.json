@@ -8,12 +8,13 @@
     "start": "node dist/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('api: smoke ok')\"",
+    "test": "tsx -e \"const m=require('./src/common/title-resolve'); const a=m.stripSeniorityFromTitle('Senior Full-stack Developer'); if(a.roleTitle!=='Full-stack Developer'||a.inferredLevel!=='SENIOR') throw new Error('strip seniority failed'); if(m.normalizeJobTitleKey('Front End Developer')!==m.normalizeJobTitleKey('Frontend Developer')) throw new Error('frontend key mismatch'); if(m.normalizeJobTitleKey('CPP Developer')!==m.normalizeJobTitleKey('C++ Developer')) throw new Error('cpp key mismatch'); console.log('api: smoke ok');\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:backfill-job-titles": "tsx prisma/backfill-job-titles.ts",
+    "backfill:job-titles": "node dist/scripts/backfill-job-titles.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {

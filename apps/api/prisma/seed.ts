@@ -776,11 +776,7 @@ async function main() {
     employeeUsers.push(user);
 
     const tpl = JOB_TITLES[i % JOB_TITLES.length];
-    const headline = tpl.title
-      .replace('Senior ', '')
-      .replace('Junior ', '')
-      .replace('Intern - ', '')
-      .replace('Intern — ', '');
+    const headline = tpl.title;
     const yearsExp = tpl.years + (i % 3);
     const summaryVariants = [
       `${headline} with ${yearsExp}+ years of experience, currently based in ${city.name}. Open to hybrid and remote roles across Uzbekistan.`,
@@ -921,9 +917,19 @@ async function main() {
     employeeProfiles.push(profile);
   }
 
-  // Ensure common catalog titles exist (even if not in JOB_TITLES templates)
-  await resolveJobTitle(prisma, { name: 'Frontend Developer' });
-  await resolveJobTitle(prisma, { name: 'C++ Developer' });
+  // Starter JobTitle catalog (role-only) — populated even before job posts exist
+  const uniqueSeedTitles = [
+    ...new Set([
+      ...JOB_TITLES.map((t) => t.title),
+      'Frontend Developer',
+      'C++ Developer',
+      'Backend Developer',
+      'React Developer',
+    ]),
+  ];
+  for (const name of uniqueSeedTitles) {
+    await resolveJobTitle(prisma, { name });
+  }
 
   // Jobs — refresh listings on each seed so counts stay predictable
   await prisma.jobPost.deleteMany({});
