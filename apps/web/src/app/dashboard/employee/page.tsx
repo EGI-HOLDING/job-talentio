@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
+import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -16,6 +17,7 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
+import { MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
 
@@ -66,6 +68,7 @@ export default function EmployeeDashboard() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('overview');
   const [addingResume, setAddingResume] = useState(false);
+  const [showCreateResume, setShowCreateResume] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [apps, setApps] = useState<any[]>([]);
   const [recommended, setRecommended] = useState<any[]>([]);
@@ -395,26 +398,13 @@ export default function EmployeeDashboard() {
     await load();
   }
 
-  async function addResume() {
-    setAddingResume(true);
+  function openCreateResume() {
     setError('');
-    try {
-      const existing = profile?.resumes?.length || 0;
-      const created = await api<{ id: string }>('/profiles/me/resumes/from-builder', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: existing ? `Resume ${existing + 1}` : 'My Resume',
-          isPrimary: existing === 0,
-        }),
-      });
-      setMsg('Resume created');
-      await load();
-      router.push(`/dashboard/employee/resume-builder?resumeId=${encodeURIComponent(created.id)}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create resume');
-    } finally {
-      setAddingResume(false);
+    if ((profile?.resumes || []).length >= MAX_RESUMES_PER_PROFILE) {
+      setError(t('resumeQuotaReached').replace('{max}', String(MAX_RESUMES_PER_PROFILE)));
+      return;
     }
+    setShowCreateResume(true);
   }
 
   function pickCvFile(file: File | null | undefined) {
@@ -552,6 +542,34 @@ export default function EmployeeDashboard() {
           onConfirm={confirmDeleteCv}
         />
       )}
+      <CreateResumeModal
+        open={showCreateResume}
+        busy={addingResume}
+        defaultJobTitle={profile?.desiredPosition || profile?.headline || ''}
+        onCancel={() => setShowCreateResume(false)}
+        onCreated={async (result) => {
+          setAddingResume(true);
+          try {
+            setShowCreateResume(false);
+            setMsg(t('createResume'));
+            await load();
+            if (result.method === 'builder') {
+              router.push(
+                `/dashboard/employee/resume-builder?resumeId=${encodeURIComponent(result.id)}`,
+              );
+              return;
+            }
+            if (result.parsedData) {
+              setCvReview({
+                resumeId: result.id,
+                parsed: result.parsedData as ParsedCv,
+              });
+            }
+          } finally {
+            setAddingResume(false);
+          }
+        }}
+      />
       <aside className="dash-nav">
         {(
           [
@@ -1418,10 +1436,13 @@ export default function EmployeeDashboard() {
                     type="button"
                     className="chip"
                     style={{ fontWeight: 600 }}
-                    disabled={addingResume}
-                    onClick={addResume}
+                    disabled={
+                      addingResume ||
+                      (profile.resumes || []).length >= MAX_RESUMES_PER_PROFILE
+                    }
+                    onClick={openCreateResume}
                   >
-                    {addingResume ? 'Adding...' : `+ ${t('addResume')}`}
+                    {`+ ${t('addResume')}`}
                   </button>
                   {(profile.resumes || []).length > 0 && (
                     <Link
@@ -1445,6 +1466,11 @@ export default function EmployeeDashboard() {
                           <span className="badge skill">PDF attached</span>
                         )}
                       </div>
+                      {r.targetJobTitle?.name && (
+                        <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+                          {t('resumeTargetRole')}: {r.targetJobTitle.name}
+                        </p>
+                      )}
                       {r.parsedData && (
                         <button
                           type="button"

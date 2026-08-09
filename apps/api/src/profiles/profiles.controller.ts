@@ -191,10 +191,15 @@ export class ProfilesController {
     const data = parseDto(
       resumeBuilderSettingsSchema.extend({
         title: resumeSchema.shape.title,
+        jobTitle: resumeSchema.shape.jobTitle,
+        jobTitleSlug: resumeSchema.shape.jobTitleSlug,
       }),
       body,
     );
-    return this.profiles.createResumeFromBuilder(user, data);
+    return this.profiles.createResumeFromBuilder(user, {
+      ...data,
+      title: data.title as string,
+    });
   }
 
   @Patch('me/resumes/:id')
@@ -274,8 +279,13 @@ export class ProfilesController {
   upload(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: Express.Multer.File,
+    @Body() body: { title?: string; jobTitle?: string; jobTitleSlug?: string },
   ) {
-    return this.profiles.uploadCv(user, file);
+    return this.profiles.uploadCv(user, file, {
+      title: body?.title,
+      jobTitle: body?.jobTitle,
+      jobTitleSlug: body?.jobTitleSlug,
+    });
   }
 
   @Get('candidates')

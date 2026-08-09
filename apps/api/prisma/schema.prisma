@@ -343,6 +343,7 @@ model JobTitle {
 
   aliases  JobTitleAlias[]
   jobPosts JobPost[]
+  resumes  Resume[]
 }
 
 model JobTitleAlias {
@@ -701,6 +702,8 @@ model Resume {
   id                String    @id @default(cuid())
   profileId         String
   title             String
+  /// Canonical target role for matching / analytics (not the free-text display title).
+  targetJobTitleId  String?
   content           String?
   fileKey           String?
   fileUrl           String?
@@ -715,11 +718,13 @@ model Resume {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  profile      EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  applications Application[]
+  profile         EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  targetJobTitle  JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
+  applications    Application[]
 
   @@index([profileId])
   @@index([profileId, deletedAt])
+  @@index([targetJobTitleId])
 }
 
 model Application {

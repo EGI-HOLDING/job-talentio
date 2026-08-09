@@ -10,6 +10,9 @@ type JobTitleInputProps = {
   required?: boolean;
   minLength?: number;
   defaultValue?: string;
+  /** Controlled value (when set, overrides internal state). */
+  value?: string;
+  onValueChange?: (value: string) => void;
   placeholder?: string;
   /** Prefill experience level when seniority words are typed and level is empty */
   onInferredLevel?: (level: string) => void;
@@ -81,11 +84,18 @@ export function JobTitleInput({
   required,
   minLength = 3,
   defaultValue = '',
+  value: controlledValue,
+  onValueChange,
   placeholder,
   onInferredLevel,
 }: JobTitleInputProps) {
   const listId = useId();
-  const [value, setValue] = useState(defaultValue);
+  const [inner, setInner] = useState(defaultValue);
+  const value = controlledValue !== undefined ? controlledValue : inner;
+  const setValue = (next: string) => {
+    if (controlledValue === undefined) setInner(next);
+    onValueChange?.(next);
+  };
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [highlight, setHighlight] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
