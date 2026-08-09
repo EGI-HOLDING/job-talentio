@@ -488,15 +488,17 @@ export default function EmployeeDashboard() {
             <h2 className="section-title">Jobs matched to your profile</h2>
             {recommended.map((item) => (
               <Link key={item.job.id} href={`/jobs/${item.job.id}`} className="job-card">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  className="company-logo"
-                  src={
-                    item.job.company?.logoUrl ||
-                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(item.job.company?.name || 'Co')}`
-                  }
-                  alt=""
-                />
+                <span className="company-logo-tile" aria-hidden>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="company-logo"
+                    src={
+                      item.job.company?.logoUrl ||
+                      `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(item.job.company?.name || 'Co')}`
+                    }
+                    alt=""
+                  />
+                </span>
                 <div>
                   <h3>{sanitizeMojibake(item.job.title)}</h3>
                   <div className="job-meta">

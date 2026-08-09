@@ -175,18 +175,19 @@ export function SeekerHome() {
               key={job.id}
               href={`/jobs/${job.id}`}
               className="card job-card"
-              style={{ margin: 0, gridTemplateColumns: '48px 1fr' }}
+              style={{ margin: 0, gridTemplateColumns: '56px 1fr' }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="company-logo"
-                src={
-                  job.company.logoUrl ||
-                  `https://api.dicebear.com/9.x/initials/svg?seed=${job.company.name}`
-                }
-                alt=""
-                style={{ width: 48, height: 48 }}
-              />
+              <span className="company-logo-tile" aria-hidden>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  className="company-logo"
+                  src={
+                    job.company.logoUrl ||
+                    `https://api.dicebear.com/9.x/initials/svg?seed=${job.company.name}`
+                  }
+                  alt=""
+                />
+              </span>
               <div>
                 <span className="badge hot">{t('hot')}</span>
                 <h3>{sanitizeMojibake(job.title)}</h3>

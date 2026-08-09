@@ -6,6 +6,7 @@ import { jobFingerprint } from '../src/common/dedupe';
 import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
 import { backfillIndustries } from '../src/common/industry-backfill';
 import { COMPANY_INDUSTRY_OVERRIDES } from '../src/common/industry-catalog';
+import { companyLogoUrl } from '../src/common/company-logo-map';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -28,8 +29,11 @@ function avatar(n: number) {
   return `https://i.pravatar.cc/300?img=${n}`;
 }
 
-function logo(name: string, color: string) {
-  return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`;
+function logo(slug: string, name: string, color: string) {
+  return (
+    companyLogoUrl(slug) ||
+    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`
+  );
 }
 
 /** Primary hubs used for round-robin seed of jobs/companies/profiles */
@@ -677,7 +681,7 @@ async function main() {
         cityId: cityMap[c.city].id,
         industryId: indMap[c.industry].id,
         size: c.size,
-        logoUrl: logo(c.name, c.color),
+        logoUrl: logo(c.slug, c.name, c.color),
         isVerified: c.plan !== 'FREE',
       },
       create: {
@@ -688,7 +692,7 @@ async function main() {
         cityId: cityMap[c.city].id,
         industryId: indMap[c.industry].id,
         size: c.size,
-        logoUrl: logo(c.name, c.color),
+        logoUrl: logo(c.slug, c.name, c.color),
         isVerified: c.plan !== 'FREE',
         subscription: { create: { plan: c.plan, status: 'ACTIVE' } },
         members: {

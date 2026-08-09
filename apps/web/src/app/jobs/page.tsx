@@ -559,14 +559,17 @@ function JobsInner() {
                   href={`/jobs?companySlug=${encodeURIComponent(c.slug)}`}
                   className={`hiring-card ${selectedCompanies.includes(c.slug) ? 'active' : ''}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={
-                      c.logoUrl ||
-                      `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(c.name)}`
-                    }
-                    alt=""
-                  />
+                  <span className="company-logo-tile" aria-hidden>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="company-logo"
+                      src={
+                        c.logoUrl ||
+                        `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(c.name)}`
+                      }
+                      alt=""
+                    />
+                  </span>
                   <div className="hiring-card-body">
                     <strong>{c.name}</strong>
                     <span>{rolesLabel(c.count)}</span>
@@ -704,15 +707,17 @@ function JobsInner() {
         {!loading &&
           data?.items.map((job) => (
             <Link key={job.id} href={`/jobs/${job.id}`} className="job-card">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="company-logo"
-                src={
-                  job.company.logoUrl ||
-                  `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(job.company.name)}`
-                }
-                alt=""
-              />
+              <span className="company-logo-tile" aria-hidden>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  className="company-logo"
+                  src={
+                    job.company.logoUrl ||
+                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(job.company.name)}`
+                  }
+                  alt=""
+                />
+              </span>
               <div>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {job.isHot && <span className="badge hot">Hot</span>}
