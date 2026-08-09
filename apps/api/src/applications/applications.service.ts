@@ -331,15 +331,21 @@ export class ApplicationsService {
       linkUrl: `/dashboard/employee`,
     });
 
-    // Email only when the candidate moves forward (right) in the pipeline.
-    // Moving back (left, e.g. INTERVIEW → IN_REVIEW) stays in-app only.
-    if (this.isForwardMove(application.status, status)) {
+    // Email only for recruiter forward (right) moves, and only if the
+    // candidate has verified their platform email. Left moves / withdraw = in-app only.
+    const shouldEmail =
+      !isOwnerCandidate &&
+      status !== 'WITHDRAWN' &&
+      this.isForwardMove(application.status, status) &&
+      Boolean(application.profile.user.emailVerified);
+
+    if (shouldEmail) {
       const { subject, html } = this.stageEmail(
         application.jobPost.title,
         status,
         note,
       );
-      await this.mail.send(application.profile.user.email, subject, html);
+      void this.mail.send(application.profile.user.email, subject, html);
     }
 
     return updated;
@@ -356,19 +362,20 @@ export class ApplicationsService {
 
   /** Stage-specific candidate email for forward pipeline moves. */
   private stageEmail(jobTitle: string, status: ApplicationStatus, note?: string) {
+    const webUrl = process.env.WEB_URL ?? 'https://staging.jobtalent.io';
     const messages: Partial<Record<ApplicationStatus, { subject: string; intro: string }>> = {
       IN_REVIEW: {
         subject: `Your application is being reviewed - ${jobTitle}`,
-        intro: 'Good news! The recruiter is now reviewing your application.',
+        intro: 'Good news! The recruiter moved your application to In review.',
       },
       INTERVIEW: {
         subject: `Interview stage - ${jobTitle}`,
         intro:
-          'Congratulations! You have moved to the interview stage. The recruiter will contact you with the schedule details.',
+          'Congratulations! You have moved to the Interview stage. The recruiter will share schedule details soon.',
       },
       OFFER: {
         subject: `You received an offer - ${jobTitle}`,
-        intro: 'Great news! The company has extended you an offer for this position.',
+        intro: 'Great news! The company moved you to the Offer stage for this position.',
       },
       HIRED: {
         subject: `Welcome aboard - ${jobTitle}`,
@@ -377,7 +384,7 @@ export class ApplicationsService {
       REJECTED: {
         subject: `Application update - ${jobTitle}`,
         intro:
-          'Thank you for your interest. Unfortunately, the company decided not to move forward with your application this time.',
+          'Thank you for your interest. The company decided not to move forward with your application this time.',
       },
     };
     const m = messages[status] ?? {
@@ -386,9 +393,10 @@ export class ApplicationsService {
     };
     return {
       subject: m.subject,
-      html: `<p>${m.intro}</p><p>Position: <strong>${jobTitle}</strong></p>${
-        note ? `<p>Note: ${note}</p>` : ''
-      }<p><a href="${process.env.WEB_URL ?? 'https://staging.jobtalent.io'}/dashboard/employee">Open your dashboard</a></p>`,
+      html: `<p>Salom!</p><p>${m.intro}</p><p>Position: <strong>${jobTitle}</strong></p>${
+        note ? `<p>Note from recruiter: ${note}</p>` : ''
+      }<p><a href="${webUrl}/dashboard/employee">Open your dashboard</a></p>
+       <p style="color:#64748b;font-size:12px">Job Talentio · You received this because your email is verified.</p>`,
     };
   }
 
