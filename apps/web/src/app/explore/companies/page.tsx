@@ -30,7 +30,7 @@ type BrowseResponse = {
 type IndustryGroup = {
   slug: string;
   name: string;
-  industries: Array<{ slug: string; name: string }>;
+  industries: Array<{ slug: string; name: string; companyCount?: number }>;
 };
 
 const PAGE_LIMIT = 24;
@@ -108,6 +108,10 @@ function ExploreCompaniesPageInner() {
 
   function rolesLabel(n: number) {
     return t('openRolesCount').replace('{n}', String(n));
+  }
+
+  function companiesLabel(n: number) {
+    return t('companiesCount').replace('{n}', String(n));
   }
 
   function onSearch(e: FormEvent) {
@@ -225,6 +229,7 @@ function ExploreCompaniesPageInner() {
                       }
                     >
                       <strong>{ind.name}</strong>
+                      <span>{companiesLabel(ind.companyCount ?? 0)}</span>
                     </button>
                   ))}
                 </div>

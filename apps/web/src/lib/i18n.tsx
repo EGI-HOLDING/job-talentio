@@ -194,6 +194,11 @@ const DICT = {
     ru: '{n} вакансий',
     en: '{n} open roles',
   },
+  companiesCount: {
+    uz: '{n} kompaniya',
+    ru: '{n} компаний',
+    en: '{n} companies',
+  },
   exploreByCategory: {
     uz: 'Kategoriya bo‘yicha ishlar',
     ru: 'Вакансии по категориям',
