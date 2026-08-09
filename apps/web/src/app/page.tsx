@@ -63,10 +63,25 @@ export default function HomePage() {
       .then((r) => {
         setCityFacets((r.facets?.cities || []).slice(0, 8));
         setCompanyFacets((r.facets?.companies || []).slice(0, 8));
-        setTitleFacets((r.facets?.jobTitles || []).slice(0, 8));
+        const titles = (r.facets?.jobTitles || []).slice(0, 8);
+        setTitleFacets(titles);
         const map: Record<string, number> = {};
         for (const c of r.facets?.categories || []) map[c.slug] = c.count;
         setCategoryCounts(map);
+        // Fallback when facets empty (pre-backfill / no published titles yet)
+        if (!titles.length) {
+          return api<{ items: FacetItem[] }>('/meta/job-titles?page=1&limit=8', { auth: false }).then(
+            (list) => {
+              setTitleFacets(
+                (list.items || []).map((t) => ({
+                  slug: t.slug,
+                  name: t.name,
+                  count: t.count ?? 0,
+                })),
+              );
+            },
+          );
+        }
       })
       .catch(() => undefined);
   }, []);

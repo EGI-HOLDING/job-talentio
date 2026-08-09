@@ -1,8 +1,19 @@
 import { PrismaClient, PlanCode, ExperienceLevel, EmploymentType, WorkMode, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
 import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
 import * as bcrypt from 'bcryptjs';
-import { resolveJobTitle } from '../src/common/title-resolve';
+import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
 import { jobFingerprint } from '../src/common/dedupe';
+
+/** Orthographic aliases → canonical title name (seeded after jobs resolve). */
+const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
+  { alias: 'Front End Developer', canonical: 'Frontend Developer' },
+  { alias: 'Front-End Developer', canonical: 'Frontend Developer' },
+  { alias: 'Frontend Dev', canonical: 'Frontend Developer' },
+  { alias: 'CPP Developer', canonical: 'C++ Developer' },
+  { alias: 'C Plus Plus Developer', canonical: 'C++ Developer' },
+  { alias: 'Full Stack Developer', canonical: 'Full-stack Developer' },
+  { alias: 'Fullstack Developer', canonical: 'Full-stack Developer' },
+];
 
 const prisma = new PrismaClient();
 
@@ -910,6 +921,10 @@ async function main() {
     employeeProfiles.push(profile);
   }
 
+  // Ensure common catalog titles exist (even if not in JOB_TITLES templates)
+  await resolveJobTitle(prisma, { name: 'Frontend Developer' });
+  await resolveJobTitle(prisma, { name: 'C++ Developer' });
+
   // Jobs — refresh listings on each seed so counts stay predictable
   await prisma.jobPost.deleteMany({});
   const jobRecords = [];
@@ -987,6 +1002,22 @@ async function main() {
     }
 
     jobRecords.push(job);
+  }
+
+  // Job title aliases (Front End ≡ Frontend, CPP ≡ C++, …)
+  for (const row of JOB_TITLE_ALIASES) {
+    const resolved = await resolveJobTitle(prisma, { name: row.canonical });
+    const aliasKey = normalizeJobTitleKey(row.alias);
+    if (!aliasKey || aliasKey === resolved.jobTitle.normalizedKey) continue;
+    await prisma.jobTitleAlias.upsert({
+      where: { aliasKey },
+      update: { alias: row.alias, jobTitleId: resolved.jobTitle.id },
+      create: {
+        alias: row.alias,
+        aliasKey,
+        jobTitleId: resolved.jobTitle.id,
+      },
+    });
   }
 
   // Applications + matching-ish scores
