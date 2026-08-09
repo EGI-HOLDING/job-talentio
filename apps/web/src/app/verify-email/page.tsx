@@ -7,7 +7,7 @@ import { ADMIN_URL, api, saveSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
 function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/dashboard/recruiter';
+  if (role === 'RECRUITER') return '/';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
   return '/dashboard/employee';
 }

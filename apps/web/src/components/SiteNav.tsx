@@ -74,10 +74,11 @@ export function SiteNav() {
     }
   }
 
+  const isRecruiter = session?.user.role === 'RECRUITER';
   const dash =
     session?.user.role === 'EMPLOYEE'
       ? '/dashboard/employee'
-      : session?.user.role === 'RECRUITER'
+      : isRecruiter
         ? '/dashboard/recruiter'
         : null;
 
@@ -88,8 +89,18 @@ export function SiteNav() {
           Job Talentio
         </Link>
         <div className="nav-links">
-          <Link href="/jobs">{t('jobs')}</Link>
-          {dash && <Link href={dash}>{t('dashboard')}</Link>}
+          {isRecruiter ? (
+            <>
+              <Link href="/talent">{t('findTalent')}</Link>
+              <Link href="/dashboard/recruiter?tab=jobs&focus=create">{t('postAJob')}</Link>
+              {dash && <Link href={dash}>{t('dashboard')}</Link>}
+            </>
+          ) : (
+            <>
+              <Link href="/jobs">{t('jobs')}</Link>
+              {dash && <Link href={dash}>{t('dashboard')}</Link>}
+            </>
+          )}
           {session && <Link href="/messages">{t('messages')}</Link>}
           {session?.user.role === 'SUPER_ADMIN' && (
             <a href={ADMIN_URL} target="_blank" rel="noreferrer">

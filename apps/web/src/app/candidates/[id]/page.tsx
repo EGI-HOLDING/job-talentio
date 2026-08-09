@@ -114,8 +114,8 @@ function CandidateInner() {
           <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Couldn’t open this profile</strong>
           {error}
           <div style={{ marginTop: '0.85rem' }}>
-            <Link href="/dashboard/recruiter" className="chip">
-              Back to recruiter dashboard
+            <Link href="/talent" className="chip">
+              Back to Find talent
             </Link>
           </div>
         </div>

@@ -30,7 +30,7 @@ declare global {
 }
 
 function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/dashboard/recruiter';
+  if (role === 'RECRUITER') return '/';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
   return '/dashboard/employee';
 }
