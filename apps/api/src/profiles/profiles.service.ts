@@ -434,6 +434,31 @@ export class ProfilesService {
     });
   }
 
+  /**
+   * Delete an S3 object only when no Resume.fileKey and no Application.resumeSnapshot
+   * still point at it (apply durability must keep the applied PDF).
+   */
+  private async deleteStorageKeyIfOrphan(fileKey: string | null | undefined): Promise<boolean> {
+    const key = (fileKey || '').trim();
+    if (!key) return false;
+
+    const resumeRefs = await this.prisma.resume.count({ where: { fileKey: key } });
+    if (resumeRefs > 0) return false;
+
+    const snapshotRefs = await this.prisma.application.count({
+      where: {
+        resumeSnapshot: {
+          path: ['resume', 'fileKey'],
+          equals: key,
+        },
+      },
+    });
+    if (snapshotRefs > 0) return false;
+
+    await this.storage.delete(key);
+    return true;
+  }
+
   /** Hard-delete soft-deleted resume (+ S3) when no applications still reference it. */
   async purgeResumeIfOrphan(resumeId: string): Promise<{ purged: boolean }> {
     const resume = await this.prisma.resume.findUnique({
@@ -444,7 +469,7 @@ export class ProfilesService {
     if (resume._count.applications > 0) return { purged: false };
     const fileKey = resume.fileKey;
     await this.prisma.resume.delete({ where: { id: resumeId } });
-    if (fileKey) await this.storage.delete(fileKey);
+    await this.deleteStorageKeyIfOrphan(fileKey);
     return { purged: true };
   }
 
@@ -481,7 +506,7 @@ export class ProfilesService {
     if (appCount === 0) {
       const fileKey = resume.fileKey;
       await this.prisma.resume.delete({ where: { id: resumeId } });
-      if (fileKey) await this.storage.delete(fileKey);
+      await this.deleteStorageKeyIfOrphan(fileKey);
       return { ok: true, softDeleted: false, hardDeleted: true };
     }
 
@@ -734,6 +759,8 @@ export class ProfilesService {
   }
 
   async exportResumePdf(user: AuthUser, resumeId: string) {
+    const { resume: owned } = await this.ownedResume(user.id, resumeId);
+    const previousKey = owned.fileKey;
     const payload = await this.getResumeDocument(user, resumeId);
     if (!payload.resume) throw new NotFoundException('Resume not found');
     const { buildResumePdfBuffer } = await import('./resume-pdf');
@@ -784,6 +811,9 @@ export class ProfilesService {
         } as never,
       },
     });
+    if (previousKey && previousKey !== uploaded.key) {
+      await this.deleteStorageKeyIfOrphan(previousKey);
+    }
     const download = await this.storage.getPresignedGetUrl(uploaded.key, 900);
     return {
       ...this.sanitizeResume(updated),
@@ -837,6 +867,7 @@ export class ProfilesService {
   async attachFileToResume(user: AuthUser, resumeId: string, file: Express.Multer.File) {
     if (!file) throw new BadRequestException('File required');
     const { profile, resume } = await this.ownedResume(user.id, resumeId);
+    const previousKey = resume.fileKey;
     const uploaded = await this.storage.upload(
       file.buffer,
       file.originalname,
@@ -871,6 +902,10 @@ export class ProfilesService {
         title: resume.title || file.originalname,
       },
     });
+
+    if (previousKey && previousKey !== uploaded.key) {
+      await this.deleteStorageKeyIfOrphan(previousKey);
+    }
 
     return {
       ...this.sanitizeResume(updated),
