@@ -7,11 +7,16 @@ type ExploreCityCardProps = {
   slug: string;
   count?: number;
   countLabel?: string;
+  /** Override default jobs browse link */
+  href?: string;
 };
 
-export function ExploreCityCard({ name, slug, count, countLabel }: ExploreCityCardProps) {
+export function ExploreCityCard({ name, slug, count, countLabel, href }: ExploreCityCardProps) {
   return (
-    <Link href={`/jobs?city=${encodeURIComponent(slug)}`} className="explore-card explore-card--city">
+    <Link
+      href={href || `/jobs?city=${encodeURIComponent(slug)}`}
+      className="explore-card explore-card--city"
+    >
       <span className="explore-card-motif" aria-hidden />
       <strong>{name}</strong>
       {typeof count === 'number' && countLabel ? <span>{countLabel}</span> : null}

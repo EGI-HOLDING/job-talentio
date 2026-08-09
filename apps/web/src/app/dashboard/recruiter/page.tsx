@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -8,19 +8,15 @@ import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
 import { useI18n } from '@/lib/i18n';
-import { FilterFieldset, FormAlert, LabelText } from '@/components/ui/Field';
+import { FormAlert, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
-import { ExpandableList } from '@/components/ui/ExpandableList';
-import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
-import { CandidateListSkeleton } from '@/components/ui/Skeleton';
-import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 
-type Tab = 'jobs' | 'pipeline' | 'candidates' | 'bulk' | 'analytics' | 'billing' | 'company';
+type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM';
 type CheckoutResponse = {
   payment: { id: string; status: string; amountUzs: number; purpose: string };
@@ -52,48 +48,6 @@ const STAGE_LABEL: Record<(typeof STAGES)[number], string> = {
   REJECTED: 'Rejected',
   WITHDRAWN: 'Withdrawn',
 };
-const CAND_PAGE_SIZES = [12, 24, 36] as const;
-const DEGREE_OPTS = ['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'] as const;
-
-type CandFilters = {
-  q: string;
-  city: string;
-  skills: string;
-  skillMode: 'AND' | 'OR';
-  degree: string;
-  languages: string;
-  experienceYearsMin: string;
-  experienceYearsMax: string;
-  hasCertification: boolean;
-  matchJobId: string;
-  sort: 'relevance' | 'newest' | 'match';
-  page: number;
-  limit: number;
-};
-
-const DEFAULT_CAND_FILTERS: CandFilters = {
-  q: '',
-  city: '',
-  skills: '',
-  skillMode: 'OR',
-  degree: '',
-  languages: '',
-  experienceYearsMin: '',
-  experienceYearsMax: '',
-  hasCertification: false,
-  matchJobId: '',
-  sort: 'relevance',
-  page: 1,
-  limit: 12,
-};
-
-function toggleCsv(csv: string, value: string) {
-  const set = new Set(csv.split(',').map((s) => s.trim()).filter(Boolean));
-  if (set.has(value)) set.delete(value);
-  else set.add(value);
-  return Array.from(set).join(',');
-}
-
 /** Distinguish same-title openings by location + status in selects */
 function jobSelectLabel(j: {
   title: string;
@@ -102,8 +56,8 @@ function jobSelectLabel(j: {
   city?: { name: string } | null;
 }) {
   const location = jobLocationLabel(j);
-  const status = j.status && j.status !== 'PUBLISHED' ? ` · ${j.status}` : '';
-  return `${j.title} — ${location}${status}`;
+  const status = j.status && j.status !== 'PUBLISHED' ? ` Â· ${j.status}` : '';
+  return `${j.title} â€” ${location}${status}`;
 }
 
 function RecruiterDashboard() {
@@ -111,8 +65,22 @@ function RecruiterDashboard() {
   const searchParams = useSearchParams();
   const jobFromUrl = searchParams.get('job') || '';
   const tabFromUrl = searchParams.get('tab') || '';
+  const focusFromUrl = searchParams.get('focus') || '';
   const [tab, setTab] = useState<Tab>(() => {
-    if (tabFromUrl === 'billing') return 'billing';
+    if (tabFromUrl === 'candidates') {
+      if (typeof window !== 'undefined') window.location.replace('/talent');
+      return 'jobs';
+    }
+    if (
+      tabFromUrl === 'billing' ||
+      tabFromUrl === 'pipeline' ||
+      tabFromUrl === 'bulk' ||
+      tabFromUrl === 'analytics' ||
+      tabFromUrl === 'company' ||
+      tabFromUrl === 'jobs'
+    ) {
+      return tabFromUrl as Tab;
+    }
     if (jobFromUrl) return 'pipeline';
     return 'jobs';
   });
@@ -123,10 +91,6 @@ function RecruiterDashboard() {
   const [applicants, setApplicants] = useState<any[]>([]);
   const [recommended, setRecommended] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
-  const [candidates, setCandidates] = useState<any>(null);
-  const [candFilters, setCandFilters] = useState<CandFilters>(DEFAULT_CAND_FILTERS);
-  const [candLoading, setCandLoading] = useState(false);
-  const [skillQ, setSkillQ] = useState('');
   const [draftJobSkills, setDraftJobSkills] = useState<Array<{ slug: string; name: string }>>([]);
   const [draftJobBenefits, setDraftJobBenefits] = useState<Array<{ slug: string; name: string }>>([]);
   const [draftJobLevel, setDraftJobLevel] = useState('');
@@ -238,18 +202,6 @@ function RecruiterDashboard() {
     }
   }
 
-  function applyCand(patch: Partial<CandFilters>) {
-    setCandFilters((prev) => {
-      const next = { ...prev, ...patch };
-      if (!('page' in patch)) next.page = 1;
-      if (next.matchJobId && next.sort !== 'match' && patch.matchJobId !== undefined) {
-        next.sort = 'match';
-      }
-      if (!next.matchJobId && next.sort === 'match') next.sort = 'relevance';
-      return next;
-    });
-  }
-
   async function bootstrap() {
     const session = getSession();
     if (!session || (session.user.role !== 'RECRUITER' && session.user.role !== 'SUPER_ADMIN')) {
@@ -333,8 +285,28 @@ function RecruiterDashboard() {
   }, [tab, companyId]);
 
   useEffect(() => {
-    if (tabFromUrl === 'billing') setTab('billing');
+    if (tabFromUrl === 'candidates') {
+      window.location.replace('/talent');
+      return;
+    }
+    if (
+      tabFromUrl === 'billing' ||
+      tabFromUrl === 'pipeline' ||
+      tabFromUrl === 'bulk' ||
+      tabFromUrl === 'analytics' ||
+      tabFromUrl === 'company' ||
+      tabFromUrl === 'jobs'
+    ) {
+      setTab(tabFromUrl as Tab);
+    }
   }, [tabFromUrl]);
+
+  useEffect(() => {
+    if (tab === 'jobs' && focusFromUrl === 'create') {
+      const el = document.getElementById('create-job-form');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [tab, focusFromUrl]);
 
   async function createJob(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -492,41 +464,6 @@ function RecruiterDashboard() {
     setMemberships(mine);
   }
 
-  async function fetchCandidates(f: CandFilters = candFilters) {
-    setCandLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (f.q) params.set('q', f.q);
-      if (f.city) params.set('city', f.city);
-      if (f.skills) params.set('skills', f.skills);
-      if (f.skillMode) params.set('skillMode', f.skillMode);
-      if (f.degree) params.set('degree', f.degree);
-      if (f.languages) params.set('languages', f.languages);
-      if (f.experienceYearsMin) params.set('experienceYearsMin', f.experienceYearsMin);
-      if (f.experienceYearsMax) params.set('experienceYearsMax', f.experienceYearsMax);
-      if (f.hasCertification) params.set('hasCertification', 'true');
-      if (f.matchJobId) params.set('matchJobId', f.matchJobId);
-      params.set('sort', f.matchJobId ? 'match' : f.sort);
-      params.set('page', String(f.page));
-      params.set('limit', String(f.limit));
-      const data = await api<any>(`/profiles/candidates?${params.toString()}`);
-      setCandidates(data);
-      if (data?.page != null && data.page !== f.page) {
-        setCandFilters((prev) => ({ ...prev, page: data.page as number }));
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load candidates');
-    } finally {
-      setCandLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (tab !== 'candidates') return;
-    fetchCandidates(candFilters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, candFilters]);
-
   const byStage = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const s of STAGES) map[s] = [];
@@ -536,36 +473,6 @@ function RecruiterDashboard() {
     return map;
   }, [applicants]);
 
-  const selectedCandCities = candFilters.city.split(',').filter(Boolean);
-  const selectedCandSkills = candFilters.skills.split(',').filter(Boolean);
-  const selectedCandLangs = candFilters.languages.split(',').filter(Boolean);
-  const cityFacet = Object.fromEntries((candidates?.facets?.cities || []).map((c: any) => [c.slug, c.count]));
-  const skillFacetList = candidates?.facets?.skills || [];
-  const skillFacet = Object.fromEntries(skillFacetList.map((s: any) => [s.slug, s.count]));
-  const filteredSkills = useMemo(() => {
-    const bySlug = new Map<string, { slug: string; name: string; count?: number }>();
-    for (const s of skillFacetList) {
-      bySlug.set(s.slug, { slug: s.slug, name: s.name, count: s.count });
-    }
-    for (const s of meta.skills) {
-      if (!bySlug.has(s.slug)) bySlug.set(s.slug, { slug: s.slug, name: s.name, count: skillFacet[s.slug] });
-    }
-    return [...bySlug.values()]
-      .filter((s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()))
-      .sort((a, b) => (b.count || 0) - (a.count || 0) || a.name.localeCompare(b.name));
-  }, [meta.skills, skillFacetList, skillFacet, skillQ]);
-  const candAdvancedCount = [
-    candFilters.skills,
-    candFilters.degree,
-    candFilters.languages,
-    candFilters.experienceYearsMin,
-    candFilters.experienceYearsMax,
-    candFilters.hasCertification ? '1' : '',
-    candFilters.skillMode !== 'OR' ? candFilters.skillMode : '',
-  ].filter(Boolean).length;
-  const candTotalPages =
-    candidates?.totalPages || Math.max(1, Math.ceil((candidates?.total || 0) / candFilters.limit));
-
   return (
     <div className="shell dash-grid">
       <aside className="dash-nav">
@@ -573,7 +480,6 @@ function RecruiterDashboard() {
           [
             ['jobs', 'Jobs'],
             ['pipeline', 'Pipeline & match'],
-            ['candidates', 'Find talent'],
             ['bulk', 'Bulk comms'],
             ['analytics', 'Analytics'],
             ['billing', 'Plan & billing'],
@@ -609,7 +515,7 @@ function RecruiterDashboard() {
 
         {tab === 'jobs' && (
           <div className="grid-2">
-            <div className="card">
+            <div className="card" id="create-job-form">
               <h3>Create job</h3>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={createJob}>
@@ -635,7 +541,7 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>City</LabelText>
                   <select name="citySlug">
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     {meta.cities.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -646,7 +552,7 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>Category</LabelText>
                   <select name="categorySlug">
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     {meta.categories.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -661,7 +567,7 @@ function RecruiterDashboard() {
                     value={draftJobLevel}
                     onChange={(e) => setDraftJobLevel(e.target.value)}
                   >
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
                       <option key={l} value={l}>
                         {l}
@@ -710,7 +616,7 @@ function RecruiterDashboard() {
                             )
                           }
                         >
-                          ×
+                          Ã—
                         </button>
                       </span>
                     ))}
@@ -743,7 +649,7 @@ function RecruiterDashboard() {
                             )
                           }
                         >
-                          ×
+                          Ã—
                         </button>
                       </span>
                     ))}
@@ -771,10 +677,10 @@ function RecruiterDashboard() {
                 <div key={j.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{j.title}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {j.status} · {jobLocationLabel(j)} · {j._count?.applications ?? 0} apps ·{' '}
+                    {j.status} Â· {jobLocationLabel(j)} Â· {j._count?.applications ?? 0} apps Â·{' '}
                     {j._count?.views ?? 0} views
                     {j.boostUntil && new Date(j.boostUntil) > new Date()
-                      ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                      ? ` Â· Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
                       : ''}
                   </p>
                   <div className="chips">
@@ -915,7 +821,7 @@ function RecruiterDashboard() {
                           onChange={(e) => setBulkToStatus(e.target.value)}
                           aria-label="Bulk target stage"
                         >
-                          <option value="">— Keep stage —</option>
+                          <option value="">â€” Keep stage â€”</option>
                           {STAGES.map((s) => (
                             <option key={s} value={s}>
                               {STAGE_LABEL[s]}
@@ -936,7 +842,7 @@ function RecruiterDashboard() {
                           }}
                           aria-label="Bulk message template"
                         >
-                          <option value="">— Custom / none —</option>
+                          <option value="">â€” Custom / none â€”</option>
                           {bulkTemplates.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.name}
@@ -952,7 +858,7 @@ function RecruiterDashboard() {
                           value={bulkMessage}
                           onChange={(e) => setBulkMessage(e.target.value)}
                           rows={2}
-                          placeholder="Hi {{name}}, …"
+                          placeholder="Hi {{name}}, â€¦"
                         />
                       </label>
                       <button
@@ -961,7 +867,7 @@ function RecruiterDashboard() {
                         disabled={bulkBusy}
                         onClick={() => runBulkAction()}
                       >
-                        {bulkBusy ? 'Running…' : 'Apply to selected'}
+                        {bulkBusy ? 'Runningâ€¦' : 'Apply to selected'}
                       </button>
                     </div>
                     <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.78rem' }}>
@@ -1039,7 +945,7 @@ function RecruiterDashboard() {
                                       whiteSpace: 'nowrap',
                                     }}
                                   >
-                                    {a.profile?.headline || '—'}
+                                    {a.profile?.headline || 'â€”'}
                                   </div>
                                 </div>
                                 {score != null && <MatchRing score={score} size="sm" />}
@@ -1052,7 +958,7 @@ function RecruiterDashboard() {
                                     style={{ marginTop: '0.55rem', border: 0, width: '100%', cursor: 'pointer' }}
                                     onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
                                   >
-                                    Match {score}% · details
+                                    Match {score}% Â· details
                                   </button>
                                   {breakdownId === a.id && a.matchBreakdown && (
                                     <div className="match-breakdown">
@@ -1194,7 +1100,7 @@ function RecruiterDashboard() {
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {r.profile.headline || '—'}
+                              {r.profile.headline || 'â€”'}
                             </p>
                             <div className="chips">
                               {(r.profile.skills || []).slice(0, 4).map((s: any) => (
@@ -1223,7 +1129,7 @@ function RecruiterDashboard() {
                                 <button
                                   type="button"
                                   className="chip muted"
-                                  title="Cold outreach requires Premium — upgrade in Plan & billing"
+                                  title="Cold outreach requires Premium â€” upgrade in Plan & billing"
                                   style={{ fontSize: '0.75rem' }}
                                   onClick={() => setTab('billing')}
                                 >
@@ -1240,337 +1146,6 @@ function RecruiterDashboard() {
                 )}
               </>
             )}
-          </div>
-        )}
-
-        {tab === 'candidates' && (
-          <div>
-            <div className="jobs-toolbar" style={{ marginBottom: '1rem' }}>
-              <div>
-                <h2 className="section-title" style={{ margin: 0 }}>
-                  Find talent
-                </h2>
-                <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
-                  {candLoading && !candidates
-                    ? 'Searching talent…'
-                    : `${candidates?.total ?? 0} candidates found`}
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <select
-                  value={candFilters.sort}
-                  onChange={(e) =>
-                    applyCand({ sort: e.target.value as CandFilters['sort'] })
-                  }
-                  aria-label={t('sortBy')}
-                >
-                  <option value="relevance">Sort: Relevance</option>
-                  <option value="newest">Sort: Newest</option>
-                  <option value="match" disabled={!candFilters.matchJobId}>
-                    Sort: Match to job
-                  </option>
-                </select>
-                <select
-                  value={candFilters.limit}
-                  onChange={(e) => applyCand({ limit: Number(e.target.value) })}
-                  aria-label={t('resultsPerPage')}
-                >
-                  {CAND_PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n} / page
-                    </option>
-                  ))}
-                </select>
-                {(candFilters.q ||
-                  candFilters.city ||
-                  candFilters.skills ||
-                  candFilters.degree ||
-                  candFilters.languages ||
-                  candFilters.experienceYearsMin ||
-                  candFilters.experienceYearsMax ||
-                  candFilters.hasCertification ||
-                  candFilters.matchJobId) && (
-                  <button type="button" className="secondary" onClick={() => setCandFilters(DEFAULT_CAND_FILTERS)}>
-                    Clear filters
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="jobs-layout" style={{ padding: 0 }}>
-              <aside className="filters">
-                <h3>Filters</h3>
-                <form
-                  className="filter-group"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const fd = new FormData(e.currentTarget);
-                    applyCand({ q: String(fd.get('q') || '') });
-                  }}
-                >
-                  <label>
-                    <LabelText>Keywords</LabelText>
-                    <input name="q" defaultValue={candFilters.q} key={candFilters.q} placeholder="Name, headline, skill…" />
-                  </label>
-                  <button type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
-                    Search
-                  </button>
-                </form>
-
-                <div className="filter-group">
-                  <label>
-                    <LabelText>Match to job</LabelText>
-                    <select
-                      value={candFilters.matchJobId}
-                      onChange={(e) =>
-                        applyCand({
-                          matchJobId: e.target.value,
-                          sort: e.target.value ? 'match' : 'relevance',
-                        })
-                      }
-                    >
-                      <option value="">Any (no match ranking)</option>
-                      {jobs.map((j) => (
-                        <option key={j.id} value={j.id}>
-                          {jobSelectLabel(j)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <FilterFieldset legend="City" className="filter-group">
-                  <ExpandableList
-                    items={meta.cities}
-                    initialCount={10}
-                    step={10}
-                    getKey={(c) => c.slug}
-                    renderItem={(c) => (
-                      <label className="filter-check">
-                        <input
-                          type="checkbox"
-                          checked={selectedCandCities.includes(c.slug)}
-                          onChange={() => applyCand({ city: toggleCsv(candFilters.city, c.slug) })}
-                        />
-                        <LabelText optional={false}>{c.name}</LabelText>
-                        {cityFacet[c.slug] !== undefined && (
-                          <span className="facet-count">({cityFacet[c.slug]})</span>
-                        )}
-                      </label>
-                    )}
-                  />
-                </FilterFieldset>
-
-                <AdvancedFiltersPanel
-                  storageKey="jt_talent_advanced_filters"
-                  activeCount={candAdvancedCount}
-                  forceOpen={candAdvancedCount > 0}
-                >
-                  <FilterFieldset legend={`Skills (${candFilters.skillMode})`} className="filter-group">
-                    <label>
-                      <LabelText>Match mode</LabelText>
-                      <select
-                        value={candFilters.skillMode}
-                        onChange={(e) => applyCand({ skillMode: e.target.value as 'AND' | 'OR' })}
-                        style={{ marginBottom: '0.4rem' }}
-                      >
-                        <option value="OR">Match any (OR)</option>
-                        <option value="AND">Match all (AND)</option>
-                      </select>
-                    </label>
-                    <label>
-                      <LabelText>Filter skills</LabelText>
-                      <input
-                        value={skillQ}
-                        onChange={(e) => setSkillQ(e.target.value)}
-                        placeholder="Filter skills…"
-                      />
-                    </label>
-                    <ExpandableList
-                      items={filteredSkills}
-                      initialCount={10}
-                      step={10}
-                      getKey={(s) => s.slug}
-                      renderItem={(s) => (
-                        <label className="filter-check">
-                          <input
-                            type="checkbox"
-                            checked={selectedCandSkills.includes(s.slug)}
-                            onChange={() => applyCand({ skills: toggleCsv(candFilters.skills, s.slug) })}
-                          />
-                          <LabelText optional={false}>{s.name}</LabelText>
-                          {s.count !== undefined && (
-                            <span className="facet-count">({s.count})</span>
-                          )}
-                        </label>
-                      )}
-                    />
-                  </FilterFieldset>
-
-                  <div className="filter-group">
-                    <div className="grid-2" style={{ gap: '0.4rem' }}>
-                      <label>
-                        <LabelText>Min years</LabelText>
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="Min"
-                          value={candFilters.experienceYearsMin}
-                          onChange={(e) => applyCand({ experienceYearsMin: e.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <LabelText>Max years</LabelText>
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="Max"
-                          value={candFilters.experienceYearsMax}
-                          onChange={(e) => applyCand({ experienceYearsMax: e.target.value })}
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="filter-group">
-                    <label>
-                      <LabelText>Degree</LabelText>
-                      <select
-                        value={candFilters.degree}
-                        onChange={(e) => applyCand({ degree: e.target.value })}
-                      >
-                        <option value="">Any</option>
-                        {DEGREE_OPTS.map((d) => (
-                          <option key={d} value={d}>
-                            {d.replace(/_/g, ' ')}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <FilterFieldset legend="Languages" className="filter-group">
-                    <ExpandableList
-                      items={meta.languages}
-                      initialCount={8}
-                      step={10}
-                      getKey={(l) => l.code}
-                      renderItem={(l) => (
-                        <label className="filter-check">
-                          <input
-                            type="checkbox"
-                            checked={selectedCandLangs.includes(l.code)}
-                            onChange={() =>
-                              applyCand({ languages: toggleCsv(candFilters.languages, l.code) })
-                            }
-                          />
-                          <LabelText optional={false}>{l.name}</LabelText>
-                        </label>
-                      )}
-                    />
-                  </FilterFieldset>
-
-                  <div className="filter-group">
-                    <label className="filter-check">
-                      <input
-                        type="checkbox"
-                        checked={candFilters.hasCertification}
-                        onChange={(e) => applyCand({ hasCertification: e.target.checked })}
-                      />
-                      <LabelText optional={false}>Has certification</LabelText>
-                    </label>
-                  </div>
-                </AdvancedFiltersPanel>
-              </aside>
-
-              <div>
-                {candLoading && !candidates && <CandidateListSkeleton count={6} />}
-                {!candLoading && (candidates?.items || []).length === 0 && (
-                  <div className="card">
-                    <p className="muted" style={{ margin: 0 }}>
-                      No candidates match these filters. Try clearing filters or broadening skills/city.
-                    </p>
-                  </div>
-                )}
-                {(candidates?.items || []).map((p: any) => (
-                  <div key={p.id} className="job-card" style={{ marginBottom: '0.75rem' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      className="company-logo"
-                      src={
-                        p.user?.avatarUrl ||
-                        `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.user?.fullName || 'C')}`
-                      }
-                      alt=""
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h3 style={{ margin: 0 }}>{p.user?.fullName}</h3>
-                      <div className="job-meta">
-                        <span>{p.headline || '—'}</span>
-                        {p.city?.name && <span>{p.city.name}</span>}
-                        <span>{p.experienceYears ?? 0}y exp</span>
-                        {p.contactsBlurred && <span>Contacts limited</span>}
-                      </div>
-                      <div className="chips" style={{ marginTop: '0.45rem' }}>
-                        {(p.skills || []).slice(0, 6).map((s: any) => (
-                          <span key={s.id} className="badge skill">
-                            {s.skill?.name}
-                            {s.level ? ` · ${s.level}` : ''}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="chips" style={{ marginTop: '0.5rem' }}>
-                        <Link
-                          href={`/candidates/${p.id}${candFilters.matchJobId ? `?matchJobId=${candFilters.matchJobId}` : ''}`}
-                          className="chip"
-                          style={{ fontSize: '0.75rem' }}
-                        >
-                          View profile
-                        </Link>
-                        {canColdChat ? (
-                          <Link
-                            href={`/messages?peer=${p.user?.id}${candFilters.matchJobId ? `&job=${candFilters.matchJobId}` : ''}`}
-                            className="chip"
-                            style={{ fontSize: '0.75rem' }}
-                          >
-                            Chat
-                          </Link>
-                        ) : (
-                          <button
-                            type="button"
-                            className="chip muted"
-                            title="Cold outreach requires Premium — upgrade in Plan & billing"
-                            style={{ fontSize: '0.75rem' }}
-                            onClick={() => setTab('billing')}
-                          >
-                            Chat (Premium)
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {p.matchScore != null && <MatchRing score={p.matchScore} />}
-                  </div>
-                ))}
-
-                {(candidates?.total || 0) > 0 && candTotalPages > 1 && (
-                  <div className="pagination-wrap" style={{ marginTop: '1.25rem' }}>
-                    <Pagination
-                      page={candidates?.page ?? candFilters.page}
-                      totalPages={candTotalPages}
-                      total={candidates?.total || 0}
-                      limit={candidates?.limit ?? candFilters.limit}
-                      disabled={candLoading}
-                      onPageChange={(p) => applyCand({ page: p })}
-                      truncatedNote={
-                        candidates?.truncated
-                          ? `Showing top ${Number(candidates.total).toLocaleString()} of ${Number(candidates.matchedTotal ?? candidates.total).toLocaleString()} matches for this sort`
-                          : null
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         )}
 
@@ -1634,9 +1209,9 @@ function RecruiterDashboard() {
             <p className="muted" style={{ marginTop: 0 }}>
               Current plan: <strong>{planCode}</strong>
               {subscription?.endsAt
-                ? ` · renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
+                ? ` Â· renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
                 : ''}
-              {' · '}
+              {' Â· '}
               Published jobs: {activePublishedJobs} / {activeJobLimit}
             </p>
             <p className="muted" style={{ fontSize: '0.85rem' }}>
@@ -1722,7 +1297,7 @@ function RecruiterDashboard() {
                       <div className="muted" style={{ fontSize: '0.85rem' }}>
                         {jobLocationLabel(j)}
                         {j.boostUntil && new Date(j.boostUntil) > new Date()
-                          ? ` · Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                          ? ` Â· Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
                           : ''}
                       </div>
                     </div>
@@ -1735,7 +1310,7 @@ function RecruiterDashboard() {
                           disabled={billingBusy}
                           onClick={() => buyHotBoost(j.id, days)}
                         >
-                          {days}d · {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
+                          {days}d Â· {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
                         </button>
                       ))}
                     </div>
@@ -1751,7 +1326,7 @@ function RecruiterDashboard() {
               <h2 className="section-title">{company.name}</h2>
               <p className="muted">{company.description}</p>
               <p>
-                Members: {company._count?.members} · Jobs: {company._count?.jobPosts} · Followers:{' '}
+                Members: {company._count?.members} Â· Jobs: {company._count?.jobPosts} Â· Followers:{' '}
                 {company._count?.followers}
               </p>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
@@ -1772,12 +1347,12 @@ function RecruiterDashboard() {
                 </label>
                 <label>
                   <LabelText>Website</LabelText>
-                  <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://…" />
+                  <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://â€¦" />
                 </label>
                 <label>
                   <LabelText>City</LabelText>
                   <select name="citySlug" defaultValue={company.city?.slug || ''}>
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     {meta.cities.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -1788,7 +1363,7 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>Industry</LabelText>
                   <select name="industrySlug" defaultValue={company.industry?.slug || ''}>
-                    <option value="">—</option>
+                    <option value="">â€”</option>
                     {industries.map((i) => (
                       <option key={i.slug} value={i.slug}>
                         {i.name}
@@ -1799,11 +1374,11 @@ function RecruiterDashboard() {
                 <label>
                   <LabelText>Company size</LabelText>
                   <select name="size" defaultValue={company.size || ''}>
-                    <option value="">—</option>
-                    <option value="SIZE_1_10">1–10</option>
-                    <option value="SIZE_11_50">11–50</option>
-                    <option value="SIZE_51_200">51–200</option>
-                    <option value="SIZE_201_1000">201–1000</option>
+                    <option value="">â€”</option>
+                    <option value="SIZE_1_10">1â€“10</option>
+                    <option value="SIZE_11_50">11â€“50</option>
+                    <option value="SIZE_51_200">51â€“200</option>
+                    <option value="SIZE_201_1000">201â€“1000</option>
                     <option value="SIZE_1000_PLUS">1000+</option>
                   </select>
                 </label>
@@ -1819,7 +1394,7 @@ function RecruiterDashboard() {
 
 export default function RecruiterDashboardPage() {
   return (
-    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loading…</div>}>
+    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loadingâ€¦</div>}>
       <RecruiterDashboard />
     </Suspense>
   );

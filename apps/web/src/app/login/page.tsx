@@ -9,7 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
 
 function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/dashboard/recruiter';
+  if (role === 'RECRUITER') return '/';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
   return '/dashboard/employee';
 }

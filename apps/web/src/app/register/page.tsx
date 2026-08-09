@@ -65,7 +65,7 @@ export default function RegisterPage() {
       });
       saveSession(session as Parameters<typeof saveSession>[0]);
       window.location.href =
-        session.user.role === 'RECRUITER' ? '/dashboard/recruiter' : '/dashboard/employee';
+        session.user.role === 'RECRUITER' ? '/' : '/dashboard/employee';
     } catch (err) {
       setError((err as Error).message || t('authRegisterFailed'));
     } finally {

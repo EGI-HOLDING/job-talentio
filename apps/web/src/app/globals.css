@@ -389,6 +389,30 @@ button.chip.chip-hot:hover,
 }
 .explore-section-head .section-title { margin: 0; }
 .explore-section-head .muted { margin: 0.35rem 0 0; font-size: 0.95rem; }
+.trust-banner {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 1rem 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+.trust-banner--ok {
+  background: color-mix(in srgb, #0f766e 8%, #fff);
+  border-color: color-mix(in srgb, #0f766e 30%, var(--border));
+}
+.trust-banner__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.hero--recruiter {
+  padding-top: 1.5rem;
+}
 .explore-group-toggle {
   display: inline-flex;
   gap: 0.35rem;
