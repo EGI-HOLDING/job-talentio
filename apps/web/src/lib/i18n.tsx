@@ -126,6 +126,26 @@ const DICT = {
     ru: 'Выберите город, чтобы увидеть вакансии',
     en: 'Pick a city to see local openings',
   },
+  exploreCitiesGroupBy: {
+    uz: 'Guruhlash',
+    ru: 'Группировка',
+    en: 'Group by',
+  },
+  exploreCitiesByProvince: {
+    uz: 'Viloyat bo‘yicha',
+    ru: 'По регионам',
+    en: 'By province',
+  },
+  exploreCitiesAlphabetical: {
+    uz: 'A–Z',
+    ru: 'А–Я',
+    en: 'A–Z',
+  },
+  exploreCitiesOtherProvince: {
+    uz: 'Boshqa',
+    ru: 'Другое',
+    en: 'Other',
+  },
   exploreCompaniesTitle: {
     uz: 'Barcha kompaniyalar',
     ru: 'Все компании',

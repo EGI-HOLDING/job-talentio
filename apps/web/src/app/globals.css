@@ -389,6 +389,39 @@ button.chip.chip-hot:hover,
 }
 .explore-section-head .section-title { margin: 0; }
 .explore-section-head .muted { margin: 0.35rem 0 0; font-size: 0.95rem; }
+.explore-group-toggle {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 80%, #fff);
+}
+.explore-group-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.45rem 0.85rem;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.explore-group-toggle button.active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.explore-city-section {
+  margin-bottom: 1.75rem;
+}
+.explore-city-section__title {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
 .explore-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

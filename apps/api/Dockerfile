@@ -14,6 +14,7 @@ RUN pnpm --filter @job-talentio/api build
 # Fail the image build if Nest emitted the wrong layout (e.g. dist/src/main.js).
 RUN test -f /app/apps/api/dist/main.js
 RUN test -f /app/apps/api/dist/scripts/backfill-job-titles.js
+RUN test -f /app/apps/api/dist/scripts/backfill-geo.js
 
 FROM base AS runner
 ENV NODE_ENV=production
@@ -30,5 +31,5 @@ COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 WORKDIR /app/apps/api
 EXPOSE 4000
 # Nest emits dist/main.js when only `src` is compiled (see tsconfig.build.json).
-# Always purge seniority from JobPost.title + JobTitle.name after migrate.
-CMD ["sh", "-c", "set -e; pnpm exec prisma migrate deploy; echo 'Running JobTitle backfill…'; node dist/scripts/backfill-job-titles.js; node dist/main.js"]
+# Migrate → geo catalog → job-title purge → API.
+CMD ["sh", "-c", "set -e; pnpm exec prisma migrate deploy; echo 'Running geo backfill…'; node dist/scripts/backfill-geo.js; echo 'Running JobTitle backfill…'; node dist/scripts/backfill-job-titles.js; node dist/main.js"]
