@@ -7,7 +7,9 @@ import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
 import { backfillIndustries } from '../src/common/industry-backfill';
 import { backfillJobLanguages } from '../src/common/job-language-backfill';
 import { COMPANY_INDUSTRY_OVERRIDES } from '../src/common/industry-catalog';
-import { companyLogoUrl } from '../src/common/company-logo-map';
+import { demoCompanyLogoKey, isDemoCompanyLogoSlug } from '../src/common/company-logo-map';
+import { backfillCompanyLogos } from '../src/common/company-logo-backfill';
+import { createDemoLogoUploaderFromEnv } from '../src/common/demo-logo-storage';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -30,11 +32,13 @@ function avatar(n: number) {
   return `https://i.pravatar.cc/300?img=${n}`;
 }
 
+const demoLogoUploader = createDemoLogoUploaderFromEnv();
+
 function logo(slug: string, name: string, color: string) {
-  return (
-    companyLogoUrl(slug) ||
-    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`
-  );
+  if (isDemoCompanyLogoSlug(slug)) {
+    return demoLogoUploader.publicUrlForKey(demoCompanyLogoKey(slug));
+  }
+  return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`;
 }
 
 /** Primary hubs used for round-robin seed of jobs/companies/profiles */
@@ -506,6 +510,12 @@ async function main() {
   await backfillIndustries(prisma, { log: (msg) => console.warn(msg) });
   const industries = await prisma.industry.findMany();
   const indMap = Object.fromEntries(industries.map((i) => [i.slug, i]));
+
+  // Push bundled demo logos to MinIO/S3 before company.logoUrl is set.
+  const logoSeed = await backfillCompanyLogos(prisma, demoLogoUploader, {
+    log: (msg) => console.warn(msg),
+  });
+  console.log(`Demo logos: uploaded=${logoSeed.uploaded} dbUpdated=${logoSeed.updated}`);
 
   const skills = await Promise.all(
     SKILLS.map((s) => {
