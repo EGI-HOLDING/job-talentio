@@ -103,6 +103,8 @@ Semua password non-admin: `Password123!`
 
 Dummy **employees** use `@jobtalent.io` and are seeded **email verified**.  
 Dummy **recruiters** keep their company emails and are also seeded **email verified**.  
-Password (non-admin): `Password123!`
+Password (non-admin): `Password123!`  
+
+Platform email (Resend) is **not sent** to dummy mailboxes (`@jobtalent.io`, seed company domains, `@jobtalentio.uz`) so quota stays free for real users. In-app notifications still work.
 
 **Quick smoke test:** employee `madina.karimova@jobtalent.io` | recruiter `jasur.tursunov@apexsoft.uz` | admin `sarvar.adminov@jobtalentio.uz`
