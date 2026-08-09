@@ -4,11 +4,15 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 import { formatSalaryRange } from '@/lib/numberFormat';
+import { ExploreSection } from '@/components/explore/ExploreSection';
+import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
+import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
+import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
+import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -22,12 +26,7 @@ type Job = {
   city?: { name: string } | null;
 };
 
-type HiringCompany = {
-  name: string;
-  logoUrl?: string | null;
-  slug: string;
-  openRoles: number;
-};
+type FacetItem = { slug: string; name: string; count: number; logoUrl?: string | null };
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return null;
@@ -43,7 +42,10 @@ export default function HomePage() {
   const { t } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [hotJobs, setHotJobs] = useState<Job[]>([]);
-  const [companies, setCompanies] = useState<HiringCompany[]>([]);
+  const [cityFacets, setCityFacets] = useState<FacetItem[]>([]);
+  const [companyFacets, setCompanyFacets] = useState<FacetItem[]>([]);
+  const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     api<Category[]>('/meta/categories', { auth: false }).then(setCategories).catch(() => undefined);
@@ -51,16 +53,20 @@ export default function HomePage() {
       .then((r) => setHotJobs(r.items))
       .catch(() => undefined);
     api<{
-      facets?: { companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }> };
+      facets?: {
+        cities?: FacetItem[];
+        companies?: FacetItem[];
+        categories?: FacetItem[];
+        jobTitles?: FacetItem[];
+      };
     }>('/jobs?limit=1&sort=newest', { auth: false })
       .then((r) => {
-        const list = (r.facets?.companies || []).slice(0, 8).map((c) => ({
-          name: c.name,
-          slug: c.slug,
-          logoUrl: c.logoUrl,
-          openRoles: c.count,
-        }));
-        setCompanies(list);
+        setCityFacets((r.facets?.cities || []).slice(0, 8));
+        setCompanyFacets((r.facets?.companies || []).slice(0, 8));
+        setTitleFacets((r.facets?.jobTitles || []).slice(0, 8));
+        const map: Record<string, number> = {};
+        for (const c of r.facets?.categories || []) map[c.slug] = c.count;
+        setCategoryCounts(map);
       })
       .catch(() => undefined);
   }, []);
@@ -87,14 +93,6 @@ export default function HomePage() {
             {t('searchJobs')}
           </button>
         </form>
-        <div className="chips">
-          {categories.slice(0, 8).map((c) => (
-            <Link key={c.slug} href={`/jobs?category=${c.slug}`} className="chip">
-              {categoryIconLabel(c.slug, c.icon)}
-              {c.name}
-            </Link>
-          ))}
-        </div>
       </section>
 
       <section className="section">
@@ -154,42 +152,80 @@ export default function HomePage() {
         </div>
       </section>
 
-      {companies.length > 0 && (
-        <section className="section">
-          <div className="hiring-head">
-            <div>
-              <h2 className="section-title">{t('hiringNow')}</h2>
-              <p className="muted">{t('hiringNowSubtitle')}</p>
-            </div>
-            <Link href="/jobs?view=companies" className="hiring-view-all">
-              {t('viewAll')}
-              <span aria-hidden>→</span>
-            </Link>
-          </div>
-          <div className="hiring-grid">
-            {companies.map((c) => (
-              <Link
-                key={c.slug}
-                href={`/jobs?companySlug=${encodeURIComponent(c.slug)}`}
-                className="hiring-card"
-                title={c.name}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    c.logoUrl ||
-                    `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(c.name)}`
-                  }
-                  alt=""
-                />
-                <div className="hiring-card-body">
-                  <strong>{c.name}</strong>
-                  <span>{rolesLabel(t, c.openRoles)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
+      <ExploreSection
+        title={t('exploreByCategory')}
+        subtitle={t('exploreByCategorySubtitle')}
+        viewAllHref="/explore/categories"
+        viewAllLabel={t('viewAll')}
+      >
+        {categories.slice(0, 8).map((c) => (
+          <ExploreCategoryCard
+            key={c.slug}
+            name={c.name}
+            slug={c.slug}
+            icon={c.icon}
+            count={categoryCounts[c.slug] ?? 0}
+            countLabel={rolesLabel(t, categoryCounts[c.slug] ?? 0)}
+          />
+        ))}
+      </ExploreSection>
+
+      {cityFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByCity')}
+          subtitle={t('exploreByCitySubtitle')}
+          viewAllHref="/explore/cities"
+          viewAllLabel={t('viewAll')}
+        >
+          {cityFacets.map((c) => (
+            <ExploreCityCard
+              key={c.slug}
+              name={c.name}
+              slug={c.slug}
+              count={c.count}
+              countLabel={rolesLabel(t, c.count)}
+            />
+          ))}
+        </ExploreSection>
+      )}
+
+      {companyFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByCompany')}
+          subtitle={t('exploreByCompanySubtitle')}
+          viewAllHref="/explore/companies"
+          viewAllLabel={t('viewAll')}
+        >
+          {companyFacets.map((c) => (
+            <ExploreCompanyCard
+              key={c.slug}
+              name={c.name}
+              slug={c.slug}
+              logoUrl={c.logoUrl}
+              count={c.count}
+              countLabel={rolesLabel(t, c.count)}
+            />
+          ))}
+        </ExploreSection>
+      )}
+
+      {titleFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByTitle')}
+          subtitle={t('exploreByTitleSubtitle')}
+          viewAllHref="/explore/titles"
+          viewAllLabel={t('viewAll')}
+        >
+          {titleFacets.map((item) => (
+            <ExploreTitleCard
+              key={item.slug}
+              name={item.name}
+              slug={item.slug}
+              count={item.count}
+              countLabel={rolesLabel(t, item.count)}
+            />
+          ))}
+        </ExploreSection>
       )}
 
       <section className="section grid-3" style={{ paddingBottom: '3rem' }}>

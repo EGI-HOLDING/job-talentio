@@ -276,6 +276,31 @@ model BenefitAlias {
   @@index([benefitId])
 }
 
+/// Canonical role title (no seniority — use JobPost.experienceLevel).
+model JobTitle {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  normalizedKey String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  aliases  JobTitleAlias[]
+  jobPosts JobPost[]
+}
+
+model JobTitleAlias {
+  id         String   @id @default(cuid())
+  jobTitleId String
+  alias      String
+  aliasKey   String   @unique
+  createdAt  DateTime @default(now())
+
+  jobTitle JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Cascade)
+
+  @@index([jobTitleId])
+}
+
 // ─── Core identity ───────────────────────────────────────────
 
 model User {
@@ -400,6 +425,8 @@ model Payment {
 model JobPost {
   id                 String          @id @default(cuid())
   companyId          String
+  jobTitleId         String?
+  /// Denormalized display (= JobTitle.name after resolve)
   title              String
   description        String
   cityId             String?
@@ -426,6 +453,7 @@ model JobPost {
   updatedAt          DateTime        @updatedAt
 
   company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobTitle     JobTitle?        @relation(fields: [jobTitleId], references: [id])
   city         City?            @relation(fields: [cityId], references: [id])
   category     JobCategory?     @relation(fields: [categoryId], references: [id])
   jobSkills    JobPostSkill[]
@@ -440,6 +468,7 @@ model JobPost {
   @@index([status, publishedAt])
   @@index([cityId])
   @@index([categoryId])
+  @@index([jobTitleId])
   @@index([experienceLevel])
   @@index([companyId, fingerprint])
   @@index([companyId, contentHash])
