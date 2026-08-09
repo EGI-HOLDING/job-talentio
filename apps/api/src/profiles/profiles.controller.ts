@@ -255,6 +255,12 @@ export class ProfilesController {
     return this.profiles.downloadResume(user, id);
   }
 
+  @Get('me/resumes/:id/parse-status')
+  @Roles('EMPLOYEE', 'SUPER_ADMIN')
+  parseStatus(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.profiles.getResumeParseStatus(user, id);
+  }
+
   @Post('me/resumes/:id/file')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   @UseInterceptors(FileInterceptor('file', resumeUploadOptions))

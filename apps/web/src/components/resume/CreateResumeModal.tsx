@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
 import { api } from '@/lib/api';
+import { waitForResumeParse } from '@/lib/cvParse';
 import { useI18n } from '@/lib/i18n';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
@@ -12,6 +13,7 @@ export type CreateResumeResult = {
   method: 'builder' | 'upload';
   parsedData?: unknown;
   needsReview?: boolean;
+  parseStatus?: string;
 };
 
 type CreateResumeModalProps = {
@@ -42,7 +44,8 @@ export function CreateResumeModal({
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const submitting = busy || busyExternal;
+  const [parsing, setParsing] = useState(false);
+  const submitting = busy || busyExternal || parsing;
 
   useEffect(() => {
     if (!open) return;
@@ -51,6 +54,7 @@ export function CreateResumeModal({
     setMethod('builder');
     setFile(null);
     setError('');
+    setParsing(false);
   }, [open, defaultTitle, defaultJobTitle]);
 
   if (!open) return null;
@@ -107,22 +111,36 @@ export function CreateResumeModal({
         fd.append('file', file!);
         fd.append('title', displayTitle);
         fd.append('jobTitle', role);
-        const created = await api<{
-          id: string;
-          parsedData?: unknown;
-          needsReview?: boolean;
-        }>('/profiles/me/resumes/upload', { method: 'POST', body: fd });
+        const created = await api<{ id: string; parseStatus?: string }>(
+          '/profiles/me/resumes/upload',
+          { method: 'POST', body: fd },
+        );
+        setBusy(false);
+        setParsing(true);
+        const parse = await waitForResumeParse(created.id);
+        if (parse.parseStatus === 'FAILED') {
+          setError(parse.parseError || t('cvParseFailed'));
+          await onCreated({
+            id: created.id,
+            method: 'upload',
+            parseStatus: parse.parseStatus,
+            needsReview: false,
+          });
+          return;
+        }
         await onCreated({
           id: created.id,
           method: 'upload',
-          parsedData: created.parsedData,
-          needsReview: created.needsReview,
+          parsedData: parse.parsedData,
+          needsReview: Boolean(parse.needsReview),
+          parseStatus: parse.parseStatus,
         });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('resumeCreateFailed'));
     } finally {
       setBusy(false);
+      setParsing(false);
     }
   }
 
@@ -228,9 +246,15 @@ export function CreateResumeModal({
 
             {error && <div className="error">{error}</div>}
 
+            {parsing && (
+              <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>
+                {t('cvParsing')}
+              </p>
+            )}
+
             <div className="chips" style={{ marginTop: '0.5rem' }}>
               <button type="submit" className="cta" disabled={submitting}>
-                {submitting ? t('creating') : t('createResume')}
+                {parsing ? t('cvParsing') : submitting ? t('creating') : t('createResume')}
               </button>
               <button type="button" className="secondary" disabled={submitting} onClick={onCancel}>
                 {t('cancel')}

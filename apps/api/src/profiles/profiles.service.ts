@@ -26,13 +26,12 @@ import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
 import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
-import { parseCvText, ParsedCvData, stripNullBytesDeep } from './cv-parser';
+import { ParsedCvData } from './cv-parser';
+import { CvParseService } from './cv-parse.service';
 
 const resumeTargetTitleInclude = {
   targetJobTitle: { select: { id: true, name: true, slug: true } },
 } as const;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
 
 @Injectable()
 export class ProfilesService {
@@ -41,6 +40,7 @@ export class ProfilesService {
     private storage: StorageService,
     private companies: CompaniesService,
     private matching: MatchingService,
+    private cvParse: CvParseService,
   ) {}
 
   private profileInclude = {
@@ -977,32 +977,16 @@ export class ProfilesService {
       'cvs',
     );
 
-    const knownSkills = await this.prisma.skill.findMany({
-      select: { name: true, slug: true },
-      take: 500,
-    });
-    let parsed = parseCvText('', knownSkills);
-    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
-      try {
-        const result = await pdfParse(file.buffer);
-        parsed = parseCvText(result.text || '', knownSkills);
-      } catch {
-        parsed = {
-          ...parseCvText('', knownSkills),
-          textPreview: 'Could not parse PDF text',
-        };
-      }
-    }
-    parsed = stripNullBytesDeep(parsed);
-
     const updated = await this.prisma.resume.update({
       where: { id: resume.id },
       data: {
         fileKey: uploaded.key,
-        fileUrl: null, // use presigned download endpoint
-        parsedData: parsed as object,
-        content: parsed.textPreview || resume.content,
+        fileUrl: null,
         title: resume.title || file.originalname,
+        parsedData: Prisma.DbNull,
+        parseStatus: 'PENDING',
+        parseError: null,
+        parsedAt: null,
       },
     });
 
@@ -1010,11 +994,13 @@ export class ProfilesService {
       await this.deleteStorageKeyIfOrphan(previousKey);
     }
 
+    await this.cvParse.enqueue(updated.id);
+
     return {
       ...this.sanitizeResume(updated),
-      parsedData: parsed,
+      parseStatus: 'PENDING' as const,
       profileId: profile.id,
-      needsReview: true,
+      needsReview: false,
     };
   }
 
@@ -1063,25 +1049,6 @@ export class ProfilesService {
       'cvs',
     );
 
-    const knownSkills = await this.prisma.skill.findMany({
-      select: { name: true, slug: true },
-      take: 500,
-    });
-
-    let parsed = parseCvText('', knownSkills);
-    if (isPdf) {
-      try {
-        const result = await pdfParse(file.buffer);
-        parsed = parseCvText(result.text || '', knownSkills);
-      } catch {
-        parsed = {
-          ...parseCvText('', knownSkills),
-          textPreview: 'Could not extract text from this PDF',
-        };
-      }
-    }
-    parsed = stripNullBytesDeep(parsed);
-
     await this.prisma.resume.updateMany({
       where: { profileId: profile.id },
       data: { isPrimary: false },
@@ -1094,17 +1061,30 @@ export class ProfilesService {
         fileKey: uploaded.key,
         fileUrl: null,
         isPrimary: true,
-        parsedData: parsed as object,
-        content: parsed.textPreview,
+        parseStatus: 'PENDING',
         targetJobTitleId,
       },
       include: resumeTargetTitleInclude,
     });
 
+    await this.cvParse.enqueue(resume.id);
+
     return {
       ...this.sanitizeResume(resume),
-      parsedData: parsed,
-      needsReview: true,
+      parseStatus: 'PENDING' as const,
+      needsReview: false,
+    };
+  }
+
+  async getResumeParseStatus(user: AuthUser, resumeId: string) {
+    const { resume } = await this.ownedResume(user.id, resumeId);
+    return {
+      id: resume.id,
+      parseStatus: resume.parseStatus,
+      parseError: resume.parseError,
+      parsedAt: resume.parsedAt,
+      parsedData: resume.parsedData,
+      needsReview: resume.parseStatus === 'READY' && Boolean(resume.parsedData),
     };
   }
 

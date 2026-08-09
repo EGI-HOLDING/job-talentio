@@ -65,6 +65,14 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
+enum ResumeParseStatus {
+  NONE
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
 enum ProfileVisibility {
   PUBLIC
   TO_REGISTERED_RECRUITERS
@@ -699,7 +707,7 @@ model ProfileLanguage {
 }
 
 model Resume {
-  id                String    @id @default(cuid())
+  id                String            @id @default(cuid())
   profileId         String
   title             String
   /// Canonical target role for matching / analytics (not the free-text display title).
@@ -707,16 +715,19 @@ model Resume {
   content           String?
   fileKey           String?
   fileUrl           String?
-  isPrimary         Boolean   @default(false)
+  isPrimary         Boolean           @default(false)
   parsedData        Json?
-  templateKey       String    @default("classic")
+  parseStatus       ResumeParseStatus @default(NONE)
+  parseError        String?
+  parsedAt          DateTime?
+  templateKey       String            @default("classic")
   themeAccent       String?
   inclusion         Json?
   builderMeta       Json?
   /** Soft-delete tombstone; hard-purged when no Application references remain. */
   deletedAt         DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   profile         EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   targetJobTitle  JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
@@ -725,6 +736,7 @@ model Resume {
   @@index([profileId])
   @@index([profileId, deletedAt])
   @@index([targetJobTitleId])
+  @@index([parseStatus])
 }
 
 model Application {

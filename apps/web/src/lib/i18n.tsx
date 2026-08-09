@@ -518,9 +518,34 @@ const DICT = {
     en: 'Browse PDF',
   },
   uploadCvParse: {
-    uz: 'Yuklash va tahlil qilish',
-    ru: 'Загрузить и разобрать',
-    en: 'Upload & parse',
+    uz: 'Yuklash',
+    ru: 'Загрузить',
+    en: 'Upload',
+  },
+  cvParsing: {
+    uz: 'CV tahlil qilinmoqda...',
+    ru: 'Разбор CV...',
+    en: 'Parsing CV...',
+  },
+  cvParseReady: {
+    uz: 'CV tahlil qilindi - ko‘rib chiqing',
+    ru: 'CV разобрано - проверьте данные',
+    en: 'CV parsed - review what to import',
+  },
+  cvParseFailed: {
+    uz: 'CV tahlili muvaffaqiyatsiz',
+    ru: 'Не удалось разобрать CV',
+    en: 'CV parse failed',
+  },
+  cvParseBadge: {
+    uz: 'Tahlil...',
+    ru: 'Разбор...',
+    en: 'Parsing...',
+  },
+  reviewParsedData: {
+    uz: 'Tahlil natijasini ko‘rish',
+    ru: 'Смотреть разбор',
+    en: 'Review parsed data',
   },
   uploadCvSelected: {
     uz: 'Tanlangan',
