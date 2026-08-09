@@ -3,8 +3,10 @@ import {
   PutObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
+  PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3';
 import type { DemoLogoUploader } from './company-logo-backfill';
+import { PUBLIC_OBJECT_PREFIX } from '../storage/public-prefix';
 
 /** Standalone MinIO/S3 helper for prisma seed (no Nest DI). */
 export function createDemoLogoUploaderFromEnv(): DemoLogoUploader {
@@ -35,6 +37,27 @@ export function createDemoLogoUploaderFromEnv(): DemoLogoUploader {
           } catch {
             /* ignore */
           }
+        }
+        try {
+          await client.send(
+            new PutBucketPolicyCommand({
+              Bucket: bucket,
+              Policy: JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Sid: 'PublicReadPublicPrefix',
+                    Effect: 'Allow',
+                    Principal: { AWS: ['*'] },
+                    Action: ['s3:GetObject'],
+                    Resource: [`arn:aws:s3:::${bucket}/${PUBLIC_OBJECT_PREFIX}*`],
+                  },
+                ],
+              }),
+            }),
+          );
+        } catch {
+          /* local mc anonymous may already cover this */
         }
       })();
     }

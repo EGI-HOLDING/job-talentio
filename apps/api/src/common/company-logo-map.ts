@@ -24,9 +24,12 @@ export const DEMO_COMPANY_LOGO_SLUGS = [
 
 export type DemoCompanyLogoSlug = (typeof DEMO_COMPANY_LOGO_SLUGS)[number];
 
-/** Deterministic MinIO/S3 object key for a demo company logo. */
+/**
+ * Deterministic MinIO/S3 object key for a demo company logo.
+ * Under `public/` so anonymous GetObject works (local mc + Railway bucket policy).
+ */
 export function demoCompanyLogoKey(slug: string): string {
-  return `logos/demo/${slug}.png`;
+  return `public/logos/demo/${slug}.png`;
 }
 
 /** @deprecated Use demoCompanyLogoKey + storage public URL. Kept for old static-path detection. */

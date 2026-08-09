@@ -7,9 +7,13 @@ import {
   DeleteObjectCommand,
   CreateBucketCommand,
   HeadBucketCommand,
+  PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
+import { PUBLIC_OBJECT_PREFIX } from './public-prefix';
+
+export { PUBLIC_OBJECT_PREFIX } from './public-prefix';
 
 @Injectable()
 export class StorageService implements OnModuleInit {
@@ -42,6 +46,40 @@ export class StorageService implements OnModuleInit {
       } catch (err) {
         this.logger.warn(`Bucket ensure skipped: ${(err as Error).message}`);
       }
+    }
+    await this.ensurePublicReadPrefix();
+  }
+
+  /**
+   * Allow anonymous GetObject for `public/*` so company logos (and similar)
+   * work from S3_PUBLIC_URL without signed URLs. Matches local docker `mc anonymous
+   * set download …/public`. Private prefixes (cvs/, avatars/) stay closed.
+   */
+  async ensurePublicReadPrefix(): Promise<void> {
+    const policy = {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'PublicReadPublicPrefix',
+          Effect: 'Allow',
+          Principal: { AWS: ['*'] },
+          Action: ['s3:GetObject'],
+          Resource: [`arn:aws:s3:::${this.bucket}/${PUBLIC_OBJECT_PREFIX}*`],
+        },
+      ],
+    };
+    try {
+      await this.client.send(
+        new PutBucketPolicyCommand({
+          Bucket: this.bucket,
+          Policy: JSON.stringify(policy),
+        }),
+      );
+      this.logger.log(`Bucket policy: anonymous GetObject on ${PUBLIC_OBJECT_PREFIX}*`);
+    } catch (err) {
+      this.logger.warn(
+        `Could not set public read policy on ${PUBLIC_OBJECT_PREFIX}*: ${(err as Error).message}`,
+      );
     }
   }
 

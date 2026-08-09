@@ -256,7 +256,7 @@ export class CompaniesService {
       file.buffer,
       file.originalname || 'logo.png',
       file.mimetype,
-      'logos',
+      'public/logos',
     );
     const oldKey = this.storage.keyFromPublicUrl(company.logoUrl);
     const updated = await this.prisma.company.update({
