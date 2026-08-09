@@ -12,6 +12,7 @@ import {
   DEFAULT_RESUME_INCLUSION,
   levelsAtOrAbove,
   parseLanguagesCsv,
+  MAX_RESUMES_PER_PROFILE,
 } from '@job-talentio/shared';
 import { LanguageLevel, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,8 +25,12 @@ import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
-import { normalizeJobTitleKey } from '../common/title-resolve';
+import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
 import { parseCvText, ParsedCvData, stripNullBytesDeep } from './cv-parser';
+
+const resumeTargetTitleInclude = {
+  targetJobTitle: { select: { id: true, name: true, slug: true } },
+} as const;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
 
@@ -47,6 +52,7 @@ export class ProfilesService {
     resumes: {
       where: { deletedAt: null },
       orderBy: { updatedAt: 'desc' as const },
+      include: resumeTargetTitleInclude,
     },
     city: true,
     user: {
@@ -404,32 +410,77 @@ export class ProfilesService {
     return { ok: true };
   }
 
-  async createResume(user: AuthUser, data: { title: string; content?: string; isPrimary?: boolean }) {
+  private async assertResumeQuota(profileId: string) {
+    const count = await this.prisma.resume.count({
+      where: { profileId, deletedAt: null },
+    });
+    if (count >= MAX_RESUMES_PER_PROFILE) {
+      throw new BadRequestException(
+        `Resume limit reached (${MAX_RESUMES_PER_PROFILE}). Delete an old resume first.`,
+      );
+    }
+  }
+
+  private async resolveTargetJobTitleId(opts: {
+    jobTitleSlug?: string | null;
+    jobTitle?: string | null;
+  }): Promise<string | null> {
+    const name = (opts.jobTitle || opts.jobTitleSlug || '').trim();
+    const slug = opts.jobTitleSlug?.trim();
+    if (!name && !slug) return null;
+    const resolved = await resolveJobTitle(this.prisma, {
+      name: name || slug || 'Role',
+      slug: slug || undefined,
+    });
+    return resolved.jobTitle.id;
+  }
+
+  async createResume(
+    user: AuthUser,
+    data: {
+      title: string;
+      content?: string;
+      isPrimary?: boolean;
+      jobTitleSlug?: string;
+      jobTitle?: string;
+    },
+  ) {
     const profile = await this.getProfileForUser(user.id);
+    await this.assertResumeQuota(profile.id);
+    const targetJobTitleId = await this.resolveTargetJobTitleId(data);
     if (data.isPrimary) {
       await this.prisma.resume.updateMany({
         where: { profileId: profile.id },
         data: { isPrimary: false },
       });
     }
-    return this.prisma.resume.create({
+    const created = await this.prisma.resume.create({
       data: {
         profileId: profile.id,
         title: data.title,
         content: data.content,
         isPrimary: data.isPrimary ?? false,
+        targetJobTitleId,
       },
+      include: resumeTargetTitleInclude,
     });
+    return this.sanitizeResume(created);
   }
 
   async updateResume(
     user: AuthUser,
     resumeId: string,
-    data: { title?: string; content?: string; isPrimary?: boolean },
+    data: {
+      title?: string;
+      content?: string;
+      isPrimary?: boolean;
+      jobTitleSlug?: string;
+      jobTitle?: string;
+    },
   ) {
     const profile = await this.getProfileForUser(user.id);
     const resume = await this.prisma.resume.findFirst({
-      where: { id: resumeId, profileId: profile.id },
+      where: { id: resumeId, profileId: profile.id, deletedAt: null },
     });
     if (!resume) throw new NotFoundException();
     if (data.isPrimary) {
@@ -438,14 +489,21 @@ export class ProfilesService {
         data: { isPrimary: false },
       });
     }
-    return this.prisma.resume.update({
+    const touchRole = data.jobTitle !== undefined || data.jobTitleSlug !== undefined;
+    const targetJobTitleId = touchRole
+      ? await this.resolveTargetJobTitleId(data)
+      : undefined;
+    const updated = await this.prisma.resume.update({
       where: { id: resumeId },
       data: {
         title: data.title,
         content: data.content,
         isPrimary: data.isPrimary,
+        ...(touchRole ? { targetJobTitleId } : {}),
       },
+      include: resumeTargetTitleInclude,
     });
+    return this.sanitizeResume(updated);
   }
 
   /**
@@ -716,10 +774,15 @@ export class ProfilesService {
       themeAccent?: string | null;
       inclusion?: unknown;
       isPrimary?: boolean;
+      jobTitleSlug?: string;
+      jobTitle?: string;
     },
   ) {
     const profile = await this.getProfileForUser(user.id);
-    if (data.isPrimary !== false) {
+    await this.assertResumeQuota(profile.id);
+    const targetJobTitleId = await this.resolveTargetJobTitleId(data);
+    const makePrimary = data.isPrimary !== false;
+    if (makePrimary) {
       await this.prisma.resume.updateMany({
         where: { profileId: profile.id },
         data: { isPrimary: false },
@@ -733,8 +796,10 @@ export class ProfilesService {
         themeAccent: data.themeAccent ?? null,
         inclusion: (normalizeResumeInclusion(data.inclusion as never) ||
           DEFAULT_RESUME_INCLUSION) as never,
-        isPrimary: data.isPrimary !== false,
+        isPrimary: makePrimary,
+        targetJobTitleId,
       },
+      include: resumeTargetTitleInclude,
     });
     return this.sanitizeResume(created);
   }
@@ -748,6 +813,8 @@ export class ProfilesService {
       themeAccent?: string | null;
       inclusion?: unknown;
       isPrimary?: boolean;
+      jobTitleSlug?: string;
+      jobTitle?: string;
     },
   ) {
     const { resume } = await this.ownedResume(user.id, resumeId);
@@ -757,6 +824,10 @@ export class ProfilesService {
         data: { isPrimary: false },
       });
     }
+    const touchRole = data.jobTitle !== undefined || data.jobTitleSlug !== undefined;
+    const targetJobTitleId = touchRole
+      ? await this.resolveTargetJobTitleId(data)
+      : undefined;
     const updated = await this.prisma.resume.update({
       where: { id: resumeId },
       data: {
@@ -767,7 +838,9 @@ export class ProfilesService {
           ? { inclusion: normalizeResumeInclusion(data.inclusion as never) as never }
           : {}),
         ...(data.isPrimary !== undefined ? { isPrimary: data.isPrimary } : {}),
+        ...(touchRole ? { targetJobTitleId } : {}),
       },
+      include: resumeTargetTitleInclude,
     });
     return this.sanitizeResume(updated);
   }
@@ -778,42 +851,56 @@ export class ProfilesService {
     const payload = await this.getResumeDocument(user, resumeId);
     if (!payload.resume) throw new NotFoundException('Resume not found');
     const { buildResumePdfBuffer } = await import('./resume-pdf');
-    const buffer = await buildResumePdfBuffer({
-      fullName: payload.document.fullName,
-      headline: payload.document.headline,
-      email: payload.document.email,
-      phone: payload.document.phone,
-      city: payload.document.city,
-      summary: payload.document.summary,
-      templateKey: payload.resume.templateKey,
-      themeAccent: payload.resume.themeAccent,
-      skills: payload.document.skills.map((s) => s.name),
-      experiences: payload.document.experiences.map((e) => ({
-        title: e.title,
-        companyName: e.companyName,
-        startDate: e.startDate ? new Date(e.startDate).toISOString() : null,
-        endDate: e.endDate ? new Date(e.endDate).toISOString() : null,
-        isCurrent: e.isCurrent,
-        description: e.description,
-        location: e.location,
-      })),
-      educations: payload.document.educations.map((e) => ({
-        school: e.school,
-        degree: e.degree,
-        field: e.field,
-        startDate: e.startDate ? new Date(e.startDate).toISOString() : null,
-        endDate: e.endDate ? new Date(e.endDate).toISOString() : null,
-      })),
-      languages: payload.document.languages,
-      certifications: payload.document.certifications,
-    });
+    let buffer: Buffer;
+    try {
+      buffer = await buildResumePdfBuffer({
+        fullName: payload.document.fullName,
+        headline: payload.document.headline,
+        email: payload.document.email,
+        phone: payload.document.phone,
+        city: payload.document.city,
+        summary: payload.document.summary,
+        templateKey: payload.resume.templateKey,
+        themeAccent: payload.resume.themeAccent,
+        skills: payload.document.skills.map((s) => s.name),
+        experiences: payload.document.experiences.map((e) => ({
+          title: e.title,
+          companyName: e.companyName,
+          startDate: e.startDate ? new Date(e.startDate).toISOString() : null,
+          endDate: e.endDate ? new Date(e.endDate).toISOString() : null,
+          isCurrent: e.isCurrent,
+          description: e.description,
+          location: e.location,
+        })),
+        educations: payload.document.educations.map((e) => ({
+          school: e.school,
+          degree: e.degree,
+          field: e.field,
+          startDate: e.startDate ? new Date(e.startDate).toISOString() : null,
+          endDate: e.endDate ? new Date(e.endDate).toISOString() : null,
+        })),
+        languages: payload.document.languages,
+        certifications: payload.document.certifications,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new BadRequestException(
+        `Could not generate resume PDF. Check that your profile text is valid. (${msg.slice(0, 160)})`,
+      );
+    }
 
-    const uploaded = await this.storage.upload(
-      buffer,
-      `${payload.resume.title || 'resume'}.pdf`,
-      'application/pdf',
-      'cvs',
-    );
+    let uploaded: { key: string; url: string };
+    try {
+      uploaded = await this.storage.upload(
+        buffer,
+        `${payload.resume.title || 'resume'}.pdf`,
+        'application/pdf',
+        'cvs',
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new BadRequestException(`Could not store exported PDF: ${msg.slice(0, 160)}`);
+    }
     const updated = await this.prisma.resume.update({
       where: { id: resumeId },
       data: {
@@ -824,6 +911,7 @@ export class ProfilesService {
           checklistScore: payload.checklist.score,
         } as never,
       },
+      include: resumeTargetTitleInclude,
     });
     if (previousKey && previousKey !== uploaded.key) {
       await this.deleteStorageKeyIfOrphan(previousKey);
@@ -930,7 +1018,11 @@ export class ProfilesService {
     };
   }
 
-  async uploadCv(user: AuthUser, file: Express.Multer.File) {
+  async uploadCv(
+    user: AuthUser,
+    file: Express.Multer.File,
+    meta?: { title?: string; jobTitle?: string; jobTitleSlug?: string },
+  ) {
     if (!file) throw new BadRequestException('File required');
     if (file.size > 5 * 1024 * 1024) {
       throw new BadRequestException('File too large (max 5MB)');
@@ -947,6 +1039,23 @@ export class ProfilesService {
     }
 
     const profile = await this.getProfileForUser(user.id);
+    await this.assertResumeQuota(profile.id);
+    const targetJobTitleId = await this.resolveTargetJobTitleId({
+      jobTitle: meta?.jobTitle,
+      jobTitleSlug: meta?.jobTitleSlug,
+    });
+    let resolvedTitle =
+      (meta?.title || '').trim() ||
+      file.originalname.replace(/\.[^.]+$/, '') ||
+      'Uploaded CV';
+    if (targetJobTitleId && !(meta?.title || '').trim()) {
+      const jt = await this.prisma.jobTitle.findUnique({
+        where: { id: targetJobTitleId },
+        select: { name: true },
+      });
+      if (jt?.name) resolvedTitle = jt.name;
+    }
+
     const uploaded = await this.storage.upload(
       file.buffer,
       file.originalname,
@@ -981,13 +1090,15 @@ export class ProfilesService {
     const resume = await this.prisma.resume.create({
       data: {
         profileId: profile.id,
-        title: file.originalname.replace(/\.[^.]+$/, '') || 'Uploaded CV',
+        title: resolvedTitle,
         fileKey: uploaded.key,
         fileUrl: null,
         isPrimary: true,
         parsedData: parsed as object,
         content: parsed.textPreview,
+        targetJobTitleId,
       },
+      include: resumeTargetTitleInclude,
     });
 
     return {

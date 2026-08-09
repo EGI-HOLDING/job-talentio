@@ -829,6 +829,108 @@ const DICT = {
     ru: 'Поиск языка...',
     en: 'Search languages...',
   },
+  createResume: { uz: 'Resume yaratish', ru: 'Создать резюме', en: 'Create resume' },
+  createResumeHint: {
+    uz: 'Avval nom va maqsadli lavozimni kiriting. Maksimum {max} ta resume.',
+    ru: 'Сначала укажите название и целевую роль. Максимум {max} резюме.',
+    en: 'Enter a name and target role first. Up to {max} resumes.',
+  },
+  resumeDisplayName: {
+    uz: 'Resume nomi',
+    ru: 'Название резюме',
+    en: 'Resume name',
+  },
+  resumeTitlePlaceholder: {
+    uz: 'Masalan: Frontend CV 2026',
+    ru: 'Например: Frontend CV 2026',
+    en: 'e.g. Frontend CV 2026',
+  },
+  resumeTitleRequired: {
+    uz: 'Resume nomi majburiy',
+    ru: 'Укажите название резюме',
+    en: 'Resume name is required',
+  },
+  resumeTargetRole: {
+    uz: 'Maqsadli lavozim',
+    ru: 'Целевая роль',
+    en: 'Target role',
+  },
+  resumeTargetRolePlaceholder: {
+    uz: 'Masalan: Frontend Developer',
+    ru: 'Например: Frontend Developer',
+    en: 'e.g. Frontend Developer',
+  },
+  resumeTargetRoleRequired: {
+    uz: 'Maqsadli lavozim majburiy',
+    ru: 'Укажите целевую роль',
+    en: 'Target role is required',
+  },
+  resumeCreateMethod: {
+    uz: 'Qanday yaratamiz?',
+    ru: 'Как создать?',
+    en: 'How do you want to create it?',
+  },
+  resumeMethodBuilder: {
+    uz: 'Resume builder',
+    ru: 'Конструктор резюме',
+    en: 'Resume builder',
+  },
+  resumeMethodUpload: {
+    uz: 'PDF yuklash',
+    ru: 'Загрузить PDF',
+    en: 'Upload PDF',
+  },
+  resumeBuilderEmptyHint: {
+    uz: 'PDF ixtiyoriy — builderda keyin to‘ldirasiz va export qilasiz.',
+    ru: 'PDF не обязателен — заполните в конструкторе и экспортируйте позже.',
+    en: 'PDF is optional — fill the builder and export when ready.',
+  },
+  resumeDropPdf: {
+    uz: 'PDF ni shu yerga tashlang yoki tanlang',
+    ru: 'Перетащите PDF сюда или выберите файл',
+    en: 'Drop a PDF here or choose a file',
+  },
+  resumePdfHint: {
+    uz: 'Faqat PDF, maksimal 5MB',
+    ru: 'Только PDF, до 5 МБ',
+    en: 'PDF only, max 5MB',
+  },
+  resumePdfOnly: {
+    uz: 'Faqat PDF fayllar qo‘llab-quvvatlanadi',
+    ru: 'Поддерживаются только PDF',
+    en: 'Only PDF files are supported',
+  },
+  resumeFileTooLarge: {
+    uz: 'Fayl juda katta (maks. 5MB)',
+    ru: 'Файл слишком большой (макс. 5 МБ)',
+    en: 'File too large (max 5MB)',
+  },
+  resumePdfRequired: {
+    uz: 'PDF yuklash uchun fayl tanlang',
+    ru: 'Выберите PDF для загрузки',
+    en: 'Choose a PDF file to upload',
+  },
+  resumeCreateFailed: {
+    uz: 'Resume yaratib bo‘lmadi',
+    ru: 'Не удалось создать резюме',
+    en: 'Could not create resume',
+  },
+  resumeQuotaReached: {
+    uz: 'Resume limiti ({max}) to‘ldi',
+    ru: 'Достигнут лимит резюме ({max})',
+    en: 'Resume limit reached ({max})',
+  },
+  creating: { uz: 'Yaratilmoqda...', ru: 'Создание...', en: 'Creating...' },
+  continueWithoutResume: {
+    uz: 'Resumesiz davom etish',
+    ru: 'Продолжить без резюме',
+    en: 'Continue without resume',
+  },
+  resumeMatchesRole: {
+    uz: 'Bu lavozimga mos',
+    ru: 'Подходит к этой роли',
+    en: 'Matches this role',
+  },
   jobLanguagesHint: {
     uz: 'Ixtiyoriy. Maksimum 4 til, CEFR daraja bilan (masalan English B2).',
     ru: 'Необязательно. До 4 языков с уровнем CEFR (например English B2).',

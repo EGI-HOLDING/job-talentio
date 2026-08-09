@@ -9,10 +9,19 @@ import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { useI18n } from '@/lib/i18n';
 import { formatSalaryRange } from '@/lib/numberFormat';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
+type ResumeOption = {
+  id: string;
+  title: string;
+  isPrimary?: boolean;
+  hasFile?: boolean;
+  fileKey?: string | null;
+  targetJobTitle?: { id: string; name: string; slug: string } | null;
+};
 type Job = {
   id: string;
   title: string;
@@ -26,6 +35,8 @@ type Job = {
   isHot?: boolean;
   boostUntil?: string | null;
   chatPeerUserId?: string | null;
+  jobTitleId?: string | null;
+  jobTitle?: { id: string; name: string; slug: string } | null;
   company: {
     id: string;
     name: string;
@@ -66,17 +77,27 @@ export default function JobDetailPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showApply, setShowApply] = useState(false);
+  const [showCreateResume, setShowCreateResume] = useState(false);
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [resumes, setResumes] = useState<
-    Array<{ id: string; title: string; isPrimary?: boolean; hasFile?: boolean; fileKey?: string | null }>
-  >([]);
+  const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
   const alreadyApplied = Boolean(myApplication);
   const selectedResume = resumes.find((r) => r.id === selectedResumeId);
   const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);
+  const jobTitleId = job?.jobTitleId || job?.jobTitle?.id || null;
+  const defaultApplyRole = job?.jobTitle?.name || job?.title || '';
+
+  async function loadResumes() {
+    const p = await api<{ resumes?: ResumeOption[] }>('/profiles/me');
+    const list = p.resumes || [];
+    setResumes(list);
+    const primary = list.find((r) => r.isPrimary) || list[0];
+    setSelectedResumeId(primary?.id || '');
+    return list;
+  }
 
   useEffect(() => {
     api<Job>(`/jobs/${id}`)
@@ -263,22 +284,16 @@ export default function JobDetailPage() {
                     return;
                   }
                   try {
-                    const p = await api<{
-                      resumes?: Array<{
-                        id: string;
-                        title: string;
-                        isPrimary?: boolean;
-                        hasFile?: boolean;
-                        fileKey?: string | null;
-                      }>;
-                    }>('/profiles/me');
-                    const list = p.resumes || [];
-                    setResumes(list);
-                    const primary = list.find((r) => r.isPrimary) || list[0];
-                    setSelectedResumeId(primary?.id || '');
+                    const list = await loadResumes();
+                    if (list.length === 0) {
+                      setShowCreateResume(true);
+                      return;
+                    }
                   } catch {
                     setResumes([]);
                     setSelectedResumeId('');
+                    setShowCreateResume(true);
+                    return;
                   }
                   setShowApply(true);
                 }}
@@ -360,6 +375,33 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      <CreateResumeModal
+        open={showCreateResume && !alreadyApplied}
+        defaultJobTitle={defaultApplyRole}
+        defaultTitle={defaultApplyRole}
+        secondaryLabel={t('continueWithoutResume')}
+        onSecondary={() => {
+          setShowCreateResume(false);
+          setShowApply(true);
+        }}
+        onCancel={() => setShowCreateResume(false)}
+        onCreated={async (result) => {
+          setShowCreateResume(false);
+          try {
+            await loadResumes();
+            setSelectedResumeId(result.id);
+          } catch {
+            /* ignore */
+          }
+          setShowApply(true);
+          if (result.method === 'builder') {
+            setSuccess(
+              'Resume draft created. Export a PDF from the builder before applying with a file, or continue without a PDF.',
+            );
+          }
+        }}
+      />
+
       {showApply && !alreadyApplied && (
         <div
           className="modal-backdrop"
@@ -390,12 +432,20 @@ export default function JobDetailPage() {
                     {resumes.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.title}
+                        {r.targetJobTitle?.name ? ` · ${r.targetJobTitle.name}` : ''}
                         {r.isPrimary ? ' (primary)' : ''}
                         {r.hasFile || r.fileKey ? '' : ' - no PDF'}
                       </option>
                     ))}
                   </select>
                 </label>
+                {selectedResume &&
+                  jobTitleId &&
+                  selectedResume.targetJobTitle?.id === jobTitleId && (
+                    <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                      {t('resumeMatchesRole')}
+                    </p>
+                  )}
                 {selectedResumeId && !selectedHasFile && (
                   <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hot)' }}>
                     Selected resume has no PDF file yet. Export from the resume builder or attach a file before applying.

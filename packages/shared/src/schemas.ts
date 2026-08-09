@@ -341,7 +341,14 @@ export const resumeSchema = z.object({
   title: z.string().min(1).max(160),
   content: z.string().max(50000).optional(),
   isPrimary: z.boolean().optional(),
+  /** Canonical JobTitle slug (preferred). */
+  jobTitleSlug: z.string().max(120).optional(),
+  /** Free-text role name; resolved via JobTitle catalog when slug omitted. */
+  jobTitle: z.string().min(2).max(160).optional(),
 });
+
+/** Max non-deleted resumes per employee profile. */
+export const MAX_RESUMES_PER_PROFILE = 10;
 
 export const resumeImportSchema = z.object({
   headline: z.boolean().optional(),
@@ -382,6 +389,8 @@ export const resumeBuilderSettingsSchema = z.object({
   themeAccent: z.string().max(32).optional().nullable(),
   inclusion: resumeInclusionSchema.optional(),
   isPrimary: z.boolean().optional(),
+  jobTitleSlug: z.string().max(120).optional(),
+  jobTitle: z.string().min(2).max(160).optional(),
 });
 
 export const DEFAULT_RESUME_INCLUSION = {

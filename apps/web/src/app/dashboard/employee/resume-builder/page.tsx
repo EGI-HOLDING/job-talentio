@@ -195,6 +195,14 @@ function ResumeBuilderInner() {
     setExporting(true);
     setError('');
     try {
+      await api(`/profiles/me/resumes/${resumeId}/builder`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title,
+          templateKey,
+          inclusion,
+        }),
+      });
       const res = await api<{ downloadUrl?: string }>(`/profiles/me/resumes/${resumeId}/export`, {
         method: 'POST',
       });
