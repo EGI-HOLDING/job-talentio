@@ -49,6 +49,7 @@ type SearchResponse = {
     categories: Array<{ slug: string; name: string; count: number }>;
     jobTitles?: Array<{ slug: string; name: string; count: number }>;
     companies?: Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>;
+    industries?: Array<{ slug: string; name: string; count: number; groupSlug?: string }>;
     skills?: Array<{ slug: string; name: string; count: number }>;
     experienceLevels: Record<string, number>;
   };
@@ -59,6 +60,7 @@ type Filters = {
   city: string;
   category: string;
   companySlug: string;
+  industrySlug: string;
   jobTitle: string;
   skills: string;
   skillMode: string;
@@ -84,6 +86,7 @@ const EMPTY: Filters = {
   city: '',
   category: '',
   companySlug: '',
+  industrySlug: '',
   jobTitle: '',
   skills: '',
   skillMode: 'OR',
@@ -110,6 +113,7 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     city: sp.get('city') ?? '',
     category: sp.get('category') ?? '',
     companySlug: sp.get('companySlug') ?? '',
+    industrySlug: sp.get('industrySlug') ?? '',
     jobTitle: sp.get('jobTitle') ?? '',
     skills: sp.get('skills') ?? '',
     skillMode: sp.get('skillMode') ?? 'OR',
@@ -284,8 +288,18 @@ function JobsInner() {
       ? { slug: singleJobTitleSlug, name: singleJobTitleSlug, count: data?.total ?? 0 }
       : null);
 
+  const industryFacetList = data?.facets?.industries || [];
+  const singleIndustrySlug =
+    filters.industrySlug && !filters.industrySlug.includes(',') ? filters.industrySlug : '';
+  const activeIndustry =
+    (singleIndustrySlug && industryFacetList.find((x) => x.slug === singleIndustrySlug)) ||
+    (singleIndustrySlug
+      ? { slug: singleIndustrySlug, name: singleIndustrySlug, count: data?.total ?? 0 }
+      : null);
+
   const advancedActiveCount = [
     filters.companySlug,
+    filters.industrySlug,
     filters.jobTitle,
     filters.skills,
     filters.experienceLevel,
@@ -606,6 +620,31 @@ function JobsInner() {
                 onClick={() => apply({ jobTitle: '' })}
               >
                 {t('clearJobTitleFilter')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeIndustry && singleIndustrySlug && (
+          <div className="company-filter-banner">
+            <div>
+              <strong>
+                {t('industryFilter')}: {activeIndustry.name}
+              </strong>
+              <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
+                {rolesLabel(data?.total ?? activeIndustry.count)}
+              </p>
+            </div>
+            <div className="company-filter-actions">
+              <Link href="/explore/industries" className="chip">
+                {t('exploreIndustriesTitle')}
+              </Link>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => apply({ industrySlug: '' })}
+              >
+                {t('clearIndustryFilter')}
               </button>
             </div>
           </div>

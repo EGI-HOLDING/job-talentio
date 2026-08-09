@@ -103,7 +103,9 @@ function RecruiterDashboard() {
   const [msg, setMsg] = useState('');
   const [msgTone, setMsgTone] = useState<'success' | 'error'>('success');
   const [breakdownId, setBreakdownId] = useState<string | null>(null);
-  const [industries, setIndustries] = useState<any[]>([]);
+  const [industryGroups, setIndustryGroups] = useState<
+    Array<{ slug: string; name: string; industries: Array<{ slug: string; name: string }> }>
+  >([]);
   const [subscription, setSubscription] = useState<{
     plan: PlanCode;
     activePublishedJobs: number;
@@ -212,7 +214,10 @@ function RecruiterDashboard() {
       api('/meta/skills?sort=popular&take=120', { auth: false }),
       api('/meta/categories', { auth: false }),
       api('/meta/benefits', { auth: false }),
-      api('/meta/industries', { auth: false }).catch(() => []),
+      api<{ groups?: Array<{ slug: string; name: string; industries: Array<{ slug: string; name: string }> }> }>(
+        '/meta/industries?group=1',
+        { auth: false },
+      ).catch(() => ({ groups: [] })),
       api('/meta/languages', { auth: false }).catch(() => []),
     ]);
     setMemberships(mine);
@@ -223,7 +228,7 @@ function RecruiterDashboard() {
       benefits: benefits as any[],
       languages: langs as any[],
     });
-    setIndustries(inds as any[]);
+    setIndustryGroups(Array.isArray(inds) ? [] : inds.groups || []);
     const first = mine[0]?.companyId;
     if (first) {
       setCompanyId(first);
@@ -1362,10 +1367,14 @@ function RecruiterDashboard() {
                   <LabelText>Industry</LabelText>
                   <select name="industrySlug" defaultValue={company.industry?.slug || ''}>
                     <option value="">-</option>
-                    {industries.map((i) => (
-                      <option key={i.slug} value={i.slug}>
-                        {i.name}
-                      </option>
+                    {industryGroups.map((g) => (
+                      <optgroup key={g.slug} label={g.name}>
+                        {g.industries.map((i) => (
+                          <option key={i.slug} value={i.slug}>
+                            {i.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </label>

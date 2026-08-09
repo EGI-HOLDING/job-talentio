@@ -248,8 +248,32 @@ export class MetaService {
     }));
   }
 
-  industries() {
-    return this.prisma.industry.findMany({ orderBy: { name: 'asc' } });
+  async industries(group?: string) {
+    if (group === '1' || group === 'true' || group === 'group') {
+      const groups = await this.prisma.industryGroup.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        include: {
+          industries: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] },
+        },
+      });
+      return {
+        group: 'industry' as const,
+        groups: groups.map((g) => ({
+          slug: g.slug,
+          name: g.name,
+          sortOrder: g.sortOrder,
+          industries: g.industries.map((i) => ({
+            slug: i.slug,
+            name: i.name,
+            sortOrder: i.sortOrder,
+          })),
+        })),
+      };
+    }
+    return this.prisma.industry.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: { group: { select: { slug: true, name: true } } },
+    });
   }
 
   async benefits() {

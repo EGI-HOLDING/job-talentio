@@ -204,6 +204,26 @@ const DICT = {
     ru: 'Смотрите открытые роли по отраслям',
     en: 'Browse open roles by field',
   },
+  exploreByIndustry: {
+    uz: 'Sanoat bo‘yicha ishlar',
+    ru: 'Вакансии по отраслям компаний',
+    en: 'Jobs by industry',
+  },
+  exploreByIndustrySubtitle: {
+    uz: 'Kompaniya sanoati bo‘yicha ochiq ishlar',
+    ru: 'Открытые роли по отрасли компании',
+    en: 'Open roles by company industry',
+  },
+  exploreIndustriesTitle: {
+    uz: 'Barcha sanoatlar',
+    ru: 'Все отрасли',
+    en: 'All industries',
+  },
+  exploreIndustriesSubtitle: {
+    uz: 'Sanoatni tanlang - tegishli kompaniya ishlari ochiladi',
+    ru: 'Выберите отрасль, чтобы увидеть вакансии компаний',
+    en: 'Pick an industry to see matching company jobs',
+  },
   exploreByCity: {
     uz: 'Shahar bo‘yicha ishlar',
     ru: 'Вакансии по городам',
@@ -313,6 +333,16 @@ const DICT = {
     uz: 'Lavozim filtrini tozalash',
     ru: 'Сбросить фильтр должности',
     en: 'Clear title filter',
+  },
+  industryFilter: {
+    uz: 'Sanoat',
+    ru: 'Отрасль',
+    en: 'Industry',
+  },
+  clearIndustryFilter: {
+    uz: 'Sanoat filtrini tozalash',
+    ru: 'Сбросить фильтр отрасли',
+    en: 'Clear industry filter',
   },
   jobTitleHint: {
     uz: 'Taklifdan tanlang yoki yangi lavozim yozing (Junior/Senior alohida Levelda)',

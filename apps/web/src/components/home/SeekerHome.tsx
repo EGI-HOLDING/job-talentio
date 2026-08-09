@@ -13,6 +13,7 @@ import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
 import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
+import { ExploreIndustryCard } from '@/components/explore/ExploreIndustryCard';
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -45,6 +46,7 @@ export function SeekerHome() {
   const [cityFacets, setCityFacets] = useState<FacetItem[]>([]);
   const [companyFacets, setCompanyFacets] = useState<FacetItem[]>([]);
   const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
+  const [industryFacets, setIndustryFacets] = useState<FacetItem[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -58,11 +60,13 @@ export function SeekerHome() {
         companies?: FacetItem[];
         categories?: FacetItem[];
         jobTitles?: FacetItem[];
+        industries?: FacetItem[];
       };
     }>('/jobs?limit=1&sort=newest', { auth: false })
       .then((r) => {
         setCityFacets((r.facets?.cities || []).slice(0, 8));
         setCompanyFacets((r.facets?.companies || []).slice(0, 8));
+        setIndustryFacets((r.facets?.industries || []).slice(0, 8));
         const titles = (r.facets?.jobTitles || []).slice(0, 8);
         setTitleFacets(titles);
         const map: Record<string, number> = {};
@@ -191,6 +195,25 @@ export function SeekerHome() {
           />
         ))}
       </ExploreSection>
+
+      {industryFacets.length > 0 && (
+        <ExploreSection
+          title={t('exploreByIndustry')}
+          subtitle={t('exploreByIndustrySubtitle')}
+          viewAllHref="/explore/industries"
+          viewAllLabel={t('viewAll')}
+        >
+          {industryFacets.map((item) => (
+            <ExploreIndustryCard
+              key={item.slug}
+              name={item.name}
+              slug={item.slug}
+              count={item.count}
+              countLabel={rolesLabel(t, item.count)}
+            />
+          ))}
+        </ExploreSection>
+      )}
 
       {cityFacets.length > 0 && (
         <ExploreSection
