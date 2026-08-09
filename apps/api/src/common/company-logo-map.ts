@@ -1,27 +1,39 @@
-/** Static web paths for demo company logos (served from apps/web/public). */
-export const COMPANY_LOGO_BY_SLUG: Record<string, string> = {
-  'demo-tech-tashkent': '/company-logos/demo-tech-tashkent.png',
-  'uzpay-fintech': '/company-logos/uzpay-fintech.png',
-  'silk-road-commerce': '/company-logos/silk-road-commerce.png',
-  'tashkent-soft-labs': '/company-logos/tashkent-soft-labs.png',
-  'samarkand-digital': '/company-logos/samarkand-digital.png',
-  'orient-bank': '/company-logos/orient-bank.png',
-  'fergana-logistics': '/company-logos/fergana-logistics.png',
-  'edunest-uz': '/company-logos/edunest-uz.png',
-  'medicare-it': '/company-logos/medicare-it.png',
-  'navoi-engineering': '/company-logos/navoi-engineering.png',
-  'andijan-agrotech': '/company-logos/andijan-agrotech.png',
-  'bukhara-heritage': '/company-logos/bukhara-heritage.png',
-  'clickpay-solutions': '/company-logos/clickpay-solutions.png',
-  'namangan-textile': '/company-logos/namangan-textile.png',
-  'uztelecom-digital': '/company-logos/uztelecom-digital.png',
-  'khorezm-green': '/company-logos/khorezm-green.png',
-  'tashkent-legal': '/company-logos/tashkent-legal.png',
-  'caravan-marketplace': '/company-logos/caravan-marketplace.png',
-  'nukus-smart-city': '/company-logos/nukus-smart-city.png',
-  'chirchiq-pharma': '/company-logos/chirchiq-pharma.png',
-};
+/** Demo company slugs that have bundled logo PNGs under apps/api/assets/company-logos. */
+export const DEMO_COMPANY_LOGO_SLUGS = [
+  'demo-tech-tashkent',
+  'uzpay-fintech',
+  'silk-road-commerce',
+  'tashkent-soft-labs',
+  'samarkand-digital',
+  'orient-bank',
+  'fergana-logistics',
+  'edunest-uz',
+  'medicare-it',
+  'navoi-engineering',
+  'andijan-agrotech',
+  'bukhara-heritage',
+  'clickpay-solutions',
+  'namangan-textile',
+  'uztelecom-digital',
+  'khorezm-green',
+  'tashkent-legal',
+  'caravan-marketplace',
+  'nukus-smart-city',
+  'chirchiq-pharma',
+] as const;
 
-export function companyLogoUrl(slug: string): string | undefined {
-  return COMPANY_LOGO_BY_SLUG[slug];
+export type DemoCompanyLogoSlug = (typeof DEMO_COMPANY_LOGO_SLUGS)[number];
+
+/** Deterministic MinIO/S3 object key for a demo company logo. */
+export function demoCompanyLogoKey(slug: string): string {
+  return `logos/demo/${slug}.png`;
+}
+
+/** @deprecated Use demoCompanyLogoKey + storage public URL. Kept for old static-path detection. */
+export function legacyStaticCompanyLogoPath(slug: string): string {
+  return `/company-logos/${slug}.png`;
+}
+
+export function isDemoCompanyLogoSlug(slug: string): boolean {
+  return (DEMO_COMPANY_LOGO_SLUGS as readonly string[]).includes(slug);
 }

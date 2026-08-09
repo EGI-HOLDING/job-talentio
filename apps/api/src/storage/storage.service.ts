@@ -45,6 +45,33 @@ export class StorageService implements OnModuleInit {
     }
   }
 
+  /** Public base URL for objects (no trailing slash). */
+  getPublicBaseUrl() {
+    return this.publicUrl.replace(/\/$/, '');
+  }
+
+  publicUrlForKey(key: string) {
+    return `${this.getPublicBaseUrl()}/${key.replace(/^\//, '')}`;
+  }
+
+  /** Idempotent put at a fixed key (demo logos, etc.). */
+  async putObject(
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<{ key: string; url: string }> {
+    const normalized = key.replace(/^\//, '');
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: normalized,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+    return { key: normalized, url: this.publicUrlForKey(normalized) };
+  }
+
   async upload(
     buffer: Buffer,
     filename: string,
@@ -52,15 +79,7 @@ export class StorageService implements OnModuleInit {
     folder = 'uploads',
   ): Promise<{ key: string; url: string }> {
     const key = `${folder}/${randomUUID()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType,
-      }),
-    );
-    return { key, url: `${this.publicUrl}/${key}` };
+    return this.putObject(key, buffer, contentType);
   }
 
   async getPresignedPutUrl(key: string, contentType: string) {

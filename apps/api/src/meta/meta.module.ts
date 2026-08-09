@@ -7,9 +7,10 @@ import { JobLanguageBackfillService } from './job-language-backfill.service';
 import { VipCompanyBackfillService } from './vip-company-backfill.service';
 import { CompanyLogoBackfillService } from './company-logo-backfill.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, StorageModule],
   controllers: [MetaController],
   providers: [
     MetaService,

@@ -1,38 +1,94 @@
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { COMPANY_LOGO_BY_SLUG } from './company-logo-map';
+import {
+  DEMO_COMPANY_LOGO_SLUGS,
+  demoCompanyLogoKey,
+  legacyStaticCompanyLogoPath,
+} from './company-logo-map';
 
 type Db = Pick<PrismaClient, 'company'>;
 
-export async function needsCompanyLogoBackfill(db: Db): Promise<boolean> {
-  const slugs = Object.keys(COMPANY_LOGO_BY_SLUG);
+export type DemoLogoUploader = {
+  putObject: (
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+  ) => Promise<{ key: string; url: string }>;
+  publicUrlForKey: (key: string) => string;
+};
+
+/** Resolve apps/api/assets/company-logos whether running from src/ or dist/. */
+export function demoCompanyLogosAssetsDir(): string {
+  const candidates = [
+    path.join(__dirname, '../assets/company-logos'), // dist/common → dist/assets (nest assets)
+    path.join(__dirname, '../../assets/company-logos'), // src/common → apps/api/assets
+    path.join(process.cwd(), 'assets/company-logos'),
+    path.join(process.cwd(), 'apps/api/assets/company-logos'),
+  ];
+  for (const dir of candidates) {
+    if (existsSync(dir)) return dir;
+  }
+  return candidates[0];
+}
+
+export function expectedDemoLogoUrl(uploader: DemoLogoUploader, slug: string): string {
+  return uploader.publicUrlForKey(demoCompanyLogoKey(slug));
+}
+
+export async function needsCompanyLogoBackfill(
+  db: Db,
+  uploader: DemoLogoUploader,
+): Promise<boolean> {
+  const slugs = [...DEMO_COMPANY_LOGO_SLUGS];
   const rows = await db.company.findMany({
     where: { slug: { in: slugs } },
     select: { slug: true, logoUrl: true },
   });
   if (!rows.length) return false;
   return rows.some((r) => {
-    const expected = COMPANY_LOGO_BY_SLUG[r.slug];
-    return !!expected && r.logoUrl !== expected;
+    const expected = expectedDemoLogoUrl(uploader, r.slug);
+    const legacy = legacyStaticCompanyLogoPath(r.slug);
+    return !r.logoUrl || r.logoUrl === legacy || r.logoUrl !== expected;
   });
 }
 
-/** Idempotent: point demo companies at static /company-logos/<slug>.png paths. */
+/**
+ * Upload bundled demo PNGs to MinIO/S3 (deterministic keys) and point companies at public URLs.
+ * Idempotent.
+ */
 export async function backfillCompanyLogos(
   db: Db,
-  opts?: { log?: (msg: string) => void },
-): Promise<{ updated: number }> {
+  uploader: DemoLogoUploader,
+  opts?: { log?: (msg: string) => void; assetsDir?: string },
+): Promise<{ updated: number; uploaded: number }> {
   const log = opts?.log ?? (() => undefined);
+  const assetsDir = opts?.assetsDir ?? demoCompanyLogosAssetsDir();
   let updated = 0;
-  for (const [slug, logoUrl] of Object.entries(COMPANY_LOGO_BY_SLUG)) {
+  let uploaded = 0;
+
+  for (const slug of DEMO_COMPANY_LOGO_SLUGS) {
+    const filePath = path.join(assetsDir, `${slug}.png`);
+    if (!existsSync(filePath)) {
+      log(`Demo logo missing on disk: ${filePath}`);
+      continue;
+    }
+
+    const key = demoCompanyLogoKey(slug);
+    const buffer = readFileSync(filePath);
+    const { url } = await uploader.putObject(key, buffer, 'image/png');
+    uploaded += 1;
+
     const result = await db.company.updateMany({
       where: {
         slug,
-        OR: [{ logoUrl: null }, { logoUrl: { not: logoUrl } }],
+        OR: [{ logoUrl: null }, { logoUrl: { not: url } }],
       },
-      data: { logoUrl },
+      data: { logoUrl: url },
     });
     updated += result.count;
   }
-  log(`Company logos updated: ${updated}`);
-  return { updated };
+
+  log(`Company logos uploaded=${uploaded} dbUpdated=${updated}`);
+  return { updated, uploaded };
 }
