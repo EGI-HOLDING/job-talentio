@@ -50,9 +50,30 @@ const EXP_LEVEL_YEARS: Record<ExperienceLevel, number> = {
   EXECUTIVE: 12,
 };
 
+/** Floor for surfacing recommendations (baseline scoring can hit ~30+ on empty signals). */
+const MIN_RECOMMENDATION_SCORE = 40;
+
 @Injectable()
 export class MatchingService {
   constructor(private prisma: PrismaService) {}
+
+  /** Profiles without skills are not matchable for discovery recommendations. */
+  private profileHasMatchSignal(profile: { skills: unknown[] }) {
+    return profile.skills.length > 0;
+  }
+
+  private passesRecommendationGate(
+    breakdown: MatchBreakdown,
+    opts: { jobHasSkills: boolean; profileHasSkills: boolean },
+  ) {
+    if (breakdown.total < MIN_RECOMMENDATION_SCORE) return false;
+    // When both sides declare skills, require real overlap — not free baseline points.
+    if (opts.jobHasSkills && opts.profileHasSkills) {
+      return breakdown.details.matchedSkills.length > 0;
+    }
+    // Job with no skill requirements: still need a non-trivial total above the floor.
+    return true;
+  }
 
   async scoreProfileAgainstJob(
     profileId: string,
@@ -277,14 +298,15 @@ export class MatchingService {
       },
     });
     const appliedIds = new Set(job.applications.map((a) => a.profileId));
-
     const skillIds = job.jobSkills.map((s) => s.skillId);
+
+    // Without job skills, candidate discovery would surface arbitrary profiles on baseline scores.
+    if (!skillIds.length) return [];
+
     const profiles = await this.prisma.employeeProfile.findMany({
       where: {
         visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] },
-        ...(skillIds.length
-          ? { skills: { some: { skillId: { in: skillIds } } } }
-          : {}),
+        skills: { some: { skillId: { in: skillIds } } },
       },
       include: {
         user: { select: { id: true, fullName: true, avatarUrl: true } },
@@ -299,7 +321,7 @@ export class MatchingService {
     });
 
     const scored = profiles
-      .filter((p) => !appliedIds.has(p.id))
+      .filter((p) => !appliedIds.has(p.id) && this.profileHasMatchSignal(p))
       .map((p) => {
         const breakdown = this.compute(p, job);
         return {
@@ -318,6 +340,12 @@ export class MatchingService {
           matchBreakdown: breakdown,
         };
       })
+      .filter((row) =>
+        this.passesRecommendationGate(row.matchBreakdown, {
+          jobHasSkills: true,
+          profileHasSkills: true,
+        }),
+      )
       .sort((a, b) => b.matchScore - a.matchScore)
       .slice(0, limit);
 
@@ -337,15 +365,17 @@ export class MatchingService {
         applications: { select: { jobPostId: true } },
       },
     });
+
+    // Empty / new profiles must not receive "matched" jobs from baseline scoring alone.
+    if (!this.profileHasMatchSignal(profile)) return [];
+
     const appliedJobIds = new Set(profile.applications.map((a) => a.jobPostId));
     const skillIds = profile.skills.map((s) => s.skillId);
 
     const jobs = await this.prisma.jobPost.findMany({
       where: {
         status: 'PUBLISHED',
-        ...(skillIds.length
-          ? { jobSkills: { some: { skillId: { in: skillIds } } } }
-          : {}),
+        jobSkills: { some: { skillId: { in: skillIds } } },
       },
       include: {
         company: {
@@ -370,6 +400,12 @@ export class MatchingService {
           matchBreakdown: breakdown,
         };
       })
+      .filter((row) =>
+        this.passesRecommendationGate(row.matchBreakdown, {
+          jobHasSkills: row.job.jobSkills.length > 0,
+          profileHasSkills: true,
+        }),
+      )
       .sort((a, b) => b.matchScore - a.matchScore)
       .slice(0, limit);
   }

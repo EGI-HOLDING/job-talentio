@@ -688,7 +688,12 @@ export default function EmployeeDashboard() {
                 <MatchRing score={item.matchScore} />
               </Link>
             ))}
-            {!recommended.length && <p className="muted">Add skills to your profile to get recommendations.</p>}
+            {!recommended.length && (
+              <p className="muted">
+                Add skills to your profile to get job matches. Recommendations stay empty until your
+                skills overlap with published roles.
+              </p>
+            )}
           </div>
         )}
 

@@ -43,15 +43,23 @@ export class JobsController {
     if (user?.role === 'EMPLOYEE') {
       const profile = await this.prisma.employeeProfile.findUnique({
         where: { userId: user.id },
-        select: { id: true },
+        select: {
+          id: true,
+          _count: { select: { skills: true } },
+        },
       });
-      profileId = profile?.id;
+      // Empty profiles must not drive sort=match or match rings (baseline scores are misleading).
+      if (profile && profile._count.skills > 0) {
+        profileId = profile.id;
+      }
     }
+    const sort =
+      data.sort === 'match' && !profileId ? 'relevance' : (data.sort ?? 'relevance');
     return this.jobs.search({
       ...data,
       hotOnly: Boolean(data.hotOnly),
       skillMode: data.skillMode ?? 'OR',
-      sort: data.sort ?? 'relevance',
+      sort,
       page: data.page ?? 1,
       limit: data.limit ?? 12,
       profileId,
