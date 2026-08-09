@@ -570,6 +570,31 @@ const DICT = {
     ru: 'Ссылка недействительна или устарела.',
     en: 'This link is invalid or expired.',
   },
+  emailVerifiedBadge: {
+    uz: 'Email tasdiqlangan',
+    ru: 'Email подтверждён',
+    en: 'Email verified',
+  },
+  emailUnverifiedBadge: {
+    uz: 'Email tasdiqlanmagan',
+    ru: 'Email не подтверждён',
+    en: 'Email not verified',
+  },
+  verifyEmailCta: {
+    uz: 'Emailni tasdiqlash',
+    ru: 'Подтвердить email',
+    en: 'Verify email',
+  },
+  verifyEmailSending: {
+    uz: 'Yuborilmoqda...',
+    ru: 'Отправка...',
+    en: 'Sending...',
+  },
+  verifyEmailProfileHint: {
+    uz: 'Hisobingiz ishlayapti. Emailni tasdiqlash uchun havola yuboramiz.',
+    ru: 'Аккаунт уже работает. Мы отправим ссылку для подтверждения email.',
+    en: 'Your account works. We will send a link to verify your email address.',
+  },
   verifying: { uz: 'Tekshirilmoqda...', ru: 'Проверка...', en: 'Verifying...' },
   alreadyRegistered: {
     uz: 'Allaqachon ro‘yxatdan o‘tganmisiz?',

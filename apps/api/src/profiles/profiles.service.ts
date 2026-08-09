@@ -43,7 +43,14 @@ export class ProfilesService {
     },
     city: true,
     user: {
-      select: { id: true, fullName: true, email: true, locale: true, avatarUrl: true },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        locale: true,
+        avatarUrl: true,
+        emailVerified: true,
+      },
     },
   };
 

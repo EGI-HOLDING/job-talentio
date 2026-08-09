@@ -10,6 +10,7 @@ export type AuthSession = {
     role: string;
     locale?: string;
     avatarUrl?: string | null;
+    emailVerified?: boolean;
     memberships?: Array<{ companyId: string; role: string }>;
     employeeProfileId?: string | null;
   };
