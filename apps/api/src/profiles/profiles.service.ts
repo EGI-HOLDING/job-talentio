@@ -924,107 +924,70 @@ export class ProfilesService {
   }
 
   async uploadCv(user: AuthUser, file: Express.Multer.File) {
-    // #region agent log
-    fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'profiles.service.ts:uploadCv:entry',message:'uploadCv entered',data:{hasFile:Boolean(file),mime:file?.mimetype||null,size:file?.size??null,nameLen:file?.originalname?.length??0,hasBuffer:Boolean(file?.buffer),bufferLen:file?.buffer?.length??0,userIdLen:user?.id?.length??0},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!file) throw new BadRequestException('File required');
     if (file.size > 5 * 1024 * 1024) {
       throw new BadRequestException('File too large (max 5MB)');
     }
-    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
     const isPdf =
       file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
     if (!isPdf && !allowed.includes(file.mimetype)) {
       throw new BadRequestException('Only PDF (recommended) or Word documents are supported');
     }
 
-    try {
-      const profile = await this.getProfileForUser(user.id);
-      // #region agent log
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'E',location:'profiles.service.ts:uploadCv:profile',message:'profile resolved',data:{profileIdLen:profile?.id?.length??0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+    const profile = await this.getProfileForUser(user.id);
+    const uploaded = await this.storage.upload(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      'cvs',
+    );
 
-      let uploaded: { key: string; url: string };
+    const knownSkills = await this.prisma.skill.findMany({
+      select: { name: true, slug: true },
+      take: 500,
+    });
+
+    let parsed = parseCvText('', knownSkills);
+    if (isPdf) {
       try {
-        uploaded = await this.storage.upload(
-          file.buffer,
-          file.originalname,
-          file.mimetype,
-          'cvs',
-        );
-        // #region agent log
-        fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'B',location:'profiles.service.ts:uploadCv:storageOk',message:'storage upload ok',data:{keyPrefix:(uploaded.key||'').slice(0,8),keyLen:uploaded.key?.length??0},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-      } catch (storageErr) {
-        // #region agent log
-        fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'B',location:'profiles.service.ts:uploadCv:storageFail',message:'storage upload failed',data:{errName:(storageErr as Error)?.name,errMsg:String((storageErr as Error)?.message||storageErr).slice(0,300)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        throw storageErr;
+        const result = await pdfParse(file.buffer);
+        parsed = parseCvText(result.text || '', knownSkills);
+      } catch {
+        parsed = {
+          ...parseCvText('', knownSkills),
+          textPreview: 'Could not extract text from this PDF',
+        };
       }
-
-      const knownSkills = await this.prisma.skill.findMany({
-        select: { name: true, slug: true },
-        take: 500,
-      });
-
-      let parsed = parseCvText('', knownSkills);
-      let parsePath: 'pdf-ok' | 'pdf-fail' | 'skip-non-pdf' = isPdf ? 'pdf-ok' : 'skip-non-pdf';
-      let hadNullBytes = false;
-      if (isPdf) {
-        try {
-          const result = await pdfParse(file.buffer);
-          const rawText = result.text || '';
-          hadNullBytes = rawText.includes('\u0000');
-          parsed = parseCvText(rawText, knownSkills);
-          parsePath = 'pdf-ok';
-        } catch (parseErr) {
-          parsePath = 'pdf-fail';
-          // #region agent log
-          fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'post-fix',hypothesisId:'C',location:'profiles.service.ts:uploadCv:parseFail',message:'pdf parse failed (caught)',data:{errMsg:String((parseErr as Error)?.message||parseErr).slice(0,300)},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-          parsed = {
-            ...parseCvText('', knownSkills),
-            textPreview: 'Could not extract text from this PDF',
-          };
-        }
-      }
-      parsed = stripNullBytesDeep(parsed);
-      // #region agent log
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'post-fix',hypothesisId:'D',location:'profiles.service.ts:uploadCv:parsed',message:'parse stage done (null bytes stripped)',data:{parsePath,skillCount:parsed.skillNames?.length??0,previewLen:parsed.textPreview?.length??0,hadNullBytes},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
-      await this.prisma.resume.updateMany({
-        where: { profileId: profile.id },
-        data: { isPrimary: false },
-      });
-
-      const resume = await this.prisma.resume.create({
-        data: {
-          profileId: profile.id,
-          title: file.originalname.replace(/\.[^.]+$/, '') || 'Uploaded CV',
-          fileKey: uploaded.key,
-          fileUrl: null,
-          isPrimary: true,
-          parsedData: parsed as object,
-          content: parsed.textPreview,
-        },
-      });
-
-      // #region agent log
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'D',location:'profiles.service.ts:uploadCv:created',message:'resume created',data:{resumeIdLen:resume.id.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
-      return {
-        ...this.sanitizeResume(resume),
-        parsedData: parsed,
-        needsReview: true,
-      };
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'profiles.service.ts:uploadCv:throw',message:'uploadCv throwing',data:{errName:(err as Error)?.name,errMsg:String((err as Error)?.message||err).slice(0,400),errCode:(err as {code?:string})?.code||null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      throw err;
     }
+    parsed = stripNullBytesDeep(parsed);
+
+    await this.prisma.resume.updateMany({
+      where: { profileId: profile.id },
+      data: { isPrimary: false },
+    });
+
+    const resume = await this.prisma.resume.create({
+      data: {
+        profileId: profile.id,
+        title: file.originalname.replace(/\.[^.]+$/, '') || 'Uploaded CV',
+        fileKey: uploaded.key,
+        fileUrl: null,
+        isPrimary: true,
+        parsedData: parsed as object,
+        content: parsed.textPreview,
+      },
+    });
+
+    return {
+      ...this.sanitizeResume(resume),
+      parsedData: parsed,
+      needsReview: true,
+    };
   }
 
   async importParsedResume(

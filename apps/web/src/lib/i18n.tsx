@@ -507,6 +507,31 @@ const DICT = {
   closeDialog: { uz: 'Yopish', ru: 'Закрыть', en: 'Close' },
   messageInput: { uz: 'Xabar matni', ru: 'Текст сообщения', en: 'Message text' },
   uploadCv: { uz: 'CV yuklash', ru: 'Загрузить CV', en: 'Upload CV' },
+  uploadCvHint: {
+    uz: 'PDF faylni bu yerga tashlang yoki tanlang (maks. 5 MB)',
+    ru: 'Перетащите PDF сюда или выберите файл (макс. 5 МБ)',
+    en: 'Drop a PDF here or browse (max 5 MB)',
+  },
+  uploadCvBrowse: {
+    uz: 'Fayl tanlash',
+    ru: 'Выбрать файл',
+    en: 'Browse PDF',
+  },
+  uploadCvParse: {
+    uz: 'Yuklash va tahlil qilish',
+    ru: 'Загрузить и разобрать',
+    en: 'Upload & parse',
+  },
+  uploadCvSelected: {
+    uz: 'Tanlangan',
+    ru: 'Выбрано',
+    en: 'Selected',
+  },
+  uploadCvChange: {
+    uz: 'Almashtirish',
+    ru: 'Заменить',
+    en: 'Change',
+  },
   sortBy: { uz: 'Saralash', ru: 'Сортировка', en: 'Sort by' },
   resultsPerPage: { uz: 'Sahifadagi natijalar', ru: 'На странице', en: 'Results per page' },
   jumpToPage: { uz: 'Sahifaga o‘tish', ru: 'Перейти к странице', en: 'Jump to page' },

@@ -118,11 +118,6 @@ export async function api<T>(
     }
   }
   if (!res.ok) {
-    // #region agent log
-    if (path.includes('/resumes/upload') || path.includes('/resumes/') && path.endsWith('/file')) {
-      fetch('http://127.0.0.1:7812/ingest/fd53d647-d921-425f-858e-3b9eba28cb0d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'58b1d6'},body:JSON.stringify({sessionId:'58b1d6',runId:'pre-fix',hypothesisId:'A',location:'api.ts:resumeUploadFail',message:'resume upload HTTP error',data:{path,status:res.status,bodyPreview:text.slice(0,400),apiHost:API_URL.replace(/https?:\/\//,'').slice(0,40)},timestamp:Date.now()})}).catch(()=>{});
-    }
-    // #endregion
     throw new Error(formatApiError(data, res.statusText || 'Request failed'));
   }
   return data as T;

@@ -2000,15 +2000,117 @@ a.card.job-card--hot {
 .badge.degree-bachelor, .badge.degree-master, .badge.degree-phd { background: #ede9fe; color: #5b21b6; }
 .badge.skill-expert { background: #d1fae5; color: #047857; }
 .badge.skill-advanced { background: #e0e7ff; color: #3730a3; }
-.cv-upload-inline {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
+.cv-upload-form {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
 }
-.cv-upload-inline input[type='file'] {
-  font-size: 0.85rem;
-  max-width: 220px;
+.cv-upload-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 8.5rem;
+  padding: 1.25rem 1rem;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 4%, #fff);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.cv-upload-drop:hover,
+.cv-upload-drop:focus-within,
+.cv-upload-drop.is-dragover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.cv-upload-drop.is-disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.cv-upload-drop.is-selected {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: #fff;
+  align-items: stretch;
+  text-align: left;
+}
+.cv-upload-drop input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.cv-upload-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.cv-upload-drop strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.cv-upload-drop .cv-upload-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  max-width: 22rem;
+  line-height: 1.35;
+}
+.cv-upload-browse {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.15rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.cv-upload-selected {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+.cv-upload-selected-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.cv-upload-selected-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-upload-selected-meta span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.cv-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+.cv-upload-actions .ghost {
+  padding: 0.55rem 0.85rem;
 }
 
 /* CV review modal */
