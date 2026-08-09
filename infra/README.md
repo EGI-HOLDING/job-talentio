@@ -216,6 +216,7 @@ Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 2. Start command: `minio server /data --address :9000 --console-address :9001` (use **Deploy**, not Redeploy, after changing start command).
 3. Public domain target port `9000` (S3 API) or `9001` (console).
 4. API vars: `S3_ENDPOINT=http://minio-staging.railway.internal:9000`, root user/pass as access keys, bucket `job-talentio-staging` (API auto-creates on boot).
+5. **Public objects:** company logos (and similar browser-facing assets) live under the `public/` prefix. On boot the API sets a bucket policy for anonymous `GetObject` on `public/*` (same idea as local `mc anonymous set download …/public`). CVs stay under private prefixes and use presigned URLs. If logos 403 in the browser, check that policy applied (API logs) and that `S3_PUBLIC_URL` matches the Railway MinIO host + bucket.
 
 ### Production — Cloudflare R2 (when enabled)
 
