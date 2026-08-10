@@ -169,7 +169,16 @@ RESEND_API_KEY=re_...
 # SMTP_SECURE=true
 # SMTP_USER=info@jobtalent.io
 # SMTP_PASS=<mailbox-password>
+
+# Meilisearch (optional but recommended: typo-tolerant job search).
+# Railway: deploy the official Meilisearch template into the same project,
+# set a MEILI_MASTER_KEY on it, then reference it here via private networking.
+# Without MEILI_HOST the API silently uses Postgres contains search.
+MEILI_HOST=http://meilisearch.railway.internal:7700
+MEILI_MASTER_KEY=<same-key-as-meilisearch-service>
 ```
+
+**Meilisearch ops:** Postgres stays the source of truth. Only PUBLISHED jobs are indexed (`jobs` index); create/update/status changes sync automatically, and on boot the API backfills the index when it is empty. To force a full reindex: delete the `jobs` index (`curl -X DELETE $MEILI_HOST/indexes/jobs -H "Authorization: Bearer $MEILI_MASTER_KEY"`) and restart the api service. If Meilisearch is down, job search degrades to Postgres (no typo tolerance) without errors.
 
 Staging domains (single-level hostnames for Cloudflare Universal SSL): `https://staging.jobtalent.io`, `https://admin-staging.jobtalent.io`, `https://api-staging.jobtalent.io`. Use a different `JWT_SECRET` from production.
 

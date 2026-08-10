@@ -73,7 +73,26 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    container_name: jt-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: local-dev-meili-key
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: development
+    ports:
+      - "7700:7700"
+    volumes:
+      - jt_meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   jt_pg_data:
   jt_redis_data:
   jt_minio_data:
+  jt_meili_data:
