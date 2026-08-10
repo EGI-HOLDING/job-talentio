@@ -1,26 +1,36 @@
 ---
-description: Never include Cursor/AI co-author or Made-with trailers in Git commits or PRs
+description: Never include Cursor/AI co-author or Made-with attribution in Git commits or PRs
 alwaysApply: true
 ---
 
-# No AI commit attribution
+# No AI attribution in commits or PRs
 
-Commits and PRs must not credit Cursor (or other AI tools) as co-author.
+Commits, PRs (title, body, comments), and merge/squash commits must not credit Cursor or any other AI tool.
 
-## Forbidden in commit messages and `git commit` args
+## Forbidden strings (commits and PRs alike)
 
-- `Co-authored-by: Cursor …` / `cursoragent@cursor.com` / any `Co-authored-by:` for AI
-- `Made-with: Cursor` / `Generated-by` / `AI-assisted` / similar trailers
-- `git commit --trailer …` for attribution
-- Mentions of Cursor/ChatGPT/AI as author in the subject or body
+- `Co-authored-by: Cursor ...` / `cursoragent@cursor.com` / any `Co-authored-by:` for an AI
+- `Made with Cursor` / `Made-with: Cursor` — plain text, markdown link (`Made with [Cursor](https://cursor.com)`), badge, or hidden HTML comment
+- `Generated-by` / `AI-assisted` / similar trailers
+- `git commit --trailer ...` for attribution
+- Mentions of Cursor/ChatGPT/AI as author or co-author in any subject or body
 
-## Required behavior
+## Commits
 
-1. Write only the normal subject/body (why > what). Use `git commit -m` / heredoc — never add attribution trailers.
-2. After commit, if the message still contains forbidden trailers and the commit is **local and unpushed** and was created by you in this session: amend once to strip them (allowed exception to the usual no-amend rule).
-3. Do not push commits that still contain Cursor/AI attribution.
-4. Do not change `git config` user.name / user.email.
+1. Write only the normal subject/body (why > what). Use `git commit -m` / `-F` — never add attribution trailers.
+2. **Verify after every commit:** `git log -1 --format=%B`. The IDE may inject `--trailer "Co-authored-by: Cursor ..."` into `git commit` commands even when you did not write it.
+3. If a trailer slipped in and the commit is **local and unpushed** and was created by you in this session: rewrite once to strip it (allowed exception to the usual no-amend rule).
+4. If `git commit --amend` gets the trailer re-injected too, bypass it with plumbing from a script file (e.g. Node `execFileSync('git', ['commit-tree', tree, '-p', parent, '-m', msg])` then `git reset --hard <new>`), so the literal string `git commit` never appears on the command line.
+5. Never push a commit that still contains AI attribution.
+
+## Pull requests
+
+1. `gh pr create` / `gh pr edit`: write the title and body yourself (Summary + Test plan). No attribution text, links, or badges anywhere in the PR.
+2. **Verify after creation:** `gh pr view <n> --json title,body` must contain none of the forbidden strings; fix with `gh pr edit` if it does.
+3. **Squash merge:** always pass explicit `--subject "<PR title> (#<n>)"` and `--body "<summary>"` to `gh pr merge --squash`. Otherwise GitHub composes the squash message from branch commits, which can carry old trailers into `develop`/`main`. Verify the merged commit afterwards (`git log -1 --format=%B` on the base branch).
+4. PR comments and reviews you post must not contain attribution either.
+5. Before merging an older PR, check its body for `Made with` / `Co-authored-by` leftovers and clean them with `gh pr edit` first.
 
 ## Note
 
-Also keep Cursor Settings → Agents → Attribution (Commit / PR) **off**, and CLI `attributeCommitsToAgent` / `attributePRsToAgent` **false**, so the IDE does not inject trailers after the agent commit.
+Keep Cursor Settings → Agents → Attribution (Commit / PR) **off**, and CLI `attributeCommitsToAgent` / `attributePRsToAgent` **false**. Injection can still happen regardless of these settings — always verify the artifact (commit message / PR body) after creating it.
