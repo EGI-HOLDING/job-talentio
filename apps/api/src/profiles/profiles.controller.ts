@@ -30,6 +30,7 @@ import { resumeUploadOptions } from '../common/upload';
 import { ProfilesService } from './profiles.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
+import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
 
 @Controller('profiles')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -302,6 +303,7 @@ export class ProfilesController {
   }
 
   @Get('candidates')
+  @UseGuards(SearchRateLimitGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
   candidates(@CurrentUser() user: AuthUser, @Query() query: unknown) {
     const data = parseDto(candidateSearchSchema, query);

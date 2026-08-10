@@ -27,6 +27,7 @@ import {
 } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
+import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
 
 @Controller('jobs')
 export class JobsController {
@@ -36,7 +37,7 @@ export class JobsController {
   ) {}
 
   @Get()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(SearchRateLimitGuard, OptionalJwtAuthGuard)
   async search(@Query() query: unknown, @CurrentUser() user?: AuthUser) {
     const data = parseDto(jobSearchSchema, query);
     let profileId: string | undefined;
@@ -67,6 +68,7 @@ export class JobsController {
   }
 
   @Get('suggest')
+  @UseGuards(SearchRateLimitGuard)
   suggest(@Query('q') q: string) {
     return this.jobs.suggest(q || '');
   }

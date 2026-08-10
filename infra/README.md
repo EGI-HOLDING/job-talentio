@@ -136,6 +136,10 @@ Set separately on **staging** and **production**. Values below are production ex
 ```bash
 NODE_ENV=production
 DEV_AUTH_ENABLED=false
+# Cloudflare + Railway = 2 proxy hops; needed so per-IP rate limits see real client IPs
+TRUST_PROXY_HOPS=2
+# Search rate limit (req/min/IP, Redis-backed; fails open if Redis is down). Default 60.
+# SEARCH_RATE_LIMIT_PER_MIN=60
 JWT_SECRET=<long-random-secret-min-32-chars>
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=30d
