@@ -38,10 +38,12 @@ After finishing a coherent unit of work (feature, fix, or chore), **always** do 
 1. **Commit** relevant files (never secrets: `.env`, credentials, private keys).
    - Message: concise, why > what; match recent `git log` style.
    - PowerShell: `git commit -m @"...multiline..."@` (no interactive `-i`).
+   - **No AI attribution:** never add `Co-authored-by: Cursor`, `Made-with: Cursor`, or `git commit --trailer` (see `no-ai-commit-attribution.mdc`).
 2. **Push** the branch: `git push -u origin HEAD` (needs network/`all` permissions).
 3. **Open a PR into `develop`** with `gh pr create` if one does not already exist for this branch.
    - Title + body with Summary + Test plan.
    - Target is always **`develop`**, never `main`.
+   - No Cursor/AI attribution text in the PR body.
 
 Do **not**:
 
@@ -49,6 +51,7 @@ Do **not**:
 - Push or merge to `main` unless the user explicitly requests a production release.
 - Skip hooks (`--no-verify`) or force-push protected branches.
 - Commit unrelated dirty files (e.g. line-ending-only `infra/*.example`).
+- Include Cursor/AI co-author or Made-with trailers in commits or PRs.
 
 If a PR for the branch already exists, push new commits and leave the existing PR (update the body only when scope changed materially).
 
