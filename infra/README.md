@@ -182,7 +182,9 @@ MEILI_HOST=http://meilisearch.railway.internal:7700
 MEILI_MASTER_KEY=<same-key-as-meilisearch-service>
 ```
 
-**Meilisearch ops:** Postgres stays the source of truth. Only PUBLISHED jobs are indexed (`jobs` index); create/update/status changes sync automatically, and on boot the API backfills the index when it is empty. To force a full reindex: delete the `jobs` index (`curl -X DELETE $MEILI_HOST/indexes/jobs -H "Authorization: Bearer $MEILI_MASTER_KEY"`) and restart the api service. If Meilisearch is down, job search degrades to Postgres (no typo tolerance) without errors.
+**Meilisearch ops:** Postgres stays the source of truth. Only PUBLISHED jobs are indexed (`jobs` index); create/update/status changes sync automatically, the API backfills the index on boot when it is empty, and if a query finds the index wiped or missing it reindexes in the background (searches fall back to Postgres meanwhile). To force a full reindex: delete the `jobs` index (`curl -X DELETE $MEILI_HOST/indexes/jobs -H "Authorization: Bearer $MEILI_MASTER_KEY"`) — no restart needed. If Meilisearch is down, job search degrades to Postgres (no typo tolerance) without errors.
+
+> **Railway warning — no volume:** run the `meilisearch` service (image `getmeili/meilisearch:v1.13`, env `MEILI_MASTER_KEY` + `MEILI_ENV=production` + `MEILI_NO_ANALYTICS=true`) **without a Railway volume**. Attaching a volume (tested at `/meili_data` and at `/data` with `MEILI_DB_PATH`) puts the container in a silent SIGKILL crash loop a few minutes after boot. The index is therefore ephemeral on Railway; that is fine because the API rebuilds it automatically (see above).
 
 Staging domains (single-level hostnames for Cloudflare Universal SSL): `https://staging.jobtalent.io`, `https://admin-staging.jobtalent.io`, `https://api-staging.jobtalent.io`. Use a different `JWT_SECRET` from production.
 
