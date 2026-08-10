@@ -8,7 +8,8 @@ async function bootstrap() {
   // Fail fast before Nest wires JWT if staging/prod secrets are weak
   resolveJwtSecret();
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody is required to verify payment webhook HMAC signatures.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.setGlobalPrefix('api');
 
   // Behind Railway (and optionally Cloudflare) the client IP arrives via
