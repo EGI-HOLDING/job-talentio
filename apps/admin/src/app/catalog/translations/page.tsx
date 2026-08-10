@@ -219,7 +219,7 @@ export default function CatalogTranslationsPage() {
                 label=""
                 value={catalogKind}
                 onChange={(next) => setFilter('kind', next)}
-                allLabel="Skills"
+                allLabel={null}
                 options={CATALOG_KINDS.map((k) => ({
                   value: k.value,
                   label: summary ? `${k.label} (${summary[k.value]?.pending ?? 0})` : k.label,
