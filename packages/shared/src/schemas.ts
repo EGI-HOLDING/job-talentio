@@ -62,6 +62,15 @@ export const devLoginSchema = z.object({
   role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
 });
 
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(20).max(300),
+});
+
+/** Logout works even when the access token already expired; token is optional. */
+export const logoutSchema = z.object({
+  refreshToken: z.string().min(20).max(300).optional(),
+});
+
 export const companySchema = z.object({
   name: z.string().min(2).max(160),
   description: z.string().max(5000).optional(),
@@ -208,15 +217,21 @@ export const applicationStatusSchema = z.object({
 export const applySchema = z.object({
   coverLetter: z.string().max(5000).optional(),
   resumeId: z.string().min(1).optional(),
+  // Optional questions may arrive as empty strings from the form; drop them after trim.
   answers: z
     .array(
       z.object({
-        questionId: z.string(),
-        answer: z.string().min(1).max(2000),
+        questionId: z.string().min(1),
+        answer: z.string().max(2000),
       }),
     )
     .optional()
-    .default([]),
+    .default([])
+    .transform((rows) =>
+      rows
+        .map((r) => ({ questionId: r.questionId, answer: r.answer.trim() }))
+        .filter((r) => r.answer.length > 0),
+    ),
 });
 
 export const chatMessageSchema = z.object({

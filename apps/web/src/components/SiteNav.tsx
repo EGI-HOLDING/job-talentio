@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { ADMIN_URL, api, clearSession, getSession, AuthSession } from '@/lib/api';
+import { ADMIN_URL, api, getSession, logout, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
 
 type Notif = {
@@ -217,8 +217,8 @@ export function SiteNav() {
                 type="button"
                 className="secondary"
                 style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
-                onClick={() => {
-                  clearSession();
+                onClick={async () => {
+                  await logout();
                   window.location.href = '/';
                 }}
               >

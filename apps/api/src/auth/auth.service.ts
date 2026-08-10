@@ -20,6 +20,17 @@ import { UserRole } from '@prisma/client';
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 min between sends
 
+/** Parse "15m" / "7d" style TTLs into milliseconds. */
+function parseTtlMs(value: string | undefined, fallbackMs: number): number {
+  const match = /^(\d+)([smhd])$/.exec((value || '').trim());
+  if (!match) return fallbackMs;
+  const amount = Number(match[1]);
+  const unit = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 's' | 'm' | 'h' | 'd'];
+  return amount * unit;
+}
+
+const REFRESH_TOKEN_FALLBACK_TTL_MS = 30 * 86_400_000; // 30d
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -75,6 +86,26 @@ export class AuthService {
     }
   }
 
+  private async issueRefreshToken(userId: string): Promise<string> {
+    const raw = randomBytes(48).toString('hex');
+    const ttlMs = parseTtlMs(
+      this.config.get<string>('JWT_REFRESH_EXPIRES_IN'),
+      REFRESH_TOKEN_FALLBACK_TTL_MS,
+    );
+    await this.prisma.refreshToken.create({
+      data: {
+        userId,
+        tokenHash: sha256(raw),
+        expiresAt: new Date(Date.now() + ttlMs),
+      },
+    });
+    // Housekeeping: drop this user's long-expired tokens.
+    await this.prisma.refreshToken.deleteMany({
+      where: { userId, expiresAt: { lt: new Date(Date.now() - 86_400_000) } },
+    });
+    return raw;
+  }
+
   private async tokenFor(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -84,8 +115,10 @@ export class AuthService {
       },
     });
     const accessToken = await this.jwt.signAsync({ sub: user.id, role: user.role });
+    const refreshToken = await this.issueRefreshToken(user.id);
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -98,6 +131,45 @@ export class AuthService {
         employeeProfileId: user.employeeProfile?.id ?? null,
       },
     };
+  }
+
+  /** Rotate a refresh token: revoke the presented one, mint a new pair. */
+  async refresh(refreshToken: string) {
+    const tokenHash = sha256(refreshToken);
+    const record = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+    if (!record) throw new UnauthorizedException('Invalid refresh token');
+
+    if (record.revokedAt) {
+      // Reuse of a rotated token - treat as theft and revoke the whole family.
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+    if (record.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: record.userId } });
+    if (!user || user.isBanned) throw new UnauthorizedException('Account unavailable');
+
+    await this.prisma.refreshToken.update({
+      where: { id: record.id },
+      data: { revokedAt: new Date() },
+    });
+    return this.tokenFor(record.userId);
+  }
+
+  /** Best-effort revoke; safe to call with an expired access token. */
+  async logout(refreshToken?: string) {
+    if (refreshToken) {
+      await this.prisma.refreshToken.updateMany({
+        where: { tokenHash: sha256(refreshToken), revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+    return { ok: true };
   }
 
   async register(input: {

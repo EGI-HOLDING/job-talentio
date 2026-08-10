@@ -17,12 +17,16 @@ import { MatchingModule } from './matching/matching.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { BulkCommsModule } from './bulk-comms/bulk-comms.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { SearchModule } from './search/search.module';
 import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
+    RateLimitModule,
+    SearchModule,
     PrismaModule,
     StorageModule,
     MailModule,

@@ -30,6 +30,7 @@ import { resumeUploadOptions } from '../common/upload';
 import { ProfilesService } from './profiles.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
+import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
 
 @Controller('profiles')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -285,16 +286,31 @@ export class ProfilesController {
   upload(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { title?: string; jobTitle?: string; jobTitleSlug?: string },
+    @Body() body: { title?: string; jobTitle?: string; jobTitleSlug?: string; parse?: string | boolean },
   ) {
+    const parseRaw = body?.parse;
+    const parse =
+      parseRaw === true ||
+      parseRaw === 'true' ||
+      parseRaw === '1' ||
+      parseRaw === 'yes';
     return this.profiles.uploadCv(user, file, {
       title: body?.title,
       jobTitle: body?.jobTitle,
       jobTitleSlug: body?.jobTitleSlug,
+      parse,
     });
   }
 
+  /** Click-to-reveal contacts: audited + hourly quota; never in profile payloads. */
+  @Post('candidates/:id/reveal-contact')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  revealContact(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.profiles.revealCandidateContact(user, id);
+  }
+
   @Get('candidates')
+  @UseGuards(SearchRateLimitGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
   candidates(@CurrentUser() user: AuthUser, @Query() query: unknown) {
     const data = parseDto(candidateSearchSchema, query);

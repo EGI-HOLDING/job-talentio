@@ -4,7 +4,12 @@ import {
   ForbiddenException,
   BadRequestException,
   ConflictException,
+  HttpException,
+  Inject,
+  Logger,
+  Optional,
 } from '@nestjs/common';
+import type IORedis from 'ioredis';
 import {
   PLAN_LIMITS,
   normalizeResumeInclusion,
@@ -28,19 +33,26 @@ import { resolveCity } from '../common/city-resolve';
 import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
 import { ParsedCvData } from './cv-parser';
 import { CvParseService } from './cv-parse.service';
+import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
 
 const resumeTargetTitleInclude = {
   targetJobTitle: { select: { id: true, name: true, slug: true } },
 } as const;
 
+/** Contact reveals allowed per recruiter per hour (anti bulk harvesting). */
+const REVEAL_LIMIT_PER_HOUR = 30;
+
 @Injectable()
 export class ProfilesService {
+  private readonly logger = new Logger(ProfilesService.name);
+
   constructor(
     private prisma: PrismaService,
     private storage: StorageService,
     private companies: CompaniesService,
     private matching: MatchingService,
     private cvParse: CvParseService,
+    @Optional() @Inject(RATE_LIMIT_REDIS) private readonly rlRedis: IORedis | null,
   ) {}
 
   private profileInclude = {
@@ -984,7 +996,7 @@ export class ProfilesService {
         fileUrl: null,
         title: resume.title || file.originalname,
         parsedData: Prisma.DbNull,
-        parseStatus: 'PENDING',
+        parseStatus: 'NONE',
         parseError: null,
         parsedAt: null,
       },
@@ -994,11 +1006,9 @@ export class ProfilesService {
       await this.deleteStorageKeyIfOrphan(previousKey);
     }
 
-    await this.cvParse.enqueue(updated.id);
-
     return {
       ...this.sanitizeResume(updated),
-      parseStatus: 'PENDING' as const,
+      parseStatus: 'NONE' as const,
       profileId: profile.id,
       needsReview: false,
     };
@@ -1007,7 +1017,7 @@ export class ProfilesService {
   async uploadCv(
     user: AuthUser,
     file: Express.Multer.File,
-    meta?: { title?: string; jobTitle?: string; jobTitleSlug?: string },
+    meta?: { title?: string; jobTitle?: string; jobTitleSlug?: string; parse?: boolean },
   ) {
     if (!file) throw new BadRequestException('File required');
     if (file.size > 5 * 1024 * 1024) {
@@ -1054,6 +1064,7 @@ export class ProfilesService {
       data: { isPrimary: false },
     });
 
+    const shouldParse = Boolean(meta?.parse);
     const resume = await this.prisma.resume.create({
       data: {
         profileId: profile.id,
@@ -1061,17 +1072,19 @@ export class ProfilesService {
         fileKey: uploaded.key,
         fileUrl: null,
         isPrimary: true,
-        parseStatus: 'PENDING',
+        parseStatus: shouldParse ? 'PENDING' : 'NONE',
         targetJobTitleId,
       },
       include: resumeTargetTitleInclude,
     });
 
-    await this.cvParse.enqueue(resume.id);
+    if (shouldParse) {
+      await this.cvParse.enqueue(resume.id);
+    }
 
     return {
       ...this.sanitizeResume(resume),
-      parseStatus: 'PENDING' as const,
+      parseStatus: resume.parseStatus,
       needsReview: false,
     };
   }
@@ -1387,11 +1400,12 @@ export class ProfilesService {
     const needsScan = needsExperienceFilter || needsMatchRank || needsTitleKeyFilter;
 
     const candidateInclude = {
+      // Contacts never appear in search payloads; reveals go through the
+      // audited click-to-reveal endpoint.
       user: {
         select: {
           id: true,
           fullName: true,
-          email: limited ? false : true,
           avatarUrl: true,
         },
       },
@@ -1428,7 +1442,6 @@ export class ProfilesService {
           id: p.user.id,
           fullName: p.user.fullName,
           avatarUrl: p.user.avatarUrl,
-          email: limited ? undefined : (p.user as { email?: string }).email,
         },
         contactsBlurred: limited,
         matchScore: null as number | null,
@@ -1578,11 +1591,11 @@ export class ProfilesService {
     };
   }
 
-  async getCandidateProfile(user: AuthUser, profileId: string, matchJobId?: string) {
-    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException();
-    }
-
+  /**
+   * Shared contact-access gate: plan-based `limited` plus the override that
+   * recruiters always see contacts of candidates who applied to their company.
+   */
+  private async contactAccessFor(user: AuthUser, profileId: string) {
     const membership = user.memberships?.[0];
     let limited = true;
     if (user.role === 'SUPER_ADMIN') limited = false;
@@ -1594,28 +1607,7 @@ export class ProfilesService {
       limited = PLAN_LIMITS[plan].candidateSearch === 'limited';
     }
 
-    const profile = await this.prisma.employeeProfile.findUnique({
-      where: { id: profileId },
-      include: {
-        user: {
-          select: { id: true, fullName: true, email: true, avatarUrl: true, locale: true },
-        },
-        skills: { include: { skill: true } },
-        experiences: { include: { city: true }, orderBy: { startDate: 'desc' } },
-        educations: { orderBy: { startDate: 'desc' } },
-        certifications: true,
-        languages: { include: { language: true } },
-        resumes: { where: { isPrimary: true }, take: 1 },
-        city: true,
-      },
-    });
-    if (!profile) {
-      throw new NotFoundException('Profile not available');
-    }
-
-    const companyIds = (user.memberships ?? [])
-      .map((m) => m.companyId)
-      .filter(Boolean);
+    const companyIds = (user.memberships ?? []).map((m) => m.companyId).filter(Boolean);
 
     // Applicants to this recruiter's company must remain viewable even if PRIVATE.
     const applied =
@@ -1632,13 +1624,40 @@ export class ProfilesService {
           : null;
     const appliedToMyCompany = Boolean(applied);
 
-    if (profile.visibility === 'PRIVATE' && !appliedToMyCompany) {
+    if (limited && appliedToMyCompany) {
+      limited = false;
+    }
+    return { limited, appliedToMyCompany };
+  }
+
+  async getCandidateProfile(user: AuthUser, profileId: string, matchJobId?: string) {
+    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException();
+    }
+
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { id: profileId },
+      include: {
+        user: {
+          select: { id: true, fullName: true, avatarUrl: true, locale: true },
+        },
+        skills: { include: { skill: true } },
+        experiences: { include: { city: true }, orderBy: { startDate: 'desc' } },
+        educations: { orderBy: { startDate: 'desc' } },
+        certifications: true,
+        languages: { include: { language: true } },
+        resumes: { where: { isPrimary: true }, take: 1 },
+        city: true,
+      },
+    });
+    if (!profile) {
       throw new NotFoundException('Profile not available');
     }
 
-    // Recruiter can always see contacts of candidates who applied to their company
-    if (limited && appliedToMyCompany) {
-      limited = false;
+    const { limited, appliedToMyCompany } = await this.contactAccessFor(user, profileId);
+
+    if (profile.visibility === 'PRIVATE' && !appliedToMyCompany) {
+      throw new NotFoundException('Profile not available');
     }
 
     const experienceYears = this.matching.totalExperienceYears(profile.experiences);
@@ -1685,17 +1704,86 @@ export class ProfilesService {
     const safe = this.sanitizeProfileResumes(profile);
     return {
       ...safe,
-      user: {
-        ...safe.user,
-        email: limited ? undefined : safe.user.email,
-      },
-      phone: limited ? undefined : safe.phone,
+      // Contacts are never in the profile payload; use POST
+      // /profiles/candidates/:id/reveal-contact so reveals are audited
+      // and rate limited (anti-scrape).
+      phone: undefined,
       contactsBlurred: limited,
       experienceYears,
       match,
       appliedToMyCompany,
       applicationForJob,
     };
+  }
+
+  /** Click-to-reveal: returns contacts for one candidate, audited + quota'd. */
+  async revealCandidateContact(user: AuthUser, profileId: string) {
+    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException();
+    }
+
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        id: true,
+        phone: true,
+        visibility: true,
+        user: { select: { email: true } },
+      },
+    });
+    if (!profile) throw new NotFoundException('Profile not available');
+
+    const { limited, appliedToMyCompany } = await this.contactAccessFor(user, profileId);
+    if (profile.visibility === 'PRIVATE' && !appliedToMyCompany) {
+      throw new NotFoundException('Profile not available');
+    }
+    if (limited) {
+      throw new ForbiddenException(
+        'Contacts are available on Standard/Premium plans, or after the candidate applies to your company',
+      );
+    }
+
+    await this.assertRevealQuota(user);
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'CANDIDATE_CONTACT_REVEAL',
+          entityType: 'EmployeeProfile',
+          entityId: profileId,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`Reveal audit write failed: ${(err as Error).message}`);
+    }
+
+    return {
+      email: profile.user.email ?? null,
+      phone: profile.phone ?? null,
+    };
+  }
+
+  /** Redis hourly quota per recruiter; fails open when Redis is down. */
+  private async assertRevealQuota(user: AuthUser) {
+    if (!this.rlRedis || this.rlRedis.status !== 'ready') return;
+    const window = Math.floor(Date.now() / 3_600_000);
+    const key = `rl:reveal:${user.id}:${window}`;
+    try {
+      const count = await this.rlRedis.incr(key);
+      if (count === 1) {
+        await this.rlRedis.expire(key, 3_900);
+      }
+      if (count > REVEAL_LIMIT_PER_HOUR) {
+        throw new HttpException(
+          'Contact reveal limit reached for this hour. Try again later.',
+          429,
+        );
+      }
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      // Redis hiccup: allow the reveal rather than blocking paying recruiters.
+    }
   }
 
   async saveJob(user: AuthUser, jobPostId: string) {

@@ -5,12 +5,49 @@ export function getToken() {
   return localStorage.getItem('jt_admin_token');
 }
 
-export function saveToken(token: string) {
+export function saveToken(token: string, refreshToken?: string) {
   localStorage.setItem('jt_admin_token', token);
+  if (refreshToken) {
+    localStorage.setItem('jt_admin_refresh', refreshToken);
+  }
 }
 
 export function clearToken() {
   localStorage.removeItem('jt_admin_token');
+  localStorage.removeItem('jt_admin_refresh');
+}
+
+function getRefreshToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('jt_admin_refresh');
+}
+
+// Single in-flight refresh shared by concurrent 401s.
+let refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefresh(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return null;
+      try {
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!res.ok) return null;
+        const session = (await res.json()) as { accessToken: string; refreshToken?: string };
+        saveToken(session.accessToken, session.refreshToken);
+        return session.accessToken;
+      } catch {
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
 }
 
 type NestErrorBody = {
@@ -70,7 +107,17 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   headers.set('Content-Type', 'application/json');
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+  let res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+
+  // Expired access token: silently rotate once via the refresh token, then retry.
+  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+    const rotated = await tryRefresh();
+    if (rotated) {
+      headers.set('Authorization', `Bearer ${rotated}`);
+      res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+    }
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(formatApiError(data, res.statusText || 'Request failed'));
   return data as T;

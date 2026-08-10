@@ -29,6 +29,7 @@ import { resolveSkill } from '../common/skill-resolve';
 import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
+import { JobsSearchService } from '../search/jobs-search.service';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -57,6 +58,7 @@ export class JobsService {
     private companies: CompaniesService,
     private matching: MatchingService,
     private notifications: NotificationsService,
+    private jobsSearch: JobsSearchService,
   ) {}
 
   private planLimits(plan: PlanCode) {
@@ -342,6 +344,7 @@ export class JobsService {
       where: { id: job.id },
       include: this.jobInclude,
     });
+    void this.jobsSearch.syncJob(job.id);
     return created ? this.withResolvedIcons(created) : created;
   }
 
@@ -437,6 +440,7 @@ export class JobsService {
       where: { id: jobId },
       include: this.jobInclude,
     });
+    void this.jobsSearch.syncJob(jobId);
     return updated ? this.withResolvedIcons(updated) : updated;
   }
 
@@ -520,6 +524,7 @@ export class JobsService {
       }
     }
 
+    void this.jobsSearch.syncJob(jobId);
     return this.withResolvedIcons(updated);
   }
 
@@ -609,6 +614,35 @@ export class JobsService {
       chatPeerUserId,
       ...(viewerMatch || {}),
     };
+  }
+
+  /** Minimal public fields for JobPosting JSON-LD. No JobView side effect. */
+  async getSeo(id: string) {
+    const job = await this.prisma.jobPost.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        employmentType: true,
+        workMode: true,
+        salaryMin: true,
+        salaryMax: true,
+        salaryPeriod: true,
+        currency: true,
+        status: true,
+        publishedAt: true,
+        closedAt: true,
+        createdAt: true,
+        company: { select: { name: true, slug: true, logoUrl: true } },
+        city: { select: { name: true } },
+      },
+    });
+    if (!job || job.status !== 'PUBLISHED') {
+      throw new NotFoundException('Job not found');
+    }
+    const { status: _status, ...publicJob } = job;
+    return publicJob;
   }
 
   /** Live match for logged-in employees (pre-apply job detail breakdown). */
@@ -774,18 +808,26 @@ export class JobsService {
     }
 
     if (query.q) {
-      const terms = query.q.trim().split(/\s+/).filter(Boolean);
-      for (const term of terms) {
-        and.push({
-          OR: [
-            { title: { contains: term, mode: 'insensitive' } },
-            { description: { contains: term, mode: 'insensitive' } },
-            { company: { name: { contains: term, mode: 'insensitive' } } },
-            { jobSkills: { some: { skill: { name: { contains: term, mode: 'insensitive' } } } } },
-            { city: { name: { contains: term, mode: 'insensitive' } } },
-            { category: { name: { contains: term, mode: 'insensitive' } } },
-          ],
-        });
+      const q = query.q.trim();
+      // Typo-tolerant path: Meilisearch narrows to ranked ids, Prisma applies
+      // every other filter. Falls back to `contains` when Meili is down.
+      const meiliIds = q ? await this.jobsSearch.searchJobIds(q) : null;
+      if (meiliIds) {
+        and.push({ id: { in: meiliIds } });
+      } else {
+        const terms = q.split(/\s+/).filter(Boolean);
+        for (const term of terms) {
+          and.push({
+            OR: [
+              { title: { contains: term, mode: 'insensitive' } },
+              { description: { contains: term, mode: 'insensitive' } },
+              { company: { name: { contains: term, mode: 'insensitive' } } },
+              { jobSkills: { some: { skill: { name: { contains: term, mode: 'insensitive' } } } } },
+              { city: { name: { contains: term, mode: 'insensitive' } } },
+              { category: { name: { contains: term, mode: 'insensitive' } } },
+            ],
+          });
+        }
       }
     }
 
@@ -1077,6 +1119,13 @@ export class JobsService {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN']);
+    return this.activateHotJobSystem(jobId, days, weight);
+  }
+
+  /** Payment-webhook path: authorization already happened when paying. */
+  async activateHotJobSystem(jobId: string, days: 7 | 14 | 30, weight = 1) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
     if (job.status !== 'PUBLISHED') {
       throw new BadRequestException('Only published jobs can be boosted');
     }

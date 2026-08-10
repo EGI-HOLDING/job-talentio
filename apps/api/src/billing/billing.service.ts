@@ -1,19 +1,28 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PlanCode } from '@prisma/client';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import type { IncomingHttpHeaders } from 'http';
+import { Payment, PlanCode } from '@prisma/client';
 import { PLAN_PRICES_UZS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { JobsService } from '../jobs/jobs.service';
-import { MockPaymentProvider } from './mock-payment.provider';
+import { PAYMENT_PROVIDER, PaymentProvider } from './payment.provider';
 import { AuthUser } from '../common/auth.decorators';
 
 @Injectable()
 export class BillingService {
+  private readonly logger = new Logger(BillingService.name);
+
   constructor(
     private prisma: PrismaService,
     private companies: CompaniesService,
     private jobs: JobsService,
-    private payments: MockPaymentProvider,
+    @Inject(PAYMENT_PROVIDER) private payments: PaymentProvider,
   ) {}
 
   /** Auto-confirm mock payments only when explicitly enabled (local/dev). */
@@ -75,7 +84,7 @@ export class BillingService {
     const payment = await this.prisma.payment.create({
       data: {
         companyId,
-        provider: 'mock',
+        provider: this.payments.name,
         externalId: intent.id,
         purpose: `plan_${plan}`,
         amountUzs: amount,
@@ -99,11 +108,17 @@ export class BillingService {
     }
     const key = `HOT_JOB_${days}D` as keyof typeof PLAN_PRICES_UZS;
     const amount = PLAN_PRICES_UZS[key];
+    const intent = await this.payments.createPayment({
+      companyId,
+      amountUzs: amount,
+      purpose: `hot_job_${days}`,
+      metadata: { jobId, days },
+    });
     const payment = await this.prisma.payment.create({
       data: {
         companyId,
-        provider: 'mock',
-        externalId: `mock_hot_${Date.now()}`,
+        provider: this.payments.name,
+        externalId: intent.id,
         purpose: `hot_job_${days}`,
         amountUzs: amount,
         status: 'PENDING',
@@ -140,6 +155,23 @@ export class BillingService {
       data: { status: 'MOCKED' },
     });
 
+    await this.applyPaymentEffects(payment);
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: user.id,
+        action: 'PAYMENT_CONFIRMED',
+        entityType: 'Payment',
+        entityId: payment.id,
+        metadata: { purpose: payment.purpose, amountUzs: payment.amountUzs },
+      },
+    });
+
+    return updated;
+  }
+
+  /** Grant what the payment bought. Caller has already authorized the payment. */
+  private async applyPaymentEffects(payment: Payment) {
     if (payment.purpose.startsWith('plan_')) {
       const plan = payment.purpose.replace('plan_', '') as PlanCode;
       await this.prisma.subscription.update({
@@ -156,25 +188,75 @@ export class BillingService {
     if (payment.purpose.startsWith('hot_job_')) {
       const meta = payment.metadata as { jobId?: string; days?: number } | null;
       if (meta?.jobId && meta.days) {
-        await this.jobs.activateHotJob(
-          user,
-          meta.jobId,
-          meta.days as 7 | 14 | 30,
-        );
+        await this.jobs.activateHotJobSystem(meta.jobId, meta.days as 7 | 14 | 30);
       }
     }
+  }
 
+  /**
+   * Signature-verified provider webhook - the production-shaped confirm path.
+   * Idempotent: already-settled payments are acknowledged without re-applying.
+   */
+  async handleWebhook(
+    providerName: string,
+    headers: IncomingHttpHeaders,
+    rawBody: Buffer | undefined,
+  ) {
+    if (providerName !== this.payments.name) {
+      throw new NotFoundException('Unknown payment provider');
+    }
+    if (!rawBody || !rawBody.length) {
+      throw new BadRequestException('Empty webhook body');
+    }
+
+    const event = this.payments.parseWebhook(headers, rawBody);
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { externalId: event.externalId },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+
+    if (payment.status === 'PAID' || payment.status === 'MOCKED') {
+      return { ok: true, paymentId: payment.id, status: payment.status };
+    }
+
+    if (event.status === 'FAILED') {
+      const failed = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: 'FAILED' },
+      });
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: null,
+          action: 'PAYMENT_WEBHOOK_FAILED',
+          entityType: 'Payment',
+          entityId: payment.id,
+          metadata: { purpose: payment.purpose, provider: providerName },
+        },
+      });
+      return { ok: true, paymentId: failed.id, status: failed.status };
+    }
+
+    const paid = await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'PAID' },
+    });
+    await this.applyPaymentEffects(paid);
     await this.prisma.auditLog.create({
       data: {
-        actorId: user.id,
-        action: 'PAYMENT_CONFIRMED',
+        actorId: null,
+        action: 'PAYMENT_WEBHOOK_PAID',
         entityType: 'Payment',
         entityId: payment.id,
-        metadata: { purpose: payment.purpose, amountUzs: payment.amountUzs },
+        metadata: {
+          purpose: payment.purpose,
+          amountUzs: payment.amountUzs,
+          provider: providerName,
+        },
       },
     });
-
-    return updated;
+    this.logger.log(`Webhook confirmed payment ${payment.id} (${payment.purpose})`);
+    return { ok: true, paymentId: paid.id, status: paid.status };
   }
 
   async adminSetPlan(actorId: string, companyId: string, plan: PlanCode) {

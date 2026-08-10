@@ -136,8 +136,13 @@ Set separately on **staging** and **production**. Values below are production ex
 ```bash
 NODE_ENV=production
 DEV_AUTH_ENABLED=false
+# Cloudflare + Railway = 2 proxy hops; needed so per-IP rate limits see real client IPs
+TRUST_PROXY_HOPS=2
+# Search rate limit (req/min/IP, Redis-backed; fails open if Redis is down). Default 60.
+# SEARCH_RATE_LIMIT_PER_MIN=60
 JWT_SECRET=<long-random-secret-min-32-chars>
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=30d
 WEB_URL=https://jobtalent.io
 ADMIN_URL=https://admin.jobtalent.io
 API_URL=https://api.jobtalent.io
@@ -146,6 +151,10 @@ SUPERADMIN_PASSWORD=<strong-password-min-12-chars>
 PAYMENT_PROVIDER=mock
 # Keep false on staging/prod. true only for local mock auto-confirm of plan/hot purchases.
 PAYMENTS_MOCK=false
+# HMAC-SHA256 secret verifying provider webhooks (POST /api/billing/webhooks/mock,
+# header X-Mock-Signature). Payments are confirmed via signed webhooks; card data
+# is never collected or stored by this platform.
+PAYMENTS_WEBHOOK_SECRET=<long-random-secret>
 
 # Cloudflare R2
 S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
@@ -164,7 +173,16 @@ RESEND_API_KEY=re_...
 # SMTP_SECURE=true
 # SMTP_USER=info@jobtalent.io
 # SMTP_PASS=<mailbox-password>
+
+# Meilisearch (optional but recommended: typo-tolerant job search).
+# Railway: deploy the official Meilisearch template into the same project,
+# set a MEILI_MASTER_KEY on it, then reference it here via private networking.
+# Without MEILI_HOST the API silently uses Postgres contains search.
+MEILI_HOST=http://meilisearch.railway.internal:7700
+MEILI_MASTER_KEY=<same-key-as-meilisearch-service>
 ```
+
+**Meilisearch ops:** Postgres stays the source of truth. Only PUBLISHED jobs are indexed (`jobs` index); create/update/status changes sync automatically, and on boot the API backfills the index when it is empty. To force a full reindex: delete the `jobs` index (`curl -X DELETE $MEILI_HOST/indexes/jobs -H "Authorization: Bearer $MEILI_MASTER_KEY"`) and restart the api service. If Meilisearch is down, job search degrades to Postgres (no typo tolerance) without errors.
 
 Staging domains (single-level hostnames for Cloudflare Universal SSL): `https://staging.jobtalent.io`, `https://admin-staging.jobtalent.io`, `https://api-staging.jobtalent.io`. Use a different `JWT_SECRET` from production.
 

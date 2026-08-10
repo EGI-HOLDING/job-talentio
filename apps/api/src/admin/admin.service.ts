@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { JobStatus, PlanCode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BillingService } from '../billing/billing.service';
+import { JobsSearchService } from '../search/jobs-search.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private prisma: PrismaService,
     private billing: BillingService,
+    private jobsSearch: JobsSearchService,
   ) {}
 
   async metrics() {
@@ -93,6 +95,7 @@ export class AdminService {
         data: { status: 'PAUSED' },
       });
     }
+    void this.jobsSearch.syncCompanyJobs(companyId);
     await this.prisma.auditLog.create({
       data: {
         actorId,
@@ -127,6 +130,7 @@ export class AdminService {
         metadata: { status },
       },
     });
+    void this.jobsSearch.syncJob(jobId);
     return job;
   }
 

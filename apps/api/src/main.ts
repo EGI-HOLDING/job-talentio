@@ -8,8 +8,18 @@ async function bootstrap() {
   // Fail fast before Nest wires JWT if staging/prod secrets are weak
   resolveJwtSecret();
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody is required to verify payment webhook HMAC signatures.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.setGlobalPrefix('api');
+
+  // Behind Railway (and optionally Cloudflare) the client IP arrives via
+  // X-Forwarded-For; without trust proxy every visitor shares the proxy IP,
+  // which breaks per-IP rate limiting. Hops: 1 = Railway edge, 2 = +Cloudflare.
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  (app.getHttpAdapter().getInstance() as import('express').Express).set(
+    'trust proxy',
+    Number.isFinite(trustProxyHops) ? trustProxyHops : 1,
+  );
   app.enableCors({
     origin: [
       process.env.WEB_URL ?? 'http://localhost:3000',
