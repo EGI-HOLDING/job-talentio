@@ -18,7 +18,8 @@ const DIRECTORY: NavEntry[] = [
 
 const OPERATIONS: NavEntry[] = [
   { href: '/reports', label: 'Reports', countKey: 'reports' },
-  { href: '/catalog', label: 'Catalog', countKey: 'catalog' },
+  { href: '/catalog', label: 'Catalog' },
+  { href: '/catalog/translations', label: 'Translations', countKey: 'catalog' },
   { href: '/flags', label: 'Feature flags' },
   { href: '/audit', label: 'Audit log' },
 ];
@@ -63,8 +64,15 @@ export function Sidebar() {
     };
   }, [pathname]);
 
+  // Longest match wins, otherwise /catalog would light up while the reader is
+  // on /catalog/translations.
+  const activeHref = [...PRIMARY, ...DIRECTORY, ...OPERATIONS]
+    .map((entry) => entry.href)
+    .filter((href) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0];
+
   function renderItem(entry: NavEntry) {
-    const active = entry.href === '/' ? pathname === '/' : pathname.startsWith(entry.href);
+    const active = entry.href === activeHref;
     const count = entry.countKey ? counts[entry.countKey] : 0;
     return (
       <Link

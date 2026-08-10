@@ -18,6 +18,7 @@ import { detectLocale } from '../common/i18n/detect-locale';
 import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { TranslationService } from '../translation/translation.service';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 
 @Injectable()
 export class CompaniesService {
@@ -332,15 +333,17 @@ export class CompaniesService {
     if (data.citySlug !== undefined) {
       if (!data.citySlug) cityId = null;
       else {
-        const city = await this.prisma.city.findUnique({ where: { slug: data.citySlug } });
+        const city = await this.prisma.city.findFirst({
+          where: { slug: data.citySlug, ...ACTIVE_CATALOG },
+        });
         cityId = city?.id ?? null;
       }
     }
     if (data.industrySlug !== undefined) {
       if (!data.industrySlug) industryId = null;
       else {
-        const ind = await this.prisma.industry.findUnique({
-          where: { slug: data.industrySlug },
+        const ind = await this.prisma.industry.findFirst({
+          where: { slug: data.industrySlug, ...ACTIVE_CATALOG },
         });
         industryId = ind?.id ?? null;
       }

@@ -210,7 +210,11 @@ export class AdminService {
       delegate.count({ where }),
     ]);
 
-    return { kind: query.kind, status: query.status, ...envelope(items, total, query.page, query.limit) };
+    return {
+      kind: query.kind,
+      status: query.status ?? null,
+      ...envelope(items, total, query.page, query.limit),
+    };
   }
 
   /** Ids for "select all matching", capped like every other bulk source. */
@@ -231,7 +235,9 @@ export class AdminService {
   }
 
   private catalogWhere(query: CatalogListQuery): Record<string, unknown> {
-    const where: Record<string, unknown> = { i18nStatus: query.status };
+    // No status means every state, which is how an admin finds a merge target
+    // that sits in a different part of the queue.
+    const where: Record<string, unknown> = query.status ? { i18nStatus: query.status } : {};
     const term = query.q?.trim();
     if (term) {
       where.OR = [
@@ -434,6 +440,33 @@ export class AdminService {
       }
     }
     return { kind, ignored: ids.length };
+  }
+
+  /**
+   * Runs a catalog write and records it. The entity id comes from the result
+   * for a create, where it does not exist yet at call time.
+   */
+  async auditCatalogWrite<T>(
+    actorId: string,
+    type: string,
+    action: string,
+    run: () => Promise<T>,
+    entityId?: string,
+  ): Promise<T> {
+    const result = await run();
+    const id = entityId ?? (result as { id?: string } | null)?.id;
+    if (id) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId,
+          action,
+          entityType: type.charAt(0).toUpperCase() + type.slice(1),
+          entityId: id,
+          metadata: { catalogType: type } as never,
+        },
+      });
+    }
+    return result;
   }
 
   private logCatalogAction(

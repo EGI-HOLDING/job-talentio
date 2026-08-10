@@ -25,7 +25,16 @@ type Db = Pick<
   | 'skill'
 >;
 
-export type CatalogI18nResult = Record<string, { updated: number; missing: number }>;
+/**
+ * `updated` was written, `skipped` belongs to an admin who edited it, `missing`
+ * is not seeded in this environment.
+ */
+export type CatalogI18nResult = Record<
+  string,
+  { updated: number; skipped: number; missing: number }
+>;
+
+type Outcome = 'updated' | 'skipped' | 'missing';
 
 /** Hand-written translations count as reviewed and are never machine output. */
 function curated(value: LocalizedName) {
@@ -38,76 +47,90 @@ function curated(value: LocalizedName) {
   } as const;
 }
 
+type Delegate = {
+  updateMany(args: {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  }): Promise<{ count: number }>;
+  count(args: { where: Record<string, unknown> }): Promise<number>;
+};
+
+/**
+ * Writes a seeded translation only when no admin has taken ownership of the row.
+ * These names are good defaults, but an admin edit is a deliberate later
+ * decision and this backfill can run at any time.
+ */
+function writeUncurated(
+  delegate: Delegate,
+  keyField: string,
+  build: (value: LocalizedName) => Record<string, unknown>,
+) {
+  return async (key: string, value: LocalizedName): Promise<Outcome> => {
+    const { count } = await delegate.updateMany({
+      where: { [keyField]: key, curatedAt: null },
+      data: build(value),
+    });
+    if (count > 0) return 'updated';
+    const exists = await delegate.count({ where: { [keyField]: key } });
+    return exists > 0 ? 'skipped' : 'missing';
+  };
+}
+
 /** Rows are matched on their stable key, so the backfill is safe to re-run. */
 async function applyByKey(
   label: string,
   names: Record<string, LocalizedName>,
-  update: (key: string, value: LocalizedName) => Promise<unknown>,
+  apply: (key: string, value: LocalizedName) => Promise<Outcome>,
   result: CatalogI18nResult,
 ) {
-  let updated = 0;
-  let missing = 0;
+  const counts = { updated: 0, skipped: 0, missing: 0 };
   for (const [key, value] of Object.entries(names)) {
-    try {
-      await update(key, value);
-      updated += 1;
-    } catch {
-      // Row not seeded in this environment; translations for it stay unused.
-      missing += 1;
-    }
+    counts[await apply(key, value)] += 1;
   }
-  result[label] = { updated, missing };
+  result[label] = counts;
 }
+
+const localeOnly = (value: LocalizedName) => ({ nameUz: value.uz, nameRu: value.ru });
 
 export async function backfillCatalogI18n(db: Db): Promise<CatalogI18nResult> {
   const result: CatalogI18nResult = {};
+  const as = (delegate: unknown) => delegate as unknown as Delegate;
 
   await applyByKey(
     'country',
     COUNTRY_NAMES,
-    (slug, v) =>
-      db.country.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    writeUncurated(as(db.country), 'slug', localeOnly),
     result,
   );
 
-  // Province slugs are unique per country, so update through the compound key.
-  let provinceUpdated = 0;
-  let provinceMissing = 0;
-  for (const [slug, value] of Object.entries(PROVINCE_NAMES)) {
-    const rows = await db.province.updateMany({
-      where: { slug },
-      data: { nameUz: value.uz, nameRu: value.ru },
-    });
-    if (rows.count > 0) provinceUpdated += rows.count;
-    else provinceMissing += 1;
-  }
-  result.province = { updated: provinceUpdated, missing: provinceMissing };
-
+  // Province slugs are unique per country, so they are matched without an id.
   await applyByKey(
-    'city',
-    CITY_NAMES,
-    (slug, v) => db.city.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    'province',
+    PROVINCE_NAMES,
+    writeUncurated(as(db.province), 'slug', localeOnly),
     result,
   );
+
+  await applyByKey('city', CITY_NAMES, writeUncurated(as(db.city), 'slug', localeOnly), result);
 
   await applyByKey(
     'jobCategory',
     CATEGORY_NAMES,
-    (slug, v) => db.jobCategory.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    writeUncurated(as(db.jobCategory), 'slug', localeOnly),
     result,
   );
 
   await applyByKey(
     'industryGroup',
     INDUSTRY_GROUP_NAMES,
-    (slug, v) => db.industryGroup.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    writeUncurated(as(db.industryGroup), 'slug', localeOnly),
     result,
   );
 
   await applyByKey(
     'industry',
     INDUSTRY_NAMES,
-    (slug, v) => db.industry.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    writeUncurated(as(db.industry), 'slug', localeOnly),
     result,
   );
 
@@ -116,30 +139,25 @@ export async function backfillCatalogI18n(db: Db): Promise<CatalogI18nResult> {
   await applyByKey(
     'benefit',
     BENEFIT_NAMES,
-    (slug, v) => db.benefit.update({ where: { slug }, data: { ...curated(v) } }),
+    writeUncurated(as(db.benefit), 'slug', curated),
     result,
   );
 
   await applyByKey(
     'language',
     LANGUAGE_NAMES,
-    (code, v) => db.language.update({ where: { code }, data: { ...curated(v) } }),
+    writeUncurated(as(db.language), 'code', curated),
     result,
   );
 
   await applyByKey(
     'jobTitle',
     JOB_TITLE_NAMES,
-    (slug, v) => db.jobTitle.update({ where: { slug }, data: { ...curated(v) } }),
+    writeUncurated(as(db.jobTitle), 'slug', curated),
     result,
   );
 
-  await applyByKey(
-    'skill',
-    SKILL_NAMES,
-    (slug, v) => db.skill.update({ where: { slug }, data: { ...curated(v) } }),
-    result,
-  );
+  await applyByKey('skill', SKILL_NAMES, writeUncurated(as(db.skill), 'slug', curated), result);
 
   return result;
 }

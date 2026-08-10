@@ -32,6 +32,7 @@ import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
 import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
 import { detectLocale } from '../common/i18n/detect-locale';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { ParsedCvData } from './cv-parser';
 import { CvParseService } from './cv-parse.service';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
@@ -232,8 +233,8 @@ export class ProfilesService {
     const profile = await this.getProfileForUser(user.id);
     let cityId: string | null = null;
     if (data.citySlug) {
-      const city = await this.prisma.city.findUnique({
-        where: { slug: String(data.citySlug) },
+      const city = await this.prisma.city.findFirst({
+        where: { slug: String(data.citySlug), ...ACTIVE_CATALOG },
       });
       cityId = city?.id ?? null;
     }
@@ -255,8 +256,8 @@ export class ProfilesService {
 
   private async resolveExperienceCityId(citySlug?: unknown) {
     if (!citySlug) return undefined;
-    const city = await this.prisma.city.findUnique({
-      where: { slug: String(citySlug) },
+    const city = await this.prisma.city.findFirst({
+      where: { slug: String(citySlug), ...ACTIVE_CATALOG },
     });
     return city?.id ?? null;
   }
@@ -1450,9 +1451,21 @@ export class ProfilesService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let pageItems: any[] = [];
     let facetSource: Array<{
-      city?: { slug: string; name: string; nameUz?: string | null; nameRu?: string | null } | null;
+      city?: {
+        slug: string;
+        name: string;
+        nameUz?: string | null;
+        nameRu?: string | null;
+        archivedAt?: Date | null;
+      } | null;
       skills: Array<{
-        skill: { slug: string; name: string; nameUz?: string | null; nameRu?: string | null };
+        skill: {
+          slug: string;
+          name: string;
+          nameUz?: string | null;
+          nameRu?: string | null;
+          archivedAt?: Date | null;
+        };
       }>;
       desiredPosition?: string | null;
       headline?: string | null;
@@ -1505,8 +1518,16 @@ export class ProfilesService {
       facetSource = await this.prisma.employeeProfile.findMany({
         where,
         select: {
-          city: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
-          skills: { select: { skill: { select: { slug: true, name: true, nameUz: true, nameRu: true } } } },
+          city: {
+            select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+          },
+          skills: {
+            select: {
+              skill: {
+                select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+              },
+            },
+          },
           desiredPosition: true,
           headline: true,
           experiences: { select: { title: true }, take: 5, orderBy: { startDate: 'desc' } },
@@ -1572,6 +1593,7 @@ export class ProfilesService {
     const titleFacets: Record<string, Facet> = {};
 
     const catalogTitles = await this.prisma.jobTitle.findMany({
+      where: ACTIVE_CATALOG,
       select: { slug: true, name: true, nameUz: true, nameRu: true, normalizedKey: true },
     });
     const catalogByKey = new Map<
@@ -1585,14 +1607,17 @@ export class ProfilesService {
       }
     }
 
+    // Archived entries stay on the candidate cards that use them but are not
+    // offered as filter options.
     for (const p of facetSource) {
-      if (p.city) {
+      if (p.city && !p.city.archivedAt) {
         const key = p.city.slug;
         cityFacets[key] = cityFacets[key]
           ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
           : { slug: p.city.slug, name: p.city.name, nameUz: p.city.nameUz, nameRu: p.city.nameRu, count: 1 };
       }
       for (const s of p.skills) {
+        if (s.skill.archivedAt) continue;
         const key = s.skill.slug;
         skillFacets[key] = skillFacets[key]
           ? { ...skillFacets[key], count: skillFacets[key].count + 1 }

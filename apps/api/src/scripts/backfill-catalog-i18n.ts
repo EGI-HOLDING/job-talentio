@@ -10,7 +10,9 @@ async function main() {
   try {
     const result = await backfillCatalogI18n(prisma);
     for (const [table, counts] of Object.entries(result)) {
-      console.log(`${table}: updated=${counts.updated} missingRows=${counts.missing}`);
+      console.log(
+        `${table}: updated=${counts.updated} adminOwned=${counts.skipped} missingRows=${counts.missing}`,
+      );
     }
   } finally {
     await prisma.$disconnect();

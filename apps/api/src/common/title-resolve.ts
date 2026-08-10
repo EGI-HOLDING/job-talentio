@@ -187,6 +187,10 @@ async function ensureCleanCatalogName(
     return jobTitle;
   }
 
+  // An admin-edited title keeps its wording even if it does not match what the
+  // canonicalizer would produce.
+  if (jobTitle.curatedAt) return jobTitle;
+
   // Prefer an already-clean twin with the same key
   if (key) {
     const twin = await db.jobTitle.findUnique({ where: { normalizedKey: key } });
