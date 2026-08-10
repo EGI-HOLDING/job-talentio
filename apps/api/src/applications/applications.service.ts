@@ -138,10 +138,12 @@ export class ApplicationsService {
             },
           },
           answers: {
-            create: (answers || []).map((a) => ({
-              questionId: a.questionId,
-              answer: a.answer,
-            })),
+            create: (answers || [])
+              .filter((a) => a.answer?.trim())
+              .map((a) => ({
+                questionId: a.questionId,
+                answer: a.answer.trim(),
+              })),
           },
         },
         include: {

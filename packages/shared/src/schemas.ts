@@ -208,15 +208,21 @@ export const applicationStatusSchema = z.object({
 export const applySchema = z.object({
   coverLetter: z.string().max(5000).optional(),
   resumeId: z.string().min(1).optional(),
+  // Optional questions may arrive as empty strings from the form; drop them after trim.
   answers: z
     .array(
       z.object({
-        questionId: z.string(),
-        answer: z.string().min(1).max(2000),
+        questionId: z.string().min(1),
+        answer: z.string().max(2000),
       }),
     )
     .optional()
-    .default([]),
+    .default([])
+    .transform((rows) =>
+      rows
+        .map((r) => ({ questionId: r.questionId, answer: r.answer.trim() }))
+        .filter((r) => r.answer.length > 0),
+    ),
 });
 
 export const chatMessageSchema = z.object({

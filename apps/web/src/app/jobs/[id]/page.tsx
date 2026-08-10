@@ -180,16 +180,21 @@ export default function JobDetailPage() {
     if (alreadyApplied || submitting) return;
 
     const fd = new FormData(e.currentTarget);
-    const answers = (job?.questions || []).map((q) => ({
-      questionId: q.id,
-      answer: String(fd.get(`q_${q.id}`) || ''),
-    }));
+    // Only send non-empty answers. Optional blanks must not hit Zod min(1).
+    // Use nullish coalescing so NUMBER answers of 0 are kept.
+    const answers = (job?.questions || [])
+      .map((q) => {
+        const raw = fd.get(`q_${q.id}`);
+        const answer = raw == null ? '' : String(raw).trim();
+        return { questionId: q.id, answer };
+      })
+      .filter((a) => a.answer.length > 0);
     setSubmitting(true);
     try {
       const created = await api<MyApplicationState>(`/applications/jobs/${id}`, {
         method: 'POST',
         body: JSON.stringify({
-          coverLetter: fd.get('coverLetter'),
+          coverLetter: String(fd.get('coverLetter') || '').trim() || undefined,
           answers,
           resumeId: selectedResumeId || undefined,
         }),
