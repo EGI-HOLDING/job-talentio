@@ -1106,6 +1106,13 @@ export class JobsService {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN']);
+    return this.activateHotJobSystem(jobId, days, weight);
+  }
+
+  /** Payment-webhook path: authorization already happened when paying. */
+  async activateHotJobSystem(jobId: string, days: 7 | 14 | 30, weight = 1) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
     if (job.status !== 'PUBLISHED') {
       throw new BadRequestException('Only published jobs can be boosted');
     }
