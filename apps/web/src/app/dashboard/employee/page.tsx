@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
@@ -18,9 +18,26 @@ import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
 import { isParseInFlight, waitForResumeParse } from '@/lib/cvParse';
+import {
+  EMPLOYEE_TAB_KEY,
+  readStoredDashboardTab,
+  storeDashboardTab,
+} from '@/lib/dashboardTab';
 import { MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
+const EMPLOYEE_TABS: Tab[] = [
+  'overview',
+  'recommended',
+  'applications',
+  'saved',
+  'alerts',
+  'profile',
+];
+
+function isEmployeeTab(v: string): v is Tab {
+  return (EMPLOYEE_TABS as string[]).includes(v);
+}
 
 function monthsBetween(start: string | Date, end?: string | Date | null) {
   const a = new Date(start);
@@ -64,10 +81,17 @@ const LEVEL_ORDER = ['EXPERT', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'] as const;
 const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] as const;
 const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
 
-export default function EmployeeDashboard() {
+function EmployeeDashboardInner() {
   const { t } = useI18n();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('overview');
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get('tab') || '';
+  const [tab, setTab] = useState<Tab>(() => {
+    if (isEmployeeTab(tabFromUrl)) return tabFromUrl;
+    const stored = readStoredDashboardTab(EMPLOYEE_TAB_KEY);
+    if (stored && isEmployeeTab(stored)) return stored;
+    return 'overview';
+  });
   const [addingResume, setAddingResume] = useState(false);
   const [showCreateResume, setShowCreateResume] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -103,6 +127,22 @@ export default function EmployeeDashboard() {
   const editingCert = editingCertId
     ? (profile?.certifications || []).find((x: any) => x.id === editingCertId)
     : null;
+
+  useEffect(() => {
+    if (isEmployeeTab(tabFromUrl) && tabFromUrl !== tab) {
+      setTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
+  useEffect(() => {
+    storeDashboardTab(EMPLOYEE_TAB_KEY, tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    const qs = params.toString();
+    if (qs !== searchParams.toString()) {
+      router.replace(`/dashboard/employee?${qs}`);
+    }
+  }, [tab, router, searchParams]);
 
   async function load() {
     const session = getSession();
@@ -1590,5 +1630,13 @@ export default function EmployeeDashboard() {
         )}
       </section>
     </div>
+  );
+}
+
+export default function EmployeeDashboard() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <EmployeeDashboardInner />
+    </Suspense>
   );
 }

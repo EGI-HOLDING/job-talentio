@@ -224,7 +224,7 @@ function ResumeBuilderInner() {
     <div className="shell resume-builder-page">
       <div className="resume-builder-toolbar">
         <div>
-          <Link href="/dashboard/employee" className="ghost" style={{ padding: 0 }}>
+          <Link href="/dashboard/employee?tab=profile" className="ghost" style={{ padding: 0 }}>
             ← Back to profile
           </Link>
           <h1 className="section-title" style={{ margin: '0.35rem 0 0' }}>
