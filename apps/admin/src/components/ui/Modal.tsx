@@ -15,17 +15,21 @@ export function Modal({ open, title, description, onClose, children, footer }: P
   const titleId = useId();
   const descId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  // Parent often passes an inline onClose; keep the latest without re-running
+  // the effect (which would steal focus from inputs on every keystroke).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     }
     document.addEventListener('keydown', onKey);
     // Focus moves into the dialog so the keyboard is not left behind the backdrop.
     panel.current?.focus();
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
