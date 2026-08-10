@@ -243,19 +243,6 @@ export function SeekerHome() {
         </div>
       </section>
 
-      {latestNews.length > 0 && (
-        <ExploreSection
-          title={t('latestNews')}
-          subtitle={t('latestNewsSubtitle')}
-          viewAllHref="/news"
-          viewAllLabel={t('viewAll')}
-        >
-          {latestNews.map((item) => (
-            <NewsCard key={item.slug} item={item} />
-          ))}
-        </ExploreSection>
-      )}
-
       <ExploreSection
         title={t('exploreByCategory')}
         subtitle={t('exploreByCategorySubtitle')}
@@ -312,7 +299,7 @@ export function SeekerHome() {
         </ExploreSection>
       )}
 
-      <section className="section grid-3" style={{ paddingBottom: '3rem' }}>
+      <section className="section grid-3">
         <div className="card">
           <h3>{t('forCandidates')}</h3>
           <p className="muted">{t('forCandidatesDesc')}</p>
@@ -329,6 +316,19 @@ export function SeekerHome() {
           <p className="muted">{t('enterpriseReadyDesc')}</p>
         </div>
       </section>
+
+      {latestNews.length > 0 && (
+        <ExploreSection
+          title={t('latestNews')}
+          subtitle={t('latestNewsSubtitle')}
+          viewAllHref="/news"
+          viewAllLabel={t('viewAll')}
+        >
+          {latestNews.map((item) => (
+            <NewsCard key={item.slug} item={item} />
+          ))}
+        </ExploreSection>
+      )}
     </div>
   );
 }

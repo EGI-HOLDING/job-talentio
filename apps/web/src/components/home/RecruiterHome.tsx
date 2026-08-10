@@ -189,20 +189,7 @@ export function RecruiterHome() {
         </ExploreSection>
       )}
 
-      {latestNews.length > 0 && (
-        <ExploreSection
-          title={t('latestNews')}
-          subtitle={t('latestNewsSubtitle')}
-          viewAllHref="/news"
-          viewAllLabel={t('viewAll')}
-        >
-          {latestNews.map((item) => (
-            <NewsCard key={item.slug} item={item} />
-          ))}
-        </ExploreSection>
-      )}
-
-      <section className="section" style={{ paddingBottom: '3rem' }}>
+      <section className="section">
         <div className="card" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <h3 style={{ marginTop: 0 }}>{t('recruiterReadyTitle')}</h3>
@@ -215,6 +202,19 @@ export function RecruiterHome() {
           </Link>
         </div>
       </section>
+
+      {latestNews.length > 0 && (
+        <ExploreSection
+          title={t('latestNews')}
+          subtitle={t('latestNewsSubtitle')}
+          viewAllHref="/news"
+          viewAllLabel={t('viewAll')}
+        >
+          {latestNews.map((item) => (
+            <NewsCard key={item.slug} item={item} />
+          ))}
+        </ExploreSection>
+      )}
     </div>
   );
 }
