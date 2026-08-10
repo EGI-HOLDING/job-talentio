@@ -21,6 +21,7 @@
     "backfill:job-languages": "node dist/scripts/backfill-job-languages.js",
     "backfill:catalog-i18n": "node dist/scripts/backfill-catalog-i18n.js",
     "backfill:catalog-status": "node dist/scripts/backfill-catalog-status.js",
+    "backfill:content-locale": "node dist/scripts/backfill-job-locale.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {

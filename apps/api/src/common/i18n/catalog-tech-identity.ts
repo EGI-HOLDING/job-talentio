@@ -61,17 +61,21 @@ const NATURAL_WORDS = new Set([
 ]);
 
 /**
- * Product names that would otherwise be mistaken for ordinary words because
- * they are also dictionary entries.
+ * Product names spelled as plain lowercase words, which nothing else in the
+ * checks below can recognise. Names carrying their own signal (TypeScript,
+ * PostgreSQL, C++, HTML5) do not need to be listed.
  */
 const KNOWN_TECH = new Set([
-  'ansible', 'azure', 'bitrix', 'confluence', 'django', 'docker', 'excel',
-  'figma', 'flutter', 'git', 'github', 'gitlab', 'grafana', 'jenkins', 'jira',
-  'kafka', 'kotlin', 'kubernetes', 'laravel', 'linux', 'nginx', 'notion',
-  'photoshop', 'postman', 'powerpoint', 'prometheus', 'python', 'react',
-  'redis', 'ruby', 'rust', 'sap', 'sketch', 'spring', 'swift', 'symfony',
-  'tableau', 'terraform', 'trello', 'ubuntu', 'unity', 'vue', 'windows',
-  'wordpress', 'zoom',
+  'android', 'angular', 'ansible', 'astro', 'azure', 'bitrix', 'confluence',
+  'cypress', 'dart', 'django', 'docker', 'elasticsearch', 'excel', 'express',
+  'fastapi', 'figma', 'firebase', 'flask', 'flutter', 'git', 'github',
+  'gitlab', 'go', 'golang', 'grafana', 'hibernate', 'illustrator', 'java',
+  'jenkins', 'jira', 'kafka', 'kotlin', 'kubernetes', 'laravel', 'linux',
+  'magento', 'nginx', 'notion', 'numpy', 'nuxt', 'pandas', 'photoshop',
+  'postman', 'powerpoint', 'prometheus', 'pytorch', 'python', 'rabbitmq',
+  'react', 'redis', 'ruby', 'rust', 'sap', 'selenium', 'sketch', 'spring',
+  'svelte', 'swift', 'symfony', 'tableau', 'terraform', 'trello', 'ubuntu',
+  'unity', 'vue', 'windows', 'wordpress', 'zoom',
 ]);
 
 const MAX_TECH_TOKENS = 2;

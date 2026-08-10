@@ -18,6 +18,12 @@ const TECH = [
   'React Native',
   'Spring Boot',
   'Figma',
+  // Plain lowercase product names, the case the seeded catalog exposed.
+  'Angular',
+  'Cypress',
+  'Go',
+  'Java',
+  'Selenium',
 ];
 
 /** Ordinary phrases a reader expects in their own language. */

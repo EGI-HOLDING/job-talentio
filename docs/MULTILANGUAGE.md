@@ -57,4 +57,9 @@ machine output stale when the source text changes.
 
 - `pnpm --filter @job-talentio/api backfill:catalog-i18n` — apply curated name maps.
 - `pnpm --filter @job-talentio/api backfill:catalog-status` — classify existing catalog rows into `PENDING` / `COMPLETE` / `IGNORED`.
+- `pnpm --filter @job-talentio/api backfill:content-locale` — re-detect the language of job postings and company profiles, so nothing claims to be Uzbek just because that is the column default.
 - Machine translation requires `TRANSLATION_PROVIDER` plus `TRANSLATION_API_KEY`; Google is required when `uz` is a target because DeepL has no Uzbek.
+
+`JobPost.locale` and `Company.locale` both default to `uz`. Any code path that writes those
+fields without setting the language must either detect it or leave the row for the backfill,
+otherwise readers get a "written in Uzbek" badge on English text.
