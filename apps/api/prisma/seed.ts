@@ -12,6 +12,7 @@ import { backfillCompanyLogos } from '../src/common/company-logo-backfill';
 import { createDemoLogoUploaderFromEnv } from '../src/common/demo-logo-storage';
 import { backfillNews } from '../src/common/news-backfill';
 import { backfillCatalogI18n } from '../src/common/i18n/catalog-i18n-backfill';
+import { backfillJobLocale } from '../src/common/i18n/job-locale-backfill';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -969,6 +970,9 @@ async function main() {
         description: `${company.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan and Central Asia.\n\nResponsibilities:\n- Own delivery for ${tpl.skills.slice(0, 2).join(' and ')} workstreams\n- Collaborate with product, design, and operations\n- Improve quality, documentation, and mentoring\n\nRequirements:\n- Hands-on experience with ${tpl.skills.join(', ')}\n- ${tpl.years}+ years relevant experience preferred\n- Communication in Uzbek/Russian/English\n\nBenefits include competitive pay, learning budget, and modern tooling.`,
         cityId: city.id,
         categoryId: catMap[tpl.cat].id,
+        // The demo copy above is English; leaving this to the schema default
+        // would label every seeded posting as Uzbek.
+        locale: 'en',
         employmentType: employmentTypes[i % employmentTypes.length],
         workMode: workModes[i % workModes.length],
         salaryMin: 8_000_000 + (tpl.years || 0) * 2_000_000,
@@ -1229,6 +1233,7 @@ async function main() {
   }
 
   const news = await backfillNews(prisma);
+  const jobLocales = await backfillJobLocale(prisma);
   const catalogI18n = await backfillCatalogI18n(prisma);
   const catalogI18nRows = Object.values(catalogI18n).reduce((sum, c) => sum + c.updated, 0);
 
@@ -1249,6 +1254,7 @@ async function main() {
   - ~${appCount} applications
   - ${news.upserted} news articles (+ ${news.translations} uz/ru versions)
   - ${catalogI18nRows} catalog rows with uz/ru display names
+  - ${jobLocales.corrected} job posts relabelled to their actual language
   Quick login:
     Admin     ${DEMO.admin.email} / ${DEMO.admin.password}
     Recruiter ${DEMO.recruiter.email} / Password123!

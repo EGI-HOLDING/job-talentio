@@ -93,7 +93,7 @@ function jobSelectLabel(
 }
 
 function RecruiterDashboard() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -123,7 +123,9 @@ function RecruiterDashboard() {
   const [editJobLanguages, setEditJobLanguages] = useState<
     Array<{ code: string; name: string; minLevel: string; isRequired: boolean }>
   >([]);
-  const [draftJobLocale, setDraftJobLocale] = useState<'uz' | 'ru' | 'en'>('uz');
+  // Recruiters almost always write in the language they are using the site in;
+  // a fixed 'uz' default silently mislabels English and Russian postings.
+  const [draftJobLocale, setDraftJobLocale] = useState<'uz' | 'ru' | 'en'>(locale);
   const localeLangSuggested = useRef(false);
   const [draftJobLevel, setDraftJobLevel] = useState('');
   const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
