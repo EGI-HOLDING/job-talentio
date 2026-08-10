@@ -44,6 +44,11 @@ export class MetaController {
     return this.meta.cities(q, province, group);
   }
 
+  @Get('platform-stats')
+  platformStats() {
+    return this.meta.platformStats();
+  }
+
   @Get('categories')
   categories() {
     return this.meta.categories();
