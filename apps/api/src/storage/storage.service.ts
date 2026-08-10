@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  CopyObjectCommand,
   CreateBucketCommand,
   HeadBucketCommand,
   PutBucketPolicyCommand,
@@ -184,6 +185,40 @@ export class StorageService implements OnModuleInit {
     const base = this.publicUrl.replace(/\/$/, '');
     if (u.startsWith(`${base}/`)) return u.slice(base.length + 1);
     return null;
+  }
+
+  /**
+   * Private avatar key (`avatars/...`) from a stored avatarUrl, if any.
+   * Skips Google/external URLs and already-public `public/avatars/...` keys.
+   */
+  privateAvatarKeyFromUrl(url: string | null | undefined): string | null {
+    const u = (url || '').trim();
+    if (!u) return null;
+    const fromBase = this.keyFromPublicUrl(u);
+    if (fromBase?.startsWith('avatars/') && !fromBase.startsWith('public/')) {
+      return fromBase;
+    }
+    try {
+      const path = new URL(u).pathname.replace(/^\/+/, '');
+      if (path.includes('public/avatars/')) return null;
+      const m = path.match(/(?:^|\/)(avatars\/[^?#]+)$/);
+      return m?.[1] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Server-side copy within the bucket (MinIO/S3). */
+  async copyObject(sourceKey: string, destKey: string): Promise<void> {
+    const src = sourceKey.replace(/^\//, '');
+    const dest = destKey.replace(/^\//, '');
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: `${this.bucket}/${src}`,
+        Key: dest,
+      }),
+    );
   }
 }
 

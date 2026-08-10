@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { AvatarBackfillService } from './avatar-backfill.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
 
 @Module({
@@ -22,7 +23,7 @@ import { resolveJwtSecret } from '../common/jwt-secret';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, AvatarBackfillService],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
