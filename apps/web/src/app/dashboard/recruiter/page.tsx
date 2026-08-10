@@ -20,6 +20,7 @@ import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { MatchRing } from '@/components/ui/MatchRing';
+import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 
@@ -1445,36 +1446,10 @@ function RecruiterDashboard() {
                                     Match {score}% | details
                                   </button>
                                   {breakdownId === a.id && a.matchBreakdown && (
-                                    <div className="match-breakdown">
-                                      {(
-                                        [
-                                          ['Skills', a.matchBreakdown.skills],
-                                          ['Experience', a.matchBreakdown.experience],
-                                          ['Location', a.matchBreakdown.location],
-                                          ['Education', a.matchBreakdown.education],
-                                          ['Language', a.matchBreakdown.language],
-                                        ] as const
-                                      ).map(([label, value]) => (
-                                        <div key={label} className="match-breakdown-row">
-                                          <span className="muted">{label}</span>
-                                          <div className="match-breakdown-track">
-                                            <i style={{ width: `${Math.round(Number(value) || 0)}%` }} />
-                                          </div>
-                                          <span>{Math.round(Number(value) || 0)}</span>
-                                        </div>
-                                      ))}
-                                      {(a.matchBreakdown.details?.matchedLanguages?.length > 0 ||
-                                        a.matchBreakdown.details?.missingRequiredLanguages?.length > 0) && (
-                                        <p className="muted" style={{ fontSize: '0.75rem', margin: '0.4rem 0 0' }}>
-                                          {a.matchBreakdown.details.matchedLanguages?.length
-                                            ? `OK: ${a.matchBreakdown.details.matchedLanguages.join(', ')}`
-                                            : ''}
-                                          {a.matchBreakdown.details.missingRequiredLanguages?.length
-                                            ? `${a.matchBreakdown.details.matchedLanguages?.length ? ' | ' : ''}Missing: ${a.matchBreakdown.details.missingRequiredLanguages.join(', ')}`
-                                            : ''}
-                                        </p>
-                                      )}
-                                    </div>
+                                    <MatchBreakdownPanel
+                                      breakdown={a.matchBreakdown}
+                                      showSkillChips={false}
+                                    />
                                   )}
                                   <div className="match-bar">
                                     <span style={{ width: `${score}%` }} />

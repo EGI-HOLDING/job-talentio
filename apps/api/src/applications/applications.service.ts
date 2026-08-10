@@ -188,6 +188,7 @@ export class ApplicationsService {
         id: true,
         status: true,
         matchScore: true,
+        matchBreakdown: true,
         createdAt: true,
       },
     });

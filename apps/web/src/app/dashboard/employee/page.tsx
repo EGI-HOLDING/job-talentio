@@ -14,6 +14,7 @@ import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
+import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
@@ -114,6 +115,7 @@ function EmployeeDashboardInner() {
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [expandedExp, setExpandedExp] = useState<string | null>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
+  const [breakdownId, setBreakdownId] = useState<string | null>(null);
 
   const editingExpId = openForm?.startsWith('edit-exp:') ? openForm.slice('edit-exp:'.length) : null;
   const editingEduId = openForm?.startsWith('edit-edu:') ? openForm.slice('edit-edu:'.length) : null;
@@ -730,38 +732,61 @@ function EmployeeDashboardInner() {
         {tab === 'recommended' && (
           <div>
             <h2 className="section-title">Jobs matched to your profile</h2>
-            {recommended.map((item) => (
-              <Link key={item.job.id} href={`/jobs/${item.job.id}`} className="job-card">
-                <span className="company-logo-tile" aria-hidden>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="company-logo"
-                    src={
-                      item.job.company?.logoUrl ||
-                      `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(item.job.company?.name || 'Co')}`
-                    }
-                    alt=""
-                  />
-                </span>
-                <div>
-                  <h3>{sanitizeMojibake(item.job.title)}</h3>
-                  <div className="job-meta">
-                    <span>{item.job.company?.name}</span>
-                    <span>{jobLocationLabel(item.job)}</span>
-                    {item.job.category && (
-                      <span>
-                        {categoryIconLabel(item.job.category.slug, item.job.category.icon)}
-                        {item.job.category.name}
-                      </span>
-                    )}
-                  </div>
-                  <div className="match-bar">
-                    <span style={{ width: `${item.matchScore}%` }} />
+            {recommended.map((item) => {
+              const rowId = `rec-${item.job.id}`;
+              const open = breakdownId === rowId;
+              return (
+                <div key={item.job.id} className="job-card" style={{ display: 'block' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '0.85rem', alignItems: 'center' }}>
+                    <Link href={`/jobs/${item.job.id}`} className="company-logo-tile" aria-hidden>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        className="company-logo"
+                        src={
+                          item.job.company?.logoUrl ||
+                          `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(item.job.company?.name || 'Co')}`
+                        }
+                        alt=""
+                      />
+                    </Link>
+                    <div>
+                      <Link href={`/jobs/${item.job.id}`}>
+                        <h3 style={{ margin: 0 }}>{sanitizeMojibake(item.job.title)}</h3>
+                      </Link>
+                      <div className="job-meta">
+                        <span>{item.job.company?.name}</span>
+                        <span>{jobLocationLabel(item.job)}</span>
+                        {item.job.category && (
+                          <span>
+                            {categoryIconLabel(item.job.category.slug, item.job.category.icon)}
+                            {item.job.category.name}
+                          </span>
+                        )}
+                      </div>
+                      {item.matchScore != null && (
+                        <>
+                          <button
+                            type="button"
+                            className="badge match"
+                            style={{ marginTop: '0.55rem', border: 0, cursor: 'pointer' }}
+                            onClick={() => setBreakdownId(open ? null : rowId)}
+                          >
+                            Match {item.matchScore}% | details
+                          </button>
+                          {open && item.matchBreakdown && (
+                            <MatchBreakdownPanel breakdown={item.matchBreakdown} style={{ marginTop: '0.5rem' }} />
+                          )}
+                          <div className="match-bar" style={{ marginTop: '0.45rem' }}>
+                            <span style={{ width: `${item.matchScore}%` }} />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {item.matchScore != null && <MatchRing score={item.matchScore} />}
                   </div>
                 </div>
-                <MatchRing score={item.matchScore} />
-              </Link>
-            ))}
+              );
+            })}
             {!recommended.length && (
               <p className="muted">
                 Add skills to your profile to get job matches. Recommendations stay empty until your
@@ -774,52 +799,67 @@ function EmployeeDashboardInner() {
         {tab === 'applications' && (
           <div>
             <h2 className="section-title">My applications</h2>
-            {apps.map((a) => (
-              <div key={a.id} className="card" style={{ marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
-                  <div>
-                    <Link href={`/jobs/${a.jobPost.id}`} style={{ fontWeight: 700, color: 'var(--accent)' }}>
-                      {sanitizeMojibake(a.jobPost.title)}
-                    </Link>
-                    <p className="muted" style={{ margin: '0.25rem 0' }}>
-                      {a.jobPost.company?.name} | {a.status}
-                    </p>
-                    {a.matchScore != null && (
-                      <span className="badge match">Match {a.matchScore}%</span>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {(a.interviews || []).map((iv: any) => (
-                      <div key={iv.id} className="badge" style={{ display: 'block', marginBottom: 4 }}>
-                        Interview {new Date(iv.scheduledAt).toLocaleString()}
-                      </div>
-                    ))}
-                    <div className="chips" style={{ justifyContent: 'flex-end' }}>
-                      {a.jobPost.company?.chatPeerUserId ? (
-                        <Link
-                          href={`/messages?peer=${a.jobPost.company.chatPeerUserId}&job=${a.jobPost.id}`}
-                          className="chip"
-                          style={{ fontSize: '0.78rem' }}
-                        >
-                          Chat with recruiter
-                        </Link>
-                      ) : null}
-                      {a.status !== 'WITHDRAWN' &&
-                        a.status !== 'HIRED' &&
-                        a.status !== 'REJECTED' && (
+            {apps.map((a) => {
+              const open = breakdownId === a.id;
+              return (
+                <div key={a.id} className="card" style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <Link href={`/jobs/${a.jobPost.id}`} style={{ fontWeight: 700, color: 'var(--accent)' }}>
+                        {sanitizeMojibake(a.jobPost.title)}
+                      </Link>
+                      <p className="muted" style={{ margin: '0.25rem 0' }}>
+                        {a.jobPost.company?.name} | {a.status}
+                      </p>
+                      {a.matchScore != null && (
+                        <>
                           <button
                             type="button"
-                            className="chip"
-                            onClick={() => withdrawApplication(a.id)}
+                            className="badge match"
+                            style={{ border: 0, cursor: 'pointer' }}
+                            onClick={() => setBreakdownId(open ? null : a.id)}
                           >
-                            Withdraw
+                            Match {a.matchScore}% | details
                           </button>
-                        )}
+                          {open && a.matchBreakdown && (
+                            <MatchBreakdownPanel breakdown={a.matchBreakdown} style={{ marginTop: '0.5rem' }} />
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {(a.interviews || []).map((iv: any) => (
+                        <div key={iv.id} className="badge" style={{ display: 'block', marginBottom: 4 }}>
+                          Interview {new Date(iv.scheduledAt).toLocaleString()}
+                        </div>
+                      ))}
+                      <div className="chips" style={{ justifyContent: 'flex-end' }}>
+                        {a.jobPost.company?.chatPeerUserId ? (
+                          <Link
+                            href={`/messages?peer=${a.jobPost.company.chatPeerUserId}&job=${a.jobPost.id}`}
+                            className="chip"
+                            style={{ fontSize: '0.78rem' }}
+                          >
+                            Chat with recruiter
+                          </Link>
+                        ) : null}
+                        {a.status !== 'WITHDRAWN' &&
+                          a.status !== 'HIRED' &&
+                          a.status !== 'REJECTED' && (
+                            <button
+                              type="button"
+                              className="chip"
+                              onClick={() => withdrawApplication(a.id)}
+                            >
+                              Withdraw
+                            </button>
+                          )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
