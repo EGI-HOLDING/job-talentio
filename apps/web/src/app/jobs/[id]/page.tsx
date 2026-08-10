@@ -283,26 +283,18 @@ export default function JobDetailPage() {
         </div>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           {alreadyApplied ? (
-            <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
-              Applied | {myApplication?.status}
-              {viewerMatchScore != null ? ` | Match ${viewerMatchScore}%` : ''}
-            </div>
-          ) : (
-            session?.user.role === 'EMPLOYEE' &&
-            viewerMatchScore != null && (
+            <>
               <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
-                Match {viewerMatchScore}%
+                Applied | {myApplication?.status}
               </div>
-            )
-          )}
-          {alreadyApplied ? (
-            <Link
-              href="/dashboard/employee?tab=applications"
-              className="secondary"
-              style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
-            >
-              View my applications
-            </Link>
+              <Link
+                href="/dashboard/employee?tab=applications"
+                className="secondary"
+                style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
+              >
+                View my applications
+              </Link>
+            </>
           ) : (
             (session?.user.role === 'EMPLOYEE' || !session) && (
               <button
