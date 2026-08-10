@@ -99,7 +99,6 @@ export default function JobDetailPage() {
   const [showCreateResume, setShowCreateResume] = useState(false);
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
-  const [showMatchDetails, setShowMatchDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
@@ -129,7 +128,6 @@ export default function JobDetailPage() {
           ...j,
           isHot: !!(j.boostUntil && new Date(j.boostUntil).getTime() > Date.now()),
         });
-        if (j.matchBreakdown) setShowMatchDetails(true);
         if (session) {
           try {
             const f = await api<{ following: boolean }>(`/companies/${j.company.id}/following`);
@@ -145,7 +143,6 @@ export default function JobDetailPage() {
               application: MyApplicationState | null;
             }>(`/applications/mine/jobs/${id}`);
             setMyApplication(mine.application);
-            if (mine.application?.matchBreakdown) setShowMatchDetails(true);
           } catch {
             /* ignore - guest / network */
           }
@@ -204,7 +201,6 @@ export default function JobDetailPage() {
         matchBreakdown: created.matchBreakdown,
         createdAt: created.createdAt || new Date().toISOString(),
       });
-      setShowMatchDetails(Boolean(created.matchBreakdown));
       setSuccess('Application submitted! Match score was calculated for the recruiter.');
       setShowApply(false);
     } catch (err) {
@@ -286,30 +282,18 @@ export default function JobDetailPage() {
           )}
         </div>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {session?.user.role === 'EMPLOYEE' && viewerMatchScore != null && (
-            <>
-              <button
-                type="button"
-                className="badge match"
-                style={{
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  border: 0,
-                  cursor: viewerMatchBreakdown ? 'pointer' : 'default',
-                  width: '100%',
-                }}
-                onClick={() => {
-                  if (viewerMatchBreakdown) setShowMatchDetails((v) => !v);
-                }}
-              >
-                {alreadyApplied ? `Applied | ${myApplication?.status} | ` : ''}
+          {alreadyApplied ? (
+            <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
+              Applied | {myApplication?.status}
+              {viewerMatchScore != null ? ` | Match ${viewerMatchScore}%` : ''}
+            </div>
+          ) : (
+            session?.user.role === 'EMPLOYEE' &&
+            viewerMatchScore != null && (
+              <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
                 Match {viewerMatchScore}%
-                {viewerMatchBreakdown ? ' | details' : ''}
-              </button>
-              {showMatchDetails && viewerMatchBreakdown && (
-                <MatchBreakdownPanel breakdown={viewerMatchBreakdown} />
-              )}
-            </>
+              </div>
+            )
           )}
           {alreadyApplied ? (
             <Link
@@ -371,9 +355,23 @@ export default function JobDetailPage() {
       {error && <div className="error" style={{ marginTop: '1rem' }}>{error}</div>}
 
       <div className="grid-2" style={{ marginTop: '1.25rem' }}>
-        <div className="card">
-          <h2 className="section-title">About the role</h2>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sanitizeMojibake(job.description)}</div>
+        <div style={{ display: 'grid', gap: '1rem', alignContent: 'start' }}>
+          <div className="card">
+            <h2 className="section-title">About the role</h2>
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sanitizeMojibake(job.description)}</div>
+          </div>
+          {session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown && (
+            <div className="card">
+              <h2 className="section-title" style={{ marginBottom: '0.35rem' }}>
+                Your match
+                {viewerMatchScore != null ? ` ${viewerMatchScore}%` : ''}
+              </h2>
+              <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
+                How your profile scores against this role
+              </p>
+              <MatchBreakdownPanel breakdown={viewerMatchBreakdown} />
+            </div>
+          )}
         </div>
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card">
