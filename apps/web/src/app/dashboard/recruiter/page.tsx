@@ -2,13 +2,18 @@
 
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
+import {
+  RECRUITER_TAB_KEY,
+  readStoredDashboardTab,
+  storeDashboardTab,
+} from '@/lib/dashboardTab';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
@@ -19,6 +24,11 @@ import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
+const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
+
+function isRecruiterTab(v: string): v is Tab {
+  return (RECRUITER_TABS as string[]).includes(v);
+}
 type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 type CheckoutResponse = {
   payment: { id: string; status: string; amountUzs: number; purpose: string };
@@ -70,22 +80,16 @@ function jobSelectLabel(j: {
 
 function RecruiterDashboard() {
   const { t } = useI18n();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const jobFromUrl = searchParams.get('job') || '';
   const tabFromUrl = searchParams.get('tab') || '';
   const focusFromUrl = searchParams.get('focus') || '';
   const [tab, setTab] = useState<Tab>(() => {
     if (tabFromUrl === 'candidates') return 'jobs';
-    if (
-      tabFromUrl === 'billing' ||
-      tabFromUrl === 'pipeline' ||
-      tabFromUrl === 'bulk' ||
-      tabFromUrl === 'analytics' ||
-      tabFromUrl === 'company' ||
-      tabFromUrl === 'jobs'
-    ) {
-      return tabFromUrl as Tab;
-    }
+    if (isRecruiterTab(tabFromUrl)) return tabFromUrl;
+    const stored = readStoredDashboardTab(RECRUITER_TAB_KEY);
+    if (stored && isRecruiterTab(stored)) return stored;
     if (jobFromUrl) return 'pipeline';
     return 'jobs';
   });
@@ -360,17 +364,30 @@ function RecruiterDashboard() {
       window.location.replace('/talent');
       return;
     }
-    if (
-      tabFromUrl === 'billing' ||
-      tabFromUrl === 'pipeline' ||
-      tabFromUrl === 'bulk' ||
-      tabFromUrl === 'analytics' ||
-      tabFromUrl === 'company' ||
-      tabFromUrl === 'jobs'
-    ) {
-      setTab(tabFromUrl as Tab);
+    if (isRecruiterTab(tabFromUrl) && tabFromUrl !== tab) {
+      setTab(tabFromUrl);
     }
   }, [tabFromUrl]);
+
+  useEffect(() => {
+    if (jobFromUrl && jobFromUrl !== selectedJob) {
+      setSelectedJob(jobFromUrl);
+    }
+  }, [jobFromUrl]);
+
+  // Keep URL + sessionStorage in sync so browser Back returns to the last section.
+  useEffect(() => {
+    storeDashboardTab(RECRUITER_TAB_KEY, tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    if (selectedJob) params.set('job', selectedJob);
+    else params.delete('job');
+    const qs = params.toString();
+    const current = searchParams.toString();
+    if (qs !== current) {
+      router.replace(qs ? `/dashboard/recruiter?${qs}` : '/dashboard/recruiter');
+    }
+  }, [tab, selectedJob, router, searchParams]);
 
   useEffect(() => {
     if (tab === 'jobs' && focusFromUrl === 'create') {
