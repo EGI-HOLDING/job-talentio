@@ -867,6 +867,16 @@ const DICT = {
     ru: 'Заменить файл',
     en: 'Replace file',
   },
+  resumeFileAttached: {
+    uz: 'Fayl resume ga biriktirildi',
+    ru: 'Файл прикреплён к резюме',
+    en: 'File attached to resume',
+  },
+  resumeUploadLibraryHint: {
+    uz: 'Bu faqat ariza uchun hujjat. Profil (tajriba/skill) uchun Import from CV dan foydalaning.',
+    ru: 'Это только документ для откликов. Для профиля (опыт/навыки) используйте Import from CV.',
+    en: 'This stores a document for applications only. To fill career history, use Import from CV.',
+  },
   viewCv: {
     uz: 'CV ni ko‘rish',
     ru: 'Смотреть CV',
