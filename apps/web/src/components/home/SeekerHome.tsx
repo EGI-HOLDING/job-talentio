@@ -143,25 +143,25 @@ export function SeekerHome() {
         <div className="stats-row">
           <div className="stat">
             <strong title={platformStats ? String(platformStats.openRoles) : undefined}>
-              {platformStats ? formatCompactCount(platformStats.openRoles) : '—'}
+              {platformStats ? formatCompactCount(platformStats.openRoles) : '-'}
             </strong>
             <span>{t('openRoles')}</span>
           </div>
           <div className="stat">
             <strong title={platformStats ? String(platformStats.companies) : undefined}>
-              {platformStats ? formatCompactCount(platformStats.companies) : '—'}
+              {platformStats ? formatCompactCount(platformStats.companies) : '-'}
             </strong>
             <span>{t('companiesStat')}</span>
           </div>
           <div className="stat">
             <strong title={platformStats ? String(platformStats.talentProfiles) : undefined}>
-              {platformStats ? formatCompactCount(platformStats.talentProfiles) : '—'}
+              {platformStats ? formatCompactCount(platformStats.talentProfiles) : '-'}
             </strong>
             <span>{t('talentProfiles')}</span>
           </div>
           <div className="stat">
             <strong title={platformStats ? String(platformStats.citiesCovered) : undefined}>
-              {platformStats ? formatCompactCount(platformStats.citiesCovered) : '—'}
+              {platformStats ? formatCompactCount(platformStats.citiesCovered) : '-'}
             </strong>
             <span>{t('citiesCovered')}</span>
           </div>
