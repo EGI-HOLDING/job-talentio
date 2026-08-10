@@ -43,7 +43,8 @@ After finishing a coherent unit of work (feature, fix, or chore), **always** do 
 3. **Open a PR into `develop`** with `gh pr create` if one does not already exist for this branch.
    - Title + body with Summary + Test plan.
    - Target is always **`develop`**, never `main`.
-   - No Cursor/AI attribution text in the PR body.
+   - No Cursor/AI attribution in the PR title, body, or comments; verify with `gh pr view` after creating (see `no-ai-commit-attribution.mdc`).
+   - When squash-merging, pass explicit `--subject`/`--body` so old commit trailers cannot leak into the squash message.
 
 Do **not**:
 
