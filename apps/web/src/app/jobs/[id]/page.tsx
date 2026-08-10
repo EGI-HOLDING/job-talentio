@@ -57,6 +57,8 @@ type Job = {
   benefits?: Array<{ benefit: { name: string; slug?: string; icon?: string | null } }>;
   questions?: Question[];
   _count?: { applications: number; views: number };
+  matchScore?: number | null;
+  matchBreakdown?: MatchBreakdownState | null;
 };
 
 function formatSalary(min?: number | null, max?: number | null) {
@@ -64,24 +66,26 @@ function formatSalary(min?: number | null, max?: number | null) {
   return formatSalaryRange(min, max) || 'Negotiable';
 }
 
+type MatchBreakdownState = {
+  skills?: number;
+  experience?: number;
+  location?: number;
+  education?: number;
+  language?: number;
+  total?: number;
+  details?: {
+    matchedSkills?: string[];
+    missingRequiredSkills?: string[];
+    matchedLanguages?: string[];
+    missingRequiredLanguages?: string[];
+  } | null;
+};
+
 type MyApplicationState = {
   id: string;
   status: string;
   matchScore?: number | null;
-  matchBreakdown?: {
-    skills?: number;
-    experience?: number;
-    location?: number;
-    education?: number;
-    language?: number;
-    total?: number;
-    details?: {
-      matchedSkills?: string[];
-      missingRequiredSkills?: string[];
-      matchedLanguages?: string[];
-      missingRequiredLanguages?: string[];
-    } | null;
-  } | null;
+  matchBreakdown?: MatchBreakdownState | null;
   createdAt: string;
 };
 
@@ -105,6 +109,9 @@ export default function JobDetailPage() {
   const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);
   const jobTitleId = job?.jobTitleId || job?.jobTitle?.id || null;
   const defaultApplyRole = job?.jobTitle?.name || job?.title || '';
+  const viewerMatchBreakdown = myApplication?.matchBreakdown || job?.matchBreakdown || null;
+  const viewerMatchScore =
+    myApplication?.matchScore != null ? myApplication.matchScore : job?.matchScore ?? null;
 
   async function loadResumes() {
     const p = await api<{ resumes?: ResumeOption[] }>('/profiles/me');
@@ -122,6 +129,7 @@ export default function JobDetailPage() {
           ...j,
           isHot: !!(j.boostUntil && new Date(j.boostUntil).getTime() > Date.now()),
         });
+        if (j.matchBreakdown) setShowMatchDetails(true);
         if (session) {
           try {
             const f = await api<{ following: boolean }>(`/companies/${j.company.id}/following`);
@@ -137,6 +145,7 @@ export default function JobDetailPage() {
               application: MyApplicationState | null;
             }>(`/applications/mine/jobs/${id}`);
             setMyApplication(mine.application);
+            if (mine.application?.matchBreakdown) setShowMatchDetails(true);
           } catch {
             /* ignore - guest / network */
           }
@@ -277,7 +286,7 @@ export default function JobDetailPage() {
           )}
         </div>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {alreadyApplied ? (
+          {session?.user.role === 'EMPLOYEE' && viewerMatchScore != null && (
             <>
               <button
                 type="button"
@@ -286,28 +295,30 @@ export default function JobDetailPage() {
                   justifyContent: 'center',
                   textAlign: 'center',
                   border: 0,
-                  cursor: myApplication?.matchBreakdown ? 'pointer' : 'default',
+                  cursor: viewerMatchBreakdown ? 'pointer' : 'default',
                   width: '100%',
                 }}
                 onClick={() => {
-                  if (myApplication?.matchBreakdown) setShowMatchDetails((v) => !v);
+                  if (viewerMatchBreakdown) setShowMatchDetails((v) => !v);
                 }}
               >
-                Applied | {myApplication?.status}
-                {myApplication?.matchScore != null ? ` | Match ${myApplication.matchScore}%` : ''}
-                {myApplication?.matchBreakdown ? ' | details' : ''}
+                {alreadyApplied ? `Applied | ${myApplication?.status} | ` : ''}
+                Match {viewerMatchScore}%
+                {viewerMatchBreakdown ? ' | details' : ''}
               </button>
-              {showMatchDetails && myApplication?.matchBreakdown && (
-                <MatchBreakdownPanel breakdown={myApplication.matchBreakdown} />
+              {showMatchDetails && viewerMatchBreakdown && (
+                <MatchBreakdownPanel breakdown={viewerMatchBreakdown} />
               )}
-              <Link
-                href="/dashboard/employee?tab=applications"
-                className="secondary"
-                style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
-              >
-                View my applications
-              </Link>
             </>
+          )}
+          {alreadyApplied ? (
+            <Link
+              href="/dashboard/employee?tab=applications"
+              className="secondary"
+              style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
+            >
+              View my applications
+            </Link>
           ) : (
             (session?.user.role === 'EMPLOYEE' || !session) && (
               <button
