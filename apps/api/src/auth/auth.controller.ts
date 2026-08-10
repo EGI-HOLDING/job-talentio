@@ -23,6 +23,8 @@ import {
   resetPasswordSchema,
   changeEmailSchema,
   confirmEmailChangeSchema,
+  refreshTokenSchema,
+  logoutSchema,
 } from '@job-talentio/shared';
 import { AuthService } from './auth.service';
 import { parseDto } from '../common/utils';
@@ -56,6 +58,18 @@ export class AuthController {
   devLogin(@Body() body: unknown) {
     const data = parseDto(devLoginSchema, body);
     return this.auth.devLogin(data.email, data.role);
+  }
+
+  @Post('refresh')
+  refresh(@Body() body: unknown) {
+    const data = parseDto(refreshTokenSchema, body);
+    return this.auth.refresh(data.refreshToken);
+  }
+
+  @Post('logout')
+  logout(@Body() body: unknown) {
+    const data = parseDto(logoutSchema, body);
+    return this.auth.logout(data.refreshToken);
   }
 
   @Get('me')

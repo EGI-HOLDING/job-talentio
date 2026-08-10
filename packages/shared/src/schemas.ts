@@ -62,6 +62,15 @@ export const devLoginSchema = z.object({
   role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
 });
 
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(20).max(300),
+});
+
+/** Logout works even when the access token already expired; token is optional. */
+export const logoutSchema = z.object({
+  refreshToken: z.string().min(20).max(300).optional(),
+});
+
 export const companySchema = z.object({
   name: z.string().min(2).max(160),
   description: z.string().max(5000).optional(),

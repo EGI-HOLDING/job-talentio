@@ -90,7 +90,7 @@ export default function AdminPage() {
       if (session.user.role !== 'SUPER_ADMIN') {
         throw new Error('Not a Super Admin account');
       }
-      saveToken(session.accessToken);
+      saveToken(session.accessToken, session.refreshToken);
       setAuthed(true);
       await load();
     } catch (err) {
