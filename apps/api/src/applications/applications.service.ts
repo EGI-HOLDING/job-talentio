@@ -6,7 +6,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ApplicationStatus, Prisma } from '@prisma/client';
-import { DEFAULT_PIPELINE } from '@job-talentio/shared';
+import { DEFAULT_PIPELINE, isMessageKey, translateMessage } from '@job-talentio/shared';
+import type { MessageLocale } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CompaniesService } from '../companies/companies.service';
@@ -14,6 +15,7 @@ import { MatchingService } from '../matching/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { MailService } from '../mail/mail.service';
+import { emailLocale } from '../common/i18n/email-locale';
 
 @Injectable()
 export class ApplicationsService {
@@ -159,6 +161,9 @@ export class ApplicationsService {
           type: 'NEW_APPLICANT',
           title: `New applicant for ${job.title}`,
           body: `${user.fullName} applied (match ${breakdown.total}%)`,
+          titleKey: 'notify.newApplicant.title',
+          bodyKey: 'notify.newApplicant.body',
+          params: { job: job.title, name: user.fullName, match: breakdown.total },
           linkUrl: `/dashboard/recruiter?job=${job.id}`,
         });
       }
@@ -355,6 +360,15 @@ export class ApplicationsService {
       type: 'APPLICATION_STATUS',
       title: `Application update: ${application.jobPost.title}`,
       body: `Status is now ${status}${note ? `. Note: ${note}` : ''}`,
+      titleKey: 'notify.applicationStatus.title',
+      bodyKey: note
+        ? 'notify.applicationStatus.bodyWithNote'
+        : 'notify.applicationStatus.body',
+      params: {
+        job: application.jobPost.title,
+        status,
+        ...(note ? { note } : {}),
+      },
       linkUrl: `/dashboard/employee`,
     });
 
@@ -371,6 +385,7 @@ export class ApplicationsService {
         application.jobPost.title,
         status,
         note,
+        emailLocale(application.profile.user.locale),
       );
       void this.mail.send(application.profile.user.email, subject, html);
     }
@@ -387,43 +402,31 @@ export class ApplicationsService {
     return toIdx > fromIdx;
   }
 
-  /** Stage-specific candidate email for forward pipeline moves. */
-  private stageEmail(jobTitle: string, status: ApplicationStatus, note?: string) {
+  /** Stage-specific candidate email, written in the candidate's own language. */
+  private stageEmail(
+    jobTitle: string,
+    status: ApplicationStatus,
+    note: string | undefined,
+    locale: MessageLocale,
+  ) {
     const webUrl = process.env.WEB_URL ?? 'https://staging.jobtalent.io';
-    const messages: Partial<Record<ApplicationStatus, { subject: string; intro: string }>> = {
-      IN_REVIEW: {
-        subject: `Your application is being reviewed - ${jobTitle}`,
-        intro: 'Good news! The recruiter moved your application to In review.',
-      },
-      INTERVIEW: {
-        subject: `Interview stage - ${jobTitle}`,
-        intro:
-          'Congratulations! You have moved to the Interview stage. The recruiter will share schedule details soon.',
-      },
-      OFFER: {
-        subject: `You received an offer - ${jobTitle}`,
-        intro: 'Great news! The company moved you to the Offer stage for this position.',
-      },
-      HIRED: {
-        subject: `Welcome aboard - ${jobTitle}`,
-        intro: 'Congratulations! You have been hired for this position.',
-      },
-      REJECTED: {
-        subject: `Application update - ${jobTitle}`,
-        intro:
-          'Thank you for your interest. The company decided not to move forward with your application this time.',
-      },
-    };
-    const m = messages[status] ?? {
-      subject: `Application update - ${jobTitle}`,
-      intro: `Your application status is now ${status}.`,
-    };
+    const t = (key: string, params?: Record<string, string | number>) =>
+      translateMessage(key, locale, params);
+
+    const introKey = `email.applicationStatus.${status}`;
+    const intro = isMessageKey(introKey)
+      ? t(introKey)
+      : t('email.applicationStatus.generic', { status });
+
     return {
-      subject: m.subject,
-      html: `<p>Salom!</p><p>${m.intro}</p><p>Position: <strong>${jobTitle}</strong></p>${
-        note ? `<p>Note from recruiter: ${note}</p>` : ''
-      }<p><a href="${webUrl}/dashboard/employee">Open your dashboard</a></p>
-       <p style="color:#64748b;font-size:12px">Job Talentio · You received this because your email is verified.</p>`,
+      subject: t('email.applicationStatus.subject', { job: jobTitle }),
+      html: `<p>${t('email.greetingShort')}</p><p>${intro}</p><p>${t(
+        'email.applicationStatus.position',
+        { job: jobTitle },
+      )}</p>${note ? `<p>${t('email.applicationStatus.note', { note })}</p>` : ''}<p><a href="${webUrl}/${locale}/dashboard/employee">${t(
+        'email.applicationStatus.cta',
+      )}</a></p>
+       <p style="color:#64748b;font-size:12px">${t('email.footer')}</p>`,
     };
   }
 
@@ -490,6 +493,12 @@ export class ApplicationsService {
       type: 'INTERVIEW_SCHEDULED',
       title: `Interview scheduled: ${application.jobPost.title}`,
       body: `On ${new Date(data.scheduledAt).toLocaleString()}`,
+      titleKey: 'notify.interviewScheduled.title',
+      bodyKey: 'notify.interviewScheduled.body',
+      params: {
+        job: application.jobPost.title,
+        date: new Date(data.scheduledAt).toISOString(),
+      },
       linkUrl: `/dashboard/employee`,
     });
 

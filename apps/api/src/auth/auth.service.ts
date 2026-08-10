@@ -10,8 +10,10 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
+import { translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { emailLocale } from '../common/i18n/email-locale';
 import { StorageService } from '../storage/storage.service';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
@@ -231,10 +233,12 @@ export class AuthService {
       return created;
     });
 
+    const welcomeLocale = emailLocale(user.locale);
     await this.mail.send(
       user.email,
-      'Welcome to Job Talentio',
-      `<p>Salom ${user.fullName}!</p><p>Your Job Talentio account is ready.</p>`,
+      translateMessage('email.welcome.subject', welcomeLocale),
+      `<p>${translateMessage('email.greeting', welcomeLocale, { name: user.fullName })}</p>` +
+        `<p>${translateMessage('email.welcome.body', welcomeLocale)}</p>`,
     );
 
     return this.tokenFor(user.id);
@@ -393,7 +397,12 @@ export class AuthService {
   }
 
   /** Create a fresh verification token (invalidates previous ones) and email the link. */
-  private async sendVerificationEmail(user: { id: string; email: string; fullName: string }) {
+  private async sendVerificationEmail(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    locale?: string | null;
+  }) {
     await this.prisma.emailVerificationToken.deleteMany({
       where: { userId: user.id, usedAt: null },
     });
@@ -406,14 +415,15 @@ export class AuthService {
       },
     });
     const link = this.verificationLink(rawToken);
+    const verifyLocale = emailLocale(user.locale);
     const sent = await this.mail.send(
       user.email,
-      'Verify your email - Job Talentio',
-      `<p>Salom ${user.fullName}!</p>
-       <p>Confirm this email address on Job Talentio:</p>
-       <p><a href="${link}">Verify my email</a></p>
-       <p>Or open this link: ${link}</p>
-       <p>The link expires in 24 hours. If you didn't request this, you can ignore this email.</p>`,
+      translateMessage('email.verify.subject', verifyLocale),
+      `<p>${translateMessage('email.greeting', verifyLocale, { name: user.fullName })}</p>
+       <p>${translateMessage('email.verify.intro', verifyLocale)}</p>
+       <p><a href="${link}">${translateMessage('email.verify.cta', verifyLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', verifyLocale, { link })}</p>
+       <p>${translateMessage('email.expires24h', verifyLocale)} ${translateMessage('email.verify.ignore', verifyLocale)}</p>`,
     );
     if (!sent) {
       throw new BadRequestException(
@@ -622,14 +632,15 @@ export class AuthService {
     });
     const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
     const link = `${webUrl}/reset-password?token=${rawToken}`;
+    const resetLocale = emailLocale(user.locale);
     void this.mail.send(
       user.email,
-      'Reset your password - Job Talentio',
-      `<p>Salom ${user.fullName}!</p>
-       <p>Reset your Job Talentio password:</p>
-       <p><a href="${link}">Choose a new password</a></p>
-       <p>Or open: ${link}</p>
-       <p>This link expires in 24 hours. If you did not request a reset, ignore this email.</p>`,
+      translateMessage('email.resetPassword.subject', resetLocale),
+      `<p>${translateMessage('email.greeting', resetLocale, { name: user.fullName })}</p>
+       <p>${translateMessage('email.resetPassword.intro', resetLocale)}</p>
+       <p><a href="${link}">${translateMessage('email.resetPassword.cta', resetLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', resetLocale, { link })}</p>
+       <p>${translateMessage('email.expires24h', resetLocale)} ${translateMessage('email.resetPassword.ignore', resetLocale)}</p>`,
     );
     return { ok: true };
   }
@@ -687,14 +698,15 @@ export class AuthService {
     });
     const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
     const link = `${webUrl}/confirm-email-change?token=${rawToken}`;
+    const changeLocale = emailLocale(user.locale);
     void this.mail.send(
       email,
-      'Confirm your new email - Job Talentio',
-      `<p>Salom ${user.fullName}!</p>
-       <p>Confirm this address as your new Job Talentio login email:</p>
-       <p><a href="${link}">Confirm email change</a></p>
-       <p>Or open: ${link}</p>
-       <p>This link expires in 24 hours.</p>`,
+      translateMessage('email.changeEmail.subject', changeLocale),
+      `<p>${translateMessage('email.greeting', changeLocale, { name: user.fullName })}</p>
+       <p>${translateMessage('email.changeEmail.intro', changeLocale)}</p>
+       <p><a href="${link}">${translateMessage('email.changeEmail.cta', changeLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', changeLocale, { link })}</p>
+       <p>${translateMessage('email.expires24h', changeLocale)}</p>`,
     );
     return { ok: true, message: 'Check the new inbox to confirm the change' };
   }

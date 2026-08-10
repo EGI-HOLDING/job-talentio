@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { emailLocale } from '../common/i18n/email-locale';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { resolveSkill } from '../common/skill-resolve';
@@ -239,10 +241,11 @@ export class AlertsService {
             `<li><strong>${j.title}</strong> - ${j.company.name} (${j.city?.name ?? '-'})</li>`,
         )
         .join('');
+      const locale = emailLocale(alert.user.locale);
       await this.mail.send(
         alert.user.email,
-        `Job Talentio alert: ${alert.name}`,
-        `<p>New jobs matching <strong>${alert.name}</strong>:</p><ul>${list}</ul>`,
+        translateMessage('email.jobAlert.subject', locale, { alert: alert.name }),
+        `<p>${translateMessage('email.jobAlert.intro', locale, { alert: alert.name })}</p><ul>${list}</ul>`,
       );
 
       await this.notifications.create({
@@ -250,6 +253,9 @@ export class AlertsService {
         type: 'NEW_JOB_MATCH',
         title: `Job alert: ${alert.name}`,
         body: `${jobs.length} new matching job(s)`,
+        titleKey: 'notify.jobAlert.title',
+        bodyKey: 'notify.jobAlert.body',
+        params: { alert: alert.name, count: jobs.length },
         linkUrl: `/jobs?q=${encodeURIComponent(alert.query || '')}`,
       });
 

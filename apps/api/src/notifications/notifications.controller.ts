@@ -1,6 +1,8 @@
-import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
+import { requestLocale } from '../common/i18n/request-locale';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -8,8 +10,8 @@ export class NotificationsController {
   constructor(private notifications: NotificationsService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthUser, @Query('page') page?: string) {
-    return this.notifications.list(user.id, page ? Number(page) : 1);
+  list(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string) {
+    return this.notifications.list(user.id, page ? Number(page) : 1, 30, requestLocale(req));
   }
 
   @Get('unread-count')

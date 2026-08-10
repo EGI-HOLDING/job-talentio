@@ -5,3 +5,4 @@ export * from './location';
 export * from './icons';
 export * from './resume';
 export * from './languages';
+export * from './messages';
