@@ -611,6 +611,35 @@ export class JobsService {
     };
   }
 
+  /** Minimal public fields for JobPosting JSON-LD. No JobView side effect. */
+  async getSeo(id: string) {
+    const job = await this.prisma.jobPost.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        employmentType: true,
+        workMode: true,
+        salaryMin: true,
+        salaryMax: true,
+        salaryPeriod: true,
+        currency: true,
+        status: true,
+        publishedAt: true,
+        closedAt: true,
+        createdAt: true,
+        company: { select: { name: true, slug: true, logoUrl: true } },
+        city: { select: { name: true } },
+      },
+    });
+    if (!job || job.status !== 'PUBLISHED') {
+      throw new NotFoundException('Job not found');
+    }
+    const { status: _status, ...publicJob } = job;
+    return publicJob;
+  }
+
   /** Live match for logged-in employees (pre-apply job detail breakdown). */
   private async matchForEmployeeViewer(viewer: AuthUser | undefined, jobPostId: string) {
     if (!viewer || (viewer.role !== 'EMPLOYEE' && viewer.role !== 'SUPER_ADMIN')) {

@@ -103,6 +103,12 @@ export class JobsController {
     return this.jobs.get(id, user);
   }
 
+  /** Public SEO payload for JSON-LD; unlike GET /jobs/:id it records no JobView. */
+  @Get(':id/seo')
+  seo(@Param('id') id: string) {
+    return this.jobs.getSeo(id);
+  }
+
   @Get(':id/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
