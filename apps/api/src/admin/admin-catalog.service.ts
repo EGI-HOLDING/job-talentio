@@ -321,7 +321,7 @@ export class AdminCatalogService {
     if (spec.type === 'language') {
       const code = trimmed.toLowerCase();
       if (!/^[a-z]{2,3}$/.test(code)) {
-        throw new BadRequestException('Language code must be a 2–3 letter ISO code (e.g. id, en, uz)');
+        throw new BadRequestException('Language code must be a 2-3 letter ISO code (e.g. id, en, uz)');
       }
       return code;
     }

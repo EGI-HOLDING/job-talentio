@@ -423,7 +423,7 @@ export default function CatalogPage() {
               onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
               placeholder={
                 spec?.keyField === 'code'
-                  ? '2–3 letter ISO code (id, en, uz)'
+                  ? '2-3 letter ISO code (id, en, uz)'
                   : 'Derived from the name when empty'
               }
             />
@@ -499,7 +499,7 @@ export default function CatalogPage() {
               value={form.key}
               onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
               placeholder={
-                spec?.keyField === 'code' ? '2–3 letter ISO code (id, en, uz)' : undefined
+                spec?.keyField === 'code' ? '2-3 letter ISO code (id, en, uz)' : undefined
               }
             />
             {spec?.keyField === 'code' ? (
