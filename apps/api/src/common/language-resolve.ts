@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Language, PrismaClient } from '@prisma/client';
 import {
-  assertLookupName,
+  assertCatalogLabel,
   normalizeLookupKey,
   titleCaseWords,
 } from './lookup-normalize';
@@ -90,7 +90,7 @@ export async function resolveLanguage(
   if (!allowCreate) throw new BadRequestException('Language not found');
 
   try {
-    assertLookupName(opts.name || raw);
+    assertCatalogLabel(opts.name || raw);
   } catch (e) {
     throw new BadRequestException((e as Error).message);
   }

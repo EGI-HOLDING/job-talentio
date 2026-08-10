@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { PrismaClient, Skill } from '@prisma/client';
+import { assertCatalogLabel } from './lookup-normalize';
 import { slugify } from './utils';
 
 type Db = Pick<PrismaClient, 'skill' | 'skillAlias'>;
@@ -138,13 +139,17 @@ export async function resolveSkill(
     throw new BadRequestException('Skill not found');
   }
 
+  const displayName = opts.name?.trim() || titleCaseFromSlug(slug || key);
+  try {
+    assertCatalogLabel(displayName);
+  } catch (e) {
+    throw new BadRequestException((e as Error).message);
+  }
   if (opts.name && !NAME_RE.test(opts.name.trim())) {
     throw new BadRequestException(
       'Skill name contains invalid characters. Use letters, numbers, and + . # / -',
     );
   }
-
-  const displayName = opts.name?.trim() || titleCaseFromSlug(slug || key);
   const finalSlug = slug || skillSlugify(displayName) || key.slice(0, 60);
 
   try {

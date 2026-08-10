@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { City, PrismaClient } from '@prisma/client';
 import {
-  assertLookupName,
+  assertCatalogLabel,
   catalogSlugify,
   normalizeLookupKey,
   titleCaseWords,
@@ -89,7 +89,7 @@ export async function resolveCity(
   }
 
   try {
-    assertLookupName(opts.name || raw);
+    assertCatalogLabel(opts.name || raw);
   } catch (e) {
     throw new BadRequestException((e as Error).message);
   }
