@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link, localeHref } from '@/lib/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ADMIN_URL, api, getSession, logout, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
@@ -220,7 +220,7 @@ export function SiteNav() {
                 style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
                 onClick={async () => {
                   await logout();
-                  window.location.href = '/';
+                  window.location.href = localeHref('/');
                 }}
               >
                 {t('logout')}

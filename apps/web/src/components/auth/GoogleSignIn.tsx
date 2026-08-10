@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ADMIN_URL, api, saveSession } from '@/lib/api';
 import { FormAlert, FormField } from '@/components/ui/Field';
 import { useI18n } from '@/lib/i18n';
+import { localeHref } from '@/lib/navigation';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
@@ -80,7 +81,7 @@ export function GoogleSignIn() {
           return;
         }
         saveSession(res as Parameters<typeof saveSession>[0]);
-        window.location.href = redirectAfterLogin(res.user.role);
+        window.location.href = localeHref(redirectAfterLogin(res.user.role));
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         setError(
