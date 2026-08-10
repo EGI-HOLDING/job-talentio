@@ -34,6 +34,7 @@ import { contentHash as translationSourceHash, resolveContent } from '../common/
 import { TranslationService } from '../translation/translation.service';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
+import { canTransition, transitionError } from './job-status';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -63,14 +64,6 @@ function localizeQuestion<
   return { ...rest, question: resolved.content.question };
 }
 
-/** Best-practice status graph: close/pause from live posts; reopen CLOSED → PUBLISHED (or DRAFT to edit). */
-const ALLOWED_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
-  DRAFT: ['PUBLISHED', 'CLOSED'],
-  PUBLISHED: ['PAUSED', 'CLOSED'],
-  PAUSED: ['PUBLISHED', 'CLOSED'],
-  CLOSED: ['PUBLISHED', 'DRAFT'],
-  EXPIRED: ['PUBLISHED', 'CLOSED'],
-};
 
 @Injectable()
 export class JobsService {
@@ -495,11 +488,8 @@ export class JobsService {
       );
     }
 
-    const allowed = ALLOWED_STATUS_TRANSITIONS[job.status] ?? [];
-    if (!allowed.includes(status)) {
-      throw new BadRequestException(
-        `Cannot change job status from ${job.status} to ${status}. Allowed: ${allowed.join(', ') || 'none'}.`,
-      );
+    if (!canTransition(job.status, status)) {
+      throw new BadRequestException(transitionError(job.status, status));
     }
 
     // Becoming active again (incl. reopen CLOSED → DRAFT/PUBLISHED) must pass dedupe

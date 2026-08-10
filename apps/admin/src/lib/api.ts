@@ -102,6 +102,50 @@ export function formatApiError(data: unknown, fallback: string): string {
   return fallback;
 }
 
+export type ListEnvelope<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type MatchingIds = { ids: string[]; total: number; capped: boolean };
+
+export type BulkResult = {
+  requested: number;
+  applied: number;
+  skipped: Array<{ id: string; reason: string }>;
+};
+
+export type QueryValue = string | number | boolean | undefined | null;
+
+/** Empty values are dropped so a cleared filter disappears from the URL. */
+export function toQueryString(params: Record<string, QueryValue>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export function apiList<T>(path: string, params: Record<string, QueryValue>) {
+  return api<ListEnvelope<T>>(`${path}${toQueryString(params)}`);
+}
+
+export function apiPost<T>(path: string, body?: unknown) {
+  return api<T>(path, {
+    method: 'POST',
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+export function apiPatch<T>(path: string, body: unknown) {
+  return api<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');

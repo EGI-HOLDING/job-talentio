@@ -29,6 +29,10 @@ export type CatalogDelegate = {
   findUnique(args: { where: { id: string } }): Promise<CatalogRow | null>;
   findMany(args: Record<string, unknown>): Promise<CatalogRow[]>;
   update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<CatalogRow>;
+  updateMany(args: {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  }): Promise<{ count: number }>;
   count(args: Record<string, unknown>): Promise<number>;
 };
 

@@ -533,3 +533,125 @@ export const bulkCampaignSchema = z
 export const bulkCommsOptOutSchema = z.object({
   optedOut: z.boolean(),
 });
+
+// ─── Admin console ───────────────────────────────────────────
+//
+// Admin tables share one query shape: free-text `q`, paging, a sort column with
+// a direction, a created-at window, and section-specific filters. Multi-value
+// filters arrive comma separated (`role=RECRUITER,EMPLOYEE`) so a filter panel
+// can round-trip through the URL.
+
+/** Query strings carry booleans as text; omitted means "do not filter". */
+const boolParam = z
+  .enum(['true', 'false'])
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v === 'true'));
+
+/** Accepts `2026-08-12` as well as a full ISO timestamp. */
+const dateParam = z.string().max(40).optional();
+
+const adminListBase = {
+  q: z.string().max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  dir: z.enum(['asc', 'desc']).default('desc'),
+  createdFrom: dateParam,
+  createdTo: dateParam,
+};
+
+export const adminUserListSchema = z.object({
+  ...adminListBase,
+  role: z.string().max(120).optional(),
+  banned: boolParam,
+  verified: boolParam,
+  locale: z.string().max(40).optional(),
+  seenWithin: z.enum(['24h', '7d', '30d']).optional(),
+  sort: z.enum(['createdAt', 'lastSeenAt', 'email', 'fullName']).default('createdAt'),
+});
+
+export const adminCompanyListSchema = z.object({
+  ...adminListBase,
+  plan: z.string().max(60).optional(),
+  verified: boolParam,
+  banned: boolParam,
+  size: z.string().max(120).optional(),
+  industrySlug: z.string().max(120).optional(),
+  citySlug: z.string().max(120).optional(),
+  sort: z.enum(['createdAt', 'name', 'jobs']).default('createdAt'),
+});
+
+export const adminJobListSchema = z.object({
+  ...adminListBase,
+  status: z.string().max(120).optional(),
+  employmentType: z.string().max(120).optional(),
+  workMode: z.string().max(60).optional(),
+  experienceLevel: z.string().max(120).optional(),
+  /** Boosted right now, i.e. `boostUntil` still in the future. */
+  hotOnly: boolParam,
+  companyId: z.string().max(40).optional(),
+  locale: z.string().max(40).optional(),
+  sort: z
+    .enum(['updatedAt', 'publishedAt', 'createdAt', 'applications', 'title'])
+    .default('updatedAt'),
+});
+
+export const adminReportListSchema = z.object({
+  ...adminListBase,
+  status: z.string().max(60).optional(),
+  entityType: z.string().max(80).optional(),
+  sort: z.enum(['createdAt', 'status']).default('createdAt'),
+});
+
+export const adminAuditListSchema = z.object({
+  ...adminListBase,
+  action: z.string().max(200).optional(),
+  entityType: z.string().max(120).optional(),
+  actorId: z.string().max(40).optional(),
+  sort: z.enum(['createdAt']).default('createdAt'),
+});
+
+export const adminCatalogListSchema = z.object({
+  ...adminListBase,
+  kind: z.enum(['skill', 'jobTitle', 'language', 'benefit']).default('skill'),
+  status: z.enum(['PENDING', 'COMPLETE', 'IGNORED']).default('PENDING'),
+  sort: z.enum(['createdAt', 'name']).default('createdAt'),
+});
+
+/**
+ * Upper bound for one bulk call. Requests above this are rejected rather than
+ * silently truncated, so an admin is never told an action covered more rows
+ * than it did.
+ */
+export const MAX_BULK_IDS = 200;
+
+const bulkIds = z.array(z.string().min(1).max(40)).min(1).max(MAX_BULK_IDS);
+
+export const adminBulkBanSchema = z.object({ ids: bulkIds, banned: z.boolean() });
+
+export const adminBulkPlanSchema = z.object({
+  ids: bulkIds,
+  plan: z.enum(['FREE', 'STANDARD', 'PREMIUM', 'VIP']),
+});
+
+export const adminBulkJobStatusSchema = z.object({
+  ids: bulkIds,
+  status: z.enum(['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED', 'EXPIRED']),
+});
+
+export const adminBulkHotSchema = z.object({
+  ids: bulkIds,
+  days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
+});
+
+export const adminBulkResolveSchema = z.object({
+  ids: bulkIds,
+  status: z.enum(['RESOLVED', 'DISMISSED']),
+  resolution: z.string().max(500).optional(),
+});
+
+export const adminBulkCatalogStatusSchema = z.object({
+  ids: bulkIds,
+  status: z.enum(['PENDING', 'COMPLETE', 'IGNORED']),
+});
+
+export const adminBulkIdsSchema = z.object({ ids: bulkIds });

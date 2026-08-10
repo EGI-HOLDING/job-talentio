@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CatalogI18nStatus, JobStatus, PlanCode } from '@prisma/client';
+import type { z } from 'zod';
+import type { adminCatalogListSchema } from '@job-talentio/shared';
+import { MAX_BULK_IDS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { dateRange, envelope, skipFor } from './admin-query';
 import { BillingService } from '../billing/billing.service';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { TranslationService } from '../translation/translation.service';
@@ -18,7 +22,7 @@ import { normalizeJobTitleKey } from '../common/title-resolve';
 import { benefitKey } from '../common/benefit-resolve';
 import { languageKey } from '../common/language-resolve';
 
-const CATALOG_PAGE_SIZE = 50;
+type CatalogListQuery = z.infer<typeof adminCatalogListSchema>;
 
 /** Audit rows store the Prisma model name so they read like the other entries. */
 function catalogEntityType(kind: CatalogKind): string {
@@ -62,22 +66,6 @@ export class AdminService {
     };
   }
 
-  listUsers(page = 1, limit = 50) {
-    return this.prisma.user.findMany({
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isBanned: true,
-        createdAt: true,
-      },
-    });
-  }
-
   async banUser(actorId: string, userId: string, banned: boolean) {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -102,18 +90,6 @@ export class AdminService {
     return user;
   }
 
-  listCompanies(page = 1, limit = 50) {
-    return this.prisma.company.findMany({
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        subscription: true,
-        _count: { select: { jobPosts: true, members: true } },
-      },
-    });
-  }
-
   async banCompany(actorId: string, companyId: string, banned: boolean) {
     const company = await this.prisma.company.update({
       where: { id: companyId },
@@ -135,15 +111,6 @@ export class AdminService {
       },
     });
     return company;
-  }
-
-  listJobs(page = 1, limit = 50) {
-    return this.prisma.jobPost.findMany({
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { updatedAt: 'desc' },
-      include: { company: { select: { id: true, name: true } } },
-    });
   }
 
   async forceJobStatus(actorId: string, jobId: string, status: JobStatus) {
@@ -214,52 +181,21 @@ export class AdminService {
     });
   }
 
-  auditLogs(page = 1, limit = 50) {
-    return this.prisma.auditLog.findMany({
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-      include: { actor: { select: { id: true, email: true, fullName: true } } },
-    });
-  }
-
-  listReports(page = 1, limit = 50) {
-    return this.prisma.report.findMany({
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        reporter: { select: { id: true, email: true, fullName: true } },
-      },
-    });
-  }
-
   /**
    * Review queue for catalogs users can extend. Rows are returned with their raw
    * locale columns because an admin edits them directly; the response is exempt
    * from the locale rewrite for the same reason.
    */
-  async listCatalogI18n(options: {
-    kind: CatalogKind;
-    status?: CatalogI18nStatus;
-    q?: string;
-    page?: number;
-  }) {
-    const { kind, status = 'PENDING', q } = options;
-    const page = Math.max(1, options.page ?? 1);
-    const delegate = catalogDelegate(this.prisma, kind);
-
-    const where: Record<string, unknown> = { i18nStatus: status };
-    if (q?.trim()) {
-      where.name = { contains: q.trim(), mode: 'insensitive' };
-    }
+  async listCatalogI18n(query: CatalogListQuery) {
+    const delegate = catalogDelegate(this.prisma, query.kind);
+    const where = this.catalogWhere(query);
 
     const [items, total] = await Promise.all([
       delegate.findMany({
         where,
-        skip: (page - 1) * CATALOG_PAGE_SIZE,
-        take: CATALOG_PAGE_SIZE,
-        orderBy: { createdAt: 'desc' },
+        skip: skipFor(query.page, query.limit),
+        take: query.limit,
+        orderBy: { [query.sort]: query.dir },
         select: {
           id: true,
           name: true,
@@ -274,7 +210,39 @@ export class AdminService {
       delegate.count({ where }),
     ]);
 
-    return { kind, status, page, total, items };
+    return { kind: query.kind, status: query.status, ...envelope(items, total, query.page, query.limit) };
+  }
+
+  /** Ids for "select all matching", capped like every other bulk source. */
+  async catalogI18nIds(query: CatalogListQuery) {
+    const delegate = catalogDelegate(this.prisma, query.kind);
+    const where = this.catalogWhere(query);
+    const [rows, total] = await Promise.all([
+      delegate.findMany({
+        where,
+        take: MAX_BULK_IDS,
+        orderBy: { [query.sort]: query.dir },
+        select: { id: true },
+      }),
+      delegate.count({ where }),
+    ]);
+    const ids = rows.map((row) => row.id);
+    return { ids, total, capped: total > ids.length };
+  }
+
+  private catalogWhere(query: CatalogListQuery): Record<string, unknown> {
+    const where: Record<string, unknown> = { i18nStatus: query.status };
+    const term = query.q?.trim();
+    if (term) {
+      where.OR = [
+        { name: { contains: term, mode: 'insensitive' } },
+        { nameUz: { contains: term, mode: 'insensitive' } },
+        { nameRu: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+    const created = dateRange(query.createdFrom, query.createdTo);
+    if (created) where.createdAt = created;
+    return where;
   }
 
   /** Counts per status, so the admin nav can show how much work is waiting. */
