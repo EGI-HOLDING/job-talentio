@@ -67,33 +67,59 @@ export class JobsSearchService implements OnModuleInit {
   async onModuleInit() {
     if (!this.host) return;
     try {
-      // Both calls are async tasks in Meili; re-running them is idempotent.
-      await this.request('POST', '/indexes', { uid: INDEX, primaryKey: 'id' }).catch(
-        () => undefined,
-      );
-      await this.request('PATCH', `/indexes/${INDEX}/settings`, {
-        searchableAttributes: [
-          'title',
-          'companyName',
-          'skills',
-          'categoryName',
-          'cityName',
-          'description',
-        ],
-        displayedAttributes: ['id'],
-      });
-      const stats = await this.request<{ numberOfDocuments: number }>(
-        'GET',
-        `/indexes/${INDEX}/stats`,
-      );
-      if (stats.numberOfDocuments === 0) {
-        await this.backfill();
-      }
+      await this.initIndex();
       this.logger.log('Meilisearch jobs index ready');
     } catch (err) {
       // Keep the API booting; searches will retry Meili and fall back to Prisma.
       this.logger.warn(`Meilisearch init incomplete: ${(err as Error).message}`);
     }
+  }
+
+  /** Ensure index + settings exist, then backfill when the index is empty. */
+  private async initIndex(): Promise<void> {
+    // Both calls are async tasks in Meili; re-running them is idempotent.
+    await this.request('POST', '/indexes', { uid: INDEX, primaryKey: 'id' }).catch(
+      () => undefined,
+    );
+    await this.request('PATCH', `/indexes/${INDEX}/settings`, {
+      searchableAttributes: [
+        'title',
+        'companyName',
+        'skills',
+        'categoryName',
+        'cityName',
+        'description',
+      ],
+      displayedAttributes: ['id'],
+    });
+    const stats = await this.request<{ numberOfDocuments: number }>(
+      'GET',
+      `/indexes/${INDEX}/stats`,
+    );
+    if (stats.numberOfDocuments === 0) {
+      await this.backfill();
+    }
+  }
+
+  private backfillInFlight = false;
+  private lastBackfillKick = 0;
+
+  /**
+   * Meilisearch may restart empty (staging runs it stateless: Railway volumes
+   * put this image in a silent crash loop). Rebuild the index in the
+   * background so search self-heals without an API redeploy.
+   */
+  private kickBackfill(): void {
+    const now = Date.now();
+    if (this.backfillInFlight || now - this.lastBackfillKick < 30_000) return;
+    this.backfillInFlight = true;
+    this.lastBackfillKick = now;
+    this.logger.warn('Meilisearch index empty or missing; reindexing in background');
+    void this.initIndex()
+      .catch((err) => this.logger.warn(`Meilisearch reindex failed: ${(err as Error).message}`))
+      .finally(() => {
+        this.backfillInFlight = false;
+      });
   }
 
   /** Ranked job ids for a text query, or null when Meili is unavailable. */
@@ -113,11 +139,26 @@ export class JobsSearchService implements OnModuleInit {
           matchingStrategy: 'all',
         },
       );
+      if (res.hits.length === 0) {
+        // 0 hits from a wiped index is indistinguishable from a genuine miss;
+        // check stats and reindex + fall back to Prisma when the index is empty.
+        const stats = await this.request<{ numberOfDocuments: number }>(
+          'GET',
+          `/indexes/${INDEX}/stats`,
+        ).catch(() => null);
+        if (!stats || stats.numberOfDocuments === 0) {
+          this.kickBackfill();
+          return null;
+        }
+      }
       return res.hits.map((h) => h.id);
     } catch (err) {
-      this.logger.warn(
-        `Meilisearch query failed, using Prisma fallback: ${(err as Error).message}`,
-      );
+      const message = (err as Error).message;
+      if (/responded 404/.test(message)) {
+        // Index itself is gone (fresh Meilisearch instance).
+        this.kickBackfill();
+      }
+      this.logger.warn(`Meilisearch query failed, using Prisma fallback: ${message}`);
       return null;
     }
   }
