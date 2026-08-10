@@ -10,6 +10,7 @@ import { jobLocationLabel } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
+import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { useI18n } from '@/lib/i18n';
 import { formatSalaryRange } from '@/lib/numberFormat';
 
@@ -67,6 +68,20 @@ type MyApplicationState = {
   id: string;
   status: string;
   matchScore?: number | null;
+  matchBreakdown?: {
+    skills?: number;
+    experience?: number;
+    location?: number;
+    education?: number;
+    language?: number;
+    total?: number;
+    details?: {
+      matchedSkills?: string[];
+      missingRequiredSkills?: string[];
+      matchedLanguages?: string[];
+      missingRequiredLanguages?: string[];
+    } | null;
+  } | null;
   createdAt: string;
 };
 
@@ -80,6 +95,7 @@ export default function JobDetailPage() {
   const [showCreateResume, setShowCreateResume] = useState(false);
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
+  const [showMatchDetails, setShowMatchDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
@@ -176,8 +192,10 @@ export default function JobDetailPage() {
         id: created.id,
         status: created.status || 'NEW',
         matchScore: created.matchScore,
+        matchBreakdown: created.matchBreakdown,
         createdAt: created.createdAt || new Date().toISOString(),
       });
+      setShowMatchDetails(Boolean(created.matchBreakdown));
       setSuccess('Application submitted! Match score was calculated for the recruiter.');
       setShowApply(false);
     } catch (err) {
@@ -261,12 +279,29 @@ export default function JobDetailPage() {
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           {alreadyApplied ? (
             <>
-              <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="badge match"
+                style={{
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  border: 0,
+                  cursor: myApplication?.matchBreakdown ? 'pointer' : 'default',
+                  width: '100%',
+                }}
+                onClick={() => {
+                  if (myApplication?.matchBreakdown) setShowMatchDetails((v) => !v);
+                }}
+              >
                 Applied | {myApplication?.status}
                 {myApplication?.matchScore != null ? ` | Match ${myApplication.matchScore}%` : ''}
-              </div>
+                {myApplication?.matchBreakdown ? ' | details' : ''}
+              </button>
+              {showMatchDetails && myApplication?.matchBreakdown && (
+                <MatchBreakdownPanel breakdown={myApplication.matchBreakdown} />
+              )}
               <Link
-                href="/dashboard/employee"
+                href="/dashboard/employee?tab=applications"
                 className="secondary"
                 style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
               >

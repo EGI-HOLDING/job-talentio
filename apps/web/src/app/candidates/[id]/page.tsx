@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, getSession, AuthSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
+import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { useI18n } from '@/lib/i18n';
 import { formatThousands } from '@/lib/numberFormat';
 
@@ -282,39 +283,7 @@ function CandidateInner() {
       {data.match && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <h3 style={{ marginTop: 0 }}>{t('match')} breakdown</h3>
-          <div className="match-breakdown" style={{ marginTop: '0.75rem' }}>
-            {(
-              [
-                ['Skills', data.match.skills],
-                ['Experience', data.match.experience],
-                ['Location', data.match.location],
-                ['Education', data.match.education],
-                ['Language', data.match.language],
-              ] as const
-            ).map(([label, value]) => (
-              <div key={label} className="match-breakdown-row">
-                <span className="muted">{label}</span>
-                <div className="match-breakdown-track">
-                  <i style={{ width: `${Math.round(Number(value) || 0)}%` }} />
-                </div>
-                <span>{Math.round(Number(value) || 0)}</span>
-              </div>
-            ))}
-          </div>
-          {!!data.match.details?.matchedSkills?.length && (
-            <div className="chips" style={{ marginTop: '0.85rem' }}>
-              {data.match.details.matchedSkills.map((s) => (
-                <span key={s} className="badge skill">
-                  {s}
-                </span>
-              ))}
-            </div>
-          )}
-          {!!data.match.details?.missingRequiredSkills?.length && (
-            <p className="muted" style={{ marginTop: '0.65rem', fontSize: '0.85rem' }}>
-              Missing required: {data.match.details.missingRequiredSkills.join(', ')}
-            </p>
-          )}
+          <MatchBreakdownPanel breakdown={data.match} style={{ marginTop: '0.75rem' }} />
         </div>
       )}
 
