@@ -485,6 +485,16 @@ const DICT = {
     ru: 'Диалогов пока нет',
     en: 'No conversations yet',
   },
+  revealContacts: {
+    uz: 'Kontaktlarni ko\'rsatish',
+    ru: 'Показать контакты',
+    en: 'Reveal contacts',
+  },
+  noContactsOnProfile: {
+    uz: 'Profilda kontaktlar yo\'q',
+    ru: 'В профиле нет контактов',
+    en: 'No contacts on profile',
+  },
   chatWithCandidate: { uz: 'Nomzod bilan chat', ru: 'Чат с кандидатом', en: 'Chat with candidate' },
   chatWithRecruiter: { uz: 'Rekruter bilan chat', ru: 'Чат с рекрутером', en: 'Chat with recruiter' },
   match: { uz: 'Moslik', ru: 'Совпадение', en: 'Match' },

@@ -302,6 +302,13 @@ export class ProfilesController {
     });
   }
 
+  /** Click-to-reveal contacts: audited + hourly quota; never in profile payloads. */
+  @Post('candidates/:id/reveal-contact')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  revealContact(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.profiles.revealCandidateContact(user, id);
+  }
+
   @Get('candidates')
   @UseGuards(SearchRateLimitGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')

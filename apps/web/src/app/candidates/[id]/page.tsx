@@ -14,7 +14,6 @@ type CandidateDetail = {
   id: string;
   headline?: string | null;
   summary?: string | null;
-  phone?: string | null;
   desiredSalaryMin?: number | null;
   desiredSalaryMax?: number | null;
   desiredSalaryCurrency?: string | null;
@@ -22,7 +21,7 @@ type CandidateDetail = {
   contactsBlurred: boolean;
   experienceYears: number;
   city?: { name: string } | null;
-  user: { id: string; fullName: string; email?: string; avatarUrl?: string | null };
+  user: { id: string; fullName: string; avatarUrl?: string | null };
   skills: Array<{ id: string; level?: string | null; skill: { name: string } }>;
   experiences: Array<{
     id: string;
@@ -79,7 +78,28 @@ function CandidateInner() {
   const [error, setError] = useState<string | null>(null);
   const [canColdChat, setCanColdChat] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<{ email?: string | null; phone?: string | null } | null>(
+    null,
+  );
+  const [revealBusy, setRevealBusy] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
   const matchJobId = search.get('matchJobId');
+
+  async function revealContacts() {
+    setRevealBusy(true);
+    setRevealError(null);
+    try {
+      const res = await api<{ email?: string | null; phone?: string | null }>(
+        `/profiles/candidates/${id}/reveal-contact`,
+        { method: 'POST' },
+      );
+      setContacts(res);
+    } catch (e) {
+      setRevealError(e instanceof Error ? e.message : 'Failed to reveal contacts');
+    } finally {
+      setRevealBusy(false);
+    }
+  }
 
   useEffect(() => {
     const s = getSession();
@@ -182,10 +202,33 @@ function CandidateInner() {
                 <Link href="/dashboard/recruiter?tab=billing">upgrade to Standard/Premium</Link>, or
                 unlock after the candidate applies.
               </p>
-            ) : (
+            ) : contacts ? (
               <p style={{ marginTop: '0.4rem', fontSize: '0.9rem' }}>
-                {data.user.email && <span>{data.user.email}</span>}
-                {data.phone && <span style={{ marginLeft: '1rem' }}>{data.phone}</span>}
+                {contacts.email && <a href={`mailto:${contacts.email}`}>{contacts.email}</a>}
+                {contacts.phone && (
+                  <a href={`tel:${contacts.phone}`} style={{ marginLeft: contacts.email ? '1rem' : 0 }}>
+                    {contacts.phone}
+                  </a>
+                )}
+                {!contacts.email && !contacts.phone && (
+                  <span className="muted">{t('noContactsOnProfile')}</span>
+                )}
+              </p>
+            ) : (
+              <p style={{ marginTop: '0.4rem' }}>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => void revealContacts()}
+                  disabled={revealBusy}
+                >
+                  {revealBusy ? '...' : t('revealContacts')}
+                </button>
+                {revealError && (
+                  <span style={{ color: '#be123c', marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                    {revealError}
+                  </span>
+                )}
               </p>
             )}
           </div>
