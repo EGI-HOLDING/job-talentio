@@ -5,12 +5,18 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { UgcText } from '@/components/ui/UgcText';
+import { useI18n } from '@/lib/i18n';
 
 type Company = {
   id: string;
   name: string;
   slug: string;
   description?: string | null;
+  /** Language the description is served in (may differ from the UI). */
+  contentLocale?: string | null;
+  isMachineTranslated?: boolean;
+  canMachineTranslate?: boolean;
   website?: string | null;
   logoUrl?: string | null;
   isVerified?: boolean;
@@ -21,6 +27,7 @@ type Company = {
   jobPosts: Array<{
     id: string;
     title: string;
+    contentLocale?: string | null;
     city?: { name: string } | null;
     category?: { name: string } | null;
     salaryMin?: number | null;
@@ -31,8 +38,10 @@ type Company = {
 
 export default function CompanyPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { t, locale } = useI18n();
   const [company, setCompany] = useState<Company | null>(null);
   const [following, setFollowing] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [error, setError] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
 
@@ -64,6 +73,25 @@ export default function CompanyPage() {
     );
     setFollowing(r.following);
     setCompany({ ...company, _count: { ...company._count!, followers: r.followers } });
+  }
+
+  async function machineTranslate() {
+    setTranslating(true);
+    setError('');
+    try {
+      const res = await api<{ status: string; company: Company }>(
+        `/companies/slug/${slug}/translate/${locale}`,
+        { method: 'POST' },
+      );
+      if (res.company) setCompany(res.company);
+      if (res.status === 'disabled' || res.status === 'budget-exceeded') {
+        setError(t('ui.translateFailed'));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('ui.translateFailed'));
+    } finally {
+      setTranslating(false);
+    }
   }
 
   if (error) return <div className="shell"><div className="error">{error}</div></div>;
@@ -102,7 +130,19 @@ export default function CompanyPage() {
               {company.website}
             </a>
           )}
-          <p style={{ marginTop: '0.75rem', color: 'var(--muted)' }}>{company.description}</p>
+          {company.description && (
+            <UgcText
+              text={company.description}
+              contentLocale={company.contentLocale}
+              isMachineTranslated={company.isMachineTranslated}
+              preserveLineBreaks
+              className="company-about"
+              translating={translating}
+              onTranslate={
+                session && company.canMachineTranslate ? () => void machineTranslate() : undefined
+              }
+            />
+          )}
         </div>
         <button type="button" className={following ? 'secondary' : 'cta'} onClick={toggleFollow}>
           {following ? 'Following' : 'Follow'}

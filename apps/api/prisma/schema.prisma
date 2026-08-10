@@ -187,22 +187,36 @@ enum ProvinceType {
   REPUBLIC
 }
 
+/// Translation state of a catalog label that users can create at runtime.
+/// IGNORED marks tech or brand identities (React, C++) that read the same in
+/// every language, so they never clutter the admin queue.
+enum CatalogI18nStatus {
+  PENDING
+  COMPLETE
+  IGNORED
+}
+
 // ─── Lookup tables ───────────────────────────────────────────
 
 model Skill {
-  id            String   @id @default(cuid())
-  name          String
-  nameUz        String?
-  nameRu        String?
-  slug          String   @unique
-  normalizedKey String?  @unique
-  category      String?
-  createdAt     DateTime @default(now())
+  id              String            @id @default(cuid())
+  name            String
+  nameUz          String?
+  nameRu          String?
+  nameUzIsMachine Boolean           @default(false)
+  nameRuIsMachine Boolean           @default(false)
+  i18nStatus      CatalogI18nStatus @default(PENDING)
+  slug            String            @unique
+  normalizedKey   String?           @unique
+  category        String?
+  createdAt       DateTime          @default(now())
 
   aliases        SkillAlias[]
   profileSkills  ProfileSkill[]
   jobPostSkills  JobPostSkill[]
   jobAlertSkills JobAlertSkill[]
+
+  @@index([i18nStatus, createdAt])
 }
 
 model SkillAlias {
@@ -309,16 +323,22 @@ model Industry {
 }
 
 model Language {
-  id            String  @id @default(cuid())
-  name          String
-  nameUz        String?
-  nameRu        String?
-  code          String  @unique
-  normalizedKey String? @unique
+  id              String            @id @default(cuid())
+  name            String
+  nameUz          String?
+  nameRu          String?
+  nameUzIsMachine Boolean           @default(false)
+  nameRuIsMachine Boolean           @default(false)
+  i18nStatus      CatalogI18nStatus @default(PENDING)
+  code            String            @unique
+  normalizedKey   String?           @unique
+  createdAt       DateTime          @default(now())
 
   aliases          LanguageAlias[]
   profileLanguages ProfileLanguage[]
   jobLanguages     JobPostLanguage[]
+
+  @@index([i18nStatus, createdAt])
 }
 
 model LanguageAlias {
@@ -334,16 +354,22 @@ model LanguageAlias {
 }
 
 model Benefit {
-  id            String  @id @default(cuid())
-  name          String
-  nameUz        String?
-  nameRu        String?
-  slug          String  @unique
-  normalizedKey String? @unique
-  icon          String?
+  id              String            @id @default(cuid())
+  name            String
+  nameUz          String?
+  nameRu          String?
+  nameUzIsMachine Boolean           @default(false)
+  nameRuIsMachine Boolean           @default(false)
+  i18nStatus      CatalogI18nStatus @default(PENDING)
+  slug            String            @unique
+  normalizedKey   String?           @unique
+  icon            String?
+  createdAt       DateTime          @default(now())
 
   aliases         BenefitAlias[]
   jobPostBenefits JobPostBenefit[]
+
+  @@index([i18nStatus, createdAt])
 }
 
 model BenefitAlias {
@@ -360,18 +386,23 @@ model BenefitAlias {
 
 /// Canonical role title (no seniority — use JobPost.experienceLevel).
 model JobTitle {
-  id            String   @id @default(cuid())
-  name          String
-  nameUz        String?
-  nameRu        String?
-  slug          String   @unique
-  normalizedKey String   @unique
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String            @id @default(cuid())
+  name            String
+  nameUz          String?
+  nameRu          String?
+  nameUzIsMachine Boolean           @default(false)
+  nameRuIsMachine Boolean           @default(false)
+  i18nStatus      CatalogI18nStatus @default(PENDING)
+  slug            String            @unique
+  normalizedKey   String            @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   aliases  JobTitleAlias[]
   jobPosts JobPost[]
   resumes  Resume[]
+
+  @@index([i18nStatus, createdAt])
 }
 
 model JobTitleAlias {
@@ -485,6 +516,8 @@ model Company {
   name        String
   slug        String       @unique
   description String?
+  /// Language `description` is written in; translations live in CompanyTranslation.
+  locale      String       @default("uz")
   website     String?
   cityId      String?
   industryId  String?
@@ -674,6 +707,9 @@ model EmployeeProfile {
   userId            String            @unique
   headline          String?
   summary           String?
+  /// Detected language of the narrative fields, used to badge them for readers
+  /// browsing in another language. Null when the text gives no clear signal.
+  contentLocale     String?
   cityId            String?
   phone             String?           @unique
   visibility        ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
@@ -978,10 +1014,29 @@ model JobQuestion {
   isRequired Boolean      @default(true)
   sortOrder  Int          @default(0)
 
-  jobPost JobPost             @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  answers ApplicationAnswer[]
+  jobPost      JobPost                 @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  answers      ApplicationAnswer[]
+  translations JobQuestionTranslation[]
 
   @@index([jobPostId])
+}
+
+/// Screening question in another language. The original wording stays on
+/// JobQuestion and follows the posting's locale (JobPost.locale).
+model JobQuestionTranslation {
+  id         String   @id @default(cuid())
+  questionId String
+  locale     String
+  question   String
+  isMachine  Boolean  @default(false)
+  sourceHash String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  jobQuestion JobQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, locale])
+  @@index([questionId])
 }
 
 model ApplicationAnswer {

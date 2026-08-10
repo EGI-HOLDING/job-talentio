@@ -31,6 +31,7 @@ import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
 import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
+import { detectLocale } from '../common/i18n/detect-locale';
 import { ParsedCvData } from './cv-parser';
 import { CvParseService } from './cv-parse.service';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
@@ -146,12 +147,21 @@ export class ProfilesService {
       }
     }
 
+    const headline = data.headline as string | undefined;
+    const summary = data.summary as string | undefined;
+
     try {
       return await this.prisma.employeeProfile.update({
         where: { userId: user.id },
         data: {
-          headline: data.headline as string | undefined,
-          summary: data.summary as string | undefined,
+          headline,
+          summary,
+          // Narrative text is never translated; recording its language lets
+          // recruiters browsing in another one see why it reads differently.
+          contentLocale: this.narrativeLocale(
+            headline ?? profile.headline,
+            summary ?? profile.summary,
+          ),
           cityId,
           phone,
           visibility: data.visibility as never,
@@ -166,6 +176,13 @@ export class ProfilesService {
       }
       throw e;
     }
+  }
+
+  /** Null when the text is too short or mixed to call, so no badge is shown. */
+  private narrativeLocale(headline?: string | null, summary?: string | null): string | null {
+    const text = [headline, summary].filter(Boolean).join('\n');
+    if (!text.trim()) return null;
+    return detectLocale(text);
   }
 
   async addSkill(user: AuthUser, opts: { slug?: string; name?: string; level?: string }) {
@@ -1134,6 +1151,12 @@ export class ProfilesService {
       if (!taken) profilePatch.phone = phone;
     }
     if (Object.keys(profilePatch).length) {
+      if (profilePatch.headline || profilePatch.summary) {
+        profilePatch.contentLocale = this.narrativeLocale(
+          (profilePatch.headline as string) ?? profile.headline,
+          (profilePatch.summary as string) ?? profile.summary,
+        );
+      }
       await this.prisma.employeeProfile.update({
         where: { id: profile.id },
         data: profilePatch,

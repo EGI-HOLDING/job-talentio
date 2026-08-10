@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { ExperienceLevel, JobTitle, PrismaClient } from '@prisma/client';
+import { initialCatalogStatus } from './i18n/catalog-tech-identity';
 import { assertCatalogLabel } from './lookup-normalize';
 import { slugify } from './utils';
 
@@ -300,6 +301,7 @@ export async function resolveJobTitle(
         name: displayName,
         slug: finalSlug,
         normalizedKey: key,
+        i18nStatus: initialCatalogStatus(displayName),
       },
     });
     const altKey = normalizeJobTitleKey(raw);

@@ -27,6 +27,17 @@ type Db = Pick<
 
 export type CatalogI18nResult = Record<string, { updated: number; missing: number }>;
 
+/** Hand-written translations count as reviewed and are never machine output. */
+function curated(value: LocalizedName) {
+  return {
+    nameUz: value.uz,
+    nameRu: value.ru,
+    nameUzIsMachine: false,
+    nameRuIsMachine: false,
+    i18nStatus: 'COMPLETE',
+  } as const;
+}
+
 /** Rows are matched on their stable key, so the backfill is safe to re-run. */
 async function applyByKey(
   label: string,
@@ -100,31 +111,33 @@ export async function backfillCatalogI18n(db: Db): Promise<CatalogI18nResult> {
     result,
   );
 
+  // The four catalogs below accept user input, so curated rows are also marked
+  // done to keep them out of the admin review queue.
   await applyByKey(
     'benefit',
     BENEFIT_NAMES,
-    (slug, v) => db.benefit.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    (slug, v) => db.benefit.update({ where: { slug }, data: { ...curated(v) } }),
     result,
   );
 
   await applyByKey(
     'language',
     LANGUAGE_NAMES,
-    (code, v) => db.language.update({ where: { code }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    (code, v) => db.language.update({ where: { code }, data: { ...curated(v) } }),
     result,
   );
 
   await applyByKey(
     'jobTitle',
     JOB_TITLE_NAMES,
-    (slug, v) => db.jobTitle.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    (slug, v) => db.jobTitle.update({ where: { slug }, data: { ...curated(v) } }),
     result,
   );
 
   await applyByKey(
     'skill',
     SKILL_NAMES,
-    (slug, v) => db.skill.update({ where: { slug }, data: { nameUz: v.uz, nameRu: v.ru } }),
+    (slug, v) => db.skill.update({ where: { slug }, data: { ...curated(v) } }),
     result,
   );
 

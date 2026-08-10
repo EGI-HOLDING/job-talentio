@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Benefit, PrismaClient } from '@prisma/client';
 import { resolveBenefitIcon } from '@job-talentio/shared';
+import { initialCatalogStatus } from './i18n/catalog-tech-identity';
 import {
   assertCatalogLabel,
   catalogSlugify,
@@ -29,7 +30,7 @@ const BENEFIT_SYNONYMS: Record<string, string> = {
   performancebonus: 'bonus',
 };
 
-function benefitKey(input: string): string {
+export function benefitKey(input: string): string {
   const key = normalizeLookupKey(input);
   return BENEFIT_SYNONYMS[key] ?? key;
 }
@@ -103,6 +104,7 @@ export async function resolveBenefit(
         slug: finalSlug,
         normalizedKey: key,
         icon: resolveBenefitIcon(finalSlug, opts.icon) || null,
+        i18nStatus: initialCatalogStatus(displayName),
       },
     });
     return { benefit, created: true, matchedVia: 'created' };

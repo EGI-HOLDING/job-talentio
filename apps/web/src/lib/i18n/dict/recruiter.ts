@@ -138,6 +138,28 @@ export const recruiter = {
     ru: 'Заполните заголовок и описание для версии ({lang})',
     en: 'Add a title and a description for the {lang} version',
   },
+  'rec.langVersionQuestion': {
+    uz: 'Savol: {question}',
+    ru: 'Вопрос: {question}',
+    en: 'Question: {question}',
+  },
+
+  // Company profile blurb in extra languages (the legal name is never translated)
+  'rec.companyLangVersionsTitle': {
+    uz: 'Kompaniya tavsifi tillari',
+    ru: 'Языки описания компании',
+    en: 'Company description languages',
+  },
+  'rec.companyLangVersionsHint': {
+    uz: 'Ixtiyoriy. Kompaniya nomi tarjima qilinmaydi - faqat tavsif.',
+    ru: 'Необязательно. Название компании не переводится - только описание.',
+    en: 'Optional. The company name is never translated - only the description.',
+  },
+  'rec.companyLangVersionFill': {
+    uz: '{lang} versiyasi uchun tavsifni to‘ldiring',
+    ru: 'Заполните описание для версии ({lang})',
+    en: 'Add a description for the {lang} version',
+  },
   'rec.localeNameUz': { uz: 'O‘zbekcha', ru: 'Узбекский', en: 'Uzbek' },
   'rec.localeNameRu': { uz: 'Ruscha', ru: 'Русский', en: 'Russian' },
   'rec.localeNameEn': { uz: 'Inglizcha', ru: 'Английский', en: 'English' },

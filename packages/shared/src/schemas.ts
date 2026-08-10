@@ -74,12 +74,18 @@ export const logoutSchema = z.object({
 export const companySchema = z.object({
   name: z.string().min(2).max(160),
   description: z.string().max(5000).optional(),
+  /** Language the description is written in; detected from the text when omitted. */
+  locale: z.enum(['uz', 'ru', 'en']).optional(),
   website: z.string().url().optional().or(z.literal('')),
   citySlug: z.string().max(120).optional(),
   industrySlug: z.string().max(120).optional(),
   size: z
     .enum(['SIZE_1_10', 'SIZE_11_50', 'SIZE_51_200', 'SIZE_201_1000', 'SIZE_1000_PLUS'])
     .optional(),
+});
+
+export const companyTranslationSchema = z.object({
+  description: z.string().min(20).max(5000),
 });
 
 export const jobPostSchema = z.object({
@@ -260,6 +266,11 @@ export const hotJobSchema = z.object({
 export const jobTranslationSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(20).max(20000),
+  /** Screening questions in the same language, matched by question id. */
+  questions: z
+    .array(z.object({ id: z.string().min(1), question: z.string().min(3).max(500) }))
+    .max(20)
+    .optional(),
 });
 
 /** Public curated news list (career/insight/event/education). */

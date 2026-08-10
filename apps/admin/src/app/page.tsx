@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { api, clearToken, getToken, saveToken } from '@/lib/api';
+import { CatalogI18nPanel } from '@/components/CatalogI18nPanel';
 
 function EyeIcon({ crossed }: { crossed?: boolean }) {
   return (
@@ -182,6 +183,7 @@ export default function AdminPage() {
         <a href="#users">Users</a>
         <a href="#companies">Companies</a>
         <a href="#jobs">Jobs</a>
+        <a href="#catalog-i18n">Catalog translations</a>
         <a href="#flags">Feature flags</a>
         <a href="#reports">Reports</a>
         <a href="#audit">Audit log</a>
@@ -364,6 +366,8 @@ export default function AdminPage() {
             </tbody>
           </table>
         </section>
+
+        <CatalogI18nPanel />
 
         <section id="flags" className="card">
           <h2>Feature flags</h2>

@@ -27,6 +27,7 @@ import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
+import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
@@ -1976,6 +1977,7 @@ function RecruiterDashboard() {
                 <button type="submit">{t('rec.saveCompany')}</button>
               </form>
             </div>
+            <CompanyLanguageVersions companyId={companyId} onFlash={flash} />
             <div className="card" style={{ gridColumn: '1 / -1' }}>
               <h3>{t('rec.team')}</h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem' }}>

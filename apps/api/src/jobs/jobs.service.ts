@@ -46,6 +46,23 @@ type JobLanguageInput = {
 
 const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
+/** Swaps one screening question for its version in the reader's language. */
+function localizeQuestion<
+  T extends {
+    question: string;
+    translations?: Array<{ locale: string; question: string; isMachine: boolean }>;
+  },
+>(question: T, sourceLocale: string, locale: Locale) {
+  const { translations = [], ...rest } = question;
+  const resolved = resolveContent(
+    { question: rest.question },
+    sourceLocale,
+    translations,
+    locale,
+  );
+  return { ...rest, question: resolved.content.question };
+}
+
 /** Best-practice status graph: close/pause from live posts; reopen CLOSED → PUBLISHED (or DRAFT to edit). */
 const ALLOWED_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
   DRAFT: ['PUBLISHED', 'CLOSED'],
@@ -174,7 +191,12 @@ export class JobsService {
     jobSkills: { include: { skill: true } },
     jobLanguages: { include: { language: true } },
     benefits: { include: { benefit: true } },
-    questions: { orderBy: { sortOrder: 'asc' as const } },
+    questions: {
+      orderBy: { sortOrder: 'asc' as const },
+      include: {
+        translations: { select: { locale: true, question: true, isMachine: true } },
+      },
+    },
     _count: { select: { applications: true, views: true } },
   };
 
@@ -681,6 +703,10 @@ export class JobsService {
         description: string;
         isMachine: boolean;
       }>;
+      questions?: Array<{
+        question: string;
+        translations?: Array<{ locale: string; question: string; isMachine: boolean }>;
+      }>;
     },
   >(job: T, locale: Locale) {
     const { translations, ...rest } = job;
@@ -693,6 +719,10 @@ export class JobsService {
     return {
       ...rest,
       ...resolved.content,
+      // Screening questions belong to the posting and follow its source language.
+      ...(rest.questions
+        ? { questions: rest.questions.map((q) => localizeQuestion(q, rest.locale, locale)) }
+        : {}),
       contentLocale: resolved.contentLocale,
       isMachineTranslated: resolved.isMachineTranslated,
       availableLocales: resolved.availableLocales,
@@ -706,7 +736,11 @@ export class JobsService {
     user: AuthUser,
     jobId: string,
     locale: Locale,
-    data: { title: string; description: string },
+    data: {
+      title: string;
+      description: string;
+      questions?: Array<{ id: string; question: string }>;
+    },
   ) {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
@@ -729,8 +763,38 @@ export class JobsService {
       update: value,
       create: { jobPostId: jobId, locale, ...value },
     });
+    if (data.questions?.length) {
+      await this.upsertQuestionTranslations(jobId, locale, data.questions);
+    }
     void this.jobsSearch.syncJob(jobId);
     return saved;
+  }
+
+  /** Question wording written by the recruiter, keyed to the original question. */
+  private async upsertQuestionTranslations(
+    jobId: string,
+    locale: Locale,
+    questions: Array<{ id: string; question: string }>,
+  ) {
+    const owned = await this.prisma.jobQuestion.findMany({
+      where: { jobPostId: jobId, id: { in: questions.map((q) => q.id) } },
+      select: { id: true, question: true },
+    });
+
+    for (const question of owned) {
+      const input = questions.find((q) => q.id === question.id);
+      if (!input) continue;
+      const value = {
+        question: input.question,
+        isMachine: false,
+        sourceHash: translationSourceHash(question.question),
+      };
+      await this.prisma.jobQuestionTranslation.upsert({
+        where: { questionId_locale: { questionId: question.id, locale } },
+        update: value,
+        create: { questionId: question.id, locale, ...value },
+      });
+    }
   }
 
   async deleteTranslation(user: AuthUser, jobId: string, locale: Locale) {
@@ -767,6 +831,14 @@ export class JobsService {
         translations: {
           select: { locale: true, title: true, description: true, isMachine: true },
         },
+        questions: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            question: true,
+            translations: { select: { locale: true, question: true, isMachine: true } },
+          },
+        },
       },
     });
     if (!job) throw new NotFoundException('Job not found');
@@ -776,6 +848,7 @@ export class JobsService {
       sourceLocale: job.locale,
       source: { title: job.title, description: job.description },
       translations: job.translations,
+      questions: job.questions,
     };
   }
 
@@ -1355,17 +1428,19 @@ export class JobsService {
   }
 
   // Screening questions
-  async listQuestions(jobId: string, viewer?: AuthUser) {
+  async listQuestions(jobId: string, viewer?: AuthUser, locale: Locale = DEFAULT_LOCALE) {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
     const member = this.isCompanyMember(viewer, job.companyId);
     if (job.status !== 'PUBLISHED' && !member) {
       throw new NotFoundException('Job not found');
     }
-    return this.prisma.jobQuestion.findMany({
+    const questions = await this.prisma.jobQuestion.findMany({
       where: { jobPostId: jobId },
       orderBy: { sortOrder: 'asc' },
+      include: { translations: { select: { locale: true, question: true, isMachine: true } } },
     });
+    return questions.map((q) => localizeQuestion(q, job.locale, locale));
   }
 
   async addQuestion(
