@@ -18,7 +18,7 @@ import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
-import { isParseInFlight, waitForResumeParse } from '@/lib/cvParse';
+import { waitForResumeParse } from '@/lib/cvParse';
 import {
   EMPLOYEE_TAB_KEY,
   readStoredDashboardTab,
@@ -175,18 +175,6 @@ function EmployeeDashboardInner() {
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, []);
-
-  // Soft-refresh while any resume parse is still running (badge + review link).
-  useEffect(() => {
-    const pending = (profile?.resumes || []).some((r: { parseStatus?: string }) =>
-      isParseInFlight(r.parseStatus),
-    );
-    if (!pending) return;
-    const id = window.setInterval(() => {
-      load().catch(() => undefined);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [profile?.resumes]);
 
   async function requestEmailVerification() {
     setVerifyBusy(true);
@@ -495,6 +483,7 @@ function EmployeeDashboardInner() {
     try {
       const fd = new FormData();
       fd.append('file', cvFile);
+      fd.append('parse', 'true');
       const resume = await api<{ id: string }>(
         '/profiles/me/resumes/upload',
         { method: 'POST', body: fd },
@@ -532,17 +521,8 @@ function EmployeeDashboardInner() {
       const fd = new FormData();
       fd.append('file', file);
       await api(`/profiles/me/resumes/${resumeId}/file`, { method: 'POST', body: fd });
-      setMsg(t('cvParsing'));
+      setMsg(t('resumeFileAttached'));
       await load();
-      setUploading(false);
-      const parse = await waitForResumeParse(resumeId);
-      await load();
-      if (parse.parseStatus === 'READY' && parse.parsedData) {
-        setMsg(t('cvParseReady'));
-        setCvReview({ resumeId, parsed: parse.parsedData as ParsedCv });
-      } else if (parse.parseStatus === 'FAILED') {
-        setError(parse.parseError || t('cvParseFailed'));
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Attach failed');
     } finally {
@@ -633,13 +613,6 @@ function EmployeeDashboardInner() {
               router.push(
                 `/dashboard/employee/resume-builder?resumeId=${encodeURIComponent(result.id)}`,
               );
-              return;
-            }
-            if (result.parsedData) {
-              setCvReview({
-                resumeId: result.id,
-                parsed: result.parsedData as ParsedCv,
-              });
             }
           } finally {
             setAddingResume(false);
@@ -1584,29 +1557,11 @@ function EmployeeDashboardInner() {
                         {(r.hasFile || r.fileKey) && (
                           <span className="badge skill">PDF attached</span>
                         )}
-                        {isParseInFlight(r.parseStatus) && (
-                          <span className="badge match">{t('cvParseBadge')}</span>
-                        )}
                       </div>
                       {r.targetJobTitle?.name && (
                         <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
                           {t('resumeTargetRole')}: {r.targetJobTitle.name}
                         </p>
-                      )}
-                      {r.parseStatus === 'FAILED' && r.parseError && (
-                        <p style={{ color: '#be123c', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
-                          {t('cvParseFailed')}: {r.parseError}
-                        </p>
-                      )}
-                      {r.parsedData && r.parseStatus === 'READY' && (
-                        <button
-                          type="button"
-                          className="ghost"
-                          style={{ display: 'inline-block', marginTop: 6, padding: 0 }}
-                          onClick={() => setCvReview({ resumeId: r.id, parsed: r.parsedData })}
-                        >
-                          {t('reviewParsedData')}
-                        </button>
                       )}
                       <div className="chips" style={{ marginTop: '0.65rem' }}>
                         {(r.hasFile || r.fileKey) ? (
@@ -1662,7 +1617,8 @@ function EmployeeDashboardInner() {
               </ul>
               {!(profile.resumes || []).length && (
                 <p className="muted">
-                  No resumes yet - use <strong>+ {t('addResume')}</strong> above, or import a PDF in Import from CV.
+                  No resumes yet - use <strong>+ {t('addResume')}</strong> above. To fill career
+                  history from a PDF, use Import from CV.
                 </p>
               )}
             </div>

@@ -285,12 +285,19 @@ export class ProfilesController {
   upload(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { title?: string; jobTitle?: string; jobTitleSlug?: string },
+    @Body() body: { title?: string; jobTitle?: string; jobTitleSlug?: string; parse?: string | boolean },
   ) {
+    const parseRaw = body?.parse;
+    const parse =
+      parseRaw === true ||
+      parseRaw === 'true' ||
+      parseRaw === '1' ||
+      parseRaw === 'yes';
     return this.profiles.uploadCv(user, file, {
       title: body?.title,
       jobTitle: body?.jobTitle,
       jobTitleSlug: body?.jobTitleSlug,
+      parse,
     });
   }
 

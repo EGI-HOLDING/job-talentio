@@ -984,7 +984,7 @@ export class ProfilesService {
         fileUrl: null,
         title: resume.title || file.originalname,
         parsedData: Prisma.DbNull,
-        parseStatus: 'PENDING',
+        parseStatus: 'NONE',
         parseError: null,
         parsedAt: null,
       },
@@ -994,11 +994,9 @@ export class ProfilesService {
       await this.deleteStorageKeyIfOrphan(previousKey);
     }
 
-    await this.cvParse.enqueue(updated.id);
-
     return {
       ...this.sanitizeResume(updated),
-      parseStatus: 'PENDING' as const,
+      parseStatus: 'NONE' as const,
       profileId: profile.id,
       needsReview: false,
     };
@@ -1007,7 +1005,7 @@ export class ProfilesService {
   async uploadCv(
     user: AuthUser,
     file: Express.Multer.File,
-    meta?: { title?: string; jobTitle?: string; jobTitleSlug?: string },
+    meta?: { title?: string; jobTitle?: string; jobTitleSlug?: string; parse?: boolean },
   ) {
     if (!file) throw new BadRequestException('File required');
     if (file.size > 5 * 1024 * 1024) {
@@ -1054,6 +1052,7 @@ export class ProfilesService {
       data: { isPrimary: false },
     });
 
+    const shouldParse = Boolean(meta?.parse);
     const resume = await this.prisma.resume.create({
       data: {
         profileId: profile.id,
@@ -1061,17 +1060,19 @@ export class ProfilesService {
         fileKey: uploaded.key,
         fileUrl: null,
         isPrimary: true,
-        parseStatus: 'PENDING',
+        parseStatus: shouldParse ? 'PENDING' : 'NONE',
         targetJobTitleId,
       },
       include: resumeTargetTitleInclude,
     });
 
-    await this.cvParse.enqueue(resume.id);
+    if (shouldParse) {
+      await this.cvParse.enqueue(resume.id);
+    }
 
     return {
       ...this.sanitizeResume(resume),
-      parseStatus: 'PENDING' as const,
+      parseStatus: resume.parseStatus,
       needsReview: false,
     };
   }

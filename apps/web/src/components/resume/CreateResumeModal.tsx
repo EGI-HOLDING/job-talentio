@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
 import { api } from '@/lib/api';
-import { waitForResumeParse } from '@/lib/cvParse';
 import { useI18n } from '@/lib/i18n';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
@@ -11,9 +10,6 @@ import { JobTitleInput } from '@/components/ui/JobTitleInput';
 export type CreateResumeResult = {
   id: string;
   method: 'builder' | 'upload';
-  parsedData?: unknown;
-  needsReview?: boolean;
-  parseStatus?: string;
 };
 
 type CreateResumeModalProps = {
@@ -44,8 +40,7 @@ export function CreateResumeModal({
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [parsing, setParsing] = useState(false);
-  const submitting = busy || busyExternal || parsing;
+  const submitting = busy || busyExternal;
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +49,6 @@ export function CreateResumeModal({
     setMethod('builder');
     setFile(null);
     setError('');
-    setParsing(false);
   }, [open, defaultTitle, defaultJobTitle]);
 
   if (!open) return null;
@@ -117,36 +111,17 @@ export function CreateResumeModal({
         fd.append('file', file!);
         fd.append('title', displayTitle);
         fd.append('jobTitle', role);
-        const created = await api<{ id: string; parseStatus?: string }>(
-          '/profiles/me/resumes/upload',
-          { method: 'POST', body: fd },
-        );
-        setBusy(false);
-        setParsing(true);
-        const parse = await waitForResumeParse(created.id);
-        if (parse.parseStatus === 'FAILED') {
-          setError(parse.parseError || t('cvParseFailed'));
-          await onCreated({
-            id: created.id,
-            method: 'upload',
-            parseStatus: parse.parseStatus,
-            needsReview: false,
-          });
-          return;
-        }
-        await onCreated({
-          id: created.id,
-          method: 'upload',
-          parsedData: parse.parsedData,
-          needsReview: Boolean(parse.needsReview),
-          parseStatus: parse.parseStatus,
+        fd.append('parse', 'false');
+        const created = await api<{ id: string }>('/profiles/me/resumes/upload', {
+          method: 'POST',
+          body: fd,
         });
+        await onCreated({ id: created.id, method: 'upload' });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('resumeCreateFailed'));
     } finally {
       setBusy(false);
-      setParsing(false);
     }
   }
 
@@ -219,29 +194,34 @@ export function CreateResumeModal({
             </fieldset>
 
             {method === 'upload' && (
-              <div
-                className={`cv-upload-drop ${file ? 'has-file' : ''}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  pickFile(e.dataTransfer.files?.[0]);
-                }}
-              >
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
-                  onChange={(e) => pickFile(e.target.files?.[0])}
-                  aria-label={t('resumeMethodUpload')}
-                />
-                <span className="cv-upload-drop-title">
-                  {file ? file.name : t('resumeDropPdf')}
-                </span>
-                <span className="cv-upload-drop-hint muted">{t('resumePdfHint')}</span>
-              </div>
+              <>
+                <div
+                  className={`cv-upload-drop ${file ? 'has-file' : ''}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pickFile(e.dataTransfer.files?.[0]);
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+                    onChange={(e) => pickFile(e.target.files?.[0])}
+                    aria-label={t('resumeMethodUpload')}
+                  />
+                  <span className="cv-upload-drop-title">
+                    {file ? file.name : t('resumeDropPdf')}
+                  </span>
+                  <span className="cv-upload-drop-hint muted">{t('resumePdfHint')}</span>
+                </div>
+                <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>
+                  {t('resumeUploadLibraryHint')}
+                </p>
+              </>
             )}
 
             {method === 'builder' && (
@@ -252,15 +232,9 @@ export function CreateResumeModal({
 
             {error && <div className="error">{error}</div>}
 
-            {parsing && (
-              <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>
-                {t('cvParsing')}
-              </p>
-            )}
-
             <div className="chips" style={{ marginTop: '0.5rem' }}>
               <button type="submit" className="cta" disabled={submitting}>
-                {parsing ? t('cvParsing') : submitting ? t('creating') : t('createResume')}
+                {submitting ? t('creating') : t('createResume')}
               </button>
               <button type="button" className="secondary" disabled={submitting} onClick={onCancel}>
                 {t('cancel')}
