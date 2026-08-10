@@ -30,6 +30,9 @@ import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { JobsSearchService } from '../search/jobs-search.service';
+import { contentHash as translationSourceHash, resolveContent } from '../common/i18n/content-locale';
+import { DEFAULT_LOCALE } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -141,7 +144,14 @@ export class JobsService {
     return { fingerprint: fp, contentHash: hash, titleNormalized: normalizeJobTitle(opts.title) };
   }
 
+  private translationSelect = {
+    select: { locale: true, title: true, description: true, isMachine: true },
+  } as const;
+
   private jobInclude = {
+    translations: {
+      select: { locale: true, title: true, description: true, isMachine: true },
+    },
     company: {
       select: {
         id: true,
@@ -584,12 +594,13 @@ export class JobsService {
     return admin?.userId ?? null;
   }
 
-  async get(id: string, viewer?: AuthUser) {
-    const job = await this.prisma.jobPost.findUnique({
+  async get(id: string, viewer?: AuthUser, locale: Locale = DEFAULT_LOCALE) {
+    const found = await this.prisma.jobPost.findUnique({
       where: { id },
       include: this.jobInclude,
     });
-    if (!job) throw new NotFoundException('Job not found');
+    if (!found) throw new NotFoundException('Job not found');
+    const job = this.withContentLocale(found, locale);
 
     const member = this.isCompanyMember(viewer, job.companyId);
     if (job.status !== 'PUBLISHED' && !member) {
@@ -617,13 +628,17 @@ export class JobsService {
   }
 
   /** Minimal public fields for JobPosting JSON-LD. No JobView side effect. */
-  async getSeo(id: string) {
-    const job = await this.prisma.jobPost.findUnique({
+  async getSeo(id: string, locale: Locale = DEFAULT_LOCALE) {
+    const found = await this.prisma.jobPost.findUnique({
       where: { id },
       select: {
         id: true,
         title: true,
         description: true,
+        locale: true,
+        translations: {
+          select: { locale: true, title: true, description: true, isMachine: true },
+        },
         employmentType: true,
         workMode: true,
         salaryMin: true,
@@ -638,11 +653,110 @@ export class JobsService {
         city: { select: { name: true } },
       },
     });
-    if (!job || job.status !== 'PUBLISHED') {
+    if (!found || found.status !== 'PUBLISHED') {
       throw new NotFoundException('Job not found');
     }
+    const job = this.withContentLocale(found, locale);
     const { status: _status, ...publicJob } = job;
     return publicJob;
+  }
+
+  /**
+   * Swaps title/description for the requested language when a version exists.
+   * The response also reports which language was served so the UI can badge
+   * machine output and emit correct hreflang links.
+   */
+  private withContentLocale<
+    T extends {
+      title: string;
+      description: string;
+      locale: string;
+      translations: Array<{
+        locale: string;
+        title: string;
+        description: string;
+        isMachine: boolean;
+      }>;
+    },
+  >(job: T, locale: Locale) {
+    const { translations, ...rest } = job;
+    const resolved = resolveContent(
+      { title: rest.title, description: rest.description },
+      rest.locale,
+      translations,
+      locale,
+    );
+    return {
+      ...rest,
+      ...resolved.content,
+      contentLocale: resolved.contentLocale,
+      isMachineTranslated: resolved.isMachineTranslated,
+      availableLocales: resolved.availableLocales,
+    };
+  }
+
+  /** Recruiter-authored translation of a posting (create or replace). */
+  async upsertTranslation(
+    user: AuthUser,
+    jobId: string,
+    locale: Locale,
+    data: { title: string; description: string },
+  ) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+    await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+
+    if (locale === job.locale) {
+      throw new BadRequestException(
+        'This is the language the posting was written in; edit the job itself instead',
+      );
+    }
+
+    const value = {
+      title: data.title,
+      description: data.description,
+      isMachine: false,
+      sourceHash: translationSourceHash(job.title, job.description),
+    };
+    const saved = await this.prisma.jobPostTranslation.upsert({
+      where: { jobPostId_locale: { jobPostId: jobId, locale } },
+      update: value,
+      create: { jobPostId: jobId, locale, ...value },
+    });
+    void this.jobsSearch.syncJob(jobId);
+    return saved;
+  }
+
+  async deleteTranslation(user: AuthUser, jobId: string, locale: Locale) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+    await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+
+    await this.prisma.jobPostTranslation
+      .delete({ where: { jobPostId_locale: { jobPostId: jobId, locale } } })
+      .catch(() => undefined);
+    void this.jobsSearch.syncJob(jobId);
+    return { ok: true };
+  }
+
+  /** Every stored language of a posting, for the recruiter editor. */
+  async listTranslations(user: AuthUser, jobId: string) {
+    const job = await this.prisma.jobPost.findUnique({
+      where: { id: jobId },
+      include: {
+        translations: {
+          select: { locale: true, title: true, description: true, isMachine: true },
+        },
+      },
+    });
+    if (!job) throw new NotFoundException('Job not found');
+    await this.companies.assertMember(user, job.companyId);
+
+    return {
+      sourceLocale: job.locale,
+      source: { title: job.title, description: job.description },
+      translations: job.translations,
+    };
   }
 
   /** Live match for logged-in employees (pre-apply job detail breakdown). */
@@ -817,14 +931,24 @@ export class JobsService {
       } else {
         const terms = q.split(/\s+/).filter(Boolean);
         for (const term of terms) {
+          const like = { contains: term, mode: 'insensitive' as const };
           and.push({
             OR: [
-              { title: { contains: term, mode: 'insensitive' } },
-              { description: { contains: term, mode: 'insensitive' } },
-              { company: { name: { contains: term, mode: 'insensitive' } } },
-              { jobSkills: { some: { skill: { name: { contains: term, mode: 'insensitive' } } } } },
-              { city: { name: { contains: term, mode: 'insensitive' } } },
-              { category: { name: { contains: term, mode: 'insensitive' } } },
+              { title: like },
+              { description: like },
+              // Translated versions, so a Russian query still finds an Uzbek posting.
+              { translations: { some: { title: like } } },
+              { translations: { some: { description: like } } },
+              { company: { name: like } },
+              {
+                jobSkills: {
+                  some: {
+                    skill: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] },
+                  },
+                },
+              },
+              { city: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
+              { category: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
             ],
           });
         }

@@ -51,6 +51,97 @@ export const recruiter = {
     en: 'Save changes',
   },
 
+  // Optional extra language versions of one posting
+  'rec.langVersionsTitle': {
+    uz: 'Til versiyalari',
+    ru: 'Языковые версии',
+    en: 'Language versions',
+  },
+  'rec.langVersionsHint': {
+    uz: 'Ixtiyoriy. Bu e’lonni boshqa tillarda ham chop etish mumkin - nomzod o‘z tilidagi versiyani ko‘radi.',
+    ru: 'Необязательно. Эту вакансию можно опубликовать и на других языках - кандидат увидит версию на своём языке.',
+    en: 'Optional. Publish this posting in other languages too - candidates see the version in their own language.',
+  },
+  'rec.langVersionsLoadFailed': {
+    uz: 'Til versiyalarini yuklab bo‘lmadi',
+    ru: 'Не удалось загрузить языковые версии',
+    en: 'Could not load language versions',
+  },
+  'rec.langVersionSource': {
+    uz: 'Asl til: {lang}',
+    ru: 'Язык оригинала: {lang}',
+    en: 'Source language: {lang}',
+  },
+  'rec.langVersionSourceRef': {
+    uz: 'Asl sarlavha',
+    ru: 'Заголовок оригинала',
+    en: 'Source title',
+  },
+  'rec.langVersionSourceNote': {
+    uz: 'Bu tildagi sarlavha va tavsif yuqoridagi asosiy shaklda tahrirlanadi.',
+    ru: 'Заголовок и описание на этом языке редактируются в основной форме выше.',
+    en: 'The title and description in this language are edited in the main form above.',
+  },
+  'rec.langVersionMissing': { uz: 'Qo‘shilmagan', ru: 'Не добавлено', en: 'Not added' },
+  'rec.langVersionHuman': {
+    uz: 'Qo‘lda saqlangan',
+    ru: 'Сохранено вручную',
+    en: 'Saved manually',
+  },
+  'rec.langVersionMachine': {
+    uz: 'Avtomatik tarjima',
+    ru: 'Автоперевод',
+    en: 'Auto-translated',
+  },
+  'rec.langVersionMachineNote': {
+    uz: 'Mashina tarjimasi. Matnni tekshirib, saqlash bilan tasdiqlang.',
+    ru: 'Машинный перевод. Проверьте текст и подтвердите сохранением.',
+    en: 'Machine translation. Review the text and save it to confirm.',
+  },
+  'rec.langVersionSave': {
+    uz: 'Bu versiyani saqlash',
+    ru: 'Сохранить эту версию',
+    en: 'Save this version',
+  },
+  'rec.langVersionDelete': {
+    uz: 'Versiyani o‘chirish',
+    ru: 'Удалить версию',
+    en: 'Delete version',
+  },
+  'rec.langVersionConfirmDelete': {
+    uz: '{lang} versiyasi o‘chirilsinmi?',
+    ru: 'Удалить версию ({lang})?',
+    en: 'Delete the {lang} version?',
+  },
+  'rec.langVersionSaved': {
+    uz: '{lang} versiyasi saqlandi',
+    ru: 'Версия ({lang}) сохранена',
+    en: '{lang} version saved',
+  },
+  'rec.langVersionSaveFailed': {
+    uz: 'Til versiyasini saqlab bo‘lmadi',
+    ru: 'Не удалось сохранить языковую версию',
+    en: 'Could not save the language version',
+  },
+  'rec.langVersionDeleted': {
+    uz: '{lang} versiyasi o‘chirildi',
+    ru: 'Версия ({lang}) удалена',
+    en: '{lang} version removed',
+  },
+  'rec.langVersionDeleteFailed': {
+    uz: 'Til versiyasini o‘chirib bo‘lmadi',
+    ru: 'Не удалось удалить языковую версию',
+    en: 'Could not delete the language version',
+  },
+  'rec.langVersionFillBoth': {
+    uz: '{lang} versiyasi uchun sarlavha va tavsifni to‘ldiring',
+    ru: 'Заполните заголовок и описание для версии ({lang})',
+    en: 'Add a title and a description for the {lang} version',
+  },
+  'rec.localeNameUz': { uz: 'O‘zbekcha', ru: 'Узбекский', en: 'Uzbek' },
+  'rec.localeNameRu': { uz: 'Ruscha', ru: 'Русский', en: 'Russian' },
+  'rec.localeNameEn': { uz: 'Inglizcha', ru: 'Английский', en: 'English' },
+
   // Job list
   'rec.yourJobs': { uz: 'Sizning ish e’lonlaringiz', ru: 'Ваши вакансии', en: 'Your jobs' },
   'rec.appsWord': { uz: 'ariza', ru: 'откликов', en: 'apps' },

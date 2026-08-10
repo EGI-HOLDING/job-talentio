@@ -7,16 +7,23 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   jobPostSchema,
   jobSearchSchema,
   jobQuestionSchema,
+  jobTranslationSchema,
 } from '@job-talentio/shared';
 import { JobStatus } from '@prisma/client';
 import { JobsService } from './jobs.service';
+import { requestLocale } from '../common/i18n/request-locale';
+import { isLocale } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
 import {
   JwtAuthGuard,
   Roles,
@@ -28,6 +35,11 @@ import {
 import { parseDto } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
+
+function assertLocale(value: string): Locale {
+  if (!isLocale(value)) throw new BadRequestException('Unsupported locale');
+  return value;
+}
 
 @Controller('jobs')
 export class JobsController {
@@ -101,14 +113,45 @@ export class JobsController {
 
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
-  get(@Param('id') id: string, @CurrentUser() user?: AuthUser) {
-    return this.jobs.get(id, user);
+  get(@Param('id') id: string, @Req() req: Request, @CurrentUser() user?: AuthUser) {
+    return this.jobs.get(id, user, requestLocale(req));
   }
 
   /** Public SEO payload for JSON-LD; unlike GET /jobs/:id it records no JobView. */
   @Get(':id/seo')
-  seo(@Param('id') id: string) {
-    return this.jobs.getSeo(id);
+  seo(@Param('id') id: string, @Req() req: Request) {
+    return this.jobs.getSeo(id, requestLocale(req));
+  }
+
+  @Get(':id/translations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  listTranslations(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.jobs.listTranslations(user, id);
+  }
+
+  @Put(':id/translations/:locale')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  upsertTranslation(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(jobTranslationSchema, body);
+    return this.jobs.upsertTranslation(user, id, assertLocale(locale), data);
+  }
+
+  @Delete(':id/translations/:locale')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  deleteTranslation(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.jobs.deleteTranslation(user, id, assertLocale(locale));
   }
 
   @Get(':id/stats')

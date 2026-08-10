@@ -26,6 +26,7 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
+import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
@@ -1122,157 +1123,160 @@ function RecruiterDashboard() {
                       ))}
                   </div>
                   {editingJobId === j.id && (
-                    <form
-                      className="form-stack"
-                      style={{ marginTop: '0.75rem' }}
-                      onSubmit={(e) => updateJob(e, j.id)}
-                    >
-                      <label>
-                        <LabelText required>{t('jobTitleFilter')}</LabelText>
-                        <input name="title" defaultValue={j.title} required minLength={2} />
-                      </label>
-                      <label>
-                        <LabelText required>{t('rec.description')}</LabelText>
-                        <textarea
-                          name="description"
-                          rows={4}
-                          defaultValue={j.description || ''}
-                          required
-                          minLength={20}
-                        />
-                      </label>
-                      <label>
-                        <LabelText>{t('city')}</LabelText>
-                        <select name="citySlug" defaultValue={j.city?.slug || ''}>
-                          <option value="">-</option>
-                          {meta.cities.map((c) => (
-                            <option key={c.slug} value={c.slug}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="grid-2">
+                    <>
+                      <form
+                        className="form-stack"
+                        style={{ marginTop: '0.75rem' }}
+                        onSubmit={(e) => updateJob(e, j.id)}
+                      >
                         <label>
-                          <LabelText>{t('experienceLevel')}</LabelText>
-                          <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                          <LabelText required>{t('jobTitleFilter')}</LabelText>
+                          <input name="title" defaultValue={j.title} required minLength={2} />
+                        </label>
+                        <label>
+                          <LabelText required>{t('rec.description')}</LabelText>
+                          <textarea
+                            name="description"
+                            rows={4}
+                            defaultValue={j.description || ''}
+                            required
+                            minLength={20}
+                          />
+                        </label>
+                        <label>
+                          <LabelText>{t('city')}</LabelText>
+                          <select name="citySlug" defaultValue={j.city?.slug || ''}>
                             <option value="">-</option>
-                            {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
-                              <option key={l} value={l}>
-                                {enumLabel('experienceLevel', l)}
+                            {meta.cities.map((c) => (
+                              <option key={c.slug} value={c.slug}>
+                                {c.name}
                               </option>
                             ))}
                           </select>
                         </label>
-                        <label>
-                          <LabelText>{t('workMode')}</LabelText>
-                          <select name="workMode" defaultValue={j.workMode || 'HYBRID'}>
-                            <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
-                            <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
-                            <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
-                          </select>
-                        </label>
-                      </div>
-                      <div className="grid-2">
-                        <label>
-                          <LabelText>{t('employmentType')}</LabelText>
-                          <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
-                            <option value="FULL_TIME">
-                              {enumLabel('employmentType', 'FULL_TIME')}
-                            </option>
-                            <option value="PART_TIME">
-                              {enumLabel('employmentType', 'PART_TIME')}
-                            </option>
-                            <option value="CONTRACT">
-                              {enumLabel('employmentType', 'CONTRACT')}
-                            </option>
-                            <option value="INTERNSHIP">
-                              {enumLabel('employmentType', 'INTERNSHIP')}
-                            </option>
-                          </select>
-                        </label>
-                        <label>
-                          <LabelText>{t('rec.salaryPeriod')}</LabelText>
-                          <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
-                            <option value="MONTHLY">{t('rec.periodMonthly')}</option>
-                            <option value="YEARLY">{t('rec.periodYearly')}</option>
-                            <option value="HOURLY">{t('rec.periodHourly')}</option>
-                          </select>
-                        </label>
-                      </div>
-                      <div className="grid-2">
-                        <label>
-                          <LabelText>{t('rec.salaryMin')}</LabelText>
-                          <NumberInput name="salaryMin" defaultValue={j.salaryMin ?? undefined} min={0} />
-                        </label>
-                        <label>
-                          <LabelText>{t('rec.salaryMax')}</LabelText>
-                          <NumberInput name="salaryMax" defaultValue={j.salaryMax ?? undefined} min={0} />
-                        </label>
-                      </div>
-                      <label>
-                        <LabelText>{t('rec.currency')}</LabelText>
-                        <select name="currency" defaultValue={j.currency || 'UZS'}>
-                          <option value="UZS">UZS</option>
-                          <option value="USD">USD</option>
-                          <option value="EUR">EUR</option>
-                        </select>
-                      </label>
-                      <div>
-                        <LabelText>{t('languages')}</LabelText>
-                        <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
-                          {t('jobLanguagesHint')}
-                        </p>
-                        <div className="chips" style={{ margin: '0.4rem 0' }}>
-                          {editJobLanguages.map((l) => (
-                            <span key={l.code} className="badge">
-                              {l.name} {l.minLevel}
-                              {l.isRequired ? '' : ` (${t('optional')})`}
-                              <button
-                                type="button"
-                                className="ghost"
-                                style={{ marginLeft: 6, padding: 0 }}
-                                onClick={() =>
-                                  setEditJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
-                                }
-                              >
-                                x
-                              </button>
-                            </span>
-                          ))}
+                        <div className="grid-2">
+                          <label>
+                            <LabelText>{t('experienceLevel')}</LabelText>
+                            <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                              <option value="">-</option>
+                              {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
+                                <option key={l} value={l}>
+                                  {enumLabel('experienceLevel', l)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <LabelText>{t('workMode')}</LabelText>
+                            <select name="workMode" defaultValue={j.workMode || 'HYBRID'}>
+                              <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
+                              <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
+                              <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
+                            </select>
+                          </label>
                         </div>
-                        {editJobLanguages.length < 4 && (
-                          <LookupCombobox
-                            kind="languages"
-                            allowCreate={false}
-                            submitLabel={t('addLanguage')}
-                            placeholder={t('languageSearchPlaceholder')}
-                            levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((v) => ({
-                              value: v,
-                              label: v,
-                            }))}
-                            defaultLevel="B1"
-                            onPick={(item) => {
-                              const code = item.code || item.slug;
-                              if (!code) return;
-                              setEditJobLanguages((prev) => {
-                                if (prev.some((p) => p.code === code) || prev.length >= 4) return prev;
-                                return [
-                                  ...prev,
-                                  {
-                                    code,
-                                    name: item.name,
-                                    minLevel: item.level || 'B1',
-                                    isRequired: true,
-                                  },
-                                ];
-                              });
-                            }}
-                          />
-                        )}
-                      </div>
-                      <button type="submit">{t('rec.saveChanges')}</button>
-                    </form>
+                        <div className="grid-2">
+                          <label>
+                            <LabelText>{t('employmentType')}</LabelText>
+                            <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
+                              <option value="FULL_TIME">
+                                {enumLabel('employmentType', 'FULL_TIME')}
+                              </option>
+                              <option value="PART_TIME">
+                                {enumLabel('employmentType', 'PART_TIME')}
+                              </option>
+                              <option value="CONTRACT">
+                                {enumLabel('employmentType', 'CONTRACT')}
+                              </option>
+                              <option value="INTERNSHIP">
+                                {enumLabel('employmentType', 'INTERNSHIP')}
+                              </option>
+                            </select>
+                          </label>
+                          <label>
+                            <LabelText>{t('rec.salaryPeriod')}</LabelText>
+                            <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
+                              <option value="MONTHLY">{t('rec.periodMonthly')}</option>
+                              <option value="YEARLY">{t('rec.periodYearly')}</option>
+                              <option value="HOURLY">{t('rec.periodHourly')}</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="grid-2">
+                          <label>
+                            <LabelText>{t('rec.salaryMin')}</LabelText>
+                            <NumberInput name="salaryMin" defaultValue={j.salaryMin ?? undefined} min={0} />
+                          </label>
+                          <label>
+                            <LabelText>{t('rec.salaryMax')}</LabelText>
+                            <NumberInput name="salaryMax" defaultValue={j.salaryMax ?? undefined} min={0} />
+                          </label>
+                        </div>
+                        <label>
+                          <LabelText>{t('rec.currency')}</LabelText>
+                          <select name="currency" defaultValue={j.currency || 'UZS'}>
+                            <option value="UZS">UZS</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                          </select>
+                        </label>
+                        <div>
+                          <LabelText>{t('languages')}</LabelText>
+                          <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
+                            {t('jobLanguagesHint')}
+                          </p>
+                          <div className="chips" style={{ margin: '0.4rem 0' }}>
+                            {editJobLanguages.map((l) => (
+                              <span key={l.code} className="badge">
+                                {l.name} {l.minLevel}
+                                {l.isRequired ? '' : ` (${t('optional')})`}
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  style={{ marginLeft: 6, padding: 0 }}
+                                  onClick={() =>
+                                    setEditJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
+                                  }
+                                >
+                                  x
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          {editJobLanguages.length < 4 && (
+                            <LookupCombobox
+                              kind="languages"
+                              allowCreate={false}
+                              submitLabel={t('addLanguage')}
+                              placeholder={t('languageSearchPlaceholder')}
+                              levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((v) => ({
+                                value: v,
+                                label: v,
+                              }))}
+                              defaultLevel="B1"
+                              onPick={(item) => {
+                                const code = item.code || item.slug;
+                                if (!code) return;
+                                setEditJobLanguages((prev) => {
+                                  if (prev.some((p) => p.code === code) || prev.length >= 4) return prev;
+                                  return [
+                                    ...prev,
+                                    {
+                                      code,
+                                      name: item.name,
+                                      minLevel: item.level || 'B1',
+                                      isRequired: true,
+                                    },
+                                  ];
+                                });
+                              }}
+                            />
+                          )}
+                        </div>
+                        <button type="submit">{t('rec.saveChanges')}</button>
+                      </form>
+                      <JobLanguageVersions jobId={j.id} onFlash={flash} />
+                    </>
                   )}
                 </div>
               ))}

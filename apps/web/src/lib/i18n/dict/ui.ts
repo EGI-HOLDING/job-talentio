@@ -1,6 +1,19 @@
 /** Reusable UI primitives, messages and small shared surfaces. */
 export const ui = {
   'ui.confirm': { uz: 'Tasdiqlash', ru: 'Подтвердить', en: 'Confirm' },
+  'ui.localeUz': { uz: 'o‘zbekcha', ru: 'узбекском', en: 'Uzbek' },
+  'ui.localeRu': { uz: 'ruscha', ru: 'русском', en: 'Russian' },
+  'ui.localeEn': { uz: 'inglizcha', ru: 'английском', en: 'English' },
+  'ui.writtenInLanguage': {
+    uz: 'Ushbu matn {language} yozilgan',
+    ru: 'Этот текст написан на {language} языке',
+    en: 'This text is written in {language}',
+  },
+  'ui.autoTranslated': {
+    uz: 'Avtomatik tarjima qilingan',
+    ru: 'Автоматический перевод',
+    en: 'Auto-translated',
+  },
   'ui.location': { uz: 'Manzil', ru: 'Локация', en: 'Location' },
   'ui.matchOk': { uz: 'Mos', ru: 'Совпадает', en: 'OK' },
   'ui.matchMissing': { uz: 'Yetishmaydi', ru: 'Не хватает', en: 'Missing' },

@@ -256,6 +256,12 @@ export const hotJobSchema = z.object({
   days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
 });
 
+/** Recruiter-authored translation of a posting (one row per extra language). */
+export const jobTranslationSchema = z.object({
+  title: z.string().min(3).max(200),
+  description: z.string().min(20).max(20000),
+});
+
 /** Public curated news list (career/insight/event/education). */
 export const newsBrowseSchema = z.object({
   category: z.enum(['CAREER', 'INSIGHT', 'EVENT', 'EDUCATION']).optional(),

@@ -11,6 +11,7 @@ import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
+import { UgcText } from '@/components/ui/UgcText';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { formatSalaryRange } from '@/lib/numberFormat';
 
@@ -27,6 +28,9 @@ type Job = {
   id: string;
   title: string;
   description: string;
+  /** Language the title and description are served in (may differ from the UI). */
+  contentLocale?: string | null;
+  isMachineTranslated?: boolean;
   salaryMin?: number | null;
   salaryMax?: number | null;
   workMode?: string;
@@ -369,7 +373,13 @@ export function JobDetailClient() {
         <div style={{ display: 'grid', gap: '1rem', alignContent: 'start' }}>
           <div className="card">
             <h2 className="section-title">{t('job.aboutTheRole')}</h2>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sanitizeMojibake(job.description)}</div>
+            <UgcText
+              text={job.description}
+              contentLocale={job.contentLocale}
+              isMachineTranslated={job.isMachineTranslated}
+              preserveLineBreaks
+              className="job-description"
+            />
           </div>
           {session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown && (
             <div className="card">

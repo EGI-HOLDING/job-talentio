@@ -495,8 +495,8 @@ model Company {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  city             City?             @relation(fields: [cityId], references: [id])
-  industry         Industry?         @relation(fields: [industryId], references: [id])
+  city             City?                @relation(fields: [cityId], references: [id])
+  industry         Industry?            @relation(fields: [industryId], references: [id])
   members          CompanyMember[]
   jobPosts         JobPost[]
   subscription     Subscription?
@@ -504,6 +504,7 @@ model Company {
   followers        CompanyFollower[]
   messageTemplates MessageTemplate[]
   bulkCampaigns    BulkCampaign[]
+  translations     CompanyTranslation[]
 
   @@index([cityId])
   @@index([industryId])
@@ -584,10 +585,10 @@ model JobPost {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
-  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  jobTitle      JobTitle?         @relation(fields: [jobTitleId], references: [id])
-  city          City?             @relation(fields: [cityId], references: [id])
-  category      JobCategory?      @relation(fields: [categoryId], references: [id])
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobTitle      JobTitle?            @relation(fields: [jobTitleId], references: [id])
+  city          City?                @relation(fields: [cityId], references: [id])
+  category      JobCategory?         @relation(fields: [categoryId], references: [id])
   jobSkills     JobPostSkill[]
   jobLanguages  JobPostLanguage[]
   benefits      JobPostBenefit[]
@@ -596,6 +597,7 @@ model JobPost {
   questions     JobQuestion[]
   views         JobView[]
   bulkCampaigns BulkCampaign[]
+  translations  JobPostTranslation[]
 
   @@index([companyId, status])
   @@index([status, publishedAt])
@@ -605,6 +607,27 @@ model JobPost {
   @@index([experienceLevel])
   @@index([companyId, fingerprint])
   @@index([companyId, contentHash])
+}
+
+/// Optional per-language version of a posting. The original language lives on
+/// JobPost itself (JobPost.locale); rows here are extra versions, either written
+/// by the recruiter or produced by machine translation (isMachine).
+model JobPostTranslation {
+  id          String   @id @default(cuid())
+  jobPostId   String
+  locale      String
+  title       String
+  description String
+  isMachine   Boolean  @default(false)
+  /// SHA-256 of the source text: lets machine output expire when the original changes.
+  sourceHash  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobPost JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+
+  @@unique([jobPostId, locale])
+  @@index([jobPostId])
 }
 
 model JobPostLanguage {
@@ -1116,6 +1139,45 @@ model NewsArticle {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  translations NewsArticleTranslation[]
+
   @@index([isPublished, publishedAt])
   @@index([category, publishedAt])
+}
+
+/// Per-language version of an article. The slug stays shared so one canonical
+/// URL per article keeps its search ranking across languages.
+model NewsArticleTranslation {
+  id         String   @id @default(cuid())
+  articleId  String
+  locale     String
+  title      String
+  excerpt    String
+  body       String
+  isMachine  Boolean  @default(false)
+  sourceHash String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  article NewsArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, locale])
+  @@index([articleId])
+}
+
+/// Optional localized company description.
+model CompanyTranslation {
+  id          String   @id @default(cuid())
+  companyId   String
+  locale      String
+  description String
+  isMachine   Boolean  @default(false)
+  sourceHash  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, locale])
+  @@index([companyId])
 }
