@@ -5,8 +5,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import { normalizeJobTitleKey } from '../common/title-resolve';
 
+export type PlatformStats = {
+  openRoles: number;
+  companies: number;
+  talentProfiles: number;
+  citiesCovered: number;
+};
+
+const PLATFORM_STATS_TTL_MS = 60_000;
+
 @Injectable()
 export class MetaService {
+  private platformStatsCache: { at: number; value: PlatformStats } | null = null;
+
   constructor(private prisma: PrismaService) {}
 
   async skills(q?: string, category?: string, sort?: string, take = 100) {
@@ -487,5 +498,36 @@ export class MetaService {
       }))
       .sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name))
       .slice(0, limit);
+  }
+
+  /**
+   * Lightweight homepage counters. Indexed counts + short TTL cache so
+   * high traffic / large tables stay cheap for the public home page.
+   */
+  async platformStats(): Promise<PlatformStats> {
+    const now = Date.now();
+    if (this.platformStatsCache && now - this.platformStatsCache.at < PLATFORM_STATS_TTL_MS) {
+      return this.platformStatsCache.value;
+    }
+
+    const [openRoles, companies, talentProfiles, cityRows] = await Promise.all([
+      this.prisma.jobPost.count({ where: { status: 'PUBLISHED' } }),
+      this.prisma.company.count(),
+      this.prisma.employeeProfile.count(),
+      this.prisma.jobPost.findMany({
+        where: { status: 'PUBLISHED', cityId: { not: null } },
+        select: { cityId: true },
+        distinct: ['cityId'],
+      }),
+    ]);
+
+    const value: PlatformStats = {
+      openRoles,
+      companies,
+      talentProfiles,
+      citiesCovered: cityRows.length,
+    };
+    this.platformStatsCache = { at: now, value };
+    return value;
   }
 }

@@ -7,12 +7,19 @@ import { api } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
-import { formatSalaryRange } from '@/lib/numberFormat';
+import { formatCompactCount, formatSalaryRange } from '@/lib/numberFormat';
 import { ExploreSection } from '@/components/explore/ExploreSection';
 import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
 import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
+
+type PlatformStats = {
+  openRoles: number;
+  companies: number;
+  talentProfiles: number;
+  citiesCovered: number;
+};
 
 type Category = { name: string; slug: string; icon?: string | null };
 type Job = {
@@ -64,9 +71,13 @@ export function SeekerHome() {
   const [topCompanies, setTopCompanies] = useState<VipCompany[]>([]);
   const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
 
   useEffect(() => {
     api<Category[]>('/meta/categories', { auth: false }).then(setCategories).catch(() => undefined);
+    api<PlatformStats>('/meta/platform-stats', { auth: false })
+      .then(setPlatformStats)
+      .catch(() => undefined);
     api<{ items: Job[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false })
       .then((r) => setHotJobs(r.items))
       .catch(() => undefined);
@@ -131,19 +142,27 @@ export function SeekerHome() {
       <section className="section">
         <div className="stats-row">
           <div className="stat">
-            <strong>90+</strong>
+            <strong title={platformStats ? String(platformStats.openRoles) : undefined}>
+              {platformStats ? formatCompactCount(platformStats.openRoles) : '—'}
+            </strong>
             <span>{t('openRoles')}</span>
           </div>
           <div className="stat">
-            <strong>20</strong>
+            <strong title={platformStats ? String(platformStats.companies) : undefined}>
+              {platformStats ? formatCompactCount(platformStats.companies) : '—'}
+            </strong>
             <span>{t('companiesStat')}</span>
           </div>
           <div className="stat">
-            <strong>60+</strong>
+            <strong title={platformStats ? String(platformStats.talentProfiles) : undefined}>
+              {platformStats ? formatCompactCount(platformStats.talentProfiles) : '—'}
+            </strong>
             <span>{t('talentProfiles')}</span>
           </div>
           <div className="stat">
-            <strong>15</strong>
+            <strong title={platformStats ? String(platformStats.citiesCovered) : undefined}>
+              {platformStats ? formatCompactCount(platformStats.citiesCovered) : '—'}
+            </strong>
             <span>{t('citiesCovered')}</span>
           </div>
         </div>

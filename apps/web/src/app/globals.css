@@ -805,6 +805,12 @@ img.company-logo {
   font-size: 1.5rem;
   font-family: var(--font-display);
   color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.2;
 }
 .stat span { color: var(--muted); font-size: 0.85rem; }
 
