@@ -242,7 +242,7 @@ export class AuthService {
       file.buffer,
       file.originalname || 'avatar.jpg',
       file.mimetype,
-      'avatars',
+      'public/avatars',
     );
     const oldKey = this.storage.keyFromPublicUrl(user.avatarUrl);
     await this.prisma.user.update({

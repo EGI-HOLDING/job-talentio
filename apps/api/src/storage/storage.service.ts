@@ -19,21 +19,35 @@ export { PUBLIC_OBJECT_PREFIX } from './public-prefix';
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
   private client: S3Client;
+  /** Signs browser-facing URLs against the public MinIO/S3 host (not Railway-internal). */
+  private signerClient: S3Client;
   private bucket: string;
   private publicUrl: string;
 
   constructor(private config: ConfigService) {
     this.bucket = this.config.get('S3_BUCKET', 'job-talentio');
     this.publicUrl = this.config.get('S3_PUBLIC_URL', 'http://localhost:9000/job-talentio');
+    const region = this.config.get('S3_REGION', 'us-east-1');
+    const forcePathStyle = this.config.get('S3_FORCE_PATH_STYLE', 'true') === 'true';
+    const credentials = {
+      accessKeyId: this.config.get('S3_ACCESS_KEY', 'minioadmin'),
+      secretAccessKey: this.config.get('S3_SECRET_KEY', 'minioadmin'),
+    };
     this.client = new S3Client({
-      region: this.config.get('S3_REGION', 'us-east-1'),
+      region,
       endpoint: this.config.get('S3_ENDPOINT'),
-      forcePathStyle: this.config.get('S3_FORCE_PATH_STYLE', 'true') === 'true',
-      credentials: {
-        accessKeyId: this.config.get('S3_ACCESS_KEY', 'minioadmin'),
-        secretAccessKey: this.config.get('S3_SECRET_KEY', 'minioadmin'),
-      },
+      forcePathStyle,
+      credentials,
     });
+    const publicEndpoint = publicEndpointFromS3PublicUrl(this.publicUrl);
+    this.signerClient = publicEndpoint
+      ? new S3Client({
+          region,
+          endpoint: publicEndpoint,
+          forcePathStyle,
+          credentials,
+        })
+      : this.client;
   }
 
   async onModuleInit() {
@@ -51,9 +65,9 @@ export class StorageService implements OnModuleInit {
   }
 
   /**
-   * Allow anonymous GetObject for `public/*` so company logos (and similar)
+   * Allow anonymous GetObject for `public/*` so logos/avatars (and similar)
    * work from S3_PUBLIC_URL without signed URLs. Matches local docker `mc anonymous
-   * set download …/public`. Private prefixes (cvs/, avatars/) stay closed.
+   * set download …/public`. Private prefixes (cvs/) stay closed + presigned GET.
    */
   async ensurePublicReadPrefix(): Promise<void> {
     const policy = {
@@ -126,16 +140,16 @@ export class StorageService implements OnModuleInit {
       Key: key,
       ContentType: contentType,
     });
-    return getSignedUrl(this.client, command, { expiresIn: 900 });
+    return getSignedUrl(this.signerClient, command, { expiresIn: 900 });
   }
 
-  /** Time-limited download URL for private objects (CVs, etc.) */
+  /** Time-limited download URL for private objects (CVs, etc.) — browser-reachable host. */
   async getPresignedGetUrl(key: string, expiresIn = 900) {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
     });
-    return getSignedUrl(this.client, command, { expiresIn });
+    return getSignedUrl(this.signerClient, command, { expiresIn });
   }
 
   /** Download object bytes for background workers (CV parse, etc.). */
@@ -169,6 +183,17 @@ export class StorageService implements OnModuleInit {
     if (!u) return null;
     const base = this.publicUrl.replace(/\/$/, '');
     if (u.startsWith(`${base}/`)) return u.slice(base.length + 1);
+    return null;
+  }
+}
+
+/** Origin of S3_PUBLIC_URL for signing (strip trailing /bucket). */
+function publicEndpointFromS3PublicUrl(publicUrl: string): string | null {
+  try {
+    const u = new URL(publicUrl);
+    if (!u.host) return null;
+    return `${u.protocol}//${u.host}`;
+  } catch {
     return null;
   }
 }
