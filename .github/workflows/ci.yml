@@ -37,6 +37,9 @@ jobs:
       - name: ASCII UI / mojibake guard
         run: pnpm check:ascii-ui
 
+      - name: Hardcoded UI copy guard
+        run: pnpm check:i18n-ui
+
       - name: Test
         run: pnpm test
 

@@ -88,7 +88,7 @@ function MessagesInner() {
             await loadMessages(conv.id);
             return;
           } catch (err) {
-            setError(err instanceof Error ? err.message : 'Cannot start conversation');
+            setError(err instanceof Error ? err.message : t('ui.cannotStartConversation'));
           }
         }
         if (list.length > 0) {
@@ -142,7 +142,7 @@ function MessagesInner() {
       setMessages((prev) => [...prev, msg]);
       loadConversations().catch(() => undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send');
+      setError(err instanceof Error ? err.message : t('ui.messageSendFailed'));
       setDraft(body);
     }
   }
@@ -199,7 +199,7 @@ function MessagesInner() {
                 </span>
                 {active.isColdOutreach && (
                   <span className="chip" style={{ marginLeft: '0.5rem', fontSize: '0.72rem' }}>
-                    Cold outreach
+                    {t('ui.coldOutreach')}
                   </span>
                 )}
               </div>

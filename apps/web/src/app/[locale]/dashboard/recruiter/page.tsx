@@ -6,10 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/lib/navigation';
 import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
-import { jobLocationLabel } from '@/lib/location';
+import { localizedJobLocation } from '@/lib/location';
 import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
 import { sanitizeMojibake } from '@/lib/text';
-import { useI18n } from '@/lib/i18n';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { usePresence } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import {
@@ -40,15 +40,28 @@ type CheckoutResponse = {
 };
 
 const PLAN_ORDER: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM', 'VIP'];
+/** Dictionary keys, resolved with `t()` where the plan cards render. */
 const PLAN_FEATURES: Record<PlanCode, string[]> = {
-  FREE: ['1 active job', 'Blurred candidate contacts', 'No cold chat'],
-  STANDARD: ['5 active jobs', 'Full candidate contacts', 'No cold chat'],
-  PREMIUM: ['20 active jobs', 'Full candidate contacts', 'Cold chat (20/day)'],
+  FREE: [
+    'rec.planFeature1Job',
+    'rec.planFeatureContactsBlurred',
+    'rec.planFeatureNoColdChat',
+  ],
+  STANDARD: [
+    'rec.planFeature5Jobs',
+    'rec.planFeatureContactsFull',
+    'rec.planFeatureNoColdChat',
+  ],
+  PREMIUM: [
+    'rec.planFeature20Jobs',
+    'rec.planFeatureContactsFull',
+    'rec.planFeatureColdChat20',
+  ],
   VIP: [
-    '50 active jobs',
-    'Full candidate contacts',
-    'Cold chat (50/day)',
-    'VIP badge + Top Companies',
+    'rec.planFeature50Jobs',
+    'rec.planFeatureContactsFull',
+    'rec.planFeatureColdChat50',
+    'rec.planFeatureVipBadge',
   ],
 };
 
@@ -61,29 +74,26 @@ function planRank(plan: PlanCode) {
 }
 
 const STAGES = ['NEW', 'IN_REVIEW', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED', 'WITHDRAWN'] as const;
-const STAGE_LABEL: Record<(typeof STAGES)[number], string> = {
-  NEW: 'New',
-  IN_REVIEW: 'In review',
-  INTERVIEW: 'Interview',
-  OFFER: 'Offer',
-  HIRED: 'Hired',
-  REJECTED: 'Rejected',
-  WITHDRAWN: 'Withdrawn',
-};
 /** Distinguish same-title openings by location + status in selects */
-function jobSelectLabel(j: {
-  title: string;
-  status?: string;
-  workMode?: string | null;
-  city?: { name: string } | null;
-}) {
-  const location = jobLocationLabel(j);
-  const status = j.status && j.status !== 'PUBLISHED' ? ` | ${j.status}` : '';
+function jobSelectLabel(
+  j: {
+    title: string;
+    status?: string;
+    workMode?: string | null;
+    city?: { name: string } | null;
+  },
+  enumLabel: (group: string, value?: string | null) => string,
+  t: (key: string) => string,
+) {
+  const location = localizedJobLocation(j, t);
+  const status =
+    j.status && j.status !== 'PUBLISHED' ? ` | ${enumLabel('jobStatus', j.status)}` : '';
   return `${j.title} - ${location}${status}`;
 }
 
 function RecruiterDashboard() {
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobFromUrl = searchParams.get('job') || '';
@@ -235,9 +245,9 @@ function RecruiterDashboard() {
         method: 'POST',
         body: JSON.stringify({ plan }),
       });
-      await startCheckout(res, `Upgraded to ${plan}`);
+      await startCheckout(res, t('rec.planUpgraded').replace('{plan}', enumLabel('plan', plan)));
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Upgrade failed', 'error');
+      flash(err instanceof Error ? err.message : t('rec.upgradeFailed'), 'error');
     } finally {
       setBillingBusy(false);
     }
@@ -251,9 +261,9 @@ function RecruiterDashboard() {
         `/billing/companies/${companyId}/jobs/${jobId}/hot`,
         { method: 'POST', body: JSON.stringify({ days }) },
       );
-      await startCheckout(res, `Hot boost ${days}d activated`);
+      await startCheckout(res, t('rec.hotBoostActivated').replace('{n}', String(days)));
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Hot boost failed', 'error');
+      flash(err instanceof Error ? err.message : t('rec.hotBoostFailed'), 'error');
     } finally {
       setBillingBusy(false);
     }
@@ -441,7 +451,7 @@ function RecruiterDashboard() {
     setDraftJobLanguages([]);
     localeLangSuggested.current = false;
     setDraftJobLevel('');
-    flash('Job created as DRAFT');
+    flash(t('rec.jobCreatedDraft'));
     await loadJobs(companyId);
   }
 
@@ -472,10 +482,10 @@ function RecruiterDashboard() {
       });
       setEditingJobId(null);
       setEditJobLanguages([]);
-      flash('Job updated');
+      flash(t('rec.jobUpdated'));
       await loadJobs(companyId);
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Job update failed', 'error');
+      flash(err instanceof Error ? err.message : t('rec.jobUpdateFailed'), 'error');
     }
   }
 
@@ -499,7 +509,7 @@ function RecruiterDashboard() {
       flash(okMsg, 'success');
       await loadJobs(companyId);
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Failed to update job status', 'error');
+      flash(err instanceof Error ? err.message : t('rec.jobStatusFailed'), 'error');
     }
   }
 
@@ -552,7 +562,7 @@ function RecruiterDashboard() {
   async function runBulkAction() {
     if (!companyId || !selectedJob || selectedAppIds.length === 0) return;
     if (!bulkToStatus && !bulkTemplateId && !bulkMessage.trim()) {
-      flash('Choose a target stage and/or a message/template', 'error');
+      flash(t('rec.bulkChooseTarget'), 'error');
       return;
     }
     setBulkBusy(true);
@@ -573,15 +583,15 @@ function RecruiterDashboard() {
         campaign.recipients?.filter((r: any) => r.deliveryStatus === 'SKIPPED_OPTED_OUT').length ?? 0;
       const failed = campaign.recipients?.filter((r: any) => r.deliveryStatus === 'FAILED').length ?? 0;
       flash(
-        `Bulk action done: ${sent} sent${skipped ? `, ${skipped} opted out` : ''}${
-          failed ? `, ${failed} failed` : ''
-        }`,
+        `${t('rec.bulkDoneSent').replace('{n}', String(sent))}${
+          skipped ? t('rec.bulkDoneSkipped').replace('{n}', String(skipped)) : ''
+        }${failed ? t('rec.bulkDoneFailed').replace('{n}', String(failed)) : ''}`,
       );
       setSelectedAppIds([]);
       setBulkMessage('');
       await loadJobData(selectedJob);
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Bulk action failed', 'error');
+      flash(err instanceof Error ? err.message : t('rec.bulkActionFailed'), 'error');
     } finally {
       setBulkBusy(false);
     }
@@ -598,7 +608,7 @@ function RecruiterDashboard() {
         note: fd.get('note'),
       }),
     });
-    flash('Interview scheduled');
+    flash(t('rec.interviewScheduled'));
     await loadJobData(selectedJob);
   }
 
@@ -622,7 +632,7 @@ function RecruiterDashboard() {
         size: fd.get('size') || undefined,
       }),
     });
-    flash('Company profile updated');
+    flash(t('rec.companyUpdated'));
     await refreshMemberships();
     await loadCompanyDetail(companyId);
   }
@@ -637,23 +647,23 @@ function RecruiterDashboard() {
         body: JSON.stringify({ email: inviteEmail.trim(), role: 'RECRUITER' }),
       });
       setInviteEmail('');
-      flash('Team member invited');
+      flash(t('rec.memberInvited'));
       await loadCompanyDetail(companyId);
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Invite failed', 'error');
+      flash(err instanceof Error ? err.message : t('rec.inviteFailed'), 'error');
     } finally {
       setInviteBusy(false);
     }
   }
 
   async function removeMember(userId: string) {
-    if (!confirm('Remove this team member?')) return;
+    if (!confirm(t('rec.confirmRemoveMember'))) return;
     try {
       await api(`/companies/${companyId}/members/${userId}`, { method: 'DELETE' });
-      flash('Member removed');
+      flash(t('rec.memberRemoved'));
       await loadCompanyDetail(companyId);
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Remove failed', 'error');
+      flash(err instanceof Error ? err.message : t('rec.removeFailed'), 'error');
     }
   }
 
@@ -675,16 +685,16 @@ function RecruiterDashboard() {
       <aside className="dash-nav">
         {(
           [
-            ['jobs', 'Jobs'],
-            ['pipeline', 'Pipeline & match'],
-            ['bulk', 'Bulk comms'],
-            ['analytics', 'Analytics'],
-            ['billing', 'Plan & billing'],
-            ['company', 'Company'],
+            ['jobs', 'jobs'],
+            ['pipeline', 'rec.tabPipeline'],
+            ['bulk', 'rec.tabBulk'],
+            ['analytics', 'rec.tabAnalytics'],
+            ['billing', 'rec.tabBilling'],
+            ['company', 'company'],
           ] as Array<[Tab, string]>
-        ).map(([k, label]) => (
+        ).map(([k, labelKey]) => (
           <button key={k} type="button" className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
-            {label}
+            {t(labelKey)}
           </button>
         ))}
         {memberships.length > 1 && (
@@ -694,7 +704,7 @@ function RecruiterDashboard() {
               setCompanyId(e.target.value);
               loadJobs(e.target.value);
             }}
-            aria-label="Company"
+            aria-label={t('company')}
             style={{ marginTop: '0.75rem' }}
           >
             {memberships.map((m) => (
@@ -730,7 +740,7 @@ function RecruiterDashboard() {
               {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
             </button>
             <p className="muted" style={{ marginBottom: 0, marginTop: '0.65rem', fontSize: '0.85rem' }}>
-              Or open{' '}
+              {t('rec.orOpen')}{' '}
               <Link href="/settings" style={{ color: 'var(--accent)' }}>
                 {t('settings')}
               </Link>
@@ -742,16 +752,16 @@ function RecruiterDashboard() {
         {tab === 'jobs' && (
           <div className="grid-2">
             <div className="card" id="create-job-form">
-              <h3>Create job</h3>
+              <h3>{t('rec.createJob')}</h3>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={createJob}>
                 <label>
-                  <LabelText required>Title</LabelText>
+                  <LabelText required>{t('jobTitleFilter')}</LabelText>
                   <JobTitleInput
                     name="title"
                     required
                     minLength={3}
-                    placeholder="e.g. Frontend Developer"
+                    placeholder={t('rec.jobTitlePlaceholder')}
                     onInferredLevel={(level) => {
                       setDraftJobLevel((prev) => prev || level);
                     }}
@@ -761,11 +771,11 @@ function RecruiterDashboard() {
                   </span>
                 </label>
                 <label>
-                  <LabelText required>Description</LabelText>
+                  <LabelText required>{t('rec.description')}</LabelText>
                   <textarea name="description" rows={5} required minLength={20} />
                 </label>
                 <label>
-                  <LabelText>City</LabelText>
+                  <LabelText>{t('city')}</LabelText>
                   <select name="citySlug">
                     <option value="">-</option>
                     {meta.cities.map((c) => (
@@ -776,7 +786,7 @@ function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  <LabelText>Category</LabelText>
+                  <LabelText>{t('category')}</LabelText>
                   <select name="categorySlug">
                     <option value="">-</option>
                     {meta.categories.map((c) => (
@@ -787,7 +797,7 @@ function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  <LabelText>Level</LabelText>
+                  <LabelText>{t('experienceLevel')}</LabelText>
                   <select
                     name="experienceLevel"
                     value={draftJobLevel}
@@ -796,55 +806,65 @@ function RecruiterDashboard() {
                     <option value="">-</option>
                     {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
                       <option key={l} value={l}>
-                        {l}
+                        {enumLabel('experienceLevel', l)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  <LabelText>Min years</LabelText>
+                  <LabelText>{t('rec.minYears')}</LabelText>
                   <input name="experienceYearsMin" type="number" />
                 </label>
                 <div className="grid-2">
                   <label>
-                    <LabelText>Salary min</LabelText>
-                    <NumberInput name="salaryMin" placeholder="e.g. 8.000.000" min={0} />
+                    <LabelText>{t('rec.salaryMin')}</LabelText>
+                    <NumberInput
+                      name="salaryMin"
+                      placeholder={t('rec.salaryMinPlaceholder')}
+                      min={0}
+                    />
                   </label>
                   <label>
-                    <LabelText>Salary max</LabelText>
-                    <NumberInput name="salaryMax" placeholder="e.g. 15.000.000" min={0} />
+                    <LabelText>{t('rec.salaryMax')}</LabelText>
+                    <NumberInput
+                      name="salaryMax"
+                      placeholder={t('rec.salaryMaxPlaceholder')}
+                      min={0}
+                    />
                   </label>
                 </div>
                 <label>
-                  <LabelText>Work mode</LabelText>
+                  <LabelText>{t('workMode')}</LabelText>
                   <select name="workMode" defaultValue="HYBRID">
-                    <option>ONSITE</option>
-                    <option>HYBRID</option>
-                    <option>REMOTE</option>
+                    <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
+                    <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
+                    <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
                   </select>
                 </label>
                 <div className="grid-2">
                   <label>
-                    <LabelText>Employment type</LabelText>
+                    <LabelText>{t('employmentType')}</LabelText>
                     <select name="employmentType" defaultValue="FULL_TIME">
-                      <option value="FULL_TIME">Full-time</option>
-                      <option value="PART_TIME">Part-time</option>
-                      <option value="CONTRACT">Contract</option>
-                      <option value="INTERNSHIP">Internship</option>
+                      <option value="FULL_TIME">{enumLabel('employmentType', 'FULL_TIME')}</option>
+                      <option value="PART_TIME">{enumLabel('employmentType', 'PART_TIME')}</option>
+                      <option value="CONTRACT">{enumLabel('employmentType', 'CONTRACT')}</option>
+                      <option value="INTERNSHIP">
+                        {enumLabel('employmentType', 'INTERNSHIP')}
+                      </option>
                     </select>
                   </label>
                   <label>
-                    <LabelText>Salary period</LabelText>
+                    <LabelText>{t('rec.salaryPeriod')}</LabelText>
                     <select name="salaryPeriod" defaultValue="MONTHLY">
-                      <option value="MONTHLY">Monthly</option>
-                      <option value="YEARLY">Yearly</option>
-                      <option value="HOURLY">Hourly</option>
+                      <option value="MONTHLY">{t('rec.periodMonthly')}</option>
+                      <option value="YEARLY">{t('rec.periodYearly')}</option>
+                      <option value="HOURLY">{t('rec.periodHourly')}</option>
                     </select>
                   </label>
                 </div>
                 <div className="grid-2">
                   <label>
-                    <LabelText>Currency</LabelText>
+                    <LabelText>{t('rec.currency')}</LabelText>
                     <select name="currency" defaultValue="UZS">
                       <option value="UZS">UZS</option>
                       <option value="USD">USD</option>
@@ -877,10 +897,10 @@ function RecruiterDashboard() {
                   </label>
                 </div>
                 <p className="muted" style={{ fontSize: '0.78rem', margin: '-0.35rem 0 0.5rem' }}>
-                  Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.
+                  {t('rec.cityRuleHint')}
                 </p>
                 <div>
-                  <LabelText>Skills</LabelText>
+                  <LabelText>{t('skills')}</LabelText>
                   <div className="chips" style={{ margin: '0.4rem 0' }}>
                     {draftJobSkills.map((s) => (
                       <span key={s.slug || s.name} className="badge">
@@ -902,7 +922,7 @@ function RecruiterDashboard() {
                   </div>
                   <SkillCombobox
                     levelSelect={false}
-                    submitLabel="Add skill to job"
+                    submitLabel={t('rec.addSkillToJob')}
                     onPick={(skill) => {
                       setDraftJobSkills((prev) => {
                         const key = skill.slug || skill.name;
@@ -913,7 +933,7 @@ function RecruiterDashboard() {
                   />
                 </div>
                 <div>
-                  <LabelText>Benefits</LabelText>
+                  <LabelText>{t('benefits')}</LabelText>
                   <div className="chips" style={{ margin: '0.4rem 0' }}>
                     {draftJobBenefits.map((b) => (
                       <span key={b.slug || b.name} className="badge">
@@ -1000,19 +1020,23 @@ function RecruiterDashboard() {
                     />
                   )}
                 </div>
-                <button type="submit">Create draft</button>
+                <button type="submit">{t('rec.createDraft')}</button>
               </form>
             </div>
             <div>
-              <h2 className="section-title">Your jobs</h2>
+              <h2 className="section-title">{t('rec.yourJobs')}</h2>
               {jobs.map((j) => (
                 <div key={j.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{j.title}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {j.status} | {jobLocationLabel(j)} | {j._count?.applications ?? 0} apps | {' '}
-                    {j._count?.views ?? 0} views
+                    {enumLabel('jobStatus', j.status)} | {localizedJobLocation(j, t)} |{' '}
+                    {j._count?.applications ?? 0} {t('rec.appsWord')} | {j._count?.views ?? 0}{' '}
+                    {t('rec.viewsWord')}
                     {j.boostUntil && new Date(j.boostUntil) > new Date()
-                      ? ` | Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                      ? ` | ${t('rec.hotUntil').replace(
+                          '{date}',
+                          new Date(j.boostUntil).toLocaleDateString(),
+                        )}`
                       : ''}
                   </p>
                   <div className="chips">
@@ -1020,9 +1044,9 @@ function RecruiterDashboard() {
                       <button
                         type="button"
                         className="chip active"
-                        onClick={() => changeJobStatus(j.id, 'PUBLISHED', 'Job published')}
+                        onClick={() => changeJobStatus(j.id, 'PUBLISHED', t('rec.jobPublished'))}
                       >
-                        Publish
+                        {t('rec.publish')}
                       </button>
                     )}
                     {(j.status === 'CLOSED' || j.status === 'PAUSED') && (
@@ -1033,29 +1057,29 @@ function RecruiterDashboard() {
                           changeJobStatus(
                             j.id,
                             'PUBLISHED',
-                            j.status === 'CLOSED' ? 'Job reopened' : 'Job resumed',
+                            j.status === 'CLOSED' ? t('rec.jobReopened') : t('rec.jobResumed'),
                           )
                         }
                       >
-                        {j.status === 'CLOSED' ? 'Reopen' : 'Resume'}
+                        {j.status === 'CLOSED' ? t('rec.reopen') : t('rec.resumeJob')}
                       </button>
                     )}
                     {j.status === 'PUBLISHED' && (
                       <button
                         type="button"
                         className="chip"
-                        onClick={() => changeJobStatus(j.id, 'PAUSED', 'Job paused')}
+                        onClick={() => changeJobStatus(j.id, 'PAUSED', t('rec.jobPaused'))}
                       >
-                        Pause
+                        {t('rec.pause')}
                       </button>
                     )}
                     {(j.status === 'DRAFT' || j.status === 'PUBLISHED' || j.status === 'PAUSED') && (
                       <button
                         type="button"
                         className="chip"
-                        onClick={() => changeJobStatus(j.id, 'CLOSED', 'Job closed')}
+                        onClick={() => changeJobStatus(j.id, 'CLOSED', t('rec.jobClosed'))}
                       >
-                        Close
+                        {t('rec.closeJob')}
                       </button>
                     )}
                     <button
@@ -1071,7 +1095,7 @@ function RecruiterDashboard() {
                         }
                       }}
                     >
-                      {editingJobId === j.id ? 'Cancel edit' : 'Edit'}
+                      {editingJobId === j.id ? t('rec.cancelEdit') : t('rec.edit')}
                     </button>
                     <button
                       type="button"
@@ -1081,7 +1105,7 @@ function RecruiterDashboard() {
                         setTab('pipeline');
                       }}
                     >
-                      Pipeline
+                      {t('rec.pipeline')}
                     </button>
                     {j.status === 'PUBLISHED' &&
                       HOT_JOB_DAYS.map((days) => (
@@ -1093,7 +1117,7 @@ function RecruiterDashboard() {
                           title={formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
                           onClick={() => buyHotBoost(j.id, days)}
                         >
-                          Boost {days}d
+                          {t('rec.boostDays').replace('{n}', String(days))}
                         </button>
                       ))}
                   </div>
@@ -1104,11 +1128,11 @@ function RecruiterDashboard() {
                       onSubmit={(e) => updateJob(e, j.id)}
                     >
                       <label>
-                        <LabelText required>Title</LabelText>
+                        <LabelText required>{t('jobTitleFilter')}</LabelText>
                         <input name="title" defaultValue={j.title} required minLength={2} />
                       </label>
                       <label>
-                        <LabelText required>Description</LabelText>
+                        <LabelText required>{t('rec.description')}</LabelText>
                         <textarea
                           name="description"
                           rows={4}
@@ -1118,7 +1142,7 @@ function RecruiterDashboard() {
                         />
                       </label>
                       <label>
-                        <LabelText>City</LabelText>
+                        <LabelText>{t('city')}</LabelText>
                         <select name="citySlug" defaultValue={j.city?.slug || ''}>
                           <option value="">-</option>
                           {meta.cities.map((c) => (
@@ -1130,56 +1154,64 @@ function RecruiterDashboard() {
                       </label>
                       <div className="grid-2">
                         <label>
-                          <LabelText>Level</LabelText>
+                          <LabelText>{t('experienceLevel')}</LabelText>
                           <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
                             <option value="">-</option>
                             {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
                               <option key={l} value={l}>
-                                {l}
+                                {enumLabel('experienceLevel', l)}
                               </option>
                             ))}
                           </select>
                         </label>
                         <label>
-                          <LabelText>Work mode</LabelText>
+                          <LabelText>{t('workMode')}</LabelText>
                           <select name="workMode" defaultValue={j.workMode || 'HYBRID'}>
-                            <option>ONSITE</option>
-                            <option>HYBRID</option>
-                            <option>REMOTE</option>
+                            <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
+                            <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
+                            <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
                           </select>
                         </label>
                       </div>
                       <div className="grid-2">
                         <label>
-                          <LabelText>Employment type</LabelText>
+                          <LabelText>{t('employmentType')}</LabelText>
                           <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
-                            <option value="FULL_TIME">Full-time</option>
-                            <option value="PART_TIME">Part-time</option>
-                            <option value="CONTRACT">Contract</option>
-                            <option value="INTERNSHIP">Internship</option>
+                            <option value="FULL_TIME">
+                              {enumLabel('employmentType', 'FULL_TIME')}
+                            </option>
+                            <option value="PART_TIME">
+                              {enumLabel('employmentType', 'PART_TIME')}
+                            </option>
+                            <option value="CONTRACT">
+                              {enumLabel('employmentType', 'CONTRACT')}
+                            </option>
+                            <option value="INTERNSHIP">
+                              {enumLabel('employmentType', 'INTERNSHIP')}
+                            </option>
                           </select>
                         </label>
                         <label>
-                          <LabelText>Salary period</LabelText>
+                          <LabelText>{t('rec.salaryPeriod')}</LabelText>
                           <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
-                            <option value="MONTHLY">Monthly</option>
-                            <option value="YEARLY">Yearly</option>
-                            <option value="HOURLY">Hourly</option>
+                            <option value="MONTHLY">{t('rec.periodMonthly')}</option>
+                            <option value="YEARLY">{t('rec.periodYearly')}</option>
+                            <option value="HOURLY">{t('rec.periodHourly')}</option>
                           </select>
                         </label>
                       </div>
                       <div className="grid-2">
                         <label>
-                          <LabelText>Salary min</LabelText>
+                          <LabelText>{t('rec.salaryMin')}</LabelText>
                           <NumberInput name="salaryMin" defaultValue={j.salaryMin ?? undefined} min={0} />
                         </label>
                         <label>
-                          <LabelText>Salary max</LabelText>
+                          <LabelText>{t('rec.salaryMax')}</LabelText>
                           <NumberInput name="salaryMax" defaultValue={j.salaryMax ?? undefined} min={0} />
                         </label>
                       </div>
                       <label>
-                        <LabelText>Currency</LabelText>
+                        <LabelText>{t('rec.currency')}</LabelText>
                         <select name="currency" defaultValue={j.currency || 'UZS'}>
                           <option value="UZS">UZS</option>
                           <option value="USD">USD</option>
@@ -1239,7 +1271,7 @@ function RecruiterDashboard() {
                           />
                         )}
                       </div>
-                      <button type="submit">Save changes</button>
+                      <button type="submit">{t('rec.saveChanges')}</button>
                     </form>
                   )}
                 </div>
@@ -1253,27 +1285,27 @@ function RecruiterDashboard() {
             <div className="pipeline-toolbar">
               <div>
                 <h2 className="section-title" style={{ margin: 0 }}>
-                  Pipeline & matching
+                  {t('rec.pipelineTitle')}
                 </h2>
                 <p className="muted" style={{ margin: '0.3rem 0 0', fontSize: '0.9rem' }}>
-                  Move applicants through stages and review match scores for this job.
+                  {t('rec.pipelineSubtitle')}
                 </p>
               </div>
               <label style={{ display: 'grid', gap: '0.3rem' }}>
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
-                  Job post
+                  {t('rec.jobPost')}
                 </span>
                 <select
                   value={selectedJob}
                   onChange={(e) => setSelectedJob(e.target.value)}
                   className="job-select"
-                  title="Select job post"
-                  aria-label="Select job post"
+                  title={t('rec.selectJobPost')}
+                  aria-label={t('rec.selectJobPost')}
                 >
-                  {jobs.length === 0 && <option value="">No jobs yet</option>}
+                  {jobs.length === 0 && <option value="">{t('rec.noJobsYet')}</option>}
                   {jobs.map((j) => (
                     <option key={j.id} value={j.id}>
-                      {jobSelectLabel(j)}
+                      {jobSelectLabel(j, enumLabel, t)}
                     </option>
                   ))}
                 </select>
@@ -1283,7 +1315,7 @@ function RecruiterDashboard() {
             {!selectedJob ? (
               <div className="card">
                 <p className="muted" style={{ margin: 0 }}>
-                  Create or select a job post to open the pipeline.
+                  {t('rec.pipelineEmpty')}
                 </p>
               </div>
             ) : (
@@ -1291,39 +1323,41 @@ function RecruiterDashboard() {
                 {selectedAppIds.length > 0 && (
                   <div className="bulk-action-bar card">
                     <div className="bulk-action-bar-head">
-                      <strong>{selectedAppIds.length} selected</strong>
+                      <strong>
+                        {t('rec.selectedCount').replace('{n}', String(selectedAppIds.length))}
+                      </strong>
                       <button type="button" className="chip" onClick={() => setSelectedAppIds([])}>
-                        Clear
+                        {t('rec.clear')}
                       </button>
                       <button
                         type="button"
                         className="chip"
                         onClick={() => setTab('bulk')}
                       >
-                        Templates & history
+                        {t('rec.templatesHistory')}
                       </button>
                     </div>
                     <div className="bulk-action-fields">
                       <label>
                         <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          Move to stage
+                          {t('rec.moveToStage')}
                         </span>
                         <select
                           value={bulkToStatus}
                           onChange={(e) => setBulkToStatus(e.target.value)}
-                          aria-label="Bulk target stage"
+                          aria-label={t('rec.bulkTargetStage')}
                         >
-                          <option value="">- Keep stage -</option>
+                          <option value="">{t('rec.keepStage')}</option>
                           {STAGES.map((s) => (
                             <option key={s} value={s}>
-                              {STAGE_LABEL[s]}
+                              {enumLabel('applicationStatus', s)}
                             </option>
                           ))}
                         </select>
                       </label>
                       <label>
                         <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          Template
+                          {t('rec.template')}
                         </span>
                         <select
                           value={bulkTemplateId}
@@ -1332,9 +1366,9 @@ function RecruiterDashboard() {
                             const t = bulkTemplates.find((x) => x.id === e.target.value);
                             if (t) setBulkMessage(t.body);
                           }}
-                          aria-label="Bulk message template"
+                          aria-label={t('rec.bulkTemplateAria')}
                         >
-                          <option value="">- Custom / none -</option>
+                          <option value="">{t('rec.customNone')}</option>
                           {bulkTemplates.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.name}
@@ -1344,13 +1378,13 @@ function RecruiterDashboard() {
                       </label>
                       <label className="bulk-action-message">
                         <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          Message (optional)
+                          {t('rec.messageOptional')}
                         </span>
                         <textarea
                           value={bulkMessage}
                           onChange={(e) => setBulkMessage(e.target.value)}
                           rows={2}
-                          placeholder="Hi {{name}}, ..."
+                          placeholder={t('rec.bulkMessagePlaceholder')}
                         />
                       </label>
                       <button
@@ -1359,12 +1393,11 @@ function RecruiterDashboard() {
                         disabled={bulkBusy}
                         onClick={() => runBulkAction()}
                       >
-                        {bulkBusy ? 'Running...' : 'Apply to selected'}
+                        {bulkBusy ? t('rec.running') : t('rec.applyToSelected')}
                       </button>
                     </div>
                     <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.78rem' }}>
-                      Candidates who opted out of bulk messaging are skipped for chat (GDPR) but can
-                      still be moved.
+                      {t('rec.bulkOptOutNote')}
                     </p>
                   </div>
                 )}
@@ -1384,17 +1417,20 @@ function RecruiterDashboard() {
                               checked={allSelected}
                               disabled={cards.length === 0}
                               onChange={() => toggleStageSelect(stage)}
-                              aria-label={`Select all in ${STAGE_LABEL[stage]}`}
+                              aria-label={t('rec.selectAllIn').replace(
+                                '{name}',
+                                enumLabel('applicationStatus', stage),
+                              )}
                             />
-                            <span>{STAGE_LABEL[stage]}</span>
+                            <span>{enumLabel('applicationStatus', stage)}</span>
                           </label>
                           <span className="pipeline-col-count">{cards.length}</span>
                         </h4>
                         {cards.length === 0 && (
-                          <div className="pipeline-empty">No candidates</div>
+                          <div className="pipeline-empty">{t('rec.noCandidates')}</div>
                         )}
                         {cards.map((a) => {
-                          const name = a.profile?.user?.fullName || 'Candidate';
+                          const name = a.profile?.user?.fullName || t('rec.candidateFallback');
                           const avatar =
                             a.profile?.user?.avatarUrl ||
                             `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
@@ -1411,7 +1447,7 @@ function RecruiterDashboard() {
                                     type="checkbox"
                                     checked={selected}
                                     onChange={() => toggleAppSelected(a.id)}
-                                    aria-label={`Select ${name}`}
+                                    aria-label={t('rec.selectCandidate').replace('{name}', name)}
                                   />
                                 </label>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1459,7 +1495,7 @@ function RecruiterDashboard() {
                                     style={{ marginTop: '0.55rem', border: 0, width: '100%', cursor: 'pointer' }}
                                     onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
                                   >
-                                    Match {score}% | details
+                                    {t('rec.matchDetails').replace('{n}', String(score))}
                                   </button>
                                   {breakdownId === a.id && a.matchBreakdown && (
                                     <MatchBreakdownPanel
@@ -1488,25 +1524,25 @@ function RecruiterDashboard() {
                                   className="chip"
                                   style={{ fontSize: '0.72rem' }}
                                 >
-                                  View profile
+                                  {t('viewProfile')}
                                 </Link>
                                 <Link
                                   href={`/messages?peer=${a.profile?.user?.id}&job=${selectedJob}`}
                                   className="chip"
                                   style={{ fontSize: '0.72rem' }}
                                 >
-                                  Chat
+                                  {t('rec.chat')}
                                 </Link>
                               </div>
                               <select
                                 style={{ marginTop: '0.5rem', fontSize: '0.8rem', width: '100%' }}
                                 value={a.status}
                                 onChange={(e) => setStatus(a.id, e.target.value)}
-                                aria-label={`Status for ${name}`}
+                                aria-label={t('rec.statusFor').replace('{name}', name)}
                               >
                                 {STAGES.map((s) => (
                                   <option key={s} value={s}>
-                                    {STAGE_LABEL[s]}
+                                    {enumLabel('applicationStatus', s)}
                                   </option>
                                 ))}
                               </select>
@@ -1516,7 +1552,7 @@ function RecruiterDashboard() {
                                   onSubmit={(e) => scheduleInterview(e, a.id)}
                                 >
                                   <label>
-                                    <LabelText required>Interview time</LabelText>
+                                    <LabelText required>{t('rec.interviewTime')}</LabelText>
                                     <input
                                       name="scheduledAt"
                                       type="datetime-local"
@@ -1525,15 +1561,15 @@ function RecruiterDashboard() {
                                     />
                                   </label>
                                   <label>
-                                    <LabelText>Meeting URL</LabelText>
+                                    <LabelText>{t('rec.meetingUrl')}</LabelText>
                                     <input
                                       name="meetingUrl"
-                                      placeholder="Meet URL"
+                                      placeholder={t('rec.meetingUrlPlaceholder')}
                                       style={{ fontSize: '0.75rem', width: '100%' }}
                                     />
                                   </label>
                                   <button type="submit" style={{ padding: '0.35rem', fontSize: '0.75rem' }}>
-                                    Schedule interview
+                                    {t('rec.scheduleInterview')}
                                   </button>
                                 </form>
                               ) : null}
@@ -1548,20 +1584,20 @@ function RecruiterDashboard() {
                 <div className="pipeline-section-head">
                   <div>
                     <h3 className="section-title" style={{ margin: 0 }}>
-                      Recommended candidates
+                      {t('rec.recommendedCandidates')}
                     </h3>
                     <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-                      Strong matches who have not applied yet.
+                      {t('rec.recommendedSubtitle')}
                     </p>
                   </div>
                   <span className="muted" style={{ fontSize: '0.85rem' }}>
-                    {recommended.length} suggested
+                    {t('rec.suggestedCount').replace('{n}', String(recommended.length))}
                   </span>
                 </div>
                 {recommended.length === 0 ? (
                   <div className="card">
                     <p className="muted" style={{ margin: 0 }}>
-                      No recommendations yet. Add required skills on the job post to improve matching.
+                      {t('rec.recommendedEmpty')}
                     </p>
                   </div>
                 ) : (
@@ -1611,7 +1647,7 @@ function RecruiterDashboard() {
                                   className="chip"
                                   style={{ fontSize: '0.75rem' }}
                                 >
-                                  View profile
+                                  {t('viewProfile')}
                                 </Link>
                               {canColdChat ? (
                                 <Link
@@ -1619,17 +1655,17 @@ function RecruiterDashboard() {
                                   className="chip"
                                   style={{ fontSize: '0.75rem' }}
                                 >
-                                  Chat
+                                  {t('rec.chat')}
                                 </Link>
                               ) : (
                                 <button
                                   type="button"
                                   className="chip muted"
-                                  title="Cold outreach requires Premium - upgrade in Plan & billing"
+                                  title={t('rec.coldChatLocked')}
                                   style={{ fontSize: '0.75rem' }}
                                   onClick={() => setTab('billing')}
                                 >
-                                  Chat (Premium)
+                                  {t('rec.chatPremium')}
                                 </button>
                               )}
                             </div>
@@ -1653,32 +1689,32 @@ function RecruiterDashboard() {
         {tab === 'analytics' && (
           <div className="grid-2">
             <div className="card">
-              <h3>Job analytics</h3>
+              <h3>{t('rec.jobAnalytics')}</h3>
               <select
                 value={selectedJob}
                 onChange={(e) => setSelectedJob(e.target.value)}
                 className="job-select"
-                title="Select job post"
-                aria-label="Select job post"
+                title={t('rec.selectJobPost')}
+                aria-label={t('rec.selectJobPost')}
               >
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>
-                    {jobSelectLabel(j)}
+                    {jobSelectLabel(j, enumLabel, t)}
                   </option>
                 ))}
               </select>
               {stats && (
                 <div style={{ marginTop: '1rem' }}>
                   <p>
-                    <strong>{stats.views}</strong> views
+                    <strong>{stats.views}</strong> {t('rec.viewsWord')}
                   </p>
                   <p>
-                    <strong>{stats.totalApplications}</strong> applications
+                    <strong>{stats.totalApplications}</strong> {t('rec.applicationsWord')}
                   </p>
                   <ul>
                     {Object.entries(stats.applicationsByStatus || {}).map(([k, v]) => (
                       <li key={k}>
-                        {k}: {String(v)}
+                        {enumLabel('applicationStatus', k)}: {String(v)}
                       </li>
                     ))}
                   </ul>
@@ -1686,15 +1722,15 @@ function RecruiterDashboard() {
               )}
             </div>
             <div className="card">
-              <h3>Plan</h3>
+              <h3>{t('rec.plan')}</h3>
               <p>
-                Current plan: <strong>{planCode}</strong>
+                {t('rec.currentPlan')}: <strong>{enumLabel('plan', planCode)}</strong>
               </p>
               <p className="muted" style={{ marginBottom: '0.75rem' }}>
-                Published jobs: {activePublishedJobs} / {activeJobLimit}
+                {t('rec.publishedJobs')}: {activePublishedJobs} / {activeJobLimit}
               </p>
               <button type="button" className="chip active" onClick={() => setTab('billing')}>
-                Manage plan & billing
+                {t('rec.managePlanBilling')}
               </button>
             </div>
           </div>
@@ -1702,17 +1738,20 @@ function RecruiterDashboard() {
 
         {tab === 'billing' && (
           <div>
-            <h2 className="section-title">Plan & billing</h2>
+            <h2 className="section-title">{t('rec.tabBilling')}</h2>
             <p className="muted" style={{ marginTop: 0 }}>
-              Current plan: <strong>{planCode}</strong>
+              {t('rec.currentPlan')}: <strong>{enumLabel('plan', planCode)}</strong>
               {subscription?.endsAt
-                ? ` | renews/ends ${new Date(subscription.endsAt).toLocaleDateString()}`
+                ? ` | ${t('rec.renewsEnds').replace(
+                    '{date}',
+                    new Date(subscription.endsAt).toLocaleDateString(),
+                  )}`
                 : ''}
               {' | '}
-              Published jobs: {activePublishedJobs} / {activeJobLimit}
+              {t('rec.publishedJobs')}: {activePublishedJobs} / {activeJobLimit}
             </p>
             <p className="muted" style={{ fontSize: '0.85rem' }}>
-              Demo checkout (mock payments). Real Payme/Click later.
+              {t('rec.demoCheckoutNote')}
             </p>
             <div
               style={{
@@ -1736,30 +1775,30 @@ function RecruiterDashboard() {
                       outline: current ? '2px solid var(--accent, #0f766e)' : undefined,
                     }}
                   >
-                    <h3 style={{ marginTop: 0 }}>{plan}</h3>
+                    <h3 style={{ marginTop: 0 }}>{enumLabel('plan', plan)}</h3>
                     <p style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.35rem 0' }}>
-                      {price === 0 ? 'Free' : `${formatUzs(price)}/mo`}
+                      {price === 0 ? t('rec.free') : `${formatUzs(price)}${t('rec.perMonth')}`}
                     </p>
                     <ul style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.1rem' }}>
                       {PLAN_FEATURES[plan].map((f) => (
                         <li key={f} style={{ marginBottom: '0.25rem' }}>
-                          {f}
+                          {t(f)}
                         </li>
                       ))}
                     </ul>
                     {current ? (
-                      <span className="chip muted">Current plan</span>
+                      <span className="chip muted">{t('rec.currentPlan')}</span>
                     ) : canUpgrade ? (
                       <button
                         type="button"
                         disabled={billingBusy}
                         onClick={() => upgradePlan(plan as 'STANDARD' | 'PREMIUM' | 'VIP')}
                       >
-                        Upgrade to {plan}
+                        {t('rec.upgradeTo').replace('{plan}', enumLabel('plan', plan))}
                       </button>
                     ) : (
                       <span className="chip muted">
-                        {plan === 'FREE' ? 'Included' : 'Already on higher plan'}
+                        {plan === 'FREE' ? t('rec.included') : t('rec.alreadyHigherPlan')}
                       </span>
                     )}
                   </div>
@@ -1767,12 +1806,12 @@ function RecruiterDashboard() {
               })}
             </div>
             <div className="card" style={{ marginTop: '1.25rem' }}>
-              <h3 style={{ marginTop: 0 }}>Hot job boosts</h3>
+              <h3 style={{ marginTop: 0 }}>{t('rec.hotJobBoosts')}</h3>
               <p className="muted" style={{ marginBottom: '0.75rem' }}>
-                Boost a published job from the Jobs tab, or pick one below.
+                {t('rec.hotBoostHint')}
               </p>
               {!jobs.filter((j) => j.status === 'PUBLISHED').length && (
-                <p className="muted">No published jobs yet.</p>
+                <p className="muted">{t('rec.noPublishedJobs')}</p>
               )}
               {jobs
                 .filter((j) => j.status === 'PUBLISHED')
@@ -1792,9 +1831,12 @@ function RecruiterDashboard() {
                     <div>
                       <strong>{j.title}</strong>
                       <div className="muted" style={{ fontSize: '0.85rem' }}>
-                        {jobLocationLabel(j)}
+                        {localizedJobLocation(j, t)}
                         {j.boostUntil && new Date(j.boostUntil) > new Date()
-                          ? ` | Hot until ${new Date(j.boostUntil).toLocaleDateString()}`
+                          ? ` | ${t('rec.hotUntil').replace(
+                              '{date}',
+                              new Date(j.boostUntil).toLocaleDateString(),
+                            )}`
                           : ''}
                       </div>
                     </div>
@@ -1807,7 +1849,8 @@ function RecruiterDashboard() {
                           disabled={billingBusy}
                           onClick={() => buyHotBoost(j.id, days)}
                         >
-                          {days}d | {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
+                          {t('rec.daysShort').replace('{n}', String(days))} |{' '}
+                          {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
                         </button>
                       ))}
                     </div>
@@ -1848,45 +1891,47 @@ function RecruiterDashboard() {
               <h2 className="section-title">{sanitizeMojibake(company.name)}</h2>
               <p className="muted">{sanitizeMojibake(company.description)}</p>
               <p>
-                Members: {company.members?.length ?? company._count?.members} | Jobs:{' '}
-                {company._count?.jobPosts} | Followers: {company._count?.followers}
+                {t('rec.members')}: {company.members?.length ?? company._count?.members} |{' '}
+                {t('jobs')}: {company._count?.jobPosts} | {t('rec.followers')}:{' '}
+                {company._count?.followers}
               </p>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
-                Public page: <a href={`/companies/${company.slug}`}>/companies/{company.slug}</a>
+                {t('rec.publicPage')}:{' '}
+                <a href={`/companies/${company.slug}`}>/companies/{company.slug}</a>
               </p>
               <div style={{ marginTop: '1rem' }}>
                 <ImageCropUpload
                   mode="logo"
-                  label="Company logo"
+                  label={t('rec.companyLogo')}
                   value={company.logoUrl}
                   uploadPath={`/companies/${companyId}/logo`}
                   clearPath={`/companies/${companyId}/logo`}
                   onUploaded={async () => {
                     await refreshMemberships();
                     await loadCompanyDetail(companyId);
-                    flash('Logo updated');
+                    flash(t('rec.logoUpdated'));
                   }}
                 />
               </div>
             </div>
             <div className="card">
-              <h3>Edit company profile</h3>
+              <h3>{t('rec.editCompanyProfile')}</h3>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={updateCompany} key={company.id}>
                 <label>
-                  <LabelText required>Name</LabelText>
+                  <LabelText required>{t('companyName')}</LabelText>
                   <input name="name" defaultValue={company.name} required minLength={2} />
                 </label>
                 <label>
-                  <LabelText>Description</LabelText>
+                  <LabelText>{t('rec.description')}</LabelText>
                   <textarea name="description" rows={4} defaultValue={company.description || ''} />
                 </label>
                 <label>
-                  <LabelText>Website</LabelText>
+                  <LabelText>{t('trustItemWebsite')}</LabelText>
                   <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://..." />
                 </label>
                 <label>
-                  <LabelText>City</LabelText>
+                  <LabelText>{t('city')}</LabelText>
                   <select name="citySlug" defaultValue={company.city?.slug || ''}>
                     <option value="">-</option>
                     {meta.cities.map((c) => (
@@ -1897,7 +1942,7 @@ function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  <LabelText>Industry</LabelText>
+                  <LabelText>{t('trustItemIndustry')}</LabelText>
                   <select name="industrySlug" defaultValue={company.industry?.slug || ''}>
                     <option value="">-</option>
                     {industryGroups.map((g) => (
@@ -1912,7 +1957,7 @@ function RecruiterDashboard() {
                   </select>
                 </label>
                 <label>
-                  <LabelText>Company size</LabelText>
+                  <LabelText>{t('trustItemSize')}</LabelText>
                   <select name="size" defaultValue={company.size || ''}>
                     <option value="">-</option>
                     <option value="SIZE_1_10">1-10</option>
@@ -1922,11 +1967,11 @@ function RecruiterDashboard() {
                     <option value="SIZE_1000_PLUS">1000+</option>
                   </select>
                 </label>
-                <button type="submit">Save company</button>
+                <button type="submit">{t('rec.saveCompany')}</button>
               </form>
             </div>
             <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <h3>Team</h3>
+              <h3>{t('rec.team')}</h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem' }}>
                 {(company.members || []).map((m: any) => (
                   <li
@@ -1949,7 +1994,7 @@ function RecruiterDashboard() {
                         className="ghost"
                         onClick={() => removeMember(m.userId || m.user?.id)}
                       >
-                        Remove
+                        {t('rec.remove')}
                       </button>
                     )}
                   </li>
@@ -1957,7 +2002,7 @@ function RecruiterDashboard() {
               </ul>
               <form className="form-stack" onSubmit={inviteMember}>
                 <label>
-                  <LabelText>Invite by email (must already be a recruiter account)</LabelText>
+                  <LabelText>{t('rec.inviteByEmail')}</LabelText>
                   <input
                     type="email"
                     value={inviteEmail}
@@ -1967,7 +2012,7 @@ function RecruiterDashboard() {
                   />
                 </label>
                 <button type="submit" disabled={inviteBusy}>
-                  {inviteBusy ? 'Inviting...' : 'Invite member'}
+                  {inviteBusy ? t('rec.inviting') : t('rec.inviteMember')}
                 </button>
               </form>
             </div>
@@ -1979,8 +2024,11 @@ function RecruiterDashboard() {
 }
 
 export default function RecruiterDashboardPage() {
+  const { t } = useI18n();
   return (
-    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loading...</div>}>
+    <Suspense
+      fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>{t('rec.loading')}</div>}
+    >
       <RecruiterDashboard />
     </Suspense>
   );

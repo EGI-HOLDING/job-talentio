@@ -1,6 +1,7 @@
 'use client';
 
 import { CSSProperties, ReactNode } from 'react';
+import { useI18n } from '@/lib/i18n';
 
 type SkeletonProps = {
   className?: string;
@@ -47,9 +48,10 @@ export function CandidateCardSkeleton() {
 }
 
 export function DetailPageSkeleton() {
+  const { t } = useI18n();
   return (
     <div className="shell" style={{ padding: '2rem' }} aria-busy="true" aria-live="polite">
-      <span className="sr-only">Loading</span>
+      <span className="sr-only">{t('ui.loading')}</span>
       <div className="skel skel-line" style={{ width: '35%', height: '1.6rem', marginBottom: '1rem' }} />
       <div className="skel skel-line" style={{ width: '60%', marginBottom: '0.75rem' }} />
       <div className="skel skel-block" style={{ height: 160, marginBottom: '1rem' }} />
@@ -85,9 +87,10 @@ export function DashboardSkeleton() {
 }
 
 export function JobListSkeleton({ count = 6 }: { count?: number }) {
+  const { t } = useI18n();
   return (
     <div className="job-list-skel" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Loading jobs</span>
+      <span className="sr-only">{t('ui.loadingJobs')}</span>
       {Array.from({ length: count }, (_, i) => (
         <JobCardSkeleton key={i} />
       ))}
@@ -96,9 +99,10 @@ export function JobListSkeleton({ count = 6 }: { count?: number }) {
 }
 
 export function CandidateListSkeleton({ count = 6 }: { count?: number }) {
+  const { t } = useI18n();
   return (
     <div aria-busy="true" aria-live="polite">
-      <span className="sr-only">Loading candidates</span>
+      <span className="sr-only">{t('ui.loadingCandidates')}</span>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} style={{ marginBottom: '0.65rem' }}>
           <CandidateCardSkeleton />

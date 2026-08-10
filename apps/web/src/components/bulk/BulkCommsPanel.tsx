@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 
 type Template = {
@@ -33,11 +34,11 @@ type Campaign = {
   _count?: { recipients: number };
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  SENT: 'Sent',
-  SKIPPED_OPTED_OUT: 'Opted out',
-  FAILED: 'Failed',
-  PENDING: 'Pending',
+const STATUS_LABEL_KEY: Record<string, string> = {
+  SENT: 'sent',
+  SKIPPED_OPTED_OUT: 'ui.optedOut',
+  FAILED: 'ui.failed',
+  PENDING: 'ui.pending',
 };
 
 export function BulkCommsPanel({
@@ -47,6 +48,7 @@ export function BulkCommsPanel({
   companyId: string;
   jobPostId?: string;
 }) {
+  const { t } = useI18n();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [name, setName] = useState('');
@@ -72,11 +74,11 @@ export function BulkCommsPanel({
       setTemplates(tpl);
       setCampaigns(hist);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to load bulk communication data');
+      setErr(e instanceof Error ? e.message : t('ui.bulkLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [companyId, jobPostId]);
+  }, [companyId, jobPostId, t]);
 
   useEffect(() => {
     load();
@@ -92,25 +94,25 @@ export function BulkCommsPanel({
           method: 'PATCH',
           body: JSON.stringify({ name, body }),
         });
-        setMsg('Template updated');
+        setMsg(t('ui.templateUpdated'));
       } else {
         await api('/bulk-comms/templates', {
           method: 'POST',
           body: JSON.stringify({ companyId, name, body }),
         });
-        setMsg('Template created');
+        setMsg(t('ui.templateCreated'));
       }
       setName('');
       setBody('');
       setEditingId(null);
       await load();
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Failed to save template');
+      setErr(error instanceof Error ? error.message : t('ui.templateSaveFailed'));
     }
   }
 
   async function removeTemplate(id: string) {
-    if (!confirm('Delete this template?')) return;
+    if (!confirm(t('ui.deleteTemplateConfirm'))) return;
     setErr(null);
     try {
       await api(`/bulk-comms/templates/${id}`, { method: 'DELETE' });
@@ -119,17 +121,17 @@ export function BulkCommsPanel({
         setName('');
         setBody('');
       }
-      setMsg('Template deleted');
+      setMsg(t('ui.templateDeleted'));
       await load();
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Failed to delete template');
+      setErr(error instanceof Error ? error.message : t('ui.templateDeleteFailed'));
     }
   }
 
-  function startEdit(t: Template) {
-    setEditingId(t.id);
-    setName(t.name);
-    setBody(t.body);
+  function startEdit(tpl: Template) {
+    setEditingId(tpl.id);
+    setName(tpl.name);
+    setBody(tpl.body);
     setMsg(null);
     setErr(null);
   }
@@ -138,11 +140,10 @@ export function BulkCommsPanel({
     <div className="bulk-panel">
       <div className="bulk-panel-intro">
         <h2 className="section-title" style={{ margin: 0 }}>
-          Bulk communication
+          {t('ui.bulkCommunication')}
         </h2>
         <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
-          Manage message templates and review who was contacted. Use checkboxes in Pipeline to
-          move and message selected candidates. Variables:{' '}
+          {t('ui.bulkCommsIntro')} {t('ui.bulkCommsVariables')}{' '}
           <code>{'{{name}}'}</code>, <code>{'{{jobTitle}}'}</code>,{' '}
           <code>{'{{companyName}}'}</code>, <code>{'{{status}}'}</code>.
         </p>
@@ -154,33 +155,33 @@ export function BulkCommsPanel({
       <div className="bulk-grid">
         <section className="card bulk-card">
           <h3 className="section-title" style={{ marginTop: 0, fontSize: '1.05rem' }}>
-            {editingId ? 'Edit template' : 'New template'}
+            {editingId ? t('ui.editTemplate') : t('ui.newTemplate')}
           </h3>
           <form className="bulk-form" onSubmit={saveTemplate}>
             <label>
-              <LabelText required>Name</LabelText>
+              <LabelText required>{t('ui.name')}</LabelText>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
                 maxLength={120}
-                placeholder="Interview invite"
+                placeholder={t('ui.interviewInvitePlaceholder')}
               />
             </label>
             <label>
-              <LabelText required>Body</LabelText>
+              <LabelText required>{t('ui.body')}</LabelText>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 required
                 rows={6}
                 maxLength={5000}
-                placeholder="Hi {{name}}, thanks for applying to {{jobTitle}} at {{companyName}}..."
+                placeholder={t('ui.templateBodyPlaceholder')}
               />
             </label>
             <div className="chips">
               <button type="submit" className="chip active">
-                {editingId ? 'Save changes' : 'Create template'}
+                {editingId ? t('ui.saveChanges') : t('ui.createTemplate')}
               </button>
               {editingId && (
                 <button
@@ -192,33 +193,33 @@ export function BulkCommsPanel({
                     setBody('');
                   }}
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
               )}
             </div>
           </form>
 
           <h3 className="section-title" style={{ fontSize: '1.05rem', marginTop: '1.5rem' }}>
-            Templates {loading ? '' : `(${templates.length})`}
+            {t('ui.templates')} {loading ? '' : `(${templates.length})`}
           </h3>
           {templates.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>
-              No templates yet.
+              {t('ui.noTemplatesYet')}
             </p>
           ) : (
             <ul className="bulk-template-list">
-              {templates.map((t) => (
-                <li key={t.id}>
+              {templates.map((tpl) => (
+                <li key={tpl.id}>
                   <div>
-                    <strong>{t.name}</strong>
-                    <p className="muted bulk-template-preview">{t.body}</p>
+                    <strong>{tpl.name}</strong>
+                    <p className="muted bulk-template-preview">{tpl.body}</p>
                   </div>
                   <div className="chips">
-                    <button type="button" className="chip" onClick={() => startEdit(t)}>
-                      Edit
+                    <button type="button" className="chip" onClick={() => startEdit(tpl)}>
+                      {t('ui.edit')}
                     </button>
-                    <button type="button" className="chip" onClick={() => removeTemplate(t.id)}>
-                      Delete
+                    <button type="button" className="chip" onClick={() => removeTemplate(tpl.id)}>
+                      {t('ui.delete')}
                     </button>
                   </div>
                 </li>
@@ -229,11 +230,11 @@ export function BulkCommsPanel({
 
         <section className="card bulk-card">
           <h3 className="section-title" style={{ marginTop: 0, fontSize: '1.05rem' }}>
-            Communication history
+            {t('ui.communicationHistory')}
           </h3>
           {campaigns.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>
-              No bulk actions yet. Select candidates in Pipeline to start.
+              {t('ui.noBulkActionsYet')}
             </p>
           ) : (
             <ul className="bulk-history-list">
@@ -253,36 +254,36 @@ export function BulkCommsPanel({
                     >
                       <div>
                         <strong>
-                          {c.jobPost?.title || 'Job'}
+                          {c.jobPost?.title || t('ui.job')}
                           {c.toStatus ? ` → ${c.toStatus}` : ''}
                         </strong>
                         <div className="muted" style={{ fontSize: '0.8rem' }}>
                           {new Date(c.createdAt).toLocaleString()} | {c.createdBy?.fullName || '-'} | {' '}
-                          {c.recipients.length} recipient(s)
+                          {t('ui.recipientsCount').replace('{n}', String(c.recipients.length))}
                           {c.template ? ` | ${c.template.name}` : ''}
                         </div>
                         <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
-                          Sent {sent}
-                          {skipped ? ` | Opted out ${skipped}` : ''}
-                          {failed ? ` | Failed ${failed}` : ''}
+                          {t('sent')} {sent}
+                          {skipped ? ` | ${t('ui.optedOut')} ${skipped}` : ''}
+                          {failed ? ` | ${t('ui.failed')} ${failed}` : ''}
                         </div>
                       </div>
-                      <span className="muted">{open ? 'Hide' : 'Details'}</span>
+                      <span className="muted">{open ? t('ui.hide') : t('ui.details')}</span>
                     </button>
                     {open && (
                       <div className="bulk-history-detail">
                         {c.messageBody && (
                           <p className="bulk-msg-preview">
-                            <span className="muted">Message:</span> {c.messageBody}
+                            <span className="muted">{t('ui.message')}:</span> {c.messageBody}
                           </p>
                         )}
                         <table className="bulk-table">
                           <thead>
                             <tr>
-                              <th>Candidate</th>
-                              <th>Delivery</th>
-                              <th>Moved</th>
-                              <th>When</th>
+                              <th>{t('ui.candidate')}</th>
+                              <th>{t('ui.delivery')}</th>
+                              <th>{t('ui.moved')}</th>
+                              <th>{t('ui.when')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -293,7 +294,9 @@ export function BulkCommsPanel({
                                   <span
                                     className={`bulk-status bulk-status-${r.deliveryStatus.toLowerCase()}`}
                                   >
-                                    {STATUS_LABEL[r.deliveryStatus] || r.deliveryStatus}
+                                    {STATUS_LABEL_KEY[r.deliveryStatus]
+                                      ? t(STATUS_LABEL_KEY[r.deliveryStatus])
+                                      : r.deliveryStatus}
                                   </span>
                                   {r.errorMessage && (
                                     <div className="muted" style={{ fontSize: '0.72rem' }}>
@@ -301,7 +304,7 @@ export function BulkCommsPanel({
                                     </div>
                                   )}
                                 </td>
-                                <td>{r.statusMoved ? 'Yes' : '-'}</td>
+                                <td>{r.statusMoved ? t('ui.yes') : '-'}</td>
                                 <td>
                                   {r.sentAt ? new Date(r.sentAt).toLocaleString() : '-'}
                                 </td>

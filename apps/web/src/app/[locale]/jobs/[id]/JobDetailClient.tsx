@@ -6,12 +6,12 @@ import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { benefitIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
-import { jobLocationLabel } from '@/lib/location';
+import { localizedJobLocation } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
-import { useI18n } from '@/lib/i18n';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { formatSalaryRange } from '@/lib/numberFormat';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
@@ -61,9 +61,13 @@ type Job = {
   matchBreakdown?: MatchBreakdownState | null;
 };
 
-function formatSalary(min?: number | null, max?: number | null) {
-  if (!min && !max) return 'Negotiable';
-  return formatSalaryRange(min, max) || 'Negotiable';
+function formatSalary(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  negotiable: string,
+) {
+  if (!min && !max) return negotiable;
+  return formatSalaryRange(min, max) || negotiable;
 }
 
 type MatchBreakdownState = {
@@ -92,6 +96,7 @@ type MyApplicationState = {
 export function JobDetailClient() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -206,7 +211,7 @@ export function JobDetailClient() {
         matchBreakdown: created.matchBreakdown,
         createdAt: created.createdAt || new Date().toISOString(),
       });
-      setSuccess('Application submitted! Match score was calculated for the recruiter.');
+      setSuccess(t('job.applySuccess'));
       setShowApply(false);
     } catch (err) {
       const message = (err as Error).message;
@@ -234,7 +239,7 @@ export function JobDetailClient() {
       return;
     }
     await api(`/profiles/me/saved-jobs/${id}`, { method: 'POST' });
-    setSuccess('Job saved to your list.');
+    setSuccess(t('job.savedToList'));
   }
 
   if (!job && !error) return <DetailPageSkeleton />;
@@ -257,9 +262,13 @@ export function JobDetailClient() {
         </span>
         <div>
           <div className="chips" style={{ marginBottom: '0.5rem' }}>
-            {job.isHot && <span className="badge hot">Hot Job</span>}
+            {job.isHot && <span className="badge hot">{t('hot')}</span>}
             {job.category && <span className="badge">{job.category.name}</span>}
-            {job.experienceLevel && <span className="badge skill">{job.experienceLevel}</span>}
+            {job.experienceLevel && (
+              <span className="badge skill">
+                {enumLabel('experienceLevel', job.experienceLevel)}
+              </span>
+            )}
           </div>
           <h1 style={{ margin: '0 0 0.35rem', fontFamily: 'var(--font-display)', fontSize: '1.75rem' }}>
             {sanitizeMojibake(job.title)}
@@ -269,20 +278,25 @@ export function JobDetailClient() {
               {job.company.name}
               {job.company.isVerified ? ' ✓' : ''}
             </Link>
-            <span>{jobLocationLabel(job)}</span>
-            {job.employmentType && <span>{job.employmentType.replace('_', ' ')}</span>}
+            <span>{localizedJobLocation(job, t)}</span>
+            {job.employmentType && <span>{enumLabel('employmentType', job.employmentType)}</span>}
             {job._count && (
               <span className="muted">
-                {job._count.views} views | {job._count.applications} applicants
+                {t('job.viewsAndApplicants')
+                  .replace('{n}', String(job._count.views))
+                  .replace('{m}', String(job._count.applications))}
               </span>
             )}
           </div>
-          <p className="salary">{formatSalary(job.salaryMin, job.salaryMax)}</p>
+          <p className="salary">{formatSalary(job.salaryMin, job.salaryMax, t('job.negotiable'))}</p>
           {job.isHot && (
             <div className="hot-urgency">
               {job.boostUntil
-                ? `Boosted until ${new Date(job.boostUntil).toLocaleDateString()} - limited window`
-                : 'Limited-time hot boost'}
+                ? t('job.boostedUntil').replace(
+                    '{date}',
+                    new Date(job.boostUntil).toLocaleDateString(),
+                  )
+                : t('job.hotLimitedBoost')}
             </div>
           )}
         </div>
@@ -290,14 +304,14 @@ export function JobDetailClient() {
           {alreadyApplied ? (
             <>
               <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
-                Applied | {myApplication?.status}
+                {t('job.appliedBadge')} | {enumLabel('applicationStatus', myApplication?.status)}
               </div>
               <Link
                 href="/dashboard/employee?tab=applications"
                 className="secondary"
                 style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
               >
-                View my applications
+                {t('job.viewMyApplications')}
               </Link>
             </>
           ) : (
@@ -326,15 +340,15 @@ export function JobDetailClient() {
                 }}
                 disabled={submitting}
               >
-                Apply now
+                {t('applyNow')}
               </button>
             )
           )}
           <button type="button" className="secondary" onClick={saveJob}>
-            Save job
+            {t('saveJob')}
           </button>
           <button type="button" className="secondary" onClick={toggleFollow}>
-            {following ? 'Following company' : 'Follow company'}
+            {following ? t('following') : t('followCompany')}
           </button>
           {session?.user.role === 'EMPLOYEE' && job.chatPeerUserId && (
             <Link
@@ -342,7 +356,7 @@ export function JobDetailClient() {
               className="secondary"
               style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
             >
-              Chat with recruiter
+              {t('chatWithRecruiter')}
             </Link>
           )}
         </div>
@@ -354,17 +368,17 @@ export function JobDetailClient() {
       <div className="grid-2" style={{ marginTop: '1.25rem' }}>
         <div style={{ display: 'grid', gap: '1rem', alignContent: 'start' }}>
           <div className="card">
-            <h2 className="section-title">About the role</h2>
+            <h2 className="section-title">{t('job.aboutTheRole')}</h2>
             <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sanitizeMojibake(job.description)}</div>
           </div>
           {session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown && (
             <div className="card">
               <h2 className="section-title" style={{ marginBottom: '0.35rem' }}>
-                Your match
+                {t('job.yourMatch')}
                 {viewerMatchScore != null ? ` ${viewerMatchScore}%` : ''}
               </h2>
               <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
-                How your profile scores against this role
+                {t('job.yourMatchHint')}
               </p>
               <MatchBreakdownPanel breakdown={viewerMatchBreakdown} />
             </div>
@@ -372,7 +386,7 @@ export function JobDetailClient() {
         </div>
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card">
-            <h3>Skills</h3>
+            <h3>{t('skills')}</h3>
             <div className="chips" style={{ marginTop: '0.75rem' }}>
               {(job.jobSkills || []).map((js, i) => (
                 <span key={i} className={`badge ${js.isRequired ? '' : 'skill'}`}>
@@ -383,7 +397,7 @@ export function JobDetailClient() {
             </div>
           </div>
           <div className="card">
-            <h3>Benefits</h3>
+            <h3>{t('benefits')}</h3>
             <div className="chips" style={{ marginTop: '0.75rem' }}>
               {(job.benefits || []).map((b, i) => (
                 <span key={i} className="chip">
@@ -391,7 +405,7 @@ export function JobDetailClient() {
                   {b.benefit.name}
                 </span>
               ))}
-              {!job.benefits?.length && <span className="muted">No benefits listed</span>}
+              {!job.benefits?.length && <span className="muted">{t('job.noBenefits')}</span>}
             </div>
           </div>
           {(job.jobLanguages || []).length > 0 && (
@@ -409,8 +423,10 @@ export function JobDetailClient() {
           )}
           {job.experienceYearsMin != null && (
             <div className="card">
-              <h3>Experience</h3>
-              <p className="muted">{job.experienceYearsMin}+ years preferred</p>
+              <h3>{t('experience')}</h3>
+              <p className="muted">
+                {t('job.yearsPreferred').replace('{n}', String(job.experienceYearsMin))}
+              </p>
             </div>
           )}
         </div>
@@ -436,9 +452,7 @@ export function JobDetailClient() {
           }
           setShowApply(true);
           if (result.method === 'builder') {
-            setSuccess(
-              'Resume draft created. Export a PDF from the builder before applying with a file, or continue without a PDF.',
-            );
+            setSuccess(t('job.resumeDraftCreated'));
           }
         }}
       />
@@ -463,19 +477,21 @@ export function JobDetailClient() {
             <form className="form-stack" onSubmit={onApply}>
               <fieldset disabled={submitting} style={{ border: 0, margin: 0, padding: 0 }}>
                 <label>
-                  <LabelText>Resume</LabelText>
+                  <LabelText>{t('job.resume')}</LabelText>
                   <select
                     value={selectedResumeId}
                     onChange={(e) => setSelectedResumeId(e.target.value)}
                     required={resumes.length > 0}
                   >
-                    {resumes.length === 0 && <option value="">No resumes on profile</option>}
+                    {resumes.length === 0 && (
+                      <option value="">{t('job.noResumesOnProfile')}</option>
+                    )}
                     {resumes.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.title}
                         {r.targetJobTitle?.name ? ` - ${r.targetJobTitle.name}` : ''}
-                        {r.isPrimary ? ' (primary)' : ''}
-                        {r.hasFile || r.fileKey ? '' : ' - no PDF'}
+                        {r.isPrimary ? ` (${t('job.resumePrimary')})` : ''}
+                        {r.hasFile || r.fileKey ? '' : ` - ${t('job.resumeNoPdf')}`}
                       </option>
                     ))}
                   </select>
@@ -489,7 +505,7 @@ export function JobDetailClient() {
                   )}
                 {selectedResumeId && !selectedHasFile && (
                   <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hot)' }}>
-                    Selected resume has no PDF file yet. Export from the resume builder or attach a file before applying.
+                    {t('job.resumeNoPdfWarning')}
                   </p>
                 )}
                 <FormField label={t('coverLetter')}>
@@ -502,9 +518,9 @@ export function JobDetailClient() {
                     </LabelText>
                     {q.type === 'YES_NO' ? (
                       <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
-                        <option value="">Select...</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
+                        <option value="">{t('job.selectOption')}</option>
+                        <option value="Yes">{t('job.yes')}</option>
+                        <option value="No">{t('job.no')}</option>
                       </select>
                     ) : (
                       <input
@@ -518,7 +534,7 @@ export function JobDetailClient() {
                 ))}
               </fieldset>
               <button type="submit" className="cta" disabled={submitting}>
-                {submitting ? 'Submitting...' : t('submitApplication')}
+                {submitting ? t('job.submitting') : t('submitApplication')}
               </button>
               <button
                 type="button"

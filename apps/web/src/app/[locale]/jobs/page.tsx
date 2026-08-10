@@ -15,8 +15,8 @@ import { api, getSession } from '@/lib/api';
 import { benefitIconLabel, categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { formatSalaryRange } from '@/lib/numberFormat';
-import { useI18n } from '@/lib/i18n';
-import { jobLocationLabel } from '@/lib/location';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
+import { localizedJobLocation } from '@/lib/location';
 import {
   csvHasLanguageCode,
   LanguageLevelCode,
@@ -187,9 +187,13 @@ function toParams(f: Filters, view?: string | null): URLSearchParams {
   return p;
 }
 
-function formatSalary(min?: number | null, max?: number | null) {
-  if (!min && !max) return 'Negotiable';
-  return formatSalaryRange(min, max) || 'Negotiable';
+function formatSalary(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  negotiable: string,
+) {
+  if (!min && !max) return negotiable;
+  return formatSalaryRange(min, max) || negotiable;
 }
 
 function toggleCsv(csv: string, slug: string) {
@@ -203,6 +207,7 @@ function JobsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
   const browseCompanies = searchParams.get('view') === 'companies';
   const [data, setData] = useState<SearchResponse | null>(null);
@@ -474,7 +479,7 @@ function JobsInner() {
                   checked={selectedLevels.includes(lvl)}
                   onChange={() => apply({ experienceLevel: toggleCsv(filters.experienceLevel, lvl) })}
                 />
-                {lvl}
+                {enumLabel('experienceLevel', lvl)}
                 {expFacet[lvl] !== undefined && (
                   <span className="facet-count">({expFacet[lvl]})</span>
                 )}
@@ -568,22 +573,22 @@ function JobsInner() {
           </div>
 
           <div className="filter-group grid-2">
-            <FormField label={`${t('salary')} min`} optional>
+            <FormField label={t('job.salaryMin')} optional>
               <NumberInput
                 value={filters.salaryMin ? Number(filters.salaryMin) : null}
                 onValueChange={(n) => apply({ salaryMin: n == null ? '' : String(n) })}
-                placeholder="e.g. 5.000.000"
+                placeholder={t('job.salaryMinPlaceholder')}
                 min={0}
-                aria-label={`${t('salary')} min`}
+                aria-label={t('job.salaryMin')}
               />
             </FormField>
-            <FormField label={`${t('salary')} max`} optional>
+            <FormField label={t('job.salaryMax')} optional>
               <NumberInput
                 value={filters.salaryMax ? Number(filters.salaryMax) : null}
                 onValueChange={(n) => apply({ salaryMax: n == null ? '' : String(n) })}
-                placeholder="e.g. 20.000.000"
+                placeholder={t('job.salaryMaxPlaceholder')}
                 min={0}
-                aria-label={`${t('salary')} max`}
+                aria-label={t('job.salaryMax')}
               />
             </FormField>
           </div>
@@ -747,7 +752,7 @@ function JobsInner() {
               ))}
               {filters.hotOnly && (
                 <button type="button" className="chip chip-hot" onClick={() => apply({ hotOnly: false })}>
-                  Hot x
+                  {t('hot')} x
                 </button>
               )}
             </div>
@@ -758,12 +763,14 @@ function JobsInner() {
               onChange={(e) => apply({ sort: e.target.value })}
               aria-label={t('sortBy')}
             >
-              <option value="relevance">Relevance</option>
-              <option value="newest">Newest</option>
-              <option value="salary_high">Salary high</option>
-              <option value="salary_low">Salary low</option>
-              <option value="experience">Experience</option>
-              {session?.user.role === 'EMPLOYEE' && <option value="match">Best match</option>}
+              <option value="relevance">{t('job.sortRelevance')}</option>
+              <option value="newest">{t('job.sortNewest')}</option>
+              <option value="salary_high">{t('job.sortSalaryHigh')}</option>
+              <option value="salary_low">{t('job.sortSalaryLow')}</option>
+              <option value="experience">{t('experience')}</option>
+              {session?.user.role === 'EMPLOYEE' && (
+                <option value="match">{t('job.sortBestMatch')}</option>
+              )}
             </select>
             <select
               value={filters.limit}
@@ -772,7 +779,7 @@ function JobsInner() {
             >
               {PAGE_SIZE_OPTIONS.map((n) => (
                 <option key={n} value={n}>
-                  {n} / page
+                  {t('job.perPage').replace('{n}', String(n))}
                 </option>
               ))}
             </select>
@@ -802,16 +809,20 @@ function JobsInner() {
               </span>
               <div>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                  {job.isHot && <span className="badge hot">Hot</span>}
+                  {job.isHot && <span className="badge hot">{t('hot')}</span>}
                   {job.category && <span className="badge">{job.category.name}</span>}
-                  {job.experienceLevel && <span className="badge skill">{job.experienceLevel}</span>}
+                  {job.experienceLevel && (
+                    <span className="badge skill">
+                      {enumLabel('experienceLevel', job.experienceLevel)}
+                    </span>
+                  )}
                 </div>
                 <h3>{sanitizeMojibake(job.title)}</h3>
                 <div className="job-meta">
                   <span>{job.company.name}</span>
-                  <span>{jobLocationLabel(job)}</span>
+                  <span>{localizedJobLocation(job, t)}</span>
                   <span className="salary" style={{ fontSize: '0.9rem' }}>
-                    {formatSalary(job.salaryMin, job.salaryMax)}
+                    {formatSalary(job.salaryMin, job.salaryMax, t('job.negotiable'))}
                   </span>
                 </div>
                 {job.isHot && (
@@ -825,11 +836,11 @@ function JobsInner() {
                                 (24 * 60 * 60 * 1000),
                             ),
                           );
-                          if (days <= 1) return 'Ends today - apply soon';
-                          if (days <= 3) return `Only ${days} days left`;
-                          return `Hot for ${days} more days`;
+                          if (days <= 1) return t('job.hotEndsToday');
+                          if (days <= 3) return t('job.hotDaysLeft').replace('{n}', String(days));
+                          return t('job.hotMoreDays').replace('{n}', String(days));
                         })()
-                      : 'Limited-time boost'}
+                      : t('job.hotLimitedBoost')}
                   </div>
                 )}
                 <div className="chips">
@@ -846,7 +857,7 @@ function JobsInner() {
 
         {!loading && data && data.items.length === 0 && (
           <div className="card">
-            <p className="muted">No jobs match these filters. Try clearing some.</p>
+            <p className="muted">{t('job.noResults')}</p>
           </div>
         )}
 
@@ -861,7 +872,9 @@ function JobsInner() {
               onPageChange={(p) => apply({ page: p })}
               truncatedNote={
                 data.truncated
-                  ? `Showing top ${data.total.toLocaleString()} of ${(data.matchedTotal ?? data.total).toLocaleString()} matches for this sort`
+                  ? t('job.truncatedNote')
+                      .replace('{n}', data.total.toLocaleString())
+                      .replace('{m}', (data.matchedTotal ?? data.total).toLocaleString())
                   : null
               }
             />

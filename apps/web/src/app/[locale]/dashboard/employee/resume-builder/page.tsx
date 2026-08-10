@@ -41,20 +41,20 @@ type ResumeDocPayload = {
 };
 
 const SECTION_KEYS = [
-  ['summary', 'Summary'],
-  ['skills', 'Skills'],
-  ['experience', 'Experience'],
-  ['education', 'Education'],
-  ['languages', 'Languages'],
-  ['certifications', 'Certifications'],
-  ['email', 'Email'],
-  ['phone', 'Phone'],
+  ['summary', 'emp.summary'],
+  ['skills', 'skills'],
+  ['experience', 'experience'],
+  ['education', 'education'],
+  ['languages', 'languages'],
+  ['certifications', 'certifications'],
+  ['email', 'email'],
+  ['phone', 'emp.phone'],
 ] as const;
 
-const TEMPLATES: Array<{ key: ResumeTemplateKey; label: string }> = [
-  { key: 'classic', label: 'Classic' },
-  { key: 'modern', label: 'Modern' },
-  { key: 'compact', label: 'Compact' },
+const TEMPLATES: Array<{ key: ResumeTemplateKey; labelKey: string }> = [
+  { key: 'classic', labelKey: 'emp.templateClassic' },
+  { key: 'modern', labelKey: 'emp.templateModern' },
+  { key: 'compact', labelKey: 'emp.templateCompact' },
 ];
 
 function normalizeInclusion(raw?: ResumeInclusion | null): typeof DEFAULT_RESUME_INCLUSION {
@@ -129,7 +129,9 @@ function ResumeBuilderInner() {
   }, []);
 
   useEffect(() => {
-    load(resumeIdParam).catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
+    load(resumeIdParam).catch((e) =>
+      setError(e instanceof Error ? e.message : t('emp.loadFailed')),
+    );
   }, [load, resumeIdParam]);
 
   useEffect(() => {
@@ -138,7 +140,7 @@ function ResumeBuilderInner() {
       skipDebounce.current = false;
       return;
     }
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setSaving(true);
       api(`/profiles/me/resumes/${resumeId}/builder`, {
         method: 'PATCH',
@@ -149,11 +151,11 @@ function ResumeBuilderInner() {
         }),
       })
         .then(() => load(resumeId))
-        .then(() => setMsg('Saved'))
-        .catch((e) => setError(e instanceof Error ? e.message : 'Save failed'))
+        .then(() => setMsg(t('emp.saved')))
+        .catch((e) => setError(e instanceof Error ? e.message : t('emp.saveFailed')))
         .finally(() => setSaving(false));
     }, 450);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [title, templateKey, inclusion, resumeId, ready, load]);
 
   function toggleSection(key: (typeof SECTION_KEYS)[number][0]) {
@@ -191,7 +193,7 @@ function ResumeBuilderInner() {
       method: 'PATCH',
       body: JSON.stringify({ isPrimary: true }),
     });
-    setMsg('Set as primary resume');
+    setMsg(t('emp.setAsPrimaryDone'));
     await load(resumeId);
   }
 
@@ -212,11 +214,11 @@ function ResumeBuilderInner() {
         method: 'POST',
       });
       setShowExportConfirm(false);
-      setMsg('PDF exported');
+      setMsg(t('emp.pdfExported'));
       if (res.downloadUrl) window.open(res.downloadUrl, '_blank', 'noopener,noreferrer');
       await load(resumeId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Export failed');
+      setError(e instanceof Error ? e.message : t('emp.exportFailed'));
     } finally {
       setExporting(false);
     }
@@ -249,16 +251,16 @@ function ResumeBuilderInner() {
       <div className="resume-builder-toolbar">
         <div>
           <Link href="/dashboard/employee?tab=profile" className="ghost" style={{ padding: 0 }}>
-            ← Back to profile
+            ← {t('emp.backToProfile')}
           </Link>
           <h1 className="section-title" style={{ margin: '0.35rem 0 0' }}>
-            Resume builder
+            {t('resumeMethodBuilder')}
           </h1>
         </div>
         <div className="resume-builder-actions">
-          {saving && <span className="muted" style={{ fontSize: '0.85rem' }}>Saving...</span>}
+          {saving && <span className="muted" style={{ fontSize: '0.85rem' }}>{t('saving')}</span>}
           <button type="button" className="secondary" onClick={setPrimary} disabled={!resumeId}>
-            Set primary
+            {t('emp.setPrimary')}
           </button>
           <button
             type="button"
@@ -266,7 +268,7 @@ function ResumeBuilderInner() {
             onClick={() => setShowExportConfirm(true)}
             disabled={!resumeId || exporting}
           >
-            {exporting ? 'Exporting...' : t('exportPdf')}
+            {exporting ? t('emp.exporting') : t('exportPdf')}
           </button>
         </div>
       </div>
@@ -277,36 +279,36 @@ function ResumeBuilderInner() {
       <div className="resume-builder-layout">
         <aside className="card resume-builder-sidebar">
           <label>
-            <LabelText>Title</LabelText>
+            <LabelText>{t('resumeDisplayName')}</LabelText>
             <input value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
 
           <div style={{ marginTop: '1rem' }}>
-            <LabelText>Template</LabelText>
+            <LabelText>{t('emp.template')}</LabelText>
             <div className="chips" style={{ marginTop: '0.4rem' }}>
-              {TEMPLATES.map((t) => (
+              {TEMPLATES.map((tpl) => (
                 <button
-                  key={t.key}
+                  key={tpl.key}
                   type="button"
-                  className={`chip ${templateKey === t.key ? 'active' : ''}`}
-                  onClick={() => setTemplateKey(t.key)}
+                  className={`chip ${templateKey === tpl.key ? 'active' : ''}`}
+                  onClick={() => setTemplateKey(tpl.key)}
                 >
-                  {t.label}
+                  {t(tpl.labelKey)}
                 </button>
               ))}
             </div>
           </div>
 
           <div style={{ marginTop: '1.25rem' }}>
-            <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Sections</h3>
-            {SECTION_KEYS.map(([key, label]) => (
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{t('emp.sections')}</h3>
+            {SECTION_KEYS.map(([key, labelKey]) => (
               <label key={key} className="resume-builder-check">
                 <input
                   type="checkbox"
                   checked={Boolean(inclusion.sections[key])}
                   onChange={() => toggleSection(key)}
                 />
-                <span>{label}</span>
+                <span>{t(labelKey)}</span>
               </label>
             ))}
           </div>
@@ -315,7 +317,7 @@ function ResumeBuilderInner() {
             <>
               {inclusion.sections.experience && payload.source.experiences.length > 0 && (
                 <div style={{ marginTop: '1rem' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Experiences</h3>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{t('emp.experiences')}</h3>
                   {payload.source.experiences.map((e) => (
                     <label key={e.id} className="resume-builder-check">
                       <input
@@ -340,7 +342,7 @@ function ResumeBuilderInner() {
 
               {inclusion.sections.education && payload.source.educations.length > 0 && (
                 <div style={{ marginTop: '1rem' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Education</h3>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{t('education')}</h3>
                   {payload.source.educations.map((e) => (
                     <label key={e.id} className="resume-builder-check">
                       <input
@@ -362,7 +364,7 @@ function ResumeBuilderInner() {
 
               {inclusion.sections.skills && payload.source.skills.length > 0 && (
                 <div style={{ marginTop: '1rem' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Skills</h3>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{t('skills')}</h3>
                   {payload.source.skills.map((s) => (
                     <label key={s.id} className="resume-builder-check">
                       <input
@@ -384,7 +386,7 @@ function ResumeBuilderInner() {
 
               {inclusion.sections.languages && payload.source.languages.length > 0 && (
                 <div style={{ marginTop: '1rem' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Languages</h3>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{t('languages')}</h3>
                   {payload.source.languages.map((l) => (
                     <label key={l.id} className="resume-builder-check">
                       <input
@@ -406,7 +408,7 @@ function ResumeBuilderInner() {
 
               {inclusion.sections.certifications && payload.source.certifications.length > 0 && (
                 <div style={{ marginTop: '1rem' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Certifications</h3>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>{t('certifications')}</h3>
                   {payload.source.certifications.map((c) => (
                     <label key={c.id} className="resume-builder-check">
                       <input
@@ -437,7 +439,7 @@ function ResumeBuilderInner() {
               themeAccent={payload?.resume?.themeAccent}
             />
           ) : (
-            <p className="muted">Loading preview...</p>
+            <p className="muted">{t('emp.loadingPreview')}</p>
           )}
         </div>
 

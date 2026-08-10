@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
-import { jobLocationLabel } from '@/lib/location';
+import { localizedJobLocation } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 import { formatCompactCount, formatSalaryRange } from '@/lib/numberFormat';
 import { ExploreSection } from '@/components/explore/ExploreSection';
@@ -36,13 +36,13 @@ type Job = {
   city?: { name: string } | null;
 };
 
-function hotUrgencyLabel(boostUntil?: string | null) {
-  if (!boostUntil) return 'Limited-time boost';
+function hotUrgencyLabel(t: (k: string) => string, boostUntil?: string | null) {
+  if (!boostUntil) return t('ui.hotBoostLimited');
   const end = new Date(boostUntil).getTime();
   const days = Math.max(1, Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000)));
-  if (days <= 1) return 'Ends today - apply soon';
-  if (days <= 3) return `Only ${days} days left`;
-  return `Hot for ${days} more days`;
+  if (days <= 1) return t('ui.hotEndsToday');
+  if (days <= 3) return t('ui.hotDaysLeft').replace('{n}', String(days));
+  return t('ui.hotMoreDays').replace('{n}', String(days));
 }
 
 type FacetItem = { slug: string; name: string; count: number; logoUrl?: string | null };
@@ -228,14 +228,14 @@ export function SeekerHome() {
                 <h3>{sanitizeMojibake(job.title)}</h3>
                 <div className="job-meta">
                   <span>{job.company.name}</span>
-                  <span>{jobLocationLabel(job)}</span>
+                  <span>{localizedJobLocation(job, t)}</span>
                   {formatSalary(job.salaryMin, job.salaryMax) && (
                     <span className="salary" style={{ fontSize: '0.9rem' }}>
                       {formatSalary(job.salaryMin, job.salaryMax)}
                     </span>
                   )}
                 </div>
-                <div className="hot-urgency">{hotUrgencyLabel(job.boostUntil)}</div>
+                <div className="hot-urgency">{hotUrgencyLabel(t, job.boostUntil)}</div>
               </div>
             </Link>
           ))}

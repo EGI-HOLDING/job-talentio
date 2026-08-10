@@ -44,6 +44,13 @@ const SUGGEST_PATH: Record<LookupKind, string> = {
   cities: '/meta/cities/suggest',
 };
 
+const KIND_LABEL_KEY: Record<LookupKind, string> = {
+  skills: 'skills',
+  benefits: 'benefits',
+  languages: 'languages',
+  cities: 'city',
+};
+
 export function LookupCombobox({
   kind,
   onPick,
@@ -143,7 +150,7 @@ export function LookupCombobox({
   return (
     <form ref={formRef} className="form-stack skill-combobox" onSubmit={onSubmit}>
       <label>
-        <span className="sr-only">{kind}</span>
+        <span className="sr-only">{t(KIND_LABEL_KEY[kind])}</span>
         <input
           type="text"
           role="combobox"
@@ -215,7 +222,7 @@ export function LookupCombobox({
       )}
       {levelOptions && levelOptions.length > 0 && (
         <label>
-          <span className="sr-only">Level</span>
+          <span className="sr-only">{t('ui.level')}</span>
           <select name={levelName} defaultValue={defaultLevel} disabled={disabled}>
             {levelOptions.map((o) => (
               <option key={o.value} value={o.value}>

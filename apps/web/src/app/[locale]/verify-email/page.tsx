@@ -68,7 +68,7 @@ function VerifyEmailInner() {
               <Link href="/settings" style={{ color: 'var(--accent)' }}>
                 {t('settings')}
               </Link>{' '}
-              - request a new verification email from your account.
+              - {t('ui.requestNewVerificationEmail')}
             </p>
           </>
         )}

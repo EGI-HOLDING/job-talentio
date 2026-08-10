@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 type ConfirmModalProps = {
   title: string;
   message: string;
@@ -14,13 +16,17 @@ type ConfirmModalProps = {
 export function ConfirmModal({
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   danger = false,
   busy = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const { t } = useI18n();
+  const confirmText = confirmLabel ?? t('ui.confirm');
+  const cancelText = cancelLabel ?? t('cancel');
+
   return (
     <div
       className="modal-backdrop"
@@ -43,7 +49,7 @@ export function ConfirmModal({
         </p>
         <div className="confirm-modal-actions">
           <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
-            {cancelLabel}
+            {cancelText}
           </button>
           <button
             type="button"
@@ -51,7 +57,7 @@ export function ConfirmModal({
             onClick={onConfirm}
             disabled={busy}
           >
-            {busy ? 'Working...' : confirmLabel}
+            {busy ? t('ui.working') : confirmText}
           </button>
         </div>
       </div>

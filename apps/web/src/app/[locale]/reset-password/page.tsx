@@ -4,10 +4,12 @@ import { Link } from '@/lib/navigation';
 import { FormEvent, Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
 
 function ResetPasswordInner() {
   const params = useSearchParams();
+  const { t } = useI18n();
   const token = params.get('token') || '';
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -27,7 +29,7 @@ function ResetPasswordInner() {
       });
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Reset failed');
+      setError(err instanceof Error ? err.message : t('ui.resetFailed'));
     } finally {
       setLoading(false);
     }
@@ -36,25 +38,25 @@ function ResetPasswordInner() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <h1>Choose a new password</h1>
-        {!token && <FormAlert>Missing reset token. Request a new link.</FormAlert>}
+        <h1>{t('ui.chooseNewPassword')}</h1>
+        {!token && <FormAlert>{t('ui.missingResetToken')}</FormAlert>}
         {done ? (
           <>
-            <FormAlert tone="success">Password updated. You can sign in now.</FormAlert>
+            <FormAlert tone="success">{t('ui.passwordUpdatedSignIn')}</FormAlert>
             <p className="muted">
               <Link href="/login" style={{ color: 'var(--accent)' }}>
-                Sign in
+                {t('signIn')}
               </Link>
             </p>
           </>
         ) : (
           <form className="form-stack" onSubmit={onSubmit}>
-            <FormField label="New password" required>
+            <FormField label={t('newPassword')} required>
               <PasswordInput name="newPassword" required minLength={8} autoComplete="new-password" />
             </FormField>
             {error && <FormAlert>{error}</FormAlert>}
             <button type="submit" disabled={loading || !token}>
-              {loading ? 'Saving...' : 'Update password'}
+              {loading ? t('saving') : t('ui.updatePassword')}
             </button>
           </form>
         )}
