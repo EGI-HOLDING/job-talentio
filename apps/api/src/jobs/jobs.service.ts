@@ -805,6 +805,11 @@ export class JobsService {
     await this.prisma.jobPostTranslation
       .delete({ where: { jobPostId_locale: { jobPostId: jobId, locale } } })
       .catch(() => undefined);
+    // Questions are part of the same language version. Leaving them behind
+    // would serve Uzbek questions on a posting that reports only English.
+    await this.prisma.jobQuestionTranslation.deleteMany({
+      where: { locale, jobQuestion: { jobPostId: jobId } },
+    });
     void this.jobsSearch.syncJob(jobId);
     return { ok: true };
   }
