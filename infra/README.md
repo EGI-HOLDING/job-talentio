@@ -137,7 +137,8 @@ Set separately on **staging** and **production**. Values below are production ex
 NODE_ENV=production
 DEV_AUTH_ENABLED=false
 JWT_SECRET=<long-random-secret-min-32-chars>
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=30d
 WEB_URL=https://jobtalent.io
 ADMIN_URL=https://admin.jobtalent.io
 API_URL=https://api.jobtalent.io

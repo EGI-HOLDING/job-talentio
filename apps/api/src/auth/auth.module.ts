@@ -17,7 +17,8 @@ import { resolveJwtSecret } from '../common/jwt-secret';
       useFactory: (config: ConfigService) => ({
         secret: resolveJwtSecret(config),
         signOptions: {
-          expiresIn: config.get('JWT_EXPIRES_IN', '7d'),
+          // Short-lived access tokens; clients silently rotate via POST /auth/refresh.
+          expiresIn: config.get('JWT_EXPIRES_IN', '15m'),
         },
       }),
     }),

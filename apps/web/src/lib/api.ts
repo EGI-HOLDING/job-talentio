@@ -3,6 +3,7 @@ export const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:
 
 export type AuthSession = {
   accessToken: string;
+  refreshToken?: string;
   user: {
     id: string;
     email: string;
@@ -21,6 +22,11 @@ export function getToken(): string | null {
   return localStorage.getItem('jt_token');
 }
 
+function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('jt_refresh');
+}
+
 export function getSession(): AuthSession | null {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('jt_session');
@@ -34,12 +40,61 @@ export function getSession(): AuthSession | null {
 
 export function saveSession(session: AuthSession) {
   localStorage.setItem('jt_token', session.accessToken);
+  if (session.refreshToken) {
+    localStorage.setItem('jt_refresh', session.refreshToken);
+  }
   localStorage.setItem('jt_session', JSON.stringify(session));
 }
 
 export function clearSession() {
   localStorage.removeItem('jt_token');
+  localStorage.removeItem('jt_refresh');
   localStorage.removeItem('jt_session');
+}
+
+/** Revoke the refresh token server-side (best effort), then clear local session. */
+export async function logout() {
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch {
+      /* offline logout still clears local state */
+    }
+  }
+  clearSession();
+}
+
+// Single in-flight refresh shared by concurrent 401s.
+let refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefresh(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return null;
+      try {
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!res.ok) return null;
+        const session = (await res.json()) as AuthSession;
+        saveSession(session);
+        return session.accessToken;
+      } catch {
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
 }
 
 type NestErrorBody = {
@@ -103,11 +158,25 @@ export async function api<T>(
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
-  if (options.auth !== false) {
+  const useAuth = options.auth !== false;
+  if (useAuth) {
     const token = getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  const res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+  let res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+
+  // Expired access token: silently rotate once via the refresh token, then retry.
+  if (res.status === 401 && useAuth && getToken() && !path.startsWith('/auth/')) {
+    const rotated = await tryRefresh();
+    if (rotated) {
+      headers.set('Authorization', `Bearer ${rotated}`);
+      res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+    } else if (getRefreshToken()) {
+      // Refresh token present but rejected - session is unrecoverable.
+      clearSession();
+    }
+  }
+
   const text = await res.text();
   let data: unknown = null;
   if (text) {
