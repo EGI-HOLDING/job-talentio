@@ -10,6 +10,15 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+
+  // Behind Railway (and optionally Cloudflare) the client IP arrives via
+  // X-Forwarded-For; without trust proxy every visitor shares the proxy IP,
+  // which breaks per-IP rate limiting. Hops: 1 = Railway edge, 2 = +Cloudflare.
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  (app.getHttpAdapter().getInstance() as import('express').Express).set(
+    'trust proxy',
+    Number.isFinite(trustProxyHops) ? trustProxyHops : 1,
+  );
   app.enableCors({
     origin: [
       process.env.WEB_URL ?? 'http://localhost:3000',
