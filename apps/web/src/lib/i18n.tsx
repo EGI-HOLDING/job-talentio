@@ -847,6 +847,31 @@ const DICT = {
     ru: 'Редактировать в конструкторе',
     en: 'Edit in builder',
   },
+  exportPdf: {
+    uz: 'PDF eksport',
+    ru: 'Экспорт PDF',
+    en: 'Export PDF',
+  },
+  exportPdfConfirmTitle: {
+    uz: 'PDF eksport qilinsinmi?',
+    ru: 'Экспортировать PDF?',
+    en: 'Export PDF?',
+  },
+  exportPdfReplaceWarning: {
+    uz: 'Bu resume da allaqachon CV biriktirilgan. Export PDF builderdagi yangi CV bilan joriy biriktirilgan faylni almashtiradi. Eski yuklangan CV olib tashlanadi va keyingi arizalarda yangi PDF ishlatiladi. Davom etasizmi?',
+    ru: 'К этому резюме уже прикреплён CV. Export PDF заменит текущий файл новым CV из конструктора. Старый загруженный файл будет удалён, и для следующих откликов будет использоваться новый PDF. Продолжить?',
+    en: 'This resume already has a CV attached. Export PDF will replace that file with a new CV from the builder. Your previous upload will be removed, and the new PDF will be used for future applications. Continue?',
+  },
+  exportPdfAttachWarning: {
+    uz: 'Export PDF builderdan PDF yaratadi va uni shu resume ga biriktiradi. Keyingi arizalarda shu fayl ishlatiladi. Davom etasizmi?',
+    ru: 'Export PDF создаст PDF из конструктора и прикрепит его к этому резюме. Этот файл будет использоваться для следующих откликов. Продолжить?',
+    en: 'Export PDF will generate a PDF from the builder and attach it to this resume. That file will be used for future applications. Continue?',
+  },
+  exportPdfConfirm: {
+    uz: 'Ha, eksport qilish',
+    ru: 'Да, экспортировать',
+    en: 'Yes, export PDF',
+  },
   viewPdf: {
     uz: 'PDF ni ko‘rish',
     ru: 'Смотреть PDF',
