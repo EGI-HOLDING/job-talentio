@@ -14,6 +14,17 @@ export const ui = {
     ru: 'Автоматический перевод',
     en: 'Auto-translated',
   },
+  'ui.translateThis': { uz: 'Tarjima qilish', ru: 'Перевести', en: 'Translate' },
+  'ui.translating': {
+    uz: 'Tarjima qilinmoqda...',
+    ru: 'Переводим...',
+    en: 'Translating...',
+  },
+  'ui.translateFailed': {
+    uz: 'Tarjima qilib bo‘lmadi',
+    ru: 'Не удалось перевести',
+    en: 'Could not translate this text',
+  },
   'ui.location': { uz: 'Manzil', ru: 'Локация', en: 'Location' },
   'ui.matchOk': { uz: 'Mos', ru: 'Совпадает', en: 'OK' },
   'ui.matchMissing': { uz: 'Yetishmaydi', ru: 'Не хватает', en: 'Missing' },

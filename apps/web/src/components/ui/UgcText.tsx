@@ -18,6 +18,9 @@ type Props = {
   /** Keep author line breaks (job descriptions, article bodies). */
   preserveLineBreaks?: boolean;
   className?: string;
+  /** Offered only when the server says machine translation is available. */
+  onTranslate?: () => void;
+  translating?: boolean;
 };
 
 /**
@@ -31,6 +34,8 @@ export function UgcText({
   isMachineTranslated = false,
   preserveLineBreaks = false,
   className,
+  onTranslate,
+  translating = false,
 }: Props) {
   const { t, locale } = useI18n();
   const clean = sanitizeMojibake(text);
@@ -46,6 +51,16 @@ export function UgcText({
                 '{language}',
                 isLocale(contentLocale) ? t(LOCALE_LABEL_KEY[contentLocale]) : String(contentLocale),
               )}
+          {onTranslate && !isMachineTranslated && (
+            <button
+              type="button"
+              className="ghost ugc-notice-action"
+              onClick={onTranslate}
+              disabled={translating}
+            >
+              {translating ? t('ui.translating') : t('ui.translateThis')}
+            </button>
+          )}
         </p>
       )}
       <div style={preserveLineBreaks ? { whiteSpace: 'pre-wrap' } : undefined}>{clean}</div>

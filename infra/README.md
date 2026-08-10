@@ -136,6 +136,14 @@ railway ssh --service api-stage-job-talentio -- node -e "require('./dist/main')"
 
 The index self-heals on boot when it is empty, so a plain redeploy is usually enough.
 
+**Machine translation (optional, costs money):** off by default (`TRANSLATION_PROVIDER=none`). When enabled, a signed-in reader can translate a posting that has no human version in their language; the result is cached as a machine row in `JobPostTranslation`, so each text is paid for once and later readers get it free. A human translation always wins and is never overwritten, and cached machine output expires when the source text changes (`sourceHash`).
+
+- `TRANSLATION_PROVIDER`: `none` | `google` | `deepl`. Only `google` supports Uzbek.
+- `TRANSLATION_API_KEY`: provider key. Missing key falls back to `none` with a warning.
+- `TRANSLATION_MONTHLY_CHAR_BUDGET` (default 200000): monthly character cap counted in Redis. Without a reachable Redis the budget cannot be enforced, so translation stays off rather than risking an open-ended bill.
+
+The endpoint (`POST /api/jobs/:id/translate/:locale`) requires authentication and shares the search rate limiter.
+
 ### Reference variables (api)
 
 Link plugin outputs into the `api` service:
