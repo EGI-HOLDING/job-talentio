@@ -596,11 +596,37 @@ export class JobsService {
     });
 
     const resolved = this.withResolvedIcons(job);
-    if (member) return resolved;
+    const viewerMatch = await this.matchForEmployeeViewer(viewer, id);
+
+    if (member) {
+      return viewerMatch ? { ...resolved, ...viewerMatch } : resolved;
+    }
 
     const stripped = this.stripPrivateCompanyFields(resolved);
     const chatPeerUserId = await this.chatPeerUserIdForCompany(job.companyId);
-    return { ...stripped, chatPeerUserId };
+    return {
+      ...stripped,
+      chatPeerUserId,
+      ...(viewerMatch || {}),
+    };
+  }
+
+  /** Live match for logged-in employees (pre-apply job detail breakdown). */
+  private async matchForEmployeeViewer(viewer: AuthUser | undefined, jobPostId: string) {
+    if (!viewer || (viewer.role !== 'EMPLOYEE' && viewer.role !== 'SUPER_ADMIN')) {
+      return null;
+    }
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { userId: viewer.id },
+      select: { id: true },
+    });
+    if (!profile) return null;
+    try {
+      const matchBreakdown = await this.matching.scoreProfileAgainstJob(profile.id, jobPostId);
+      return { matchScore: matchBreakdown.total, matchBreakdown };
+    } catch {
+      return null;
+    }
   }
 
   async listMine(user: AuthUser, companyId: string) {
