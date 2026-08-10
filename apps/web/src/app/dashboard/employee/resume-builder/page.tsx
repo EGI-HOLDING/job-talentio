@@ -10,6 +10,8 @@ import {
   type ResumeTemplateKey,
 } from '@job-talentio/shared';
 import { api, getSession } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { ResumePreview, type ResumePreviewDocument } from '@/components/resume/ResumePreview';
@@ -76,6 +78,7 @@ function normalizeInclusion(raw?: ResumeInclusion | null): typeof DEFAULT_RESUME
 }
 
 function ResumeBuilderInner() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const resumeIdParam = searchParams.get('resumeId') || undefined;
 
@@ -87,9 +90,11 @@ function ResumeBuilderInner() {
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [ready, setReady] = useState(false);
   const skipDebounce = useRef(true);
   const resumeId = payload?.resume?.id;
+  const hasAttachedFile = Boolean(payload?.resume?.hasFile);
 
   const load = useCallback(async (id?: string) => {
     const session = getSession();
@@ -206,6 +211,7 @@ function ResumeBuilderInner() {
       const res = await api<{ downloadUrl?: string }>(`/profiles/me/resumes/${resumeId}/export`, {
         method: 'POST',
       });
+      setShowExportConfirm(false);
       setMsg('PDF exported');
       if (res.downloadUrl) window.open(res.downloadUrl, '_blank', 'noopener,noreferrer');
       await load(resumeId);
@@ -222,6 +228,24 @@ function ResumeBuilderInner() {
 
   return (
     <div className="shell resume-builder-page">
+      {showExportConfirm && (
+        <ConfirmModal
+          title={t('exportPdfConfirmTitle')}
+          message={
+            hasAttachedFile ? t('exportPdfReplaceWarning') : t('exportPdfAttachWarning')
+          }
+          confirmLabel={t('exportPdfConfirm')}
+          cancelLabel={t('cancel')}
+          danger={hasAttachedFile}
+          busy={exporting}
+          onCancel={() => {
+            if (!exporting) setShowExportConfirm(false);
+          }}
+          onConfirm={() => {
+            void exportPdf();
+          }}
+        />
+      )}
       <div className="resume-builder-toolbar">
         <div>
           <Link href="/dashboard/employee?tab=profile" className="ghost" style={{ padding: 0 }}>
@@ -236,8 +260,13 @@ function ResumeBuilderInner() {
           <button type="button" className="secondary" onClick={setPrimary} disabled={!resumeId}>
             Set primary
           </button>
-          <button type="button" className="cta" onClick={exportPdf} disabled={!resumeId || exporting}>
-            {exporting ? 'Exporting...' : 'Export PDF'}
+          <button
+            type="button"
+            className="cta"
+            onClick={() => setShowExportConfirm(true)}
+            disabled={!resumeId || exporting}
+          >
+            {exporting ? 'Exporting...' : t('exportPdf')}
           </button>
         </div>
       </div>
