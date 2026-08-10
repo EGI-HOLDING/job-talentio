@@ -1,0 +1,26 @@
+---
+description: Never include Cursor/AI co-author or Made-with trailers in Git commits or PRs
+alwaysApply: true
+---
+
+# No AI commit attribution
+
+Commits and PRs must not credit Cursor (or other AI tools) as co-author.
+
+## Forbidden in commit messages and `git commit` args
+
+- `Co-authored-by: Cursor …` / `cursoragent@cursor.com` / any `Co-authored-by:` for AI
+- `Made-with: Cursor` / `Generated-by` / `AI-assisted` / similar trailers
+- `git commit --trailer …` for attribution
+- Mentions of Cursor/ChatGPT/AI as author in the subject or body
+
+## Required behavior
+
+1. Write only the normal subject/body (why > what). Use `git commit -m` / heredoc — never add attribution trailers.
+2. After commit, if the message still contains forbidden trailers and the commit is **local and unpushed** and was created by you in this session: amend once to strip them (allowed exception to the usual no-amend rule).
+3. Do not push commits that still contain Cursor/AI attribution.
+4. Do not change `git config` user.name / user.email.
+
+## Note
+
+Also keep Cursor Settings → Agents → Attribution (Commit / PR) **off**, and CLI `attributeCommitsToAgent` / `attributePRsToAgent` **false**, so the IDE does not inject trailers after the agent commit.
