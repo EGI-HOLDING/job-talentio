@@ -103,7 +103,15 @@ export class JobsSearchService implements OnModuleInit {
       const res = await this.request<{ hits: Array<{ id: string }> }>(
         'POST',
         `/indexes/${INDEX}/search`,
-        { q, limit: SEARCH_ID_LIMIT, attributesToRetrieve: ['id'] },
+        {
+          q,
+          limit: SEARCH_ID_LIMIT,
+          attributesToRetrieve: ['id'],
+          // Default 'last' matches any query word, so multi-word queries return
+          // nearly the whole corpus. 'all' keeps typo tolerance but requires
+          // every word to match, like users expect from a job search box.
+          matchingStrategy: 'all',
+        },
       );
       return res.hits.map((h) => h.id);
     } catch (err) {
