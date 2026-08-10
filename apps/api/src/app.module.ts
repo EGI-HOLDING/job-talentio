@@ -19,6 +19,8 @@ import { ReportsModule } from './reports/reports.module';
 import { BulkCommsModule } from './bulk-comms/bulk-comms.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { SearchModule } from './search/search.module';
+import { NewsModule } from './news/news.module';
+import { PresenceModule } from './presence/presence.module';
 import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
 
@@ -27,6 +29,7 @@ import { SeedService } from './seed.service';
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     RateLimitModule,
     SearchModule,
+    PresenceModule,
     PrismaModule,
     StorageModule,
     MailModule,
@@ -44,6 +47,7 @@ import { SeedService } from './seed.service';
     BulkCommsModule,
     AlertsModule,
     AdminModule,
+    NewsModule,
   ],
   controllers: [HealthController],
   providers: [SeedService],

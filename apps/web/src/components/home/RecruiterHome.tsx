@@ -10,6 +10,8 @@ import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
 import { CompanyTrustBanner } from '@/components/home/CompanyTrustBanner';
 import { sanitizeMojibake } from '@/lib/text';
+import { NewsCard } from '@/components/news/NewsCard';
+import type { NewsListItem } from '@/lib/newsSeo';
 
 type FacetItem = { slug: string; name: string; count: number };
 type Job = {
@@ -32,8 +34,12 @@ export function RecruiterHome() {
   const [skillFacets, setSkillFacets] = useState<FacetItem[]>([]);
   const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
   const [openJobs, setOpenJobs] = useState<Job[]>([]);
+  const [latestNews, setLatestNews] = useState<NewsListItem[]>([]);
 
   useEffect(() => {
+    api<{ items: NewsListItem[] }>('/news/latest?limit=4', { auth: false })
+      .then((r) => setLatestNews(r.items))
+      .catch(() => undefined);
     api<any[]>('/companies/mine')
       .then(async (mine) => {
         const row = mine[0];
@@ -179,6 +185,19 @@ export function RecruiterHome() {
               countLabel={talentCountLabel(t, item.count)}
               href={`/talent?jobTitle=${encodeURIComponent(item.slug)}`}
             />
+          ))}
+        </ExploreSection>
+      )}
+
+      {latestNews.length > 0 && (
+        <ExploreSection
+          title={t('latestNews')}
+          subtitle={t('latestNewsSubtitle')}
+          viewAllHref="/news"
+          viewAllLabel={t('viewAll')}
+        >
+          {latestNews.map((item) => (
+            <NewsCard key={item.slug} item={item} />
           ))}
         </ExploreSection>
       )}

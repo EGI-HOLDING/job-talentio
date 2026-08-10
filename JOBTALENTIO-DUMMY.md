@@ -108,3 +108,9 @@ Password (non-admin): `Password123!`
 Platform email (Resend) is **not sent** to dummy mailboxes (`@jobtalent.io`, seed company domains, `@jobtalentio.uz`) so quota stays free for real users. In-app notifications still work.
 
 **Quick smoke test:** employee `madina.karimova@jobtalent.io` | recruiter `jasur.tursunov@apexsoft.uz` | admin `sarvar.adminov@jobtalentio.uz`
+
+### News (seeded editorial content)
+
+Section **News** berisi 14 artikel kurasi (kategori CAREER / INSIGHT / EVENT / EDUCATION) tentang pasar kerja Uzbekistan. Semua artikel adalah **ringkasan editorial orisinal** yang ditulis untuk Job Talentio - bukan hasil scraping isi artikel pihak ketiga. Setiap artikel mencantumkan `sourceName`/`sourceUrl` (homepage publikasi/institusi terkait untuk bacaan lanjutan) dan cover dari Unsplash CDN (lisensi Unsplash mengizinkan hotlink + penggunaan komersial).
+
+Katalog: `apps/api/src/common/news-catalog.ts` - di-upsert by slug via `prisma/seed.ts` atau standalone `node dist/scripts/backfill-news.js` (idempotent, aman diulang).

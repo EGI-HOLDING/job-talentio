@@ -380,6 +380,8 @@ model User {
   emailVerified Boolean   @default(false)
   googleId      String?   @unique
   telegramId    String?   @unique
+  /// Cold-read fallback for presence when Redis has no live entry
+  lastSeenAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -1063,4 +1065,35 @@ model BulkCampaignRecipient {
   @@index([campaignId])
   @@index([userId, createdAt])
   @@index([applicationId])
+}
+
+enum NewsCategory {
+  CAREER
+  INSIGHT
+  EVENT
+  EDUCATION
+}
+
+/// Curated editorial content (career/insight/event/education). Seeded with
+/// original summaries plus source attribution - not scraped article bodies.
+model NewsArticle {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  category    NewsCategory
+  title       String
+  excerpt     String
+  /// Plain paragraphs separated by blank lines (rendered as <p> blocks)
+  body        String
+  coverUrl    String?
+  coverCredit String?
+  sourceName  String?
+  sourceUrl   String?
+  locale      String       @default("en")
+  publishedAt DateTime
+  isPublished Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([isPublished, publishedAt])
+  @@index([category, publishedAt])
 }

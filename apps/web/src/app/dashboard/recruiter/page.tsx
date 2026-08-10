@@ -9,6 +9,8 @@ import { jobLocationLabel } from '@/lib/location';
 import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
 import { sanitizeMojibake } from '@/lib/text';
 import { useI18n } from '@/lib/i18n';
+import { usePresence } from '@/lib/presence';
+import { PresenceDot } from '@/components/presence/PresenceDot';
 import {
   RECRUITER_TAB_KEY,
   readStoredDashboardTab,
@@ -662,6 +664,10 @@ function RecruiterDashboard() {
     }
     return map;
   }, [applicants]);
+
+  const pipelinePresence = usePresence(
+    applicants.map((a: any) => a.profile?.user?.id as string | undefined),
+  );
 
   return (
     <div className="shell dash-grid">
@@ -1413,13 +1419,22 @@ function RecruiterDashboard() {
                                   <strong
                                     style={{
                                       fontSize: '0.9rem',
-                                      display: 'block',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem',
+                                      minWidth: 0,
                                     }}
                                   >
-                                    {name}
+                                    <span
+                                      style={{
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {name}
+                                    </span>
+                                    <PresenceDot status={pipelinePresence[a.profile?.user?.id]} />
                                   </strong>
                                   <div
                                     className="muted"

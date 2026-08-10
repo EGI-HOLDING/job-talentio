@@ -3,6 +3,7 @@ import './globals.css';
 import { SiteNav } from '@/components/SiteNav';
 import { SiteFooter } from '@/components/SiteFooter';
 import { I18nProvider } from '@/lib/i18n';
+import { PresenceConnection } from '@/lib/presence';
 
 export const metadata: Metadata = {
   title: 'Job Talentio',
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <I18nProvider>
+          <PresenceConnection />
           <SiteNav />
           <main>{children}</main>
           <SiteFooter />

@@ -6,11 +6,15 @@ import {
 } from '@nestjs/common';
 import { PLAN_LIMITS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { PresenceService } from '../presence/presence.service';
 import { AuthUser } from '../common/auth.decorators';
 
 @Injectable()
 export class ChatService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private presence: PresenceService,
+  ) {}
 
   private pairIds(a: string, b: string) {
     return a < b ? [a, b] : [b, a];
@@ -151,7 +155,13 @@ export class ChatService {
       });
     }
 
-    return conversations;
+    const peerIds = conversations.map((c) => (c.userAId === userId ? c.userBId : c.userAId));
+    const presence = await this.presence.getPresence(peerIds);
+
+    return conversations.map((c) => ({
+      ...c,
+      peerPresence: presence[c.userAId === userId ? c.userBId : c.userAId] ?? null,
+    }));
   }
 
   /** Thread open/poll = Read (+ Delivered if somehow still missing). */

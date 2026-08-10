@@ -5,12 +5,14 @@ import {
   MessageBody,
   ConnectedSocket,
   OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PresenceService } from '../presence/presence.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
 
 @WebSocketGateway({
@@ -22,7 +24,7 @@ import { resolveJwtSecret } from '../common/jwt-secret';
   },
   namespace: '/chat',
 })
-export class ChatGateway implements OnGatewayConnection {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
@@ -31,6 +33,7 @@ export class ChatGateway implements OnGatewayConnection {
     private config: ConfigService,
     private chat: ChatService,
     private prisma: PrismaService,
+    private presence: PresenceService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -51,9 +54,56 @@ export class ChatGateway implements OnGatewayConnection {
       }
       client.data.userId = payload.sub;
       client.join(`user:${payload.sub}`);
+
+      const cameOnline = await this.presence.markOnline(payload.sub, client.id);
+      if (cameOnline) {
+        void this.notifyPeers(payload.sub, { isOnline: true, lastSeenAt: null });
+      }
     } catch {
       client.disconnect();
     }
+  }
+
+  async handleDisconnect(client: Socket) {
+    const userId = client.data.userId as string | undefined;
+    if (!userId) return;
+    const wentOffline = await this.presence.markOffline(userId, client.id);
+    if (wentOffline) {
+      void this.notifyPeers(userId, {
+        isOnline: false,
+        lastSeenAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  /** Push presence flips to users who share a conversation with `userId`. */
+  private async notifyPeers(
+    userId: string,
+    status: { isOnline: boolean; lastSeenAt: string | null },
+  ) {
+    try {
+      const conversations = await this.prisma.conversation.findMany({
+        where: { OR: [{ userAId: userId }, { userBId: userId }] },
+        select: { userAId: true, userBId: true },
+      });
+      const peers = new Set<string>();
+      for (const c of conversations) {
+        peers.add(c.userAId === userId ? c.userBId : c.userAId);
+      }
+      for (const peerId of peers) {
+        this.server.to(`user:${peerId}`).emit('presence:update', { userId, ...status });
+      }
+    } catch {
+      /* presence is best-effort */
+    }
+  }
+
+  @SubscribeMessage('presence:ping')
+  async onPresencePing(@ConnectedSocket() client: Socket) {
+    const userId = client.data.userId as string | undefined;
+    if (!userId) return { ok: false };
+    await this.presence.heartbeat(userId, client.id);
+    return { ok: true };
   }
 
   @SubscribeMessage('message:send')
