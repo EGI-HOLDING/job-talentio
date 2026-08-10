@@ -135,6 +135,8 @@ export class MetaService {
       .map((s) => ({
         id: s.id,
         name: s.name,
+        nameUz: s.nameUz,
+        nameRu: s.nameRu,
         slug: s.slug,
         category: s.category,
         aliases: s.aliases.map((a) => a.alias),
@@ -151,6 +153,8 @@ export class MetaService {
       select: {
         id: true,
         name: true,
+        nameUz: true,
+        nameRu: true,
         slug: true,
         iso2: true,
         iso3: true,
@@ -176,9 +180,11 @@ export class MetaService {
       select: {
         id: true,
         name: true,
+        nameUz: true,
+        nameRu: true,
         slug: true,
         type: true,
-        country: { select: { slug: true, name: true, iso2: true } },
+        country: { select: { slug: true, name: true, nameUz: true, nameRu: true, iso2: true } },
       },
     });
   }
@@ -186,14 +192,18 @@ export class MetaService {
   private citySelect = {
     id: true,
     name: true,
+    nameUz: true,
+    nameRu: true,
     slug: true,
     province: {
       select: {
         id: true,
         name: true,
+        nameUz: true,
+        nameRu: true,
         slug: true,
         type: true,
-        country: { select: { slug: true, name: true, iso2: true } },
+        country: { select: { slug: true, name: true, nameUz: true, nameRu: true, iso2: true } },
       },
     },
   } as const;
@@ -281,10 +291,14 @@ export class MetaService {
         groups: groups.map((g) => ({
           slug: g.slug,
           name: g.name,
+          nameUz: g.nameUz,
+          nameRu: g.nameRu,
           sortOrder: g.sortOrder,
           industries: g.industries.map((i) => ({
             slug: i.slug,
             name: i.name,
+            nameUz: i.nameUz,
+            nameRu: i.nameRu,
             sortOrder: i.sortOrder,
             companyCount: i._count.companies,
           })),
@@ -294,7 +308,7 @@ export class MetaService {
     const rows = await this.prisma.industry.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       include: {
-        group: { select: { slug: true, name: true } },
+        group: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
         _count: {
           select: {
             companies: { where: { isBanned: false } },
@@ -340,6 +354,8 @@ export class MetaService {
       .map((b) => ({
         id: b.id,
         name: b.name,
+        nameUz: b.nameUz,
+        nameRu: b.nameRu,
         slug: b.slug,
         icon: resolveBenefitIcon(b.slug, b.icon) || null,
         aliases: b.aliases.map((a) => a.alias),
@@ -377,6 +393,8 @@ export class MetaService {
       .map((l) => ({
         id: l.id,
         name: l.name,
+        nameUz: l.nameUz,
+        nameRu: l.nameRu,
         slug: l.code,
         code: l.code,
         aliases: l.aliases.map((a) => a.alias),
@@ -406,9 +424,14 @@ export class MetaService {
     return rows.map((c) => ({
       id: c.id,
       name: c.name,
+      nameUz: c.nameUz,
+      nameRu: c.nameRu,
       slug: c.slug,
       province: c.province,
+      // Mirrors province.name; kept in sync per locale by the same columns.
       provinceLabel: c.province.name,
+      provinceLabelUz: c.province.nameUz,
+      provinceLabelRu: c.province.nameRu,
     }));
   }
 
@@ -444,6 +467,8 @@ export class MetaService {
     const items = rows.map((t) => ({
       id: t.id,
       name: t.name,
+      nameUz: t.nameUz,
+      nameRu: t.nameRu,
       slug: t.slug,
       count: t._count.jobPosts,
     }));
@@ -492,6 +517,8 @@ export class MetaService {
       .map((t) => ({
         id: t.id,
         name: t.name,
+        nameUz: t.nameUz,
+        nameRu: t.nameRu,
         slug: t.slug,
         aliases: t.aliases.map((a) => a.alias),
         usageCount: t._count.jobPosts,

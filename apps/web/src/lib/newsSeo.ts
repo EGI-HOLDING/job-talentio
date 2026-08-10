@@ -24,11 +24,15 @@ export type NewsArticleDetail = NewsListItem & {
 };
 
 /** Server-side fetch; cached 5 min. Returns null for unpublished/missing. */
-export async function fetchNewsArticle(slug: string): Promise<NewsArticleDetail | null> {
+export async function fetchNewsArticle(
+  slug: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<NewsArticleDetail | null> {
   try {
-    const res = await fetch(`${API_URL}/api/news/slug/${encodeURIComponent(slug)}`, {
-      next: { revalidate: 300 },
-    });
+    const res = await fetch(
+      `${API_URL}/api/news/slug/${encodeURIComponent(slug)}?locale=${locale}`,
+      { next: { revalidate: 300 } },
+    );
     if (!res.ok) return null;
     return (await res.json()) as NewsArticleDetail;
   } catch {

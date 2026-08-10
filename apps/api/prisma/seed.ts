@@ -11,6 +11,7 @@ import { demoCompanyLogoKey, isDemoCompanyLogoSlug } from '../src/common/company
 import { backfillCompanyLogos } from '../src/common/company-logo-backfill';
 import { createDemoLogoUploaderFromEnv } from '../src/common/demo-logo-storage';
 import { backfillNews } from '../src/common/news-backfill';
+import { backfillCatalogI18n } from '../src/common/i18n/catalog-i18n-backfill';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -1228,6 +1229,8 @@ async function main() {
   }
 
   const news = await backfillNews(prisma);
+  const catalogI18n = await backfillCatalogI18n(prisma);
+  const catalogI18nRows = Object.values(catalogI18n).reduce((sum, c) => sum + c.updated, 0);
 
   await prisma.featureFlag.upsert({
     where: { key: 'hot_jobs' },
@@ -1245,6 +1248,7 @@ async function main() {
   - ${companyRecords.length} companies, ${employeeUsers.length} employees, ${jobRecords.length} jobs
   - ~${appCount} applications
   - ${news.upserted} news articles (curated editorial content)
+  - ${catalogI18nRows} catalog rows with uz/ru display names
   Quick login:
     Admin     ${DEMO.admin.email} / ${DEMO.admin.password}
     Recruiter ${DEMO.recruiter.email} / Password123!

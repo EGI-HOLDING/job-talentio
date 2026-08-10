@@ -1,5 +1,17 @@
+import { DEFAULT_LOCALE, localeFromPathname } from '@/lib/locale';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
+
+/**
+ * Catalog labels (cities, categories, skills) are localized server-side, so
+ * every request advertises the active language. Middleware guarantees the URL
+ * carries the locale, which keeps this in sync with what the user sees.
+ */
+function activeLocale(): string {
+  if (typeof window === 'undefined') return DEFAULT_LOCALE;
+  return localeFromPathname(window.location.pathname) ?? DEFAULT_LOCALE;
+}
 
 export type AuthSession = {
   accessToken: string;
@@ -158,6 +170,7 @@ export async function api<T>(
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
+  if (!headers.has('X-Locale')) headers.set('X-Locale', activeLocale());
   const useAuth = options.auth !== false;
   if (useAuth) {
     const token = getToken();

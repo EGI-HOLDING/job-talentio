@@ -23,9 +23,12 @@ export type JobSeoPayload = {
 };
 
 /** Server-side fetch; cached 5 min. Returns null for drafts/missing jobs. */
-export async function fetchJobSeo(id: string): Promise<JobSeoPayload | null> {
+export async function fetchJobSeo(
+  id: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<JobSeoPayload | null> {
   try {
-    const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(id)}/seo`, {
+    const res = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(id)}/seo?locale=${locale}`, {
       next: { revalidate: 300 },
     });
     if (!res.ok) return null;

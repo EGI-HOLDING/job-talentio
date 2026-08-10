@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { LocaleInterceptor } from './common/locale.interceptor';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
@@ -50,6 +52,6 @@ import { SeedService } from './seed.service';
     NewsModule,
   ],
   controllers: [HealthController],
-  providers: [SeedService],
+  providers: [SeedService, { provide: APP_INTERCEPTOR, useClass: LocaleInterceptor }],
 })
 export class AppModule {}
