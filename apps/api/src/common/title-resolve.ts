@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { ExperienceLevel, JobTitle, PrismaClient } from '@prisma/client';
+import { assertCatalogLabel } from './lookup-normalize';
 import { slugify } from './utils';
 
 type Db = Pick<PrismaClient, 'jobTitle' | 'jobTitleAlias'>;
@@ -283,6 +284,11 @@ export async function resolveJobTitle(
     throw new BadRequestException(
       'Job title contains invalid characters. Use letters, numbers, and + . # / & - ( )',
     );
+  }
+  try {
+    assertCatalogLabel(roleTitle, { skipCharset: true });
+  } catch (e) {
+    throw new BadRequestException((e as Error).message);
   }
 
   const displayName = canonicalDisplayName(roleTitle);

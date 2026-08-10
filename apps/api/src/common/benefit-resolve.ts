@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Benefit, PrismaClient } from '@prisma/client';
 import { resolveBenefitIcon } from '@job-talentio/shared';
 import {
-  assertLookupName,
+  assertCatalogLabel,
   catalogSlugify,
   normalizeLookupKey,
   titleCaseWords,
@@ -88,7 +88,7 @@ export async function resolveBenefit(
   if (!allowCreate) throw new BadRequestException('Benefit not found');
 
   try {
-    assertLookupName(opts.name || raw);
+    assertCatalogLabel(opts.name || raw);
   } catch (e) {
     throw new BadRequestException((e as Error).message);
   }
