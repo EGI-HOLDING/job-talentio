@@ -8,6 +8,8 @@ const SEARCH_ID_LIMIT = 1000;
 const BACKFILL_BATCH = 500;
 const REQUEST_TIMEOUT_MS = 3_000;
 
+type LocalizedName = { name: string; nameUz?: string | null; nameRu?: string | null };
+
 type JobDocument = {
   id: string;
   title: string;
@@ -16,6 +18,10 @@ type JobDocument = {
   categoryName: string | null;
   skills: string[];
   description: string;
+  /** Titles and bodies of every stored translation, so a Russian query finds a
+   * posting written in Uzbek and vice versa. */
+  titleAlt: string[];
+  descriptionAlt: string[];
   publishedAt: number | null;
 };
 
@@ -84,11 +90,13 @@ export class JobsSearchService implements OnModuleInit {
     await this.request('PATCH', `/indexes/${INDEX}/settings`, {
       searchableAttributes: [
         'title',
+        'titleAlt',
         'companyName',
         'skills',
         'categoryName',
         'cityName',
         'description',
+        'descriptionAlt',
       ],
       displayedAttributes: ['id'],
     });
@@ -223,9 +231,10 @@ export class JobsSearchService implements OnModuleInit {
 
   private syncInclude = {
     company: { select: { name: true } },
-    city: { select: { name: true } },
-    category: { select: { name: true } },
-    jobSkills: { select: { skill: { select: { name: true } } } },
+    city: { select: { name: true, nameUz: true, nameRu: true } },
+    category: { select: { name: true, nameUz: true, nameRu: true } },
+    jobSkills: { select: { skill: { select: { name: true, nameUz: true, nameRu: true } } } },
+    translations: { select: { title: true, description: true } },
   } as const;
 
   private fetchJob(jobId: string) {
@@ -241,18 +250,26 @@ export class JobsSearchService implements OnModuleInit {
     description: string;
     publishedAt: Date | null;
     company: { name: string };
-    city: { name: string } | null;
-    category: { name: string } | null;
-    jobSkills: Array<{ skill: { name: string } }>;
+    city: LocalizedName | null;
+    category: LocalizedName | null;
+    jobSkills: Array<{ skill: LocalizedName }>;
+    translations: Array<{ title: string; description: string }>;
   }): JobDocument {
+    // Catalog names are indexed in every language so a Russian query for a city
+    // still matches a posting whose row was written in Uzbek.
+    const names = (row: LocalizedName | null | undefined): string[] =>
+      row ? [row.name, row.nameUz, row.nameRu].filter((v): v is string => Boolean(v)) : [];
+
     return {
       id: job.id,
       title: job.title,
       companyName: job.company.name,
-      cityName: job.city?.name ?? null,
-      categoryName: job.category?.name ?? null,
-      skills: job.jobSkills.map((s) => s.skill.name),
+      cityName: names(job.city).join(' ') || null,
+      categoryName: names(job.category).join(' ') || null,
+      skills: job.jobSkills.flatMap((s) => names(s.skill)),
       description: job.description.slice(0, 600),
+      titleAlt: job.translations.map((t) => t.title),
+      descriptionAlt: job.translations.map((t) => t.description.slice(0, 600)),
       publishedAt: job.publishedAt ? job.publishedAt.getTime() : null,
     };
   }

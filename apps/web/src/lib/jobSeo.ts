@@ -20,6 +20,9 @@ export type JobSeoPayload = {
   createdAt: string;
   company: { name: string; slug: string; logoUrl?: string | null };
   city?: { name: string } | null;
+  /** Language the title and description are served in. */
+  contentLocale?: string | null;
+  availableLocales?: string[];
 };
 
 /** Server-side fetch; cached 5 min. Returns null for drafts/missing jobs. */
@@ -63,11 +66,23 @@ export function jobCanonicalUrl(id: string, locale: Locale = DEFAULT_LOCALE): st
   return `${SITE_URL}/${locale}/jobs/${id}`;
 }
 
-/** hreflang map so Google can serve the right language version of a posting. */
-export function jobLanguageAlternates(id: string): Record<string, string> {
+/**
+ * hreflang map so Google can serve the right language version of a posting.
+ * Only languages the posting actually exists in are advertised: pointing at a
+ * URL that falls back to another language would be a wrong hreflang claim.
+ */
+export function jobLanguageAlternates(
+  id: string,
+  availableLocales?: string[] | null,
+): Record<string, string> {
+  const usable = (availableLocales ?? LOCALES).filter((l): l is Locale =>
+    (LOCALES as readonly string[]).includes(l),
+  );
+  const locales = usable.length ? usable : [DEFAULT_LOCALE];
+
   const alternates: Record<string, string> = {};
-  for (const locale of LOCALES) alternates[locale] = jobCanonicalUrl(id, locale);
-  alternates['x-default'] = jobCanonicalUrl(id, DEFAULT_LOCALE);
+  for (const locale of locales) alternates[locale] = jobCanonicalUrl(id, locale);
+  alternates['x-default'] = jobCanonicalUrl(id, locales[0]);
   return alternates;
 }
 
@@ -107,6 +122,7 @@ export function buildJobPostingJsonLd(
       value: job.id,
     },
     url: jobCanonicalUrl(job.id, locale),
+    inLanguage: job.contentLocale ?? locale,
     directApply: true,
   };
 

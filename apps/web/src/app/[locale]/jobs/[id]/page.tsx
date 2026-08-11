@@ -23,7 +23,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    alternates: { canonical: url, languages: jobLanguageAlternates(job.id) },
+    alternates: {
+      canonical: url,
+      languages: jobLanguageAlternates(job.id, job.availableLocales),
+    },
     openGraph: { title, description, url, type: 'website' },
   };
 }

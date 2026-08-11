@@ -128,6 +128,14 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 
 **News translations:** `node dist/scripts/backfill-news.js` (idempotent) seeds the curated articles and their uz/ru versions.
 
+**Job content translations:** postings are written in one language (`JobPost.locale`) and recruiters can add optional versions in the other two from the job editor. Readers get the requested language when it exists, otherwise the original, and the response reports `contentLocale` so the UI can say which language the text is in. `hreflang` only advertises languages a posting actually has. After deploying the `content_translations` migration, reindex Meilisearch so translated titles become searchable:
+
+```bash
+railway ssh --service api-stage-job-talentio -- node -e "require('./dist/main')"  # or simply redeploy
+```
+
+The index self-heals on boot when it is empty, so a plain redeploy is usually enough.
+
 ### Reference variables (api)
 
 Link plugin outputs into the `api` service:

@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
-import { DEFAULT_LOCALE, isLocale, localeFromAcceptLanguage } from './i18n/locale';
+import { requestLocale } from './i18n/request-locale';
 import type { Locale } from './i18n/locale';
 
 /** Deep walk is bounded so a pathological payload cannot spin the event loop. */
@@ -48,38 +48,13 @@ function localizeDeep(value: unknown, locale: Locale, depth = 0): unknown {
   return out;
 }
 
-/**
- * Resolution order: explicit `?locale=` (server-side rendering) -> `X-Locale`
- * header from the web client -> `Accept-Language` -> the signed-in user's saved
- * locale -> default.
- */
-function resolveLocale(request: {
-  query?: Record<string, unknown>;
-  headers?: Record<string, unknown>;
-  user?: { locale?: string };
-}): Locale {
-  const fromQuery = request.query?.locale;
-  if (isLocale(fromQuery)) return fromQuery;
-
-  const fromHeader = request.headers?.['x-locale'];
-  if (isLocale(fromHeader)) return fromHeader;
-
-  const fromAccept = localeFromAcceptLanguage(request.headers?.['accept-language'] as string);
-  if (fromAccept) return fromAccept;
-
-  const fromUser = request.user?.locale;
-  if (isLocale(fromUser)) return fromUser;
-
-  return DEFAULT_LOCALE;
-}
-
 @Injectable()
 export class LocaleInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
 
     const request = context.switchToHttp().getRequest();
-    const locale = resolveLocale(request);
+    const locale = requestLocale(request);
 
     return next.handle().pipe(
       map((body) => (locale === 'en' ? stripLocaleColumns(body) : localizeDeep(body, locale))),

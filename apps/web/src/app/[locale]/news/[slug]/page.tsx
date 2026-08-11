@@ -15,7 +15,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${article.title} - Job Talentio`,
     description: article.excerpt,
-    alternates: { canonical: url, languages: newsLanguageAlternates(article.slug) },
+    alternates: {
+      canonical: url,
+      languages: newsLanguageAlternates(article.slug, article.availableLocales),
+    },
     openGraph: {
       title: article.title,
       description: article.excerpt,
@@ -39,7 +42,7 @@ export default async function NewsArticlePage({ params }: PageProps) {
     description: article.excerpt,
     datePublished: article.publishedAt,
     url: newsCanonicalUrl(article.slug, active),
-    inLanguage: article.locale,
+    inLanguage: article.contentLocale ?? article.locale,
     ...(article.coverUrl ? { image: [article.coverUrl] } : {}),
     publisher: { '@type': 'Organization', name: 'Job Talentio' },
   };

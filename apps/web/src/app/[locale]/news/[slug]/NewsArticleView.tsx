@@ -33,6 +33,17 @@ export function NewsArticleView({ article }: { article: NewsArticleDetail }) {
           </figure>
         )}
 
+        {article.contentLocale && article.contentLocale !== locale && (
+          <p className="ugc-notice muted">
+            {article.isMachineTranslated
+              ? t('ui.autoTranslated')
+              : t('ui.writtenInLanguage').replace(
+                  '{language}',
+                  t(`ui.locale${article.contentLocale.charAt(0).toUpperCase()}${article.contentLocale.slice(1)}`),
+                )}
+          </p>
+        )}
+
         <div className="news-article-body">
           {paragraphs.map((p, i) => (
             <p key={i}>{p}</p>

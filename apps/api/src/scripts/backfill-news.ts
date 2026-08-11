@@ -9,7 +9,9 @@ async function main() {
   const prisma = new PrismaClient();
   try {
     const result = await backfillNews(prisma);
-    console.log(`News backfill: upserted=${result.upserted}`);
+    console.log(
+      `News backfill: upserted=${result.upserted} translations=${result.translations}`,
+    );
   } finally {
     await prisma.$disconnect();
   }

@@ -1247,7 +1247,7 @@ async function main() {
   - ${cities.length} cities, ${categories.length} categories, ${skills.length} skills
   - ${companyRecords.length} companies, ${employeeUsers.length} employees, ${jobRecords.length} jobs
   - ~${appCount} applications
-  - ${news.upserted} news articles (curated editorial content)
+  - ${news.upserted} news articles (+ ${news.translations} uz/ru versions)
   - ${catalogI18nRows} catalog rows with uz/ru display names
   Quick login:
     Admin     ${DEMO.admin.email} / ${DEMO.admin.password}

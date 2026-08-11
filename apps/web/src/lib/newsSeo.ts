@@ -21,6 +21,10 @@ export type NewsArticleDetail = NewsListItem & {
   body: string;
   sourceUrl?: string | null;
   locale: string;
+  /** Language actually served, which may fall back to the original. */
+  contentLocale?: string | null;
+  isMachineTranslated?: boolean;
+  availableLocales?: string[];
 };
 
 /** Server-side fetch; cached 5 min. Returns null for unpublished/missing. */
@@ -44,9 +48,18 @@ export function newsCanonicalUrl(slug: string, locale: Locale = DEFAULT_LOCALE):
   return `${SITE_URL}/${locale}/news/${slug}`;
 }
 
-export function newsLanguageAlternates(slug: string): Record<string, string> {
+/** Only languages the article exists in, so hreflang never promises a fallback. */
+export function newsLanguageAlternates(
+  slug: string,
+  availableLocales?: string[] | null,
+): Record<string, string> {
+  const usable = (availableLocales ?? LOCALES).filter((l): l is Locale =>
+    (LOCALES as readonly string[]).includes(l),
+  );
+  const locales = usable.length ? usable : [DEFAULT_LOCALE];
+
   const alternates: Record<string, string> = {};
-  for (const locale of LOCALES) alternates[locale] = newsCanonicalUrl(slug, locale);
-  alternates['x-default'] = newsCanonicalUrl(slug, DEFAULT_LOCALE);
+  for (const locale of locales) alternates[locale] = newsCanonicalUrl(slug, locale);
+  alternates['x-default'] = newsCanonicalUrl(slug, locales[0]);
   return alternates;
 }

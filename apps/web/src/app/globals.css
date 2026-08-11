@@ -2951,6 +2951,16 @@ button.linkish:hover,
   }
 }
 
+/* --------------------------------------------- Author-written content */
+.ugc-notice {
+  font-size: 0.8rem;
+  margin: 0 0 0.75rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  display: inline-block;
+}
+
 /* ------------------------------------------------------------- Presence */
 .presence-wrap {
   display: inline-flex;
