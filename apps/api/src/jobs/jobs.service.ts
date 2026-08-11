@@ -158,7 +158,7 @@ export class JobsService {
     },
     city: true,
     category: true,
-    jobTitle: { select: { id: true, name: true, slug: true } },
+    jobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, slug: true } },
     jobSkills: { include: { skill: true } },
     jobLanguages: { include: { language: true } },
     benefits: { include: { benefit: true } },
@@ -852,7 +852,7 @@ export class JobsService {
       },
       city: true,
       category: true,
-      jobTitle: { select: { id: true, name: true, slug: true } },
+      jobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, slug: true } },
       jobSkills: { include: { skill: true }, take: 8 },
       jobLanguages: { include: { language: true }, take: 4 },
       benefits: { include: { benefit: true }, take: 6 },
@@ -969,9 +969,9 @@ export class JobsService {
         categoryId: true,
         jobTitleId: true,
         experienceLevel: true,
-        city: { select: { slug: true, name: true } },
-        category: { select: { slug: true, name: true } },
-        jobTitle: { select: { slug: true, name: true } },
+        city: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
+        category: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
+        jobTitle: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
         company: {
           select: {
             slug: true,
@@ -981,49 +981,77 @@ export class JobsService {
               select: {
                 slug: true,
                 name: true,
-                group: { select: { slug: true, name: true } },
+                nameUz: true,
+                nameRu: true,
+                group: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
               },
             },
           },
         },
-        jobSkills: { select: { skill: { select: { slug: true, name: true } } } },
-        jobLanguages: { select: { language: { select: { code: true, name: true } } } },
+        jobSkills: {
+          select: { skill: { select: { slug: true, name: true, nameUz: true, nameRu: true } } },
+        },
+        jobLanguages: {
+          select: { language: { select: { code: true, name: true, nameUz: true, nameRu: true } } },
+        },
       },
       take: 1000,
     });
 
-    const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
-    const categoryFacets: Record<string, { slug: string; name: string; count: number }> = {};
-    const jobTitleFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    type Facet = {
+      slug: string;
+      name: string;
+      nameUz?: string | null;
+      nameRu?: string | null;
+      count: number;
+    };
+    const cityFacets: Record<string, Facet> = {};
+    const categoryFacets: Record<string, Facet> = {};
+    const jobTitleFacets: Record<string, Facet> = {};
     const companyFacets: Record<
       string,
       { slug: string; name: string; logoUrl?: string | null; count: number }
     > = {};
     const industryFacets: Record<
       string,
-      { slug: string; name: string; groupSlug?: string; groupName?: string; count: number }
+      Facet & { groupSlug?: string; groupName?: string }
     > = {};
-    const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
-    const languageFacets: Record<string, { code: string; name: string; count: number }> = {};
+    const skillFacets: Record<string, Facet> = {};
+    const languageFacets: Record<
+      string,
+      { code: string; name: string; nameUz?: string | null; nameRu?: string | null; count: number }
+    > = {};
     const experienceFacets: Record<string, number> = {};
     for (const j of facetJobs) {
       if (j.city) {
         const key = j.city.slug;
         cityFacets[key] = cityFacets[key]
           ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
-          : { slug: j.city.slug, name: j.city.name, count: 1 };
+          : { slug: j.city.slug, name: j.city.name, nameUz: j.city.nameUz, nameRu: j.city.nameRu, count: 1 };
       }
       if (j.category) {
         const key = j.category.slug;
         categoryFacets[key] = categoryFacets[key]
           ? { ...categoryFacets[key], count: categoryFacets[key].count + 1 }
-          : { slug: j.category.slug, name: j.category.name, count: 1 };
+          : {
+              slug: j.category.slug,
+              name: j.category.name,
+              nameUz: j.category.nameUz,
+              nameRu: j.category.nameRu,
+              count: 1,
+            };
       }
       if (j.jobTitle) {
         const key = j.jobTitle.slug;
         jobTitleFacets[key] = jobTitleFacets[key]
           ? { ...jobTitleFacets[key], count: jobTitleFacets[key].count + 1 }
-          : { slug: j.jobTitle.slug, name: j.jobTitle.name, count: 1 };
+          : {
+              slug: j.jobTitle.slug,
+              name: j.jobTitle.name,
+              nameUz: j.jobTitle.nameUz,
+              nameRu: j.jobTitle.nameRu,
+              count: 1,
+            };
       }
       if (j.company) {
         const key = j.company.slug;
@@ -1042,6 +1070,8 @@ export class JobsService {
             : {
                 slug: j.company.industry.slug,
                 name: j.company.industry.name,
+                nameUz: j.company.industry.nameUz,
+                nameRu: j.company.industry.nameRu,
                 groupSlug: j.company.industry.group?.slug,
                 groupName: j.company.industry.group?.name,
                 count: 1,
@@ -1056,14 +1086,14 @@ export class JobsService {
         if (!sk) continue;
         skillFacets[sk.slug] = skillFacets[sk.slug]
           ? { ...skillFacets[sk.slug], count: skillFacets[sk.slug].count + 1 }
-          : { slug: sk.slug, name: sk.name, count: 1 };
+          : { slug: sk.slug, name: sk.name, nameUz: sk.nameUz, nameRu: sk.nameRu, count: 1 };
       }
       for (const jl of j.jobLanguages) {
         const lang = jl.language;
         if (!lang) continue;
         languageFacets[lang.code] = languageFacets[lang.code]
           ? { ...languageFacets[lang.code], count: languageFacets[lang.code].count + 1 }
-          : { code: lang.code, name: lang.name, count: 1 };
+          : { code: lang.code, name: lang.name, nameUz: lang.nameUz, nameRu: lang.nameRu, count: 1 };
       }
     }
 

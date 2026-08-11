@@ -37,7 +37,7 @@ import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
 import { PresenceService } from '../presence/presence.service';
 
 const resumeTargetTitleInclude = {
-  targetJobTitle: { select: { id: true, name: true, slug: true } },
+  targetJobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, slug: true } },
 } as const;
 
 /** Contact reveals allowed per recruiter per hour (anti bulk harvesting). */
@@ -1427,8 +1427,10 @@ export class ProfilesService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let pageItems: any[] = [];
     let facetSource: Array<{
-      city?: { slug: string; name: string } | null;
-      skills: Array<{ skill: { slug: string; name: string } }>;
+      city?: { slug: string; name: string; nameUz?: string | null; nameRu?: string | null } | null;
+      skills: Array<{
+        skill: { slug: string; name: string; nameUz?: string | null; nameRu?: string | null };
+      }>;
       desiredPosition?: string | null;
       headline?: string | null;
       experiences?: Array<{ title?: string | null }>;
@@ -1480,8 +1482,8 @@ export class ProfilesService {
       facetSource = await this.prisma.employeeProfile.findMany({
         where,
         select: {
-          city: { select: { slug: true, name: true } },
-          skills: { select: { skill: { select: { slug: true, name: true } } } },
+          city: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
+          skills: { select: { skill: { select: { slug: true, name: true, nameUz: true, nameRu: true } } } },
           desiredPosition: true,
           headline: true,
           experiences: { select: { title: true }, take: 5, orderBy: { startDate: 'desc' } },
@@ -1535,18 +1537,28 @@ export class ProfilesService {
       facetSource = scored;
     }
 
-    const cityFacets: Record<string, { slug: string; name: string; count: number }> = {};
-    const skillFacets: Record<string, { slug: string; name: string; count: number }> = {};
-    const titleFacets: Record<string, { slug: string; name: string; count: number }> = {};
+    type Facet = {
+      slug: string;
+      name: string;
+      nameUz?: string | null;
+      nameRu?: string | null;
+      count: number;
+    };
+    const cityFacets: Record<string, Facet> = {};
+    const skillFacets: Record<string, Facet> = {};
+    const titleFacets: Record<string, Facet> = {};
 
     const catalogTitles = await this.prisma.jobTitle.findMany({
-      select: { slug: true, name: true, normalizedKey: true },
+      select: { slug: true, name: true, nameUz: true, nameRu: true, normalizedKey: true },
     });
-    const catalogByKey = new Map<string, { slug: string; name: string }>();
+    const catalogByKey = new Map<
+      string,
+      { slug: string; name: string; nameUz?: string | null; nameRu?: string | null }
+    >();
     for (const t of catalogTitles) {
       const key = t.normalizedKey || normalizeJobTitleKey(t.name);
       if (key && !catalogByKey.has(key)) {
-        catalogByKey.set(key, { slug: t.slug, name: t.name });
+        catalogByKey.set(key, { slug: t.slug, name: t.name, nameUz: t.nameUz, nameRu: t.nameRu });
       }
     }
 
@@ -1555,13 +1567,19 @@ export class ProfilesService {
         const key = p.city.slug;
         cityFacets[key] = cityFacets[key]
           ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
-          : { slug: p.city.slug, name: p.city.name, count: 1 };
+          : { slug: p.city.slug, name: p.city.name, nameUz: p.city.nameUz, nameRu: p.city.nameRu, count: 1 };
       }
       for (const s of p.skills) {
         const key = s.skill.slug;
         skillFacets[key] = skillFacets[key]
           ? { ...skillFacets[key], count: skillFacets[key].count + 1 }
-          : { slug: s.skill.slug, name: s.skill.name, count: 1 };
+          : {
+              slug: s.skill.slug,
+              name: s.skill.name,
+              nameUz: s.skill.nameUz,
+              nameRu: s.skill.nameRu,
+              count: 1,
+            };
       }
       const seenKeys = new Set<string>();
       for (const text of this.profileTitleTexts(p)) {
@@ -1572,7 +1590,7 @@ export class ProfilesService {
         if (!cat) continue;
         titleFacets[cat.slug] = titleFacets[cat.slug]
           ? { ...titleFacets[cat.slug], count: titleFacets[cat.slug].count + 1 }
-          : { slug: cat.slug, name: cat.name, count: 1 };
+          : { slug: cat.slug, name: cat.name, nameUz: cat.nameUz, nameRu: cat.nameRu, count: 1 };
       }
     }
 

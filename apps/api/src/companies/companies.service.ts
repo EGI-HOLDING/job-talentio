@@ -115,7 +115,7 @@ export class CompaniesService {
         slug: true,
         name: true,
         logoUrl: true,
-        industry: { select: { slug: true, name: true } },
+        industry: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
         subscription: { select: { plan: true } },
         _count: {
           select: { jobPosts: { where: { status: 'PUBLISHED' } } },

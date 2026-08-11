@@ -8,9 +8,9 @@ type PageProps = { params: Promise<{ slug: string; locale: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug, locale } = await params;
-  const article = await fetchNewsArticle(slug);
-  if (!article) return {};
   const active = isLocale(locale) ? locale : DEFAULT_LOCALE;
+  const article = await fetchNewsArticle(slug, active);
+  if (!article) return {};
   const url = newsCanonicalUrl(article.slug, active);
   return {
     title: `${article.title} - Job Talentio`,
@@ -28,9 +28,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function NewsArticlePage({ params }: PageProps) {
   const { slug, locale } = await params;
-  const article = await fetchNewsArticle(slug);
-  if (!article) notFound();
   const active = isLocale(locale) ? locale : DEFAULT_LOCALE;
+  const article = await fetchNewsArticle(slug, active);
+  if (!article) notFound();
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',

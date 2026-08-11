@@ -190,12 +190,14 @@ enum ProvinceType {
 // ─── Lookup tables ───────────────────────────────────────────
 
 model Skill {
-  id             String   @id @default(cuid())
-  name           String
-  slug           String   @unique
-  normalizedKey  String?  @unique
-  category       String?
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  name          String
+  nameUz        String?
+  nameRu        String?
+  slug          String   @unique
+  normalizedKey String?  @unique
+  category      String?
+  createdAt     DateTime @default(now())
 
   aliases        SkillAlias[]
   profileSkills  ProfileSkill[]
@@ -218,6 +220,8 @@ model SkillAlias {
 model Country {
   id           String   @id @default(cuid())
   name         String
+  nameUz       String?
+  nameRu       String?
   slug         String   @unique
   iso2         String   @unique @db.Char(2)
   iso3         String   @db.Char(3)
@@ -234,6 +238,8 @@ model Province {
   id        String       @id @default(cuid())
   countryId String
   name      String
+  nameUz    String?
+  nameRu    String?
   slug      String
   type      ProvinceType @default(REGION)
   createdAt DateTime     @default(now())
@@ -247,9 +253,11 @@ model Province {
 }
 
 model City {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   name       String
-  slug       String @unique
+  nameUz     String?
+  nameRu     String?
+  slug       String  @unique
   provinceId String
 
   province        Province          @relation(fields: [provinceId], references: [id], onDelete: Restrict)
@@ -263,29 +271,35 @@ model City {
 }
 
 model JobCategory {
-  id   String  @id @default(cuid())
-  name String
-  slug String  @unique
-  icon String?
+  id     String  @id @default(cuid())
+  name   String
+  nameUz String?
+  nameRu String?
+  slug   String  @unique
+  icon   String?
 
   jobPosts  JobPost[]
   jobAlerts JobAlert[]
 }
 
 model IndustryGroup {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   name      String
-  slug      String @unique
-  sortOrder Int    @default(0)
+  nameUz    String?
+  nameRu    String?
+  slug      String  @unique
+  sortOrder Int     @default(0)
 
   industries Industry[]
 }
 
 model Industry {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   name      String
-  slug      String @unique
-  sortOrder Int    @default(0)
+  nameUz    String?
+  nameRu    String?
+  slug      String  @unique
+  sortOrder Int     @default(0)
   groupId   String
 
   group     IndustryGroup @relation(fields: [groupId], references: [id])
@@ -297,6 +311,8 @@ model Industry {
 model Language {
   id            String  @id @default(cuid())
   name          String
+  nameUz        String?
+  nameRu        String?
   code          String  @unique
   normalizedKey String? @unique
 
@@ -320,6 +336,8 @@ model LanguageAlias {
 model Benefit {
   id            String  @id @default(cuid())
   name          String
+  nameUz        String?
+  nameRu        String?
   slug          String  @unique
   normalizedKey String? @unique
   icon          String?
@@ -344,6 +362,8 @@ model BenefitAlias {
 model JobTitle {
   id            String   @id @default(cuid())
   name          String
+  nameUz        String?
+  nameRu        String?
   slug          String   @unique
   normalizedKey String   @unique
   createdAt     DateTime @default(now())
@@ -385,19 +405,19 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  employeeProfile  EmployeeProfile?
-  memberships      CompanyMember[]
-  sentMessages     ChatMessage[]       @relation("SentMessages")
-  conversationsAsA Conversation[]      @relation("ConversationUserA")
-  conversationsAsB Conversation[]      @relation("ConversationUserB")
-  auditLogs        AuditLog[]
-  jobAlerts        JobAlert[]
-  notifications    Notification[]
-  followedCompanies CompanyFollower[]
-  jobViews         JobView[]
-  reports          Report[]            @relation("Reporter")
-  messageTemplates MessageTemplate[]   @relation("TemplateAuthor")
-  bulkCampaigns    BulkCampaign[]      @relation("BulkCampaignAuthor")
+  employeeProfile         EmployeeProfile?
+  memberships             CompanyMember[]
+  sentMessages            ChatMessage[]            @relation("SentMessages")
+  conversationsAsA        Conversation[]           @relation("ConversationUserA")
+  conversationsAsB        Conversation[]           @relation("ConversationUserB")
+  auditLogs               AuditLog[]
+  jobAlerts               JobAlert[]
+  notifications           Notification[]
+  followedCompanies       CompanyFollower[]
+  jobViews                JobView[]
+  reports                 Report[]                 @relation("Reporter")
+  messageTemplates        MessageTemplate[]        @relation("TemplateAuthor")
+  bulkCampaigns           BulkCampaign[]           @relation("BulkCampaignAuthor")
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   emailChangeTokens       EmailChangeToken[]
@@ -475,8 +495,8 @@ model Company {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  city         City?             @relation(fields: [cityId], references: [id])
-  industry     Industry?         @relation(fields: [industryId], references: [id])
+  city             City?             @relation(fields: [cityId], references: [id])
+  industry         Industry?         @relation(fields: [industryId], references: [id])
   members          CompanyMember[]
   jobPosts         JobPost[]
   subscription     Subscription?
@@ -535,7 +555,7 @@ model Payment {
 }
 
 model JobPost {
-  id                 String          @id @default(cuid())
+  id                 String           @id @default(cuid())
   companyId          String
   jobTitleId         String?
   /// Denormalized display (= JobTitle.name after resolve)
@@ -543,31 +563,31 @@ model JobPost {
   description        String
   cityId             String?
   categoryId         String?
-  employmentType     EmploymentType  @default(FULL_TIME)
-  workMode           WorkMode        @default(ONSITE)
+  employmentType     EmploymentType   @default(FULL_TIME)
+  workMode           WorkMode         @default(ONSITE)
   salaryMin          Int?
   salaryMax          Int?
-  salaryPeriod       SalaryPeriod    @default(MONTHLY)
-  currency           String          @default("UZS")
+  salaryPeriod       SalaryPeriod     @default(MONTHLY)
+  currency           String           @default("UZS")
   experienceYearsMin Int?
   experienceLevel    ExperienceLevel?
-  locale             String          @default("uz")
-  status             JobStatus       @default(DRAFT)
+  locale             String           @default("uz")
+  status             JobStatus        @default(DRAFT)
   publishedAt        DateTime?
   closedAt           DateTime?
-  boostWeight        Float           @default(0)
+  boostWeight        Float            @default(0)
   boostUntil         DateTime?
   /// SHA-256 of normalized title|workMode|cityId — blocks duplicate openings
   fingerprint        String?
   /// SHA-256 of normalized description — blocks copy-paste duplicate posts
   contentHash        String?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
-  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  jobTitle     JobTitle?        @relation(fields: [jobTitleId], references: [id])
-  city         City?            @relation(fields: [cityId], references: [id])
-  category     JobCategory?     @relation(fields: [categoryId], references: [id])
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobTitle      JobTitle?         @relation(fields: [jobTitleId], references: [id])
+  city          City?             @relation(fields: [cityId], references: [id])
+  category      JobCategory?      @relation(fields: [categoryId], references: [id])
   jobSkills     JobPostSkill[]
   jobLanguages  JobPostLanguage[]
   benefits      JobPostBenefit[]
@@ -602,11 +622,11 @@ model JobPostLanguage {
 }
 
 model JobPostSkill {
-  id        String  @id @default(cuid())
-  jobPostId String
-  skillId   String
+  id         String  @id @default(cuid())
+  jobPostId  String
+  skillId    String
   isRequired Boolean @default(true)
-  weight    Float   @default(1)
+  weight     Float   @default(1)
 
   jobPost JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
@@ -627,20 +647,20 @@ model JobPostBenefit {
 }
 
 model EmployeeProfile {
-  id               String            @id @default(cuid())
-  userId           String            @unique
-  headline         String?
-  summary          String?
-  cityId           String?
-  phone            String?           @unique
-  visibility          ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
-  desiredSalaryMin    Int?
-  desiredPosition     String?
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  headline          String?
+  summary           String?
+  cityId            String?
+  phone             String?           @unique
+  visibility        ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
+  desiredSalaryMin  Int?
+  desiredPosition   String?
   /// GDPR: opt out of recruiter bulk messaging (pipeline status updates still allowed)
-  bulkCommsOptOut     Boolean           @default(false)
-  bulkCommsOptOutAt   DateTime?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  bulkCommsOptOut   Boolean           @default(false)
+  bulkCommsOptOutAt DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   city           City?             @relation(fields: [cityId], references: [id])
@@ -725,31 +745,33 @@ model ProfileLanguage {
 }
 
 model Resume {
-  id                String            @id @default(cuid())
-  profileId         String
-  title             String
+  id               String            @id @default(cuid())
+  profileId        String
+  title            String
   /// Canonical target role for matching / analytics (not the free-text display title).
-  targetJobTitleId  String?
-  content           String?
-  fileKey           String?
-  fileUrl           String?
-  isPrimary         Boolean           @default(false)
-  parsedData        Json?
-  parseStatus       ResumeParseStatus @default(NONE)
-  parseError        String?
-  parsedAt          DateTime?
-  templateKey       String            @default("classic")
-  themeAccent       String?
-  inclusion         Json?
-  builderMeta       Json?
-  /** Soft-delete tombstone; hard-purged when no Application references remain. */
-  deletedAt         DateTime?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  targetJobTitleId String?
+  content          String?
+  fileKey          String?
+  fileUrl          String?
+  isPrimary        Boolean           @default(false)
+  parsedData       Json?
+  parseStatus      ResumeParseStatus @default(NONE)
+  parseError       String?
+  parsedAt         DateTime?
+  templateKey      String            @default("classic")
+  themeAccent      String?
+  inclusion        Json?
+  builderMeta      Json?
+  /**
+   * Soft-delete tombstone; hard-purged when no Application references remain.
+   */
+  deletedAt        DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  profile         EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  targetJobTitle  JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
-  applications    Application[]
+  profile        EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  targetJobTitle JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
+  applications   Application[]
 
   @@index([profileId])
   @@index([profileId, deletedAt])
@@ -770,11 +792,11 @@ model Application {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  jobPost   JobPost             @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  profile   EmployeeProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  resume    Resume?             @relation(fields: [resumeId], references: [id], onDelete: SetNull)
-  events    PipelineEvent[]
-  answers   ApplicationAnswer[]
+  jobPost    JobPost             @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  profile    EmployeeProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  resume     Resume?             @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  events     PipelineEvent[]
+  answers    ApplicationAnswer[]
   interviews Interview[]
 
   @@unique([jobPostId, profileId])
@@ -1036,10 +1058,10 @@ model BulkCampaign {
   note        String?
   createdAt   DateTime           @default(now())
 
-  company    Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  jobPost    JobPost                  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  createdBy  User                     @relation("BulkCampaignAuthor", fields: [createdById], references: [id], onDelete: Cascade)
-  template   MessageTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  company    Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobPost    JobPost                 @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  createdBy  User                    @relation("BulkCampaignAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  template   MessageTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
   recipients BulkCampaignRecipient[]
 
   @@index([companyId, createdAt])

@@ -14,9 +14,9 @@ type PageProps = { params: Promise<{ id: string; locale: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id, locale } = await params;
-  const job = await fetchJobSeo(id);
-  if (!job) return {};
   const active = isLocale(locale) ? locale : DEFAULT_LOCALE;
+  const job = await fetchJobSeo(id, active);
+  if (!job) return {};
   const title = `${sanitizeMojibake(job.title)} - ${job.company.name}`;
   const description = jobMetaDescription(job);
   const url = jobCanonicalUrl(job.id, active);
@@ -30,8 +30,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function JobDetailPage({ params }: PageProps) {
   const { id, locale } = await params;
-  const job = await fetchJobSeo(id);
   const active = isLocale(locale) ? locale : DEFAULT_LOCALE;
+  const job = await fetchJobSeo(id, active);
   const jsonLd = job ? buildJobPostingJsonLd(job, active) : null;
   return (
     <>

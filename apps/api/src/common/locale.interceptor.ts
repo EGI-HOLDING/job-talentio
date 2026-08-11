@@ -1,0 +1,93 @@
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { Observable, map } from 'rxjs';
+import { DEFAULT_LOCALE, isLocale, localeFromAcceptLanguage } from './i18n/locale';
+import type { Locale } from './i18n/locale';
+
+/** Deep walk is bounded so a pathological payload cannot spin the event loop. */
+const MAX_DEPTH = 12;
+
+type Localizable = Record<string, unknown> & {
+  name: string;
+  nameUz?: string | null;
+  nameRu?: string | null;
+};
+
+function isLocalizable(value: unknown): value is Localizable {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  if (typeof row.name !== 'string') return false;
+  return 'nameUz' in row || 'nameRu' in row;
+}
+
+/**
+ * Rewrites catalog rows in place-ish: `name` becomes the localized label and the
+ * locale columns are dropped, so every client keeps reading a single `name`
+ * field. Rows without a translation fall back to the canonical English name.
+ */
+function localizeDeep(value: unknown, locale: Locale, depth = 0): unknown {
+  if (depth > MAX_DEPTH || value === null || typeof value !== 'object') return value;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => localizeDeep(item, locale, depth + 1));
+  }
+  if (value instanceof Date) return value;
+
+  const row = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+
+  for (const [key, child] of Object.entries(row)) {
+    if (key === 'nameUz' || key === 'nameRu') continue;
+    out[key] = localizeDeep(child, locale, depth + 1);
+  }
+
+  if (isLocalizable(row)) {
+    const translated = locale === 'uz' ? row.nameUz : locale === 'ru' ? row.nameRu : null;
+    out.name = (typeof translated === 'string' && translated) || row.name;
+  }
+
+  return out;
+}
+
+/**
+ * Resolution order: explicit `?locale=` (server-side rendering) -> `X-Locale`
+ * header from the web client -> `Accept-Language` -> the signed-in user's saved
+ * locale -> default.
+ */
+function resolveLocale(request: {
+  query?: Record<string, unknown>;
+  headers?: Record<string, unknown>;
+  user?: { locale?: string };
+}): Locale {
+  const fromQuery = request.query?.locale;
+  if (isLocale(fromQuery)) return fromQuery;
+
+  const fromHeader = request.headers?.['x-locale'];
+  if (isLocale(fromHeader)) return fromHeader;
+
+  const fromAccept = localeFromAcceptLanguage(request.headers?.['accept-language'] as string);
+  if (fromAccept) return fromAccept;
+
+  const fromUser = request.user?.locale;
+  if (isLocale(fromUser)) return fromUser;
+
+  return DEFAULT_LOCALE;
+}
+
+@Injectable()
+export class LocaleInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (context.getType() !== 'http') return next.handle();
+
+    const request = context.switchToHttp().getRequest();
+    const locale = resolveLocale(request);
+
+    return next.handle().pipe(
+      map((body) => (locale === 'en' ? stripLocaleColumns(body) : localizeDeep(body, locale))),
+    );
+  }
+}
+
+/** English already lives in `name`; only the extra columns need removing. */
+function stripLocaleColumns(value: unknown): unknown {
+  return localizeDeep(value, 'en');
+}

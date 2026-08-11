@@ -118,6 +118,16 @@ pnpm --filter @job-talentio/api prisma:backfill-job-titles
 pnpm --filter @job-talentio/api backfill:job-titles
 ```
 
+**Catalog display names (uz/ru):** cities, provinces, categories, industries, benefits, languages, skills and job titles carry `nameUz` / `nameRu` columns. `name` stays the canonical English label and the final fallback, so untranslated rows keep rendering. Run once per environment after deploying the `catalog_locale_names` migration (idempotent, safe to repeat):
+
+```bash
+railway ssh --service api-stage-job-talentio -- node dist/scripts/backfill-catalog-i18n.js
+```
+
+The API picks the language from `?locale=`, then the `X-Locale` header sent by the web app, then `Accept-Language`, then the signed-in user's saved locale, then `uz`.
+
+**News translations:** `node dist/scripts/backfill-news.js` (idempotent) seeds the curated articles and their uz/ru versions.
+
 ### Reference variables (api)
 
 Link plugin outputs into the `api` service:
