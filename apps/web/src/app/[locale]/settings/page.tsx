@@ -3,28 +3,29 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from '@/lib/navigation';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
-import { useI18n, Locale } from '@/lib/i18n';
+import { useEnumLabel, useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 
 type Section = 'account' | 'preferences' | 'privacy' | 'security';
 
-function passwordStrength(pw: string): { score: number; label: string; color: string } {
+function passwordStrength(pw: string): { score: number; labelKey: string; color: string } {
   let score = 0;
   if (pw.length >= 8) score += 1;
   if (pw.length >= 12) score += 1;
   if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score += 1;
   if (/\d/.test(pw)) score += 1;
   if (/[^A-Za-z0-9]/.test(pw)) score += 1;
-  if (score <= 1) return { score: 20, label: 'Weak', color: '#ef4444' };
-  if (score === 2) return { score: 40, label: 'Fair', color: '#f59e0b' };
-  if (score === 3) return { score: 65, label: 'Good', color: '#3b82f6' };
-  return { score: 100, label: 'Strong', color: '#10b981' };
+  if (score <= 1) return { score: 20, labelKey: 'ui.passwordWeak', color: '#ef4444' };
+  if (score === 2) return { score: 40, labelKey: 'ui.passwordFair', color: '#f59e0b' };
+  if (score === 3) return { score: 65, labelKey: 'ui.passwordGood', color: '#3b82f6' };
+  return { score: 100, labelKey: 'ui.passwordStrong', color: '#10b981' };
 }
 
 export default function SettingsPage() {
   const router = useRouter();
   const { t, locale, setLocale } = useI18n();
+  const enumLabel = useEnumLabel();
   const [section, setSection] = useState<Section>('account');
   const [session, setSession] = useState<AuthSession | null>(null);
   const [fullName, setFullName] = useState('');
@@ -89,13 +90,9 @@ export default function SettingsPage() {
         body: JSON.stringify({ optedOut: bulkOptedOut }),
       });
       setBulkOptedOut(r.optedOut);
-      setMsg(
-        r.optedOut
-          ? 'You opted out of recruiter bulk messaging'
-          : 'You can receive recruiter bulk messages again',
-      );
+      setMsg(r.optedOut ? t('ui.bulkOptedOutMsg') : t('ui.bulkOptedInMsg'));
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Failed to update privacy');
+      setErr(error instanceof Error ? error.message : t('ui.privacyUpdateFailed'));
     } finally {
       setPrivacyLoading(false);
     }
@@ -114,9 +111,9 @@ export default function SettingsPage() {
       saveSession(updated);
       setSession(updated);
       setLocale(prefLocale);
-      setMsg('Profile saved');
+      setMsg(t('ui.profileSaved'));
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Failed to save');
+      setErr(error instanceof Error ? error.message : t('ui.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -131,11 +128,11 @@ export default function SettingsPage() {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      setPwMsg('Password updated');
+      setPwMsg(t('ui.passwordUpdated'));
       setCurrentPassword('');
       setNewPassword('');
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Failed to change password');
+      setErr(error instanceof Error ? error.message : t('ui.passwordChangeFailed'));
     }
   }
 
@@ -151,11 +148,11 @@ export default function SettingsPage() {
           currentPassword: emailChangePassword,
         }),
       });
-      setPwMsg(r.message || 'Check the new inbox to confirm the change');
+      setPwMsg(r.message || t('ui.emailChangeCheckInbox'));
       setNewEmail('');
       setEmailChangePassword('');
     } catch (error) {
-      setErr(error instanceof Error ? error.message : 'Failed to start email change');
+      setErr(error instanceof Error ? error.message : t('ui.emailChangeFailed'));
     }
   }
 
@@ -196,7 +193,7 @@ export default function SettingsPage() {
             [
               ['account', t('account')],
               ['preferences', t('language')],
-              ...(isEmployee ? [['privacy', 'Privacy'] as [Section, string]] : []),
+              ...(isEmployee ? [['privacy', t('ui.privacy')] as [Section, string]] : []),
               ['security', t('changePassword')],
             ] as Array<[Section, string]>
           ).map(([k, label]) => (
@@ -227,7 +224,7 @@ export default function SettingsPage() {
               <p className="muted" style={{ margin: '0.35rem 0' }}>
                 {session.user.email}
               </p>
-              <span className="badge skill">{session.user.role}</span>
+              <span className="badge skill">{enumLabel('role', session.user.role)}</span>
             </div>
           </div>
 
@@ -293,7 +290,7 @@ export default function SettingsPage() {
                 </FormField>
                 <ImageCropUpload
                   mode="avatar"
-                  label="Profile photo"
+                  label={t('ui.profilePhoto')}
                   value={avatarUrl}
                   uploadPath="/auth/me/avatar"
                   clearPath="/auth/me/avatar"
@@ -308,13 +305,10 @@ export default function SettingsPage() {
                       saveSession(next);
                       setSession(next);
                     }
-                    setMsg('Photo updated');
+                    setMsg(t('ui.photoUpdated'));
                   }}
                 />
-                <FormField
-                  label={t('avatarUrl')}
-                  hint="Optional: paste an image URL, or upload & crop above."
-                >
+                <FormField label={t('avatarUrl')} hint={t('ui.avatarUrlHint')}>
                   <input
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
@@ -366,10 +360,9 @@ export default function SettingsPage() {
 
           {section === 'privacy' && isEmployee && (
             <div className="card">
-              <h3 style={{ marginTop: 0 }}>Privacy & messaging</h3>
+              <h3 style={{ marginTop: 0 }}>{t('ui.privacyAndMessaging')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                Under GDPR you can opt out of recruiter bulk / mass messages. You will still receive
-                application status updates and one-to-one chat if you message a recruiter.
+                {t('ui.privacyBulkIntro')}
               </p>
               <form onSubmit={savePrivacy} className="form-stack">
                 <label
@@ -387,11 +380,10 @@ export default function SettingsPage() {
                     style={{ marginTop: '0.25rem' }}
                   />
                   <span>
-                    <strong>Opt out of bulk recruiter messaging</strong>
+                    <strong>{t('ui.optOutBulkTitle')}</strong>
                     <br />
                     <span className="muted" style={{ fontSize: '0.88rem' }}>
-                      Recruiters cannot send mass messages to you from the pipeline. Pipeline stage
-                      changes may still notify you.
+                      {t('ui.optOutBulkHint')}
                     </span>
                   </span>
                 </label>
@@ -406,7 +398,7 @@ export default function SettingsPage() {
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('changePassword')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                Use at least 8 characters with mixed case and a number.
+                {t('ui.passwordRuleHint')}
               </p>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form onSubmit={changePassword} className="form-stack">
@@ -437,7 +429,7 @@ export default function SettingsPage() {
                         <span style={{ width: `${strength.score}%`, background: strength.color }} />
                       </div>
                       <span id="pw-strength" className="muted" style={{ fontSize: '0.8rem' }}>
-                        Strength: {strength.label}
+                        {t('ui.passwordStrength')}: {t(strength.labelKey)}
                       </span>
                     </>
                   )}
@@ -445,13 +437,12 @@ export default function SettingsPage() {
                 <button type="submit">{t('changePassword')}</button>
               </form>
 
-              <h3 style={{ marginTop: '2rem' }}>Change email</h3>
+              <h3 style={{ marginTop: '2rem' }}>{t('ui.changeEmail')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                We will email a confirmation link to the new address. Your login email updates after
-                you confirm.
+                {t('ui.changeEmailHint')}
               </p>
               <form onSubmit={requestEmailChange} className="form-stack">
-                <FormField label="New email" required>
+                <FormField label={t('ui.newEmail')} required>
                   <input
                     type="email"
                     value={newEmail}
@@ -469,7 +460,7 @@ export default function SettingsPage() {
                     autoComplete="current-password"
                   />
                 </label>
-                <button type="submit">Send confirmation</button>
+                <button type="submit">{t('ui.sendConfirmation')}</button>
               </form>
             </div>
           )}

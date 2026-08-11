@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
+
 type Size = 'sm' | 'md' | 'lg';
 
 type Props = {
@@ -25,9 +27,10 @@ function toneFor(score: number): 'high' | 'mid' | 'low' {
 
 /** Circular match score with a filled arc and centered percentage label. */
 export function MatchRing({ score, size = 'md', className = '', label }: Props) {
+  const { t } = useI18n();
   const value = clampScore(score);
   const tone = toneFor(value);
-  const title = label ? `${label}: ${value}%` : `Match ${value}%`;
+  const title = label ? `${label}: ${value}%` : `${t('match')} ${value}%`;
   const dim = SIZE_PX[size];
   const stroke = STROKE_PX[size];
   const radius = (dim - stroke) / 2;

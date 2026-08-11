@@ -1,0 +1,458 @@
+/** Reusable UI primitives, messages and small shared surfaces. */
+export const ui = {
+  'ui.confirm': { uz: 'Tasdiqlash', ru: 'Подтвердить', en: 'Confirm' },
+  'ui.location': { uz: 'Manzil', ru: 'Локация', en: 'Location' },
+  'ui.matchOk': { uz: 'Mos', ru: 'Совпадает', en: 'OK' },
+  'ui.matchMissing': { uz: 'Yetishmaydi', ru: 'Не хватает', en: 'Missing' },
+  'ui.matchMissingRequired': {
+    uz: 'Majburiylari yetishmaydi',
+    ru: 'Нет обязательных',
+    en: 'Missing required',
+  },
+  'ui.pageRangeOf': { uz: 'dan', ru: 'из', en: 'of' },
+  'ui.cropFailed': {
+    uz: 'Rasmni qayta ishlab bo‘lmadi',
+    ru: 'Не удалось обработать изображение',
+    en: 'Could not process the image',
+  },
+  'ui.working': { uz: 'Bajarilmoqda...', ru: 'Выполняется...', en: 'Working...' },
+  'ui.clear': { uz: 'Tozalash', ru: 'Очистить', en: 'Clear' },
+  'ui.selectAll': { uz: 'Barchasini tanlash', ru: 'Выбрать все', en: 'Select all' },
+  'ui.remove': { uz: 'O‘chirish', ru: 'Удалить', en: 'Remove' },
+  'ui.level': { uz: 'Daraja', ru: 'Уровень', en: 'Level' },
+  'ui.now': { uz: 'hozir', ru: 'сейчас', en: 'now' },
+
+  'ui.loading': { uz: 'Yuklanmoqda', ru: 'Загрузка', en: 'Loading' },
+  'ui.loadingJobs': {
+    uz: 'Ish o‘rinlari yuklanmoqda',
+    ru: 'Загрузка вакансий',
+    en: 'Loading jobs',
+  },
+  'ui.loadingCandidates': {
+    uz: 'Nomzodlar yuklanmoqda',
+    ru: 'Загрузка кандидатов',
+    en: 'Loading candidates',
+  },
+
+  'ui.pagination': { uz: 'Sahifalash', ru: 'Постраничная навигация', en: 'Pagination' },
+  'ui.firstPage': { uz: 'Birinchi sahifa', ru: 'Первая страница', en: 'First page' },
+  'ui.previousPage': { uz: 'Oldingi sahifa', ru: 'Предыдущая страница', en: 'Previous page' },
+  'ui.nextPage': { uz: 'Keyingi sahifa', ru: 'Следующая страница', en: 'Next page' },
+  'ui.lastPage': { uz: 'Oxirgi sahifa', ru: 'Последняя страница', en: 'Last page' },
+  'ui.prev': { uz: 'Oldingi', ru: 'Назад', en: 'Prev' },
+  'ui.next': { uz: 'Keyingi', ru: 'Вперёд', en: 'Next' },
+  'ui.go': { uz: 'O‘tish', ru: 'Перейти', en: 'Go' },
+  'ui.goToPageRange': {
+    uz: 'Sahifaga o‘tish (1-{n})',
+    ru: 'Перейти к странице (1-{n})',
+    en: 'Go to page (1-{n})',
+  },
+
+  'ui.noImage': { uz: 'Rasm yo‘q', ru: 'Нет изображения', en: 'No image' },
+  'ui.uploadAndCrop': { uz: 'Yuklash va kesish', ru: 'Загрузить и обрезать', en: 'Upload & crop' },
+  'ui.cropPhoto': { uz: 'Rasmni kesish', ru: 'Обрезать фото', en: 'Crop photo' },
+  'ui.cropLogo': { uz: 'Logoni kesish', ru: 'Обрезать логотип', en: 'Crop logo' },
+  'ui.zoom': { uz: 'Masshtab', ru: 'Масштаб', en: 'Zoom' },
+  'ui.uploading': { uz: 'Yuklanmoqda...', ru: 'Загрузка...', en: 'Uploading...' },
+  'ui.pickImageFile': {
+    uz: 'Rasm faylini tanlang',
+    ru: 'Выберите файл изображения',
+    en: 'Please choose an image file',
+  },
+  'ui.uploadFailed': {
+    uz: 'Yuklab bo‘lmadi',
+    ru: 'Не удалось загрузить',
+    en: 'Upload failed',
+  },
+  'ui.clearFailed': {
+    uz: 'Tozalab bo‘lmadi',
+    ru: 'Не удалось удалить',
+    en: 'Clear failed',
+  },
+  'ui.cropTooLarge': {
+    uz: 'Kesilgan rasm 2MB dan katta - kichikroq qismni tanlang',
+    ru: 'Обрезанное изображение больше 2 МБ - выберите меньшую область',
+    en: 'Cropped image is larger than 2MB - try a smaller crop',
+  },
+
+  'ui.coldOutreach': { uz: 'Sovuq murojaat', ru: 'Холодное обращение', en: 'Cold outreach' },
+  'ui.cannotStartConversation': {
+    uz: 'Suhbatni boshlab bo‘lmadi',
+    ru: 'Не удалось начать диалог',
+    en: 'Cannot start conversation',
+  },
+  'ui.messageSendFailed': {
+    uz: 'Xabar yuborilmadi',
+    ru: 'Не удалось отправить',
+    en: 'Failed to send',
+  },
+
+  'ui.privacy': { uz: 'Maxfiylik', ru: 'Конфиденциальность', en: 'Privacy' },
+  'ui.privacyAndMessaging': {
+    uz: 'Maxfiylik va xabarlar',
+    ru: 'Конфиденциальность и сообщения',
+    en: 'Privacy & messaging',
+  },
+  'ui.privacyBulkIntro': {
+    uz: 'GDPR bo‘yicha rekruterlarning ommaviy xabarlaridan voz kechishingiz mumkin. Ariza holati haqidagi xabarlar va rekruterga o‘zingiz yozgan suhbatlar baribir keladi.',
+    ru: 'По GDPR вы можете отказаться от массовых сообщений рекрутеров. Уведомления о статусе откликов и личная переписка с рекрутером будут приходить по-прежнему.',
+    en: 'Under GDPR you can opt out of recruiter bulk / mass messages. You will still receive application status updates and one-to-one chat if you message a recruiter.',
+  },
+  'ui.optOutBulkTitle': {
+    uz: 'Rekruterlarning ommaviy xabarlaridan voz kechish',
+    ru: 'Отказаться от массовых сообщений рекрутеров',
+    en: 'Opt out of bulk recruiter messaging',
+  },
+  'ui.optOutBulkHint': {
+    uz: 'Rekruterlar sizga pipeline orqali ommaviy xabar yubora olmaydi. Pipeline bosqichi o‘zgarganda bildirishnoma kelishi mumkin.',
+    ru: 'Рекрутеры не смогут отправлять вам массовые сообщения из пайплайна. Уведомления о смене этапа могут приходить.',
+    en: 'Recruiters cannot send mass messages to you from the pipeline. Pipeline stage changes may still notify you.',
+  },
+  'ui.bulkOptedOutMsg': {
+    uz: 'Rekruterlarning ommaviy xabarlaridan voz kechdingiz',
+    ru: 'Вы отказались от массовых сообщений рекрутеров',
+    en: 'You opted out of recruiter bulk messaging',
+  },
+  'ui.bulkOptedInMsg': {
+    uz: 'Rekruterlarning ommaviy xabarlarini yana olasiz',
+    ru: 'Вы снова можете получать массовые сообщения рекрутеров',
+    en: 'You can receive recruiter bulk messages again',
+  },
+  'ui.privacyUpdateFailed': {
+    uz: 'Maxfiylik sozlamalarini yangilab bo‘lmadi',
+    ru: 'Не удалось обновить настройки конфиденциальности',
+    en: 'Failed to update privacy',
+  },
+
+  'ui.profilePhoto': { uz: 'Profil rasmi', ru: 'Фото профиля', en: 'Profile photo' },
+  'ui.photoUpdated': { uz: 'Rasm yangilandi', ru: 'Фото обновлено', en: 'Photo updated' },
+  'ui.profileSaved': { uz: 'Profil saqlandi', ru: 'Профиль сохранён', en: 'Profile saved' },
+  'ui.saveFailed': { uz: 'Saqlab bo‘lmadi', ru: 'Не удалось сохранить', en: 'Failed to save' },
+  'ui.avatarUrlHint': {
+    uz: 'Ixtiyoriy: rasm havolasini joylashtiring yoki yuqorida yuklab kesing.',
+    ru: 'Необязательно: вставьте ссылку на изображение или загрузите и обрежьте выше.',
+    en: 'Optional: paste an image URL, or upload & crop above.',
+  },
+
+  'ui.passwordUpdated': { uz: 'Parol yangilandi', ru: 'Пароль обновлён', en: 'Password updated' },
+  'ui.passwordChangeFailed': {
+    uz: 'Parolni o‘zgartirib bo‘lmadi',
+    ru: 'Не удалось сменить пароль',
+    en: 'Failed to change password',
+  },
+  'ui.passwordRuleHint': {
+    uz: 'Kamida 8 ta belgi, katta va kichik harflar hamda raqam ishlating.',
+    ru: 'Используйте не менее 8 символов с заглавными, строчными буквами и цифрой.',
+    en: 'Use at least 8 characters with mixed case and a number.',
+  },
+  'ui.passwordStrength': { uz: 'Kuchlilik', ru: 'Надёжность', en: 'Strength' },
+  'ui.passwordWeak': { uz: 'Zaif', ru: 'Слабый', en: 'Weak' },
+  'ui.passwordFair': { uz: 'O‘rtacha', ru: 'Средний', en: 'Fair' },
+  'ui.passwordGood': { uz: 'Yaxshi', ru: 'Хороший', en: 'Good' },
+  'ui.passwordStrong': { uz: 'Kuchli', ru: 'Надёжный', en: 'Strong' },
+
+  'ui.changeEmail': { uz: 'Emailni o‘zgartirish', ru: 'Сменить email', en: 'Change email' },
+  'ui.newEmail': { uz: 'Yangi email', ru: 'Новый email', en: 'New email' },
+  'ui.changeEmailHint': {
+    uz: 'Yangi manzilga tasdiqlash havolasini yuboramiz. Kirish emailingiz siz tasdiqlaganingizdan keyin o‘zgaradi.',
+    ru: 'Мы отправим ссылку для подтверждения на новый адрес. Email для входа изменится после подтверждения.',
+    en: 'We will email a confirmation link to the new address. Your login email updates after you confirm.',
+  },
+  'ui.sendConfirmation': {
+    uz: 'Tasdiqlashni yuborish',
+    ru: 'Отправить подтверждение',
+    en: 'Send confirmation',
+  },
+  'ui.emailChangeCheckInbox': {
+    uz: 'O‘zgarishni tasdiqlash uchun yangi pochtangizni tekshiring',
+    ru: 'Проверьте новый почтовый ящик, чтобы подтвердить изменение',
+    en: 'Check the new inbox to confirm the change',
+  },
+  'ui.emailChangeFailed': {
+    uz: 'Emailni o‘zgartirishni boshlab bo‘lmadi',
+    ru: 'Не удалось начать смену email',
+    en: 'Failed to start email change',
+  },
+
+  'ui.cvReviewSubtitle': {
+    uz: 'Profilga nimani import qilishni tanlang. Noto‘g‘ri ko‘ringan bandlarni belgidan chiqaring.',
+    ru: 'Выберите, что импортировать в профиль. Снимите отметку с того, что выглядит неверно.',
+    en: 'Choose what to import into your profile. Uncheck anything that looks wrong.',
+  },
+  'ui.profileBasics': { uz: 'Profil asoslari', ru: 'Основное в профиле', en: 'Profile basics' },
+  'ui.headline': { uz: 'Sarlavha', ru: 'Заголовок', en: 'Headline' },
+  'ui.summary': { uz: 'Qisqacha ma’lumot', ru: 'О себе', en: 'Summary' },
+  'ui.phone': { uz: 'Telefon', ru: 'Телефон', en: 'Phone' },
+  'ui.emailDetected': { uz: 'Email aniqlandi', ru: 'Найден email', en: 'Email detected' },
+  'ui.emailKeptAsReference': {
+    uz: '(ma’lumot uchun saqlanadi - hisob emaili o‘zgarmaydi)',
+    ru: '(сохраняется для справки - email аккаунта не меняется)',
+    en: '(kept as reference - account email unchanged)',
+  },
+  'ui.nothingSelectedHint': {
+    uz: 'Hech narsa tanlanmadi - yuqoridagi bandlarni belgilang yoki import qilmasdan yoping.',
+    ru: 'Ничего не выбрано - отметьте пункты выше или закройте без импорта.',
+    en: 'Nothing selected - tick items above or close without importing.',
+  },
+  'ui.skipForNow': { uz: 'Hozircha o‘tkazib yuborish', ru: 'Пропустить пока', en: 'Skip for now' },
+  'ui.importing': { uz: 'Import qilinmoqda...', ru: 'Импорт...', en: 'Importing...' },
+  'ui.importSelected': {
+    uz: 'Tanlanganlarni import qilish ({n})',
+    ru: 'Импортировать выбранное ({n})',
+    en: 'Import selected ({n})',
+  },
+  'ui.importFailed': {
+    uz: 'Import qilib bo‘lmadi',
+    ru: 'Не удалось импортировать',
+    en: 'Import failed',
+  },
+
+  'ui.forgotPassword': { uz: 'Parolni unutdingizmi', ru: 'Забыли пароль', en: 'Forgot password' },
+  'ui.forgotPasswordHint': {
+    uz: 'Hisobingiz emailini kiriting - tiklash havolasini yuboramiz.',
+    ru: 'Введите email аккаунта - мы отправим ссылку для сброса пароля.',
+    en: 'Enter your account email and we will send a reset link.',
+  },
+  'ui.sendResetLink': {
+    uz: 'Tiklash havolasini yuborish',
+    ru: 'Отправить ссылку',
+    en: 'Send reset link',
+  },
+  'ui.forgotPasswordSent': {
+    uz: 'Agar bu email ro‘yxatdan o‘tgan bo‘lsa, tiklash havolasini yubordik. Pochtangizni tekshiring.',
+    ru: 'Если этот email зарегистрирован, мы отправили ссылку для сброса. Проверьте почту.',
+    en: 'If that email is registered, we sent a reset link. Check your inbox.',
+  },
+  'ui.requestFailed': {
+    uz: 'So‘rov bajarilmadi',
+    ru: 'Не удалось выполнить запрос',
+    en: 'Request failed',
+  },
+  'ui.backToSignIn': {
+    uz: 'Kirish sahifasiga qaytish',
+    ru: 'Вернуться ко входу',
+    en: 'Back to sign in',
+  },
+
+  'ui.chooseNewPassword': {
+    uz: 'Yangi parol tanlang',
+    ru: 'Придумайте новый пароль',
+    en: 'Choose a new password',
+  },
+  'ui.missingResetToken': {
+    uz: 'Tiklash tokeni yo‘q. Yangi havola so‘rang.',
+    ru: 'Токен сброса отсутствует. Запросите новую ссылку.',
+    en: 'Missing reset token. Request a new link.',
+  },
+  'ui.passwordUpdatedSignIn': {
+    uz: 'Parol yangilandi. Endi hisobingizga kirishingiz mumkin.',
+    ru: 'Пароль обновлён. Теперь вы можете войти.',
+    en: 'Password updated. You can sign in now.',
+  },
+  'ui.updatePassword': { uz: 'Parolni yangilash', ru: 'Обновить пароль', en: 'Update password' },
+  'ui.resetFailed': {
+    uz: 'Parolni tiklab bo‘lmadi',
+    ru: 'Не удалось сбросить пароль',
+    en: 'Reset failed',
+  },
+
+  'ui.confirmEmailChange': {
+    uz: 'Email o‘zgarishini tasdiqlash',
+    ru: 'Подтвердите смену email',
+    en: 'Confirm email change',
+  },
+  'ui.confirming': { uz: 'Tasdiqlanmoqda...', ru: 'Подтверждение...', en: 'Confirming...' },
+  'ui.emailUpdated': { uz: 'Email yangilandi', ru: 'Email обновлён', en: 'Email updated' },
+  'ui.missingConfirmationToken': {
+    uz: 'Tasdiqlash tokeni yo‘q',
+    ru: 'Отсутствует токен подтверждения',
+    en: 'Missing confirmation token',
+  },
+  'ui.confirmationFailed': {
+    uz: 'Tasdiqlab bo‘lmadi',
+    ru: 'Не удалось подтвердить',
+    en: 'Confirmation failed',
+  },
+  'ui.backToSettings': {
+    uz: 'Sozlamalarga qaytish',
+    ru: 'Вернуться в настройки',
+    en: 'Back to settings',
+  },
+  'ui.requestNewVerificationEmail': {
+    uz: 'hisobingizdan yangi tasdiqlash xatini so‘rang.',
+    ru: 'запросите новое письмо для подтверждения в аккаунте.',
+    en: 'request a new verification email from your account.',
+  },
+
+  'ui.demoCheckout': { uz: 'Demo to‘lov', ru: 'Демо-оплата', en: 'Demo checkout' },
+  'ui.demoCheckoutHint': {
+    uz: 'Test to‘lovi - haqiqiy pul yechilmaydi. Tarif yoki boostni faollashtirish uchun tasdiqlang.',
+    ru: 'Тестовый платёж - реальных списаний нет. Подтвердите, чтобы активировать тариф или продвижение.',
+    en: 'Mock payment - no real charge. Confirm to activate the plan or boost.',
+  },
+  'ui.planUpgradeLabel': {
+    uz: 'Tarifni yangilash: {plan}',
+    ru: 'Смена тарифа: {plan}',
+    en: 'Plan upgrade: {plan}',
+  },
+  'ui.hotJobBoostLabel': {
+    uz: 'Dolzarb e’lon: {n} kun',
+    ru: 'Продвижение вакансии: {n} дней',
+    en: 'Hot job boost: {n} days',
+  },
+  'ui.missingPaymentId': {
+    uz: 'To‘lov identifikatori yo‘q.',
+    ru: 'Отсутствует идентификатор платежа.',
+    en: 'Missing payment id.',
+  },
+  'ui.backToBilling': {
+    uz: 'To‘lovlarga qaytish',
+    ru: 'Вернуться к оплате',
+    en: 'Back to billing',
+  },
+  'ui.backToPlanBilling': {
+    uz: 'Tarif va to‘lovlarga qaytish',
+    ru: 'Вернуться к тарифу и оплате',
+    en: 'Back to Plan & billing',
+  },
+  'ui.loadPaymentFailed': {
+    uz: 'To‘lovni yuklab bo‘lmadi',
+    ru: 'Не удалось загрузить платёж',
+    en: 'Failed to load payment',
+  },
+  'ui.paymentFailed': {
+    uz: 'To‘lov amalga oshmadi',
+    ru: 'Платёж не прошёл',
+    en: 'Payment failed',
+  },
+  'ui.paymentConfirmed': {
+    uz: 'To‘lov tasdiqlandi.',
+    ru: 'Платёж подтверждён.',
+    en: 'Payment confirmed.',
+  },
+  'ui.processing': { uz: 'Amalga oshirilmoqda...', ru: 'Обработка...', en: 'Processing...' },
+  'ui.payDemo': { uz: 'To‘lash (demo)', ru: 'Оплатить (демо)', en: 'Pay (demo)' },
+  'ui.status': { uz: 'Holat', ru: 'Статус', en: 'Status' },
+
+  'ui.bulkCommunication': {
+    uz: 'Ommaviy xabarlar',
+    ru: 'Массовые сообщения',
+    en: 'Bulk communication',
+  },
+  'ui.bulkCommsIntro': {
+    uz: 'Xabar shablonlarini boshqaring va kimga yozilganini ko‘ring. Tanlangan nomzodlarni ko‘chirish va ularga xabar yuborish uchun Pipeline dagi katakchalardan foydalaning.',
+    ru: 'Управляйте шаблонами сообщений и смотрите, кому уже писали. Используйте чекбоксы в пайплайне, чтобы переместить выбранных кандидатов и написать им.',
+    en: 'Manage message templates and review who was contacted. Use checkboxes in Pipeline to move and message selected candidates.',
+  },
+  'ui.bulkCommsVariables': { uz: 'O‘zgaruvchilar:', ru: 'Переменные:', en: 'Variables:' },
+  'ui.bulkLoadFailed': {
+    uz: 'Ommaviy xabar ma’lumotlarini yuklab bo‘lmadi',
+    ru: 'Не удалось загрузить данные массовых рассылок',
+    en: 'Failed to load bulk communication data',
+  },
+  'ui.editTemplate': {
+    uz: 'Shablonni tahrirlash',
+    ru: 'Редактировать шаблон',
+    en: 'Edit template',
+  },
+  'ui.newTemplate': { uz: 'Yangi shablon', ru: 'Новый шаблон', en: 'New template' },
+  'ui.createTemplate': { uz: 'Shablon yaratish', ru: 'Создать шаблон', en: 'Create template' },
+  'ui.saveChanges': {
+    uz: 'O‘zgarishlarni saqlash',
+    ru: 'Сохранить изменения',
+    en: 'Save changes',
+  },
+  'ui.templates': { uz: 'Shablonlar', ru: 'Шаблоны', en: 'Templates' },
+  'ui.noTemplatesYet': {
+    uz: 'Hozircha shablonlar yo‘q.',
+    ru: 'Шаблонов пока нет.',
+    en: 'No templates yet.',
+  },
+  'ui.interviewInvitePlaceholder': {
+    uz: 'Suhbatga taklif',
+    ru: 'Приглашение на интервью',
+    en: 'Interview invite',
+  },
+  'ui.templateBodyPlaceholder': {
+    uz: 'Salom {{name}}, {{companyName}} kompaniyasidagi {{jobTitle}} lavozimiga ariza qoldirganingiz uchun rahmat...',
+    ru: 'Здравствуйте, {{name}}! Спасибо за отклик на вакансию {{jobTitle}} в {{companyName}}...',
+    en: 'Hi {{name}}, thanks for applying to {{jobTitle}} at {{companyName}}...',
+  },
+  'ui.deleteTemplateConfirm': {
+    uz: 'Bu shablon o‘chirilsinmi?',
+    ru: 'Удалить этот шаблон?',
+    en: 'Delete this template?',
+  },
+  'ui.templateCreated': { uz: 'Shablon yaratildi', ru: 'Шаблон создан', en: 'Template created' },
+  'ui.templateUpdated': { uz: 'Shablon yangilandi', ru: 'Шаблон обновлён', en: 'Template updated' },
+  'ui.templateDeleted': { uz: 'Shablon o‘chirildi', ru: 'Шаблон удалён', en: 'Template deleted' },
+  'ui.templateSaveFailed': {
+    uz: 'Shablonni saqlab bo‘lmadi',
+    ru: 'Не удалось сохранить шаблон',
+    en: 'Failed to save template',
+  },
+  'ui.templateDeleteFailed': {
+    uz: 'Shablonni o‘chirib bo‘lmadi',
+    ru: 'Не удалось удалить шаблон',
+    en: 'Failed to delete template',
+  },
+  'ui.communicationHistory': {
+    uz: 'Xabarlar tarixi',
+    ru: 'История сообщений',
+    en: 'Communication history',
+  },
+  'ui.noBulkActionsYet': {
+    uz: 'Hozircha ommaviy amallar yo‘q. Boshlash uchun Pipeline dan nomzodlarni tanlang.',
+    ru: 'Массовых действий пока нет. Выберите кандидатов в пайплайне, чтобы начать.',
+    en: 'No bulk actions yet. Select candidates in Pipeline to start.',
+  },
+  'ui.recipientsCount': {
+    uz: '{n} ta qabul qiluvchi',
+    ru: 'Получателей: {n}',
+    en: '{n} recipient(s)',
+  },
+  'ui.optedOut': { uz: 'Voz kechgan', ru: 'Отказался', en: 'Opted out' },
+  'ui.failed': { uz: 'Xatolik', ru: 'Ошибка', en: 'Failed' },
+  'ui.pending': { uz: 'Kutilmoqda', ru: 'В ожидании', en: 'Pending' },
+  'ui.candidate': { uz: 'Nomzod', ru: 'Кандидат', en: 'Candidate' },
+  'ui.delivery': { uz: 'Yetkazish', ru: 'Доставка', en: 'Delivery' },
+  'ui.moved': { uz: 'Ko‘chirildi', ru: 'Перемещён', en: 'Moved' },
+  'ui.when': { uz: 'Qachon', ru: 'Когда', en: 'When' },
+
+  'ui.name': { uz: 'Nomi', ru: 'Название', en: 'Name' },
+  'ui.body': { uz: 'Matn', ru: 'Текст', en: 'Body' },
+  'ui.job': { uz: 'Ish o‘rni', ru: 'Вакансия', en: 'Job' },
+  'ui.message': { uz: 'Xabar', ru: 'Сообщение', en: 'Message' },
+  'ui.edit': { uz: 'Tahrirlash', ru: 'Редактировать', en: 'Edit' },
+  'ui.delete': { uz: 'O‘chirish', ru: 'Удалить', en: 'Delete' },
+  'ui.details': { uz: 'Batafsil', ru: 'Подробнее', en: 'Details' },
+  'ui.hide': { uz: 'Yashirish', ru: 'Скрыть', en: 'Hide' },
+  'ui.yes': { uz: 'Ha', ru: 'Да', en: 'Yes' },
+
+  'ui.atsChecklist': {
+    uz: 'ATS tekshiruv ro‘yxati',
+    ru: 'ATS-чеклист',
+    en: 'ATS checklist',
+  },
+
+  'ui.hotBoostLimited': {
+    uz: 'Cheklangan muddatli boost',
+    ru: 'Продвижение на ограниченный срок',
+    en: 'Limited-time boost',
+  },
+  'ui.hotEndsToday': {
+    uz: 'Bugun tugaydi - tezroq ariza bering',
+    ru: 'Заканчивается сегодня - откликнитесь скорее',
+    en: 'Ends today - apply soon',
+  },
+  'ui.hotDaysLeft': {
+    uz: 'Atigi {n} kun qoldi',
+    ru: 'Осталось всего {n} дней',
+    en: 'Only {n} days left',
+  },
+  'ui.hotMoreDays': {
+    uz: 'Yana {n} kun dolzarb',
+    ru: 'Ещё {n} дней в горячих',
+    en: 'Hot for {n} more days',
+  },
+} as const;

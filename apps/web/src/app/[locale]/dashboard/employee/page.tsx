@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/lib/navigation';
 import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
-import { jobLocationLabel } from '@/lib/location';
+import { localizedJobLocation } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -18,7 +18,7 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { categoryIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
-import { useI18n } from '@/lib/i18n';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { waitForResumeParse } from '@/lib/cvParse';
 import {
   EMPLOYEE_TAB_KEY,
@@ -47,13 +47,20 @@ function monthsBetween(start: string | Date, end?: string | Date | null) {
   return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()));
 }
 
-function formatDuration(start: string, end?: string | null, isCurrent?: boolean) {
+function formatDuration(
+  t: (key: string) => string,
+  start: string,
+  end?: string | null,
+  isCurrent?: boolean,
+) {
   const months = monthsBetween(start, isCurrent || !end ? null : end);
   const y = Math.floor(months / 12);
   const m = months % 12;
-  if (y && m) return `${y}y ${m}mo`;
-  if (y) return `${y}y`;
-  return `${m || 1}mo`;
+  const years = t('emp.durationYears').replace('{n}', String(y));
+  const monthLabel = (n: number) => t('emp.durationMonths').replace('{n}', String(n));
+  if (y && m) return `${years} ${monthLabel(m)}`;
+  if (y) return years;
+  return monthLabel(m || 1);
 }
 
 function dateInputValue(d?: string | Date | null) {
@@ -65,15 +72,15 @@ function dateInputValue(d?: string | Date | null) {
 
 function completeness(profile: any) {
   const checks = [
-    { ok: Boolean(profile?.user?.emailVerified), label: 'Verify your email' },
-    { ok: Boolean(profile?.user?.avatarUrl), label: 'Add a profile photo' },
-    { ok: Boolean(profile?.headline), label: 'Add a headline' },
-    { ok: Boolean(profile?.city), label: 'Set your city' },
-    { ok: (profile?.skills || []).length >= 3, label: 'Add at least 3 skills' },
-    { ok: (profile?.experiences || []).length >= 1, label: 'Add work experience' },
-    { ok: (profile?.educations || []).length >= 1, label: 'Add education' },
-    { ok: (profile?.languages || []).length >= 1, label: 'Add a language' },
-    { ok: (profile?.resumes || []).length >= 1, label: 'Upload or create a resume' },
+    { ok: Boolean(profile?.user?.emailVerified), labelKey: 'emp.checkVerifyEmail' },
+    { ok: Boolean(profile?.user?.avatarUrl), labelKey: 'emp.checkAddPhoto' },
+    { ok: Boolean(profile?.headline), labelKey: 'emp.checkAddHeadline' },
+    { ok: Boolean(profile?.city), labelKey: 'emp.checkSetCity' },
+    { ok: (profile?.skills || []).length >= 3, labelKey: 'emp.checkAddSkills' },
+    { ok: (profile?.experiences || []).length >= 1, labelKey: 'emp.checkAddExperience' },
+    { ok: (profile?.educations || []).length >= 1, labelKey: 'emp.checkAddEducation' },
+    { ok: (profile?.languages || []).length >= 1, labelKey: 'emp.checkAddLanguage' },
+    { ok: (profile?.resumes || []).length >= 1, labelKey: 'emp.checkAddResume' },
   ];
   const done = checks.filter((c) => c.ok).length;
   return { percent: Math.round((done / checks.length) * 100), checks, missing: checks.filter((c) => !c.ok) };
@@ -85,6 +92,7 @@ const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
 
 function EmployeeDashboardInner() {
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabFromUrl = searchParams.get('tab') || '';
@@ -226,7 +234,7 @@ function EmployeeDashboardInner() {
           : null,
       }),
     });
-    setMsg('Profile updated');
+    setMsg(t('emp.profileUpdated'));
     await load();
   }
 
@@ -245,9 +253,10 @@ function EmployeeDashboardInner() {
       ),
     });
     setMsg(
-      skill.isNew
-        ? `Skill “${skill.name}” resolved and saved`
-        : `Skill “${skill.name}” added`,
+      t(skill.isNew ? 'emp.skillResolvedSaved' : 'emp.skillAdded').replace(
+        '{name}',
+        skill.name,
+      ),
     );
     await load();
   }
@@ -293,32 +302,32 @@ function EmployeeDashboardInner() {
         { method: 'DELETE' },
       );
       if (res?.softDeleted && res.message) setMsg(res.message);
-      else setMsg('CV removed from your library');
+      else setMsg(t('emp.cvRemoved'));
       setDeleteCvId(null);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
+      setError(e instanceof Error ? e.message : t('emp.deleteFailed'));
     } finally {
       setDeleteCvBusy(false);
     }
   }
 
   async function withdrawApplication(appId: string) {
-    if (!confirm('Withdraw this application?')) return;
+    if (!confirm(t('emp.withdrawConfirm'))) return;
     try {
       await api(`/applications/${appId}/status`, {
         method: 'POST',
         body: JSON.stringify({ status: 'WITHDRAWN' }),
       });
-      setMsg('Application withdrawn');
+      setMsg(t('emp.applicationWithdrawn'));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Withdraw failed');
+      setError(e instanceof Error ? e.message : t('emp.withdrawFailed'));
     }
   }
 
   async function deleteAlert(id: string) {
-    if (!confirm('Delete this job alert?')) return;
+    if (!confirm(t('emp.deleteAlertConfirm'))) return;
     await api(`/alerts/${id}`, { method: 'DELETE' });
     await load();
   }
@@ -348,13 +357,13 @@ function EmployeeDashboardInner() {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
-      setMsg('Experience updated');
+      setMsg(t('emp.experienceUpdated'));
     } else {
       await api('/profiles/me/experiences', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      setMsg('Experience added');
+      setMsg(t('emp.experienceAdded'));
     }
     setOpenForm(null);
     await load();
@@ -375,13 +384,13 @@ function EmployeeDashboardInner() {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
-      setMsg('Education updated');
+      setMsg(t('emp.educationUpdated'));
     } else {
       await api('/profiles/me/educations', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      setMsg('Education added');
+      setMsg(t('emp.educationAdded'));
     }
     setOpenForm(null);
     await load();
@@ -402,13 +411,13 @@ function EmployeeDashboardInner() {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
-      setMsg('Certification updated');
+      setMsg(t('emp.certificationUpdated'));
     } else {
       await api('/profiles/me/certifications', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      setMsg('Certification added');
+      setMsg(t('emp.certificationAdded'));
     }
     setOpenForm(null);
     await load();
@@ -429,7 +438,12 @@ function EmployeeDashboardInner() {
           : { name: item.name, level: item.level || 'B1' },
       ),
     });
-    setMsg(item.isNew ? `Language “${item.name}” resolved and saved` : `Language “${item.name}” added`);
+    setMsg(
+      t(item.isNew ? 'emp.languageResolvedSaved' : 'emp.languageAdded').replace(
+        '{name}',
+        item.name,
+      ),
+    );
     await load();
   }
 
@@ -438,7 +452,7 @@ function EmployeeDashboardInner() {
       method: 'PATCH',
       body: JSON.stringify({ isPrimary: true }),
     });
-    setMsg('Primary resume updated');
+    setMsg(t('emp.primaryResumeUpdated'));
     await load();
   }
 
@@ -466,7 +480,7 @@ function EmployeeDashboardInner() {
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError('File too large (max 5MB)');
+      setError(t('resumeFileTooLarge'));
       return;
     }
     setError('');
@@ -504,7 +518,7 @@ function EmployeeDashboardInner() {
         setMsg(t('cvParsing'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      setError(err instanceof Error ? err.message : t('emp.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -525,7 +539,7 @@ function EmployeeDashboardInner() {
       setMsg(t('resumeFileAttached'));
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Attach failed');
+      setError(err instanceof Error ? err.message : t('emp.attachFailed'));
     } finally {
       setUploading(false);
     }
@@ -579,7 +593,7 @@ function EmployeeDashboardInner() {
           onClose={() => setCvReview(null)}
           onImported={async () => {
             setCvReview(null);
-            setMsg('Selected CV data imported into your profile');
+            setMsg(t('emp.cvImported'));
             setTab('profile');
             await load();
           }}
@@ -623,12 +637,12 @@ function EmployeeDashboardInner() {
       <aside className="dash-nav">
         {(
           [
-            ['overview', 'Overview'],
-            ['recommended', 'Recommended'],
-            ['applications', 'Applications'],
-            ['saved', 'Saved jobs'],
-            ['alerts', 'Job alerts'],
-            ['profile', 'Profile'],
+            ['overview', t('overview')],
+            ['recommended', t('recommended')],
+            ['applications', t('applications')],
+            ['saved', t('savedJobs')],
+            ['alerts', t('alerts')],
+            ['profile', t('profile')],
           ] as Array<[Tab, string]>
         ).map(([k, label]) => (
           <button key={k} type="button" className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
@@ -647,9 +661,9 @@ function EmployeeDashboardInner() {
               <div className="card completeness-card" style={{ marginBottom: '1rem' }}>
                 <div className="completeness-head">
                   <div>
-                    <h3 style={{ margin: 0 }}>Profile strength</h3>
+                    <h3 style={{ margin: 0 }}>{t('emp.profileStrength')}</h3>
                     <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-                      Stronger profiles get better job matches
+                      {t('emp.profileStrengthHint')}
                     </p>
                   </div>
                   <div className="completeness-score">{complete.percent}%</div>
@@ -661,12 +675,12 @@ function EmployeeDashboardInner() {
                   <div className="chips" style={{ marginTop: '0.75rem' }}>
                     {complete.missing.slice(0, 4).map((m) => (
                       <button
-                        key={m.label}
+                        key={m.labelKey}
                         type="button"
                         className="chip"
                         onClick={() => setTab('profile')}
                       >
-                        + {m.label}
+                        + {t(m.labelKey)}
                       </button>
                     ))}
                   </div>
@@ -690,12 +704,12 @@ function EmployeeDashboardInner() {
               </div>
             </div>
             <div className="card">
-              <h3>Quick stats</h3>
-              <p><strong>{apps.length}</strong> applications</p>
-              <p><strong>{recommended.length}</strong> recommended jobs</p>
-              <p><strong>{(profile?.skills || []).length}</strong> skills</p>
+              <h3>{t('emp.quickStats')}</h3>
+              <p><strong>{apps.length}</strong> {t('emp.statApplications')}</p>
+              <p><strong>{recommended.length}</strong> {t('emp.statRecommendedJobs')}</p>
+              <p><strong>{(profile?.skills || []).length}</strong> {t('emp.statSkills')}</p>
               <p>
-                Upcoming interviews:{' '}
+                {t('emp.upcomingInterviews')}:{' '}
                 {apps.reduce((n, a) => n + (a.interviews?.length || 0), 0)}
               </p>
             </div>
@@ -705,7 +719,7 @@ function EmployeeDashboardInner() {
 
         {tab === 'recommended' && (
           <div>
-            <h2 className="section-title">Jobs matched to your profile</h2>
+            <h2 className="section-title">{t('emp.jobsMatchedTitle')}</h2>
             {recommended.map((item) => {
               const rowId = `rec-${item.job.id}`;
               const open = breakdownId === rowId;
@@ -729,7 +743,7 @@ function EmployeeDashboardInner() {
                       </Link>
                       <div className="job-meta">
                         <span>{item.job.company?.name}</span>
-                        <span>{jobLocationLabel(item.job)}</span>
+                        <span>{localizedJobLocation(item.job, t)}</span>
                         {item.job.category && (
                           <span>
                             {categoryIconLabel(item.job.category.slug, item.job.category.icon)}
@@ -745,7 +759,7 @@ function EmployeeDashboardInner() {
                             style={{ marginTop: '0.55rem', border: 0, cursor: 'pointer' }}
                             onClick={() => setBreakdownId(open ? null : rowId)}
                           >
-                            Match {item.matchScore}% | details
+                            {t('match')} {item.matchScore}% | {t('emp.details')}
                           </button>
                           {open && item.matchBreakdown && (
                             <MatchBreakdownPanel breakdown={item.matchBreakdown} style={{ marginTop: '0.5rem' }} />
@@ -762,17 +776,14 @@ function EmployeeDashboardInner() {
               );
             })}
             {!recommended.length && (
-              <p className="muted">
-                Add skills to your profile to get job matches. Recommendations stay empty until your
-                skills overlap with published roles.
-              </p>
+              <p className="muted">{t('emp.recommendedEmpty')}</p>
             )}
           </div>
         )}
 
         {tab === 'applications' && (
           <div>
-            <h2 className="section-title">My applications</h2>
+            <h2 className="section-title">{t('emp.myApplications')}</h2>
             {apps.map((a) => {
               const open = breakdownId === a.id;
               return (
@@ -783,7 +794,7 @@ function EmployeeDashboardInner() {
                         {sanitizeMojibake(a.jobPost.title)}
                       </Link>
                       <p className="muted" style={{ margin: '0.25rem 0' }}>
-                        {a.jobPost.company?.name} | {a.status}
+                        {a.jobPost.company?.name} | {enumLabel('applicationStatus', a.status)}
                       </p>
                       {a.matchScore != null && (
                         <>
@@ -793,7 +804,7 @@ function EmployeeDashboardInner() {
                             style={{ border: 0, cursor: 'pointer' }}
                             onClick={() => setBreakdownId(open ? null : a.id)}
                           >
-                            Match {a.matchScore}% | details
+                            {t('match')} {a.matchScore}% | {t('emp.details')}
                           </button>
                           {open && a.matchBreakdown && (
                             <MatchBreakdownPanel breakdown={a.matchBreakdown} style={{ marginTop: '0.5rem' }} />
@@ -804,7 +815,7 @@ function EmployeeDashboardInner() {
                     <div style={{ textAlign: 'right' }}>
                       {(a.interviews || []).map((iv: any) => (
                         <div key={iv.id} className="badge" style={{ display: 'block', marginBottom: 4 }}>
-                          Interview {new Date(iv.scheduledAt).toLocaleString()}
+                          {t('emp.interview')} {new Date(iv.scheduledAt).toLocaleString()}
                         </div>
                       ))}
                       <div className="chips" style={{ justifyContent: 'flex-end' }}>
@@ -814,7 +825,7 @@ function EmployeeDashboardInner() {
                             className="chip"
                             style={{ fontSize: '0.78rem' }}
                           >
-                            Chat with recruiter
+                            {t('chatWithRecruiter')}
                           </Link>
                         ) : null}
                         {a.status !== 'WITHDRAWN' &&
@@ -825,7 +836,7 @@ function EmployeeDashboardInner() {
                               className="chip"
                               onClick={() => withdrawApplication(a.id)}
                             >
-                              Withdraw
+                              {t('emp.withdraw')}
                             </button>
                           )}
                       </div>
@@ -839,8 +850,8 @@ function EmployeeDashboardInner() {
 
         {tab === 'saved' && (
           <div>
-            <h2 className="section-title">Saved jobs</h2>
-            {saved.length === 0 && <p className="muted">You have not saved any jobs yet.</p>}
+            <h2 className="section-title">{t('savedJobs')}</h2>
+            {saved.length === 0 && <p className="muted">{t('emp.savedEmpty')}</p>}
             {saved.map((s) => (
               <div key={s.id} className="card" style={{ marginBottom: '0.75rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
@@ -849,11 +860,12 @@ function EmployeeDashboardInner() {
                       {s.jobPost.title}
                     </Link>
                     <p className="muted" style={{ margin: '0.25rem 0' }}>
-                      {s.jobPost.company?.name} | {jobLocationLabel(s.jobPost)} | {s.jobPost.status}
+                      {s.jobPost.company?.name} | {localizedJobLocation(s.jobPost, t)} |{' '}
+                      {enumLabel('jobStatus', s.jobPost.status)}
                     </p>
                   </div>
                   <button type="button" className="secondary" onClick={() => unsaveJob(s.jobPost.id)}>
-                    Remove
+                    {t('emp.remove')}
                   </button>
                 </div>
               </div>
@@ -864,21 +876,21 @@ function EmployeeDashboardInner() {
         {tab === 'alerts' && (
           <div className="grid-2">
             <div className="card">
-              <h3>Create alert</h3>
+              <h3>{t('emp.createAlert')}</h3>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={createAlert}>
                 <label>
-                  <LabelText required>Name</LabelText>
+                  <LabelText required>{t('emp.name')}</LabelText>
                   <input name="name" required />
                 </label>
                 <label>
-                  <LabelText>Keywords</LabelText>
+                  <LabelText>{t('emp.keywords')}</LabelText>
                   <input name="query" />
                 </label>
                 <label>
-                  <LabelText>City</LabelText>
+                  <LabelText>{t('city')}</LabelText>
                   <select name="citySlug">
-                    <option value="">Any</option>
+                    <option value="">{t('any')}</option>
                     {cities.map((c) => (
                       <option key={c.slug} value={c.slug}>
                         {c.name}
@@ -887,7 +899,7 @@ function EmployeeDashboardInner() {
                   </select>
                 </label>
                 <div>
-                  <LabelText>Skills</LabelText>
+                  <LabelText>{t('skills')}</LabelText>
                   <div className="chips" style={{ margin: '0.4rem 0' }}>
                     {draftAlertSkills.map((s) => (
                       <span key={s.slug} className="badge">
@@ -908,7 +920,7 @@ function EmployeeDashboardInner() {
                   <SkillCombobox
                     levelSelect={false}
                     allowCreate={false}
-                    submitLabel="Add skill to alert"
+                    submitLabel={t('emp.addSkillToAlert')}
                     onPick={(skill) => {
                       if (!skill.slug) return;
                       setDraftAlertSkills((prev) =>
@@ -920,13 +932,13 @@ function EmployeeDashboardInner() {
                   />
                 </div>
                 <label>
-                  <LabelText>Frequency</LabelText>
+                  <LabelText>{t('emp.frequency')}</LabelText>
                   <select name="frequency" defaultValue="DAILY">
-                    <option value="DAILY">Daily</option>
-                    <option value="WEEKLY">Weekly</option>
+                    <option value="DAILY">{t('emp.daily')}</option>
+                    <option value="WEEKLY">{t('emp.weekly')}</option>
                   </select>
                 </label>
-                <button type="submit">Save alert</button>
+                <button type="submit">{t('emp.saveAlert')}</button>
               </form>
             </div>
             <div>
@@ -934,12 +946,13 @@ function EmployeeDashboardInner() {
                 <div key={a.id} className="card" style={{ marginBottom: '0.5rem' }}>
                   <strong>{a.name}</strong>
                   <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {a.city?.name || 'Any city'} | {a.frequency} |{' '}
-                    {a.isActive ? 'Active' : 'Paused'}
+                    {a.city?.name || t('emp.anyCity')} | {a.frequency} |{' '}
+                    {a.isActive ? t('emp.active') : t('emp.paused')}
                   </p>
                   {(a.skills || []).length > 0 && (
                     <p className="muted" style={{ fontSize: '0.85rem', margin: '0.25rem 0' }}>
-                      Skills: {a.skills.map((s: any) => s.skill?.name).filter(Boolean).join(', ')}
+                      {t('skills')}:{' '}
+                      {a.skills.map((s: any) => s.skill?.name).filter(Boolean).join(', ')}
                     </p>
                   )}
                   <div className="chips">
@@ -948,10 +961,10 @@ function EmployeeDashboardInner() {
                       className="chip"
                       onClick={() => toggleAlert(a.id, a.isActive)}
                     >
-                      {a.isActive ? 'Pause' : 'Resume'}
+                      {a.isActive ? t('emp.pause') : t('emp.resumeAlert')}
                     </button>
                     <button type="button" className="chip" onClick={() => deleteAlert(a.id)}>
-                      Delete
+                      {t('emp.delete')}
                     </button>
                   </div>
                 </div>
@@ -989,36 +1002,36 @@ function EmployeeDashboardInner() {
             </div>
 
             <div className="card profile-block">
-              <h2 className="section-title" style={{ marginTop: 0 }}>Basics</h2>
+              <h2 className="section-title" style={{ marginTop: 0 }}>{t('emp.basics')}</h2>
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                How recruiters see you at a glance.
+                {t('emp.basicsHint')}
               </p>
               <p className="required-note">{t('requiredFieldsNote')}</p>
               <form className="form-stack" onSubmit={updateProfile} key={`profile-${profile.updatedAt || profile.id}`}>
                 <label>
-                  <LabelText>Headline</LabelText>
+                  <LabelText>{t('emp.headline')}</LabelText>
                   <input name="headline" defaultValue={sanitizeMojibake(profile.headline) || ''} />
                 </label>
                 <label>
-                  <LabelText>Summary</LabelText>
+                  <LabelText>{t('emp.summary')}</LabelText>
                   <textarea name="summary" rows={4} defaultValue={sanitizeMojibake(profile.summary) || ''} />
                 </label>
                 <div className="grid-2">
                   <label>
-                    <LabelText>Phone</LabelText>
+                    <LabelText>{t('emp.phone')}</LabelText>
                     <input name="phone" type="tel" defaultValue={profile.phone || ''} placeholder="+998..." />
                   </label>
                   <label>
-                    <LabelText>Visibility</LabelText>
+                    <LabelText>{t('emp.visibility')}</LabelText>
                     <select name="visibility" defaultValue={profile.visibility || 'TO_REGISTERED_RECRUITERS'}>
-                      <option value="PUBLIC">Public</option>
-                      <option value="TO_REGISTERED_RECRUITERS">Visible to registered recruiters</option>
-                      <option value="PRIVATE">Private</option>
+                      <option value="PUBLIC">{t('emp.visibilityPublic')}</option>
+                      <option value="TO_REGISTERED_RECRUITERS">{t('emp.visibilityRecruiters')}</option>
+                      <option value="PRIVATE">{t('emp.visibilityPrivate')}</option>
                     </select>
                   </label>
                 </div>
                 <label>
-                  <LabelText>City</LabelText>
+                  <LabelText>{t('city')}</LabelText>
                   <select name="citySlug" defaultValue={profile.city?.slug || ''}>
                     <option value="">-</option>
                     {cities.map((c) => (
@@ -1030,28 +1043,28 @@ function EmployeeDashboardInner() {
                 </label>
                 <div className="grid-2">
                   <label>
-                    <LabelText>Desired position</LabelText>
+                    <LabelText>{t('emp.desiredPosition')}</LabelText>
                     <input name="desiredPosition" defaultValue={sanitizeMojibake(profile.desiredPosition) || ''} />
                   </label>
                   <label>
-                    <LabelText>Desired salary (UZS)</LabelText>
+                    <LabelText>{t('emp.desiredSalary')}</LabelText>
                     <NumberInput
                       name="desiredSalaryMin"
                       defaultValue={profile.desiredSalaryMin}
-                      placeholder="e.g. 12.000.000"
+                      placeholder={t('emp.desiredSalaryPlaceholder')}
                       min={0}
-                      aria-label="Desired salary in UZS"
+                      aria-label={t('emp.desiredSalaryAria')}
                     />
                   </label>
                 </div>
-                <button type="submit">Save basics</button>
+                <button type="submit">{t('emp.saveBasics')}</button>
               </form>
             </div>
 
             <div className="card profile-block">
-              <h2 className="section-title" style={{ marginTop: 0 }}>Import from CV</h2>
+              <h2 className="section-title" style={{ marginTop: 0 }}>{t('emp.importFromCv')}</h2>
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                Upload a PDF to parse skills, experience, and education into your profile. Review before importing.
+                {t('emp.importFromCvHint')}
               </p>
               <form onSubmit={uploadCv} className="cv-upload-form">
                 <div
@@ -1111,7 +1124,7 @@ function EmployeeDashboardInner() {
                 </div>
                 <div className="cv-upload-actions">
                   <button type="submit" className="cta" disabled={uploading || !cvFile}>
-                    {uploading ? 'Uploading...' : t('uploadCvParse')}
+                    {uploading ? t('emp.uploading') : t('uploadCvParse')}
                   </button>
                   {cvFile && !uploading && (
                     <button type="button" className="ghost" onClick={() => setCvFile(null)}>
@@ -1123,39 +1136,39 @@ function EmployeeDashboardInner() {
             </div>
 
             <div className="profile-block" style={{ marginBottom: '0.35rem' }}>
-              <h2 className="section-title" style={{ margin: 0 }}>Career history</h2>
+              <h2 className="section-title" style={{ margin: 0 }}>{t('emp.careerHistory')}</h2>
               <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
-                Experience, education, skills, and languages - edit here for matching and recruiters.
+                {t('emp.careerHistoryHint')}
               </p>
             </div>
 
             <div className="card profile-block">
               <div className="cv-section-head">
-                <h3 style={{ margin: 0 }}>Skills</h3>
+                <h3 style={{ margin: 0 }}>{t('skills')}</h3>
                 <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'skill' ? null : 'skill')}>
-                  {openForm === 'skill' ? 'Close' : '+ Add skill'}
+                  {openForm === 'skill' ? t('closeDialog') : `+ ${t('addSkill')}`}
                 </button>
               </div>
               {LEVEL_ORDER.map((lvl) =>
                 (skillsByLevel[lvl] || []).length ? (
                   <div key={lvl} className="profile-skill-group">
-                    <div className="profile-group-label">{lvl}</div>
+                    <div className="profile-group-label">{enumLabel('skillLevel', lvl)}</div>
                     <ul className="profile-list">
                       {skillsByLevel[lvl].map((s: any) => (
                         <li key={s.id} className="profile-list-row">
                           <span className="profile-list-title">{s.skill?.name}</span>
                           <div className="profile-list-actions">
                             <select
-                              aria-label={`Level for ${s.skill?.name}`}
+                              aria-label={t('emp.levelFor').replace('{name}', s.skill?.name)}
                               value={s.level || 'INTERMEDIATE'}
                               onChange={(e) => updateSkillLevel(s.id, e.target.value)}
                             >
                               {SKILL_LEVELS.map((l) => (
-                                <option key={l} value={l}>{l}</option>
+                                <option key={l} value={l}>{enumLabel('skillLevel', l)}</option>
                               ))}
                             </select>
                             <button type="button" className="ghost" onClick={() => removeItem('skills', s.id)}>
-                              Remove
+                              {t('emp.remove')}
                             </button>
                           </div>
                         </li>
@@ -1164,7 +1177,7 @@ function EmployeeDashboardInner() {
                   </div>
                 ) : null,
               )}
-              {!(profile.skills || []).length && <p className="muted">No skills yet - add manually or import from CV.</p>}
+              {!(profile.skills || []).length && <p className="muted">{t('emp.noSkills')}</p>}
               {openForm === 'skill' && (
                 <div style={{ marginTop: '1rem' }}>
                   <p className="required-note">{t('requiredFieldsNote')}</p>
@@ -1173,7 +1186,7 @@ function EmployeeDashboardInner() {
                       await addSkillPick(s);
                       setOpenForm(null);
                     }}
-                    submitLabel="Save skill"
+                    submitLabel={t('emp.saveSkill')}
                   />
                 </div>
               )}
@@ -1181,18 +1194,18 @@ function EmployeeDashboardInner() {
 
             <div className="card profile-block">
               <div className="cv-section-head">
-                <h3 style={{ margin: 0 }}>Work experience</h3>
+                <h3 style={{ margin: 0 }}>{t('emp.workExperience')}</h3>
                 <button
                   type="button"
                   className="chip"
                   onClick={() => setOpenForm(showExpForm && !editingExpId ? null : 'exp')}
                 >
-                  {showExpForm && !editingExpId ? 'Close' : '+ Add'}
+                  {showExpForm && !editingExpId ? t('closeDialog') : `+ ${t('emp.add')}`}
                 </button>
               </div>
               <div className="timeline">
                 {(profile.experiences || []).length === 0 && (
-                  <p className="muted">No experience yet.</p>
+                  <p className="muted">{t('emp.noExperience')}</p>
                 )}
                 {(profile.experiences || []).map((x: any) => (
                   <div key={x.id} className="timeline-item">
@@ -1207,9 +1220,9 @@ function EmployeeDashboardInner() {
                           </div>
                         </div>
                         <div className="timeline-meta">
-                          {x.isCurrent && <span className="badge match">Current</span>}
-                          <span className="badge">{formatDuration(x.startDate, x.endDate, x.isCurrent)}</span>
-                          <button type="button" className="ghost" onClick={() => setOpenForm(`edit-exp:${x.id}`)}>Edit</button>
+                          {x.isCurrent && <span className="badge match">{t('emp.current')}</span>}
+                          <span className="badge">{formatDuration(t, x.startDate, x.endDate, x.isCurrent)}</span>
+                          <button type="button" className="ghost" onClick={() => setOpenForm(`edit-exp:${x.id}`)}>{t('emp.edit')}</button>
                           <button type="button" className="ghost" onClick={() => removeItem('experiences', x.id)}>x</button>
                         </div>
                       </div>
@@ -1217,7 +1230,7 @@ function EmployeeDashboardInner() {
                         {new Date(x.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
                         {' - '}
                         {x.isCurrent || !x.endDate
-                          ? 'Present'
+                          ? t('emp.present')
                           : new Date(x.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
                       </div>
                       {x.description && (
@@ -1229,7 +1242,7 @@ function EmployeeDashboardInner() {
                           </p>
                           {x.description.length >= 180 && (
                             <button type="button" className="ghost" onClick={() => setExpandedExp(expandedExp === x.id ? null : x.id)}>
-                              {expandedExp === x.id ? 'Show less' : 'Show more'}
+                              {expandedExp === x.id ? t('showLess') : t('viewMore')}
                             </button>
                           )}
                         </div>
@@ -1248,16 +1261,16 @@ function EmployeeDashboardInner() {
                   <p className="required-note">{t('requiredFieldsNote')}</p>
                   <div className="grid-2">
                     <label>
-                      <LabelText required>Title</LabelText>
+                      <LabelText required>{t('emp.positionTitle')}</LabelText>
                       <input name="title" required defaultValue={editingExp?.title || ''} />
                     </label>
                     <label>
-                      <LabelText required>Company</LabelText>
+                      <LabelText required>{t('company')}</LabelText>
                       <input name="companyName" required defaultValue={editingExp?.companyName || ''} />
                     </label>
                   </div>
                   <label>
-                    <LabelText>City</LabelText>
+                    <LabelText>{t('city')}</LabelText>
                     <select name="citySlug" defaultValue={editingExp?.city?.slug || ''}>
                       <option value="">-</option>
                       {cities.map((c) => (
@@ -1266,27 +1279,29 @@ function EmployeeDashboardInner() {
                     </select>
                   </label>
                   <label>
-                    <LabelText>Description</LabelText>
+                    <LabelText>{t('emp.description')}</LabelText>
                     <textarea name="description" rows={3} defaultValue={editingExp?.description || ''} />
                   </label>
                   <div className="grid-2">
                     <label>
-                      <LabelText required>Start</LabelText>
+                      <LabelText required>{t('emp.start')}</LabelText>
                       <input name="startDate" type="date" required defaultValue={dateInputValue(editingExp?.startDate)} />
                     </label>
                     <label>
-                      <LabelText>End</LabelText>
+                      <LabelText>{t('emp.end')}</LabelText>
                       <input name="endDate" type="date" defaultValue={dateInputValue(editingExp?.endDate)} />
                     </label>
                   </div>
                   <label className="check-row">
                     <input name="isCurrent" type="checkbox" defaultChecked={Boolean(editingExp?.isCurrent)} />
-                    <LabelText optional={false}>Currently work here</LabelText>
+                    <LabelText optional={false}>{t('emp.currentlyWorkHere')}</LabelText>
                   </label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button type="submit">{editingExpId ? 'Update experience' : 'Save experience'}</button>
+                    <button type="submit">
+                      {editingExpId ? t('emp.updateExperience') : t('emp.saveExperience')}
+                    </button>
                     {editingExpId && (
-                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>{t('cancel')}</button>
                     )}
                   </div>
                 </form>
@@ -1296,13 +1311,13 @@ function EmployeeDashboardInner() {
             <div className="grid-2 profile-block">
               <div className="card">
                 <div className="cv-section-head">
-                  <h3 style={{ margin: 0 }}>Education</h3>
+                  <h3 style={{ margin: 0 }}>{t('education')}</h3>
                   <button
                     type="button"
                     className="chip"
                     onClick={() => setOpenForm(showEduForm && !editingEduId ? null : 'edu')}
                   >
-                    {showEduForm && !editingEduId ? 'Close' : '+ Add'}
+                    {showEduForm && !editingEduId ? t('closeDialog') : `+ ${t('emp.add')}`}
                   </button>
                 </div>
                 <ul className="profile-list">
@@ -1313,7 +1328,7 @@ function EmployeeDashboardInner() {
                         <div className="chips" style={{ marginTop: '0.4rem' }}>
                           {x.degree && (
                             <span className={`badge degree-${String(x.degree).toLowerCase()}`}>
-                              {String(x.degree).replace(/_/g, ' ')}
+                              {enumLabel('degree', x.degree)}
                             </span>
                           )}
                           {x.field && <span className="badge skill">{x.field}</span>}
@@ -1321,18 +1336,18 @@ function EmployeeDashboardInner() {
                         {(x.startDate || x.endDate) && (
                           <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>
                             {x.startDate ? new Date(x.startDate).getFullYear() : '-'} -{' '}
-                            {x.endDate ? new Date(x.endDate).getFullYear() : 'Present'}
+                            {x.endDate ? new Date(x.endDate).getFullYear() : t('emp.present')}
                           </div>
                         )}
                       </div>
                       <div className="profile-list-actions">
-                        <button type="button" className="ghost" onClick={() => setOpenForm(`edit-edu:${x.id}`)}>Edit</button>
+                        <button type="button" className="ghost" onClick={() => setOpenForm(`edit-edu:${x.id}`)}>{t('emp.edit')}</button>
                         <button type="button" className="ghost" onClick={() => removeItem('educations', x.id)}>x</button>
                       </div>
                     </li>
                   ))}
                 </ul>
-                {!(profile.educations || []).length && <p className="muted">No education entries yet.</p>}
+                {!(profile.educations || []).length && <p className="muted">{t('emp.noEducation')}</p>}
                 {showEduForm && (
                   <form
                     className="form-stack"
@@ -1342,38 +1357,40 @@ function EmployeeDashboardInner() {
                   >
                     <p className="required-note">{t('requiredFieldsNote')}</p>
                     <label>
-                      <LabelText required>School / University</LabelText>
+                      <LabelText required>{t('emp.school')}</LabelText>
                       <input name="school" required defaultValue={editingEdu?.school || ''} />
                     </label>
                     <div className="grid-2">
                       <label>
-                        <LabelText>Degree</LabelText>
+                        <LabelText>{t('emp.degree')}</LabelText>
                         <select name="degree" defaultValue={editingEdu?.degree || ''}>
                           <option value="">-</option>
                           {['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'].map((d) => (
-                            <option key={d} value={d}>{d}</option>
+                            <option key={d} value={d}>{enumLabel('degree', d)}</option>
                           ))}
                         </select>
                       </label>
                       <label>
-                        <LabelText>Field</LabelText>
+                        <LabelText>{t('emp.field')}</LabelText>
                         <input name="field" defaultValue={editingEdu?.field || ''} />
                       </label>
                     </div>
                     <div className="grid-2">
                       <label>
-                        <LabelText>Start</LabelText>
+                        <LabelText>{t('emp.start')}</LabelText>
                         <input name="startDate" type="date" defaultValue={dateInputValue(editingEdu?.startDate)} />
                       </label>
                       <label>
-                        <LabelText>End</LabelText>
+                        <LabelText>{t('emp.end')}</LabelText>
                         <input name="endDate" type="date" defaultValue={dateInputValue(editingEdu?.endDate)} />
                       </label>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button type="submit">{editingEduId ? 'Update education' : 'Save education'}</button>
+                      <button type="submit">
+                        {editingEduId ? t('emp.updateEducation') : t('emp.saveEducation')}
+                      </button>
                       {editingEduId && (
-                        <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                        <button type="button" className="secondary" onClick={() => setOpenForm(null)}>{t('cancel')}</button>
                       )}
                     </div>
                   </form>
@@ -1382,9 +1399,9 @@ function EmployeeDashboardInner() {
 
               <div className="card">
                 <div className="cv-section-head">
-                  <h3 style={{ margin: 0 }}>Languages</h3>
+                  <h3 style={{ margin: 0 }}>{t('languages')}</h3>
                   <button type="button" className="chip" onClick={() => setOpenForm(openForm === 'lang' ? null : 'lang')}>
-                    {openForm === 'lang' ? 'Close' : '+ Add'}
+                    {openForm === 'lang' ? t('closeDialog') : `+ ${t('emp.add')}`}
                   </button>
                 </div>
                 <ul className="profile-list">
@@ -1396,7 +1413,7 @@ function EmployeeDashboardInner() {
                       </div>
                       <div className="profile-list-actions">
                         <select
-                          aria-label={`Level for ${x.language?.name}`}
+                          aria-label={t('emp.levelFor').replace('{name}', x.language?.name)}
                           value={x.level || 'B1'}
                           onChange={(e) => updateLanguageLevel(x.id, e.target.value)}
                         >
@@ -1405,13 +1422,13 @@ function EmployeeDashboardInner() {
                           ))}
                         </select>
                         <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>
-                          Remove
+                          {t('emp.remove')}
                         </button>
                       </div>
                     </li>
                   ))}
                 </ul>
-                {!(profile.languages || []).length && <p className="muted">No languages yet.</p>}
+                {!(profile.languages || []).length && <p className="muted">{t('emp.noLanguages')}</p>}
                 {openForm === 'lang' && (
                   <div style={{ marginTop: '1rem' }}>
                     <p className="required-note">{t('requiredFieldsNote')}</p>
@@ -1437,13 +1454,13 @@ function EmployeeDashboardInner() {
 
             <div className="card profile-block">
               <div className="cv-section-head">
-                <h3 style={{ margin: 0 }}>Certifications</h3>
+                <h3 style={{ margin: 0 }}>{t('certifications')}</h3>
                 <button
                   type="button"
                   className="chip"
                   onClick={() => setOpenForm(showCertForm && !editingCertId ? null : 'cert')}
                 >
-                  {showCertForm && !editingCertId ? 'Close' : '+ Add'}
+                  {showCertForm && !editingCertId ? t('closeDialog') : `+ ${t('emp.add')}`}
                 </button>
               </div>
               <ul className="profile-list">
@@ -1454,28 +1471,28 @@ function EmployeeDashboardInner() {
                       {x.issuer && <div className="muted" style={{ fontSize: '0.85rem' }}>{x.issuer}</div>}
                       {x.issuedAt && (
                         <div className="muted" style={{ fontSize: '0.8rem' }}>
-                          Issued {new Date(x.issuedAt).toLocaleDateString()}
+                          {t('emp.issued')} {new Date(x.issuedAt).toLocaleDateString()}
                         </div>
                       )}
                       {x.expiresAt && (
                         <div className="muted" style={{ fontSize: '0.8rem' }}>
-                          Expires {new Date(x.expiresAt).toLocaleDateString()}
+                          {t('emp.expires')} {new Date(x.expiresAt).toLocaleDateString()}
                         </div>
                       )}
                       {x.credentialUrl && (
                         <a href={x.credentialUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem' }}>
-                          View credential →
+                          {t('emp.viewCredential')} →
                         </a>
                       )}
                     </div>
                     <div className="profile-list-actions">
-                      <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>Edit</button>
+                      <button type="button" className="ghost" onClick={() => setOpenForm(`edit-cert:${x.id}`)}>{t('emp.edit')}</button>
                       <button type="button" className="ghost" onClick={() => removeItem('certifications', x.id)}>x</button>
                     </div>
                   </li>
                 ))}
               </ul>
-              {!(profile.certifications || []).length && <p className="muted">No certifications yet.</p>}
+              {!(profile.certifications || []).length && <p className="muted">{t('emp.noCertifications')}</p>}
               {showCertForm && (
                 <form
                   className="form-stack"
@@ -1485,31 +1502,33 @@ function EmployeeDashboardInner() {
                 >
                   <p className="required-note">{t('requiredFieldsNote')}</p>
                   <label>
-                    <LabelText required>Name</LabelText>
+                    <LabelText required>{t('emp.name')}</LabelText>
                     <input name="name" required defaultValue={editingCert?.name || ''} />
                   </label>
                   <div className="grid-2">
                     <label>
-                      <LabelText>Issuer</LabelText>
+                      <LabelText>{t('emp.issuer')}</LabelText>
                       <input name="issuer" defaultValue={editingCert?.issuer || ''} />
                     </label>
                     <label>
-                      <LabelText>Issued at</LabelText>
+                      <LabelText>{t('emp.issuedAt')}</LabelText>
                       <input name="issuedAt" type="date" defaultValue={dateInputValue(editingCert?.issuedAt)} />
                     </label>
                   </div>
                   <label>
-                    <LabelText>Expires at</LabelText>
+                    <LabelText>{t('emp.expiresAt')}</LabelText>
                     <input name="expiresAt" type="date" defaultValue={dateInputValue(editingCert?.expiresAt)} />
                   </label>
                   <label>
-                    <LabelText>Credential URL</LabelText>
+                    <LabelText>{t('emp.credentialUrl')}</LabelText>
                     <input name="credentialUrl" type="url" placeholder="https://..." defaultValue={editingCert?.credentialUrl || ''} />
                   </label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button type="submit">{editingCertId ? 'Update certification' : 'Save certification'}</button>
+                    <button type="submit">
+                      {editingCertId ? t('emp.updateCertification') : t('emp.saveCertification')}
+                    </button>
                     {editingCertId && (
-                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>Cancel</button>
+                      <button type="button" className="secondary" onClick={() => setOpenForm(null)}>{t('cancel')}</button>
                     )}
                   </div>
                 </form>
@@ -1519,9 +1538,9 @@ function EmployeeDashboardInner() {
             <div className="card profile-block">
               <div className="cv-section-head">
                 <div>
-                  <h3 style={{ margin: 0 }}>Resumes</h3>
+                  <h3 style={{ margin: 0 }}>{t('resumes')}</h3>
                   <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-                    Named CV versions for applications - build, export, or attach a PDF.
+                    {t('emp.resumesHint')}
                   </p>
                 </div>
                 <div className="chips" style={{ justifyContent: 'flex-end' }}>
@@ -1554,9 +1573,9 @@ function EmployeeDashboardInner() {
                     <div className="profile-list-main">
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem' }}>
                         <strong>{r.title}</strong>
-                        {r.isPrimary && <span className="badge match">Primary</span>}
+                        {r.isPrimary && <span className="badge match">{t('emp.primary')}</span>}
                         {(r.hasFile || r.fileKey) && (
-                          <span className="badge skill">PDF attached</span>
+                          <span className="badge skill">{t('emp.pdfAttached')}</span>
                         )}
                       </div>
                       {r.targetJobTitle?.name && (
@@ -1585,7 +1604,7 @@ function EmployeeDashboardInner() {
                         </Link>
                         {!r.isPrimary && (
                           <button type="button" className="chip" onClick={() => setPrimaryResume(r.id)}>
-                            Set primary
+                            {t('emp.setPrimary')}
                           </button>
                         )}
                         <label className="chip" style={{ cursor: 'pointer' }}>
@@ -1618,8 +1637,8 @@ function EmployeeDashboardInner() {
               </ul>
               {!(profile.resumes || []).length && (
                 <p className="muted">
-                  No resumes yet - use <strong>+ {t('addResume')}</strong> above. To fill career
-                  history from a PDF, use Import from CV.
+                  {t('emp.noResumesBefore')} <strong>+ {t('addResume')}</strong>{' '}
+                  {t('emp.noResumesAfter')}
                 </p>
               )}
             </div>

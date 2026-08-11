@@ -5,8 +5,8 @@ import { Link, localeHref } from '@/lib/navigation';
 import { useSearchParams } from 'next/navigation';
 import { usePathname, useRouter } from '@/lib/navigation';
 import { api, getSession } from '@/lib/api';
-import { jobLocationLabel } from '@/lib/location';
-import { useI18n } from '@/lib/i18n';
+import { localizedJobLocation } from '@/lib/location';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { FilterFieldset, LabelText } from '@/components/ui/Field';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
@@ -79,14 +79,18 @@ function toggleLanguageCsv(csv: string, code: string, defaultLevel: LanguageLeve
     .join(',');
 }
 
-function jobSelectLabel(j: {
-  title: string;
-  status?: string;
-  workMode?: string | null;
-  city?: { name: string } | null;
-}) {
-  const location = jobLocationLabel(j);
-  const status = j.status && j.status !== 'PUBLISHED' ? ` | ${j.status}` : '';
+function jobSelectLabel(
+  j: {
+    title: string;
+    status?: string;
+    workMode?: string | null;
+    city?: { name: string } | null;
+  },
+  statusLabel: (value: string) => string,
+  t: (key: string) => string,
+) {
+  const location = localizedJobLocation(j, t);
+  const status = j.status && j.status !== 'PUBLISHED' ? ` | ${statusLabel(j.status)}` : '';
   return `${j.title} - ${location}${status}`;
 }
 
@@ -135,6 +139,7 @@ function filtersToSearchParams(f: CandFilters): URLSearchParams {
 
 export function FindTalentPanel() {
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -207,7 +212,7 @@ export function FindTalentPanel() {
           );
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load');
+        setError(e instanceof Error ? e.message : t('talent.loadFailed'));
       }
     })();
   }, []);
@@ -231,7 +236,7 @@ export function FindTalentPanel() {
           setCandFilters((prev) => ({ ...prev, page: data.page as number }));
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load talent');
+        if (!cancelled) setError(e instanceof Error ? e.message : t('talent.loadTalentFailed'));
       } finally {
         if (!cancelled) setCandLoading(false);
       }
@@ -319,10 +324,10 @@ export function FindTalentPanel() {
             onChange={(e) => applyCand({ sort: e.target.value as CandFilters['sort'] })}
             aria-label={t('sortBy')}
           >
-            <option value="relevance">Sort: Relevance</option>
-            <option value="newest">Sort: Newest</option>
+            <option value="relevance">{t('talent.sortRelevance')}</option>
+            <option value="newest">{t('talent.sortNewest')}</option>
             <option value="match" disabled={!candFilters.matchJobId}>
-              Sort: Match to job
+              {t('talent.sortMatch')}
             </option>
           </select>
           <select
@@ -332,7 +337,7 @@ export function FindTalentPanel() {
           >
             {CAND_PAGE_SIZES.map((n) => (
               <option key={n} value={n}>
-                {n} / page
+                {t('talent.perPage').replace('{n}', String(n))}
               </option>
             ))}
           </select>
@@ -345,7 +350,7 @@ export function FindTalentPanel() {
                 syncUrl(DEFAULT_CAND_FILTERS);
               }}
             >
-              Clear filters
+              {t('clearFilters')}
             </button>
           )}
         </div>
@@ -361,7 +366,7 @@ export function FindTalentPanel() {
               onClick={() =>
                 applyCand({ jobTitle: toggleCsv(candFilters.jobTitle, selectedJobTitles[i]) })
               }
-              title="Remove job title filter"
+              title={t('clearJobTitleFilter')}
             >
               {label} ×
             </button>
@@ -371,7 +376,7 @@ export function FindTalentPanel() {
 
       <div className="jobs-layout" style={{ padding: 0 }}>
         <aside className="filters">
-          <h3>Filters</h3>
+          <h3>{t('filters')}</h3>
           <form
             className="filter-group"
             onSubmit={(e) => {
@@ -381,17 +386,22 @@ export function FindTalentPanel() {
             }}
           >
             <label>
-              <LabelText>Keywords</LabelText>
-              <input name="q" defaultValue={candFilters.q} key={candFilters.q} placeholder="Name, headline, skill..." />
+              <LabelText>{t('keyword')}</LabelText>
+              <input
+                name="q"
+                defaultValue={candFilters.q}
+                key={candFilters.q}
+                placeholder={t('findTalentSearchPlaceholder')}
+              />
             </label>
             <button type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
-              Search
+              {t('search')}
             </button>
           </form>
 
           <div className="filter-group">
             <label>
-              <LabelText>Match to job</LabelText>
+              <LabelText>{t('talent.matchToJob')}</LabelText>
               <select
                 value={candFilters.matchJobId}
                 onChange={(e) =>
@@ -401,17 +411,17 @@ export function FindTalentPanel() {
                   })
                 }
               >
-                <option value="">Any (no match ranking)</option>
+                <option value="">{t('talent.matchToJobAny')}</option>
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>
-                    {jobSelectLabel(j)}
+                    {jobSelectLabel(j, (status) => enumLabel('jobStatus', status), t)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
-          <FilterFieldset legend="City" className="filter-group">
+          <FilterFieldset legend={t('city')} className="filter-group">
             <ExpandableList
               items={meta.cities}
               initialCount={10}
@@ -434,7 +444,7 @@ export function FindTalentPanel() {
           </FilterFieldset>
 
           {jobTitleFacetList.length > 0 && (
-            <FilterFieldset legend="Job title" className="filter-group">
+            <FilterFieldset legend={t('jobTitleFilter')} className="filter-group">
               <ExpandableList
                 items={jobTitleFacetList}
                 initialCount={8}
@@ -460,24 +470,27 @@ export function FindTalentPanel() {
             activeCount={candAdvancedCount}
             forceOpen={candAdvancedCount > 0}
           >
-            <FilterFieldset legend={`Skills (${candFilters.skillMode})`} className="filter-group">
+            <FilterFieldset
+              legend={`${t('skills')} (${candFilters.skillMode})`}
+              className="filter-group"
+            >
               <label>
-                <LabelText>Match mode</LabelText>
+                <LabelText>{t('matchMode')}</LabelText>
                 <select
                   value={candFilters.skillMode}
                   onChange={(e) => applyCand({ skillMode: e.target.value as 'AND' | 'OR' })}
                   style={{ marginBottom: '0.4rem' }}
                 >
-                  <option value="OR">Match any (OR)</option>
-                  <option value="AND">Match all (AND)</option>
+                  <option value="OR">{t('matchAny')}</option>
+                  <option value="AND">{t('matchAll')}</option>
                 </select>
               </label>
               <label>
-                <LabelText>Filter skills</LabelText>
+                <LabelText>{t('filterSkills')}</LabelText>
                 <input
                   value={skillQ}
                   onChange={(e) => setSkillQ(e.target.value)}
-                  placeholder="Filter skills..."
+                  placeholder={t('skillSearchPlaceholder')}
                 />
               </label>
               <ExpandableList
@@ -502,21 +515,21 @@ export function FindTalentPanel() {
             <div className="filter-group">
               <div className="grid-2" style={{ gap: '0.4rem' }}>
                 <label>
-                  <LabelText>Min years</LabelText>
+                  <LabelText>{t('talent.minYears')}</LabelText>
                   <input
                     type="number"
                     min={0}
-                    placeholder="Min"
+                    placeholder={t('talent.min')}
                     value={candFilters.experienceYearsMin}
                     onChange={(e) => applyCand({ experienceYearsMin: e.target.value })}
                   />
                 </label>
                 <label>
-                  <LabelText>Max years</LabelText>
+                  <LabelText>{t('talent.maxYears')}</LabelText>
                   <input
                     type="number"
                     min={0}
-                    placeholder="Max"
+                    placeholder={t('talent.max')}
                     value={candFilters.experienceYearsMax}
                     onChange={(e) => applyCand({ experienceYearsMax: e.target.value })}
                   />
@@ -526,12 +539,12 @@ export function FindTalentPanel() {
 
             <div className="filter-group">
               <label>
-                <LabelText>Degree</LabelText>
+                <LabelText>{t('talent.degree')}</LabelText>
                 <select value={candFilters.degree} onChange={(e) => applyCand({ degree: e.target.value })}>
-                  <option value="">Any</option>
+                  <option value="">{t('any')}</option>
                   {DEGREE_OPTS.map((d) => (
                     <option key={d} value={d}>
-                      {d.replace(/_/g, ' ')}
+                      {enumLabel('degree', d)}
                     </option>
                   ))}
                 </select>
@@ -571,7 +584,7 @@ export function FindTalentPanel() {
                   checked={candFilters.hasCertification}
                   onChange={(e) => applyCand({ hasCertification: e.target.checked })}
                 />
-                <LabelText optional={false}>Has certification</LabelText>
+                <LabelText optional={false}>{t('talent.hasCertification')}</LabelText>
               </label>
             </div>
           </AdvancedFiltersPanel>
@@ -582,11 +595,13 @@ export function FindTalentPanel() {
           {!candLoading && (candidates?.items || []).length === 0 && (
             <div className="card">
               <p className="muted" style={{ marginTop: 0 }}>
-                No talent matches these filters
                 {selectedTitleLabels.length
-                  ? ` for ${selectedTitleLabels.join(', ')}`
-                  : ''}
-                . Try clearing filters or broadening skills/city/title.
+                  ? t('talent.noMatchesForTitles').replace(
+                      '{titles}',
+                      selectedTitleLabels.join(', '),
+                    )
+                  : t('talent.noMatches')}{' '}
+                {t('talent.noMatchesHint')}
               </p>
               <div className="chips">
                 {hasActiveCandFilters && (
@@ -598,11 +613,11 @@ export function FindTalentPanel() {
                       syncUrl(DEFAULT_CAND_FILTERS);
                     }}
                   >
-                    Clear filters
+                    {t('clearFilters')}
                   </button>
                 )}
                 <Link href="/talent" className="chip">
-                  Browse all talent
+                  {t('browseTalent')}
                 </Link>
               </div>
             </div>
@@ -626,14 +641,14 @@ export function FindTalentPanel() {
                 <div className="job-meta">
                   <span>{p.headline || '-'}</span>
                   {p.city?.name && <span>{p.city.name}</span>}
-                  <span>{p.experienceYears ?? 0}y exp</span>
-                  {p.contactsBlurred && <span>Contacts limited</span>}
+                  <span>{t('talent.expYears').replace('{n}', String(p.experienceYears ?? 0))}</span>
+                  {p.contactsBlurred && <span>{t('talent.contactsLimited')}</span>}
                 </div>
                 <div className="chips" style={{ marginTop: '0.45rem' }}>
                   {(p.skills || []).slice(0, 6).map((s: any) => (
                     <span key={s.id} className="badge skill">
                       {s.skill?.name}
-                      {s.level ? ` | ${s.level}` : ''}
+                      {s.level ? ` | ${enumLabel('skillLevel', s.level)}` : ''}
                     </span>
                   ))}
                 </div>
@@ -643,7 +658,7 @@ export function FindTalentPanel() {
                     className="chip"
                     style={{ fontSize: '0.75rem' }}
                   >
-                    View profile
+                    {t('viewProfile')}
                   </Link>
                   {canColdChat ? (
                     <Link
@@ -651,16 +666,16 @@ export function FindTalentPanel() {
                       className="chip"
                       style={{ fontSize: '0.75rem' }}
                     >
-                      Chat
+                      {t('talent.chat')}
                     </Link>
                   ) : (
                     <Link
                       href="/dashboard/recruiter?tab=billing"
                       className="chip muted"
-                      title="Cold outreach requires Premium"
+                      title={t('talent.coldChatRequiresPremium')}
                       style={{ fontSize: '0.75rem' }}
                     >
-                      Chat (Premium)
+                      {t('talent.chatPremium')}
                     </Link>
                   )}
                 </div>
@@ -680,7 +695,12 @@ export function FindTalentPanel() {
                 onPageChange={(p) => applyCand({ page: p })}
                 truncatedNote={
                   candidates?.truncated
-                    ? `Showing top ${Number(candidates.total).toLocaleString()} of ${Number(candidates.matchedTotal ?? candidates.total).toLocaleString()} matches for this sort`
+                    ? t('talent.truncatedNote')
+                        .replace('{n}', Number(candidates.total).toLocaleString())
+                        .replace(
+                          '{m}',
+                          Number(candidates.matchedTotal ?? candidates.total).toLocaleString(),
+                        )
                     : null
                 }
               />

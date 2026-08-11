@@ -86,7 +86,7 @@ export default function LoginPage() {
           </FormField>
           <p style={{ margin: '-0.35rem 0 0', fontSize: '0.88rem' }}>
             <Link href="/forgot-password" style={{ color: 'var(--accent)' }}>
-              Forgot password?
+              {t('ui.forgotPassword')}?
             </Link>
           </p>
           <FormAlert>{error}</FormAlert>

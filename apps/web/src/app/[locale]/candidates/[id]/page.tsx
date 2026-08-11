@@ -8,7 +8,7 @@ import { api, getSession, AuthSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
-import { useI18n } from '@/lib/i18n';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { formatThousands } from '@/lib/numberFormat';
 import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
@@ -67,8 +67,8 @@ type CandidateDetail = {
   presence?: PresenceStatus | null;
 };
 
-function fmtDate(d?: string | null) {
-  if (!d) return 'now';
+function fmtDate(d: string | null | undefined, nowLabel: string) {
+  if (!d) return nowLabel;
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
 }
 
@@ -77,6 +77,7 @@ function CandidateInner() {
   const search = useSearchParams();
   const router = useRouter();
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [data, setData] = useState<CandidateDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +100,7 @@ function CandidateInner() {
       );
       setContacts(res);
     } catch (e) {
-      setRevealError(e instanceof Error ? e.message : 'Failed to reveal contacts');
+      setRevealError(e instanceof Error ? e.message : t('talent.revealContactsFailed'));
     } finally {
       setRevealBusy(false);
     }
@@ -130,7 +131,7 @@ function CandidateInner() {
         const plan = mine[0]?.company?.subscription?.plan || 'FREE';
         setCanColdChat(plan === 'PREMIUM' || plan === 'VIP' || s.user.role === 'SUPER_ADMIN');
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
+      .catch((e) => setError(e instanceof Error ? e.message : t('talent.loadFailed')));
   }, [id, matchJobId, router]);
 
   const livePresence = usePresence([data?.user?.id]);
@@ -155,11 +156,13 @@ function CandidateInner() {
     return (
       <div className="shell" style={{ padding: '3rem 1.5rem' }}>
         <div className="card" style={{ color: '#be123c' }}>
-          <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Couldn’t open this profile</strong>
+          <strong style={{ display: 'block', marginBottom: '0.35rem' }}>
+            {t('talent.profileOpenError')}
+          </strong>
           {error}
           <div style={{ marginTop: '0.85rem' }}>
             <Link href="/talent" className="chip">
-              Back to Find talent
+              {t('talent.backToFindTalent')}
             </Link>
           </div>
         </div>
@@ -176,6 +179,7 @@ function CandidateInner() {
     salaryBits.length > 0
       ? `${salaryBits.join(' - ')} ${data.desiredSalaryCurrency || 'UZS'}`
       : null;
+  const nowLabel = t('talent.now');
 
   return (
     <div className="shell" style={{ padding: '2.5rem 1.5rem', maxWidth: 900 }}>
@@ -203,14 +207,16 @@ function CandidateInner() {
             </p>
             {salaryLabel && (
               <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-                Desired salary: {salaryLabel}
+                {t('talent.desiredSalary')}: {salaryLabel}
               </p>
             )}
             {data.contactsBlurred ? (
               <p className="muted" style={{ marginTop: '0.4rem', fontSize: '0.85rem' }}>
-                Contacts hidden -{' '}
-                <Link href="/dashboard/recruiter?tab=billing">upgrade to Standard/Premium</Link>, or
-                unlock after the candidate applies.
+                {t('talent.contactsHiddenPrefix')}{' '}
+                <Link href="/dashboard/recruiter?tab=billing">
+                  {t('talent.contactsHiddenUpgrade')}
+                </Link>
+                {t('talent.contactsHiddenSuffix')}
               </p>
             ) : contacts ? (
               <p style={{ marginTop: '0.4rem', fontSize: '0.9rem' }}>
@@ -255,9 +261,9 @@ function CandidateInner() {
               <Link
                 href="/dashboard/recruiter?tab=billing"
                 className="chip muted"
-                title="Cold outreach requires Premium"
+                title={t('talent.coldChatRequiresPremium')}
               >
-                Upgrade for Chat
+                {t('talent.upgradeForChat')}
               </Link>
             )}
           </div>
@@ -266,7 +272,7 @@ function CandidateInner() {
 
       {(data.applicationForJob || !!data.resumes?.length) && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
-          <h3 style={{ marginTop: 0 }}>Resumes</h3>
+          <h3 style={{ marginTop: 0 }}>{t('resumes')}</h3>
           {cvError && (
             <p style={{ color: '#be123c', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>{cvError}</p>
           )}
@@ -321,7 +327,7 @@ function CandidateInner() {
                 </button>
               ) : r.hasFile ? (
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
-                  Available after they apply
+                  {t('talent.cvAfterApply')}
                 </span>
               ) : (
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
@@ -335,14 +341,14 @@ function CandidateInner() {
 
       {data.match && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
-          <h3 style={{ marginTop: 0 }}>{t('match')} breakdown</h3>
+          <h3 style={{ marginTop: 0 }}>{t('talent.matchBreakdown')}</h3>
           <MatchBreakdownPanel breakdown={data.match} style={{ marginTop: '0.75rem' }} />
         </div>
       )}
 
       {data.summary && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
-          <h3>About</h3>
+          <h3>{t('talent.about')}</h3>
           <p style={{ whiteSpace: 'pre-wrap' }}>{data.summary}</p>
         </div>
       )}
@@ -354,7 +360,7 @@ function CandidateInner() {
           {data.skills.map((s) => (
             <span key={s.id} className="chip">
               {s.skill.name}
-              {s.level ? ` | ${s.level}` : ''}
+              {s.level ? ` | ${enumLabel('skillLevel', s.level)}` : ''}
             </span>
           ))}
         </div>
@@ -367,7 +373,7 @@ function CandidateInner() {
           <div key={e.id} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border)' }}>
             <strong>{e.title}</strong> | {e.companyName}
             <div className="muted" style={{ fontSize: '0.85rem' }}>
-              {fmtDate(e.startDate)} - {fmtDate(e.endDate)}
+              {fmtDate(e.startDate, nowLabel)} - {fmtDate(e.endDate, nowLabel)}
               {e.city ? ` | ${e.city.name}` : ''}
             </div>
             {e.description && <p style={{ marginTop: '0.35rem', fontSize: '0.9rem' }}>{e.description}</p>}
@@ -382,7 +388,8 @@ function CandidateInner() {
           <div key={e.id} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
             <strong>{e.school}</strong>
             <div className="muted" style={{ fontSize: '0.85rem' }}>
-              {[e.degree, e.field].filter(Boolean).join(' | ')} | {fmtDate(e.startDate)} - {fmtDate(e.endDate)}
+              {[enumLabel('degree', e.degree), e.field].filter(Boolean).join(' | ')} |{' '}
+              {fmtDate(e.startDate, nowLabel)} - {fmtDate(e.endDate, nowLabel)}
             </div>
           </div>
         ))}

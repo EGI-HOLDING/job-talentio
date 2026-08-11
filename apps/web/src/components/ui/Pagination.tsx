@@ -1,5 +1,6 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n';
 import { buildPageWindow, clampPage, pageRangeLabel } from '@/lib/pagination';
 
 type Props = {
@@ -27,6 +28,7 @@ export function Pagination({
   className = '',
   truncatedNote = null,
 }: Props) {
+  const { t } = useI18n();
   const safeTotalPages = Math.max(1, totalPages || 1);
   const current = clampPage(page, safeTotalPages);
   const items = buildPageWindow(current, safeTotalPages, 1);
@@ -35,9 +37,11 @@ export function Pagination({
   if (total <= 0) return null;
 
   return (
-    <nav className={`pagination ${className}`.trim()} aria-label="Pagination">
+    <nav className={`pagination ${className}`.trim()} aria-label={t('ui.pagination')}>
       <div className="pagination-meta">
-        <span className="pagination-range muted">{pageRangeLabel(current, limit, total)}</span>
+        <span className="pagination-range muted">
+          {pageRangeLabel(current, limit, total, t('ui.pageRangeOf'))}
+        </span>
         {truncatedNote ? <span className="pagination-truncated muted">{truncatedNote}</span> : null}
       </div>
 
@@ -47,8 +51,8 @@ export function Pagination({
           className="pagination-nav"
           disabled={disabled || current <= 1}
           onClick={() => onPageChange(1)}
-          aria-label="First page"
-          title="First page"
+          aria-label={t('ui.firstPage')}
+          title={t('ui.firstPage')}
         >
           «
         </button>
@@ -57,9 +61,9 @@ export function Pagination({
           className="pagination-nav"
           disabled={disabled || current <= 1}
           onClick={() => onPageChange(current - 1)}
-          aria-label="Previous page"
+          aria-label={t('ui.previousPage')}
         >
-          ‹ Prev
+          ‹ {t('ui.prev')}
         </button>
 
         <div className="pagination-pages" role="list">
@@ -89,17 +93,17 @@ export function Pagination({
           className="pagination-nav"
           disabled={disabled || current >= safeTotalPages}
           onClick={() => onPageChange(current + 1)}
-          aria-label="Next page"
+          aria-label={t('ui.nextPage')}
         >
-          Next ›
+          {t('ui.next')} ›
         </button>
         <button
           type="button"
           className="pagination-nav"
           disabled={disabled || current >= safeTotalPages}
           onClick={() => onPageChange(safeTotalPages)}
-          aria-label="Last page"
-          title="Last page"
+          aria-label={t('ui.lastPage')}
+          title={t('ui.lastPage')}
         >
           »
         </button>
@@ -118,7 +122,7 @@ export function Pagination({
           }}
         >
           <label className="pagination-jump-label muted" htmlFor="pagination-jump-input">
-            Go to
+            {t('jumpToPage')}
           </label>
           <input
             id="pagination-jump-input"
@@ -130,10 +134,10 @@ export function Pagination({
             placeholder={String(current)}
             className="pagination-jump-input"
             disabled={disabled}
-            aria-label={`Go to page (1-${safeTotalPages})`}
+            aria-label={t('ui.goToPageRange').replace('{n}', String(safeTotalPages))}
           />
           <button type="submit" className="btn btn-ghost btn-sm" disabled={disabled}>
-            Go
+            {t('ui.go')}
           </button>
         </form>
       ) : null}

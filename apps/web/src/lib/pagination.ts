@@ -47,9 +47,15 @@ export function clampPage(page: number, totalPages: number): number {
   return Math.min(Math.max(1, page || 1), total);
 }
 
-export function pageRangeLabel(page: number, limit: number, total: number): string {
-  if (total <= 0) return '0 of 0';
+/** `of` is supplied by the caller so the label follows the active locale. */
+export function pageRangeLabel(
+  page: number,
+  limit: number,
+  total: number,
+  ofLabel = 'of',
+): string {
+  if (total <= 0) return `0 ${ofLabel} 0`;
   const start = (page - 1) * limit + 1;
   const end = Math.min(page * limit, total);
-  return `${start}-${end} of ${total}`;
+  return `${start}-${end} ${ofLabel} ${total}`;
 }

@@ -4,9 +4,11 @@ import { Link, localeHref } from '@/lib/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, saveSession } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 function ConfirmEmailChangeInner() {
   const params = useSearchParams();
+  const { t } = useI18n();
   const [state, setState] = useState<'working' | 'ok' | 'error'>('working');
   const [message, setMessage] = useState('');
   const ran = useRef(false);
@@ -17,7 +19,7 @@ function ConfirmEmailChangeInner() {
     const token = params.get('token');
     if (!token) {
       setState('error');
-      setMessage('Missing confirmation token');
+      setMessage(t('ui.missingConfirmationToken'));
       return;
     }
     (async () => {
@@ -34,22 +36,24 @@ function ConfirmEmailChangeInner() {
         }, 1200);
       } catch (err) {
         setState('error');
-        setMessage(err instanceof Error ? err.message : 'Confirmation failed');
+        setMessage(err instanceof Error ? err.message : t('ui.confirmationFailed'));
       }
     })();
-  }, [params]);
+  }, [params, t]);
 
   return (
     <div className="auth-wrap">
       <div className="auth-card" style={{ textAlign: 'center' }}>
-        <h1>Confirm email change</h1>
-        {state === 'working' && <p className="muted">Confirming...</p>}
-        {state === 'ok' && <p style={{ color: '#047857', fontWeight: 600 }}>Email updated</p>}
+        <h1>{t('ui.confirmEmailChange')}</h1>
+        {state === 'working' && <p className="muted">{t('ui.confirming')}</p>}
+        {state === 'ok' && (
+          <p style={{ color: '#047857', fontWeight: 600 }}>{t('ui.emailUpdated')}</p>
+        )}
         {state === 'error' && (
           <>
             <p style={{ color: '#be123c' }}>{message}</p>
             <Link href="/settings" style={{ color: 'var(--accent)' }}>
-              Back to settings
+              {t('ui.backToSettings')}
             </Link>
           </>
         )}

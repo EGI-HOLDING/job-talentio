@@ -5,6 +5,7 @@ import { Link } from '@/lib/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/lib/navigation';
 import { api, getSession } from '@/lib/api';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { FormAlert } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { formatUzs } from '@/lib/numberFormat';
@@ -18,15 +19,21 @@ type Payment = {
   metadata?: { plan?: string; jobId?: string; days?: number } | null;
 };
 
-function purposeLabel(purpose: string) {
-  if (purpose.startsWith('plan_')) return `Plan upgrade: ${purpose.replace('plan_', '')}`;
-  if (purpose.startsWith('hot_job_')) return `Hot job boost: ${purpose.replace('hot_job_', '')} days`;
+function purposeLabel(t: (k: string) => string, purpose: string) {
+  if (purpose.startsWith('plan_')) {
+    return t('ui.planUpgradeLabel').replace('{plan}', purpose.replace('plan_', ''));
+  }
+  if (purpose.startsWith('hot_job_')) {
+    return t('ui.hotJobBoostLabel').replace('{n}', purpose.replace('hot_job_', ''));
+  }
   return purpose;
 }
 
 function MockCheckoutInner() {
   const search = useSearchParams();
   const router = useRouter();
+  const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   const paymentId = search.get('paymentId') || '';
   const [payment, setPayment] = useState<Payment | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +51,7 @@ function MockCheckoutInner() {
       return;
     }
     if (!paymentId) {
-      setError('Missing paymentId');
+      setError(t('ui.missingPaymentId'));
       return;
     }
 
@@ -66,10 +73,10 @@ function MockCheckoutInner() {
           setPayment(cached);
           setError(null);
         } else {
-          setError(e instanceof Error ? e.message : 'Failed to load payment');
+          setError(e instanceof Error ? e.message : t('ui.loadPaymentFailed'));
         }
       });
-  }, [paymentId, router]);
+  }, [paymentId, router, t]);
 
   async function confirmPay() {
     if (!paymentId || busy) return;
@@ -87,7 +94,7 @@ function MockCheckoutInner() {
         /* ignore */
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Payment failed');
+      setError(e instanceof Error ? e.message : t('ui.paymentFailed'));
     } finally {
       setBusy(false);
     }
@@ -96,9 +103,9 @@ function MockCheckoutInner() {
   if (!paymentId) {
     return (
       <div className="shell" style={{ padding: '3rem 1.5rem', maxWidth: 520 }}>
-        <FormAlert>Missing payment id.</FormAlert>
+        <FormAlert>{t('ui.missingPaymentId')}</FormAlert>
         <Link href="/dashboard/recruiter?tab=billing" className="chip" style={{ marginTop: '1rem' }}>
-          Back to billing
+          {t('ui.backToBilling')}
         </Link>
       </div>
     );
@@ -109,31 +116,31 @@ function MockCheckoutInner() {
   return (
     <div className="shell" style={{ padding: '3rem 1.5rem', maxWidth: 520 }}>
       <div className="card">
-        <h1 style={{ marginTop: 0, fontSize: '1.35rem' }}>Demo checkout</h1>
+        <h1 style={{ marginTop: 0, fontSize: '1.35rem' }}>{t('ui.demoCheckout')}</h1>
         <p className="muted" style={{ fontSize: '0.9rem' }}>
-          Mock payment - no real charge. Confirm to activate the plan or boost.
+          {t('ui.demoCheckoutHint')}
         </p>
         {error && <FormAlert>{error}</FormAlert>}
         {payment && (
           <>
             <p style={{ margin: '1rem 0 0.35rem' }}>
-              <strong>{purposeLabel(payment.purpose)}</strong>
+              <strong>{purposeLabel(t, payment.purpose)}</strong>
             </p>
             <p style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0.25rem 0 1rem' }}>
               {formatUzs(payment.amountUzs)}
             </p>
             <p className="muted" style={{ fontSize: '0.85rem' }}>
-              Status: {payment.status}
+              {t('ui.status')}: {enumLabel('paymentStatus', payment.status)}
             </p>
             {done ? (
               <div style={{ marginTop: '1.25rem' }}>
-                <FormAlert tone="success">Payment confirmed.</FormAlert>
+                <FormAlert tone="success">{t('ui.paymentConfirmed')}</FormAlert>
                 <Link
                   href="/dashboard/recruiter?tab=billing"
                   className="chip active"
                   style={{ marginTop: '1rem', display: 'inline-block' }}
                 >
-                  Back to Plan & billing
+                  {t('ui.backToPlanBilling')}
                 </Link>
               </div>
             ) : (
@@ -143,7 +150,7 @@ function MockCheckoutInner() {
                 disabled={busy}
                 onClick={confirmPay}
               >
-                {busy ? 'Processing...' : 'Pay (demo)'}
+                {busy ? t('ui.processing') : t('ui.payDemo')}
               </button>
             )}
           </>

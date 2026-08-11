@@ -1,7 +1,7 @@
 'use client';
 
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
-import { useI18n } from '@/lib/i18n';
+import { useEnumLabel, useI18n } from '@/lib/i18n';
 
 type SkillComboboxProps = {
   onPick: (skill: {
@@ -29,6 +29,7 @@ export function SkillCombobox({
   submitLabel,
 }: SkillComboboxProps) {
   const { t } = useI18n();
+  const enumLabel = useEnumLabel();
   return (
     <LookupCombobox
       kind="skills"
@@ -39,10 +40,10 @@ export function SkillCombobox({
       levelOptions={
         levelSelect
           ? [
-              { value: 'BEGINNER', label: 'Beginner' },
-              { value: 'INTERMEDIATE', label: 'Intermediate' },
-              { value: 'ADVANCED', label: 'Advanced' },
-              { value: 'EXPERT', label: 'Expert' },
+              { value: 'BEGINNER', label: enumLabel('skillLevel', 'BEGINNER') },
+              { value: 'INTERMEDIATE', label: enumLabel('skillLevel', 'INTERMEDIATE') },
+              { value: 'ADVANCED', label: enumLabel('skillLevel', 'ADVANCED') },
+              { value: 'EXPERT', label: enumLabel('skillLevel', 'EXPERT') },
             ]
           : undefined
       }

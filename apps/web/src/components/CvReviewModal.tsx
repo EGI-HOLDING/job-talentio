@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 export type ParsedCv = {
   email?: string;
@@ -36,6 +37,7 @@ type Props = {
 };
 
 export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) {
+  const { t } = useI18n();
   const skills = parsed.skillNames || [];
   const experiences = parsed.experiences || [];
   const educations = parsed.educations || [];
@@ -99,7 +101,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
       });
       onImported();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed');
+      setError(e instanceof Error ? e.message : t('ui.importFailed'));
     } finally {
       setBusy(false);
     }
@@ -117,13 +119,13 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
         <div className="cv-review-header">
           <div>
             <h2 id="cv-review-title" style={{ margin: 0 }}>
-              Review parsed CV
+              {t('reviewParsedData')}
             </h2>
             <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
-              Choose what to import into your profile. Uncheck anything that looks wrong.
+              {t('ui.cvReviewSubtitle')}
             </p>
           </div>
-          <button type="button" className="ghost" onClick={onClose} aria-label="Close dialog">
+          <button type="button" className="ghost" onClick={onClose} aria-label={t('closeDialog')}>
             x
           </button>
         </div>
@@ -137,12 +139,12 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
         <div className="cv-review-body">
           {(parsed.headline || parsed.summary || parsed.phone || parsed.email) && (
             <section className="cv-section">
-              <h4>Profile basics</h4>
+              <h4>{t('ui.profileBasics')}</h4>
               {parsed.headline && (
                 <label className="cv-check">
                   <input type="checkbox" checked={headline} onChange={(e) => setHeadline(e.target.checked)} />
                   <div>
-                    <strong>Headline</strong>
+                    <strong>{t('ui.headline')}</strong>
                     <span>{parsed.headline}</span>
                   </div>
                 </label>
@@ -151,7 +153,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                 <label className="cv-check">
                   <input type="checkbox" checked={summary} onChange={(e) => setSummary(e.target.checked)} />
                   <div>
-                    <strong>Summary</strong>
+                    <strong>{t('ui.summary')}</strong>
                     <span>{parsed.summary}</span>
                   </div>
                 </label>
@@ -160,7 +162,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                 <label className="cv-check">
                   <input type="checkbox" checked={phone} onChange={(e) => setPhone(e.target.checked)} />
                   <div>
-                    <strong>Phone</strong>
+                    <strong>{t('ui.phone')}</strong>
                     <span>{parsed.phone}</span>
                   </div>
                 </label>
@@ -168,8 +170,10 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
               {parsed.email && (
                 <div className="cv-check muted" style={{ paddingLeft: '1.75rem' }}>
                   <div>
-                    <strong>Email detected</strong>
-                    <span>{parsed.email} (kept as reference - account email unchanged)</span>
+                    <strong>{t('ui.emailDetected')}</strong>
+                    <span>
+                      {parsed.email} {t('ui.emailKeptAsReference')}
+                    </span>
                   </div>
                 </div>
               )}
@@ -179,7 +183,9 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
           {skills.length > 0 && (
             <section className="cv-section">
               <div className="cv-section-head">
-                <h4>Skills ({skills.length})</h4>
+                <h4>
+                  {t('skills')} ({skills.length})
+                </h4>
                 <button
                   type="button"
                   className="ghost"
@@ -187,7 +193,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                     setSkillIndexes(skillIndexes.length === skills.length ? [] : skills.map((_, i) => i))
                   }
                 >
-                  {skillIndexes.length === skills.length ? 'Clear' : 'Select all'}
+                  {skillIndexes.length === skills.length ? t('ui.clear') : t('ui.selectAll')}
                 </button>
               </div>
               <div className="chips">
@@ -208,7 +214,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
 
           {experiences.length > 0 && (
             <section className="cv-section">
-              <h4>Work experience</h4>
+              <h4>{t('experience')}</h4>
               {experiences.map((x, i) => (
                 <label key={i} className="cv-check">
                   <input
@@ -221,7 +227,8 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                       {x.title} | {x.companyName}
                     </strong>
                     <span>
-                      {x.startDate?.slice(0, 7) || '?'} - {x.isCurrent ? 'now' : x.endDate?.slice(0, 7) || '?'}
+                      {x.startDate?.slice(0, 7) || '?'} -{' '}
+                      {x.isCurrent ? t('ui.now') : x.endDate?.slice(0, 7) || '?'}
                       {x.description ? ` | ${x.description.slice(0, 120)}` : ''}
                     </span>
                   </div>
@@ -232,7 +239,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
 
           {educations.length > 0 && (
             <section className="cv-section">
-              <h4>Education</h4>
+              <h4>{t('education')}</h4>
               {educations.map((x, i) => (
                 <label key={i} className="cv-check">
                   <input
@@ -243,7 +250,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
                   <div>
                     <strong>{x.school}</strong>
                     <span>
-                      {[x.degree, x.field].filter(Boolean).join(' | ') || 'Education'}
+                      {[x.degree, x.field].filter(Boolean).join(' | ') || t('education')}
                     </span>
                   </div>
                 </label>
@@ -253,7 +260,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
 
           {languages.length > 0 && (
             <section className="cv-section">
-              <h4>Languages</h4>
+              <h4>{t('languages')}</h4>
               {languages.map((x, i) => (
                 <label key={i} className="cv-check">
                   <input
@@ -270,17 +277,17 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
             </section>
           )}
 
-          {!selectedCount && (
-            <p className="muted">Nothing selected - tick items above or close without importing.</p>
-          )}
+          {!selectedCount && <p className="muted">{t('ui.nothingSelectedHint')}</p>}
         </div>
 
         <div className="cv-review-footer">
           <button type="button" className="secondary" onClick={onClose} disabled={busy}>
-            Skip for now
+            {t('ui.skipForNow')}
           </button>
           <button type="button" onClick={importSelected} disabled={busy || selectedCount === 0}>
-            {busy ? 'Importing...' : `Import selected (${selectedCount})`}
+            {busy
+              ? t('ui.importing')
+              : t('ui.importSelected').replace('{n}', String(selectedCount))}
           </button>
         </div>
       </div>

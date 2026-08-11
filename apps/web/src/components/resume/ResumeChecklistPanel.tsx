@@ -1,3 +1,7 @@
+'use client';
+
+import { useI18n } from '@/lib/i18n';
+
 type ChecklistItem = {
   id: string;
   label: string;
@@ -13,10 +17,12 @@ type Props = {
 };
 
 export function ResumeChecklistPanel({ checklist }: Props) {
+  const { t } = useI18n();
+
   return (
     <aside className="resume-checklist card">
       <div className="resume-checklist__head">
-        <h3 style={{ margin: 0 }}>ATS checklist</h3>
+        <h3 style={{ margin: 0 }}>{t('ui.atsChecklist')}</h3>
         <div className="resume-checklist__score">{checklist.score}%</div>
       </div>
       <div className="completeness-bar" style={{ margin: '0.75rem 0 1rem' }}>

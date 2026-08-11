@@ -1,4 +1,7 @@
+'use client';
+
 import type { CSSProperties } from 'react';
+import { useI18n } from '@/lib/i18n';
 
 export type MatchBreakdownData = {
   skills?: number;
@@ -24,11 +27,11 @@ type Props = {
 };
 
 const ROWS = [
-  ['Skills', 'skills'],
-  ['Experience', 'experience'],
-  ['Location', 'location'],
-  ['Education', 'education'],
-  ['Language', 'language'],
+  ['skills', 'skills'],
+  ['experience', 'experience'],
+  ['ui.location', 'location'],
+  ['education', 'education'],
+  ['language', 'language'],
 ] as const;
 
 export function MatchBreakdownPanel({
@@ -37,6 +40,7 @@ export function MatchBreakdownPanel({
   style,
   showSkillChips = true,
 }: Props) {
+  const { t } = useI18n();
   const details = breakdown.details;
   const matchedLang = details?.matchedLanguages || [];
   const missingLang = details?.missingRequiredLanguages || [];
@@ -45,11 +49,11 @@ export function MatchBreakdownPanel({
 
   return (
     <div className={`match-breakdown ${className}`.trim()} style={style}>
-      {ROWS.map(([label, key]) => {
+      {ROWS.map(([labelKey, key]) => {
         const value = Math.round(Number(breakdown[key]) || 0);
         return (
           <div key={key} className="match-breakdown-row">
-            <span className="muted">{label}</span>
+            <span className="muted">{t(labelKey)}</span>
             <div className="match-breakdown-track">
               <i style={{ width: `${value}%` }} />
             </div>
@@ -59,9 +63,9 @@ export function MatchBreakdownPanel({
       })}
       {(matchedLang.length > 0 || missingLang.length > 0) && (
         <p className="muted" style={{ fontSize: '0.75rem', margin: '0.4rem 0 0' }}>
-          {matchedLang.length ? `OK: ${matchedLang.join(', ')}` : ''}
+          {matchedLang.length ? `${t('ui.matchOk')}: ${matchedLang.join(', ')}` : ''}
           {missingLang.length
-            ? `${matchedLang.length ? ' | ' : ''}Missing: ${missingLang.join(', ')}`
+            ? `${matchedLang.length ? ' | ' : ''}${t('ui.matchMissing')}: ${missingLang.join(', ')}`
             : ''}
         </p>
       )}
@@ -76,7 +80,7 @@ export function MatchBreakdownPanel({
       )}
       {showSkillChips && missingSkills.length > 0 && (
         <p className="muted" style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
-          Missing required: {missingSkills.join(', ')}
+          {t('ui.matchMissingRequired')}: {missingSkills.join(', ')}
         </p>
       )}
     </div>

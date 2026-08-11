@@ -3,9 +3,11 @@
 import { Link } from '@/lib/navigation';
 import { FormEvent, useState } from 'react';
 import { api } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { FormAlert, FormField } from '@/components/ui/Field';
 
 export default function ForgotPasswordPage() {
+  const { t } = useI18n();
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,9 +24,9 @@ export default function ForgotPasswordPage() {
         auth: false,
         body: JSON.stringify({ email }),
       });
-      setMsg('If that email is registered, we sent a reset link. Check your inbox.');
+      setMsg(t('ui.forgotPasswordSent'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed');
+      setError(err instanceof Error ? err.message : t('ui.requestFailed'));
     } finally {
       setLoading(false);
     }
@@ -33,21 +35,21 @@ export default function ForgotPasswordPage() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <h1>Forgot password</h1>
-        <p className="muted">Enter your account email and we will send a reset link.</p>
+        <h1>{t('ui.forgotPassword')}</h1>
+        <p className="muted">{t('ui.forgotPasswordHint')}</p>
         <form className="form-stack" onSubmit={onSubmit}>
-          <FormField label="Email" required>
+          <FormField label={t('email')} required>
             <input name="email" type="email" required autoComplete="email" />
           </FormField>
           {error && <FormAlert>{error}</FormAlert>}
           {msg && <FormAlert tone="success">{msg}</FormAlert>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Sending...' : 'Send reset link'}
+            {loading ? t('verifyEmailSending') : t('ui.sendResetLink')}
           </button>
         </form>
         <p className="muted" style={{ marginTop: '1rem' }}>
           <Link href="/login" style={{ color: 'var(--accent)' }}>
-            Back to sign in
+            {t('ui.backToSignIn')}
           </Link>
         </p>
       </div>

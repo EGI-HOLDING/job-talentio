@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import Cropper, { Area } from 'react-easy-crop';
 import { getToken } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -75,6 +76,7 @@ export function ImageCropUpload({
   onUploaded,
   label,
 }: Props) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -91,7 +93,7 @@ export function ImageCropUpload({
     setError('');
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Please choose an image file');
+      setError(t('ui.pickImageFile'));
       return;
     }
     const reader = new FileReader();
@@ -117,7 +119,7 @@ export function ImageCropUpload({
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(
-        typeof data?.message === 'string' ? data.message : 'Upload failed',
+        typeof data?.message === 'string' ? data.message : t('ui.uploadFailed'),
       );
     }
     return data;
@@ -131,7 +133,7 @@ export function ImageCropUpload({
       const mime = mode === 'logo' ? 'image/png' : 'image/jpeg';
       const blob = await cropToBlob(src, area, mime, 1024);
       if (blob.size > 2 * 1024 * 1024) {
-        throw new Error('Cropped image is larger than 2MB - try a smaller crop');
+        throw new Error(t('ui.cropTooLarge'));
       }
       const data = await uploadBlob(blob);
       const url =
@@ -147,7 +149,7 @@ export function ImageCropUpload({
       setOpen(false);
       setSrc(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
+      setError(e instanceof Error ? e.message : t('ui.uploadFailed'));
     } finally {
       setBusy(false);
     }
@@ -169,7 +171,7 @@ export function ImageCropUpload({
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
-          typeof data?.message === 'string' ? data.message : 'Clear failed',
+          typeof data?.message === 'string' ? data.message : t('ui.clearFailed'),
         );
       }
       const data = await res.json().catch(() => ({}));
@@ -179,7 +181,7 @@ export function ImageCropUpload({
         onUploaded(null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Clear failed');
+      setError(e instanceof Error ? e.message : t('ui.clearFailed'));
     } finally {
       setBusy(false);
     }
@@ -218,13 +220,13 @@ export function ImageCropUpload({
             />
           ) : (
             <span className="muted" style={{ fontSize: '0.75rem' }}>
-              No image
+              {t('ui.noImage')}
             </span>
           )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <label className="chip" style={{ cursor: 'pointer' }}>
-            Upload & crop
+            {t('ui.uploadAndCrop')}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -237,7 +239,7 @@ export function ImageCropUpload({
           </label>
           {(value || clearPath) && (
             <button type="button" className="secondary" disabled={busy} onClick={clearImage}>
-              Remove
+              {t('ui.remove')}
             </button>
           )}
         </div>
@@ -266,7 +268,9 @@ export function ImageCropUpload({
             className="card"
             style={{ width: 'min(480px, 100%)', margin: 0, padding: '1rem' }}
           >
-            <h3 style={{ marginTop: 0 }}>Crop {mode === 'avatar' ? 'photo' : 'logo'}</h3>
+            <h3 style={{ marginTop: 0 }}>
+              {mode === 'avatar' ? t('ui.cropPhoto') : t('ui.cropLogo')}
+            </h3>
             <div
               style={{
                 position: 'relative',
@@ -291,7 +295,7 @@ export function ImageCropUpload({
             </div>
             <label style={{ display: 'block', marginTop: '0.75rem' }}>
               <span className="muted" style={{ fontSize: '0.85rem' }}>
-                Zoom
+                {t('ui.zoom')}
               </span>
               <input
                 type="range"
@@ -305,7 +309,7 @@ export function ImageCropUpload({
             </label>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
               <button type="button" className="cta" disabled={busy} onClick={confirmCrop}>
-                {busy ? 'Uploading...' : 'Save'}
+                {busy ? t('ui.uploading') : t('save')}
               </button>
               <button
                 type="button"
@@ -316,7 +320,7 @@ export function ImageCropUpload({
                   setSrc(null);
                 }}
               >
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </div>

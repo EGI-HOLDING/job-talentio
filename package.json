@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "check:ascii-ui": "node scripts/check-ascii-ui.mjs",
+    "check:i18n-ui": "node scripts/check-i18n-ui.mjs",
     "purge:mojibake": "node scripts/purge-mojibake.mjs",
     "db:generate": "pnpm --filter @job-talentio/api prisma:generate",
     "db:migrate": "pnpm --filter @job-talentio/api prisma:migrate",
