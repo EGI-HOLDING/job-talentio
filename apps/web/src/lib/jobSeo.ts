@@ -1,4 +1,6 @@
 import { sanitizeMojibake } from '@/lib/text';
+import { DEFAULT_LOCALE, LOCALES } from '@/lib/locale';
+import type { Locale } from '@/lib/locale';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobtalent.io').replace(/\/$/, '');
@@ -54,8 +56,16 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
-export function jobCanonicalUrl(id: string): string {
-  return `${SITE_URL}/jobs/${id}`;
+export function jobCanonicalUrl(id: string, locale: Locale = DEFAULT_LOCALE): string {
+  return `${SITE_URL}/${locale}/jobs/${id}`;
+}
+
+/** hreflang map so Google can serve the right language version of a posting. */
+export function jobLanguageAlternates(id: string): Record<string, string> {
+  const alternates: Record<string, string> = {};
+  for (const locale of LOCALES) alternates[locale] = jobCanonicalUrl(id, locale);
+  alternates['x-default'] = jobCanonicalUrl(id, DEFAULT_LOCALE);
+  return alternates;
 }
 
 export function jobMetaDescription(job: JobSeoPayload): string {
@@ -64,7 +74,10 @@ export function jobMetaDescription(job: JobSeoPayload): string {
 }
 
 /** Google Jobs JobPosting structured data (schema.org). */
-export function buildJobPostingJsonLd(job: JobSeoPayload): Record<string, unknown> {
+export function buildJobPostingJsonLd(
+  job: JobSeoPayload,
+  locale: Locale = DEFAULT_LOCALE,
+): Record<string, unknown> {
   const descriptionHtml = escapeHtml(sanitizeMojibake(job.description)).replace(/\n/g, '<br>');
   const logoUrl = job.company.logoUrl
     ? job.company.logoUrl.startsWith('http')
@@ -82,7 +95,7 @@ export function buildJobPostingJsonLd(job: JobSeoPayload): Record<string, unknow
     hiringOrganization: {
       '@type': 'Organization',
       name: job.company.name,
-      sameAs: `${SITE_URL}/companies/${job.company.slug}`,
+      sameAs: `${SITE_URL}/${locale}/companies/${job.company.slug}`,
       ...(logoUrl ? { logo: logoUrl } : {}),
     },
     identifier: {
@@ -90,7 +103,7 @@ export function buildJobPostingJsonLd(job: JobSeoPayload): Record<string, unknow
       name: job.company.name,
       value: job.id,
     },
-    url: jobCanonicalUrl(job.id),
+    url: jobCanonicalUrl(job.id, locale),
     directApply: true,
   };
 

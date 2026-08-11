@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/lib/navigation';
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { jobLocationLabel } from '@/lib/location';

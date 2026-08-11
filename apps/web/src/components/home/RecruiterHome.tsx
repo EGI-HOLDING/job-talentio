@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/lib/navigation';
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { ExploreSection } from '@/components/explore/ExploreSection';

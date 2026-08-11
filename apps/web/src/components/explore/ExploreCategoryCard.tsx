@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/lib/navigation';
 import { categoryIconLabel } from '@/lib/icons';
 
 type ExploreCategoryCardProps = {

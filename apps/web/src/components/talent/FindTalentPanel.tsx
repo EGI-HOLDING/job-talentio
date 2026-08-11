@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Link, localeHref } from '@/lib/navigation';
+import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from '@/lib/navigation';
 import { api, getSession } from '@/lib/api';
 import { jobLocationLabel } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
@@ -178,7 +179,7 @@ export function FindTalentPanel() {
   useEffect(() => {
     const session = getSession();
     if (!session || (session.user.role !== 'RECRUITER' && session.user.role !== 'SUPER_ADMIN')) {
-      window.location.href = `/login?next=${encodeURIComponent('/talent')}`;
+      window.location.href = localeHref(`/login?next=${encodeURIComponent('/talent')}`);
       return;
     }
     (async () => {

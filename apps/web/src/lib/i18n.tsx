@@ -1,16 +1,17 @@
 'use client';
 
+import { usePathname, useRouter } from 'next/navigation';
+import { createContext, useCallback, useContext, useMemo, ReactNode } from 'react';
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  ReactNode,
-} from 'react';
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  stripLocale,
+  withLocale,
+} from '@/lib/locale';
+import type { Locale } from '@/lib/locale';
 
-export type Locale = 'uz' | 'ru' | 'en';
+export type { Locale };
 
 const DICT = {
   jobs: { uz: 'Ish o‘rinlari', ru: 'Вакансии', en: 'Jobs' },
@@ -1107,6 +1108,16 @@ const DICT = {
     en: 'Last seen',
   },
   justNow: { uz: 'hozirgina', ru: 'только что', en: 'just now' },
+  pageNotFound: {
+    uz: 'Sahifa topilmadi',
+    ru: 'Страница не найдена',
+    en: 'Page not found',
+  },
+  backHome: {
+    uz: 'Bosh sahifaga',
+    ru: 'На главную',
+    en: 'Back home',
+  },
 } as const;
 
 export type DictKey = keyof typeof DICT;
@@ -1119,29 +1130,29 @@ type I18nCtx = {
 
 const Ctx = createContext<I18nCtx | null>(null);
 
-function readStoredLocale(): Locale {
-  if (typeof window === 'undefined') return 'uz';
-  const stored = localStorage.getItem('jt_locale');
-  if (stored === 'uz' || stored === 'ru' || stored === 'en') return stored;
-  return 'uz';
-}
+/**
+ * The locale comes from the URL segment (see middleware + app/[locale]), so the
+ * first server render already has the right language - no post-hydration flash.
+ * Switching language navigates to the same page under the new prefix.
+ */
+export function I18nProvider({
+  children,
+  locale = DEFAULT_LOCALE,
+}: {
+  children: ReactNode;
+  locale?: Locale;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('uz');
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const initial = readStoredLocale();
-    setLocaleState(initial);
-    document.documentElement.lang = initial;
-    setReady(true);
-  }, []);
-
-  const setLocale = useCallback((l: Locale) => {
-    setLocaleState(l);
-    localStorage.setItem('jt_locale', l);
-    document.documentElement.lang = l;
-  }, []);
+  const setLocale = useCallback(
+    (next: Locale) => {
+      document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
+      const { search, hash } = window.location;
+      router.replace(`${withLocale(next, stripLocale(pathname ?? '/'))}${search}${hash}`);
+    },
+    [pathname, router],
+  );
 
   const t = useCallback(
     (key: string) => {
@@ -1153,11 +1164,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
-
-  // Avoid flashing wrong language before localStorage hydrate
-  if (!ready) {
-    return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
-  }
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
