@@ -31,6 +31,7 @@ type Job = {
   /** Language the title and description are served in (may differ from the UI). */
   contentLocale?: string | null;
   isMachineTranslated?: boolean;
+  canMachineTranslate?: boolean;
   salaryMin?: number | null;
   salaryMax?: number | null;
   workMode?: string;
@@ -99,7 +100,7 @@ type MyApplicationState = {
 
 export function JobDetailClient() {
   const { id } = useParams<{ id: string }>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState('');
@@ -109,6 +110,7 @@ export function JobDetailClient() {
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
@@ -246,6 +248,25 @@ export function JobDetailClient() {
     setSuccess(t('job.savedToList'));
   }
 
+  /** Machine translation is cached server-side, so this costs at most once. */
+  async function machineTranslate() {
+    setTranslating(true);
+    setError('');
+    try {
+      const res = await api<{ status: string; job: Job }>(`/jobs/${id}/translate/${locale}`, {
+        method: 'POST',
+      });
+      if (res.job) setJob(res.job);
+      if (res.status === 'disabled' || res.status === 'budget-exceeded') {
+        setError(t('ui.translateFailed'));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('ui.translateFailed'));
+    } finally {
+      setTranslating(false);
+    }
+  }
+
   if (!job && !error) return <DetailPageSkeleton />;
   if (error && !job) return <div className="shell"><div className="error">{error}</div></div>;
   if (!job) return null;
@@ -379,6 +400,10 @@ export function JobDetailClient() {
               isMachineTranslated={job.isMachineTranslated}
               preserveLineBreaks
               className="job-description"
+              translating={translating}
+              onTranslate={
+                session && job.canMachineTranslate ? () => void machineTranslate() : undefined
+              }
             />
           </div>
           {session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown && (

@@ -123,6 +123,20 @@ export class JobsController {
     return this.jobs.getSeo(id, requestLocale(req));
   }
 
+  /**
+   * Reader-triggered machine translation. Signed-in only and rate limited,
+   * because every miss costs money at the provider.
+   */
+  @Post(':id/translate/:locale')
+  @UseGuards(JwtAuthGuard, SearchRateLimitGuard)
+  machineTranslate(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.jobs.machineTranslate(id, assertLocale(locale), user);
+  }
+
   @Get(':id/translations')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')

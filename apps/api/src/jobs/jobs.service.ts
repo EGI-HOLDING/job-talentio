@@ -31,6 +31,7 @@ import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { contentHash as translationSourceHash, resolveContent } from '../common/i18n/content-locale';
+import { TranslationService } from '../translation/translation.service';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 
@@ -62,6 +63,7 @@ export class JobsService {
     private matching: MatchingService,
     private notifications: NotificationsService,
     private jobsSearch: JobsSearchService,
+    private translation: TranslationService,
   ) {}
 
   private planLimits(plan: PlanCode) {
@@ -692,6 +694,8 @@ export class JobsService {
       contentLocale: resolved.contentLocale,
       isMachineTranslated: resolved.isMachineTranslated,
       availableLocales: resolved.availableLocales,
+      // Lets the UI offer a Translate action only when a provider is configured.
+      canMachineTranslate: this.translation.enabled && resolved.isFallback,
     };
   }
 
@@ -737,6 +741,20 @@ export class JobsService {
       .catch(() => undefined);
     void this.jobsSearch.syncJob(jobId);
     return { ok: true };
+  }
+
+  /**
+   * Machine-translate a posting into `locale` on request, then return the
+   * posting in that language. Results are cached, so the first reader pays for
+   * the translation and everyone after gets it for free.
+   */
+  async machineTranslate(id: string, locale: Locale, viewer?: AuthUser) {
+    const result = await this.translation.translateJob(id, locale);
+    if (result.status === 'failed') {
+      throw new BadRequestException(result.reason);
+    }
+    const job = await this.get(id, viewer, locale);
+    return { status: result.status, job };
   }
 
   /** Every stored language of a posting, for the recruiter editor. */
