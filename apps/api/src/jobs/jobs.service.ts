@@ -531,6 +531,8 @@ export class JobsService {
           type: 'NEW_JOB_MATCH',
           title: `New job at ${job.company.name}`,
           body: updated.title,
+          titleKey: 'notify.newJobAtCompany.title',
+          params: { company: job.company.name },
           linkUrl: `/jobs/${updated.id}`,
         });
       }

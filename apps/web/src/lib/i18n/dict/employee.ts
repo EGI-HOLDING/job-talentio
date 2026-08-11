@@ -397,4 +397,103 @@ export const employee = {
     ru: 'Загрузка предпросмотра...',
     en: 'Loading preview...',
   },
+
+  // ATS checklist: keys come from scoreResumeChecklist in packages/shared
+  'emp.checklist.email': { uz: 'Email kiritilgan', ru: 'Указан email', en: 'Email present' },
+  'emp.checklist.email.tip': {
+    uz: 'Hisob yoki profilingizga email qo‘shing',
+    ru: 'Добавьте email в аккаунт или профиль',
+    en: 'Add email on your account or profile',
+  },
+  'emp.checklist.phone': { uz: 'Telefon kiritilgan', ru: 'Указан телефон', en: 'Phone present' },
+  'emp.checklist.phone.tip': {
+    uz: 'Profilga telefon raqamini qo‘shing',
+    ru: 'Добавьте телефон в профиль',
+    en: 'Add phone in Profile',
+  },
+  'emp.checklist.headline': {
+    uz: 'Sarlavha kiritilgan',
+    ru: 'Указан заголовок',
+    en: 'Headline present',
+  },
+  'emp.checklist.headline.tip': {
+    uz: 'Kasbiy sarlavha qo‘shing',
+    ru: 'Добавьте профессиональный заголовок',
+    en: 'Add a professional headline',
+  },
+  'emp.checklist.summary': {
+    uz: 'Qisqacha ma’lumot 80-600 belgi',
+    ru: 'Описание 80-600 символов',
+    en: 'Summary 80-600 characters',
+  },
+  'emp.checklist.summary.tipShort': {
+    uz: 'Kasbiy tavsifni uzunroq yozing',
+    ru: 'Напишите более развёрнутое описание',
+    en: 'Write a longer professional summary',
+  },
+  'emp.checklist.summary.tipLong': {
+    uz: 'Tavsifni 600 belgidan qisqartiring',
+    ru: 'Сократите описание до 600 символов',
+    en: 'Shorten your summary under 600 characters',
+  },
+  'emp.checklist.skills': {
+    uz: 'Kamida 5 ta ko‘nikma',
+    ru: 'Минимум 5 навыков',
+    en: 'At least 5 skills',
+  },
+  'emp.checklist.skills.tip': {
+    uz: 'Profilga yana ko‘nikma qo‘shing',
+    ru: 'Добавьте больше навыков в профиль',
+    en: 'Add more skills in Profile',
+  },
+  'emp.checklist.experience': {
+    uz: 'Kamida bitta tavsifli tajriba',
+    ru: 'Минимум один опыт с описанием',
+    en: 'At least one experience with description',
+  },
+  'emp.checklist.experience.tip': {
+    uz: 'Vazifalaringizni tavsiflab ish tajribasini qo‘shing',
+    ru: 'Добавьте опыт работы с описанием задач',
+    en: 'Add work experience with bullet details',
+  },
+  'emp.checklist.dates': {
+    uz: 'Tajriba sanalari to‘ldirilgan',
+    ru: 'Заполнены даты опыта',
+    en: 'Experience dates filled',
+  },
+  'emp.checklist.dates.tip': {
+    uz: 'Barcha tajribalar uchun boshlanish sanasini kiriting',
+    ru: 'Укажите дату начала для каждого опыта',
+    en: 'Fill start dates on all experiences',
+  },
+  'emp.checklist.education': {
+    uz: 'Kamida bitta ta’lim',
+    ru: 'Минимум одно образование',
+    en: 'At least one education',
+  },
+  'emp.checklist.education.tip': {
+    uz: 'Profilga ta’limni qo‘shing',
+    ru: 'Добавьте образование в профиль',
+    en: 'Add education in Profile',
+  },
+  'emp.checklist.languages': {
+    uz: 'Tillar ko‘rsatilgan (bonus)',
+    ru: 'Указаны языки (бонус)',
+    en: 'Languages listed (bonus)',
+  },
+  'emp.checklist.languages.tip': {
+    uz: 'Ixtiyoriy: tillarni qo‘shing',
+    ru: 'Необязательно: добавьте языки',
+    en: 'Optional: add languages',
+  },
+  'emp.checklist.certs': {
+    uz: 'Sertifikatlar ko‘rsatilgan (bonus)',
+    ru: 'Указаны сертификаты (бонус)',
+    en: 'Certifications listed (bonus)',
+  },
+  'emp.checklist.certs.tip': {
+    uz: 'Ixtiyoriy: sertifikatlarni qo‘shing',
+    ru: 'Необязательно: добавьте сертификаты',
+    en: 'Optional: add certifications',
+  },
 } as const;

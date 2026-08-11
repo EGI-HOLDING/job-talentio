@@ -7,6 +7,9 @@ type ChecklistItem = {
   label: string;
   ok: boolean;
   tip?: string;
+  /** Dictionary keys from shared; label/tip stay as the English fallback. */
+  labelKey?: string;
+  tipKey?: string;
 };
 
 type Props = {
@@ -18,6 +21,13 @@ type Props = {
 
 export function ResumeChecklistPanel({ checklist }: Props) {
   const { t } = useI18n();
+
+  /** Falls back to the English text the API sent when a key is not translated. */
+  const label = (key: string | undefined, fallback: string | undefined) => {
+    if (!key) return fallback ?? '';
+    const translated = t(key);
+    return translated === key ? (fallback ?? key) : translated;
+  };
 
   return (
     <aside className="resume-checklist card">
@@ -35,10 +45,10 @@ export function ResumeChecklistPanel({ checklist }: Props) {
               {item.ok ? '✓' : '○'}
             </span>
             <div>
-              <strong>{item.label}</strong>
-              {!item.ok && item.tip ? (
+              <strong>{label(item.labelKey, item.label)}</strong>
+              {!item.ok && (item.tipKey || item.tip) ? (
                 <p className="muted" style={{ margin: '0.15rem 0 0', fontSize: '0.82rem' }}>
-                  {item.tip}
+                  {label(item.tipKey, item.tip)}
                 </p>
               ) : null}
             </div>
