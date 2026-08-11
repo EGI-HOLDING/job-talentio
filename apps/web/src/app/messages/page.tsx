@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, getSession, AuthSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
+import { PresenceDot } from '@/components/presence/PresenceDot';
 
 type Peer = { id: string; fullName: string; email: string };
 type Conversation = {
@@ -16,6 +18,7 @@ type Conversation = {
   isColdOutreach: boolean;
   updatedAt: string;
   messages: Array<{ id: string; body: string; senderId: string; createdAt: string }>;
+  peerPresence?: PresenceStatus | null;
 };
 type Message = {
   id: string;
@@ -43,6 +46,11 @@ function MessagesInner() {
 
   const loadConversations = useCallback(async () => {
     const list = await api<Conversation[]>('/chat/conversations');
+    const me = getSession()?.user.id;
+    for (const c of list) {
+      const peerId = c.userAId === me ? c.userBId : c.userAId;
+      seedPresence(peerId, c.peerPresence);
+    }
     setConversations(list);
     return list;
   }, []);
@@ -116,6 +124,10 @@ function MessagesInner() {
     await loadMessages(id);
   }
 
+  const livePresence = usePresence(
+    conversations.map((c) => (c.userAId === session?.user.id ? c.userBId : c.userAId)),
+  );
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!draft.trim() || !activeId) return;
@@ -138,6 +150,8 @@ function MessagesInner() {
 
   const peerOf = (c: Conversation): Peer => (c.userAId === session.user.id ? c.userB : c.userA);
   const active = conversations.find((c) => c.id === activeId) || null;
+  const presenceOf = (c: Conversation): PresenceStatus | null =>
+    livePresence[peerOf(c).id] ?? c.peerPresence ?? null;
 
   return (
     <div className="shell" style={{ padding: '2rem 1.5rem' }}>
@@ -162,7 +176,10 @@ function MessagesInner() {
                 className={`chat-conv${c.id === activeId ? ' active' : ''}`}
                 onClick={() => openConversation(c.id)}
               >
-                <strong>{peer.fullName}</strong>
+                <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                  {peer.fullName}
+                  <PresenceDot status={presenceOf(c)} />
+                </strong>
                 <span className="preview">{last ? last.body : '-'}</span>
               </button>
             );
@@ -176,6 +193,9 @@ function MessagesInner() {
             <>
               <div className="chat-header">
                 {peerOf(active).fullName}
+                <span style={{ marginLeft: '0.55rem' }}>
+                  <PresenceDot status={presenceOf(active)} showLabel />
+                </span>
                 {active.isColdOutreach && (
                   <span className="chip" style={{ marginLeft: '0.5rem', fontSize: '0.72rem' }}>
                     Cold outreach

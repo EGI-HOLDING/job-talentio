@@ -101,6 +101,7 @@ export function SiteNav() {
               {dash && <Link href={dash}>{t('dashboard')}</Link>}
             </>
           )}
+          <Link href="/news">{t('news')}</Link>
           {session && <Link href="/messages">{t('messages')}</Link>}
           {session?.user.role === 'SUPER_ADMIN' && (
             <a href={ADMIN_URL} target="_blank" rel="noreferrer">

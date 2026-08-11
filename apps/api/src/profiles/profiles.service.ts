@@ -34,6 +34,7 @@ import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
 import { ParsedCvData } from './cv-parser';
 import { CvParseService } from './cv-parse.service';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
+import { PresenceService } from '../presence/presence.service';
 
 const resumeTargetTitleInclude = {
   targetJobTitle: { select: { id: true, name: true, slug: true } },
@@ -52,6 +53,7 @@ export class ProfilesService {
     private companies: CompaniesService,
     private matching: MatchingService,
     private cvParse: CvParseService,
+    private presence: PresenceService,
     @Optional() @Inject(RATE_LIMIT_REDIS) private readonly rlRedis: IORedis | null,
   ) {}
 
@@ -1574,6 +1576,14 @@ export class ProfilesService {
       }
     }
 
+    const presenceMap = await this.presence.getPresence(
+      pageItems.map((p) => p.user?.id as string).filter(Boolean),
+    );
+    pageItems = pageItems.map((p) => ({
+      ...p,
+      presence: (p.user?.id && presenceMap[p.user.id]) || null,
+    }));
+
     return {
       items: pageItems,
       total,
@@ -1713,6 +1723,7 @@ export class ProfilesService {
       match,
       appliedToMyCompany,
       applicationForJob,
+      presence: await this.presence.getOne(profile.user.id),
     };
   }
 

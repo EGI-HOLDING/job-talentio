@@ -1066,6 +1066,47 @@ const DICT = {
     ru: 'Мин. уровень',
     en: 'Min level',
   },
+  news: { uz: 'Yangiliklar', ru: 'Новости', en: 'News' },
+  latestNews: {
+    uz: 'So‘nggi yangiliklar',
+    ru: 'Последние новости',
+    en: 'Latest news',
+  },
+  latestNewsSubtitle: {
+    uz: 'Karyera, tahlillar, tadbirlar va ta’lim - O‘zbekiston mehnat bozori haqida',
+    ru: 'Карьера, аналитика, события и образование на рынке труда Узбекистана',
+    en: 'Career, insights, events and education across the Uzbek job market',
+  },
+  newsAll: { uz: 'Barchasi', ru: 'Все', en: 'All' },
+  newsCatCareer: { uz: 'Karyera', ru: 'Карьера', en: 'Career' },
+  newsCatInsight: { uz: 'Tahlil', ru: 'Аналитика', en: 'Insight' },
+  newsCatEvent: { uz: 'Tadbir', ru: 'Событие', en: 'Event' },
+  newsCatEducation: { uz: 'Ta’lim', ru: 'Образование', en: 'Education' },
+  readMore: { uz: 'Batafsil', ru: 'Читать далее', en: 'Read more' },
+  newsSource: { uz: 'Manba', ru: 'Источник', en: 'Source' },
+  newsFurtherReading: {
+    uz: 'Batafsil o‘qish uchun manba',
+    ru: 'Первоисточник для дальнейшего чтения',
+    en: 'Further reading at the original source',
+  },
+  backToNews: {
+    uz: 'Yangiliklarga qaytish',
+    ru: 'К новостям',
+    en: 'Back to news',
+  },
+  newsEmpty: {
+    uz: 'Hozircha yangiliklar yo‘q',
+    ru: 'Пока нет новостей',
+    en: 'No articles yet',
+  },
+  online: { uz: 'Onlayn', ru: 'В сети', en: 'Online' },
+  offline: { uz: 'Oflayn', ru: 'Не в сети', en: 'Offline' },
+  lastSeen: {
+    uz: 'Oxirgi faollik',
+    ru: 'Был(а) в сети',
+    en: 'Last seen',
+  },
+  justNow: { uz: 'hozirgina', ru: 'только что', en: 'just now' },
 } as const;
 
 export type DictKey = keyof typeof DICT;

@@ -12,6 +12,8 @@ import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { MatchRing } from '@/components/ui/MatchRing';
+import { PresenceDot } from '@/components/presence/PresenceDot';
+import { usePresence, seedPresence } from '@/lib/presence';
 import {
   csvHasLanguageCode,
   LanguageLevelCode,
@@ -220,6 +222,9 @@ export function FindTalentPanel() {
         params.set('limit', String(candFilters.limit));
         const data = await api<any>(`/profiles/candidates?${params.toString()}`);
         if (cancelled) return;
+        for (const item of data?.items || []) {
+          if (item.user?.id) seedPresence(item.user.id, item.presence);
+        }
         setCandidates(data);
         if (data?.page != null && data.page !== candFilters.page) {
           setCandFilters((prev) => ({ ...prev, page: data.page as number }));
@@ -284,6 +289,10 @@ export function FindTalentPanel() {
 
   const candTotalPages =
     candidates?.totalPages || Math.max(1, Math.ceil((candidates?.total || 0) / candFilters.limit));
+
+  const presenceMap = usePresence(
+    ((candidates?.items || []) as Array<{ user?: { id?: string } }>).map((p) => p.user?.id),
+  );
 
   return (
     <div>
@@ -609,7 +618,10 @@ export function FindTalentPanel() {
                 alt=""
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ margin: 0 }}>{p.user?.fullName}</h3>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  {p.user?.fullName}
+                  <PresenceDot status={presenceMap[p.user?.id] ?? p.presence} />
+                </h3>
                 <div className="job-meta">
                   <span>{p.headline || '-'}</span>
                   {p.city?.name && <span>{p.city.name}</span>}

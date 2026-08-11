@@ -10,6 +10,7 @@ import { COMPANY_INDUSTRY_OVERRIDES } from '../src/common/industry-catalog';
 import { demoCompanyLogoKey, isDemoCompanyLogoSlug } from '../src/common/company-logo-map';
 import { backfillCompanyLogos } from '../src/common/company-logo-backfill';
 import { createDemoLogoUploaderFromEnv } from '../src/common/demo-logo-storage';
+import { backfillNews } from '../src/common/news-backfill';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -1226,6 +1227,8 @@ async function main() {
     });
   }
 
+  const news = await backfillNews(prisma);
+
   await prisma.featureFlag.upsert({
     where: { key: 'hot_jobs' },
     update: { enabled: true },
@@ -1241,6 +1244,7 @@ async function main() {
   - ${cities.length} cities, ${categories.length} categories, ${skills.length} skills
   - ${companyRecords.length} companies, ${employeeUsers.length} employees, ${jobRecords.length} jobs
   - ~${appCount} applications
+  - ${news.upserted} news articles (curated editorial content)
   Quick login:
     Admin     ${DEMO.admin.email} / ${DEMO.admin.password}
     Recruiter ${DEMO.recruiter.email} / Password123!

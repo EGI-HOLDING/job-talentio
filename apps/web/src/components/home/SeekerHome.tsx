@@ -13,6 +13,8 @@ import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
 import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
+import { NewsCard } from '@/components/news/NewsCard';
+import type { NewsListItem } from '@/lib/newsSeo';
 
 type PlatformStats = {
   openRoles: number;
@@ -72,9 +74,13 @@ export function SeekerHome() {
   const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+  const [latestNews, setLatestNews] = useState<NewsListItem[]>([]);
 
   useEffect(() => {
     api<Category[]>('/meta/categories', { auth: false }).then(setCategories).catch(() => undefined);
+    api<{ items: NewsListItem[] }>('/news/latest?limit=4', { auth: false })
+      .then((r) => setLatestNews(r.items))
+      .catch(() => undefined);
     api<PlatformStats>('/meta/platform-stats', { auth: false })
       .then(setPlatformStats)
       .catch(() => undefined);
@@ -236,6 +242,19 @@ export function SeekerHome() {
           {!hotJobs.length && <p className="muted">{t('hotJobsEmpty')}</p>}
         </div>
       </section>
+
+      {latestNews.length > 0 && (
+        <ExploreSection
+          title={t('latestNews')}
+          subtitle={t('latestNewsSubtitle')}
+          viewAllHref="/news"
+          viewAllLabel={t('viewAll')}
+        >
+          {latestNews.map((item) => (
+            <NewsCard key={item.slug} item={item} />
+          ))}
+        </ExploreSection>
+      )}
 
       <ExploreSection
         title={t('exploreByCategory')}

@@ -256,6 +256,17 @@ export const hotJobSchema = z.object({
   days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
 });
 
+/** Public curated news list (career/insight/event/education). */
+export const newsBrowseSchema = z.object({
+  category: z.enum(['CAREER', 'INSIGHT', 'EVENT', 'EDUCATION']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(24).default(12),
+});
+
+export const newsLatestSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(8).default(4),
+});
+
 export const profileUpdateSchema = z.object({
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),

@@ -9,6 +9,8 @@ import { MatchRing } from '@/components/ui/MatchRing';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { useI18n } from '@/lib/i18n';
 import { formatThousands } from '@/lib/numberFormat';
+import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
+import { PresenceDot } from '@/components/presence/PresenceDot';
 
 type CandidateDetail = {
   id: string;
@@ -61,6 +63,7 @@ type CandidateDetail = {
       missingRequiredSkills?: string[];
     };
   } | null;
+  presence?: PresenceStatus | null;
 };
 
 function fmtDate(d?: string | null) {
@@ -121,12 +124,15 @@ function CandidateInner() {
       ),
     ])
       .then(([profile, mine]) => {
+        if (profile.user?.id) seedPresence(profile.user.id, profile.presence);
         setData(profile);
         const plan = mine[0]?.company?.subscription?.plan || 'FREE';
         setCanColdChat(plan === 'PREMIUM' || plan === 'VIP' || s.user.role === 'SUPER_ADMIN');
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'));
   }, [id, matchJobId, router]);
+
+  const livePresence = usePresence([data?.user?.id]);
 
   async function downloadResume(resumeId: string) {
     const res = await api<{ url: string }>(`/profiles/resumes/${resumeId}/download`);
@@ -185,7 +191,10 @@ function CandidateInner() {
             style={{ width: 72, height: 72 }}
           />
           <div style={{ flex: 1, minWidth: 220 }}>
-            <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{data.user.fullName}</h1>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {data.user.fullName}
+              <PresenceDot status={livePresence[data.user.id] ?? data.presence} showLabel />
+            </h1>
             <p className="muted" style={{ margin: '0.25rem 0 0' }}>
               {data.headline || '-'}
               {data.city ? ` | ${data.city.name}` : ''}
