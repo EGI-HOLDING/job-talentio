@@ -26,6 +26,8 @@ export type ParsedLanguage = {
 export type ParsedCvMeta = {
   provider: string;
   ocrUsed?: boolean;
+  /** True when OpenAI structured the CV (false = local fallback / local-only). */
+  llmUsed?: boolean;
 };
 
 export type ParsedCvData = {
@@ -133,12 +135,12 @@ function isCurrentEnd(raw: string): boolean {
   return new RegExp(`^(?:${CURRENT_END})$`, 'iu').test(raw.trim());
 }
 
-function extractEmail(text: string): string | undefined {
+export function extractEmail(text: string): string | undefined {
   const m = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   return m?.[0]?.toLowerCase();
 }
 
-function extractPhone(text: string): string | undefined {
+export function extractPhone(text: string): string | undefined {
   const m = text.match(/(?:\+?998[\s-]?)?(?:\(?\d{2}\)?[\s-]?)?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\+\d{10,15}/);
   if (!m) return undefined;
   try {
@@ -161,6 +163,38 @@ function extractSkills(text: string, knownSkills: Array<{ name: string; slug: st
     }
   }
   return Array.from(new Set(found)).slice(0, 40);
+}
+
+/**
+ * Map free-text skill labels from an LLM onto catalog names when possible;
+ * keep unmatched labels (trimmed) so review/import can still create skills.
+ */
+export function normalizeSkillNames(
+  rawNames: string[],
+  knownSkills: Array<{ name: string; slug: string }> = [],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawNames) {
+    const label = String(raw || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80);
+    if (!label) continue;
+    const lower = label.toLowerCase();
+    const catalog = knownSkills.find(
+      (s) =>
+        s.name.toLowerCase() === lower ||
+        s.slug.toLowerCase() === lower.replace(/[^a-z0-9]+/g, '-'),
+    );
+    const name = catalog?.name || label;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= 40) break;
+  }
+  return out;
 }
 
 function extractLanguages(text: string): ParsedLanguage[] {

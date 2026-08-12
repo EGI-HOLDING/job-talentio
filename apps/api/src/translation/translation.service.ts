@@ -85,7 +85,8 @@ export class TranslationService {
     const title = job.title.slice(0, MAX_CHARS_PER_FIELD);
     const description = job.description.slice(0, MAX_CHARS_PER_FIELD);
 
-    const allowed = await this.consumeBudget(title.length + description.length);
+    const chars = title.length + description.length;
+    const allowed = await this.consumeBudget(chars);
     if (!allowed) return { status: 'budget-exceeded' };
 
     try {
@@ -94,7 +95,10 @@ export class TranslationService {
         targetLocale: target,
         sourceLocale: job.locale,
       });
-      if (!translatedTitle || !translatedDescription) return { status: 'unsupported' };
+      if (!translatedTitle || !translatedDescription) {
+        await this.refundBudget(chars);
+        return { status: 'unsupported' };
+      }
 
       const value = {
         title: translatedTitle,
@@ -111,6 +115,7 @@ export class TranslationService {
       await this.translateJobQuestions(jobId, job.locale, target);
       return { status: 'ready', locale: target };
     } catch (err) {
+      await this.refundBudget(chars);
       this.logger.warn(`Machine translation failed for job ${jobId}: ${(err as Error).message}`);
       return { status: 'failed', reason: 'Translation service unavailable' };
     }
@@ -132,7 +137,8 @@ export class TranslationService {
       if (existing && (!existing.isMachine || existing.sourceHash === hash)) continue;
 
       const text = question.question.slice(0, MAX_LABEL_CHARS * 4);
-      if (!(await this.consumeBudget(text.length))) return;
+      const qChars = text.length;
+      if (!(await this.consumeBudget(qChars))) return;
 
       try {
         const [translated] = await this.provider.translate({
@@ -140,7 +146,10 @@ export class TranslationService {
           targetLocale: target,
           sourceLocale: source,
         });
-        if (!translated) continue;
+        if (!translated) {
+          await this.refundBudget(qChars);
+          continue;
+        }
         const value = { question: translated, isMachine: true, sourceHash: hash };
         await this.prisma.jobQuestionTranslation.upsert({
           where: { questionId_locale: { questionId: question.id, locale: target } },
@@ -148,6 +157,7 @@ export class TranslationService {
           create: { questionId: question.id, locale: target, ...value },
         });
       } catch (err) {
+        await this.refundBudget(qChars);
         this.logger.warn(
           `Question translation failed for job ${jobId}: ${(err as Error).message}`,
         );
@@ -176,7 +186,8 @@ export class TranslationService {
     }
 
     const description = company.description.slice(0, MAX_CHARS_PER_FIELD);
-    const allowed = await this.consumeBudget(description.length);
+    const chars = description.length;
+    const allowed = await this.consumeBudget(chars);
     if (!allowed) return { status: 'budget-exceeded' };
 
     try {
@@ -185,7 +196,10 @@ export class TranslationService {
         targetLocale: target,
         sourceLocale: company.locale,
       });
-      if (!translated) return { status: 'unsupported' };
+      if (!translated) {
+        await this.refundBudget(chars);
+        return { status: 'unsupported' };
+      }
 
       const value = { description: translated, isMachine: true, sourceHash: hash };
       await this.prisma.companyTranslation.upsert({
@@ -195,6 +209,7 @@ export class TranslationService {
       });
       return { status: 'ready', locale: target };
     } catch (err) {
+      await this.refundBudget(chars);
       this.logger.warn(
         `Machine translation failed for company ${companyId}: ${(err as Error).message}`,
       );
@@ -231,11 +246,13 @@ export class TranslationService {
     }
 
     const text = row.name.slice(0, MAX_LABEL_CHARS);
-    const allowed = await this.consumeBudget(text.length * targets.length);
+    const reserved = text.length * targets.length;
+    const allowed = await this.consumeBudget(reserved);
     if (!allowed) return { status: 'budget-exceeded' };
 
     const data: Record<string, unknown> = {};
     const filled: Locale[] = [];
+    let spent = 0;
     for (const target of targets) {
       try {
         const [translated] = await this.provider.translate({
@@ -248,7 +265,9 @@ export class TranslationService {
         data[target === 'uz' ? 'nameUz' : 'nameRu'] = translated;
         data[target === 'uz' ? 'nameUzIsMachine' : 'nameRuIsMachine'] = true;
         filled.push(target);
+        spent += text.length;
       } catch (err) {
+        await this.refundBudget(reserved - spent);
         this.logger.warn(
           `Machine translation failed for ${kind} ${id}: ${(err as Error).message}`,
         );
@@ -256,6 +275,7 @@ export class TranslationService {
       }
     }
 
+    if (spent < reserved) await this.refundBudget(reserved - spent);
     if (!filled.length) return { status: 'unsupported' };
 
     const covered = (locale: Locale) =>
@@ -273,9 +293,15 @@ export class TranslationService {
     await delegate.update({ where: { id }, data: { i18nStatus: 'COMPLETE' } });
   }
 
+  private budgetKey(): string {
+    const month = new Date().toISOString().slice(0, 7);
+    return `mt:chars:${month}`;
+  }
+
   /**
-   * Monthly character counter in Redis. Without Redis the budget cannot be
-   * enforced, so translation stays off rather than risking an open-ended bill.
+   * Reserve characters against the monthly Redis counter. Callers must
+   * `refundBudget` when the provider fails or returns unsupported output so
+   * failed attempts do not burn the monthly cap.
    */
   private async consumeBudget(chars: number): Promise<boolean> {
     if (this.monthlyCharBudget <= 0) return true;
@@ -284,18 +310,28 @@ export class TranslationService {
       return false;
     }
 
-    const month = new Date().toISOString().slice(0, 7);
-    const key = `mt:chars:${month}`;
+    const key = this.budgetKey();
     try {
       const used = await this.redis.incrby(key, chars);
       if (used === chars) await this.redis.expire(key, 60 * 60 * 24 * 40);
       if (used > this.monthlyCharBudget) {
-        this.logger.warn(`Machine translation budget exhausted (${used} chars this month)`);
+        await this.redis.decrby(key, chars);
+        this.logger.warn(`Machine translation budget exhausted (${used - chars} chars this month)`);
         return false;
       }
       return true;
     } catch {
       return false;
+    }
+  }
+
+  private async refundBudget(chars: number): Promise<void> {
+    if (chars <= 0 || this.monthlyCharBudget <= 0) return;
+    if (!this.redis || this.redis.status !== 'ready') return;
+    try {
+      await this.redis.decrby(this.budgetKey(), chars);
+    } catch {
+      // Best-effort; over-count is safer than under-count on refund failure.
     }
   }
 }
