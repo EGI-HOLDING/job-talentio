@@ -18,7 +18,7 @@ export function useTableQuery(defaults: TableQuery) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const query = useMemo(() => {
+  const fromUrl = useMemo(() => {
     const merged: TableQuery = { ...defaults };
     searchParams.forEach((value, key) => {
       merged[key] = value;
@@ -28,8 +28,23 @@ export function useTableQuery(defaults: TableQuery) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  /**
+   * `router.replace` lands on a later render, so two changes made in quick
+   * succession would both read the same URL and the first would be discarded.
+   * The last written state is held here until the URL catches up.
+   */
+  const pending = useRef<TableQuery | null>(null);
+  const seenSearch = useRef(searchParams.toString());
+  const currentSearch = searchParams.toString();
+  if (seenSearch.current !== currentSearch) {
+    seenSearch.current = currentSearch;
+    pending.current = null;
+  }
+  const query = pending.current ?? fromUrl;
+
   const write = useCallback(
     (next: TableQuery) => {
+      pending.current = next;
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(next)) {
         // A value equal to the default is implied, so it stays out of the URL.
@@ -66,6 +81,7 @@ export function useTableQuery(defaults: TableQuery) {
   );
 
   const reset = useCallback(() => {
+    pending.current = null;
     router.replace(pathname, { scroll: false });
   }, [pathname, router]);
 

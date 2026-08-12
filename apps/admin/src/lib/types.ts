@@ -149,6 +149,23 @@ export type CatalogType =
   | 'province'
   | 'city';
 
+export const CATALOG_TYPES: CatalogType[] = [
+  'skill',
+  'jobTitle',
+  'language',
+  'benefit',
+  'jobCategory',
+  'industry',
+  'industryGroup',
+  'country',
+  'province',
+  'city',
+];
+
+export function isCatalogType(value: unknown): value is CatalogType {
+  return typeof value === 'string' && (CATALOG_TYPES as string[]).includes(value);
+}
+
 export type CatalogKindSpec = {
   type: CatalogType;
   label: string;
@@ -191,6 +208,16 @@ export type ArchiveResult = {
   outcome: 'deleted' | 'archived';
   usage: CatalogUsage;
 };
+
+/**
+ * A dropdown and a multi-select can drive the same filter key. Once the filter
+ * holds several values there is no single option to show, so the dropdown falls
+ * back to its neutral entry rather than rendering blank.
+ */
+export function soleFilterValue(raw?: string): string {
+  if (!raw || raw.includes(',')) return '';
+  return raw;
+}
 
 /** Enum values are SCREAMING_CASE in the database but read better as words. */
 export function humanize(value?: string | null): string {

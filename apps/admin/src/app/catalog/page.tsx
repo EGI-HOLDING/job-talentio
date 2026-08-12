@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { api, apiPatch, apiPost } from '@/lib/api';
 import { downloadCsv, timestampedName } from '@/lib/csv';
@@ -11,7 +12,7 @@ import {
   CatalogRow,
   CatalogType,
   CatalogUsage,
-  formatDate,
+  isCatalogType,
 } from '@/lib/types';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { DataTable, type Column } from '@/components/data/DataTable';
@@ -46,7 +47,13 @@ const EMPTY_FORM: FormState = {
 export default function CatalogPage() {
   const { notify } = useToast();
   const [kinds, setKinds] = useState<CatalogKindSpec[]>([]);
-  const [type, setType] = useState<CatalogType>('skill');
+
+  // The catalog lives in the URL like every other filter, so a view can be
+  // shared and switching resets paging. It is read directly because the table
+  // hook needs it to build the request path.
+  const searchParams = useSearchParams();
+  const typeParam = searchParams.get('type');
+  const type: CatalogType = isCatalogType(typeParam) ? typeParam : 'skill';
 
   const table = useAdminTable<CatalogRow>({
     path: `/admin/catalog/type/${type}`,
@@ -242,26 +249,20 @@ export default function CatalogPage() {
           onClearAll={table.reset}
           quick={
             <>
-              <label>
-                <span className="sr-only">Catalog</span>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as CatalogType)}
-                  aria-label="Catalog"
-                >
-                  {kinds.map((k) => (
-                    <option key={k.type} value={k.type}>
-                      {k.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectField
+                label=""
+                value={type}
+                onChange={(next) => setFilter('type', next)}
+                allLabel={null}
+                options={kinds.map((k) => ({ value: k.type, label: k.label }))}
+              />
               <SelectField
                 label=""
                 value={query.archived ?? 'false'}
-                onChange={(next) => setFilter('archived', next || 'false')}
-                allLabel="Active only"
+                onChange={(next) => setFilter('archived', next)}
+                allLabel={null}
                 options={[
+                  { value: 'false', label: 'Active only' },
                   { value: 'true', label: 'Archived only' },
                   { value: 'any', label: 'Any state' },
                 ]}

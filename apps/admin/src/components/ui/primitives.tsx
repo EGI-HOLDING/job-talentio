@@ -134,6 +134,14 @@ export function MultiSelect({
   );
 }
 
+/**
+ * `allLabel` renders the neutral empty option. Pass null when every state has
+ * its own option, otherwise the empty entry duplicates one of them.
+ *
+ * `value` must match an option. A controlled select whose value matches nothing
+ * renders blank and silently rejects the matching choice, which reads as a
+ * control that needs two clicks.
+ */
 export function SelectField({
   label,
   value,
@@ -145,13 +153,13 @@ export function SelectField({
   value: string;
   onChange: (next: string) => void;
   options: Array<{ value: string; label: string }>;
-  allLabel?: string;
+  allLabel?: string | null;
 }) {
   return (
     <label>
       {label}
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{allLabel}</option>
+        {allLabel === null ? null : <option value="">{allLabel}</option>}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
