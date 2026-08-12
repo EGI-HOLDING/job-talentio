@@ -17,12 +17,20 @@ import {
 import { PageHeader } from '@/components/shell/PageHeader';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { FilterBar, Pager, type ActiveFilter } from '@/components/data/TableChrome';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { Alert, Badge, SelectField } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/Toaster';
 
 const DEFAULTS = { page: '1', limit: '25', sort: 'name', dir: 'asc', archived: 'false' };
 const FILTER_KEYS = ['q', 'archived', 'parentSlug', 'sort', 'dir', 'page', 'limit'];
+
+function catalogKeyLabel(keyField?: 'slug' | 'code'): string {
+  return keyField === 'code' ? 'Code (ISO)' : 'Slug';
+}
+
+function rowIdentityKey(row: CatalogRow): string {
+  return row.slug ?? row.code ?? '';
+}
 
 type FormState = {
   name: string;
@@ -64,6 +72,8 @@ export default function CatalogPage() {
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CatalogRow | null>(null);
+  const [editUsage, setEditUsage] = useState<CatalogUsage | null>(null);
+  const [pendingKeyConfirm, setPendingKeyConfirm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [archiving, setArchiving] = useState<{ row: CatalogRow; usage: CatalogUsage } | null>(null);
 
@@ -87,11 +97,13 @@ export default function CatalogPage() {
     [type, notify],
   );
 
-  function startEdit(row: CatalogRow) {
+  async function startEdit(row: CatalogRow) {
     setEditing(row);
+    setEditUsage(null);
+    setPendingKeyConfirm(false);
     setForm({
       name: row.name,
-      key: row.slug ?? row.code ?? '',
+      key: rowIdentityKey(row),
       nameUz: row.nameUz ?? '',
       nameRu: row.nameRu ?? '',
       parentSlug:
@@ -99,6 +111,26 @@ export default function CatalogPage() {
       sortOrder: String(row.sortOrder ?? 0),
       icon: row.icon ?? '',
     });
+    try {
+      const usage = await api<CatalogUsage>(`/admin/catalog/type/${type}/${row.id}/usage`);
+      setEditUsage(usage);
+    } catch {
+      // Confirm dialog treats missing usage as zero; save still works.
+      setEditUsage({ total: 0, byRelation: [] });
+    }
+  }
+
+  function buildEditPayload(row: CatalogRow) {
+    const original = rowIdentityKey(row);
+    const nextKey = form.key.trim();
+    return {
+      name: form.name.trim(),
+      ...(nextKey && nextKey !== original ? { key: nextKey } : {}),
+      ...(spec?.hasLocaleNames ? { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim() } : {}),
+      ...(spec?.parent && form.parentSlug.trim() ? { parentSlug: form.parentSlug.trim() } : {}),
+      ...(spec?.hasSortOrder ? { sortOrder: Number(form.sortOrder) || 0 } : {}),
+      ...(spec?.hasIcon ? { icon: form.icon.trim() || null } : {}),
+    };
   }
 
   const columns: Array<Column<CatalogRow>> = [
@@ -196,16 +228,27 @@ export default function CatalogPage() {
 
   async function submitEdit() {
     const row = editing;
-    setEditing(null);
     if (!row) return;
-    const payload = {
-      name: form.name.trim(),
-      ...(spec?.hasLocaleNames ? { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim() } : {}),
-      ...(spec?.parent && form.parentSlug.trim() ? { parentSlug: form.parentSlug.trim() } : {}),
-      ...(spec?.hasSortOrder ? { sortOrder: Number(form.sortOrder) || 0 } : {}),
-      ...(spec?.hasIcon ? { icon: form.icon.trim() || null } : {}),
-    };
-    await table.runAction(apiPatch(`/admin/catalog/type/${type}/${row.id}`, payload), 'Entry saved');
+    const original = rowIdentityKey(row);
+    const nextKey = form.key.trim();
+    const keyChanging = Boolean(nextKey && nextKey !== original);
+    if (keyChanging && (editUsage?.total ?? 0) > 0) {
+      setPendingKeyConfirm(true);
+      return;
+    }
+    await commitEdit();
+  }
+
+  async function commitEdit() {
+    const row = editing;
+    setPendingKeyConfirm(false);
+    setEditing(null);
+    setEditUsage(null);
+    if (!row) return;
+    await table.runAction(
+      apiPatch(`/admin/catalog/type/${type}/${row.id}`, buildEditPayload(row)),
+      'Entry saved',
+    );
   }
 
   return (
@@ -303,7 +346,11 @@ export default function CatalogPage() {
           onSort={table.toggleSort}
           actions={(row) => (
             <>
-              <button type="button" className="secondary sm" onClick={() => startEdit(row)}>
+              <button
+                type="button"
+                className="secondary sm"
+                onClick={() => void startEdit(row)}
+              >
                 Edit
               </button>
               {row.archivedAt ? (
@@ -370,11 +417,15 @@ export default function CatalogPage() {
             />
           </label>
           <label>
-            {spec?.keyField === 'code' ? 'Code' : 'Slug'} (optional)
+            {catalogKeyLabel(spec?.keyField)} (optional)
             <input
               value={form.key}
               onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
-              placeholder="Derived from the name when empty"
+              placeholder={
+                spec?.keyField === 'code'
+                  ? '2-3 letter ISO code (id, en, uz)'
+                  : 'Derived from the name when empty'
+              }
             />
           </label>
           {spec?.parent ? (
@@ -409,13 +460,23 @@ export default function CatalogPage() {
       </Modal>
 
       <Modal
-        open={editing !== null}
+        open={editing !== null && !pendingKeyConfirm}
         title={`Edit ${editing?.name ?? ''}`}
         description="Saving marks this entry as owned by an admin, so deploy backfills stop rewriting it."
-        onClose={() => setEditing(null)}
+        onClose={() => {
+          setEditing(null);
+          setEditUsage(null);
+        }}
         footer={
           <>
-            <button type="button" className="secondary" onClick={() => setEditing(null)}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setEditing(null);
+                setEditUsage(null);
+              }}
+            >
               Cancel
             </button>
             <button type="button" disabled={!form.name.trim() || table.busy} onClick={submitEdit}>
@@ -431,6 +492,21 @@ export default function CatalogPage() {
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
+          </label>
+          <label>
+            {catalogKeyLabel(spec?.keyField)}
+            <input
+              value={form.key}
+              onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
+              placeholder={
+                spec?.keyField === 'code' ? '2-3 letter ISO code (id, en, uz)' : undefined
+              }
+            />
+            {spec?.keyField === 'code' ? (
+              <span className="muted" style={{ display: 'block', fontSize: '0.8rem', marginTop: 4 }}>
+                Changing the code keeps the old value as an alias so existing input still matches.
+              </span>
+            ) : null}
           </label>
           {spec?.hasLocaleNames ? (
             <>
@@ -480,6 +556,33 @@ export default function CatalogPage() {
           ) : null}
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={pendingKeyConfirm && editing !== null}
+        title={`Change ${catalogKeyLabel(spec?.keyField).toLowerCase()}?`}
+        description={
+          <>
+            <p style={{ marginTop: 0 }}>
+              {editing
+                ? `"${rowIdentityKey(editing)}" → "${form.key.trim()}". Profiles and jobs keep the same record; matching on the old key will use an alias.`
+                : null}
+            </p>
+            {editUsage && editUsage.total > 0 ? (
+              <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
+                {editUsage.byRelation.map((relation) => (
+                  <li key={relation.label}>
+                    <span className="num">{relation.count}</span> {relation.label}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        }
+        confirmLabel="Change key"
+        busy={table.busy}
+        onConfirm={() => void commitEdit()}
+        onCancel={() => setPendingKeyConfirm(false)}
+      />
 
       <Modal
         open={archiving !== null}

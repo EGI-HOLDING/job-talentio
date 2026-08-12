@@ -685,6 +685,8 @@ export const adminCatalogCreateSchema = z.object({
 
 export const adminCatalogUpdateSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
+  /** Slug or ISO code; omit to leave the identity key unchanged. */
+  key: z.string().trim().min(1).max(120).optional(),
   nameUz: z.string().trim().max(120).nullable().optional(),
   nameRu: z.string().trim().max(120).nullable().optional(),
   parentSlug: z.string().trim().max(120).optional(),

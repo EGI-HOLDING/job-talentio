@@ -2,9 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCatalogLabel, catalogSlugify } from '../common/lookup-normalize';
 import { normalizeSkillKey, resolveSkill, skillSlugify } from '../common/skill-resolve';
-import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
-import { resolveLanguage } from '../common/language-resolve';
-import { resolveBenefit } from '../common/benefit-resolve';
+import {
+  jobTitleSlugify,
+  normalizeJobTitleKey,
+  resolveJobTitle,
+} from '../common/title-resolve';
+import { languageKey, resolveLanguage } from '../common/language-resolve';
+import { benefitKey, resolveBenefit } from '../common/benefit-resolve';
+import { catalogAlias, isCatalogKind } from '../common/i18n/catalog-kind';
 import { dateRange, envelope, skipFor } from './admin-query';
 import {
   CATALOG_SPECS,
@@ -13,7 +18,7 @@ import {
   catalogSelect,
   countingDelegate,
 } from './catalog-registry';
-import type { CatalogSpec, CatalogType } from './catalog-registry';
+import type { CatalogRecord, CatalogSpec, CatalogType } from './catalog-registry';
 
 export type CatalogListQuery = {
   q?: string;
@@ -220,13 +225,15 @@ export class AdminCatalogService {
   /**
    * Renaming re-derives the key so a slug never drifts from the name it
    * describes, and marks the row as owned by an admin so deploy backfills stop
-   * rewriting it.
+   * rewriting it. An explicit `key` overrides that identity after the rename
+   * so a mistyped ISO code or slug can be corrected without inventing a new row.
    */
   async update(
     type: CatalogType,
     id: string,
     patch: {
       name?: string;
+      key?: string;
       nameUz?: string | null;
       nameRu?: string | null;
       parentSlug?: string;
@@ -240,6 +247,8 @@ export class AdminCatalogService {
     if (!row) throw new NotFoundException('Catalog entry not found');
 
     const data: Record<string, unknown> = { curatedAt: new Date() };
+    let previousKey: string | null = null;
+    let nextKey: string | null = null;
 
     if (patch.name !== undefined) {
       const name = patch.name.trim();
@@ -251,6 +260,17 @@ export class AdminCatalogService {
       }
       data.name = name;
       Object.assign(data, await this.rekey(spec, id, name));
+    }
+
+    if (patch.key !== undefined) {
+      const currentKey = this.rowKey(row, spec);
+      const normalized = this.normalizeIdentityKey(spec, patch.key);
+      if (normalized !== currentKey) {
+        await this.assertKeyFree(spec, id, { [spec.keyField]: normalized });
+        data[spec.keyField] = normalized;
+        previousKey = currentKey;
+        nextKey = normalized;
+      }
     }
 
     if (spec.hasLocaleNames) {
@@ -279,7 +299,69 @@ export class AdminCatalogService {
     if (spec.hasSortOrder && patch.sortOrder !== undefined) data.sortOrder = patch.sortOrder;
     if (spec.hasIcon && patch.icon !== undefined) data.icon = patch.icon || null;
 
-    return delegate.update({ where: { id }, data, select: catalogSelect(spec) });
+    const updated = await delegate.update({ where: { id }, data, select: catalogSelect(spec) });
+    if (previousKey && nextKey && previousKey !== nextKey) {
+      await this.preserveOldKeyAsAlias(type, id, previousKey);
+    }
+    return updated;
+  }
+
+  private rowKey(row: CatalogRecord, spec: CatalogSpec): string {
+    return String((spec.keyField === 'code' ? row.code : row.slug) ?? '');
+  }
+
+  /**
+   * Language codes stay ISO-shaped; everything else goes through the same
+   * slug helpers create/resolvers already use.
+   */
+  private normalizeIdentityKey(spec: CatalogSpec, raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed) throw new BadRequestException(`${spec.keyField} cannot be empty`);
+
+    if (spec.type === 'language') {
+      const code = trimmed.toLowerCase();
+      if (!/^[a-z]{2,3}$/.test(code)) {
+        throw new BadRequestException('Language code must be a 2-3 letter ISO code (e.g. id, en, uz)');
+      }
+      return code;
+    }
+    if (spec.type === 'skill') {
+      const slug = skillSlugify(trimmed);
+      if (!slug) throw new BadRequestException('Could not derive a slug from that key');
+      return slug;
+    }
+    if (spec.type === 'jobTitle') {
+      const slug = jobTitleSlugify(trimmed);
+      if (!slug) throw new BadRequestException('Could not derive a slug from that key');
+      return slug;
+    }
+
+    const slug = catalogSlugify(trimmed).toLowerCase();
+    if (!slug) throw new BadRequestException('Could not derive a slug from that key');
+    return slug;
+  }
+
+  /** Keeps the previous identity findable so old user input still resolves. */
+  private async preserveOldKeyAsAlias(type: CatalogType, id: string, oldKey: string) {
+    if (!isCatalogKind(type) || !oldKey) return;
+    const aliasKey = this.aliasKeyFor(type, oldKey);
+    if (!aliasKey) return;
+    const { delegate, foreignKey } = catalogAlias(this.prisma, type);
+    await delegate
+      .create({
+        data: { [foreignKey]: id, alias: oldKey.slice(0, 80), aliasKey },
+      })
+      .catch(() => undefined);
+  }
+
+  private aliasKeyFor(
+    type: 'skill' | 'jobTitle' | 'language' | 'benefit',
+    value: string,
+  ): string {
+    if (type === 'skill') return normalizeSkillKey(value);
+    if (type === 'jobTitle') return normalizeJobTitleKey(value);
+    if (type === 'benefit') return benefitKey(value);
+    return languageKey(value);
   }
 
   /** Recomputes slug and normalizedKey, refusing a rename that collides. */
