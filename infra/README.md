@@ -128,6 +128,12 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 
 **News translations:** `node dist/scripts/backfill-news.js` (idempotent) seeds the curated articles and their uz/ru versions.
 
+**Job source language:** `JobPost.locale` defaults to `uz`, so postings created before the field was filled in claim to be Uzbek whatever they are written in. That mislabel is user-visible ("This text is written in Uzbek" on an English posting) and also drives hreflang and machine translation. Repair it once per environment with an idempotent detector that only rewrites rows it can read confidently:
+
+```bash
+railway ssh --service api-stage-job-talentio -- node dist/scripts/backfill-job-locale.js
+```
+
 **Job content translations:** postings are written in one language (`JobPost.locale`) and recruiters can add optional versions in the other two from the job editor. Readers get the requested language when it exists, otherwise the original, and the response reports `contentLocale` so the UI can say which language the text is in. `hreflang` only advertises languages a posting actually has. After deploying the `content_translations` migration, reindex Meilisearch so translated titles become searchable:
 
 ```bash
