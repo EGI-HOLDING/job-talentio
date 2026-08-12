@@ -613,7 +613,11 @@ export const adminAuditListSchema = z.object({
 export const adminCatalogListSchema = z.object({
   ...adminListBase,
   kind: z.enum(['skill', 'jobTitle', 'language', 'benefit']).default('skill'),
-  status: z.enum(['PENDING', 'COMPLETE', 'IGNORED']).default('PENDING'),
+  /**
+   * Optional on purpose: without an "any" option an entry in a different state
+   * is invisible, which makes finding a merge target impossible.
+   */
+  status: z.enum(['PENDING', 'COMPLETE', 'IGNORED']).optional(),
   sort: z.enum(['createdAt', 'name']).default('createdAt'),
 });
 
@@ -655,3 +659,35 @@ export const adminBulkCatalogStatusSchema = z.object({
 });
 
 export const adminBulkIdsSchema = z.object({ ids: bulkIds });
+
+/** Browse and edit any admin-managed lookup table. */
+export const adminCatalogBrowseSchema = z.object({
+  q: z.string().max(200).optional(),
+  /** `any` is what makes an entry findable regardless of its lifecycle state. */
+  archived: z.enum(['true', 'false', 'any']).default('false'),
+  parentSlug: z.string().max(120).optional(),
+  sort: z.enum(['name', 'createdAt', 'sortOrder']).default('name'),
+  dir: z.enum(['asc', 'desc']).default('asc'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  createdFrom: dateParam,
+  createdTo: dateParam,
+});
+
+export const adminCatalogCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  /** Slug or ISO code; derived from the name when omitted. */
+  key: z.string().trim().max(120).optional(),
+  parentSlug: z.string().trim().max(120).optional(),
+  sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  icon: z.string().trim().max(120).optional(),
+});
+
+export const adminCatalogUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  nameUz: z.string().trim().max(120).nullable().optional(),
+  nameRu: z.string().trim().max(120).nullable().optional(),
+  parentSlug: z.string().trim().max(120).optional(),
+  sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  icon: z.string().trim().max(120).nullable().optional(),
+});

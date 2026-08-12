@@ -107,12 +107,15 @@ async function cleanJobTitleCatalog(
   log: (msg: string) => void,
 ): Promise<{ cleaned: number; merged: number }> {
   const titles = await db.jobTitle.findMany({
-    select: { id: true, name: true, slug: true, normalizedKey: true },
+    select: { id: true, name: true, slug: true, normalizedKey: true, curatedAt: true },
   });
   let cleaned = 0;
   let merged = 0;
 
   for (const row of titles) {
+    // An admin chose this wording on purpose; the seniority cleaner runs on
+    // every deploy and would otherwise rewrite it back.
+    if (row.curatedAt) continue;
     const sanitizedName = sanitizeStoredText(row.name);
     if (!titleHasSeniorityToken(row.name) && sanitizedName === row.name) continue;
     try {

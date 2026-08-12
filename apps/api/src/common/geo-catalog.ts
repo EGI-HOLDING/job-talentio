@@ -14,26 +14,38 @@ export type UpsertUzbekistanGeoResult = {
   citiesLinked: number;
 };
 
-/** Upsert UZ country, provinces, and catalog cities by slug. Relinks legacy cities by slug. */
+/**
+ * Upsert UZ country, provinces, and catalog cities by slug. Relinks legacy
+ * cities by slug.
+ *
+ * This runs on every container start, so it must not undo admin work: a row an
+ * admin edited (`curatedAt`) keeps its name, and an archived slug is neither
+ * revived nor recreated.
+ */
 export async function upsertUzbekistanGeo(db: Db): Promise<UpsertUzbekistanGeoResult> {
+  const existingCountry = await db.country.findUnique({
+    where: { slug: UZBEKISTAN_COUNTRY.slug },
+    select: { id: true, curatedAt: true },
+  });
+
+  const countryFacts = {
+    iso2: UZBEKISTAN_COUNTRY.iso2,
+    iso3: UZBEKISTAN_COUNTRY.iso3,
+    phoneCode: UZBEKISTAN_COUNTRY.phoneCode,
+    currencyCode: UZBEKISTAN_COUNTRY.currencyCode,
+    isActive: true,
+  };
+
   const country = await db.country.upsert({
     where: { slug: UZBEKISTAN_COUNTRY.slug },
     update: {
-      name: UZBEKISTAN_COUNTRY.name,
-      iso2: UZBEKISTAN_COUNTRY.iso2,
-      iso3: UZBEKISTAN_COUNTRY.iso3,
-      phoneCode: UZBEKISTAN_COUNTRY.phoneCode,
-      currencyCode: UZBEKISTAN_COUNTRY.currencyCode,
-      isActive: true,
+      ...countryFacts,
+      ...(existingCountry?.curatedAt ? {} : { name: UZBEKISTAN_COUNTRY.name }),
     },
     create: {
       name: UZBEKISTAN_COUNTRY.name,
       slug: UZBEKISTAN_COUNTRY.slug,
-      iso2: UZBEKISTAN_COUNTRY.iso2,
-      iso3: UZBEKISTAN_COUNTRY.iso3,
-      phoneCode: UZBEKISTAN_COUNTRY.phoneCode,
-      currencyCode: UZBEKISTAN_COUNTRY.currencyCode,
-      isActive: true,
+      ...countryFacts,
     },
   });
 
@@ -44,11 +56,14 @@ export async function upsertUzbekistanGeo(db: Db): Promise<UpsertUzbekistanGeoRe
   for (const prov of UZBEKISTAN_PROVINCES) {
     const existing = await db.province.findUnique({
       where: { countryId_slug: { countryId: country.id, slug: prov.slug } },
+      select: { id: true, curatedAt: true },
     });
     const row = existing
       ? await db.province.update({
           where: { id: existing.id },
-          data: { name: prov.name, type: prov.type as ProvinceType },
+          data: existing.curatedAt
+            ? {}
+            : { name: prov.name, type: prov.type as ProvinceType },
         })
       : await db.province.create({
           data: {
@@ -62,12 +77,19 @@ export async function upsertUzbekistanGeo(db: Db): Promise<UpsertUzbekistanGeoRe
     provincesUpserted += 1;
 
     for (const city of prov.cities) {
-      const found = await db.city.findUnique({ where: { slug: city.slug } });
+      const found = await db.city.findUnique({
+        where: { slug: city.slug },
+        select: { id: true, curatedAt: true, archivedAt: true },
+      });
       if (found) {
-        await db.city.update({
-          where: { id: found.id },
-          data: { name: city.name, provinceId: row.id },
-        });
+        // An archived city stays archived; reviving it here would undo a
+        // deliberate admin decision on every deploy.
+        if (!found.curatedAt) {
+          await db.city.update({
+            where: { id: found.id },
+            data: { name: city.name, provinceId: row.id },
+          });
+        }
       } else {
         await db.city.create({
           data: { name: city.name, slug: city.slug, provinceId: row.id },
@@ -78,8 +100,11 @@ export async function upsertUzbekistanGeo(db: Db): Promise<UpsertUzbekistanGeoRe
   }
 
   let citiesLinked = 0;
-  const allCities = await db.city.findMany({ select: { id: true, slug: true, provinceId: true } });
+  const allCities = await db.city.findMany({
+    select: { id: true, slug: true, provinceId: true, curatedAt: true },
+  });
   for (const c of allCities) {
+    if (c.curatedAt) continue;
     const targetSlug = LEGACY_CITY_PROVINCE[c.slug];
     if (!targetSlug) continue;
     const pid = provinceBySlug.get(targetSlug);

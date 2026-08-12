@@ -19,7 +19,10 @@ import {
   adminBulkJobStatusSchema,
   adminBulkPlanSchema,
   adminBulkResolveSchema,
+  adminCatalogBrowseSchema,
+  adminCatalogCreateSchema,
   adminCatalogListSchema,
+  adminCatalogUpdateSchema,
   adminCompanyListSchema,
   adminJobListSchema,
   adminReportListSchema,
@@ -28,6 +31,9 @@ import {
 import { AdminService } from './admin.service';
 import { AdminListsService } from './admin-lists.service';
 import { AdminBulkService } from './admin-bulk.service';
+import { AdminCatalogService } from './admin-catalog.service';
+import { isCatalogType } from './catalog-registry';
+import type { CatalogType } from './catalog-registry';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { isCatalogKind } from '../common/i18n/catalog-kind';
 import type { CatalogKind } from '../common/i18n/catalog-kind';
@@ -36,6 +42,11 @@ import { parseDto } from '../common/utils';
 
 function assertCatalogKind(value: string): CatalogKind {
   if (!isCatalogKind(value)) throw new BadRequestException('Unknown catalog');
+  return value;
+}
+
+function assertCatalogType(value: string): CatalogType {
+  if (!isCatalogType(value)) throw new BadRequestException('Unknown catalog type');
   return value;
 }
 
@@ -64,6 +75,7 @@ export class AdminController {
     private admin: AdminService,
     private lists: AdminListsService,
     private bulk: AdminBulkService,
+    private catalog: AdminCatalogService,
   ) {}
 
   @Get('metrics')
@@ -236,6 +248,11 @@ export class AdminController {
 
   // ─── Catalog translations ─────────────────────────────────
 
+  @Get('catalog/kinds')
+  catalogKinds() {
+    return this.catalog.kinds();
+  }
+
   @Get('catalog/i18n')
   catalogQueue(@Query() query: unknown) {
     return this.admin.listCatalogI18n(parseDto(adminCatalogListSchema, query));
@@ -274,6 +291,87 @@ export class AdminController {
   @Post('catalog/:kind/reclassify')
   reclassifyCatalog(@CurrentUser() user: AuthUser, @Param('kind') kind: string) {
     return this.admin.reclassifyCatalog(user.id, assertCatalogKind(kind));
+  }
+
+  // ─── Catalog CRUD ─────────────────────────────────────────
+  //
+  // Covers all ten lookup tables through the registry. Declared after the
+  // literal `catalog/...` routes above so those are not captured by `:type`.
+
+  @Get('catalog/type/:type')
+  browseCatalog(@Param('type') type: string, @Query() query: unknown) {
+    return this.catalog.list(
+      assertCatalogType(type),
+      parseDto(adminCatalogBrowseSchema, query),
+    );
+  }
+
+  @Post('catalog/type/:type')
+  createCatalogEntry(
+    @CurrentUser() user: AuthUser,
+    @Param('type') type: string,
+    @Body() body: unknown,
+  ) {
+    const catalogType = assertCatalogType(type);
+    const data = parseDto(adminCatalogCreateSchema, body);
+    return this.admin.auditCatalogWrite(user.id, catalogType, 'CREATE_CATALOG_ENTRY', () =>
+      this.catalog.create(catalogType, data),
+    );
+  }
+
+  @Get('catalog/type/:type/:id/usage')
+  catalogUsage(@Param('type') type: string, @Param('id') id: string) {
+    return this.catalog.usage(assertCatalogType(type), id);
+  }
+
+  @Patch('catalog/type/:type/:id')
+  updateCatalogRow(
+    @CurrentUser() user: AuthUser,
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const catalogType = assertCatalogType(type);
+    const data = parseDto(adminCatalogUpdateSchema, body);
+    return this.admin.auditCatalogWrite(
+      user.id,
+      catalogType,
+      'UPDATE_CATALOG_ENTRY',
+      () => this.catalog.update(catalogType, id, data),
+      id,
+    );
+  }
+
+  @Post('catalog/type/:type/:id/archive')
+  archiveCatalogEntry(
+    @CurrentUser() user: AuthUser,
+    @Param('type') type: string,
+    @Param('id') id: string,
+  ) {
+    const catalogType = assertCatalogType(type);
+    return this.admin.auditCatalogWrite(
+      user.id,
+      catalogType,
+      'ARCHIVE_CATALOG_ENTRY',
+      () => this.catalog.archive(catalogType, id),
+      id,
+    );
+  }
+
+  @Post('catalog/type/:type/:id/restore')
+  restoreCatalogEntry(
+    @CurrentUser() user: AuthUser,
+    @Param('type') type: string,
+    @Param('id') id: string,
+  ) {
+    const catalogType = assertCatalogType(type);
+    return this.admin.auditCatalogWrite(
+      user.id,
+      catalogType,
+      'RESTORE_CATALOG_ENTRY',
+      () => this.catalog.restore(catalogType, id),
+      id,
+    );
   }
 
   @Patch('catalog/:kind/:id')

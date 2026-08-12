@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import { normalizeJobTitleKey } from '../common/title-resolve';
 
@@ -46,6 +47,7 @@ export class MetaService {
       if (!allIds.length) {
         return this.prisma.skill.findMany({
           where: {
+            ...ACTIVE_CATALOG,
             ...(q
               ? {
                   OR: [
@@ -62,6 +64,7 @@ export class MetaService {
       }
       const rows = await this.prisma.skill.findMany({
         where: {
+          ...ACTIVE_CATALOG,
           id: { in: allIds },
           ...(q
             ? {
@@ -85,6 +88,7 @@ export class MetaService {
 
     return this.prisma.skill.findMany({
       where: {
+        ...ACTIVE_CATALOG,
         ...(q
           ? {
               OR: [
@@ -109,6 +113,7 @@ export class MetaService {
     const key = normalizeSkillKey(term);
 
     const where: Prisma.SkillWhereInput = {
+      ...ACTIVE_CATALOG,
       OR: [
         { name: { contains: term, mode: 'insensitive' } },
         { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
@@ -148,7 +153,7 @@ export class MetaService {
 
   countries() {
     return this.prisma.country.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...ACTIVE_CATALOG },
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -172,10 +177,10 @@ export class MetaService {
         : raw.length === 2
           ? { iso2: raw.toUpperCase() }
           : { slug: raw };
-    const c = await this.prisma.country.findFirst({ where });
+    const c = await this.prisma.country.findFirst({ where: { ...where, ...ACTIVE_CATALOG } });
     if (!c) return [];
     return this.prisma.province.findMany({
-      where: { countryId: c.id, NOT: { slug: 'other-uzbekistan' } },
+      where: { countryId: c.id, NOT: { slug: 'other-uzbekistan' }, ...ACTIVE_CATALOG },
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -213,6 +218,7 @@ export class MetaService {
     const provinceSlug = province?.trim();
     const rows = await this.prisma.city.findMany({
       where: {
+        ...ACTIVE_CATALOG,
         AND: [
           term
             ? {
@@ -224,7 +230,7 @@ export class MetaService {
               }
             : {},
           provinceSlug ? { province: { slug: provinceSlug } } : {},
-          { province: { NOT: { slug: 'other-uzbekistan' } } },
+          { province: { NOT: { slug: 'other-uzbekistan' }, ...ACTIVE_CATALOG } },
         ],
       },
       orderBy: [{ province: { name: 'asc' } }, { name: 'asc' }],
@@ -262,7 +268,10 @@ export class MetaService {
   }
 
   async categories() {
-    const rows = await this.prisma.jobCategory.findMany({ orderBy: { name: 'asc' } });
+    const rows = await this.prisma.jobCategory.findMany({
+      where: ACTIVE_CATALOG,
+      orderBy: { name: 'asc' },
+    });
     return rows.map((c) => ({
       ...c,
       icon: resolveCategoryIcon(c.slug, c.icon) || null,
@@ -272,9 +281,11 @@ export class MetaService {
   async industries(group?: string) {
     if (group === '1' || group === 'true' || group === 'group') {
       const groups = await this.prisma.industryGroup.findMany({
+        where: ACTIVE_CATALOG,
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
         include: {
           industries: {
+            where: ACTIVE_CATALOG,
             orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
             include: {
               _count: {
@@ -306,6 +317,7 @@ export class MetaService {
       };
     }
     const rows = await this.prisma.industry.findMany({
+      where: ACTIVE_CATALOG,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       include: {
         group: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
@@ -323,7 +335,10 @@ export class MetaService {
   }
 
   async benefits() {
-    const rows = await this.prisma.benefit.findMany({ orderBy: { name: 'asc' } });
+    const rows = await this.prisma.benefit.findMany({
+      where: ACTIVE_CATALOG,
+      orderBy: { name: 'asc' },
+    });
     return rows.map((b) => ({
       ...b,
       icon: resolveBenefitIcon(b.slug, b.icon) || null,
@@ -334,15 +349,18 @@ export class MetaService {
     const limit = Math.min(Math.max(take || 10, 1), 20);
     const term = q?.trim();
     const rows = await this.prisma.benefit.findMany({
-      where: term
-        ? {
-            OR: [
-              { name: { contains: term, mode: 'insensitive' } },
-              { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
-              { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
-            ],
-          }
-        : undefined,
+      where: {
+        ...ACTIVE_CATALOG,
+        ...(term
+          ? {
+              OR: [
+                { name: { contains: term, mode: 'insensitive' } },
+                { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+                { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
       include: {
         _count: { select: { jobPostBenefits: true } },
         aliases: { take: 3, select: { alias: true } },
@@ -366,22 +384,25 @@ export class MetaService {
   }
 
   languages() {
-    return this.prisma.language.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.language.findMany({ where: ACTIVE_CATALOG, orderBy: { name: 'asc' } });
   }
 
   async suggestLanguages(q?: string, take = 10) {
     const limit = Math.min(Math.max(take || 10, 1), 20);
     const term = q?.trim();
     const rows = await this.prisma.language.findMany({
-      where: term
-        ? {
-            OR: [
-              { name: { contains: term, mode: 'insensitive' } },
-              { code: { contains: term.toLowerCase(), mode: 'insensitive' } },
-              { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
-            ],
-          }
-        : undefined,
+      where: {
+        ...ACTIVE_CATALOG,
+        ...(term
+          ? {
+              OR: [
+                { name: { contains: term, mode: 'insensitive' } },
+                { code: { contains: term.toLowerCase(), mode: 'insensitive' } },
+                { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
+      },
       include: {
         _count: { select: { profileLanguages: true } },
         aliases: { take: 3, select: { alias: true } },
@@ -408,15 +429,18 @@ export class MetaService {
     const limit = Math.min(Math.max(take || 10, 1), 20);
     const term = q?.trim();
     const rows = await this.prisma.city.findMany({
-      where: term
-        ? {
-            OR: [
-              { name: { contains: term, mode: 'insensitive' } },
-              { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
-              { province: { name: { contains: term, mode: 'insensitive' } } },
-            ],
-          }
-        : undefined,
+      where: {
+        ...ACTIVE_CATALOG,
+        ...(term
+          ? {
+              OR: [
+                { name: { contains: term, mode: 'insensitive' } },
+                { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+                { province: { name: { contains: term, mode: 'insensitive' } } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { name: 'asc' },
       take: limit,
       select: this.citySelect,
@@ -439,15 +463,18 @@ export class MetaService {
     const take = Math.min(Math.max(limit || 24, 1), 100);
     const skip = (Math.max(page || 1, 1) - 1) * take;
     const term = q?.trim();
-    const where: Prisma.JobTitleWhereInput = term
-      ? {
-          OR: [
-            { name: { contains: term, mode: 'insensitive' } },
-            { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
-            { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
-          ],
-        }
-      : {};
+    const where: Prisma.JobTitleWhereInput = {
+      ...ACTIVE_CATALOG,
+      ...(term
+        ? {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+              { aliases: { some: { alias: { contains: term, mode: 'insensitive' } } } },
+            ],
+          }
+        : {}),
+    };
 
     const [total, rows] = await Promise.all([
       this.prisma.jobTitle.count({ where }),
@@ -487,24 +514,31 @@ export class MetaService {
     const term = q?.trim();
     const key = term ? normalizeJobTitleKey(term) : '';
 
-    const where: Prisma.JobTitleWhereInput = term
-      ? {
-          OR: [
-            { name: { contains: term, mode: 'insensitive' } },
-            { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
-            ...(key
-              ? [
-                  { normalizedKey: key },
-                  { aliases: { some: { aliasKey: key } } },
-                  { aliases: { some: { alias: { contains: term, mode: 'insensitive' as const } } } },
-                ]
-              : []),
-          ],
-        }
-      : {};
+    const where: Prisma.JobTitleWhereInput = {
+      ...ACTIVE_CATALOG,
+      ...(term
+        ? {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { slug: { contains: term.toLowerCase().replace(/\s+/g, '-'), mode: 'insensitive' } },
+              ...(key
+                ? [
+                    { normalizedKey: key },
+                    { aliases: { some: { aliasKey: key } } },
+                    {
+                      aliases: {
+                        some: { alias: { contains: term, mode: 'insensitive' as const } },
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : {}),
+    };
 
     const rows = await this.prisma.jobTitle.findMany({
-      where: Object.keys(where).length ? where : undefined,
+      where,
       include: {
         _count: { select: { jobPosts: { where: { status: 'PUBLISHED' } } } },
         aliases: { take: 3, select: { alias: true } },

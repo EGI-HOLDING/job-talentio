@@ -55,10 +55,16 @@ export async function backfillIndustries(
 
   const groupIdBySlug = new Map<string, string>();
 
+  // Rows an admin edited keep their wording; the backfill only fills in what
+  // nobody has taken ownership of.
   for (const g of INDUSTRY_GROUPS) {
+    const existing = await db.industryGroup.findUnique({
+      where: { slug: g.slug },
+      select: { curatedAt: true },
+    });
     const row = await db.industryGroup.upsert({
       where: { slug: g.slug },
-      update: { name: g.name, sortOrder: g.sortOrder },
+      update: existing?.curatedAt ? {} : { name: g.name, sortOrder: g.sortOrder },
       create: { name: g.name, slug: g.slug, sortOrder: g.sortOrder },
     });
     groupIdBySlug.set(g.slug, row.id);
@@ -69,9 +75,15 @@ export async function backfillIndustries(
   for (const g of INDUSTRY_GROUPS) {
     const groupId = groupIdBySlug.get(g.slug)!;
     for (const ind of g.industries) {
+      const existing = await db.industry.findUnique({
+        where: { slug: ind.slug },
+        select: { curatedAt: true },
+      });
       const row = await db.industry.upsert({
         where: { slug: ind.slug },
-        update: { name: ind.name, sortOrder: ind.sortOrder, groupId },
+        update: existing?.curatedAt
+          ? {}
+          : { name: ind.name, sortOrder: ind.sortOrder, groupId },
         create: {
           name: ind.name,
           slug: ind.slug,
@@ -112,12 +124,22 @@ export async function backfillIndustries(
   const canonical = new Set(allIndustrySlugs());
   const obsolete = await db.industry.findMany({
     where: { slug: { notIn: [...canonical] } },
-    select: { id: true, slug: true, _count: { select: { companies: true } } },
+    select: {
+      id: true,
+      slug: true,
+      curatedAt: true,
+      _count: { select: { companies: true } },
+    },
   });
   let industriesRetired = 0;
   for (const row of obsolete) {
     if (row._count.companies > 0) {
       log(`Industry ${row.slug} still has ${row._count.companies} companies - skip delete`);
+      continue;
+    }
+    // An admin-created industry is off-catalog by design, not leftover legacy data.
+    if (row.curatedAt) {
+      log(`Industry ${row.slug} was created or edited in admin - skip delete`);
       continue;
     }
     await db.industry.delete({ where: { id: row.id } });
