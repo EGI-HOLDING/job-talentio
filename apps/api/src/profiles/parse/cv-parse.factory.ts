@@ -17,7 +17,7 @@ export function createCvParseProvider(config: ConfigService): CvParseProvider {
     case 'affinda':
       return new AffindaCvParseProvider();
     case 'llm':
-      return new LlmCvParseProvider();
+      return new LlmCvParseProvider(config);
     case 'local':
     default:
       return new LocalCvParseProvider(config);

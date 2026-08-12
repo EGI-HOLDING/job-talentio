@@ -142,11 +142,17 @@ railway ssh --service api-stage-job-talentio -- node -e "require('./dist/main')"
 
 The index self-heals on boot when it is empty, so a plain redeploy is usually enough.
 
+**OpenAI (optional, costs money):** one key powers LLM CV parse and/or machine translation.
+
+- `OPENAI_API_KEY`: set in Railway only; never commit.
+- `OPENAI_MODEL`: default `gpt-4o-mini`.
+- `CV_PARSE_PROVIDER=llm`: local PDF/DOCX(/OCR) text extract → OpenAI JSON structure → local heuristic fallback on failure. Never sends PDF/image bytes to OpenAI.
+
 **Machine translation (optional, costs money):** off by default (`TRANSLATION_PROVIDER=none`). When enabled, a signed-in reader can translate a posting that has no human version in their language; the result is cached as a machine row in `JobPostTranslation`, so each text is paid for once and later readers get it free. A human translation always wins and is never overwritten, and cached machine output expires when the source text changes (`sourceHash`).
 
-- `TRANSLATION_PROVIDER`: `none` | `google` | `deepl`. Only `google` supports Uzbek.
-- `TRANSLATION_API_KEY`: provider key. Missing key falls back to `none` with a warning.
-- `TRANSLATION_MONTHLY_CHAR_BUDGET` (default 200000): monthly character cap counted in Redis. Without a reachable Redis the budget cannot be enforced, so translation stays off rather than risking an open-ended bill.
+- `TRANSLATION_PROVIDER`: `none` | `openai` | `google` | `deepl`. `openai` and `google` support Uzbek; `deepl` is ru/en only.
+- `TRANSLATION_API_KEY`: required for `google`/`deepl`. For `openai`, use `OPENAI_API_KEY` (`TRANSLATION_API_KEY` accepted as fallback).
+- `TRANSLATION_MONTHLY_CHAR_BUDGET` (default 200000): monthly character cap counted in Redis. Without a reachable Redis the budget cannot be enforced, so translation stays off rather than risking an open-ended bill. Failed provider calls refund reserved characters.
 
 The endpoint (`POST /api/jobs/:id/translate/:locale`) requires authentication and shares the search rate limiter.
 
