@@ -685,6 +685,8 @@ async function main() {
       update: {
         name: c.name,
         description: `${c.name} is a leading ${c.industry} company in Uzbekistan, building modern products for the Central Asian market.`,
+        // The blurb below is English; without this it would claim to be Uzbek.
+        locale: 'en',
         website: `https://${c.slug}.uz`,
         cityId: cityMap[c.city].id,
         industryId: indMap[c.industry].id,
@@ -696,6 +698,7 @@ async function main() {
         name: c.name,
         slug: c.slug,
         description: `${c.name} is a leading ${c.industry} company in Uzbekistan, building modern products for the Central Asian market.`,
+        locale: 'en',
         website: `https://${c.slug}.uz`,
         cityId: cityMap[c.city].id,
         industryId: indMap[c.industry].id,

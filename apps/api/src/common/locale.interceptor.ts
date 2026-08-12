@@ -1,10 +1,25 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+  SetMetadata,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable, map } from 'rxjs';
 import { requestLocale } from './i18n/request-locale';
 import type { Locale } from './i18n/locale';
 
 /** Deep walk is bounded so a pathological payload cannot spin the event loop. */
 const MAX_DEPTH = 12;
+
+export const RAW_LOCALE_NAMES_KEY = 'rawLocaleNames';
+
+/**
+ * Keeps `nameUz` / `nameRu` in the response instead of collapsing them into
+ * `name`. Used by the admin catalog screens, which edit the columns directly.
+ */
+export const RawLocaleNames = () => SetMetadata(RAW_LOCALE_NAMES_KEY, true);
 
 type Localizable = Record<string, unknown> & {
   name: string;
@@ -50,8 +65,16 @@ function localizeDeep(value: unknown, locale: Locale, depth = 0): unknown {
 
 @Injectable()
 export class LocaleInterceptor implements NestInterceptor {
+  constructor(private reflector: Reflector) {}
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
+
+    const raw = this.reflector.getAllAndOverride<boolean>(RAW_LOCALE_NAMES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (raw) return next.handle();
 
     const request = context.switchToHttp().getRequest();
     const locale = requestLocale(request);

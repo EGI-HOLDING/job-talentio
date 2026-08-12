@@ -13,13 +13,20 @@ type JobTranslation = {
   isMachine: boolean;
 };
 
+type JobQuestion = {
+  id: string;
+  question: string;
+  translations: Array<{ locale: Locale; question: string; isMachine: boolean }>;
+};
+
 type JobTranslations = {
   sourceLocale: Locale;
   source: { title: string; description: string };
   translations: JobTranslation[];
+  questions: JobQuestion[];
 };
 
-type Draft = { title: string; description: string };
+type Draft = { title: string; description: string; questions: Record<string, string> };
 
 const LOCALE_NAME_KEY: Record<Locale, string> = {
   uz: 'rec.localeNameUz',
@@ -27,7 +34,7 @@ const LOCALE_NAME_KEY: Record<Locale, string> = {
   en: 'rec.localeNameEn',
 };
 
-const EMPTY_DRAFT: Draft = { title: '', description: '' };
+const EMPTY_DRAFT: Draft = { title: '', description: '', questions: {} };
 
 type Props = {
   jobId: string;
@@ -62,8 +69,19 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
         const next: Partial<Record<Locale, Draft>> = {};
         for (const locale of LOCALES) {
           const saved = res.translations.find((tr) => tr.locale === locale);
-          if (saved) next[locale] = { title: saved.title, description: saved.description };
-          else if (prev[locale]) next[locale] = prev[locale];
+          const questions = Object.fromEntries(
+            res.questions.map((q) => [
+              q.id,
+              q.translations.find((tr) => tr.locale === locale)?.question ??
+                prev[locale]?.questions[q.id] ??
+                '',
+            ]),
+          );
+          if (saved) {
+            next[locale] = { title: saved.title, description: saved.description, questions };
+          } else if (prev[locale]) {
+            next[locale] = { ...prev[locale], questions };
+          }
         }
         return next;
       });
@@ -98,9 +116,12 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
     }
     setBusyLocale(locale);
     try {
+      const questions = Object.entries(draft.questions ?? {})
+        .filter(([, text]) => text.trim().length >= 3)
+        .map(([id, text]) => ({ id, question: text.trim() }));
       await api(`/jobs/${jobId}/translations/${locale}`, {
         method: 'PUT',
-        body: JSON.stringify({ title, description }),
+        body: JSON.stringify({ title, description, ...(questions.length ? { questions } : {}) }),
       });
       onFlash(t('rec.langVersionSaved').replace('{lang}', langName));
       await load();
@@ -210,6 +231,26 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
                       onChange={(e) => updateDraft(locale, { description: e.target.value })}
                     />
                   </label>
+                  {data.questions.map((question) => (
+                    <label key={question.id}>
+                      <LabelText>
+                        {t('rec.langVersionQuestion').replace('{question}', question.question)}
+                      </LabelText>
+                      <input
+                        value={draft.questions?.[question.id] ?? ''}
+                        maxLength={500}
+                        disabled={busy}
+                        onChange={(e) =>
+                          updateDraft(locale, {
+                            questions: {
+                              ...(draft.questions ?? {}),
+                              [question.id]: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
                 </div>
                 <div className="chips" style={{ marginTop: '0.6rem' }}>
                   <button

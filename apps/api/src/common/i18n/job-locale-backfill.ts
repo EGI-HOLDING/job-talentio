@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { detectLocale } from './detect-locale';
 
 type Db = Pick<PrismaClient, 'jobPost'>;
+type CompanyDb = Pick<PrismaClient, 'company'>;
 
 export type JobLocaleBackfillResult = {
   scanned: number;
@@ -37,4 +38,32 @@ export async function backfillJobLocale(db: Db): Promise<JobLocaleBackfillResult
   }
 
   return { scanned: jobs.length, corrected, unclear };
+}
+
+/**
+ * `Company.locale` has the same problem as `JobPost.locale`: it defaults to
+ * `uz`, so a profile written in English claims to be Uzbek. That drives the
+ * "written in" badge and the source language sent to the translation provider.
+ */
+export async function backfillCompanyLocale(db: CompanyDb): Promise<JobLocaleBackfillResult> {
+  const companies = await db.company.findMany({
+    select: { id: true, description: true, locale: true },
+  });
+
+  let corrected = 0;
+  let unclear = 0;
+
+  for (const company of companies) {
+    const detected = company.description ? detectLocale(company.description) : null;
+    if (!detected) {
+      unclear += 1;
+      continue;
+    }
+    if (detected === company.locale) continue;
+
+    await db.company.update({ where: { id: company.id }, data: { locale: detected } });
+    corrected += 1;
+  }
+
+  return { scanned: companies.length, corrected, unclear };
 }

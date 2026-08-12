@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,12 +8,18 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { companyBrowseSchema, companySchema } from '@job-talentio/shared';
+import type { Request } from 'express';
+import {
+  companyBrowseSchema,
+  companySchema,
+  companyTranslationSchema,
+} from '@job-talentio/shared';
 import { CompanyMemberRole } from '@prisma/client';
 import { CompaniesService } from './companies.service';
 import {
@@ -25,6 +32,15 @@ import {
 } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
 import { imageUploadOptions } from '../common/upload';
+import { requestLocale } from '../common/i18n/request-locale';
+import { isLocale } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
+import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
+
+function assertLocale(value: string): Locale {
+  if (!isLocale(value)) throw new BadRequestException('Unsupported locale');
+  return value;
+}
 
 @Controller('companies')
 export class CompaniesController {
@@ -52,8 +68,46 @@ export class CompaniesController {
   }
 
   @Get('slug/:slug')
-  getBySlug(@Param('slug') slug: string) {
-    return this.companies.getBySlug(slug);
+  getBySlug(@Param('slug') slug: string, @Req() req: Request) {
+    return this.companies.getBySlug(slug, requestLocale(req));
+  }
+
+  /** Signed-in and rate limited: every miss costs money at the provider. */
+  @Post('slug/:slug/translate/:locale')
+  @UseGuards(JwtAuthGuard, SearchRateLimitGuard)
+  machineTranslate(@Param('slug') slug: string, @Param('locale') locale: string) {
+    return this.companies.machineTranslate(slug, assertLocale(locale));
+  }
+
+  @Get(':id/translations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  listTranslations(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.companies.listTranslations(user, id);
+  }
+
+  @Patch(':id/translations/:locale')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  upsertTranslation(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(companyTranslationSchema, body);
+    return this.companies.upsertTranslation(user, id, assertLocale(locale), data.description);
+  }
+
+  @Delete(':id/translations/:locale')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  deleteTranslation(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.companies.deleteTranslation(user, id, assertLocale(locale));
   }
 
   @Get(':id')

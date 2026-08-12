@@ -12,11 +12,14 @@ import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { formatThousands } from '@/lib/numberFormat';
 import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
+import { UgcText } from '@/components/ui/UgcText';
 
 type CandidateDetail = {
   id: string;
   headline?: string | null;
   summary?: string | null;
+  /** Language the candidate wrote their profile in; never machine translated. */
+  contentLocale?: string | null;
   desiredSalaryMin?: number | null;
   desiredSalaryMax?: number | null;
   desiredSalaryCurrency?: string | null;
@@ -349,7 +352,11 @@ function CandidateInner() {
       {data.summary && (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
           <h3>{t('talent.about')}</h3>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{data.summary}</p>
+          <UgcText
+            text={data.summary}
+            contentLocale={data.contentLocale}
+            preserveLineBreaks
+          />
         </div>
       )}
 

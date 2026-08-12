@@ -2960,6 +2960,10 @@ button.linkish:hover,
   background: var(--accent-soft);
   display: inline-block;
 }
+.company-about {
+  margin-top: 0.75rem;
+  color: var(--muted);
+}
 
 /* ------------------------------------------------------------- Presence */
 .presence-wrap {

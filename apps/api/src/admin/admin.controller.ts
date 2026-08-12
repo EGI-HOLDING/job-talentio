@@ -1,11 +1,40 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { JobStatus, PlanCode } from '@prisma/client';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { CatalogI18nStatus, JobStatus, PlanCode } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
+import { isCatalogKind } from '../common/i18n/catalog-kind';
+import type { CatalogKind } from '../common/i18n/catalog-kind';
+import { RawLocaleNames } from '../common/locale.interceptor';
 
+function assertCatalogKind(value: string): CatalogKind {
+  if (!isCatalogKind(value)) throw new BadRequestException('Unknown catalog');
+  return value;
+}
+
+function assertStatus(value?: string): CatalogI18nStatus | undefined {
+  if (!value) return undefined;
+  if (value !== 'PENDING' && value !== 'COMPLETE' && value !== 'IGNORED') {
+    throw new BadRequestException('Unknown status');
+  }
+  return value;
+}
+
+// The admin app is English-only and edits the locale columns directly, so its
+// responses keep nameUz / nameRu instead of being collapsed into `name`.
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('SUPER_ADMIN')
+@RawLocaleNames()
 export class AdminController {
   constructor(private admin: AdminService) {}
 
@@ -104,5 +133,72 @@ export class AdminController {
     @Body() body: { status: 'RESOLVED' | 'DISMISSED'; resolution?: string },
   ) {
     return this.admin.resolveReport(user.id, id, body.status, body.resolution);
+  }
+
+  @Get('catalog/i18n')
+  catalogQueue(
+    @Query('kind') kind = 'skill',
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+  ) {
+    return this.admin.listCatalogI18n({
+      kind: assertCatalogKind(kind),
+      status: assertStatus(status),
+      q,
+      page: page ? Number(page) : 1,
+    });
+  }
+
+  @Get('catalog/i18n/summary')
+  catalogSummary() {
+    return this.admin.catalogI18nSummary();
+  }
+
+  @Patch('catalog/:kind/:id')
+  updateCatalogEntry(
+    @CurrentUser() user: AuthUser,
+    @Param('kind') kind: string,
+    @Param('id') id: string,
+    @Body() body: { name?: string; nameUz?: string | null; nameRu?: string | null },
+  ) {
+    return this.admin.updateCatalogEntry(user.id, assertCatalogKind(kind), id, body);
+  }
+
+  @Post('catalog/:kind/:id/translate')
+  translateCatalogEntry(
+    @CurrentUser() user: AuthUser,
+    @Param('kind') kind: string,
+    @Param('id') id: string,
+  ) {
+    return this.admin.translateCatalogEntry(user.id, assertCatalogKind(kind), id);
+  }
+
+  @Post('catalog/:kind/:id/status')
+  setCatalogStatus(
+    @CurrentUser() user: AuthUser,
+    @Param('kind') kind: string,
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    const status = assertStatus(body.status);
+    if (!status) throw new BadRequestException('status required');
+    return this.admin.setCatalogStatus(user.id, assertCatalogKind(kind), id, status);
+  }
+
+  @Post('catalog/:kind/:id/merge')
+  mergeCatalogEntry(
+    @CurrentUser() user: AuthUser,
+    @Param('kind') kind: string,
+    @Param('id') id: string,
+    @Body() body: { targetId: string },
+  ) {
+    if (!body?.targetId) throw new BadRequestException('targetId required');
+    return this.admin.mergeCatalogEntry(user.id, assertCatalogKind(kind), id, body.targetId);
+  }
+
+  @Post('catalog/:kind/reclassify')
+  reclassifyCatalog(@CurrentUser() user: AuthUser, @Param('kind') kind: string) {
+    return this.admin.reclassifyCatalog(user.id, assertCatalogKind(kind));
   }
 }

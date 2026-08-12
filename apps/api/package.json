@@ -8,7 +8,7 @@
     "start": "node dist/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx -e \"const m=require('./src/common/title-resolve'); const cases=[['Senior Full-stack Developer','Full-stack Developer','SENIOR'],['Junior Java Developer','Java Developer','JUNIOR'],['Java Senior Developer','Java Developer','SENIOR'],['(Senior) Frontend Developer','Frontend Developer','SENIOR'],['Sr. Backend Developer','Backend Developer','SENIOR'],['Mid-level Product Designer','Product Designer','MIDDLE']]; for (const [raw,role,lvl] of cases){const a=m.stripSeniorityFromTitle(raw); if(a.roleTitle!==role||a.inferredLevel!==lvl) throw new Error('strip failed: '+raw+' => '+JSON.stringify(a)); if(m.titleHasSeniorityToken(a.roleTitle)) throw new Error('still dirty: '+a.roleTitle);} if(m.titleHasSeniorityToken('International Sales Manager')) throw new Error('false positive Intern in International'); if(m.normalizeJobTitleKey('Front End Developer')!==m.normalizeJobTitleKey('Frontend Developer')) throw new Error('frontend key mismatch'); if(m.normalizeJobTitleKey('CPP Developer')!==m.normalizeJobTitleKey('C++ Developer')) throw new Error('cpp key mismatch'); console.log('api: smoke ok');\" && tsx src/profiles/cv-parser.smoke.ts && tsx src/common/catalog-label.smoke.ts && tsx src/common/i18n/detect-locale.smoke.ts",
+    "test": "tsx -e \"const m=require('./src/common/title-resolve'); const cases=[['Senior Full-stack Developer','Full-stack Developer','SENIOR'],['Junior Java Developer','Java Developer','JUNIOR'],['Java Senior Developer','Java Developer','SENIOR'],['(Senior) Frontend Developer','Frontend Developer','SENIOR'],['Sr. Backend Developer','Backend Developer','SENIOR'],['Mid-level Product Designer','Product Designer','MIDDLE']]; for (const [raw,role,lvl] of cases){const a=m.stripSeniorityFromTitle(raw); if(a.roleTitle!==role||a.inferredLevel!==lvl) throw new Error('strip failed: '+raw+' => '+JSON.stringify(a)); if(m.titleHasSeniorityToken(a.roleTitle)) throw new Error('still dirty: '+a.roleTitle);} if(m.titleHasSeniorityToken('International Sales Manager')) throw new Error('false positive Intern in International'); if(m.normalizeJobTitleKey('Front End Developer')!==m.normalizeJobTitleKey('Frontend Developer')) throw new Error('frontend key mismatch'); if(m.normalizeJobTitleKey('CPP Developer')!==m.normalizeJobTitleKey('C++ Developer')) throw new Error('cpp key mismatch'); console.log('api: smoke ok');\" && tsx src/profiles/cv-parser.smoke.ts && tsx src/common/catalog-label.smoke.ts && tsx src/common/i18n/detect-locale.smoke.ts && tsx src/common/i18n/catalog-tech-identity.smoke.ts && tsx src/translation/catalog-translation.smoke.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
@@ -19,6 +19,9 @@
     "backfill:geo": "node dist/scripts/backfill-geo.js",
     "backfill:industries": "node dist/scripts/backfill-industries.js",
     "backfill:job-languages": "node dist/scripts/backfill-job-languages.js",
+    "backfill:catalog-i18n": "node dist/scripts/backfill-catalog-i18n.js",
+    "backfill:catalog-status": "node dist/scripts/backfill-catalog-status.js",
+    "backfill:content-locale": "node dist/scripts/backfill-job-locale.js",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {

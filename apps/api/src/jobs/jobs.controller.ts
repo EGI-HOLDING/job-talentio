@@ -184,8 +184,8 @@ export class JobsController {
 
   @Get(':id/questions')
   @UseGuards(OptionalJwtAuthGuard)
-  listQuestions(@Param('id') id: string, @CurrentUser() user?: AuthUser) {
-    return this.jobs.listQuestions(id, user);
+  listQuestions(@Param('id') id: string, @Req() req: Request, @CurrentUser() user?: AuthUser) {
+    return this.jobs.listQuestions(id, user, requestLocale(req));
   }
 
   @Post(':id/questions')

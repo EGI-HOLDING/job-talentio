@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { PrismaClient, Skill } from '@prisma/client';
+import { initialCatalogStatus } from './i18n/catalog-tech-identity';
 import { assertCatalogLabel } from './lookup-normalize';
 import { slugify } from './utils';
 
@@ -159,6 +160,7 @@ export async function resolveSkill(
         slug: finalSlug,
         normalizedKey: key,
         category: opts.category,
+        i18nStatus: initialCatalogStatus(displayName),
       },
     });
     if (normalizeSkillKey(displayName) !== key || displayName !== skill.name) {

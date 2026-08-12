@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import type IORedis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
+import { catalogDelegate } from '../common/i18n/catalog-kind';
+import type { CatalogKind } from '../common/i18n/catalog-kind';
 import { contentHash } from '../common/i18n/content-locale';
+import { detectLocale } from '../common/i18n/detect-locale';
 import { isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { TRANSLATION_PROVIDER } from './translation.provider';
@@ -11,11 +14,21 @@ import type { TranslationProvider } from './translation.provider';
 
 /** Machine output is truncated so a single request cannot burn the budget. */
 const MAX_CHARS_PER_FIELD = 5_000;
+/** Catalog labels are a few words; anything longer is not a label. */
+const MAX_LABEL_CHARS = 120;
 const DEFAULT_MONTHLY_CHAR_BUDGET = 200_000;
 
 export type MachineTranslationResult =
   | { status: 'ready'; locale: Locale }
   | { status: 'exists'; locale: Locale }
+  | { status: 'disabled' }
+  | { status: 'budget-exceeded' }
+  | { status: 'unsupported' }
+  | { status: 'failed'; reason: string };
+
+export type CatalogTranslationResult =
+  | { status: 'ready'; filled: Locale[] }
+  | { status: 'exists' }
   | { status: 'disabled' }
   | { status: 'budget-exceeded' }
   | { status: 'unsupported' }
@@ -94,11 +107,170 @@ export class TranslationService {
         update: value,
         create: { jobPostId: jobId, locale: target, ...value },
       });
+      // Applicants answer in the language they read the posting in.
+      await this.translateJobQuestions(jobId, job.locale, target);
       return { status: 'ready', locale: target };
     } catch (err) {
       this.logger.warn(`Machine translation failed for job ${jobId}: ${(err as Error).message}`);
       return { status: 'failed', reason: 'Translation service unavailable' };
     }
+  }
+
+  /**
+   * Screening questions ride along with the posting they belong to. Failures are
+   * swallowed: a translated posting with original questions still works.
+   */
+  private async translateJobQuestions(jobId: string, source: Locale, target: Locale) {
+    const questions = await this.prisma.jobQuestion.findMany({
+      where: { jobPostId: jobId },
+      include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
+    });
+
+    for (const question of questions) {
+      const hash = contentHash(question.question);
+      const existing = question.translations.find((t) => t.locale === target);
+      if (existing && (!existing.isMachine || existing.sourceHash === hash)) continue;
+
+      const text = question.question.slice(0, MAX_LABEL_CHARS * 4);
+      if (!(await this.consumeBudget(text.length))) return;
+
+      try {
+        const [translated] = await this.provider.translate({
+          texts: [text],
+          targetLocale: target,
+          sourceLocale: source,
+        });
+        if (!translated) continue;
+        const value = { question: translated, isMachine: true, sourceHash: hash };
+        await this.prisma.jobQuestionTranslation.upsert({
+          where: { questionId_locale: { questionId: question.id, locale: target } },
+          update: value,
+          create: { questionId: question.id, locale: target, ...value },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Question translation failed for job ${jobId}: ${(err as Error).message}`,
+        );
+        return;
+      }
+    }
+  }
+
+  /** Same contract as `translateJob`, for the company blurb (never the name). */
+  async translateCompany(companyId: string, target: Locale): Promise<MachineTranslationResult> {
+    if (!this.provider.enabled) return { status: 'disabled' };
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
+    });
+    if (!company) return { status: 'failed', reason: 'Company not found' };
+    if (!company.description?.trim()) return { status: 'unsupported' };
+    if (!isLocale(company.locale)) return { status: 'unsupported' };
+    if (target === company.locale) return { status: 'exists', locale: target };
+
+    const hash = contentHash(company.description);
+    const existing = company.translations.find((t) => t.locale === target);
+    if (existing && (!existing.isMachine || existing.sourceHash === hash)) {
+      return { status: 'exists', locale: target };
+    }
+
+    const description = company.description.slice(0, MAX_CHARS_PER_FIELD);
+    const allowed = await this.consumeBudget(description.length);
+    if (!allowed) return { status: 'budget-exceeded' };
+
+    try {
+      const [translated] = await this.provider.translate({
+        texts: [description],
+        targetLocale: target,
+        sourceLocale: company.locale,
+      });
+      if (!translated) return { status: 'unsupported' };
+
+      const value = { description: translated, isMachine: true, sourceHash: hash };
+      await this.prisma.companyTranslation.upsert({
+        where: { companyId_locale: { companyId, locale: target } },
+        update: value,
+        create: { companyId, locale: target, ...value },
+      });
+      return { status: 'ready', locale: target };
+    } catch (err) {
+      this.logger.warn(
+        `Machine translation failed for company ${companyId}: ${(err as Error).message}`,
+      );
+      return { status: 'failed', reason: 'Translation service unavailable' };
+    }
+  }
+
+  /**
+   * Fills the missing uz/ru labels of one catalog row. Only empty columns and
+   * earlier machine output are touched, so an admin's wording always survives.
+   * The row is marked reviewed once nothing is left to translate.
+   */
+  async translateCatalogLabel(
+    kind: CatalogKind,
+    id: string,
+  ): Promise<CatalogTranslationResult> {
+    if (!this.provider.enabled) return { status: 'disabled' };
+
+    const delegate = catalogDelegate(this.prisma, kind);
+    const row = await delegate.findUnique({ where: { id } });
+    if (!row) return { status: 'failed', reason: 'Catalog entry not found' };
+
+    const source = detectLocale(row.name) ?? 'en';
+    const targets = (['uz', 'ru'] as const).filter((locale) => {
+      if (locale === source) return false;
+      const value = locale === 'uz' ? row.nameUz : row.nameRu;
+      const isMachine = locale === 'uz' ? row.nameUzIsMachine : row.nameRuIsMachine;
+      // A human value is final; machine output may be refreshed.
+      return !value || isMachine;
+    });
+    if (!targets.length) {
+      await this.markCatalogReviewed(kind, id);
+      return { status: 'exists' };
+    }
+
+    const text = row.name.slice(0, MAX_LABEL_CHARS);
+    const allowed = await this.consumeBudget(text.length * targets.length);
+    if (!allowed) return { status: 'budget-exceeded' };
+
+    const data: Record<string, unknown> = {};
+    const filled: Locale[] = [];
+    for (const target of targets) {
+      try {
+        const [translated] = await this.provider.translate({
+          texts: [text],
+          targetLocale: target,
+          sourceLocale: source,
+        });
+        // Providers return nothing for a language they do not support.
+        if (!translated || translated === text) continue;
+        data[target === 'uz' ? 'nameUz' : 'nameRu'] = translated;
+        data[target === 'uz' ? 'nameUzIsMachine' : 'nameRuIsMachine'] = true;
+        filled.push(target);
+      } catch (err) {
+        this.logger.warn(
+          `Machine translation failed for ${kind} ${id}: ${(err as Error).message}`,
+        );
+        return { status: 'failed', reason: 'Translation service unavailable' };
+      }
+    }
+
+    if (!filled.length) return { status: 'unsupported' };
+
+    const covered = (locale: Locale) =>
+      locale === source ||
+      filled.includes(locale) ||
+      Boolean(locale === 'uz' ? row.nameUz : row.nameRu);
+    if (covered('uz') && covered('ru')) data.i18nStatus = 'COMPLETE';
+
+    await delegate.update({ where: { id }, data });
+    return { status: 'ready', filled };
+  }
+
+  private async markCatalogReviewed(kind: CatalogKind, id: string) {
+    const delegate = catalogDelegate(this.prisma, kind);
+    await delegate.update({ where: { id }, data: { i18nStatus: 'COMPLETE' } });
   }
 
   /**

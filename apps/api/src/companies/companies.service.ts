@@ -13,12 +13,18 @@ import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName } from '../common/dedupe';
 import { sanitizeStoredText } from '../common/text-sanitize';
+import { contentHash as translationSourceHash, resolveContent } from '../common/i18n/content-locale';
+import { detectLocale } from '../common/i18n/detect-locale';
+import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
+import { TranslationService } from '../translation/translation.service';
 
 @Injectable()
 export class CompaniesService {
   constructor(
     private prisma: PrismaService,
     private storage: StorageService,
+    private translation: TranslationService,
   ) {}
 
   private async assertCompanyNameAvailable(name: string, excludeId?: string) {
@@ -164,19 +170,23 @@ export class CompaniesService {
     return company;
   }
 
-  async getBySlug(slug: string) {
+  async getBySlug(slug: string, locale: Locale = DEFAULT_LOCALE) {
     const company = await this.prisma.company.findUnique({
       where: { slug },
       include: {
         city: true,
         industry: true,
         subscription: { select: { plan: true } },
+        translations: { select: { locale: true, description: true, isMachine: true } },
         jobPosts: {
           where: { status: 'PUBLISHED' },
           include: {
             city: true,
             category: true,
             jobSkills: { include: { skill: true }, take: 6 },
+            translations: {
+              select: { locale: true, title: true, description: true, isMachine: true },
+            },
           },
           orderBy: { publishedAt: 'desc' },
           take: 20,
@@ -185,18 +195,119 @@ export class CompaniesService {
       },
     });
     if (!company || company.isBanned) throw new NotFoundException('Company not found');
+
+    const { translations, ...rest } = company;
+    const described = this.withDescriptionLocale(rest, translations, locale);
+
+    return {
+      ...described,
+      // Listings on this page follow the same language rules as job search.
+      jobPosts: company.jobPosts.map(({ translations: jobTranslations, ...job }) => {
+        const resolved = resolveContent(
+          { title: job.title, description: job.description },
+          job.locale,
+          jobTranslations,
+          locale,
+        );
+        return {
+          ...job,
+          ...resolved.content,
+          contentLocale: resolved.contentLocale,
+          isMachineTranslated: resolved.isMachineTranslated,
+          category: job.category
+            ? {
+                ...job.category,
+                icon: resolveCategoryIcon(job.category.slug, job.category.icon) || null,
+              }
+            : job.category,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Serves the company blurb in the reader's language when a version exists.
+   * The legal name is never translated, so only `description` is swapped.
+   */
+  private withDescriptionLocale<T extends { description: string | null; locale: string }>(
+    company: T,
+    translations: Array<{ locale: string; description: string; isMachine: boolean }>,
+    locale: Locale,
+  ) {
+    const resolved = resolveContent(
+      { description: company.description ?? '' },
+      company.locale,
+      translations,
+      locale,
+    );
     return {
       ...company,
-      jobPosts: company.jobPosts.map((job) => ({
-        ...job,
-        category: job.category
-          ? {
-              ...job.category,
-              icon: resolveCategoryIcon(job.category.slug, job.category.icon) || null,
-            }
-          : job.category,
-      })),
+      description: resolved.content.description || null,
+      contentLocale: resolved.contentLocale,
+      isMachineTranslated: resolved.isMachineTranslated,
+      availableLocales: resolved.availableLocales,
+      canMachineTranslate:
+        this.translation.enabled && resolved.isFallback && Boolean(company.description),
     };
+  }
+
+  /** Every stored language of the company blurb, for the recruiter editor. */
+  async listTranslations(user: AuthUser, companyId: string) {
+    const { company } = await this.assertMember(user, companyId);
+    const translations = await this.prisma.companyTranslation.findMany({
+      where: { companyId },
+      select: { locale: true, description: true, isMachine: true },
+    });
+    return {
+      sourceLocale: company.locale,
+      source: { description: company.description },
+      translations,
+    };
+  }
+
+  async upsertTranslation(
+    user: AuthUser,
+    companyId: string,
+    locale: Locale,
+    description: string,
+  ) {
+    const { company } = await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    if (locale === company.locale) {
+      throw new BadRequestException(
+        'This is the language the profile was written in; edit the company instead',
+      );
+    }
+    const value = {
+      description: sanitizeStoredText(description),
+      isMachine: false,
+      sourceHash: translationSourceHash(company.description),
+    };
+    return this.prisma.companyTranslation.upsert({
+      where: { companyId_locale: { companyId, locale } },
+      update: value,
+      create: { companyId, locale, ...value },
+    });
+  }
+
+  async deleteTranslation(user: AuthUser, companyId: string, locale: Locale) {
+    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    await this.prisma.companyTranslation
+      .delete({ where: { companyId_locale: { companyId, locale } } })
+      .catch(() => undefined);
+    return { ok: true };
+  }
+
+  /** Reader-triggered fallback, cached so the text is paid for only once. */
+  async machineTranslate(slug: string, locale: Locale) {
+    const company = await this.prisma.company.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const result = await this.translation.translateCompany(company.id, locale);
+    if (result.status === 'failed') throw new BadRequestException(result.reason);
+    return { status: result.status, company: await this.getBySlug(slug, locale) };
   }
 
   async update(
@@ -209,6 +320,7 @@ export class CompaniesService {
       citySlug?: string;
       industrySlug?: string;
       size?: string;
+      locale?: string;
     },
   ) {
     await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
@@ -233,12 +345,17 @@ export class CompaniesService {
         industryId = ind?.id ?? null;
       }
     }
+    const description =
+      data.description !== undefined ? sanitizeStoredText(data.description) : undefined;
+
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
         name: data.name !== undefined ? sanitizeStoredText(data.name) : undefined,
-        description:
-          data.description !== undefined ? sanitizeStoredText(data.description) : undefined,
+        description,
+        // Recording the language the blurb is written in keeps readers in other
+        // languages from being told it is already theirs.
+        locale: this.descriptionLocale(description, data.locale),
         website: data.website || null,
         cityId,
         industryId,
@@ -246,6 +363,12 @@ export class CompaniesService {
       },
       include: { subscription: true, city: true, industry: true },
     });
+  }
+
+  private descriptionLocale(description?: string, explicit?: string): Locale | undefined {
+    if (explicit && isLocale(explicit)) return explicit;
+    if (!description) return undefined;
+    return detectLocale(description) ?? undefined;
   }
 
   async uploadLogo(user: AuthUser, companyId: string, file: Express.Multer.File) {

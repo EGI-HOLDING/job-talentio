@@ -27,7 +27,7 @@ const LANGUAGE_SYNONYMS: Record<string, string> = {
   arabic: 'ar',
 };
 
-function languageKey(input: string): string {
+export function languageKey(input: string): string {
   const raw = input.trim().toLowerCase();
   if (/^[a-z]{2,3}$/.test(raw)) return LANGUAGE_SYNONYMS[raw] ?? raw;
   const key = normalizeLookupKey(input);
@@ -99,11 +99,14 @@ export async function resolveLanguage(
   const finalCode = code || codeFromInput(displayName);
 
   try {
+    // Language names always read differently per locale ("Kazakh" / "Qozoqcha" /
+    // "Казахский"), so they never qualify as a tech identity.
     const language = await db.language.create({
       data: {
         name: displayName,
         code: finalCode,
         normalizedKey: key || finalCode,
+        i18nStatus: 'PENDING',
       },
     });
     return { language, created: true, matchedVia: 'created' };
