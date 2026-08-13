@@ -157,7 +157,7 @@ export class CompaniesController {
     @Body() body: unknown,
   ) {
     const data = parseDto(companyInviteSchema, body);
-    return this.companies.invite(user, id, data.email, data.role);
+    return this.companies.invite(user, id, data.email, data.role, data.locale);
   }
 
   @Get(':id/invites')

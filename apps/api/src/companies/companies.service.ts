@@ -440,6 +440,7 @@ export class CompaniesService {
     companyId: string,
     email: string,
     role: CompanyMemberRole = 'RECRUITER',
+    locale?: string,
   ) {
     const { company } = await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
     if (role !== 'ADMIN' && role !== 'RECRUITER') {
@@ -466,7 +467,7 @@ export class CompaniesService {
           include: { user: { select: { id: true, email: true, fullName: true } } },
         });
         await this.closePendingInvites(companyId, storedEmail);
-        await this.sendAddedEmail(invitee, company.name);
+        await this.sendAddedEmail(invitee, company.name, locale);
         return { status: 'added' as const, member };
       } catch {
         await this.closePendingInvites(companyId, storedEmail);
@@ -477,13 +478,14 @@ export class CompaniesService {
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = sha256(rawToken);
     const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    const emailLocaleCode = emailLocale(locale);
     const pending = await this.prisma.companyInvite.findFirst({
       where: { companyId, email: storedEmail, acceptedAt: null },
     });
     if (pending) {
       await this.prisma.companyInvite.update({
         where: { id: pending.id },
-        data: { tokenHash, expiresAt, role, invitedById: user.id },
+        data: { tokenHash, expiresAt, role, locale: emailLocaleCode, invitedById: user.id },
       });
     } else {
       await this.prisma.companyInvite.create({
@@ -491,14 +493,15 @@ export class CompaniesService {
           companyId,
           email: storedEmail,
           role,
+          locale: emailLocaleCode,
           tokenHash,
           expiresAt,
           invitedById: user.id,
         },
       });
     }
-    await this.sendInviteEmail(storedEmail, company.name, rawToken);
-    return { status: 'invited' as const, email: storedEmail, role, expiresAt };
+    await this.sendInviteEmail(storedEmail, company.name, rawToken, emailLocaleCode);
+    return { status: 'invited' as const, email: storedEmail, role, locale: emailLocaleCode, expiresAt };
   }
 
   async previewInvite(rawToken: string) {
@@ -516,7 +519,7 @@ export class CompaniesService {
     return this.prisma.companyInvite.findMany({
       where: { companyId, acceptedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, email: true, role: true, expiresAt: true, createdAt: true },
+      select: { id: true, email: true, role: true, locale: true, expiresAt: true, createdAt: true },
     });
   }
 
@@ -618,9 +621,13 @@ export class CompaniesService {
     return this.config.get('WEB_URL', 'http://localhost:3000').replace(/\/$/, '');
   }
 
-  private async sendInviteEmail(email: string, companyName: string, rawToken: string) {
+  private async sendInviteEmail(
+    email: string,
+    companyName: string,
+    rawToken: string,
+    locale = emailLocale(null),
+  ) {
     const link = `${this.webUrl()}/register?invite=${rawToken}`;
-    const locale = emailLocale(null);
     const sent = await this.mail.send(
       email,
       translateMessage('email.invite.subject', locale, { company: companyName }),
@@ -640,9 +647,10 @@ export class CompaniesService {
   private async sendAddedEmail(
     user: { email: string; fullName: string; locale?: string | null },
     companyName: string,
+    chosenLocale?: string,
   ) {
     const link = `${this.webUrl()}/login`;
-    const locale = emailLocale(user.locale);
+    const locale = emailLocale(chosenLocale || user.locale);
     await this.mail.send(
       user.email,
       translateMessage('email.inviteAdded.subject', locale, { company: companyName }),

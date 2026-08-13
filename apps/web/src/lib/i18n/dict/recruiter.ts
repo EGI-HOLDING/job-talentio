@@ -532,6 +532,11 @@ export const recruiter = {
   'rec.inviteRole': { uz: 'Rol', ru: 'Роль', en: 'Role' },
   'rec.roleRecruiter': { uz: 'Rekruter', ru: 'Рекрутер', en: 'Recruiter' },
   'rec.roleAdmin': { uz: 'Admin', ru: 'Админ', en: 'Admin' },
+  'rec.inviteEmailLanguage': {
+    uz: 'Email tili',
+    ru: 'Язык письма',
+    en: 'Email language',
+  },
   'rec.inviteMember': { uz: 'A’zo taklif qilish', ru: 'Пригласить участника', en: 'Invite member' },
   'rec.inviting': { uz: 'Yuborilmoqda...', ru: 'Отправка...', en: 'Inviting...' },
   'rec.memberInvited': {
