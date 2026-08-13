@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
+import { accessTokenIsCurrent } from './access-token';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -18,14 +19,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string }) {
+  async validate(payload: { sub: string; tv?: number }) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: {
         memberships: { select: { companyId: true, role: true } },
       },
     });
-    if (!user || user.isBanned) {
+    if (!user || user.isBanned || !accessTokenIsCurrent(payload.tv, user.tokenVersion)) {
       throw new UnauthorizedException();
     }
     return {

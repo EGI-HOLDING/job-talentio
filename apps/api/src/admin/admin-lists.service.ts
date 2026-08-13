@@ -111,11 +111,22 @@ export class AdminListsService {
           emailVerified: true,
           lastSeenAt: true,
           createdAt: true,
+          passwordHash: true,
+          anonymizedAt: true,
         },
       }),
       this.prisma.user.count({ where }),
     ]);
-    return envelope(items, total, query.page, query.limit);
+    return envelope(
+      items.map(({ passwordHash, anonymizedAt, ...row }) => ({
+        ...row,
+        hasPassword: Boolean(passwordHash),
+        anonymized: Boolean(anonymizedAt),
+      })),
+      total,
+      query.page,
+      query.limit,
+    );
   }
 
   userIds(query: UserQuery) {

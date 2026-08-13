@@ -24,14 +24,17 @@ import {
   adminCatalogListSchema,
   adminCatalogUpdateSchema,
   adminCompanyListSchema,
+  adminInviteOperatorSchema,
   adminJobListSchema,
   adminReportListSchema,
+  adminUserAnonymizeSchema,
   adminUserListSchema,
 } from '@job-talentio/shared';
 import { AdminService } from './admin.service';
 import { AdminListsService } from './admin-lists.service';
 import { AdminBulkService } from './admin-bulk.service';
 import { AdminCatalogService } from './admin-catalog.service';
+import { AdminUsersService } from './admin-users.service';
 import { isCatalogType } from './catalog-registry';
 import type { CatalogType } from './catalog-registry';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
@@ -76,6 +79,7 @@ export class AdminController {
     private lists: AdminListsService,
     private bulk: AdminBulkService,
     private catalog: AdminCatalogService,
+    private accounts: AdminUsersService,
   ) {}
 
   @Get('metrics')
@@ -101,13 +105,40 @@ export class AdminController {
     return this.bulk.banUsers(user.id, data.ids, data.banned);
   }
 
+  @Post('users')
+  inviteOperator(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const data = parseDto(adminInviteOperatorSchema, body);
+    return this.accounts.inviteOperator(user.id, data);
+  }
+
+  @Post('users/:id/send-password-reset')
+  sendPasswordReset(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.accounts.sendPasswordReset(user.id, id);
+  }
+
+  @Post('users/:id/send-verification')
+  sendVerification(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.accounts.sendVerification(user.id, id);
+  }
+
+  @Post('users/:id/revoke-sessions')
+  revokeSessions(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.accounts.revokeSessions(user.id, id);
+  }
+
+  @Post('users/:id/anonymize')
+  anonymizeUser(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const data = parseDto(adminUserAnonymizeSchema, body);
+    return this.accounts.anonymize(user.id, id, data.reason);
+  }
+
   @Post('users/:id/ban')
   banUser(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() body: { banned: boolean },
   ) {
-    return this.admin.banUser(user.id, id, body.banned);
+    return this.accounts.banUser(user.id, id, body.banned);
   }
 
   // ─── Companies ────────────────────────────────────────────

@@ -4,11 +4,13 @@ import { AdminService } from './admin.service';
 import { AdminListsService } from './admin-lists.service';
 import { AdminBulkService } from './admin-bulk.service';
 import { AdminCatalogService } from './admin-catalog.service';
+import { AdminUsersService } from './admin-users.service';
 import { BillingModule } from '../billing/billing.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [BillingModule],
+  imports: [BillingModule, AuthModule],
   controllers: [AdminController],
-  providers: [AdminService, AdminListsService, AdminBulkService, AdminCatalogService],
+  providers: [AdminService, AdminListsService, AdminBulkService, AdminCatalogService, AdminUsersService],
 })
 export class AdminModule {}

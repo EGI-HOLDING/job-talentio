@@ -685,6 +685,15 @@ const bulkIds = z.array(z.string().min(1).max(40)).min(1).max(MAX_BULK_IDS);
 
 export const adminBulkBanSchema = z.object({ ids: bulkIds, banned: z.boolean() });
 
+export const adminInviteOperatorSchema = z.object({
+  email: z.string().email().max(200),
+  fullName: z.string().trim().min(2).max(120),
+});
+
+export const adminUserAnonymizeSchema = z.object({
+  reason: z.string().trim().min(8).max(500),
+});
+
 export const adminBulkPlanSchema = z.object({
   ids: bulkIds,
   plan: z.enum(['FREE', 'STANDARD', 'PREMIUM', 'VIP']),

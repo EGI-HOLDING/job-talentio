@@ -66,30 +66,6 @@ export class AdminService {
     };
   }
 
-  async banUser(actorId: string, userId: string, banned: boolean) {
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { isBanned: banned },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isBanned: true,
-        createdAt: true,
-      },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: banned ? 'BAN_USER' : 'UNBAN_USER',
-        entityType: 'User',
-        entityId: userId,
-      },
-    });
-    return user;
-  }
-
   async banCompany(actorId: string, companyId: string, banned: boolean) {
     const company = await this.prisma.company.update({
       where: { id: companyId },

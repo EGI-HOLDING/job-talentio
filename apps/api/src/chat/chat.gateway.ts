@@ -14,6 +14,7 @@ import { ChatService } from './chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
+import { accessTokenIsCurrent } from '../auth/access-token';
 
 @WebSocketGateway({
   cors: {
@@ -41,14 +42,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const token =
         (client.handshake.auth?.token as string) ||
         (client.handshake.headers.authorization?.replace('Bearer ', '') ?? '');
-      const payload = await this.jwt.verifyAsync<{ sub: string }>(token, {
+      const payload = await this.jwt.verifyAsync<{ sub: string; tv?: number }>(token, {
         secret: resolveJwtSecret(this.config),
       });
-      const banned = await this.prisma.user.findUnique({
+      const account = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { isBanned: true },
+        select: { isBanned: true, tokenVersion: true },
       });
-      if (!banned || banned.isBanned) {
+      if (!account || account.isBanned || !accessTokenIsCurrent(payload.tv, account.tokenVersion)) {
         client.disconnect();
         return;
       }
