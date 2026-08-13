@@ -312,7 +312,12 @@ export class JobsService {
   }
 
   async create(user: AuthUser, companyId: string, data: Record<string, unknown>) {
-    await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    const { company } = await this.companies.assertMember(user, companyId, [
+      'OWNER',
+      'ADMIN',
+      'RECRUITER',
+    ]);
+    this.companies.assertOpen(company);
     const workMode = ((data.workMode as string) || 'ONSITE') as WorkMode;
     // Remote: city is optional hub/region — never invent a fake "Remote" city
     const cityId =
@@ -379,9 +384,13 @@ export class JobsService {
   }
 
   async update(user: AuthUser, jobId: string, data: Record<string, unknown>) {
-    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    const job = await this.prisma.jobPost.findUnique({
+      where: { id: jobId },
+      include: { company: { select: { anonymizedAt: true } } },
+    });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    this.companies.assertOpen(job.company);
 
     const workMode = (data.workMode as WorkMode | undefined) ?? job.workMode;
     let cityId: string | null | undefined =
@@ -481,6 +490,7 @@ export class JobsService {
     });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    if (status !== 'CLOSED') this.companies.assertOpen(job.company);
 
     if (job.status === status) {
       return this.withResolvedIcons(

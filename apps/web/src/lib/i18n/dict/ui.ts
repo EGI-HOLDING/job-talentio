@@ -501,4 +501,42 @@ export const ui = {
     ru: 'Ещё {n} дней в горячих',
     en: 'Hot for {n} more days',
   },
+
+  'ui.deleteAccount': { uz: 'Hisobni o‘chirish', ru: 'Удалить аккаунт', en: 'Delete account' },
+  'ui.deleteAccountTitle': { uz: 'Hisobni o‘chirish', ru: 'Удаление аккаунта', en: 'Delete account' },
+  'ui.deleteAccountHint': {
+    uz: 'Bu amalni qaytarib bo‘lmaydi. Profilingiz yashirinadi, suhbat va arizalar boshqa tomon uchun saqlanadi.',
+    ru: 'Это нельзя отменить. Профиль будет скрыт, чаты и отклики сохранятся для другой стороны.',
+    en: 'This cannot be undone. Your profile is hidden; chats and applications stay for the other party.',
+  },
+  'ui.deleteAccountConfirmEmail': {
+    uz: 'Tasdiqlash uchun emailingizni yozing',
+    ru: 'Введите свой email для подтверждения',
+    en: 'Type your email to confirm',
+  },
+  'ui.deleteAccountConfirmName': {
+    uz: 'Tasdiqlash uchun ismingizni yozing',
+    ru: 'Введите своё имя для подтверждения',
+    en: 'Type your name to confirm',
+  },
+  'ui.deleteAccountPassword': {
+    uz: 'Joriy parol',
+    ru: 'Текущий пароль',
+    en: 'Current password',
+  },
+  'ui.deleteAccountOwnerHint': {
+    uz: 'Avval kompaniyani yoping yoki egalikni o‘tkazing, keyin hisobni o‘chiring.',
+    ru: 'Сначала закройте компанию или передайте владение, затем удалите аккаунт.',
+    en: 'Close the company or transfer ownership first, then delete your account.',
+  },
+  'ui.goToCompanySettings': {
+    uz: 'Kompaniya sozlamalariga o‘tish',
+    ru: 'Перейти к настройкам компании',
+    en: 'Go to company settings',
+  },
+  'ui.typeToConfirm': {
+    uz: 'Tasdiqlash uchun matnni yozing',
+    ru: 'Введите текст для подтверждения',
+    en: 'Type to confirm',
+  },
 } as const;

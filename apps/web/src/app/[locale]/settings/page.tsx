@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from '@/lib/navigation';
-import { api, getSession, saveSession, AuthSession } from '@/lib/api';
+import { useRouter, localeHref } from '@/lib/navigation';
+import { api, getSession, saveSession, logout, AuthSession } from '@/lib/api';
 import { useEnumLabel, useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
@@ -55,6 +55,10 @@ export default function SettingsPage() {
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramBusy, setTelegramBusy] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [ownerBlock, setOwnerBlock] = useState(false);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
@@ -255,6 +259,33 @@ export default function SettingsPage() {
     }
   }
 
+  async function deleteAccount() {
+    if (!session) return;
+    setDeleteBusy(true);
+    setErr(null);
+    setOwnerBlock(false);
+    try {
+      await api('/auth/me', {
+        method: 'DELETE',
+        body: JSON.stringify({
+          confirmation: session.user.email || session.user.fullName,
+          ...(hasPassword ? { currentPassword: deletePassword } : {}),
+        }),
+      });
+      await logout();
+      window.location.href = localeHref('/');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('ui.deleteAccount');
+      setErr(message);
+      if (message.includes('Close this company') || message.includes('Transfer ownership')) {
+        setOwnerBlock(true);
+      }
+      setConfirmDelete(false);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   if (!session) return null;
 
   const openBotChip = TELEGRAM_BOT_URL ? (
@@ -276,6 +307,23 @@ export default function SettingsPage() {
             if (!telegramBusy) setConfirmUnlink(false);
           }}
           onConfirm={() => void unlinkTelegram()}
+        />
+      ) : null}
+      {confirmDelete ? (
+        <ConfirmModal
+          title={t('ui.deleteAccountTitle')}
+          message={t('ui.deleteAccountHint')}
+          confirmLabel={t('ui.deleteAccount')}
+          danger
+          busy={deleteBusy}
+          requireTypedValue={session.user.email || session.user.fullName}
+          typedLabel={
+            session.user.email ? t('ui.deleteAccountConfirmEmail') : t('ui.deleteAccountConfirmName')
+          }
+          onCancel={() => {
+            if (!deleteBusy) setConfirmDelete(false);
+          }}
+          onConfirm={() => void deleteAccount()}
         />
       ) : null}
       <div className="settings-layout">
@@ -671,6 +719,41 @@ export default function SettingsPage() {
                   {hasEmail ? t('ui.sendConfirmation') : t('addEmailCta')}
                 </button>
               </form>
+
+              {session.user.role !== 'SUPER_ADMIN' ? (
+                <>
+                  <h3 style={{ marginTop: '2rem' }}>{t('ui.deleteAccountTitle')}</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('ui.deleteAccountHint')}
+                  </p>
+                  {ownerBlock ? (
+                    <p className="muted">
+                      {t('ui.deleteAccountOwnerHint')}{' '}
+                      {isRecruiter ? (
+                        <a href={localeHref('/dashboard/recruiter')}>{t('ui.goToCompanySettings')}</a>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {hasPassword ? (
+                    <label className="form-stack" style={{ display: 'block', marginBottom: '0.75rem' }}>
+                      <LabelText required>{t('ui.deleteAccountPassword')}</LabelText>
+                      <PasswordInput
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        autoComplete="current-password"
+                      />
+                    </label>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={deleteBusy || (hasPassword && !deletePassword)}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    {t('ui.deleteAccount')}
+                  </button>
+                </>
+              ) : null}
             </div>
           )}
         </section>

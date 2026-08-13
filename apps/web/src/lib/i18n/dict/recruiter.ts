@@ -576,4 +576,59 @@ export const recruiter = {
     ru: 'Нет ожидающих приглашений',
     en: 'No pending invitations',
   },
+  'rec.transferOwnership': {
+    uz: 'Egalikni o‘tkazish',
+    ru: 'Передать владение',
+    en: 'Transfer ownership',
+  },
+  'rec.confirmTransferOwnership': {
+    uz: 'Bu a’zo kompaniya egasi bo‘lsinmi? Siz admin bo‘lib qolasiz.',
+    ru: 'Сделать этого участника владельцем? Вы станете админом.',
+    en: 'Make this member the owner? You will become an admin.',
+  },
+  'rec.ownershipTransferred': {
+    uz: 'Egalik o‘tkazildi',
+    ru: 'Владение передано',
+    en: 'Ownership transferred',
+  },
+  'rec.transferFailed': {
+    uz: 'O‘tkazib bo‘lmadi',
+    ru: 'Не удалось передать',
+    en: 'Transfer failed',
+  },
+  'rec.closeCompany': {
+    uz: 'Kompaniyani yopish',
+    ru: 'Закрыть компанию',
+    en: 'Close company',
+  },
+  'rec.closeCompanyHint': {
+    uz: 'Vakansiyalar yopiladi, lekin arizalar saqlanadi. Keyin Settings orqali hisobni o‘chirishingiz mumkin.',
+    ru: 'Вакансии закроются, отклики сохранятся. После этого можно удалить аккаунт в Settings.',
+    en: 'Jobs are closed; applications stay. You can then delete your account in Settings.',
+  },
+  'rec.closeCompanyNeedTransfer': {
+    uz: 'Avval egalikni o‘tkazing yoki boshqa a’zolarni olib tashlang.',
+    ru: 'Сначала передайте владение или удалите других участников.',
+    en: 'Transfer ownership or remove other members first.',
+  },
+  'rec.closeCompanyConfirm': {
+    uz: 'Kompaniya nomini yozib tasdiqlang. Bu amalni qaytarib bo‘lmaydi.',
+    ru: 'Введите название компании для подтверждения. Это нельзя отменить.',
+    en: 'Type the company name to confirm. This cannot be undone.',
+  },
+  'rec.companyClosed': {
+    uz: 'Kompaniya yopildi',
+    ru: 'Компания закрыта',
+    en: 'Company closed',
+  },
+  'rec.companyAlreadyClosed': {
+    uz: 'Bu kompaniya yopilgan. Hisobni Settings orqali o‘chirish mumkin.',
+    ru: 'Компания уже закрыта. Аккаунт можно удалить в Settings.',
+    en: 'This company is closed. You can delete your account in Settings.',
+  },
+  'rec.closeFailed': {
+    uz: 'Yopib bo‘lmadi',
+    ru: 'Не удалось закрыть',
+    en: 'Could not close the company',
+  },
 } as const;

@@ -17,8 +17,10 @@ import { emailLocale } from '../common/i18n/email-locale';
 import { StorageService } from '../storage/storage.service';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { CompaniesService } from '../companies/companies.service';
+import { UserErasureService } from '../users/user-erasure.service';
+import { confirmationMatchesAccount } from '../users/erasure-guards';
 import { telegramFullName, verifyTelegramLogin } from './telegram-login';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -44,6 +46,7 @@ export class AuthService {
     private mail: MailService,
     private storage: StorageService,
     private companies: CompaniesService,
+    private erasure: UserErasureService,
   ) {}
 
   private async assertEmailAvailable(email: string) {
@@ -1083,5 +1086,60 @@ export class AuthService {
       }),
     ]);
     return this.tokenFor(record.userId);
+  }
+
+  async deleteMyAccount(
+    userId: string,
+    input: { confirmation: string; currentPassword?: string },
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        passwordHash: true,
+        anonymizedAt: true,
+      },
+    });
+    if (!user) throw new UnauthorizedException('Account unavailable');
+    if (user.role === 'SUPER_ADMIN') {
+      throw new ForbiddenException('Super admin accounts cannot be deleted here');
+    }
+    if (user.anonymizedAt) {
+      throw new BadRequestException('Account already anonymized');
+    }
+    if (
+      !confirmationMatchesAccount({
+        confirmation: input.confirmation,
+        email: user.email,
+        fullName: user.fullName,
+      })
+    ) {
+      throw new BadRequestException(
+        user.email ? 'Type your email to confirm' : 'Type your name to confirm',
+      );
+    }
+    if (user.passwordHash) {
+      if (!input.currentPassword) {
+        throw new BadRequestException('Current password is required');
+      }
+      const ok = await bcrypt.compare(input.currentPassword, user.passwordHash);
+      if (!ok) throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const result = await this.erasure.erase(userId);
+    await this.revokeAllSessions(userId);
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'USER_DELETE_ACCOUNT',
+        entityType: 'User',
+        entityId: userId,
+        metadata: { source: 'self' } as Prisma.InputJsonValue,
+      },
+    });
+    return result;
   }
 }

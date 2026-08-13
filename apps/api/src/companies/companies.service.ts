@@ -22,7 +22,9 @@ import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { emailLocale } from '../common/i18n/email-locale';
 import { TranslationService } from '../translation/translation.service';
+import { JobsSearchService } from '../search/jobs-search.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
+import { closeCompanyBlocked, transferOwnershipBlocked } from '../users/erasure-guards';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -36,7 +38,14 @@ export class CompaniesService {
     private translation: TranslationService,
     private mail: MailService,
     private config: ConfigService,
+    private jobsSearch: JobsSearchService,
   ) {}
+
+  assertOpen(company: { anonymizedAt?: Date | null }) {
+    if (company.anonymizedAt) {
+      throw new BadRequestException('This company is closed');
+    }
+  }
 
   private async assertCompanyNameAvailable(name: string, excludeId?: string) {
     const normalized = normalizeCompanyName(name);
@@ -76,6 +85,16 @@ export class CompaniesService {
       throw new ForbiddenException('Insufficient company role');
     }
     return { company: membership.company, membershipRole: membership.role };
+  }
+
+  private async assertOpenMember(
+    user: AuthUser,
+    companyId: string,
+    roles?: CompanyMemberRole[],
+  ) {
+    const result = await this.assertMember(user, companyId, roles);
+    this.assertOpen(result.company);
+    return result;
   }
 
   async myCompanies(userId: string) {
@@ -282,7 +301,7 @@ export class CompaniesService {
     locale: Locale,
     description: string,
   ) {
-    const { company } = await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const { company } = await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     if (locale === company.locale) {
       throw new BadRequestException(
         'This is the language the profile was written in; edit the company instead',
@@ -301,7 +320,7 @@ export class CompaniesService {
   }
 
   async deleteTranslation(user: AuthUser, companyId: string, locale: Locale) {
-    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     await this.prisma.companyTranslation
       .delete({ where: { companyId_locale: { companyId, locale } } })
       .catch(() => undefined);
@@ -334,7 +353,7 @@ export class CompaniesService {
       locale?: string;
     },
   ) {
-    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     if (data.name) {
       await this.assertCompanyNameAvailable(data.name, companyId);
     }
@@ -385,7 +404,7 @@ export class CompaniesService {
   }
 
   async uploadLogo(user: AuthUser, companyId: string, file: Express.Multer.File) {
-    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     if (!file?.buffer?.length) throw new BadRequestException('Image file is required');
     const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
     const uploaded = await this.storage.upload(
@@ -405,7 +424,7 @@ export class CompaniesService {
   }
 
   async clearLogo(user: AuthUser, companyId: string) {
-    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });
     const oldKey = this.storage.keyFromPublicUrl(company.logoUrl);
     const updated = await this.prisma.company.update({
@@ -418,7 +437,7 @@ export class CompaniesService {
   }
 
   async removeMember(user: AuthUser, companyId: string, memberUserId: string) {
-    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     if (memberUserId === user.id) {
       throw new BadRequestException('You cannot remove yourself');
     }
@@ -435,6 +454,94 @@ export class CompaniesService {
     return { ok: true };
   }
 
+  async transferOwnership(user: AuthUser, companyId: string, targetUserId: string) {
+    await this.assertOpenMember(user, companyId, ['OWNER']);
+    const target = await this.prisma.companyMember.findUnique({
+      where: { companyId_userId: { companyId, userId: targetUserId } },
+    });
+    const transferBlock = transferOwnershipBlocked({
+      actorId: user.id,
+      targetUserId,
+      targetIsMember: Boolean(target),
+    });
+    if (transferBlock) {
+      throw target ? new BadRequestException(transferBlock) : new NotFoundException(transferBlock);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.companyMember.update({
+        where: { companyId_userId: { companyId, userId: targetUserId } },
+        data: { role: 'OWNER' },
+      }),
+      this.prisma.companyMember.update({
+        where: { companyId_userId: { companyId, userId: user.id } },
+        data: { role: 'ADMIN' },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'COMPANY_TRANSFER_OWNERSHIP',
+          entityType: 'Company',
+          entityId: companyId,
+          metadata: { toUserId: targetUserId } as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
+    return { ok: true as const };
+  }
+
+  async closeCompany(user: AuthUser, companyId: string, typedName: string) {
+    const { company } = await this.assertMember(user, companyId, ['OWNER']);
+    const memberCount = await this.prisma.companyMember.count({ where: { companyId } });
+    const blocked = closeCompanyBlocked({
+      alreadyClosed: Boolean(company.anonymizedAt),
+      memberCount,
+      typedName,
+      companyName: company.name,
+    });
+    if (blocked) throw new BadRequestException(blocked);
+
+    const logoKey = this.storage.keyFromPublicUrl(company.logoUrl);
+    const now = new Date();
+    const closedSlug = `closed-${companyId}`;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.company.update({
+        where: { id: companyId },
+        data: {
+          isBanned: true,
+          anonymizedAt: now,
+          slug: closedSlug,
+          logoUrl: null,
+          website: null,
+          description: null,
+        },
+      });
+      await tx.companyTranslation.deleteMany({ where: { companyId } });
+      await tx.companyInvite.deleteMany({ where: { companyId, acceptedAt: null } });
+      await tx.subscription.updateMany({
+        where: { companyId },
+        data: { status: 'CANCELLED' },
+      });
+      await tx.jobPost.updateMany({
+        where: { companyId, NOT: { status: 'CLOSED' } },
+        data: { status: 'CLOSED', closedAt: now },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'COMPANY_CLOSED',
+          entityType: 'Company',
+          entityId: companyId,
+        },
+      });
+    });
+
+    if (logoKey) await this.storage.delete(logoKey).catch(() => undefined);
+    void this.jobsSearch.syncCompanyJobs(companyId);
+    return { ok: true as const, id: companyId };
+  }
+
   async invite(
     user: AuthUser,
     companyId: string,
@@ -442,7 +549,7 @@ export class CompaniesService {
     role: CompanyMemberRole = 'RECRUITER',
     locale?: string,
   ) {
-    const { company } = await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const { company } = await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     if (role !== 'ADMIN' && role !== 'RECRUITER') {
       throw new BadRequestException('Invite role must be ADMIN or RECRUITER');
     }

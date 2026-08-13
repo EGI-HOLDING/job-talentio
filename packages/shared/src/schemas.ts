@@ -694,6 +694,19 @@ export const adminUserAnonymizeSchema = z.object({
   reason: z.string().trim().min(8).max(500),
 });
 
+export const deleteAccountSchema = z.object({
+  confirmation: z.string().trim().min(1).max(200),
+  currentPassword: z.string().min(1).max(128).optional(),
+});
+
+export const companyCloseSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+});
+
+export const companyTransferOwnershipSchema = z.object({
+  userId: z.string().min(1).max(40),
+});
+
 export const adminBulkPlanSchema = z.object({
   ids: bulkIds,
   plan: z.enum(['FREE', 'STANDARD', 'PREMIUM', 'VIP']),
