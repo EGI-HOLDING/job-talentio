@@ -87,6 +87,18 @@ input, select, textarea {
   color: var(--text);
   padding: 0.7rem 0.85rem;
 }
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
 input:focus, select:focus, textarea:focus {
   outline: 2px solid var(--accent-soft);
   border-color: var(--accent);
@@ -2372,6 +2384,48 @@ a.card.job-card--hot {
   object-fit: cover;
   border: 3px solid #fff;
   box-shadow: var(--shadow);
+}
+.settings-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+.settings-choice input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.2rem;
+}
+.settings-choice-copy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.settings-choice-copy strong {
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.settings-choice-copy .muted {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+.form-stack .settings-form-actions button {
+  width: auto;
+  min-width: 8rem;
 }
 .pw-strength {
   height: 6px;
