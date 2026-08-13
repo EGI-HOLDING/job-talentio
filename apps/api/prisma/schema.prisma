@@ -496,6 +496,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   emailChangeTokens       EmailChangeToken[]
   refreshTokens           RefreshToken[]
+  companyInvitesSent      CompanyInvite[]          @relation("CompanyInvitesSent")
 }
 
 model RefreshToken {
@@ -581,6 +582,7 @@ model Company {
   messageTemplates MessageTemplate[]
   bulkCampaigns    BulkCampaign[]
   translations     CompanyTranslation[]
+  invites          CompanyInvite[]
 
   @@index([cityId])
   @@index([industryId])
@@ -598,6 +600,27 @@ model CompanyMember {
 
   @@unique([companyId, userId])
   @@index([userId])
+}
+
+/// Pending team invite. Raw token lives only in the email; we store SHA-256.
+model CompanyInvite {
+  id          String            @id @default(cuid())
+  companyId   String
+  email       String
+  role        CompanyMemberRole
+  /// SHA-256 of the raw token sent by email — raw token is never stored
+  tokenHash   String            @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  invitedById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy User    @relation("CompanyInvitesSent", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, email])
+  @@index([expiresAt])
 }
 
 model Subscription {

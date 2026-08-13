@@ -45,6 +45,7 @@ export class AuthController {
       role: data.role,
       locale: data.locale,
       companyName: data.companyName,
+      inviteToken: data.inviteToken,
     });
   }
 

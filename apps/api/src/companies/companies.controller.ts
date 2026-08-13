@@ -19,8 +19,8 @@ import {
   companyBrowseSchema,
   companySchema,
   companyTranslationSchema,
+  companyInviteSchema,
 } from '@job-talentio/shared';
-import { CompanyMemberRole } from '@prisma/client';
 import { CompaniesService } from './companies.service';
 import {
   JwtAuthGuard,
@@ -70,6 +70,11 @@ export class CompaniesController {
   @Get('slug/:slug')
   getBySlug(@Param('slug') slug: string, @Req() req: Request) {
     return this.companies.getBySlug(slug, requestLocale(req));
+  }
+
+  @Get('invites/:token')
+  previewInvite(@Param('token') token: string) {
+    return this.companies.previewInvite(token);
   }
 
   /** Signed-in and rate limited: every miss costs money at the provider. */
@@ -149,9 +154,28 @@ export class CompaniesController {
   invite(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
-    @Body() body: { email: string; role?: CompanyMemberRole },
+    @Body() body: unknown,
   ) {
-    return this.companies.invite(user, id, body.email, body.role ?? 'RECRUITER');
+    const data = parseDto(companyInviteSchema, body);
+    return this.companies.invite(user, id, data.email, data.role);
+  }
+
+  @Get(':id/invites')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  listInvites(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.companies.listPendingInvites(user, id);
+  }
+
+  @Delete(':id/invites/:inviteId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  revokeInvite(
+    @Param('id') id: string,
+    @Param('inviteId') inviteId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.companies.revokeInvite(user, id, inviteId);
   }
 
   @Delete(':id/members/:userId')
