@@ -2039,7 +2039,7 @@ function RecruiterDashboard() {
               <>
               <form className="form-stack" onSubmit={inviteMember}>
                 <label>
-                  <LabelText>{t('rec.inviteByEmail')}</LabelText>
+                  <LabelText required>{t('rec.inviteByEmail')}</LabelText>
                   <input
                     type="email"
                     value={inviteEmail}
@@ -2049,20 +2049,22 @@ function RecruiterDashboard() {
                   />
                 </label>
                 <label>
-                  <LabelText>{t('rec.inviteRole')}</LabelText>
+                  <LabelText required>{t('rec.inviteRole')}</LabelText>
                   <select
                     value={inviteRole}
                     onChange={(e) => setInviteRole(e.target.value as 'RECRUITER' | 'ADMIN')}
+                    required
                   >
                     <option value="RECRUITER">{t('rec.roleRecruiter')}</option>
                     <option value="ADMIN">{t('rec.roleAdmin')}</option>
                   </select>
                 </label>
                 <label>
-                  <LabelText>{t('rec.inviteEmailLanguage')}</LabelText>
+                  <LabelText required>{t('rec.inviteEmailLanguage')}</LabelText>
                   <select
                     value={inviteLocale}
                     onChange={(e) => setInviteLocale(e.target.value as 'uz' | 'ru' | 'en')}
+                    required
                   >
                     <option value="uz">{t('rec.localeNameUz')}</option>
                     <option value="ru">{t('rec.localeNameRu')}</option>
