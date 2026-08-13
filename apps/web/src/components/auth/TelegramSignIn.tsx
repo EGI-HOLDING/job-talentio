@@ -24,10 +24,50 @@ type TelegramResponse =
   | { requiresRegistration: true; fullName: string; username: string | null }
   | { accessToken: string; user: { role: string; locale?: string } };
 
+type TelegramAuthFn = (
+  options: { bot_id: string | number; request_access?: string; lang?: string },
+  callback: (user: TelegramUser | false) => void,
+) => void;
+
 declare global {
   interface Window {
-    onJobTalentioTelegramAuth?: (user: TelegramUser) => void;
+    Telegram?: { Login?: { auth?: TelegramAuthFn } };
   }
+}
+
+let sdkPromise: Promise<void> | null = null;
+
+function loadTelegramSdk(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (window.Telegram?.Login?.auth) return Promise.resolve();
+  if (sdkPromise) return sdkPromise;
+  sdkPromise = new Promise((resolve, reject) => {
+    const done = () => {
+      if (window.Telegram?.Login?.auth) resolve();
+      else reject(new Error('Telegram SDK failed to load'));
+    };
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${WIDGET_SRC}"]`);
+    if (existing) {
+      if (window.Telegram?.Login?.auth) {
+        resolve();
+        return;
+      }
+      existing.addEventListener('load', done, { once: true });
+      existing.addEventListener(
+        'error',
+        () => reject(new Error('Telegram SDK failed to load')),
+        { once: true },
+      );
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = WIDGET_SRC;
+    script.async = true;
+    script.onload = done;
+    script.onerror = () => reject(new Error('Telegram SDK failed to load'));
+    document.head.appendChild(script);
+  });
+  return sdkPromise;
 }
 
 function redirectAfterLogin(role: string) {
@@ -58,7 +98,8 @@ export function TelegramSignIn({
   onConnected?: () => void;
 } = {}) {
   const { t, locale } = useI18n();
-  const slotRef = useRef<HTMLDivElement>(null);
+  const [botId, setBotId] = useState<string | null>(null);
+  const [sdkReady, setSdkReady] = useState(false);
   const [widgetUser, setWidgetUser] = useState<TelegramUser | null>(null);
   const [needsRole, setNeedsRole] = useState<{ fullName: string; username: string | null } | null>(
     null,
@@ -133,25 +174,59 @@ export function TelegramSignIn({
   }, [submitTelegram]);
 
   useEffect(() => {
-    if (!TELEGRAM_BOT || !slotRef.current) return;
-    window.onJobTalentioTelegramAuth = (user) => {
-      setWidgetUser(user);
-      submitRef.current(user);
-    };
-    slotRef.current.innerHTML = '';
-    const script = document.createElement('script');
-    script.src = WIDGET_SRC;
-    script.async = true;
-    script.setAttribute('data-telegram-login', TELEGRAM_BOT);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-radius', '8');
-    script.setAttribute('data-request-access', 'write');
-    script.setAttribute('data-onauth', 'onJobTalentioTelegramAuth(user)');
-    slotRef.current.appendChild(script);
+    if (!TELEGRAM_BOT) return;
+    let cancelled = false;
+    api<{ available?: boolean; botId?: string }>('/auth/telegram/config', { auth: false })
+      .then((r) => {
+        if (!cancelled && r.available && r.botId) setBotId(r.botId);
+      })
+      .catch(() => undefined);
+    loadTelegramSdk()
+      .then(() => {
+        if (!cancelled) setSdkReady(true);
+      })
+      .catch(() => undefined);
     return () => {
-      delete window.onJobTalentioTelegramAuth;
+      cancelled = true;
     };
   }, []);
+
+  const openTelegramPopup = useCallback(async () => {
+    if (!botId || busy) return;
+    setError('');
+    try {
+      await loadTelegramSdk();
+      setSdkReady(true);
+    } catch {
+      setError(t('telegramSignInFailed'));
+      return;
+    }
+    const auth = window.Telegram?.Login?.auth;
+    if (!auth) {
+      setError(t('telegramSignInFailed'));
+      return;
+    }
+
+    const nativeOpen = window.open.bind(window);
+    let popup: Window | null = null;
+    window.open = ((...args: Parameters<typeof window.open>) => {
+      popup = nativeOpen(...args);
+      return popup;
+    }) as typeof window.open;
+    try {
+      auth({ bot_id: botId, request_access: 'write', lang: locale }, (user) => {
+        if (user && typeof user === 'object' && user.hash) {
+          setWidgetUser(user);
+          void submitRef.current(user);
+        }
+      });
+    } finally {
+      window.open = nativeOpen;
+    }
+    if (!popup) {
+      setError(t('telegramPopupBlocked'));
+    }
+  }, [botId, busy, locale, t]);
 
   if (!TELEGRAM_BOT) return null;
 
@@ -236,6 +311,7 @@ export function TelegramSignIn({
   }
 
   const showDivider = mode === 'login' && !GOOGLE_CLIENT_ID;
+  const ready = Boolean(botId) && sdkReady;
 
   return (
     <div className="google-signin">
@@ -244,12 +320,25 @@ export function TelegramSignIn({
           <span>{t('orContinueWith')}</span>
         </div>
       )}
-      <div ref={slotRef} className="telegram-btn-slot" style={{ marginTop: showDivider ? 0 : '0.75rem' }} />
-      {busy && (
-        <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-          {t('signingIn')}
-        </p>
-      )}
+      <div className="telegram-btn-slot" style={{ marginTop: showDivider ? 0 : '0.75rem' }}>
+        <button
+          type="button"
+          className="telegram-login-btn"
+          disabled={!ready || busy}
+          onClick={() => void openTelegramPopup()}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M21.5 3.2 2.8 10.4c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 11.1-7c.5-.3.9-.1.6.2l-9 8.1-.3 4.8c.4 0 .6-.2.8-.4l2.1-2 4.4 3.2c.8.5 1.4.2 1.6-.7l2.9-13.7c.3-1.2-.4-1.8-1.1-1.5z"
+            />
+          </svg>
+          {busy ? t('signingIn') : t('telegramContinue')}
+        </button>
+      </div>
+      <p className="muted" style={{ fontSize: '0.8rem', margin: '0.55rem 0 0', textAlign: 'center' }}>
+        {t('telegramSwitchHint')}
+      </p>
       <FormAlert>{error}</FormAlert>
     </div>
   );

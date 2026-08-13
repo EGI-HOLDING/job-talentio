@@ -672,6 +672,22 @@ export class AuthService {
     };
   }
 
+  /**
+   * Public bot id for the Login popup. The token itself stays on the server.
+   * Numeric id is the part before ':' in TELEGRAM_BOT_TOKEN and is not secret.
+   */
+  telegramWidgetConfig() {
+    const token = (this.config.get<string>('TELEGRAM_BOT_TOKEN') || '').trim();
+    const username = (this.config.get<string>('TELEGRAM_BOT_USERNAME') || '')
+      .replace(/^@/, '')
+      .trim();
+    const botId = token.split(':')[0] || '';
+    if (!token || !username || !/^\d{5,}$/.test(botId)) {
+      return { available: false as const };
+    }
+    return { available: true as const, botId, username };
+  }
+
   private parseTelegramAuth(input: {
     id: string;
     first_name: string;

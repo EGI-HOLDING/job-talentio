@@ -136,6 +136,11 @@ export class AuthController {
     return this.auth.requestVerification(user.id);
   }
 
+  @Get('telegram/config')
+  telegramConfig() {
+    return this.auth.telegramWidgetConfig();
+  }
+
   @Post('oauth/telegram')
   telegram(@Body() body: unknown) {
     const data = parseDto(telegramOAuthSchema, body);
