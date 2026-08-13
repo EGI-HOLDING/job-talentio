@@ -101,7 +101,7 @@ export function TelegramSignIn({
             role: extras?.role,
             companyName:
               extras?.role === 'RECRUITER' && !inviteToken ? extras.company : undefined,
-            email: extras?.email,
+            email: extras?.email?.trim() || undefined,
             locale,
             inviteToken: inviteToken || undefined,
           }),
@@ -164,15 +164,21 @@ export function TelegramSignIn({
             {needsRole.fullName}
             {needsRole.username ? ` (@${needsRole.username})` : ''}
           </p>
-          <FormField label={t('email')} required>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </FormField>
+          {inviteToken ? (
+            <FormField label={t('email')} required>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </FormField>
+          ) : (
+            <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
+              {t('telegramEmailLaterHint')}
+            </p>
+          )}
           {inviteToken ? null : (
             <div className="chips" role="radiogroup" style={{ margin: '0.75rem 0' }}>
               <button
@@ -210,14 +216,14 @@ export function TelegramSignIn({
             type="button"
             disabled={
               busy ||
-              !email.trim() ||
+              (Boolean(inviteToken) && !email.trim()) ||
               (!inviteToken && role === 'RECRUITER' && companyName.trim().length < 2)
             }
             onClick={() =>
               submitTelegram(widgetUser, {
                 role: inviteToken ? 'RECRUITER' : role,
                 company: companyName.trim(),
-                email: email.trim(),
+                email: email.trim() || undefined,
               })
             }
             style={{ marginTop: '0.5rem' }}

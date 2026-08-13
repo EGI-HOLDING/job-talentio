@@ -67,7 +67,7 @@ export default function UsersPage() {
           />
           <span style={{ minWidth: 0 }}>
             <span className="cell-strong truncate">{row.fullName}</span>
-            <span className="cell-sub truncate">{row.email}</span>
+            <span className="cell-sub truncate">{row.email || '—'}</span>
           </span>
         </div>
       ),
@@ -121,7 +121,7 @@ export default function UsersPage() {
     downloadCsv(timestampedName('users'), rows, [
       { header: 'id', value: (r) => r.id },
       { header: 'fullName', value: (r) => r.fullName },
-      { header: 'email', value: (r) => r.email },
+      { header: 'email', value: (r) => r.email ?? '' },
       { header: 'role', value: (r) => r.role },
       { header: 'locale', value: (r) => r.locale },
       { header: 'banned', value: (r) => r.isBanned },

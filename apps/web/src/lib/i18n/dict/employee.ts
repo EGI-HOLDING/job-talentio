@@ -94,6 +94,11 @@ export const employee = {
   },
 
   // Profile completeness checklist
+  'emp.checkAddEmail': {
+    uz: 'Email qo‘shing',
+    ru: 'Добавьте email',
+    en: 'Add your email',
+  },
   'emp.checkVerifyEmail': {
     uz: 'Emailingizni tasdiqlang',
     ru: 'Подтвердите email',

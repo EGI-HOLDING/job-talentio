@@ -168,7 +168,7 @@ function RecruiterDashboard() {
   >([]);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
-  const [accountEmail, setAccountEmail] = useState('');
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
 
   const company = useMemo(
@@ -752,7 +752,26 @@ function RecruiterDashboard() {
         {error && <FormAlert>{error}</FormAlert>}
         {msg && <FormAlert tone={msgTone}>{msg}</FormAlert>}
 
-        {emailVerified === false && (
+        {!accountEmail && emailVerified !== null && (
+          <div
+            className="card"
+            style={{
+              marginBottom: '1rem',
+              background: 'rgba(245, 158, 11, 0.12)',
+              borderColor: 'rgba(245, 158, 11, 0.35)',
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>{t('addEmailTitle')}</h3>
+            <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+              {t('addEmailDashboardHint')}
+            </p>
+            <Link href="/settings" style={{ color: 'var(--accent)' }}>
+              {t('addEmailGoToSettings')}
+            </Link>
+          </div>
+        )}
+
+        {accountEmail && emailVerified === false && (
           <div
             className="card"
             style={{
@@ -1911,16 +1930,28 @@ function RecruiterDashboard() {
         {tab === 'company' && company && (
           <div className="grid-2">
             <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h3>
-              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                {accountEmail || '-'} -{' '}
-                {emailVerified ? (
-                  <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
-                ) : (
-                  <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
-                )}
-              </p>
-              {!emailVerified && (
+              <h3 style={{ marginTop: 0 }}>
+                {accountEmail ? t('verifyEmailTitle') : t('addEmailTitle')}
+              </h3>
+              {accountEmail ? (
+                <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                  {accountEmail} -{' '}
+                  {emailVerified ? (
+                    <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
+                  ) : (
+                    <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
+                  )}
+                </p>
+              ) : (
+                <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                  {t('addEmailDashboardHint')}
+                </p>
+              )}
+              {!accountEmail ? (
+                <Link href="/settings" style={{ color: 'var(--accent)' }}>
+                  {t('addEmailGoToSettings')}
+                </Link>
+              ) : !emailVerified ? (
                 <>
                   <p className="muted" style={{ fontSize: '0.9rem' }}>
                     {t('verifyEmailProfileHint')}
@@ -1933,7 +1964,7 @@ function RecruiterDashboard() {
                     {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
                   </button>
                 </>
-              )}
+              ) : null}
             </div>
             <div className="card">
               <h2 className="section-title">{sanitizeMojibake(company.name)}</h2>

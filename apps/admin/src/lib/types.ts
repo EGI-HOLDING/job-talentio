@@ -10,7 +10,7 @@ export type CatalogStatus = 'PENDING' | 'COMPLETE' | 'IGNORED';
 
 export type AdminUser = {
   id: string;
-  email: string;
+  email: string | null;
   fullName: string;
   role: UserRole;
   locale: string;
@@ -62,7 +62,7 @@ export type AdminReport = {
   status: ReportStatus;
   resolution: string | null;
   createdAt: string;
-  reporter: { id: string; email: string; fullName: string } | null;
+  reporter: { id: string; email: string | null; fullName: string } | null;
 };
 
 export type AdminAuditLog = {
@@ -72,7 +72,7 @@ export type AdminAuditLog = {
   entityId: string | null;
   metadata: unknown;
   createdAt: string;
-  actor: { id: string; email: string; fullName: string } | null;
+  actor: { id: string; email: string | null; fullName: string } | null;
 };
 
 export type AdminCatalogEntry = {

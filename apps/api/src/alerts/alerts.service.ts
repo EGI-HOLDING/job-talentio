@@ -247,11 +247,13 @@ export class AlertsService {
         )
         .join('');
       const locale = emailLocale(alert.user.locale);
-      await this.mail.send(
-        alert.user.email,
-        translateMessage('email.jobAlert.subject', locale, { alert: alert.name }),
-        `<p>${translateMessage('email.jobAlert.intro', locale, { alert: alert.name })}</p><ul>${list}</ul>`,
-      );
+      if (alert.user.email) {
+        await this.mail.send(
+          alert.user.email,
+          translateMessage('email.jobAlert.subject', locale, { alert: alert.name }),
+          `<p>${translateMessage('email.jobAlert.intro', locale, { alert: alert.name })}</p><ul>${list}</ul>`,
+        );
+      }
 
       await this.notifications.create({
         userId: alert.userId,

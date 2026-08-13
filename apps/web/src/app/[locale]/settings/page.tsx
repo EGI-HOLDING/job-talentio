@@ -47,7 +47,9 @@ export default function SettingsPage() {
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const isRecruiter = session?.user.role === 'RECRUITER';
-  const canVerifyEmail = isEmployee || isRecruiter;
+  const canVerifyEmail = (isEmployee || isRecruiter) && Boolean(session?.user.email);
+  const hasPassword = session?.user.hasPassword !== false;
+  const hasEmail = Boolean(session?.user.email);
   const previewAvatar =
     avatarUrl ||
     (session
@@ -146,7 +148,7 @@ export default function SettingsPage() {
         method: 'POST',
         body: JSON.stringify({
           newEmail,
-          currentPassword: emailChangePassword,
+          ...(hasPassword ? { currentPassword: emailChangePassword } : {}),
         }),
       });
       setPwMsg(r.message || t('ui.emailChangeCheckInbox'));
@@ -223,7 +225,7 @@ export default function SettingsPage() {
                 {fullName || session.user.fullName}
               </h1>
               <p className="muted" style={{ margin: '0.35rem 0' }}>
-                {session.user.email}
+                {session.user.email || t('addEmailTitle')}
               </p>
               <span className="badge skill">{enumLabel('role', session.user.role)}</span>
             </div>
@@ -251,6 +253,24 @@ export default function SettingsPage() {
               <p className="muted" style={{ marginTop: 0 }}>
                 {t('updateProfileHint')}
               </p>
+              {(isEmployee || isRecruiter) && !hasEmail && (
+                <div
+                  style={{
+                    marginBottom: '1.25rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: 12,
+                    background: 'rgba(245, 158, 11, 0.12)',
+                  }}
+                >
+                  <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>{t('addEmailTitle')}</p>
+                  <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
+                    {t('addEmailHint')}
+                  </p>
+                  <button type="button" onClick={() => setSection('security')}>
+                    {t('addEmailCta')}
+                  </button>
+                </div>
+              )}
               {canVerifyEmail && (
                 <div
                   style={{
@@ -397,46 +417,57 @@ export default function SettingsPage() {
 
           {section === 'security' && (
             <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('changePassword')}</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
-                {t('ui.passwordRuleHint')}
-              </p>
-              <p className="required-note">{t('requiredFieldsNote')}</p>
-              <form onSubmit={changePassword} className="form-stack">
-                <label>
-                  <LabelText required>{t('currentPassword')}</LabelText>
-                  <PasswordInput
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                    aria-required="true"
-                    autoComplete="current-password"
-                  />
-                </label>
-                <label>
-                  <LabelText required>{t('newPassword')}</LabelText>
-                  <PasswordInput
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    aria-required="true"
-                    minLength={8}
-                    autoComplete="new-password"
-                    aria-describedby={newPassword ? 'pw-strength' : undefined}
-                  />
-                  {newPassword && (
-                    <>
-                      <div className="pw-strength" aria-hidden="true">
-                        <span style={{ width: `${strength.score}%`, background: strength.color }} />
-                      </div>
-                      <span id="pw-strength" className="muted" style={{ fontSize: '0.8rem' }}>
-                        {t('ui.passwordStrength')}: {t(strength.labelKey)}
-                      </span>
-                    </>
-                  )}
-                </label>
-                <button type="submit">{t('changePassword')}</button>
-              </form>
+              {hasPassword ? (
+                <>
+                  <h3 style={{ marginTop: 0 }}>{t('changePassword')}</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('ui.passwordRuleHint')}
+                  </p>
+                  <p className="required-note">{t('requiredFieldsNote')}</p>
+                  <form onSubmit={changePassword} className="form-stack">
+                    <label>
+                      <LabelText required>{t('currentPassword')}</LabelText>
+                      <PasswordInput
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                        aria-required="true"
+                        autoComplete="current-password"
+                      />
+                    </label>
+                    <label>
+                      <LabelText required>{t('newPassword')}</LabelText>
+                      <PasswordInput
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        aria-required="true"
+                        minLength={8}
+                        autoComplete="new-password"
+                        aria-describedby={newPassword ? 'pw-strength' : undefined}
+                      />
+                      {newPassword && (
+                        <>
+                          <div className="pw-strength" aria-hidden="true">
+                            <span style={{ width: `${strength.score}%`, background: strength.color }} />
+                          </div>
+                          <span id="pw-strength" className="muted" style={{ fontSize: '0.8rem' }}>
+                            {t('ui.passwordStrength')}: {t(strength.labelKey)}
+                          </span>
+                        </>
+                      )}
+                    </label>
+                    <button type="submit">{t('changePassword')}</button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <h3 style={{ marginTop: 0 }}>{t('changePassword')}</h3>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('passwordlessHint')}
+                  </p>
+                </>
+              )}
 
               <h3 style={{ marginTop: '2rem' }}>{t('telegramConnectTitle')}</h3>
               {session.user.telegramLinked ? (
@@ -459,12 +490,14 @@ export default function SettingsPage() {
                 </>
               )}
 
-              <h3 style={{ marginTop: '2rem' }}>{t('ui.changeEmail')}</h3>
+              <h3 style={{ marginTop: '2rem' }}>
+                {hasEmail ? t('ui.changeEmail') : t('addEmailTitle')}
+              </h3>
               <p className="muted" style={{ marginTop: 0 }}>
-                {t('ui.changeEmailHint')}
+                {hasEmail ? t('ui.changeEmailHint') : t('addEmailHint')}
               </p>
               <form onSubmit={requestEmailChange} className="form-stack">
-                <FormField label={t('ui.newEmail')} required>
+                <FormField label={hasEmail ? t('ui.newEmail') : t('email')} required>
                   <input
                     type="email"
                     value={newEmail}
@@ -473,16 +506,20 @@ export default function SettingsPage() {
                     autoComplete="email"
                   />
                 </FormField>
-                <label>
-                  <LabelText required>{t('currentPassword')}</LabelText>
-                  <PasswordInput
-                    value={emailChangePassword}
-                    onChange={(e) => setEmailChangePassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                  />
-                </label>
-                <button type="submit">{t('ui.sendConfirmation')}</button>
+                {hasPassword ? (
+                  <label>
+                    <LabelText required>{t('currentPassword')}</LabelText>
+                    <PasswordInput
+                      value={emailChangePassword}
+                      onChange={(e) => setEmailChangePassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                    />
+                  </label>
+                ) : null}
+                <button type="submit">
+                  {hasEmail ? t('ui.sendConfirmation') : t('addEmailCta')}
+                </button>
               </form>
             </div>
           )}

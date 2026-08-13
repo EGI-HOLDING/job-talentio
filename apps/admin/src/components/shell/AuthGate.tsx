@@ -7,7 +7,7 @@ import { Alert } from '@/components/ui/primitives';
 type Session = {
   accessToken: string;
   refreshToken?: string;
-  user: { id: string; email: string; fullName: string; role: string };
+  user: { id: string; email: string | null; fullName: string; role: string };
 };
 
 type AdminIdentity = { email: string; fullName: string };
@@ -96,7 +96,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       saveToken(session.accessToken, session.refreshToken);
       localStorage.setItem(
         IDENTITY_KEY,
-        JSON.stringify({ email: session.user.email, fullName: session.user.fullName }),
+        JSON.stringify({ email: session.user.email ?? '', fullName: session.user.fullName }),
       );
       setAuthed(true);
     } catch (err) {

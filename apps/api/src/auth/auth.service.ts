@@ -65,7 +65,7 @@ export class AuthService {
         select: { email: true },
         take: 5000,
       });
-      if (users.some((u) => normalizeEmail(u.email) === normalized)) {
+      if (users.some((u) => u.email && normalizeEmail(u.email) === normalized)) {
         throw new ConflictException(
           'An account with this email (or a Gmail alias of it) already exists',
         );
@@ -133,6 +133,7 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         emailVerified: user.emailVerified,
         telegramLinked: Boolean(user.telegramId),
+        hasPassword: Boolean(user.passwordHash),
         memberships: user.memberships,
         employeeProfileId: user.employeeProfile?.id ?? null,
       },
@@ -243,12 +244,14 @@ export class AuthService {
     });
 
     const welcomeLocale = emailLocale(user.locale);
-    await this.mail.send(
-      user.email,
-      translateMessage('email.welcome.subject', welcomeLocale),
-      `<p>${translateMessage('email.greeting', welcomeLocale, { name: user.fullName })}</p>` +
-        `<p>${translateMessage('email.welcome.body', welcomeLocale)}</p>`,
-    );
+    if (user.email) {
+      await this.mail.send(
+        user.email,
+        translateMessage('email.welcome.subject', welcomeLocale),
+        `<p>${translateMessage('email.greeting', welcomeLocale, { name: user.fullName })}</p>` +
+          `<p>${translateMessage('email.welcome.body', welcomeLocale)}</p>`,
+      );
+    }
 
     return this.tokenFor(user.id);
   }
@@ -603,7 +606,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
     });
-    if (!user || user.emailVerified || user.isBanned) return { ok: true };
+    if (!user || !user.email || user.emailVerified || user.isBanned) return { ok: true };
 
     const recent = await this.prisma.emailVerificationToken.findFirst({
       where: {
@@ -615,7 +618,12 @@ export class AuthService {
     if (recent) return { ok: true };
 
     try {
-      await this.sendVerificationEmail(user);
+      await this.sendVerificationEmail({
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        locale: user.locale,
+      });
     } catch {
       // Public endpoint — do not leak delivery failures
     }
@@ -631,6 +639,9 @@ export class AuthService {
     if (user.isBanned) throw new ForbiddenException('Account banned');
     if (user.emailVerified) {
       return { ok: true as const, email: user.email, alreadyVerified: true as const };
+    }
+    if (!user.email) {
+      throw new BadRequestException('Add an email in Settings before requesting verification');
     }
 
     const recent = await this.prisma.emailVerificationToken.findFirst({
@@ -648,7 +659,12 @@ export class AuthService {
       };
     }
 
-    await this.sendVerificationEmail(user);
+    await this.sendVerificationEmail({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      locale: user.locale,
+    });
     return {
       ok: true as const,
       email: user.email,
@@ -691,7 +707,7 @@ export class AuthService {
 
   /**
    * Telegram Login Widget. Returning users get a session immediately.
-   * New users must send email + role (Telegram does not provide an email).
+   * New users pick a role; email is optional and verified later from Settings.
    */
   async oauthTelegram(input: {
     id: string;
@@ -713,13 +729,13 @@ export class AuthService {
     let user = await this.prisma.user.findUnique({ where: { telegramId: tg.telegramId } });
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
-      if (inviteToken) {
+      if (inviteToken && user.email) {
         await this.acceptInviteOnExistingUser(inviteToken, user.email, user.id);
       }
       return this.tokenFor(user.id);
     }
 
-    if (!input.role || !input.email) {
+    if (!input.role) {
       return {
         requiresRegistration: true as const,
         fullName: tg.fullName,
@@ -727,19 +743,25 @@ export class AuthService {
       };
     }
 
-    const email = input.email.trim().toLowerCase();
-    const byEmail = await this.prisma.user.findUnique({ where: { email } });
-    if (byEmail) {
-      throw new ConflictException(
-        'An account with this email already exists. Sign in and connect Telegram from Settings.',
-      );
+    const email = input.email?.trim().toLowerCase() || null;
+    if (inviteToken && !email) {
+      throw new BadRequestException('Email is required to accept a company invitation');
+    }
+    if (email) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email } });
+      if (byEmail) {
+        throw new ConflictException(
+          'An account with this email already exists. Sign in and connect Telegram from Settings.',
+        );
+      }
     }
 
     if (inviteToken) {
+      const inviteEmail = email as string;
       const created = await this.prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
           data: {
-            email,
+            email: inviteEmail,
             telegramId: tg.telegramId,
             fullName: tg.fullName,
             avatarUrl: tg.avatarUrl,
@@ -748,7 +770,7 @@ export class AuthService {
             emailVerified: false,
           },
         });
-        await this.companies.consumeInvite(tx, inviteToken, email, newUser.id);
+        await this.companies.consumeInvite(tx, inviteToken, inviteEmail, newUser.id);
         return newUser;
       });
       return this.tokenFor(created.id);
@@ -762,7 +784,7 @@ export class AuthService {
       await this.assertCompanyNameAvailable(name);
     }
 
-    await this.assertEmailAvailable(email);
+    if (email) await this.assertEmailAvailable(email);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -838,7 +860,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
     });
-    if (!user || user.isBanned || !user.passwordHash) return { ok: true };
+    if (!user || user.isBanned || !user.passwordHash || !user.email) return { ok: true };
 
     await this.prisma.passwordResetToken.deleteMany({
       where: { userId: user.id, usedAt: null },
@@ -893,16 +915,18 @@ export class AuthService {
     return { ok: true };
   }
 
-  async requestEmailChange(userId: string, newEmail: string, currentPassword: string) {
+  async requestEmailChange(userId: string, newEmail: string, currentPassword?: string) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    if (!user.passwordHash) {
-      throw new BadRequestException('Set a password before changing email');
+    if (user.passwordHash) {
+      if (!currentPassword) {
+        throw new BadRequestException('Current password is required');
+      }
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) throw new UnauthorizedException('Current password is incorrect');
     }
-    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Current password is incorrect');
 
     const email = newEmail.trim().toLowerCase();
-    if (email === user.email) throw new BadRequestException('That is already your email');
+    if (user.email && email === user.email) throw new BadRequestException('That is already your email');
     await this.assertEmailAvailable(email);
 
     await this.prisma.emailChangeToken.deleteMany({

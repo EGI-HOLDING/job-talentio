@@ -404,13 +404,16 @@ export class ApplicationsService {
       Boolean(application.profile.user.emailVerified);
 
     if (shouldEmail) {
-      const { subject, html } = this.stageEmail(
-        application.jobPost.title,
-        status,
-        note,
-        emailLocale(application.profile.user.locale),
-      );
-      void this.mail.send(application.profile.user.email, subject, html);
+      const to = application.profile.user.email;
+      if (to) {
+        const { subject, html } = this.stageEmail(
+          application.jobPost.title,
+          status,
+          note,
+          emailLocale(application.profile.user.locale),
+        );
+        void this.mail.send(to, subject, html);
+      }
     }
 
     return updated;

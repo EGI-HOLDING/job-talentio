@@ -2,6 +2,7 @@ import {
   companyInviteSchema,
   googleOAuthSchema,
   registerSchema,
+  telegramOAuthSchema,
 } from '@job-talentio/shared';
 import { sha256 } from '../common/dedupe';
 
@@ -69,6 +70,40 @@ if (ownerInvite.success) throw new Error('invite must reject OWNER');
 
 if (sha256('invite-a') === sha256('invite-b')) {
   throw new Error('invite token hashes must differ');
+}
+
+const telegramBase = {
+  id: '12345',
+  first_name: 'Ada',
+  auth_date: Math.floor(Date.now() / 1000),
+  hash: 'a'.repeat(64),
+};
+
+const telegramSignup = telegramOAuthSchema.safeParse({
+  ...telegramBase,
+  role: 'EMPLOYEE',
+});
+if (!telegramSignup.success) {
+  throw new Error('telegram signup must allow a missing email');
+}
+
+const telegramInviteMissingEmail = telegramOAuthSchema.safeParse({
+  ...telegramBase,
+  role: 'RECRUITER',
+  inviteToken: token,
+});
+if (telegramInviteMissingEmail.success) {
+  throw new Error('telegram invite signup must require email');
+}
+
+const telegramInvite = telegramOAuthSchema.safeParse({
+  ...telegramBase,
+  role: 'RECRUITER',
+  email: 'teammate@co.uz',
+  inviteToken: token,
+});
+if (!telegramInvite.success) {
+  throw new Error('telegram invite signup with email must pass');
 }
 
 console.log('company-invite schema smoke ok');
