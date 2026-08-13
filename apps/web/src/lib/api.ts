@@ -1,5 +1,4 @@
 import { DEFAULT_LOCALE, localeFromPathname } from '@/lib/locale';
-import { forgetTelegramOauthSession } from '@/lib/telegramOauth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
@@ -82,7 +81,6 @@ export async function logout() {
     }
   }
   clearSession();
-  forgetTelegramOauthSession();
 }
 
 // Single in-flight refresh shared by concurrent 401s.
