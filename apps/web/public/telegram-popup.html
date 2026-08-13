@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telegram</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        padding: 1.5rem;
+        color: #334155;
+      }
+    </style>
+  </head>
+  <body>
+    <p>Telegram...</p>
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var botId = q.get('bot_id') || '';
+        var origin = q.get('origin') || location.origin;
+        if (!botId) return;
+        var logout =
+          'https://oauth.telegram.org/auth/logout?bot_id=' +
+          encodeURIComponent(botId) +
+          '&origin=' +
+          encodeURIComponent(origin);
+        location.replace(logout);
+      })();
+    </script>
+  </body>
+</html>

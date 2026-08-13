@@ -623,9 +623,14 @@ export const core = {
     en: 'Connect Telegram',
   },
   telegramSwitchHint: {
-    uz: 'Agar Telegram avvalgi akkauntni tanlasa, boshqa akkauntni tanlang.',
-    ru: 'Если Telegram подставил прошлый аккаунт, выберите другой.',
-    en: 'If Telegram fills in a previous account, choose a different one.',
+    uz: 'Har safar Telegram yangi login ochiladi, avvalgi sessiya saqlanmaydi.',
+    ru: 'Каждый раз Telegram открывает новый вход, прошлый сеанс не сохраняется.',
+    en: 'Each Telegram window starts a new login. The previous Telegram session is not reused.',
+  },
+  telegramSameAccount: {
+    uz: 'Telegram hali ham avvalgi akkauntni yubordi. Oynada Log out qiling, keyin qayta urinib ko‘ring.',
+    ru: 'Telegram снова отправил прежний аккаунт. Нажмите Log out в окне и повторите.',
+    en: 'Telegram still sent the previous account. Click Log out in the Telegram window and try again.',
   },
   telegramConfirmTitle: {
     uz: 'Telegram hisobi',
