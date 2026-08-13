@@ -50,7 +50,11 @@ export class JobsController {
 
   @Get()
   @UseGuards(SearchRateLimitGuard, OptionalJwtAuthGuard)
-  async search(@Query() query: unknown, @CurrentUser() user?: AuthUser) {
+  async search(
+    @Query() query: unknown,
+    @Req() req: Request,
+    @CurrentUser() user?: AuthUser,
+  ) {
     const data = parseDto(jobSearchSchema, query);
     let profileId: string | undefined;
     if (user?.role === 'EMPLOYEE') {
@@ -76,6 +80,7 @@ export class JobsController {
       page: data.page ?? 1,
       limit: data.limit ?? 12,
       profileId,
+      locale: requestLocale(req),
     });
   }
 
@@ -124,15 +129,15 @@ export class JobsController {
   }
 
   /**
-   * Reader-triggered machine translation. Signed-in only and rate limited,
-   * because every miss costs money at the provider.
+   * Reader-triggered machine translation, including guests. Rate limited and
+   * budgeted: the first miss pays the provider, later readers hit the cache.
    */
   @Post(':id/translate/:locale')
-  @UseGuards(JwtAuthGuard, SearchRateLimitGuard)
+  @UseGuards(OptionalJwtAuthGuard, SearchRateLimitGuard)
   machineTranslate(
     @Param('id') id: string,
     @Param('locale') locale: string,
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user?: AuthUser,
   ) {
     return this.jobs.machineTranslate(id, assertLocale(locale), user);
   }

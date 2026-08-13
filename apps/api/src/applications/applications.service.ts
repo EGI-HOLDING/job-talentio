@@ -16,6 +16,9 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
+import { resolveContent } from '../common/i18n/content-locale';
+import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
 
 @Injectable()
 export class ApplicationsService {
@@ -257,12 +260,13 @@ export class ApplicationsService {
   async listForJob(
     user: AuthUser,
     jobPostId: string,
-    opts?: { status?: string; sort?: 'match' | 'newest'; minMatch?: number },
+    opts?: { status?: string; sort?: 'match' | 'newest'; minMatch?: number; locale?: Locale },
   ) {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobPostId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId);
 
+    const locale = opts?.locale ?? DEFAULT_LOCALE;
     const where: Record<string, unknown> = { jobPostId };
     if (opts?.status) where.status = opts.status;
     if (opts?.minMatch !== undefined) where.matchScore = { gte: opts.minMatch };
@@ -278,6 +282,7 @@ export class ApplicationsService {
             city: true,
             experiences: true,
             educations: true,
+            translations: { select: { locale: true, headline: true, isMachine: true } },
           },
         },
         events: { orderBy: { createdAt: 'desc' }, take: 10 },
@@ -291,7 +296,7 @@ export class ApplicationsService {
     });
 
     return rows.map((row) => {
-      const { resume, resumeSnapshot, ...rest } = row;
+      const { resume, resumeSnapshot, profile, ...rest } = row;
       const snap = resumeSnapshot as
         | {
             resume?: { title?: string | null; fileKey?: string | null; hasFile?: boolean };
@@ -305,8 +310,26 @@ export class ApplicationsService {
         const { fileKey: _fileKey, ...resumeWithoutKey } = snapResume;
         safeSnapshot = { ...snap, resume: { ...resumeWithoutKey, hasFile: hasResumeFile } };
       }
+      const { translations, ...profileRest } = profile;
+      const source = isLocale(profileRest.contentLocale)
+        ? profileRest.contentLocale
+        : DEFAULT_LOCALE;
+      const resolvedHeadline = resolveContent(
+        { headline: profileRest.headline ?? '' },
+        source,
+        (translations ?? []).map((t) => ({
+          locale: t.locale,
+          headline: t.headline ?? '',
+          isMachine: t.isMachine,
+        })),
+        locale,
+      );
       return {
         ...rest,
+        profile: {
+          ...profileRest,
+          headline: resolvedHeadline.content.headline || profileRest.headline,
+        },
         resumeSnapshot: safeSnapshot,
         resumeTitle: resume?.title ?? snapResume?.title ?? null,
         hasResumeFile,

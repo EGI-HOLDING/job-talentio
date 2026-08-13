@@ -908,7 +908,9 @@ export class JobsService {
     page: number;
     limit: number;
     profileId?: string;
+    locale?: Locale;
   }) {
+    const locale = query.locale ?? DEFAULT_LOCALE;
     const and: Prisma.JobPostWhereInput[] = [{ status: 'PUBLISHED' }];
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -1056,6 +1058,9 @@ export class JobsService {
     const scanCap = sort === 'match' ? MATCH_SCAN_CAP : RELEVANCE_SCAN_CAP;
 
     const jobInclude = {
+      translations: {
+        select: { locale: true, title: true, description: true, isMachine: true },
+      },
       company: {
         select: {
           id: true,
@@ -1328,7 +1333,7 @@ export class JobsService {
     }
 
     return {
-      items: sorted.map((job) => this.withResolvedIcons(job)),
+      items: sorted.map((job) => this.withContentLocale(this.withResolvedIcons(job), locale)),
       total,
       matchedTotal,
       truncated,

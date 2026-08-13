@@ -7,7 +7,7 @@ import { catalogDelegate } from '../common/i18n/catalog-kind';
 import type { CatalogKind } from '../common/i18n/catalog-kind';
 import { contentHash } from '../common/i18n/content-locale';
 import { detectLocale } from '../common/i18n/detect-locale';
-import { isLocale } from '../common/i18n/locale';
+import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { TRANSLATION_PROVIDER } from './translation.provider';
 import type { TranslationProvider } from './translation.provider';
@@ -212,6 +212,231 @@ export class TranslationService {
       await this.refundBudget(chars);
       this.logger.warn(
         `Machine translation failed for company ${companyId}: ${(err as Error).message}`,
+      );
+      return { status: 'failed', reason: 'Translation service unavailable' };
+    }
+  }
+
+  /** Same contract as `translateJob`, for an article title, excerpt, and body. */
+  async translateNews(slug: string, target: Locale): Promise<MachineTranslationResult> {
+    if (!this.provider.enabled) return { status: 'disabled' };
+
+    const article = await this.prisma.newsArticle.findUnique({
+      where: { slug },
+      include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
+    });
+    if (!article || !article.isPublished) return { status: 'failed', reason: 'Article not found' };
+    if (!isLocale(article.locale)) return { status: 'unsupported' };
+    if (target === article.locale) return { status: 'exists', locale: target };
+
+    const hash = contentHash(article.title, article.excerpt, article.body);
+    const existing = article.translations.find((t) => t.locale === target);
+    if (existing && (!existing.isMachine || existing.sourceHash === hash)) {
+      return { status: 'exists', locale: target };
+    }
+
+    const title = article.title.slice(0, MAX_CHARS_PER_FIELD);
+    const excerpt = article.excerpt.slice(0, MAX_CHARS_PER_FIELD);
+    const body = article.body.slice(0, MAX_CHARS_PER_FIELD);
+    const chars = title.length + excerpt.length + body.length;
+    const allowed = await this.consumeBudget(chars);
+    if (!allowed) return { status: 'budget-exceeded' };
+
+    try {
+      const [translatedTitle, translatedExcerpt, translatedBody] = await this.provider.translate({
+        texts: [title, excerpt, body],
+        targetLocale: target,
+        sourceLocale: article.locale,
+      });
+      if (!translatedTitle || !translatedExcerpt || !translatedBody) {
+        await this.refundBudget(chars);
+        return { status: 'unsupported' };
+      }
+
+      const value = {
+        title: translatedTitle,
+        excerpt: translatedExcerpt,
+        body: translatedBody,
+        isMachine: true,
+        sourceHash: hash,
+      };
+      await this.prisma.newsArticleTranslation.upsert({
+        where: { articleId_locale: { articleId: article.id, locale: target } },
+        update: value,
+        create: { articleId: article.id, locale: target, ...value },
+      });
+      return { status: 'ready', locale: target };
+    } catch (err) {
+      await this.refundBudget(chars);
+      this.logger.warn(
+        `Machine translation failed for news ${slug}: ${(err as Error).message}`,
+      );
+      return { status: 'failed', reason: 'Translation service unavailable' };
+    }
+  }
+
+  /**
+   * Recruiter-triggered batch for a candidate's narrative fields. Proper names
+   * (person, company, school, issuer) stay in the source language.
+   */
+  async translateProfile(profileId: string, target: Locale): Promise<MachineTranslationResult> {
+    if (!this.provider.enabled) return { status: 'disabled' };
+
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { id: profileId },
+      include: {
+        translations: { select: { locale: true, isMachine: true, sourceHash: true } },
+        experiences: {
+          include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
+        },
+        educations: {
+          include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
+        },
+      },
+    });
+    if (!profile) return { status: 'failed', reason: 'Profile not found' };
+
+    const detected =
+      detectLocale([profile.headline, profile.summary].filter(Boolean).join('\n')) ?? DEFAULT_LOCALE;
+    const source: Locale = isLocale(profile.contentLocale) ? profile.contentLocale : detected;
+    if (target === source) return { status: 'exists', locale: target };
+
+    type Pending = { texts: string[]; apply: (out: string[]) => Promise<void> };
+    const pending: Pending[] = [];
+
+    const profileParts: Array<{ key: 'headline' | 'summary'; text: string }> = [];
+    if (profile.headline?.trim()) {
+      profileParts.push({ key: 'headline', text: profile.headline.slice(0, MAX_CHARS_PER_FIELD) });
+    }
+    if (profile.summary?.trim()) {
+      profileParts.push({ key: 'summary', text: profile.summary.slice(0, MAX_CHARS_PER_FIELD) });
+    }
+    const profileHash = contentHash(profile.headline, profile.summary);
+    const profileExisting = profile.translations.find((t) => t.locale === target);
+    if (
+      profileParts.length &&
+      !(profileExisting && (!profileExisting.isMachine || profileExisting.sourceHash === profileHash))
+    ) {
+      pending.push({
+        texts: profileParts.map((p) => p.text),
+        apply: async (out) => {
+          const value: {
+            headline?: string;
+            summary?: string;
+            isMachine: boolean;
+            sourceHash: string;
+          } = { isMachine: true, sourceHash: profileHash };
+          profileParts.forEach((part, i) => {
+            value[part.key] = out[i];
+          });
+          await this.prisma.employeeProfileTranslation.upsert({
+            where: { profileId_locale: { profileId, locale: target } },
+            update: value,
+            create: { profileId, locale: target, ...value },
+          });
+        },
+      });
+    }
+
+    for (const exp of profile.experiences) {
+      const parts: Array<{ key: 'title' | 'description'; text: string }> = [];
+      if (exp.title.trim()) {
+        parts.push({ key: 'title', text: exp.title.slice(0, MAX_CHARS_PER_FIELD) });
+      }
+      if (exp.description?.trim()) {
+        parts.push({ key: 'description', text: exp.description.slice(0, MAX_CHARS_PER_FIELD) });
+      }
+      if (!parts.length) continue;
+      const hash = contentHash(exp.title, exp.description);
+      const existing = exp.translations.find((t) => t.locale === target);
+      if (existing && (!existing.isMachine || existing.sourceHash === hash)) continue;
+      pending.push({
+        texts: parts.map((p) => p.text),
+        apply: async (out) => {
+          const value: {
+            title?: string;
+            description?: string;
+            isMachine: boolean;
+            sourceHash: string;
+          } = { isMachine: true, sourceHash: hash };
+          parts.forEach((part, i) => {
+            value[part.key] = out[i];
+          });
+          const title = value.title ?? exp.title;
+          await this.prisma.workExperienceTranslation.upsert({
+            where: { experienceId_locale: { experienceId: exp.id, locale: target } },
+            update: {
+              title,
+              description: value.description,
+              isMachine: true,
+              sourceHash: hash,
+            },
+            create: {
+              experienceId: exp.id,
+              locale: target,
+              title,
+              description: value.description,
+              isMachine: true,
+              sourceHash: hash,
+            },
+          });
+        },
+      });
+    }
+
+    for (const edu of profile.educations) {
+      if (!edu.field?.trim()) continue;
+      const text = edu.field.slice(0, MAX_CHARS_PER_FIELD);
+      const hash = contentHash(edu.field);
+      const existing = edu.translations.find((t) => t.locale === target);
+      if (existing && (!existing.isMachine || existing.sourceHash === hash)) continue;
+      pending.push({
+        texts: [text],
+        apply: async (out) => {
+          const value = { field: out[0], isMachine: true, sourceHash: hash };
+          await this.prisma.educationTranslation.upsert({
+            where: { educationId_locale: { educationId: edu.id, locale: target } },
+            update: value,
+            create: { educationId: edu.id, locale: target, ...value },
+          });
+        },
+      });
+    }
+
+    if (!pending.length) {
+      const hadNarrative =
+        profileParts.length > 0 ||
+        profile.experiences.some((e) => e.title.trim() || e.description?.trim()) ||
+        profile.educations.some((e) => e.field?.trim());
+      return hadNarrative ? { status: 'exists', locale: target } : { status: 'unsupported' };
+    }
+
+    const texts = pending.flatMap((item) => item.texts);
+    const chars = texts.reduce((n, t) => n + t.length, 0);
+    const allowed = await this.consumeBudget(chars);
+    if (!allowed) return { status: 'budget-exceeded' };
+
+    try {
+      const translated = await this.provider.translate({
+        texts,
+        targetLocale: target,
+        sourceLocale: source,
+      });
+      if (translated.length < texts.length || translated.some((t) => !t)) {
+        await this.refundBudget(chars);
+        return { status: 'unsupported' };
+      }
+      let offset = 0;
+      for (const item of pending) {
+        const slice = translated.slice(offset, offset + item.texts.length);
+        offset += item.texts.length;
+        await item.apply(slice as string[]);
+      }
+      return { status: 'ready', locale: target };
+    } catch (err) {
+      await this.refundBudget(chars);
+      this.logger.warn(
+        `Machine translation failed for profile ${profileId}: ${(err as Error).message}`,
       );
       return { status: 'failed', reason: 'Translation service unavailable' };
     }
