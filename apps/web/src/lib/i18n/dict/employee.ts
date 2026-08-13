@@ -210,6 +210,20 @@ export const employee = {
   'emp.pause': { uz: 'To‘xtatish', ru: 'Приостановить', en: 'Pause' },
   'emp.resumeAlert': { uz: 'Davom ettirish', ru: 'Возобновить', en: 'Resume' },
   'emp.delete': { uz: 'O‘chirish', ru: 'Удалить', en: 'Delete' },
+  'emp.alertChannels': { uz: 'Qayerga yuborilsin', ru: 'Куда отправлять', en: 'Send to' },
+  'emp.alertChannelInApp': { uz: 'Ilova', ru: 'В приложении', en: 'In-app' },
+  'emp.alertChannelEmail': { uz: 'Email', ru: 'Email', en: 'Email' },
+  'emp.alertChannelTelegram': { uz: 'Telegram', ru: 'Telegram', en: 'Telegram' },
+  'emp.alertTelegramLinkHint': {
+    uz: 'Avval Settings orqali Telegramni ulang.',
+    ru: 'Сначала привяжите Telegram в настройках.',
+    en: 'Link Telegram in Settings first.',
+  },
+  'emp.alertTelegramNotLinked': {
+    uz: 'Telegram yoqilgan, lekin hisob ulanmagan.',
+    ru: 'Telegram включён, но аккаунт не привязан.',
+    en: 'Telegram is on, but this account is not linked yet.',
+  },
 
   // Profile basics
   'emp.basics': { uz: 'Asosiy ma’lumotlar', ru: 'Основное', en: 'Basics' },

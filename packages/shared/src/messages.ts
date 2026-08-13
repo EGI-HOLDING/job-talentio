@@ -214,6 +214,47 @@ export const MESSAGES = {
     ru: 'Новые вакансии по запросу <strong>{alert}</strong>:',
     en: 'New jobs matching <strong>{alert}</strong>:',
   },
+  'email.jobAlert.jobLine': {
+    uz: '{title} - {company} ({city})',
+    ru: '{title} - {company} ({city})',
+    en: '{title} - {company} ({city})',
+  },
+  'email.jobAlert.manage': {
+    uz: 'Ogohlantirishlarni boshqarish',
+    ru: 'Управлять оповещениями',
+    en: 'Manage alerts',
+  },
+
+  'telegram.jobAlert.intro': {
+    uz: '{alert}: {count} ta yangi mos ish',
+    ru: '{alert}: новых вакансий - {count}',
+    en: '{alert}: {count} new matching job(s)',
+  },
+  'telegram.jobAlert.jobLine': {
+    uz: '{title} - {company} ({city})\n{url}',
+    ru: '{title} - {company} ({city})\n{url}',
+    en: '{title} - {company} ({city})\n{url}',
+  },
+  'telegram.link.ok': {
+    uz: 'Telegram hisobingiz Job Talentio bilan ulandi. /stop yozsangiz uziladi.',
+    ru: 'Telegram привязан к Job Talentio. Напишите /stop, чтобы отключить.',
+    en: 'Telegram is linked to Job Talentio. Send /stop to unlink.',
+  },
+  'telegram.link.expired': {
+    uz: 'Bu havola eskirgan. Job Talentio sozlamalaridan yangi havola oling.',
+    ru: 'Ссылка устарела. Создайте новую в настройках Job Talentio.',
+    en: 'This link expired. Open Job Talentio settings and try again.',
+  },
+  'telegram.link.help': {
+    uz: 'Job Talentio ogohlantirishlari. Hisobni ulash uchun kabinetdagi havolani oching.',
+    ru: 'Оповещения Job Talentio. Откройте ссылку в кабинете, чтобы привязать аккаунт.',
+    en: 'Job Talentio alerts. Open the link from your dashboard to connect this chat.',
+  },
+  'telegram.link.stopped': {
+    uz: 'Telegram uzildi. Qayta ulash uchun kabinetdagi havolani oching.',
+    ru: 'Telegram отключён. Чтобы привязать снова, откройте ссылку в кабинете.',
+    en: 'Telegram unlinked. Open the link from your dashboard to connect again.',
+  },
 
   'email.applicationStatus.subject': {
     uz: 'Ariza yangilandi - {job}',

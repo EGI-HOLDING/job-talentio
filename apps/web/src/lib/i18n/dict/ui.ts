@@ -113,6 +113,22 @@ export const ui = {
   },
 
   'ui.privacy': { uz: 'Maxfiylik', ru: 'Конфиденциальность', en: 'Privacy' },
+  'ui.telegramAlerts': { uz: 'Telegram ogohlantirishlari', ru: 'Оповещения Telegram', en: 'Telegram alerts' },
+  'ui.telegramAlertsHint': {
+    uz: 'Ish ogohlantirishlarini Telegramga yuborish uchun botni ulang. /stop yozsangiz uziladi.',
+    ru: 'Привяжите бота, чтобы получать оповещения о вакансиях в Telegram. /stop отключает связь.',
+    en: 'Link the bot to receive job alerts in Telegram. Send /stop in the chat to unlink.',
+  },
+  'ui.telegramLinked': { uz: 'Telegram ulangan', ru: 'Telegram привязан', en: 'Telegram linked' },
+  'ui.telegramNotLinked': { uz: 'Telegram ulanmagan', ru: 'Telegram не привязан', en: 'Telegram not linked' },
+  'ui.telegramLink': { uz: 'Telegramni ulash', ru: 'Привязать Telegram', en: 'Link Telegram' },
+  'ui.telegramUnlink': { uz: 'Telegramni uzish', ru: 'Отвязать Telegram', en: 'Unlink Telegram' },
+  'ui.telegramRefresh': { uz: 'Holatni yangilash', ru: 'Обновить статус', en: 'Refresh status' },
+  'ui.telegramLinkFailed': {
+    uz: 'Telegramni ulab bo‘lmadi',
+    ru: 'Не удалось привязать Telegram',
+    en: 'Could not link Telegram',
+  },
   'ui.privacyAndMessaging': {
     uz: 'Maxfiylik va xabarlar',
     ru: 'Конфиденциальность и сообщения',

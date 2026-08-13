@@ -121,6 +121,10 @@ function EmployeeDashboardInner() {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvDragOver, setCvDragOver] = useState(false);
   const [draftAlertSkills, setDraftAlertSkills] = useState<Array<{ slug: string; name: string }>>([]);
+  const [notifyInApp, setNotifyInApp] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifyTelegram, setNotifyTelegram] = useState(false);
+  const [telegramLinked, setTelegramLinked] = useState(false);
   const [cvReview, setCvReview] = useState<{ resumeId: string; parsed: ParsedCv } | null>(null);
   const [deleteCvId, setDeleteCvId] = useState<string | null>(null);
   const [deleteCvBusy, setDeleteCvBusy] = useState(false);
@@ -182,6 +186,13 @@ function EmployeeDashboardInner() {
     setSkillsMeta(sk as any[]);
     setLanguagesMeta(langs as any[]);
     setSaved(sv as any[]);
+    setTelegramLinked(Boolean(getSession()?.user.telegramLinked));
+    api<AuthSession>('/auth/me')
+      .then((fresh) => {
+        saveSession(fresh);
+        setTelegramLinked(Boolean(fresh.user.telegramLinked));
+      })
+      .catch(() => undefined);
   }
 
   useEffect(() => {
@@ -339,6 +350,18 @@ function EmployeeDashboardInner() {
     await api(`/alerts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ isActive: !isActive }),
+    });
+    await load();
+  }
+
+  async function patchAlertChannel(
+    id: string,
+    field: 'notifyInApp' | 'notifyEmail' | 'notifyTelegram',
+    value: boolean,
+  ) {
+    await api(`/alerts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ [field]: value }),
     });
     await load();
   }
@@ -564,9 +587,15 @@ function EmployeeDashboardInner() {
         citySlug: fd.get('citySlug') || undefined,
         skillSlugs: draftAlertSkills.map((s) => s.slug).filter(Boolean),
         frequency: fd.get('frequency'),
+        notifyInApp,
+        notifyEmail,
+        notifyTelegram,
       }),
     });
     setDraftAlertSkills([]);
+    setNotifyInApp(true);
+    setNotifyEmail(true);
+    setNotifyTelegram(false);
     await load();
   }
 
@@ -950,6 +979,39 @@ function EmployeeDashboardInner() {
                     <option value="WEEKLY">{t('emp.weekly')}</option>
                   </select>
                 </label>
+                <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+                  <LabelText>{t('emp.alertChannels')}</LabelText>
+                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.4rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={notifyInApp}
+                      onChange={(e) => setNotifyInApp(e.target.checked)}
+                    />
+                    {t('emp.alertChannelInApp')}
+                  </label>
+                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={notifyEmail}
+                      onChange={(e) => setNotifyEmail(e.target.checked)}
+                    />
+                    {t('emp.alertChannelEmail')}
+                  </label>
+                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={notifyTelegram}
+                      onChange={(e) => setNotifyTelegram(e.target.checked)}
+                    />
+                    {t('emp.alertChannelTelegram')}
+                  </label>
+                  {notifyTelegram && !telegramLinked && (
+                    <p className="muted" style={{ fontSize: '0.85rem', margin: '0.35rem 0 0' }}>
+                      {t('emp.alertTelegramLinkHint')}{' '}
+                      <Link href="/settings">{t('settings')}</Link>
+                    </p>
+                  )}
+                </fieldset>
                 <button type="submit">{t('emp.saveAlert')}</button>
               </form>
             </div>
@@ -961,6 +1023,21 @@ function EmployeeDashboardInner() {
                     {a.city?.name || t('emp.anyCity')} | {a.frequency} |{' '}
                     {a.isActive ? t('emp.active') : t('emp.paused')}
                   </p>
+                  <p className="muted" style={{ fontSize: '0.85rem', margin: '0.25rem 0' }}>
+                    {[
+                      a.notifyInApp !== false ? t('emp.alertChannelInApp') : null,
+                      a.notifyEmail !== false ? t('emp.alertChannelEmail') : null,
+                      a.notifyTelegram ? t('emp.alertChannelTelegram') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' | ') || t('emp.paused')}
+                  </p>
+                  {a.notifyTelegram && !telegramLinked && (
+                    <p className="muted" style={{ fontSize: '0.85rem', margin: '0.25rem 0' }}>
+                      {t('emp.alertTelegramNotLinked')}{' '}
+                      <Link href="/settings">{t('settings')}</Link>
+                    </p>
+                  )}
                   {(a.skills || []).length > 0 && (
                     <p className="muted" style={{ fontSize: '0.85rem', margin: '0.25rem 0' }}>
                       {t('skills')}:{' '}
@@ -968,6 +1045,27 @@ function EmployeeDashboardInner() {
                     </p>
                   )}
                   <div className="chips">
+                    <button
+                      type="button"
+                      className="chip"
+                      onClick={() => patchAlertChannel(a.id, 'notifyInApp', a.notifyInApp === false)}
+                    >
+                      {t('emp.alertChannelInApp')}
+                    </button>
+                    <button
+                      type="button"
+                      className="chip"
+                      onClick={() => patchAlertChannel(a.id, 'notifyEmail', a.notifyEmail === false)}
+                    >
+                      {t('emp.alertChannelEmail')}
+                    </button>
+                    <button
+                      type="button"
+                      className="chip"
+                      onClick={() => patchAlertChannel(a.id, 'notifyTelegram', !a.notifyTelegram)}
+                    >
+                      {t('emp.alertChannelTelegram')}
+                    </button>
                     <button
                       type="button"
                       className="chip"

@@ -19,3 +19,12 @@ export function slugify(input: string): string {
     .replace(/(^-|-$)/g, '')
     .slice(0, 60);
 }
+
+export function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

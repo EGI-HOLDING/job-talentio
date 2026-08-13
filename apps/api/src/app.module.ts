@@ -24,6 +24,7 @@ import { SearchModule } from './search/search.module';
 import { NewsModule } from './news/news.module';
 import { PresenceModule } from './presence/presence.module';
 import { TranslationModule } from './translation/translation.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
 
@@ -52,6 +53,7 @@ import { SeedService } from './seed.service';
     AlertsModule,
     AdminModule,
     NewsModule,
+    TelegramModule,
   ],
   controllers: [HealthController],
   providers: [SeedService, { provide: APP_INTERCEPTOR, useClass: LocaleInterceptor }],

@@ -5,9 +5,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TelegramService } from '../telegram/telegram.service';
 import { AuthUser } from '../common/auth.decorators';
 import { resolveSkill } from '../common/skill-resolve';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
+import { isDemoMailbox } from '../common/demo-mailboxes';
+import {
+  buildJobAlertEmailHtml,
+  buildJobAlertTelegramText,
+  decideAlertChannels,
+  hasAnyAlertChannel,
+  shouldStampLastSentAt,
+} from './alerts.deliver';
 
 @Injectable()
 export class AlertsService {
@@ -17,6 +26,7 @@ export class AlertsService {
     private prisma: PrismaService,
     private mail: MailService,
     private notifications: NotificationsService,
+    private telegram: TelegramService,
   ) {}
 
   setQueue(queue: Queue) {
@@ -32,6 +42,9 @@ export class AlertsService {
       categorySlug?: string;
       skillSlugs?: string[];
       frequency?: 'DAILY' | 'WEEKLY';
+      notifyInApp?: boolean;
+      notifyEmail?: boolean;
+      notifyTelegram?: boolean;
     },
   ) {
     let cityId: string | null = null;
@@ -79,6 +92,9 @@ export class AlertsService {
         cityId,
         categoryId,
         frequency: data.frequency ?? 'DAILY',
+        notifyInApp: data.notifyInApp ?? true,
+        notifyEmail: data.notifyEmail ?? true,
+        notifyTelegram: data.notifyTelegram ?? false,
       },
     });
 
@@ -125,6 +141,9 @@ export class AlertsService {
       skillSlugs?: string[];
       frequency?: 'DAILY' | 'WEEKLY';
       isActive?: boolean;
+      notifyInApp?: boolean;
+      notifyEmail?: boolean;
+      notifyTelegram?: boolean;
     },
   ) {
     const alert = await this.prisma.jobAlert.findFirst({ where: { id, userId } });
@@ -160,6 +179,9 @@ export class AlertsService {
         categoryId,
         frequency: data.frequency,
         isActive: data.isActive,
+        notifyInApp: data.notifyInApp,
+        notifyEmail: data.notifyEmail,
+        notifyTelegram: data.notifyTelegram,
       },
     });
 
@@ -195,6 +217,7 @@ export class AlertsService {
     });
 
     for (const alert of alerts) {
+      if (!hasAnyAlertChannel(alert)) continue;
       const since = alert.lastSentAt ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
       if (alert.frequency === 'WEEKLY') {
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -240,36 +263,69 @@ export class AlertsService {
 
       if (!jobs.length) continue;
 
-      const list = jobs
-        .map(
-          (j) =>
-            `<li><strong>${j.title}</strong> - ${j.company.name} (${j.city?.name ?? '-'})</li>`,
-        )
-        .join('');
       const locale = emailLocale(alert.user.locale);
-      if (alert.user.email) {
-        await this.mail.send(
+      const digestJobs = jobs.map((j) => ({
+        id: j.id,
+        title: j.title,
+        companyName: j.company.name,
+        cityName: j.city?.name ?? null,
+      }));
+      const decisions = decideAlertChannels(
+        {
+          notifyInApp: alert.notifyInApp,
+          notifyEmail: alert.notifyEmail,
+          notifyTelegram: alert.notifyTelegram,
+        },
+        {
+          emailVerified: alert.user.emailVerified,
+          demoMailbox: isDemoMailbox(alert.user.email ?? ''),
+          telegramId: alert.user.telegramId,
+          telegramConfigured: this.telegram.isConfigured(),
+        },
+      );
+
+      const results: { inApp?: boolean; email?: boolean; telegram?: boolean } = {};
+
+      if (decisions.inApp === 'send') {
+        try {
+          await this.notifications.create({
+            userId: alert.userId,
+            type: 'NEW_JOB_MATCH',
+            title: `Job alert: ${alert.name}`,
+            body: `${jobs.length} new matching job(s)`,
+            titleKey: 'notify.jobAlert.title',
+            bodyKey: 'notify.jobAlert.body',
+            params: { alert: alert.name, count: jobs.length },
+            linkUrl: `/jobs?q=${encodeURIComponent(alert.query || '')}`,
+          });
+          results.inApp = true;
+        } catch {
+          results.inApp = false;
+        }
+      }
+
+      if (decisions.email === 'send' && alert.user.email) {
+        const sent = await this.mail.send(
           alert.user.email,
           translateMessage('email.jobAlert.subject', locale, { alert: alert.name }),
-          `<p>${translateMessage('email.jobAlert.intro', locale, { alert: alert.name })}</p><ul>${list}</ul>`,
+          buildJobAlertEmailHtml({ locale, alertName: alert.name, jobs: digestJobs }),
+        );
+        results.email = Boolean(sent) && !((sent as { skipped?: boolean })?.skipped);
+      }
+
+      if (decisions.telegram === 'send' && alert.user.telegramId) {
+        results.telegram = await this.telegram.sendMessage(
+          alert.user.telegramId,
+          buildJobAlertTelegramText({ locale, alertName: alert.name, jobs: digestJobs }),
         );
       }
 
-      await this.notifications.create({
-        userId: alert.userId,
-        type: 'NEW_JOB_MATCH',
-        title: `Job alert: ${alert.name}`,
-        body: `${jobs.length} new matching job(s)`,
-        titleKey: 'notify.jobAlert.title',
-        bodyKey: 'notify.jobAlert.body',
-        params: { alert: alert.name, count: jobs.length },
-        linkUrl: `/jobs?q=${encodeURIComponent(alert.query || '')}`,
-      });
-
-      await this.prisma.jobAlert.update({
-        where: { id: alert.id },
-        data: { lastSentAt: new Date() },
-      });
+      if (shouldStampLastSentAt(decisions, results)) {
+        await this.prisma.jobAlert.update({
+          where: { id: alert.id },
+          data: { lastSentAt: new Date() },
+        });
+      }
     }
   }
 
