@@ -1710,6 +1710,32 @@ a.card.job-card--hot {
   justify-content: center;
   min-height: 44px;
 }
+.telegram-login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 238px;
+  height: 40px;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 8px;
+  background: #54a9eb;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.telegram-login-btn:hover {
+  background: #4a9cd9;
+}
+.telegram-login-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.telegram-login-btn svg {
+  flex-shrink: 0;
+}
 .google-verify-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);

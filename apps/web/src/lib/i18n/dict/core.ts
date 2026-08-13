@@ -611,6 +611,21 @@ export const core = {
     ru: 'Не удалось войти через Telegram',
     en: 'Telegram sign-in failed',
   },
+  telegramContinue: {
+    uz: 'Telegram orqali kirish',
+    ru: 'Войти через Telegram',
+    en: 'Continue with Telegram',
+  },
+  telegramSwitchHint: {
+    uz: 'Telegram oynasida Log out ni bosing, keyin boshqa akkaunt bilan kiring.',
+    ru: 'В окне Telegram нажмите Log out, затем войдите другим аккаунтом.',
+    en: 'In the Telegram window, click Log out to sign in with a different account.',
+  },
+  telegramPopupBlocked: {
+    uz: 'Brauzer oynani blokladi. Popupga ruxsat bering va qayta urinib ko‘ring.',
+    ru: 'Браузер заблокировал окно. Разрешите всплывающие окна и попробуйте снова.',
+    en: 'The browser blocked the Telegram window. Allow popups and try again.',
+  },
   telegramConnectTitle: {
     uz: 'Telegram',
     ru: 'Telegram',
