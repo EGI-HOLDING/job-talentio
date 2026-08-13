@@ -4,6 +4,7 @@ import type { CatalogI18nStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { TranslationService } from '../translation/translation.service';
+import { AuthService } from '../auth/auth.service';
 import { catalogDelegate } from '../common/i18n/catalog-kind';
 import type { CatalogKind } from '../common/i18n/catalog-kind';
 import { canTransition } from '../jobs/job-status';
@@ -28,6 +29,7 @@ export class AdminBulkService {
     private prisma: PrismaService,
     private jobsSearch: JobsSearchService,
     private translation: TranslationService,
+    private auth: AuthService,
   ) {}
 
   private async audit(
@@ -83,6 +85,7 @@ export class AdminBulkService {
         where: { id: { in: targets } },
         data: { isBanned: banned },
       });
+      if (banned) await this.auth.revokeSessionsForUsers(targets);
       await this.audit(
         actorId,
         banned ? 'BAN_USER' : 'UNBAN_USER',

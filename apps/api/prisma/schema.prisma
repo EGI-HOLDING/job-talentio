@@ -476,6 +476,10 @@ model User {
   telegramId    String?   @unique
   /// Cold-read fallback for presence when Redis has no live entry
   lastSeenAt    DateTime?
+  /// Bumped to invalidate access JWTs (force logout / ban) without a blacklist.
+  tokenVersion  Int       @default(0)
+  /// Set when support erases identity; the row is kept for FK history.
+  anonymizedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -119,7 +119,11 @@ export class AuthService {
         employeeProfile: { select: { id: true } },
       },
     });
-    const accessToken = await this.jwt.signAsync({ sub: user.id, role: user.role });
+    const accessToken = await this.jwt.signAsync({
+      sub: user.id,
+      role: user.role,
+      tv: user.tokenVersion,
+    });
     const refreshToken = await this.issueRefreshToken(user.id);
     return {
       accessToken,
@@ -177,6 +181,102 @@ export class AuthService {
       });
     }
     return { ok: true };
+  }
+
+  /** Invalidate every refresh token and every access JWT for these users. */
+  async revokeSessionsForUsers(userIds: string[]) {
+    const ids = [...new Set(userIds.filter(Boolean))];
+    if (!ids.length) return { ok: true as const };
+    await this.prisma.$transaction([
+      this.prisma.user.updateMany({
+        where: { id: { in: ids } },
+        data: { tokenVersion: { increment: 1 } },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: { in: ids }, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return { ok: true as const };
+  }
+
+  async revokeAllSessions(userId: string) {
+    return this.revokeSessionsForUsers([userId]);
+  }
+
+  async ensureEmailAvailable(email: string) {
+    return this.assertEmailAvailable(email);
+  }
+
+  /**
+   * Support: send the same reset mail as forgot-password, with a real error
+   * instead of a silent ok. `allowWithoutPassword` is for invited operators
+   * who have not chosen a password yet.
+   */
+  async sendPasswordResetForUser(userId: string, opts?: { allowWithoutPassword?: boolean }) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.isBanned) throw new ForbiddenException('Account banned');
+    if (!user.email) throw new BadRequestException('This account has no email');
+    if (!user.passwordHash && !opts?.allowWithoutPassword) {
+      throw new BadRequestException('This account signs in with Google or Telegram, not a password');
+    }
+    await this.dispatchPasswordReset({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      locale: user.locale,
+    });
+    return { ok: true as const, email: user.email };
+  }
+
+  async sendVerificationForUser(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.isBanned) throw new ForbiddenException('Account banned');
+    if (user.emailVerified) {
+      throw new BadRequestException('Email is already verified');
+    }
+    if (!user.email) throw new BadRequestException('This account has no email');
+    await this.sendVerificationEmail({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      locale: user.locale,
+    });
+    return { ok: true as const, email: user.email };
+  }
+
+  private async dispatchPasswordReset(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    locale?: string | null;
+  }) {
+    await this.prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+    const rawToken = randomBytes(32).toString('hex');
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: sha256(rawToken),
+        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+      },
+    });
+    const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
+    const link = `${webUrl}/reset-password?token=${rawToken}`;
+    const resetLocale = emailLocale(user.locale);
+    const sent = await this.mail.send(
+      user.email,
+      translateMessage('email.resetPassword.subject', resetLocale),
+      `<p>${translateMessage('email.greeting', resetLocale, { name: user.fullName })}</p>
+       <p>${translateMessage('email.resetPassword.intro', resetLocale)}</p>
+       <p><a href="${link}">${translateMessage('email.resetPassword.cta', resetLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', resetLocale, { link })}</p>
+       <p>${translateMessage('email.expires24h', resetLocale)} ${translateMessage('email.resetPassword.ignore', resetLocale)}</p>`,
+    );
+    if (!sent) {
+      throw new BadRequestException('Could not send the reset email. Try again in a moment.');
+    }
   }
 
   async register(input: {
@@ -877,30 +977,16 @@ export class AuthService {
       where: { email: email.trim().toLowerCase() },
     });
     if (!user || user.isBanned || !user.passwordHash || !user.email) return { ok: true };
-
-    await this.prisma.passwordResetToken.deleteMany({
-      where: { userId: user.id, usedAt: null },
-    });
-    const rawToken = randomBytes(32).toString('hex');
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: sha256(rawToken),
-        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
-      },
-    });
-    const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
-    const link = `${webUrl}/reset-password?token=${rawToken}`;
-    const resetLocale = emailLocale(user.locale);
-    void this.mail.send(
-      user.email,
-      translateMessage('email.resetPassword.subject', resetLocale),
-      `<p>${translateMessage('email.greeting', resetLocale, { name: user.fullName })}</p>
-       <p>${translateMessage('email.resetPassword.intro', resetLocale)}</p>
-       <p><a href="${link}">${translateMessage('email.resetPassword.cta', resetLocale)}</a></p>
-       <p>${translateMessage('email.linkFallback', resetLocale, { link })}</p>
-       <p>${translateMessage('email.expires24h', resetLocale)} ${translateMessage('email.resetPassword.ignore', resetLocale)}</p>`,
-    );
+    try {
+      await this.dispatchPasswordReset({
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        locale: user.locale,
+      });
+    } catch {
+      // Public endpoint — do not leak delivery failures
+    }
     return { ok: true };
   }
 

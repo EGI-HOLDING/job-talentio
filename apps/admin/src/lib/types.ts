@@ -17,6 +17,8 @@ export type AdminUser = {
   avatarUrl: string | null;
   isBanned: boolean;
   emailVerified: boolean;
+  hasPassword: boolean;
+  anonymized: boolean;
   lastSeenAt: string | null;
   createdAt: string;
 };
