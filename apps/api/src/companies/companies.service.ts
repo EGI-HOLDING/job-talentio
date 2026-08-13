@@ -467,7 +467,13 @@ export class CompaniesService {
           include: { user: { select: { id: true, email: true, fullName: true } } },
         });
         await this.closePendingInvites(companyId, storedEmail);
-        await this.sendAddedEmail(invitee, company.name, locale);
+        if (invitee.email) {
+          await this.sendAddedEmail(
+            { email: invitee.email, fullName: invitee.fullName, locale: invitee.locale },
+            company.name,
+            locale,
+          );
+        }
         return { status: 'added' as const, member };
       } catch {
         await this.closePendingInvites(companyId, storedEmail);
@@ -598,7 +604,7 @@ export class CompaniesService {
       },
       take: 5000,
     });
-    return users.find((u) => normalizeEmail(u.email) === normalized) ?? null;
+    return users.find((u) => u.email && normalizeEmail(u.email) === normalized) ?? null;
   }
 
   private async closePendingInvites(companyId: string, email: string) {

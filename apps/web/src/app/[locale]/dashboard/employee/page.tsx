@@ -72,7 +72,10 @@ function dateInputValue(d?: string | Date | null) {
 
 function completeness(profile: any) {
   const checks = [
-    { ok: Boolean(profile?.user?.emailVerified), labelKey: 'emp.checkVerifyEmail' },
+    {
+      ok: Boolean(profile?.user?.emailVerified),
+      labelKey: profile?.user?.email ? 'emp.checkVerifyEmail' : 'emp.checkAddEmail',
+    },
     { ok: Boolean(profile?.user?.avatarUrl), labelKey: 'emp.checkAddPhoto' },
     { ok: Boolean(profile?.headline), labelKey: 'emp.checkAddHeadline' },
     { ok: Boolean(profile?.city), labelKey: 'emp.checkSetCity' },
@@ -1083,16 +1086,28 @@ function EmployeeDashboardInner() {
         {tab === 'profile' && profile && (
           <div className="career-page profile-page">
             <div className="card profile-block">
-              <h2 className="section-title" style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h2>
-              <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                {profile.user?.email} -{' '}
-                {profile.user?.emailVerified ? (
-                  <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
-                ) : (
-                  <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
-                )}
-              </p>
-              {!profile.user?.emailVerified ? (
+              <h2 className="section-title" style={{ marginTop: 0 }}>
+                {profile.user?.email ? t('verifyEmailTitle') : t('addEmailTitle')}
+              </h2>
+              {profile.user?.email ? (
+                <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                  {profile.user.email} -{' '}
+                  {profile.user?.emailVerified ? (
+                    <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
+                  ) : (
+                    <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
+                  )}
+                </p>
+              ) : (
+                <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
+                  {t('addEmailDashboardHint')}
+                </p>
+              )}
+              {!profile.user?.email ? (
+                <Link href="/settings" style={{ color: 'var(--accent)' }}>
+                  {t('addEmailGoToSettings')}
+                </Link>
+              ) : !profile.user?.emailVerified ? (
                 <>
                   <p className="muted" style={{ fontSize: '0.9rem' }}>
                     {t('verifyEmailProfileHint')}

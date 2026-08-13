@@ -587,9 +587,9 @@ export const core = {
     en: 'Join the team',
   },
   inviteJoinSubtitle: {
-    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Hisob oching (parol yoki Google).',
-    ru: '{company} приглашает вас в команду найма. Создайте аккаунт (пароль или Google).',
-    en: '{company} invited you to their hiring team. Create an account with a password or Google.',
+    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Hisob oching (parol, Google yoki Telegram).',
+    ru: '{company} приглашает вас в команду найма. Создайте аккаунт (пароль, Google или Telegram).',
+    en: '{company} invited you to their hiring team. Create an account with a password, Google, or Telegram.',
   },
   inviteInvalid: {
     uz: 'Taklif havolasi eskirgan yoki noto‘g‘ri. Oddiy ro‘yxatdan o‘tishdan foydalaning.',
@@ -605,6 +605,61 @@ export const core = {
     uz: 'Hisob turini tanlang',
     ru: 'Выберите тип аккаунта',
     en: 'Choose your account type',
+  },
+  telegramSignInFailed: {
+    uz: 'Telegram orqali kirib bo‘lmadi',
+    ru: 'Не удалось войти через Telegram',
+    en: 'Telegram sign-in failed',
+  },
+  telegramConnectTitle: {
+    uz: 'Telegram',
+    ru: 'Telegram',
+    en: 'Telegram',
+  },
+  telegramConnected: {
+    uz: 'Telegram hisobi ulangan.',
+    ru: 'Аккаунт Telegram подключён.',
+    en: 'Telegram is connected.',
+  },
+  telegramConnectHint: {
+    uz: 'Mavjud hisobga Telegram orqali kirishni ulang.',
+    ru: 'Подключите Telegram, чтобы входить в этот аккаунт.',
+    en: 'Connect Telegram to sign in to this account next time.',
+  },
+  telegramEmailLaterHint: {
+    uz: 'Email keyinroq Settings orqali qo‘shiladi va tasdiqlanadi.',
+    ru: 'Email можно добавить и подтвердить позже в настройках.',
+    en: 'Add and verify your own email later in Settings.',
+  },
+  addEmailTitle: {
+    uz: 'Email qo‘shing',
+    ru: 'Добавьте email',
+    en: 'Add your email',
+  },
+  addEmailHint: {
+    uz: 'Tasdiqlash havolasi shu manzilga yuboriladi. Havolani ochgach email hisobga yoziladi.',
+    ru: 'Мы отправим ссылку подтверждения на этот адрес. Email сохранится после перехода по ссылке.',
+    en: 'We will send a confirmation link to this address. Your email is saved after you open the link.',
+  },
+  addEmailCta: {
+    uz: 'Tasdiqlash havolasini yuborish',
+    ru: 'Отправить ссылку',
+    en: 'Send confirmation link',
+  },
+  addEmailDashboardHint: {
+    uz: 'Ariza va xabarnomalar uchun o‘z emailingizni qo‘shing va tasdiqlang.',
+    ru: 'Добавьте и подтвердите свой email - он нужен для откликов и уведомлений.',
+    en: 'Add and verify your own email for applications and notifications.',
+  },
+  addEmailGoToSettings: {
+    uz: 'Settings orqali email qo‘shish',
+    ru: 'Добавить email в настройках',
+    en: 'Add email in Settings',
+  },
+  passwordlessHint: {
+    uz: 'Bu hisobda parol yo‘q (Telegram yoki Google). Pastda o‘z emailingizni qo‘shib tasdiqlashingiz mumkin.',
+    ru: 'У этого аккаунта нет пароля (Telegram или Google). Ниже можно добавить и подтвердить свой email.',
+    en: 'This account has no password (Telegram or Google). Add and verify your own email below.',
   },
   verifyEmailTitle: {
     uz: 'Emailingizni tasdiqlang',

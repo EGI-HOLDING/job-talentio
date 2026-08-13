@@ -17,6 +17,7 @@ import {
   accountUpdateSchema,
   changePasswordSchema,
   googleOAuthSchema,
+  telegramOAuthSchema,
   verifyEmailSchema,
   resendVerificationSchema,
   forgotPasswordSchema,
@@ -136,8 +137,16 @@ export class AuthController {
   }
 
   @Post('oauth/telegram')
-  oauthTelegram() {
-    return this.auth.oauthTelegramStub();
+  telegram(@Body() body: unknown) {
+    const data = parseDto(telegramOAuthSchema, body);
+    return this.auth.oauthTelegram(data);
+  }
+
+  @Post('oauth/telegram/connect')
+  @UseGuards(JwtAuthGuard)
+  connectTelegram(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const data = parseDto(telegramOAuthSchema, body);
+    return this.auth.connectTelegram(user.id, data);
   }
 
   @Post('telegram/link')

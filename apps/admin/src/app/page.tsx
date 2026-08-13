@@ -14,7 +14,7 @@ type Recent = {
   action: string;
   entityType: string;
   createdAt: string;
-  actor: { email: string } | null;
+  actor: { email: string | null } | null;
 };
 
 export default function OverviewPage() {

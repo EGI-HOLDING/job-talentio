@@ -1704,7 +1704,8 @@ a.card.job-card--hot {
   height: 1px;
   background: var(--border);
 }
-.google-btn-slot {
+.google-btn-slot,
+.telegram-btn-slot {
   display: flex;
   justify-content: center;
   min-height: 44px;

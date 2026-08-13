@@ -67,7 +67,7 @@ export class RolesGuard implements CanActivate {
 
 export type AuthUser = {
   id: string;
-  email: string;
+  email: string | null;
   role: UserRole;
   fullName: string;
   isBanned: boolean;

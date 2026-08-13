@@ -18,13 +18,14 @@ export type AuthSession = {
   refreshToken?: string;
   user: {
     id: string;
-    email: string;
+    email: string | null;
     fullName: string;
     role: string;
     locale?: string;
     avatarUrl?: string | null;
     emailVerified?: boolean;
     telegramLinked?: boolean;
+    hasPassword?: boolean;
     memberships?: Array<{ companyId: string; role: string }>;
     employeeProfileId?: string | null;
   };

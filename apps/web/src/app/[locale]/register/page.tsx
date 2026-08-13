@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { api, saveSession } from '@/lib/api';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
+import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 import { useI18n } from '@/lib/i18n';
 
 type InvitePreview = { companyName: string; email: string; role: string };
@@ -218,6 +219,7 @@ function RegisterForm() {
           </button>
         </form>
         <GoogleSignIn inviteToken={useInvite ? inviteToken : undefined} />
+        <TelegramSignIn inviteToken={useInvite ? inviteToken : undefined} />
         <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>
           {t('alreadyRegistered')}{' '}
           <Link href="/login" style={{ color: 'var(--accent)' }}>

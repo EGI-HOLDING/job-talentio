@@ -278,7 +278,7 @@ export class AlertsService {
         },
         {
           emailVerified: alert.user.emailVerified,
-          demoMailbox: isDemoMailbox(alert.user.email),
+          demoMailbox: isDemoMailbox(alert.user.email ?? ''),
           telegramId: alert.user.telegramId,
           telegramConfigured: this.telegram.isConfigured(),
         },
@@ -304,7 +304,7 @@ export class AlertsService {
         }
       }
 
-      if (decisions.email === 'send') {
+      if (decisions.email === 'send' && alert.user.email) {
         const sent = await this.mail.send(
           alert.user.email,
           translateMessage('email.jobAlert.subject', locale, { alert: alert.name }),
