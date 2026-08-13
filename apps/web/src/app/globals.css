@@ -639,6 +639,153 @@ img.company-logo {
   }
 }
 
+.top-companies-carousel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "progress progress progress"
+    "prev viewport next"
+    ". dots .";
+  align-items: center;
+  column-gap: 0.55rem;
+  row-gap: 0.7rem;
+}
+.top-companies-carousel__progress {
+  grid-area: progress;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--border));
+  overflow: hidden;
+}
+.top-companies-carousel__progress-bar {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation-name: tcc-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+.top-companies-carousel.is-paused .top-companies-carousel__progress-bar {
+  animation-play-state: paused;
+}
+@keyframes tcc-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.top-companies-carousel__nav--prev { grid-area: prev; }
+.top-companies-carousel__nav--next { grid-area: next; }
+.top-companies-carousel__viewport {
+  grid-area: viewport;
+  overflow: hidden;
+  min-width: 0;
+  touch-action: pan-y;
+  border-radius: calc(var(--radius) + 2px);
+}
+.top-companies-carousel__track {
+  display: flex;
+  width: 100%;
+  will-change: transform;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.top-companies-carousel__page {
+  box-sizing: border-box;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  align-content: start;
+  min-height: calc(3 * 5.25rem + 2 * 0.85rem);
+}
+.top-companies-carousel__nav {
+  width: 2.45rem;
+  height: 2.45rem;
+  padding: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.top-companies-carousel__nav:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.14);
+}
+.top-companies-carousel__nav:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+.top-companies-carousel__dots {
+  grid-area: dots;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.45rem;
+}
+.top-companies-carousel__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, var(--border));
+  border: 0;
+  box-shadow: none;
+  transition: width 0.22s ease, background 0.22s ease;
+}
+.top-companies-carousel__dot:hover {
+  background: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.top-companies-carousel__dot.is-active {
+  width: 1.35rem;
+  background: var(--accent);
+}
+.top-companies-carousel__dot:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .top-companies-carousel {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "progress progress progress"
+      "viewport viewport viewport"
+      "prev dots next";
+    column-gap: 0.7rem;
+  }
+  .top-companies-carousel__nav {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  .top-companies-carousel__dots {
+    min-height: 2.25rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .top-companies-carousel__track {
+    transition: none;
+  }
+  .top-companies-carousel__progress {
+    display: none;
+  }
+  .top-companies-carousel__dot,
+  .top-companies-carousel__nav {
+    transition: none;
+  }
+}
+
 .hiring-head {
   display: flex;
   flex-wrap: wrap;

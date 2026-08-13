@@ -11,8 +11,8 @@ import { formatCompactCount, formatSalaryRange } from '@/lib/numberFormat';
 import { ExploreSection } from '@/components/explore/ExploreSection';
 import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
-import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
+import { TopCompaniesCarousel, type TopCompany } from '@/components/home/TopCompaniesCarousel';
 import { NewsCard } from '@/components/news/NewsCard';
 import type { NewsListItem } from '@/lib/newsSeo';
 
@@ -47,13 +47,6 @@ function hotUrgencyLabel(t: (k: string) => string, boostUntil?: string | null) {
 
 type FacetItem = { slug: string; name: string; count: number; logoUrl?: string | null };
 
-type VipCompany = {
-  slug: string;
-  name: string;
-  logoUrl?: string | null;
-  plan?: string;
-  openJobsCount: number;
-};
 
 function formatSalary(min?: number | null, max?: number | null) {
   if (!min && !max) return null;
@@ -70,7 +63,7 @@ export function SeekerHome() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [hotJobs, setHotJobs] = useState<Job[]>([]);
   const [cityFacets, setCityFacets] = useState<FacetItem[]>([]);
-  const [topCompanies, setTopCompanies] = useState<VipCompany[]>([]);
+  const [topCompanies, setTopCompanies] = useState<TopCompany[]>([]);
   const [titleFacets, setTitleFacets] = useState<FacetItem[]>([]);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
@@ -87,7 +80,7 @@ export function SeekerHome() {
     api<{ items: Job[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false })
       .then((r) => setHotJobs(r.items))
       .catch(() => undefined);
-    api<{ items: VipCompany[] }>('/companies?plan=VIP&limit=12&sort=jobs', { auth: false })
+    api<{ items: TopCompany[] }>('/companies?plan=VIP&limit=36&sort=jobs', { auth: false })
       .then((r) => setTopCompanies(r.items || []))
       .catch(() => undefined);
     api<{
@@ -180,20 +173,9 @@ export function SeekerHome() {
           subtitle={t('topCompaniesSubtitle')}
           viewAllHref="/explore/companies?tab=vip"
           viewAllLabel={t('viewAll')}
-          gridClassName="explore-grid--company"
+          bare
         >
-          {topCompanies.map((c) => (
-            <ExploreCompanyCard
-              key={c.slug}
-              name={c.name}
-              slug={c.slug}
-              logoUrl={c.logoUrl}
-              plan={c.plan || 'VIP'}
-              vipLabel={t('vipBadge')}
-              count={c.openJobsCount}
-              countLabel={rolesLabel(t, c.openJobsCount)}
-            />
-          ))}
+          <TopCompaniesCarousel companies={topCompanies} />
         </ExploreSection>
       )}
 
