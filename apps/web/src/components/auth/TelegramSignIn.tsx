@@ -10,7 +10,6 @@ const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '';
 const WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const TELEGRAM_OAUTH = 'https://oauth.telegram.org';
-const LOGOUT_WAIT_MS = 1400;
 
 type TelegramUser = {
   id: number;
@@ -112,6 +111,18 @@ function telegramLogoutUrl(botId: string) {
   return `${TELEGRAM_OAUTH}/auth/logout?${q.toString()}`;
 }
 
+function writeHoldingPage(popup: Window) {
+  try {
+    popup.document.open();
+    popup.document.write(
+      '<!doctype html><html><head><meta charset="utf-8"><title>Telegram</title></head><body style="font-family:sans-serif;padding:1.5rem;color:#334155">Telegram...</body></html>',
+    );
+    popup.document.close();
+  } catch {
+    /* popup already navigated or closed */
+  }
+}
+
 export function TelegramSignIn({
   inviteToken,
   mode = 'login',
@@ -134,7 +145,7 @@ export function TelegramSignIn({
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [opening, setOpening] = useState(false);
+  const [awaitingRelogin, setAwaitingRelogin] = useState(false);
   const aliveRef = useRef(true);
 
   useEffect(() => {
@@ -220,28 +231,28 @@ export function TelegramSignIn({
     };
   }, []);
 
-  const runTelegramAuth = useCallback(async () => {
-    if (!botId) return false;
-    try {
-      await loadTelegramSdk();
-      if (!aliveRef.current) return false;
-      setSdkReady(true);
-    } catch {
-      setError(t('telegramSignInFailed'));
-      return false;
-    }
+  const startTelegramAuth = useCallback(() => {
+    if (!botId || busy) return;
+    setError('');
+    setAwaitingRelogin(false);
     const auth = window.Telegram?.Login?.auth;
     if (!auth) {
       setError(t('telegramSignInFailed'));
-      return false;
+      return;
     }
 
+    const name = telegramWindowName(botId);
+    const features = telegramPopupFeatures();
     const nativeOpen = window.open.bind(window);
-    let popup: Window | null = null;
-    window.open = ((...args: Parameters<typeof window.open>) => {
-      popup = nativeOpen(...args);
-      return popup;
-    }) as typeof window.open;
+    const popup = nativeOpen('about:blank', name, features);
+    if (!popup) {
+      setError(t('telegramPopupBlocked'));
+      return;
+    }
+    writeHoldingPage(popup);
+
+    window.open = ((url: string | URL | undefined, _n?: string, feat?: string) =>
+      nativeOpen(url, name, feat ?? features)) as typeof window.open;
     try {
       auth({ bot_id: botId, request_access: 'write', lang: locale }, (user) => {
         if (!aliveRef.current) return;
@@ -254,48 +265,25 @@ export function TelegramSignIn({
     } finally {
       window.open = nativeOpen;
     }
-    if (!popup) {
-      setError(t('telegramPopupBlocked'));
-      return false;
-    }
-    return true;
-  }, [botId, locale, t]);
-
-  const openTelegramPopup = useCallback(
-    async (logoutFirst: boolean) => {
-      if (!botId || busy || opening) return;
-      setError('');
-      setOpening(true);
-      try {
-        if (logoutFirst) {
-          const popup = window.open(
-            telegramLogoutUrl(botId),
-            telegramWindowName(botId),
-            telegramPopupFeatures(),
-          );
-          if (!popup) {
-            setError(t('telegramPopupBlocked'));
-            return;
-          }
-          await new Promise<void>((resolve) => {
-            window.setTimeout(resolve, LOGOUT_WAIT_MS);
-          });
-          if (!aliveRef.current) return;
-        }
-        await runTelegramAuth();
-      } finally {
-        if (aliveRef.current) setOpening(false);
-      }
-    },
-    [botId, busy, opening, runTelegramAuth, t],
-  );
+  }, [botId, busy, locale, t]);
 
   const switchTelegramAccount = useCallback(() => {
+    if (!botId || busy) return;
     setPendingUser(null);
     setWidgetUser(null);
     setNeedsRole(null);
-    void openTelegramPopup(true);
-  }, [openTelegramPopup]);
+    setError('');
+    const popup = window.open(
+      telegramLogoutUrl(botId),
+      telegramWindowName(botId),
+      telegramPopupFeatures(),
+    );
+    if (!popup) {
+      setError(t('telegramPopupBlocked'));
+      return;
+    }
+    setAwaitingRelogin(true);
+  }, [botId, busy, t]);
 
   if (!TELEGRAM_BOT) return null;
 
@@ -412,25 +400,21 @@ export function TelegramSignIn({
           </p>
           <FormAlert>{error}</FormAlert>
           <div className="telegram-confirm-actions">
-            <button
-              type="button"
-              disabled={busy || opening}
-              onClick={() => void submitTelegram(pendingUser)}
-            >
+            <button type="button" disabled={busy} onClick={() => void submitTelegram(pendingUser)}>
               {busy ? t('signingIn') : t('continueLabel')}
             </button>
             <button
               type="button"
               className="secondary"
-              disabled={busy || opening}
+              disabled={busy}
               onClick={switchTelegramAccount}
             >
-              {opening ? t('telegramOpening') : t('telegramUseDifferent')}
+              {t('telegramUseDifferent')}
             </button>
             <button
               type="button"
               className="ghost"
-              disabled={busy || opening}
+              disabled={busy}
               onClick={() => {
                 setPendingUser(null);
                 setWidgetUser(null);
@@ -459,8 +443,8 @@ export function TelegramSignIn({
         <button
           type="button"
           className="telegram-login-btn"
-          disabled={!ready || busy || opening}
-          onClick={() => void openTelegramPopup(true)}
+          disabled={!ready || busy}
+          onClick={startTelegramAuth}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -468,11 +452,11 @@ export function TelegramSignIn({
               d="M21.5 3.2 2.8 10.4c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 11.1-7c.5-.3.9-.1.6.2l-9 8.1-.3 4.8c.4 0 .6-.2.8-.4l2.1-2 4.4 3.2c.8.5 1.4.2 1.6-.7l2.9-13.7c.3-1.2-.4-1.8-1.1-1.5z"
             />
           </svg>
-          {opening ? t('telegramOpening') : busy ? t('signingIn') : t('telegramContinue')}
+          {busy ? t('signingIn') : t('telegramContinue')}
         </button>
       </div>
       <p className="muted" style={{ fontSize: '0.8rem', margin: '0.55rem 0 0', textAlign: 'center' }}>
-        {t('telegramSwitchHint')}
+        {t(awaitingRelogin ? 'telegramLogoutThenContinue' : 'telegramSwitchHint')}
       </p>
       <FormAlert>{error}</FormAlert>
     </div>

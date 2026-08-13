@@ -641,6 +641,11 @@ export const core = {
     ru: 'Открывается Telegram...',
     en: 'Opening Telegram...',
   },
+  telegramLogoutThenContinue: {
+    uz: 'Telegram oynasida Log out ni bosing, keyin qayta Telegram orqali kirish ni bosing.',
+    ru: 'В окне Telegram нажмите Log out, затем снова нажмите Войти через Telegram.',
+    en: 'In the Telegram window, click Log out, then click Continue with Telegram again.',
+  },
   telegramPopupBlocked: {
     uz: 'Brauzer oynani blokladi. Popupga ruxsat bering va qayta urinib ko‘ring.',
     ru: 'Браузер заблокировал окно. Разрешите всплывающие окна и попробуйте снова.',
