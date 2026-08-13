@@ -67,7 +67,7 @@ export default function UsersPage() {
           />
           <span style={{ minWidth: 0 }}>
             <span className="cell-strong truncate">{row.fullName}</span>
-            <span className="cell-sub truncate">{row.email || '—'}</span>
+            <span className="cell-sub truncate">{row.email || '-'}</span>
           </span>
         </div>
       ),

@@ -648,7 +648,7 @@ export const core = {
   },
   addEmailDashboardHint: {
     uz: 'Ariza va xabarnomalar uchun o‘z emailingizni qo‘shing va tasdiqlang.',
-    ru: 'Добавьте и подтвердите свой email — он нужен для откликов и уведомлений.',
+    ru: 'Добавьте и подтвердите свой email - он нужен для откликов и уведомлений.',
     en: 'Add and verify your own email for applications and notifications.',
   },
   addEmailGoToSettings: {
