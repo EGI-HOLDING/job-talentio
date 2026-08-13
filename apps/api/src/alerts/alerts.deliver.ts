@@ -33,11 +33,17 @@ export function hasAnyAlertChannel(flags: AlertChannelFlags): boolean {
   return flags.notifyInApp || flags.notifyEmail || flags.notifyTelegram;
 }
 
+/** Keep at least in-app on so an alert cannot be saved with no destination. */
+export function ensureDeliverableAlertChannels(flags: AlertChannelFlags): AlertChannelFlags {
+  if (hasAnyAlertChannel(flags)) return flags;
+  return { ...flags, notifyInApp: true };
+}
+
 export function decideAlertChannels(
   flags: AlertChannelFlags,
   ctx: AlertChannelContext,
 ): AlertChannelDecisions {
-  return {
+  const decisions: AlertChannelDecisions = {
     inApp: flags.notifyInApp ? 'send' : 'off',
     email: !flags.notifyEmail
       ? 'off'
@@ -50,6 +56,16 @@ export function decideAlertChannels(
         ? 'skip'
         : 'send',
   };
+  // Telegram (or email) requested but not deliverable must not drop the digest.
+  if (
+    decisions.inApp !== 'send' &&
+    decisions.email !== 'send' &&
+    decisions.telegram !== 'send' &&
+    hasAnyAlertChannel(flags)
+  ) {
+    decisions.inApp = 'send';
+  }
+  return decisions;
 }
 
 export function shouldStampLastSentAt(
