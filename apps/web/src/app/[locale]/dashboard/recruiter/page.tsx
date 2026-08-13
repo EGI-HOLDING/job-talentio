@@ -798,7 +798,7 @@ function RecruiterDashboard() {
                       setDraftJobLevel((prev) => prev || level);
                     }}
                   />
-                  <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                  <span className="field-hint muted">
                     {t('jobTitleHint')}
                   </span>
                 </label>
@@ -806,20 +806,28 @@ function RecruiterDashboard() {
                   <LabelText required>{t('rec.description')}</LabelText>
                   <textarea name="description" rows={5} required minLength={20} />
                 </label>
-                <label>
-                  <LabelText>{t('city')}</LabelText>
-                  <select name="citySlug">
-                    <option value="">-</option>
-                    {meta.cities.map((c) => (
-                      <option key={c.slug} value={c.slug}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
-                    {t('rec.cityRuleHint')}
-                  </span>
-                </label>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>{t('city')}</LabelText>
+                    <select name="citySlug">
+                      <option value="">-</option>
+                      {meta.cities.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <LabelText>{t('workMode')}</LabelText>
+                    <select name="workMode" defaultValue="HYBRID">
+                      <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
+                      <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
+                      <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="field-hint muted">{t('rec.cityRuleHint')}</p>
                 <label>
                   <LabelText>{t('category')}</LabelText>
                   <select name="categorySlug">
@@ -868,14 +876,6 @@ function RecruiterDashboard() {
                     />
                   </label>
                 </div>
-                <label>
-                  <LabelText>{t('workMode')}</LabelText>
-                  <select name="workMode" defaultValue="HYBRID">
-                    <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
-                    <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
-                    <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
-                  </select>
-                </label>
                 <div className="grid-2">
                   <label>
                     <LabelText>{t('employmentType')}</LabelText>
@@ -929,11 +929,9 @@ function RecruiterDashboard() {
                       <option value="ru">{t('rec.localeNameRu')}</option>
                       <option value="en">{t('rec.localeNameEn')}</option>
                     </select>
-                    <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
-                      {t('rec.postLocaleHint')}
-                    </span>
                   </label>
                 </div>
+                <p className="field-hint muted">{t('rec.postLocaleHint')}</p>
                 <div>
                   <LabelText>{t('skills')}</LabelText>
                   <div className="chips" style={{ margin: '0.4rem 0' }}>
@@ -1177,28 +1175,14 @@ function RecruiterDashboard() {
                             minLength={20}
                           />
                         </label>
-                        <label>
-                          <LabelText>{t('city')}</LabelText>
-                          <select name="citySlug" defaultValue={j.city?.slug || ''}>
-                            <option value="">-</option>
-                            {meta.cities.map((c) => (
-                              <option key={c.slug} value={c.slug}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                          <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
-                            {t('rec.cityRuleHint')}
-                          </span>
-                        </label>
                         <div className="grid-2">
                           <label>
-                            <LabelText>{t('experienceLevel')}</LabelText>
-                            <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                            <LabelText>{t('city')}</LabelText>
+                            <select name="citySlug" defaultValue={j.city?.slug || ''}>
                               <option value="">-</option>
-                              {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
-                                <option key={l} value={l}>
-                                  {enumLabel('experienceLevel', l)}
+                              {meta.cities.map((c) => (
+                                <option key={c.slug} value={c.slug}>
+                                  {c.name}
                                 </option>
                               ))}
                             </select>
@@ -1212,7 +1196,19 @@ function RecruiterDashboard() {
                             </select>
                           </label>
                         </div>
+                        <p className="field-hint muted">{t('rec.cityRuleHint')}</p>
                         <div className="grid-2">
+                          <label>
+                            <LabelText>{t('experienceLevel')}</LabelText>
+                            <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                              <option value="">-</option>
+                              {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
+                                <option key={l} value={l}>
+                                  {enumLabel('experienceLevel', l)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <label>
                             <LabelText>{t('employmentType')}</LabelText>
                             <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
@@ -1230,12 +1226,22 @@ function RecruiterDashboard() {
                               </option>
                             </select>
                           </label>
+                        </div>
+                        <div className="grid-2">
                           <label>
                             <LabelText>{t('rec.salaryPeriod')}</LabelText>
                             <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
                               <option value="MONTHLY">{t('rec.periodMonthly')}</option>
                               <option value="YEARLY">{t('rec.periodYearly')}</option>
                               <option value="HOURLY">{t('rec.periodHourly')}</option>
+                            </select>
+                          </label>
+                          <label>
+                            <LabelText>{t('rec.currency')}</LabelText>
+                            <select name="currency" defaultValue={j.currency || 'UZS'}>
+                              <option value="UZS">UZS</option>
+                              <option value="USD">USD</option>
+                              <option value="EUR">EUR</option>
                             </select>
                           </label>
                         </div>
@@ -1250,24 +1256,14 @@ function RecruiterDashboard() {
                           </label>
                         </div>
                         <label>
-                          <LabelText>{t('rec.currency')}</LabelText>
-                          <select name="currency" defaultValue={j.currency || 'UZS'}>
-                            <option value="UZS">UZS</option>
-                            <option value="USD">USD</option>
-                            <option value="EUR">EUR</option>
-                          </select>
-                        </label>
-                        <label>
                           <LabelText>{t('postLocale')}</LabelText>
                           <select name="locale" defaultValue={j.locale || 'uz'}>
                             <option value="uz">{t('rec.localeNameUz')}</option>
                             <option value="ru">{t('rec.localeNameRu')}</option>
                             <option value="en">{t('rec.localeNameEn')}</option>
                           </select>
-                          <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
-                            {t('rec.postLocaleHint')}
-                          </span>
                         </label>
+                        <p className="field-hint muted">{t('rec.postLocaleHint')}</p>
                         <div>
                           <LabelText>{t('languages')}</LabelText>
                           <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>

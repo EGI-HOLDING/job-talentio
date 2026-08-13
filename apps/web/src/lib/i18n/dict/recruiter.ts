@@ -35,14 +35,14 @@ export const recruiter = {
   'rec.periodHourly': { uz: 'Soatlik', ru: 'Почасовая', en: 'Hourly' },
   'rec.currency': { uz: 'Valyuta', ru: 'Валюта', en: 'Currency' },
   'rec.cityRuleHint': {
-    uz: 'Masofaviy: shahar ixtiyoriy (yollash hududi yoki vaqt mintaqasi). Ofisda/Gibrid: chop etishdan oldin shahar majburiy.',
-    ru: 'Удалённо: город необязателен (регион найма или часовой пояс). В офисе/гибрид: город обязателен до публикации.',
-    en: 'Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.',
+    uz: 'Masofaviy: shahar ixtiyoriy. Ofisda yoki gibrid: chop etishdan oldin majburiy.',
+    ru: 'Удалённо: город необязателен. Офис или гибрид: город нужен до публикации.',
+    en: 'Remote: city optional. Onsite or hybrid: required before publish.',
   },
   'rec.postLocaleHint': {
-    uz: 'Sarlavha va tavsifni yozgan tilingiz. Boshqa tilda ko‘rayotganlar tarjima qilishi mumkin.',
-    ru: 'Язык, на котором вы написали заголовок и описание. Посетители на другом языке смогут перевести текст.',
-    en: 'This is the language you wrote the title and description in. People browsing in another language can translate it.',
+    uz: 'Sarlavha va tavsif tili. Boshqa tilda ko‘rayotganlar tarjima qilishi mumkin.',
+    ru: 'Язык заголовка и описания. Читатели на другом языке могут перевести текст.',
+    en: 'Language of the title and description. Readers in another language can translate it.',
   },
   'rec.addSkillToJob': {
     uz: 'Ish e’loniga ko‘nikma qo‘shish',
