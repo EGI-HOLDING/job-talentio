@@ -76,6 +76,7 @@ function formatSalary(
 }
 
 type MatchBreakdownState = {
+  title?: number;
   skills?: number;
   experience?: number;
   location?: number;

@@ -30,7 +30,7 @@ import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
-import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
+import { normalizeJobTitleKey, profileRoleTexts, resolveJobTitle } from '../common/title-resolve';
 import { detectLocale } from '../common/i18n/detect-locale';
 import { resolveContent } from '../common/i18n/content-locale';
 import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
@@ -1392,8 +1392,7 @@ export class ProfilesService {
     headline?: string | null;
     experiences?: Array<{ title?: string | null }>;
   }): string[] {
-    const texts = [p.desiredPosition, p.headline, ...(p.experiences || []).map((e) => e.title)];
-    return texts.map((t) => (t || '').trim()).filter(Boolean);
+    return profileRoleTexts(p);
   }
 
   private profileMatchesTitleKeys(

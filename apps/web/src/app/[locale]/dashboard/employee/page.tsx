@@ -776,7 +776,16 @@ function EmployeeDashboardInner() {
               );
             })}
             {!recommended.length && (
-              <p className="muted">{t('emp.recommendedEmpty')}</p>
+              <p className="muted">
+                {profile?.skills?.length || profile?.headline || profile?.desiredPosition ? (
+                  <>
+                    {t('emp.recommendedEmptyNoOverlap')}{' '}
+                    <Link href="/jobs">{t('jobs')}</Link>
+                  </>
+                ) : (
+                  t('emp.recommendedEmpty')
+                )}
+              </p>
             )}
           </div>
         )}

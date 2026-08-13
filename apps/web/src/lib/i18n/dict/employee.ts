@@ -75,9 +75,9 @@ export const employee = {
     en: 'Profile strength',
   },
   'emp.profileStrengthHint': {
-    uz: 'To‘liqroq profil yaxshiroq mos ishlarni oladi',
-    ru: 'Чем полнее профиль, тем точнее подбор вакансий',
-    en: 'Stronger profiles get better job matches',
+    uz: 'Bu foiz profilingiz qanchalik to‘liq ekanini ko‘rsatadi, chop etilgan ishlarga mosligini emas.',
+    ru: 'Этот процент показывает заполненность профиля, а не совпадение с опубликованными вакансиями.',
+    en: 'This percent is how complete your profile is, not how well you match published jobs.',
   },
   'emp.quickStats': { uz: 'Qisqacha statistika', ru: 'Краткая статистика', en: 'Quick stats' },
   'emp.statApplications': { uz: 'ta ariza', ru: 'откликов', en: 'applications' },
@@ -143,6 +143,11 @@ export const employee = {
     uz: 'Mos ishlarni ko‘rish uchun profilingizga ko‘nikma qo‘shing. Ko‘nikmalaringiz chop etilgan vakansiyalarga mos kelmaguncha tavsiyalar bo‘sh qoladi.',
     ru: 'Добавьте навыки в профиль, чтобы получать подходящие вакансии. Рекомендации остаются пустыми, пока ваши навыки не совпадут с опубликованными вакансиями.',
     en: 'Add skills to your profile to get job matches. Recommendations stay empty until your skills overlap with published roles.',
+  },
+  'emp.recommendedEmptyNoOverlap': {
+    uz: 'Hozircha sarlavhangiz yoki ko‘nikmalaringizga mos ochiq ish yo‘q. Barcha e’lonlarni ko‘rish uchun',
+    ru: 'Пока нет опубликованных вакансий, совпадающих с вашим заголовком или навыками. Смотреть все вакансии:',
+    en: 'No published jobs overlap with your skills or headline yet. Browse all openings:',
   },
 
   // Applications
