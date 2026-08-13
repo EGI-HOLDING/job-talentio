@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Git workflow (Job Talentio)
 
-Also follow `.cursor/rules/development-lifecycle.mdc` (CI/CD + staging/prod gates).
+Also follow `.cursor/rules/development-lifecycle.mdc` (CI/CD + staging/prod gates) and `.cursor/rules/check-working-tree-before-execute.mdc` (inspect branch/PR before any mutating work).
 
 ## Long-lived branches
 
