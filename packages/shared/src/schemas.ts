@@ -93,6 +93,7 @@ export const companyTranslationSchema = z.object({
 export const companyInviteSchema = z.object({
   email: z.string().trim().email(),
   role: z.enum(['ADMIN', 'RECRUITER']).default('RECRUITER'),
+  locale: z.enum(['uz', 'ru', 'en']).optional(),
 });
 
 export const jobPostSchema = z.object({

@@ -51,6 +51,16 @@ if (!googleJoin.success) {
 const invite = companyInviteSchema.parse({ email: 'teammate@co.uz' });
 if (invite.role !== 'RECRUITER') throw new Error('invite role must default to RECRUITER');
 
+const ruInvite = companyInviteSchema.parse({
+  email: 'teammate@co.uz',
+  role: 'RECRUITER',
+  locale: 'ru',
+});
+if (ruInvite.locale !== 'ru') throw new Error('invite must accept locale ru');
+
+const badLocale = companyInviteSchema.safeParse({ email: 'x@co.uz', locale: 'fr' });
+if (badLocale.success) throw new Error('invite must reject unknown locale');
+
 const adminInvite = companyInviteSchema.parse({ email: 'lead@co.uz', role: 'ADMIN' });
 if (adminInvite.role !== 'ADMIN') throw new Error('invite must accept ADMIN');
 

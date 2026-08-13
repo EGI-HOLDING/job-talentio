@@ -161,9 +161,10 @@ function RecruiterDashboard() {
   const [companyDetail, setCompanyDetail] = useState<any>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'RECRUITER' | 'ADMIN'>('RECRUITER');
+  const [inviteLocale, setInviteLocale] = useState<'uz' | 'ru' | 'en'>(locale);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<
-    Array<{ id: string; email: string; role: string; expiresAt: string }>
+    Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
   >([]);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
@@ -637,9 +638,9 @@ function RecruiterDashboard() {
 
   async function loadPendingInvites(cid: string) {
     if (!cid) return;
-    const rows = await api<Array<{ id: string; email: string; role: string; expiresAt: string }>>(
-      `/companies/${cid}/invites`,
-    );
+    const rows = await api<
+      Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
+    >(`/companies/${cid}/invites`);
     setPendingInvites(rows);
   }
 
@@ -669,7 +670,11 @@ function RecruiterDashboard() {
     try {
       const result = await api<{ status: 'added' | 'invited' }>(`/companies/${companyId}/invite`, {
         method: 'POST',
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          locale: inviteLocale,
+        }),
       });
       setInviteEmail('');
       flash(result.status === 'added' ? t('rec.memberAdded') : t('rec.memberInvited'));
@@ -2034,7 +2039,7 @@ function RecruiterDashboard() {
               <>
               <form className="form-stack" onSubmit={inviteMember}>
                 <label>
-                  <LabelText>{t('rec.inviteByEmail')}</LabelText>
+                  <LabelText required>{t('rec.inviteByEmail')}</LabelText>
                   <input
                     type="email"
                     value={inviteEmail}
@@ -2044,13 +2049,26 @@ function RecruiterDashboard() {
                   />
                 </label>
                 <label>
-                  <LabelText>{t('rec.inviteRole')}</LabelText>
+                  <LabelText required>{t('rec.inviteRole')}</LabelText>
                   <select
                     value={inviteRole}
                     onChange={(e) => setInviteRole(e.target.value as 'RECRUITER' | 'ADMIN')}
+                    required
                   >
                     <option value="RECRUITER">{t('rec.roleRecruiter')}</option>
                     <option value="ADMIN">{t('rec.roleAdmin')}</option>
+                  </select>
+                </label>
+                <label>
+                  <LabelText required>{t('rec.inviteEmailLanguage')}</LabelText>
+                  <select
+                    value={inviteLocale}
+                    onChange={(e) => setInviteLocale(e.target.value as 'uz' | 'ru' | 'en')}
+                    required
+                  >
+                    <option value="uz">{t('rec.localeNameUz')}</option>
+                    <option value="ru">{t('rec.localeNameRu')}</option>
+                    <option value="en">{t('rec.localeNameEn')}</option>
                   </select>
                 </label>
                 <button type="submit" disabled={inviteBusy}>
@@ -2076,7 +2094,20 @@ function RecruiterDashboard() {
                         }}
                       >
                         <span>
-                          {row.email} <span className="muted">({row.role})</span>
+                          {row.email}{' '}
+                          <span className="muted">
+                            ({row.role}
+                            {row.locale
+                              ? `, ${
+                                  row.locale === 'ru'
+                                    ? t('rec.localeNameRu')
+                                    : row.locale === 'en'
+                                      ? t('rec.localeNameEn')
+                                      : t('rec.localeNameUz')
+                                }`
+                              : ''}
+                            )
+                          </span>
                         </span>
                         <span className="btn-row">
                           <button
@@ -2086,7 +2117,11 @@ function RecruiterDashboard() {
                               try {
                                 await api(`/companies/${companyId}/invite`, {
                                   method: 'POST',
-                                  body: JSON.stringify({ email: row.email, role: row.role }),
+                                  body: JSON.stringify({
+                                    email: row.email,
+                                    role: row.role,
+                                    locale: row.locale || inviteLocale,
+                                  }),
                                 });
                                 flash(t('rec.memberInvited'));
                                 await loadPendingInvites(companyId);

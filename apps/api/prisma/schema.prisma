@@ -608,6 +608,8 @@ model CompanyInvite {
   companyId   String
   email       String
   role        CompanyMemberRole
+  /// Language used for the invitation email (uz/ru/en)
+  locale      String            @default("uz")
   /// SHA-256 of the raw token sent by email — raw token is never stored
   tokenHash   String            @unique
   expiresAt   DateTime
