@@ -76,7 +76,7 @@ export const employee = {
   },
   'emp.profileStrengthHint': {
     uz: 'Bu foiz profilingiz qanchalik to‘liq ekanini ko‘rsatadi, chop etilgan ishlarga mosligini emas.',
-    ru: 'Этот процент — заполненность профиля, а не совпадение с опубликованными вакансиями.',
+    ru: 'Этот процент показывает заполненность профиля, а не совпадение с опубликованными вакансиями.',
     en: 'This percent is how complete your profile is, not how well you match published jobs.',
   },
   'emp.quickStats': { uz: 'Qisqacha statistika', ru: 'Краткая статистика', en: 'Quick stats' },
