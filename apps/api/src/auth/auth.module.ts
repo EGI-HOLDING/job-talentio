@@ -8,10 +8,12 @@ import { JwtStrategy } from './jwt.strategy';
 import { AvatarBackfillService } from './avatar-backfill.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
 import { CompaniesModule } from '../companies/companies.module';
+import { TelegramModule } from '../telegram/telegram.module';
 
 @Module({
   imports: [
     CompaniesModule,
+    TelegramModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

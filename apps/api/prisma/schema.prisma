@@ -497,6 +497,7 @@ model User {
   emailChangeTokens       EmailChangeToken[]
   refreshTokens           RefreshToken[]
   companyInvitesSent      CompanyInvite[]          @relation("CompanyInvitesSent")
+  telegramLinkTokens      TelegramLinkToken[]
 }
 
 model RefreshToken {
@@ -1053,22 +1054,38 @@ model ChatMessage {
 }
 
 model JobAlert {
-  id         String         @id @default(cuid())
-  userId     String
-  name       String
-  query      String?
-  cityId     String?
-  categoryId String?
-  frequency  AlertFrequency @default(DAILY)
-  isActive   Boolean        @default(true)
-  lastSentAt DateTime?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  userId          String
+  name            String
+  query           String?
+  cityId          String?
+  categoryId      String?
+  frequency       AlertFrequency @default(DAILY)
+  isActive        Boolean        @default(true)
+  notifyInApp     Boolean        @default(true)
+  notifyEmail     Boolean        @default(true)
+  notifyTelegram  Boolean        @default(false)
+  lastSentAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   city     City?           @relation(fields: [cityId], references: [id])
   category JobCategory?    @relation(fields: [categoryId], references: [id])
   skills   JobAlertSkill[]
+
+  @@index([userId])
+}
+
+model TelegramLinkToken {
+  id        String   @id @default(cuid())
+  userId    String
+  /// SHA-256 of the raw start payload — raw token is never stored
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

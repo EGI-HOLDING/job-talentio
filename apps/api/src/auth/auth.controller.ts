@@ -30,10 +30,14 @@ import { AuthService } from './auth.service';
 import { parseDto } from '../common/utils';
 import { CurrentUser, JwtAuthGuard, AuthUser } from '../common/auth.decorators';
 import { imageUploadOptions } from '../common/upload';
+import { TelegramService } from '../telegram/telegram.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private auth: AuthService) {}
+  constructor(
+    private auth: AuthService,
+    private telegramService: TelegramService,
+  ) {}
 
   @Post('register')
   register(@Body() body: unknown) {
@@ -132,8 +136,20 @@ export class AuthController {
   }
 
   @Post('oauth/telegram')
-  telegram() {
+  oauthTelegram() {
     return this.auth.oauthTelegramStub();
+  }
+
+  @Post('telegram/link')
+  @UseGuards(JwtAuthGuard)
+  createTelegramLink(@CurrentUser() user: AuthUser) {
+    return this.telegramService.createLink(user.id);
+  }
+
+  @Delete('telegram/link')
+  @UseGuards(JwtAuthGuard)
+  unlinkTelegram(@CurrentUser() user: AuthUser) {
+    return this.telegramService.unlink(user.id);
   }
 
   @Post('forgot-password')

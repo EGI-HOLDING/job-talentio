@@ -131,6 +131,7 @@ export class AuthService {
         locale: user.locale,
         avatarUrl: user.avatarUrl,
         emailVerified: user.emailVerified,
+        telegramLinked: Boolean(user.telegramId),
         memberships: user.memberships,
         employeeProfileId: user.employeeProfile?.id ?? null,
       },
