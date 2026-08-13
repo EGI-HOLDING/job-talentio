@@ -9,6 +9,8 @@ import { localeHref } from '@/lib/navigation';
 const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '';
 const WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const TELEGRAM_OAUTH = 'https://oauth.telegram.org';
+const LOGOUT_WAIT_MS = 1400;
 
 type TelegramUser = {
   id: number;
@@ -88,6 +90,28 @@ function widgetFields(user: TelegramUser) {
   };
 }
 
+function telegramAccountName(user: TelegramUser) {
+  return [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+}
+
+function telegramWindowName(botId: string) {
+  return `telegram_oauth_bot${botId}`;
+}
+
+function telegramPopupFeatures() {
+  const width = 550;
+  const height = 470;
+  const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+  const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+  return `width=${width},height=${height},left=${left},top=${top},status=0,location=1,menubar=0,toolbar=0`;
+}
+
+function telegramLogoutUrl(botId: string) {
+  const origin = window.location.origin;
+  const q = new URLSearchParams({ bot_id: botId, origin });
+  return `${TELEGRAM_OAUTH}/auth/logout?${q.toString()}`;
+}
+
 export function TelegramSignIn({
   inviteToken,
   mode = 'login',
@@ -101,6 +125,7 @@ export function TelegramSignIn({
   const [botId, setBotId] = useState<string | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
   const [widgetUser, setWidgetUser] = useState<TelegramUser | null>(null);
+  const [pendingUser, setPendingUser] = useState<TelegramUser | null>(null);
   const [needsRole, setNeedsRole] = useState<{ fullName: string; username: string | null } | null>(
     null,
   );
@@ -109,6 +134,15 @@ export function TelegramSignIn({
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const submitTelegram = useCallback(
     async (
@@ -168,11 +202,6 @@ export function TelegramSignIn({
     [locale, inviteToken, mode, onConnected, t],
   );
 
-  const submitRef = useRef(submitTelegram);
-  useEffect(() => {
-    submitRef.current = submitTelegram;
-  }, [submitTelegram]);
-
   useEffect(() => {
     if (!TELEGRAM_BOT) return;
     let cancelled = false;
@@ -191,20 +220,20 @@ export function TelegramSignIn({
     };
   }, []);
 
-  const openTelegramPopup = useCallback(async () => {
-    if (!botId || busy) return;
-    setError('');
+  const runTelegramAuth = useCallback(async () => {
+    if (!botId) return false;
     try {
       await loadTelegramSdk();
+      if (!aliveRef.current) return false;
       setSdkReady(true);
     } catch {
       setError(t('telegramSignInFailed'));
-      return;
+      return false;
     }
     const auth = window.Telegram?.Login?.auth;
     if (!auth) {
       setError(t('telegramSignInFailed'));
-      return;
+      return false;
     }
 
     const nativeOpen = window.open.bind(window);
@@ -215,9 +244,11 @@ export function TelegramSignIn({
     }) as typeof window.open;
     try {
       auth({ bot_id: botId, request_access: 'write', lang: locale }, (user) => {
+        if (!aliveRef.current) return;
         if (user && typeof user === 'object' && user.hash) {
+          setNeedsRole(null);
           setWidgetUser(user);
-          void submitRef.current(user);
+          setPendingUser(user);
         }
       });
     } finally {
@@ -225,8 +256,46 @@ export function TelegramSignIn({
     }
     if (!popup) {
       setError(t('telegramPopupBlocked'));
+      return false;
     }
-  }, [botId, busy, locale, t]);
+    return true;
+  }, [botId, locale, t]);
+
+  const openTelegramPopup = useCallback(
+    async (logoutFirst: boolean) => {
+      if (!botId || busy || opening) return;
+      setError('');
+      setOpening(true);
+      try {
+        if (logoutFirst) {
+          const popup = window.open(
+            telegramLogoutUrl(botId),
+            telegramWindowName(botId),
+            telegramPopupFeatures(),
+          );
+          if (!popup) {
+            setError(t('telegramPopupBlocked'));
+            return;
+          }
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, LOGOUT_WAIT_MS);
+          });
+          if (!aliveRef.current) return;
+        }
+        await runTelegramAuth();
+      } finally {
+        if (aliveRef.current) setOpening(false);
+      }
+    },
+    [botId, busy, opening, runTelegramAuth, t],
+  );
+
+  const switchTelegramAccount = useCallback(() => {
+    setPendingUser(null);
+    setWidgetUser(null);
+    setNeedsRole(null);
+    void openTelegramPopup(true);
+  }, [openTelegramPopup]);
 
   if (!TELEGRAM_BOT) return null;
 
@@ -310,6 +379,72 @@ export function TelegramSignIn({
     );
   }
 
+  if (pendingUser) {
+    const name = telegramAccountName(pendingUser);
+    return (
+      <div className="google-signin">
+        <div className="google-verify-card">
+          <strong>{t('telegramConfirmTitle')}</strong>
+          <div className="telegram-confirm-identity">
+            {pendingUser.photo_url ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pendingUser.photo_url}
+                  alt=""
+                  width={48}
+                  height={48}
+                  referrerPolicy="no-referrer"
+                />
+              </>
+            ) : null}
+            <div>
+              <div>{name}</div>
+              {pendingUser.username ? (
+                <div className="muted" style={{ fontSize: '0.9rem' }}>
+                  @{pendingUser.username}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
+            {t('telegramConfirmHint')}
+          </p>
+          <FormAlert>{error}</FormAlert>
+          <div className="telegram-confirm-actions">
+            <button
+              type="button"
+              disabled={busy || opening}
+              onClick={() => void submitTelegram(pendingUser)}
+            >
+              {busy ? t('signingIn') : t('continueLabel')}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || opening}
+              onClick={switchTelegramAccount}
+            >
+              {opening ? t('telegramOpening') : t('telegramUseDifferent')}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy || opening}
+              onClick={() => {
+                setPendingUser(null);
+                setWidgetUser(null);
+                setError('');
+              }}
+            >
+              {t('cancel')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const showDivider = mode === 'login' && !GOOGLE_CLIENT_ID;
   const ready = Boolean(botId) && sdkReady;
 
@@ -324,8 +459,8 @@ export function TelegramSignIn({
         <button
           type="button"
           className="telegram-login-btn"
-          disabled={!ready || busy}
-          onClick={() => void openTelegramPopup()}
+          disabled={!ready || busy || opening}
+          onClick={() => void openTelegramPopup(true)}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -333,7 +468,7 @@ export function TelegramSignIn({
               d="M21.5 3.2 2.8 10.4c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 11.1-7c.5-.3.9-.1.6.2l-9 8.1-.3 4.8c.4 0 .6-.2.8-.4l2.1-2 4.4 3.2c.8.5 1.4.2 1.6-.7l2.9-13.7c.3-1.2-.4-1.8-1.1-1.5z"
             />
           </svg>
-          {busy ? t('signingIn') : t('telegramContinue')}
+          {opening ? t('telegramOpening') : busy ? t('signingIn') : t('telegramContinue')}
         </button>
       </div>
       <p className="muted" style={{ fontSize: '0.8rem', margin: '0.55rem 0 0', textAlign: 'center' }}>

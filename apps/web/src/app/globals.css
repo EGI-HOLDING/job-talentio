@@ -1736,6 +1736,24 @@ a.card.job-card--hot {
 .telegram-login-btn svg {
   flex-shrink: 0;
 }
+.telegram-confirm-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+.telegram-confirm-identity img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e2e8f0;
+}
+.telegram-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 .google-verify-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);

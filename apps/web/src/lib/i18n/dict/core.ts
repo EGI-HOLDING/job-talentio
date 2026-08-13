@@ -617,9 +617,29 @@ export const core = {
     en: 'Continue with Telegram',
   },
   telegramSwitchHint: {
-    uz: 'Telegram oynasida Log out ni bosing, keyin boshqa akkaunt bilan kiring.',
-    ru: 'В окне Telegram нажмите Log out, затем войдите другим аккаунтом.',
-    en: 'In the Telegram window, click Log out to sign in with a different account.',
+    uz: 'Agar Telegram avvalgi akkauntni tanlasa, boshqa akkauntni tanlang.',
+    ru: 'Если Telegram подставил прошлый аккаунт, выберите другой.',
+    en: 'If Telegram fills in a previous account, choose a different one.',
+  },
+  telegramConfirmTitle: {
+    uz: 'Telegram hisobi',
+    ru: 'Аккаунт Telegram',
+    en: 'Telegram account',
+  },
+  telegramConfirmHint: {
+    uz: 'Shu hisob bilan davom etasizmi? Boshqa Telegram akkaunt ham tanlashingiz mumkin.',
+    ru: 'Продолжить с этим аккаунтом или выбрать другой Telegram?',
+    en: 'Continue with this account, or choose a different Telegram account?',
+  },
+  telegramUseDifferent: {
+    uz: 'Boshqa Telegram akkaunt',
+    ru: 'Другой аккаунт Telegram',
+    en: 'Use a different Telegram account',
+  },
+  telegramOpening: {
+    uz: 'Telegram ochilmoqda...',
+    ru: 'Открывается Telegram...',
+    en: 'Opening Telegram...',
   },
   telegramPopupBlocked: {
     uz: 'Brauzer oynani blokladi. Popupga ruxsat bering va qayta urinib ko‘ring.',
