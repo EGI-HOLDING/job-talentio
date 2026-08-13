@@ -1,0 +1,46 @@
+---
+description: Check git working tree, branch, and PR state before any work
+alwaysApply: true
+---
+
+# Check the working tree before executing anything
+
+Before edits, installs, merges, pulls, commits, pushes, deploys, or other mutating commands, inspect the repo. Do not assume the previous chat’s branch is still the right place to work.
+
+## Required checks (read-only first)
+
+Run together:
+
+1. `git status` — clean vs dirty, merge/rebase in progress, untracked files
+2. `git branch --show-current` — never treat `develop`/`main` as a feature branch
+3. Tracking vs remote — `git status` “ahead/behind”; fetch if you will merge or branch
+
+Also confirm:
+
+- Open PR for this branch: `gh pr view --json state,mergedAt,url` (or `gh pr list --head <branch>`)
+- If the user mentions a PR number, check that PR **before** pulling or merging
+
+## Stop or redirect when
+
+| State | Action |
+|-------|--------|
+| Dirty tree unrelated to the request | Do not mix work; stash/leave those files alone |
+| Merge/rebase conflict in progress | Finish or abort that first; do not start a new task on top |
+| On `develop` or `main` | Branch off up-to-date `develop` (`feature/` / `fix/` / `chore/`) before editing |
+| Feature branch whose PR is already **MERGED** | Switch to up-to-date `develop`; do not `git pull origin develop` into the dead branch |
+| Requested work already on `develop` | Do not re-implement; say so |
+| Behind `origin/develop` and starting new work | Fast-forward/checkout `develop`, then new branch |
+
+## Do not
+
+- Pull `develop` into a merged feature branch to “sync”
+- Commit/push/PR until the checks above say this branch is the right target
+- Skip these checks because the last turn already ran git (re-check; state changes)
+
+## Example
+
+User pastes a merge conflict from `git pull origin develop` on `feature/openai-…`:
+
+1. Check `git status` + `gh pr view 124` → PR **MERGED**
+2. Tell the user the work is already on `develop`
+3. Do not continue implementing or merging into that feature branch
