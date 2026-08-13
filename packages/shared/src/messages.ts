@@ -92,6 +92,48 @@ export const MESSAGES = {
     ru: 'Ссылка действительна 24 часа.',
     en: 'This link expires in 24 hours.',
   },
+  'email.expires7d': {
+    uz: 'Havola 7 kundan keyin eskiradi.',
+    ru: 'Ссылка действительна 7 дней.',
+    en: 'This link expires in 7 days.',
+  },
+
+  'email.invite.subject': {
+    uz: '{company} sizni Job Talentio jamoasiga taklif qildi',
+    ru: '{company} приглашает вас в команду Job Talentio',
+    en: '{company} invited you to join their Job Talentio team',
+  },
+  'email.invite.intro': {
+    uz: '{company} kompaniyasi sizni yollash jamoasiga qo‘shilishga taklif qiladi. Hisob ochish uchun havolani oching (parol yoki Google).',
+    ru: '{company} приглашает вас в команду найма. Откройте ссылку, чтобы создать аккаунт (пароль или Google).',
+    en: '{company} invited you to their hiring team. Open the link to create an account with a password or Google.',
+  },
+  'email.invite.cta': {
+    uz: 'Taklifni qabul qilish',
+    ru: 'Принять приглашение',
+    en: 'Accept invitation',
+  },
+  'email.invite.ignore': {
+    uz: 'Agar bu taklifni kutmagan bo‘lsangiz, xatni e’tiborsiz qoldiring.',
+    ru: 'Если вы не ждали это приглашение, просто проигнорируйте письмо.',
+    en: 'If you were not expecting this invitation, you can ignore this email.',
+  },
+
+  'email.inviteAdded.subject': {
+    uz: 'Siz {company} jamoasiga qo‘shildingiz',
+    ru: 'Вас добавили в команду {company}',
+    en: 'You were added to the {company} team',
+  },
+  'email.inviteAdded.intro': {
+    uz: '{company} kompaniyasi sizni yollash jamoasiga qo‘shdi. Kirish uchun havolani oching.',
+    ru: '{company} добавила вас в команду найма. Откройте ссылку, чтобы войти.',
+    en: '{company} added you to their hiring team. Open the link to sign in.',
+  },
+  'email.inviteAdded.cta': {
+    uz: 'Kirish',
+    ru: 'Войти',
+    en: 'Sign in',
+  },
 
   'email.welcome.subject': {
     uz: 'Job Talentio ga xush kelibsiz',

@@ -41,7 +41,7 @@ function redirectAfterLogin(role: string) {
  * button → /auth/oauth/google → role picker for new users → session issued immediately.
  * Renders nothing when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured.
  */
-export function GoogleSignIn() {
+export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
   const { t, locale } = useI18n();
   const buttonRef = useRef<HTMLDivElement>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
@@ -67,8 +67,9 @@ export function GoogleSignIn() {
           body: JSON.stringify({
             idToken: token,
             role: chosenRole,
-            companyName: chosenRole === 'RECRUITER' ? company : undefined,
+            companyName: chosenRole === 'RECRUITER' && !inviteToken ? company : undefined,
             locale,
+            inviteToken: inviteToken || undefined,
           }),
         });
         if ('requiresVerification' in res) {
@@ -94,7 +95,7 @@ export function GoogleSignIn() {
         setBusy(false);
       }
     },
-    [locale],
+    [locale, inviteToken],
   );
 
   // GIS callback must always see the latest submitGoogle without re-initializing GIS
@@ -187,6 +188,7 @@ export function GoogleSignIn() {
           <p className="muted" style={{ margin: '0.4rem 0 0.75rem', fontSize: '0.9rem' }}>
             {needsRole.fullName} | {needsRole.email}
           </p>
+          {inviteToken ? null : (
           <div className="chips" role="radiogroup" style={{ marginBottom: '0.75rem' }}>
             <button
               type="button"
@@ -207,7 +209,8 @@ export function GoogleSignIn() {
               {t('imHiring')}
             </button>
           </div>
-          {role === 'RECRUITER' && (
+          )}
+          {role === 'RECRUITER' && !inviteToken && (
             <FormField label={t('companyName')} required>
               <input
                 value={companyName}
@@ -220,8 +223,13 @@ export function GoogleSignIn() {
           <FormAlert>{error}</FormAlert>
           <button
             type="button"
-            disabled={busy || (role === 'RECRUITER' && companyName.trim().length < 2)}
-            onClick={() => submitGoogle(idToken, role, companyName.trim())}
+            disabled={
+              busy ||
+              (!inviteToken && role === 'RECRUITER' && companyName.trim().length < 2)
+            }
+            onClick={() =>
+              submitGoogle(idToken, inviteToken ? 'RECRUITER' : role, companyName.trim())
+            }
             style={{ marginTop: '0.5rem' }}
           >
             {busy ? t('creatingAccount') : t('continueLabel')}

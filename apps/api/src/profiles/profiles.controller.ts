@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,10 +8,12 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   profileUpdateSchema,
@@ -31,6 +34,14 @@ import { ProfilesService } from './profiles.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
 import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
+import { requestLocale } from '../common/i18n/request-locale';
+import { isLocale } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
+
+function assertLocale(value: string): Locale {
+  if (!isLocale(value)) throw new BadRequestException('Unsupported locale');
+  return value;
+}
 
 @Controller('profiles')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -312,7 +323,7 @@ export class ProfilesController {
   @Get('candidates')
   @UseGuards(SearchRateLimitGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
-  candidates(@CurrentUser() user: AuthUser, @Query() query: unknown) {
+  candidates(@CurrentUser() user: AuthUser, @Query() query: unknown, @Req() req: Request) {
     const data = parseDto(candidateSearchSchema, query);
     return this.profiles.searchCandidates(user, {
       ...data,
@@ -321,7 +332,20 @@ export class ProfilesController {
       sort: data.sort ?? 'relevance',
       page: data.page ?? 1,
       limit: data.limit ?? 12,
+      locale: requestLocale(req),
     });
+  }
+
+  @Post('candidates/:id/translate/:locale')
+  @UseGuards(SearchRateLimitGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  machineTranslateCandidate(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @Query('matchJobId') matchJobId?: string,
+  ) {
+    return this.profiles.machineTranslateCandidate(user, id, assertLocale(locale), matchJobId);
   }
 
   @Get('candidates/:id')
@@ -329,9 +353,10 @@ export class ProfilesController {
   candidateDetail(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
+    @Req() req: Request,
     @Query('matchJobId') matchJobId?: string,
   ) {
-    return this.profiles.getCandidateProfile(user, id, matchJobId);
+    return this.profiles.getCandidateProfile(user, id, matchJobId, requestLocale(req));
   }
 
   @Post('me/saved-jobs/:jobId')

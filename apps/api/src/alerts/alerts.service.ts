@@ -7,6 +7,7 @@ import { emailLocale } from '../common/i18n/email-locale';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { resolveSkill } from '../common/skill-resolve';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 
 @Injectable()
 export class AlertsService {
@@ -36,12 +37,14 @@ export class AlertsService {
     let cityId: string | null = null;
     let categoryId: string | null = null;
     if (data.citySlug) {
-      const city = await this.prisma.city.findUnique({ where: { slug: data.citySlug } });
+      const city = await this.prisma.city.findFirst({
+        where: { slug: data.citySlug, ...ACTIVE_CATALOG },
+      });
       cityId = city?.id ?? null;
     }
     if (data.categorySlug) {
-      const cat = await this.prisma.jobCategory.findUnique({
-        where: { slug: data.categorySlug },
+      const cat = await this.prisma.jobCategory.findFirst({
+        where: { slug: data.categorySlug, ...ACTIVE_CATALOG },
       });
       categoryId = cat?.id ?? null;
     }
@@ -132,15 +135,17 @@ export class AlertsService {
     if (data.citySlug !== undefined) {
       if (!data.citySlug) cityId = null;
       else {
-        const city = await this.prisma.city.findUnique({ where: { slug: data.citySlug } });
+        const city = await this.prisma.city.findFirst({
+          where: { slug: data.citySlug, ...ACTIVE_CATALOG },
+        });
         cityId = city?.id ?? null;
       }
     }
     if (data.categorySlug !== undefined) {
       if (!data.categorySlug) categoryId = null;
       else {
-        const cat = await this.prisma.jobCategory.findUnique({
-          where: { slug: data.categorySlug },
+        const cat = await this.prisma.jobCategory.findFirst({
+          where: { slug: data.categorySlug, ...ACTIVE_CATALOG },
         });
         categoryId = cat?.id ?? null;
       }

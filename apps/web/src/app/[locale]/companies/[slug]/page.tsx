@@ -139,7 +139,7 @@ export default function CompanyPage() {
               className="company-about"
               translating={translating}
               onTranslate={
-                session && company.canMachineTranslate ? () => void machineTranslate() : undefined
+                company.canMachineTranslate ? () => void machineTranslate() : undefined
               }
             />
           )}

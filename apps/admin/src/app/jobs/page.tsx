@@ -15,6 +15,7 @@ import {
   formatDate,
   humanize,
   isHot,
+  soleFilterValue,
 } from '@/lib/types';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { DataTable, type Column } from '@/components/data/DataTable';
@@ -171,7 +172,7 @@ export default function JobsPage() {
           quick={
             <SelectField
               label=""
-              value={query.status ?? ''}
+              value={soleFilterValue(query.status)}
               onChange={(next) => setFilter('status', next)}
               allLabel="Any status"
               options={JOB_STATUSES.map((s) => ({ value: s, label: humanize(s) }))}

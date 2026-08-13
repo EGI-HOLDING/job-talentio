@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { applicationStatusSchema, applySchema, interviewSchema } from '@job-talentio/shared';
 import { ApplicationsService } from './applications.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
+import { requestLocale } from '../common/i18n/request-locale';
 
 @Controller('applications')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -43,6 +45,7 @@ export class ApplicationsController {
   forJob(
     @Param('jobId') jobId: string,
     @CurrentUser() user: AuthUser,
+    @Req() req: Request,
     @Query('status') status?: string,
     @Query('sort') sort?: 'match' | 'newest',
     @Query('minMatch') minMatch?: string,
@@ -51,6 +54,7 @@ export class ApplicationsController {
       status,
       sort: sort ?? 'match',
       minMatch: minMatch ? Number(minMatch) : undefined,
+      locale: requestLocale(req),
     });
   }
 

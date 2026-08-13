@@ -136,6 +136,89 @@ export const CATALOG_KINDS: Array<{ value: CatalogKind; label: string }> = [
 ];
 export const CATALOG_STATUSES: CatalogStatus[] = ['PENDING', 'COMPLETE', 'IGNORED'];
 
+/** Every admin-managed lookup table, described by the API registry. */
+export type CatalogType =
+  | 'skill'
+  | 'jobTitle'
+  | 'language'
+  | 'benefit'
+  | 'jobCategory'
+  | 'industry'
+  | 'industryGroup'
+  | 'country'
+  | 'province'
+  | 'city';
+
+export const CATALOG_TYPES: CatalogType[] = [
+  'skill',
+  'jobTitle',
+  'language',
+  'benefit',
+  'jobCategory',
+  'industry',
+  'industryGroup',
+  'country',
+  'province',
+  'city',
+];
+
+export function isCatalogType(value: unknown): value is CatalogType {
+  return typeof value === 'string' && (CATALOG_TYPES as string[]).includes(value);
+}
+
+export type CatalogKindSpec = {
+  type: CatalogType;
+  label: string;
+  keyField: 'slug' | 'code';
+  hasLocaleNames: boolean;
+  hasI18nStatus: boolean;
+  hasSortOrder: boolean;
+  hasIcon: boolean;
+  parent: { type: CatalogType; field: string; label: string; required: boolean } | null;
+  seedManaged: boolean;
+  supportsMerge: boolean;
+  usageLabels: string[];
+};
+
+export type CatalogRow = {
+  id: string;
+  name: string;
+  nameUz?: string | null;
+  nameRu?: string | null;
+  slug?: string;
+  code?: string;
+  icon?: string | null;
+  sortOrder?: number;
+  archivedAt: string | null;
+  curatedAt: string | null;
+  i18nStatus?: CatalogStatus;
+  createdAt?: string;
+  // Parent relation, keyed by the parent's type name.
+  province?: { name: string; slug: string } | null;
+  country?: { name: string; slug: string } | null;
+  industryGroup?: { name: string; slug: string } | null;
+};
+
+export type CatalogUsage = {
+  total: number;
+  byRelation: Array<{ label: string; count: number }>;
+};
+
+export type ArchiveResult = {
+  outcome: 'deleted' | 'archived';
+  usage: CatalogUsage;
+};
+
+/**
+ * A dropdown and a multi-select can drive the same filter key. Once the filter
+ * holds several values there is no single option to show, so the dropdown falls
+ * back to its neutral entry rather than rendering blank.
+ */
+export function soleFilterValue(raw?: string): string {
+  if (!raw || raw.includes(',')) return '';
+  return raw;
+}
+
 /** Enum values are SCREAMING_CASE in the database but read better as words. */
 export function humanize(value?: string | null): string {
   if (!value) return '-';

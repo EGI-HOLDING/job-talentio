@@ -12,7 +12,7 @@ Every translatable field belongs to exactly one of five classes. Pick the class 
 | B. Shared catalog labels | `name` + `nameUz` / `nameRu` on the row | Prisma columns + `LocaleInterceptor` | Skill, JobTitle, Language, Benefit, City, Industry |
 | C. Long public content | Parent `locale` + `*Translation` rows | `JobPostTranslation`, `NewsArticleTranslation`, `CompanyTranslation`, `JobQuestionTranslation` | Job posting, news article, company description, screening questions |
 | D. Private UGC | None — keep the source language | — | Chat, cover letters, screening answers, notes, templates, reports |
-| E. Public profile narrative | `contentLocale` marker + badge only | `EmployeeProfile.contentLocale` | Headline, summary, experience descriptions |
+| E. Public profile narrative | On-demand MT + `*Translation` cache; employee editor stays single-language | `EmployeeProfileTranslation`, `WorkExperienceTranslation`, `EducationTranslation` | Headline, summary, experience title/description, education field |
 
 ## Invariants
 
@@ -44,7 +44,9 @@ or merge a duplicate into an existing row. `nameUzIsMachine` / `nameRuIsMachine`
 
 `resolveContent` (`apps/api/src/common/i18n/content-locale.ts`) picks requested locale, then human translation, then
 machine translation, then the original. Readers see a `UgcText` badge when they get a fallback. `sourceHash` marks
-machine output stale when the source text changes.
+machine output stale when the source text changes. Guests can read cached rows and click Translate on job, company,
+and news detail (IP rate limit + monthly character budget). Recruiters can request one Translate on a candidate
+profile for Class E narrative fields; the employee editor is still single-language.
 
 ## Adding a new field
 

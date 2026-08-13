@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 
 export type MatchBreakdownData = {
   skills?: number;
+  title?: number;
   experience?: number;
   location?: number;
   education?: number;
@@ -28,6 +29,7 @@ type Props = {
 
 const ROWS = [
   ['skills', 'skills'],
+  ['ui.matchRole', 'title'],
   ['experience', 'experience'],
   ['ui.location', 'location'],
   ['education', 'education'],

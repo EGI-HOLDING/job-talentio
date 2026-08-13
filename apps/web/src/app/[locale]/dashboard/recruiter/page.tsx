@@ -160,7 +160,12 @@ function RecruiterDashboard() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [companyDetail, setCompanyDetail] = useState<any>(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'RECRUITER' | 'ADMIN'>('RECRUITER');
+  const [inviteLocale, setInviteLocale] = useState<'uz' | 'ru' | 'en'>(locale);
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<
+    Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
+  >([]);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [accountEmail, setAccountEmail] = useState('');
@@ -170,6 +175,10 @@ function RecruiterDashboard() {
     () => companyDetail || memberships.find((m) => m.companyId === companyId)?.company,
     [memberships, companyId, companyDetail],
   );
+  const canManageTeam = useMemo(() => {
+    const role = memberships.find((m) => m.companyId === companyId)?.role;
+    return role === 'OWNER' || role === 'ADMIN';
+  }, [memberships, companyId]);
   const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
   const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
   const activeJobLimit = PLAN_LIMITS[planCode].activeJobs;
@@ -368,8 +377,13 @@ function RecruiterDashboard() {
       loadSubscription(companyId).catch(() => setSubscription(null));
       loadBulkTemplates(companyId).catch(() => setBulkTemplates([]));
       loadCompanyDetail(companyId).catch(() => setCompanyDetail(null));
+      if (canManageTeam) {
+        loadPendingInvites(companyId).catch(() => setPendingInvites([]));
+      } else {
+        setPendingInvites([]);
+      }
     }
-  }, [companyId]);
+  }, [companyId, canManageTeam]);
 
   useEffect(() => {
     if ((tab === 'pipeline' || tab === 'bulk') && companyId) {
@@ -476,6 +490,7 @@ function RecruiterDashboard() {
           currency: fd.get('currency') || 'UZS',
           employmentType: fd.get('employmentType') || 'FULL_TIME',
           workMode: fd.get('workMode') || 'ONSITE',
+          locale: fd.get('locale') || undefined,
           languages: editJobLanguages.map((l) => ({
             code: l.code,
             name: l.name,
@@ -622,6 +637,14 @@ function RecruiterDashboard() {
     setCompanyDetail(detail);
   }
 
+  async function loadPendingInvites(cid: string) {
+    if (!cid) return;
+    const rows = await api<
+      Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
+    >(`/companies/${cid}/invites`);
+    setPendingInvites(rows);
+  }
+
   async function updateCompany(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -646,13 +669,18 @@ function RecruiterDashboard() {
     if (!inviteEmail.trim() || inviteBusy) return;
     setInviteBusy(true);
     try {
-      await api(`/companies/${companyId}/invite`, {
+      const result = await api<{ status: 'added' | 'invited' }>(`/companies/${companyId}/invite`, {
         method: 'POST',
-        body: JSON.stringify({ email: inviteEmail.trim(), role: 'RECRUITER' }),
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          locale: inviteLocale,
+        }),
       });
       setInviteEmail('');
-      flash(t('rec.memberInvited'));
+      flash(result.status === 'added' ? t('rec.memberAdded') : t('rec.memberInvited'));
       await loadCompanyDetail(companyId);
+      await loadPendingInvites(companyId);
     } catch (err) {
       flash(err instanceof Error ? err.message : t('rec.inviteFailed'), 'error');
     } finally {
@@ -770,7 +798,7 @@ function RecruiterDashboard() {
                       setDraftJobLevel((prev) => prev || level);
                     }}
                   />
-                  <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                  <span className="field-hint muted">
                     {t('jobTitleHint')}
                   </span>
                 </label>
@@ -778,17 +806,28 @@ function RecruiterDashboard() {
                   <LabelText required>{t('rec.description')}</LabelText>
                   <textarea name="description" rows={5} required minLength={20} />
                 </label>
-                <label>
-                  <LabelText>{t('city')}</LabelText>
-                  <select name="citySlug">
-                    <option value="">-</option>
-                    {meta.cities.map((c) => (
-                      <option key={c.slug} value={c.slug}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="grid-2">
+                  <label>
+                    <LabelText>{t('city')}</LabelText>
+                    <select name="citySlug">
+                      <option value="">-</option>
+                      {meta.cities.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <LabelText>{t('workMode')}</LabelText>
+                    <select name="workMode" defaultValue="HYBRID">
+                      <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
+                      <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
+                      <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="field-hint muted">{t('rec.cityRuleHint')}</p>
                 <label>
                   <LabelText>{t('category')}</LabelText>
                   <select name="categorySlug">
@@ -837,14 +876,6 @@ function RecruiterDashboard() {
                     />
                   </label>
                 </div>
-                <label>
-                  <LabelText>{t('workMode')}</LabelText>
-                  <select name="workMode" defaultValue="HYBRID">
-                    <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
-                    <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
-                    <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
-                  </select>
-                </label>
                 <div className="grid-2">
                   <label>
                     <LabelText>{t('employmentType')}</LabelText>
@@ -894,15 +925,13 @@ function RecruiterDashboard() {
                         }
                       }}
                     >
-                      <option value="uz">uz</option>
-                      <option value="ru">ru</option>
-                      <option value="en">en</option>
+                      <option value="uz">{t('rec.localeNameUz')}</option>
+                      <option value="ru">{t('rec.localeNameRu')}</option>
+                      <option value="en">{t('rec.localeNameEn')}</option>
                     </select>
                   </label>
                 </div>
-                <p className="muted" style={{ fontSize: '0.78rem', margin: '-0.35rem 0 0.5rem' }}>
-                  {t('rec.cityRuleHint')}
-                </p>
+                <p className="field-hint muted">{t('rec.postLocaleHint')}</p>
                 <div>
                   <LabelText>{t('skills')}</LabelText>
                   <div className="chips" style={{ margin: '0.4rem 0' }}>
@@ -1146,25 +1175,14 @@ function RecruiterDashboard() {
                             minLength={20}
                           />
                         </label>
-                        <label>
-                          <LabelText>{t('city')}</LabelText>
-                          <select name="citySlug" defaultValue={j.city?.slug || ''}>
-                            <option value="">-</option>
-                            {meta.cities.map((c) => (
-                              <option key={c.slug} value={c.slug}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
                         <div className="grid-2">
                           <label>
-                            <LabelText>{t('experienceLevel')}</LabelText>
-                            <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                            <LabelText>{t('city')}</LabelText>
+                            <select name="citySlug" defaultValue={j.city?.slug || ''}>
                               <option value="">-</option>
-                              {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
-                                <option key={l} value={l}>
-                                  {enumLabel('experienceLevel', l)}
+                              {meta.cities.map((c) => (
+                                <option key={c.slug} value={c.slug}>
+                                  {c.name}
                                 </option>
                               ))}
                             </select>
@@ -1178,7 +1196,19 @@ function RecruiterDashboard() {
                             </select>
                           </label>
                         </div>
+                        <p className="field-hint muted">{t('rec.cityRuleHint')}</p>
                         <div className="grid-2">
+                          <label>
+                            <LabelText>{t('experienceLevel')}</LabelText>
+                            <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
+                              <option value="">-</option>
+                              {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
+                                <option key={l} value={l}>
+                                  {enumLabel('experienceLevel', l)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <label>
                             <LabelText>{t('employmentType')}</LabelText>
                             <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
@@ -1196,12 +1226,22 @@ function RecruiterDashboard() {
                               </option>
                             </select>
                           </label>
+                        </div>
+                        <div className="grid-2">
                           <label>
                             <LabelText>{t('rec.salaryPeriod')}</LabelText>
                             <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
                               <option value="MONTHLY">{t('rec.periodMonthly')}</option>
                               <option value="YEARLY">{t('rec.periodYearly')}</option>
                               <option value="HOURLY">{t('rec.periodHourly')}</option>
+                            </select>
+                          </label>
+                          <label>
+                            <LabelText>{t('rec.currency')}</LabelText>
+                            <select name="currency" defaultValue={j.currency || 'UZS'}>
+                              <option value="UZS">UZS</option>
+                              <option value="USD">USD</option>
+                              <option value="EUR">EUR</option>
                             </select>
                           </label>
                         </div>
@@ -1216,13 +1256,14 @@ function RecruiterDashboard() {
                           </label>
                         </div>
                         <label>
-                          <LabelText>{t('rec.currency')}</LabelText>
-                          <select name="currency" defaultValue={j.currency || 'UZS'}>
-                            <option value="UZS">UZS</option>
-                            <option value="USD">USD</option>
-                            <option value="EUR">EUR</option>
+                          <LabelText>{t('postLocale')}</LabelText>
+                          <select name="locale" defaultValue={j.locale || 'uz'}>
+                            <option value="uz">{t('rec.localeNameUz')}</option>
+                            <option value="ru">{t('rec.localeNameRu')}</option>
+                            <option value="en">{t('rec.localeNameEn')}</option>
                           </select>
                         </label>
+                        <p className="field-hint muted">{t('rec.postLocaleHint')}</p>
                         <div>
                           <LabelText>{t('languages')}</LabelText>
                           <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
@@ -2008,9 +2049,11 @@ function RecruiterDashboard() {
                   </li>
                 ))}
               </ul>
+              {canManageTeam ? (
+              <>
               <form className="form-stack" onSubmit={inviteMember}>
                 <label>
-                  <LabelText>{t('rec.inviteByEmail')}</LabelText>
+                  <LabelText required>{t('rec.inviteByEmail')}</LabelText>
                   <input
                     type="email"
                     value={inviteEmail}
@@ -2019,10 +2062,121 @@ function RecruiterDashboard() {
                     required
                   />
                 </label>
+                <label>
+                  <LabelText required>{t('rec.inviteRole')}</LabelText>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as 'RECRUITER' | 'ADMIN')}
+                    required
+                  >
+                    <option value="RECRUITER">{t('rec.roleRecruiter')}</option>
+                    <option value="ADMIN">{t('rec.roleAdmin')}</option>
+                  </select>
+                </label>
+                <label>
+                  <LabelText required>{t('rec.inviteEmailLanguage')}</LabelText>
+                  <select
+                    value={inviteLocale}
+                    onChange={(e) => setInviteLocale(e.target.value as 'uz' | 'ru' | 'en')}
+                    required
+                  >
+                    <option value="uz">{t('rec.localeNameUz')}</option>
+                    <option value="ru">{t('rec.localeNameRu')}</option>
+                    <option value="en">{t('rec.localeNameEn')}</option>
+                  </select>
+                </label>
                 <button type="submit" disabled={inviteBusy}>
                   {inviteBusy ? t('rec.inviting') : t('rec.inviteMember')}
                 </button>
               </form>
+              <div style={{ marginTop: '1.25rem' }}>
+                <h4 style={{ margin: '0 0 0.5rem' }}>{t('rec.pendingInvites')}</h4>
+                {pendingInvites.length === 0 ? (
+                  <p className="muted">{t('rec.noPendingInvites')}</p>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {pendingInvites.map((row) => (
+                      <li
+                        key={row.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: '0.75rem',
+                          padding: '0.45rem 0',
+                          borderBottom: '1px solid var(--border, #e5e7eb)',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span>
+                          {row.email}{' '}
+                          <span className="muted">
+                            ({row.role}
+                            {row.locale
+                              ? `, ${
+                                  row.locale === 'ru'
+                                    ? t('rec.localeNameRu')
+                                    : row.locale === 'en'
+                                      ? t('rec.localeNameEn')
+                                      : t('rec.localeNameUz')
+                                }`
+                              : ''}
+                            )
+                          </span>
+                        </span>
+                        <span className="btn-row">
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={async () => {
+                              try {
+                                await api(`/companies/${companyId}/invite`, {
+                                  method: 'POST',
+                                  body: JSON.stringify({
+                                    email: row.email,
+                                    role: row.role,
+                                    locale: row.locale || inviteLocale,
+                                  }),
+                                });
+                                flash(t('rec.memberInvited'));
+                                await loadPendingInvites(companyId);
+                              } catch (err) {
+                                flash(
+                                  err instanceof Error ? err.message : t('rec.inviteFailed'),
+                                  'error',
+                                );
+                              }
+                            }}
+                          >
+                            {t('rec.resendInvite')}
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={async () => {
+                              try {
+                                await api(`/companies/${companyId}/invites/${row.id}`, {
+                                  method: 'DELETE',
+                                });
+                                flash(t('rec.inviteCancelled'));
+                                await loadPendingInvites(companyId);
+                              } catch (err) {
+                                flash(
+                                  err instanceof Error ? err.message : t('rec.inviteFailed'),
+                                  'error',
+                                );
+                              }
+                            }}
+                          >
+                            {t('rec.cancelInvite')}
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              </>
+              ) : null}
             </div>
           </div>
         )}

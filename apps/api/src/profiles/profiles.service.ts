@@ -30,8 +30,13 @@ import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
-import { normalizeJobTitleKey, resolveJobTitle } from '../common/title-resolve';
+import { normalizeJobTitleKey, profileRoleTexts, resolveJobTitle } from '../common/title-resolve';
 import { detectLocale } from '../common/i18n/detect-locale';
+import { resolveContent } from '../common/i18n/content-locale';
+import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import type { Locale } from '../common/i18n/locale';
+import { TranslationService } from '../translation/translation.service';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { ParsedCvData } from './cv-parser';
 import { CvParseService } from './cv-parse.service';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
@@ -55,6 +60,7 @@ export class ProfilesService {
     private matching: MatchingService,
     private cvParse: CvParseService,
     private presence: PresenceService,
+    private translation: TranslationService,
     @Optional() @Inject(RATE_LIMIT_REDIS) private readonly rlRedis: IORedis | null,
   ) {}
 
@@ -104,6 +110,141 @@ export class ProfilesService {
     return {
       ...profile,
       resumes: profile.resumes.map((r) => this.sanitizeResume(r)),
+    };
+  }
+
+  private sourceNarrativeLocale(
+    contentLocale?: string | null,
+    headline?: string | null,
+    summary?: string | null,
+  ): Locale {
+    if (isLocale(contentLocale)) return contentLocale;
+    return detectLocale([headline, summary].filter(Boolean).join('\n')) ?? DEFAULT_LOCALE;
+  }
+
+  /** List/pipeline cards only need a localized headline when a cache row exists. */
+  private resolveHeadlineForList<
+    T extends {
+      headline?: string | null;
+      contentLocale?: string | null;
+      translations?: Array<{ locale: string; headline?: string | null; isMachine: boolean }>;
+    },
+  >(profile: T, locale: Locale): T {
+    const { translations, ...rest } = profile;
+    if (!translations?.length) return rest as T;
+    const source = this.sourceNarrativeLocale(rest.contentLocale, rest.headline, null);
+    const resolved = resolveContent(
+      { headline: rest.headline ?? '' },
+      source,
+      translations.map((row) => ({
+        locale: row.locale,
+        headline: row.headline ?? '',
+        isMachine: row.isMachine,
+      })),
+      locale,
+    );
+    return { ...rest, headline: resolved.content.headline || rest.headline } as T;
+  }
+
+  private localizeCandidateProfile<
+    T extends {
+      headline?: string | null;
+      summary?: string | null;
+      contentLocale?: string | null;
+      translations?: Array<{
+        locale: string;
+        headline?: string | null;
+        summary?: string | null;
+        isMachine: boolean;
+      }>;
+      experiences: Array<{
+        title: string;
+        description?: string | null;
+        translations?: Array<{
+          locale: string;
+          title: string;
+          description?: string | null;
+          isMachine: boolean;
+        }>;
+      }>;
+      educations: Array<{
+        field?: string | null;
+        translations?: Array<{ locale: string; field?: string | null; isMachine: boolean }>;
+      }>;
+    },
+  >(profile: T, locale: Locale) {
+    const { translations = [], ...rest } = profile;
+    const source = this.sourceNarrativeLocale(rest.contentLocale, rest.headline, rest.summary);
+    const resolved = resolveContent(
+      { headline: rest.headline ?? '', summary: rest.summary ?? '' },
+      source,
+      translations.map((row) => ({
+        locale: row.locale,
+        headline: row.headline ?? '',
+        summary: row.summary ?? '',
+        isMachine: row.isMachine,
+      })),
+      locale,
+    );
+
+    let anyFallback = resolved.isFallback && Boolean(rest.headline?.trim() || rest.summary?.trim());
+
+    const experiences = rest.experiences.map((exp) => {
+      const { translations: expT = [], ...e } = exp;
+      const r = resolveContent(
+        { title: e.title, description: e.description ?? '' },
+        source,
+        expT.map((row) => ({
+          locale: row.locale,
+          title: row.title,
+          description: row.description ?? '',
+          isMachine: row.isMachine,
+        })),
+        locale,
+      );
+      if (r.isFallback && (e.title.trim() || e.description?.trim())) anyFallback = true;
+      return {
+        ...e,
+        title: r.content.title,
+        description: e.description == null ? r.content.description || null : r.content.description,
+        contentLocale: r.contentLocale,
+        isMachineTranslated: r.isMachineTranslated,
+      };
+    });
+
+    const educations = rest.educations.map((edu) => {
+      const { translations: eduT = [], ...e } = edu;
+      if (!e.field?.trim()) {
+        return { ...e, contentLocale: source, isMachineTranslated: false };
+      }
+      const r = resolveContent(
+        { field: e.field },
+        source,
+        eduT.map((row) => ({
+          locale: row.locale,
+          field: row.field ?? '',
+          isMachine: row.isMachine,
+        })),
+        locale,
+      );
+      if (r.isFallback) anyFallback = true;
+      return {
+        ...e,
+        field: r.content.field,
+        contentLocale: r.contentLocale,
+        isMachineTranslated: r.isMachineTranslated,
+      };
+    });
+
+    return {
+      ...rest,
+      headline: resolved.content.headline || rest.headline,
+      summary: resolved.content.summary || rest.summary,
+      contentLocale: resolved.contentLocale,
+      isMachineTranslated: resolved.isMachineTranslated,
+      experiences,
+      educations,
+      canMachineTranslate: this.translation.enabled && anyFallback,
     };
   }
 
@@ -232,8 +373,8 @@ export class ProfilesService {
     const profile = await this.getProfileForUser(user.id);
     let cityId: string | null = null;
     if (data.citySlug) {
-      const city = await this.prisma.city.findUnique({
-        where: { slug: String(data.citySlug) },
+      const city = await this.prisma.city.findFirst({
+        where: { slug: String(data.citySlug), ...ACTIVE_CATALOG },
       });
       cityId = city?.id ?? null;
     }
@@ -255,8 +396,8 @@ export class ProfilesService {
 
   private async resolveExperienceCityId(citySlug?: unknown) {
     if (!citySlug) return undefined;
-    const city = await this.prisma.city.findUnique({
-      where: { slug: String(citySlug) },
+    const city = await this.prisma.city.findFirst({
+      where: { slug: String(citySlug), ...ACTIVE_CATALOG },
     });
     return city?.id ?? null;
   }
@@ -1251,8 +1392,7 @@ export class ProfilesService {
     headline?: string | null;
     experiences?: Array<{ title?: string | null }>;
   }): string[] {
-    const texts = [p.desiredPosition, p.headline, ...(p.experiences || []).map((e) => e.title)];
-    return texts.map((t) => (t || '').trim()).filter(Boolean);
+    return profileRoleTexts(p);
   }
 
   private profileMatchesTitleKeys(
@@ -1288,6 +1428,7 @@ export class ProfilesService {
       sort?: 'relevance' | 'newest' | 'match';
       page?: number;
       limit?: number;
+      locale?: Locale;
     },
   ) {
     if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
@@ -1317,6 +1458,7 @@ export class ProfilesService {
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 12;
+    const locale = query.locale ?? DEFAULT_LOCALE;
     const and: Prisma.EmployeeProfileWhereInput[] = [
       { visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] } },
     ];
@@ -1440,6 +1582,7 @@ export class ProfilesService {
       educations: true,
       languages: { include: { language: true } },
       certifications: true,
+      translations: { select: { locale: true, headline: true, isMachine: true } },
       _count: { select: { certifications: true } },
     };
 
@@ -1450,9 +1593,21 @@ export class ProfilesService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let pageItems: any[] = [];
     let facetSource: Array<{
-      city?: { slug: string; name: string; nameUz?: string | null; nameRu?: string | null } | null;
+      city?: {
+        slug: string;
+        name: string;
+        nameUz?: string | null;
+        nameRu?: string | null;
+        archivedAt?: Date | null;
+      } | null;
       skills: Array<{
-        skill: { slug: string; name: string; nameUz?: string | null; nameRu?: string | null };
+        skill: {
+          slug: string;
+          name: string;
+          nameUz?: string | null;
+          nameRu?: string | null;
+          archivedAt?: Date | null;
+        };
       }>;
       desiredPosition?: string | null;
       headline?: string | null;
@@ -1462,8 +1617,9 @@ export class ProfilesService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mapProfile = (p: any) => {
       const years = this.matching.totalExperienceYears(p.experiences);
+      const localized = this.resolveHeadlineForList(p, locale);
       return {
-        ...p,
+        ...localized,
         experienceYears: years,
         user: {
           id: p.user.id,
@@ -1505,8 +1661,16 @@ export class ProfilesService {
       facetSource = await this.prisma.employeeProfile.findMany({
         where,
         select: {
-          city: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
-          skills: { select: { skill: { select: { slug: true, name: true, nameUz: true, nameRu: true } } } },
+          city: {
+            select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+          },
+          skills: {
+            select: {
+              skill: {
+                select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+              },
+            },
+          },
           desiredPosition: true,
           headline: true,
           experiences: { select: { title: true }, take: 5, orderBy: { startDate: 'desc' } },
@@ -1572,6 +1736,7 @@ export class ProfilesService {
     const titleFacets: Record<string, Facet> = {};
 
     const catalogTitles = await this.prisma.jobTitle.findMany({
+      where: ACTIVE_CATALOG,
       select: { slug: true, name: true, nameUz: true, nameRu: true, normalizedKey: true },
     });
     const catalogByKey = new Map<
@@ -1585,14 +1750,17 @@ export class ProfilesService {
       }
     }
 
+    // Archived entries stay on the candidate cards that use them but are not
+    // offered as filter options.
     for (const p of facetSource) {
-      if (p.city) {
+      if (p.city && !p.city.archivedAt) {
         const key = p.city.slug;
         cityFacets[key] = cityFacets[key]
           ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
           : { slug: p.city.slug, name: p.city.name, nameUz: p.city.nameUz, nameRu: p.city.nameRu, count: 1 };
       }
       for (const s of p.skills) {
+        if (s.skill.archivedAt) continue;
         const key = s.skill.slug;
         skillFacets[key] = skillFacets[key]
           ? { ...skillFacets[key], count: skillFacets[key].count + 1 }
@@ -1681,7 +1849,12 @@ export class ProfilesService {
     return { limited, appliedToMyCompany };
   }
 
-  async getCandidateProfile(user: AuthUser, profileId: string, matchJobId?: string) {
+  async getCandidateProfile(
+    user: AuthUser,
+    profileId: string,
+    matchJobId?: string,
+    locale: Locale = DEFAULT_LOCALE,
+  ) {
     if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException();
     }
@@ -1693,8 +1866,24 @@ export class ProfilesService {
           select: { id: true, fullName: true, avatarUrl: true, locale: true },
         },
         skills: { include: { skill: true } },
-        experiences: { include: { city: true }, orderBy: { startDate: 'desc' } },
-        educations: { orderBy: { startDate: 'desc' } },
+        translations: {
+          select: { locale: true, headline: true, summary: true, isMachine: true },
+        },
+        experiences: {
+          include: {
+            city: true,
+            translations: {
+              select: { locale: true, title: true, description: true, isMachine: true },
+            },
+          },
+          orderBy: { startDate: 'desc' },
+        },
+        educations: {
+          include: {
+            translations: { select: { locale: true, field: true, isMachine: true } },
+          },
+          orderBy: { startDate: 'desc' },
+        },
         certifications: true,
         languages: { include: { language: true } },
         resumes: { where: { isPrimary: true }, take: 1 },
@@ -1752,7 +1941,8 @@ export class ProfilesService {
       }
     }
 
-    const safe = this.sanitizeProfileResumes(profile);
+    const localized = this.localizeCandidateProfile(profile, locale);
+    const safe = this.sanitizeProfileResumes(localized);
     return {
       ...safe,
       // Contacts are never in the profile payload; use POST
@@ -1765,6 +1955,22 @@ export class ProfilesService {
       appliedToMyCompany,
       applicationForJob,
       presence: await this.presence.getOne(profile.user.id),
+    };
+  }
+
+  async machineTranslateCandidate(
+    user: AuthUser,
+    profileId: string,
+    locale: Locale,
+    matchJobId?: string,
+  ) {
+    // Same visibility gate as the profile page; then one provider batch is cached.
+    await this.getCandidateProfile(user, profileId, matchJobId, locale);
+    const result = await this.translation.translateProfile(profileId, locale);
+    if (result.status === 'failed') throw new BadRequestException(result.reason);
+    return {
+      status: result.status,
+      profile: await this.getCandidateProfile(user, profileId, matchJobId, locale),
     };
   }
 

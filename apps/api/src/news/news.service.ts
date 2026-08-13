@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { NewsCategory, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveContent } from '../common/i18n/content-locale';
 import type { Locale } from '../common/i18n/locale';
+import { TranslationService } from '../translation/translation.service';
 
 const LIST_SELECT = {
   id: true,
@@ -22,7 +23,10 @@ type ListRow = Prisma.NewsArticleGetPayload<{ select: typeof LIST_SELECT }>;
 
 @Injectable()
 export class NewsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private translation: TranslationService,
+  ) {}
 
   /** Cards only need the headline pair, so translations are resolved in memory. */
   private toCard(row: ListRow, locale: Locale) {
@@ -109,6 +113,19 @@ export class NewsService {
       contentLocale: resolved.contentLocale,
       isMachineTranslated: resolved.isMachineTranslated,
       availableLocales: resolved.availableLocales,
+      canMachineTranslate: this.translation.enabled && resolved.isFallback,
     };
+  }
+
+  async machineTranslate(slug: string, locale: Locale) {
+    const article = await this.prisma.newsArticle.findUnique({
+      where: { slug },
+      select: { slug: true, isPublished: true },
+    });
+    if (!article || !article.isPublished) throw new NotFoundException('Article not found');
+
+    const result = await this.translation.translateNews(slug, locale);
+    if (result.status === 'failed') throw new BadRequestException(result.reason);
+    return { status: result.status, article: await this.getBySlug(slug, locale) };
   }
 }

@@ -11,9 +11,10 @@ export const registerSchema = z
       .boolean()
       .refine((v) => v === true, { message: 'You must accept the terms to create an account' }),
     companyName: z.string().trim().min(2).max(160).optional(),
+    inviteToken: z.string().trim().min(20).max(200).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.role === 'RECRUITER') {
+    if (data.role === 'RECRUITER' && !data.inviteToken) {
       const name = data.companyName?.trim() ?? '';
       if (name.length < 2) {
         ctx.addIssue({
@@ -37,9 +38,10 @@ export const googleOAuthSchema = z
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     companyName: z.string().trim().min(2).max(160).optional(),
     locale: z.enum(['uz', 'ru', 'en']).optional(),
+    inviteToken: z.string().trim().min(20).max(200).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.role === 'RECRUITER' && (data.companyName?.trim() ?? '').length < 2) {
+    if (data.role === 'RECRUITER' && !data.inviteToken && (data.companyName?.trim() ?? '').length < 2) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['companyName'],
@@ -86,6 +88,12 @@ export const companySchema = z.object({
 
 export const companyTranslationSchema = z.object({
   description: z.string().min(20).max(5000),
+});
+
+export const companyInviteSchema = z.object({
+  email: z.string().trim().email(),
+  role: z.enum(['ADMIN', 'RECRUITER']).default('RECRUITER'),
+  locale: z.enum(['uz', 'ru', 'en']).optional(),
 });
 
 export const jobPostSchema = z.object({
@@ -613,7 +621,11 @@ export const adminAuditListSchema = z.object({
 export const adminCatalogListSchema = z.object({
   ...adminListBase,
   kind: z.enum(['skill', 'jobTitle', 'language', 'benefit']).default('skill'),
-  status: z.enum(['PENDING', 'COMPLETE', 'IGNORED']).default('PENDING'),
+  /**
+   * Optional on purpose: without an "any" option an entry in a different state
+   * is invisible, which makes finding a merge target impossible.
+   */
+  status: z.enum(['PENDING', 'COMPLETE', 'IGNORED']).optional(),
   sort: z.enum(['createdAt', 'name']).default('createdAt'),
 });
 
@@ -655,3 +667,37 @@ export const adminBulkCatalogStatusSchema = z.object({
 });
 
 export const adminBulkIdsSchema = z.object({ ids: bulkIds });
+
+/** Browse and edit any admin-managed lookup table. */
+export const adminCatalogBrowseSchema = z.object({
+  q: z.string().max(200).optional(),
+  /** `any` is what makes an entry findable regardless of its lifecycle state. */
+  archived: z.enum(['true', 'false', 'any']).default('false'),
+  parentSlug: z.string().max(120).optional(),
+  sort: z.enum(['name', 'createdAt', 'sortOrder']).default('name'),
+  dir: z.enum(['asc', 'desc']).default('asc'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  createdFrom: dateParam,
+  createdTo: dateParam,
+});
+
+export const adminCatalogCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  /** Slug or ISO code; derived from the name when omitted. */
+  key: z.string().trim().max(120).optional(),
+  parentSlug: z.string().trim().max(120).optional(),
+  sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  icon: z.string().trim().max(120).optional(),
+});
+
+export const adminCatalogUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  /** Slug or ISO code; omit to leave the identity key unchanged. */
+  key: z.string().trim().min(1).max(120).optional(),
+  nameUz: z.string().trim().max(120).nullable().optional(),
+  nameRu: z.string().trim().max(120).nullable().optional(),
+  parentSlug: z.string().trim().max(120).optional(),
+  sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
+  icon: z.string().trim().max(120).nullable().optional(),
+});

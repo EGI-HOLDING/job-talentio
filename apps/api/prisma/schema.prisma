@@ -198,6 +198,15 @@ enum CatalogI18nStatus {
 
 // ─── Lookup tables ───────────────────────────────────────────
 
+/// Catalog lifecycle columns, present on every admin-managed lookup table:
+///
+/// `archivedAt` hides a row from suggestions, lists and facet options while the
+/// profiles and postings already pointing at it keep rendering. A row with no
+/// usages is hard deleted instead of archived.
+///
+/// `curatedAt` records that an admin edited the row by hand. Deploy backfills
+/// re-run on every container start and would otherwise rewrite the name back to
+/// the seed catalog, so they skip curated rows.
 model Skill {
   id              String            @id @default(cuid())
   name            String
@@ -209,6 +218,8 @@ model Skill {
   slug            String            @unique
   normalizedKey   String?           @unique
   category        String?
+  archivedAt      DateTime?
+  curatedAt       DateTime?
   createdAt       DateTime          @default(now())
 
   aliases        SkillAlias[]
@@ -217,6 +228,7 @@ model Skill {
   jobAlertSkills JobAlertSkill[]
 
   @@index([i18nStatus, createdAt])
+  @@index([archivedAt])
 }
 
 model SkillAlias {
@@ -232,47 +244,57 @@ model SkillAlias {
 }
 
 model Country {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
   nameUz       String?
   nameRu       String?
-  slug         String   @unique
-  iso2         String   @unique @db.Char(2)
-  iso3         String   @db.Char(3)
+  slug         String    @unique
+  iso2         String    @unique @db.Char(2)
+  iso3         String    @db.Char(3)
   phoneCode    String
   currencyCode String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  /// Whether the market is live. Separate from archivedAt, which is catalog visibility.
+  isActive     Boolean   @default(true)
+  archivedAt   DateTime?
+  curatedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   provinces Province[]
+
+  @@index([archivedAt])
 }
 
 model Province {
-  id        String       @id @default(cuid())
-  countryId String
-  name      String
-  nameUz    String?
-  nameRu    String?
-  slug      String
-  type      ProvinceType @default(REGION)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id         String       @id @default(cuid())
+  countryId  String
+  name       String
+  nameUz     String?
+  nameRu     String?
+  slug       String
+  type       ProvinceType @default(REGION)
+  archivedAt DateTime?
+  curatedAt  DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
   country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
   cities  City[]
 
   @@unique([countryId, slug])
   @@index([countryId])
+  @@index([archivedAt])
 }
 
 model City {
-  id         String  @id @default(cuid())
+  id         String    @id @default(cuid())
   name       String
   nameUz     String?
   nameRu     String?
-  slug       String  @unique
+  slug       String    @unique
   provinceId String
+  archivedAt DateTime?
+  curatedAt  DateTime?
 
   province        Province          @relation(fields: [provinceId], references: [id], onDelete: Restrict)
   jobPosts        JobPost[]
@@ -282,44 +304,56 @@ model City {
   workExperiences WorkExperience[]
 
   @@index([provinceId])
+  @@index([archivedAt])
 }
 
 model JobCategory {
-  id     String  @id @default(cuid())
-  name   String
-  nameUz String?
-  nameRu String?
-  slug   String  @unique
-  icon   String?
+  id         String    @id @default(cuid())
+  name       String
+  nameUz     String?
+  nameRu     String?
+  slug       String    @unique
+  icon       String?
+  archivedAt DateTime?
+  curatedAt  DateTime?
 
   jobPosts  JobPost[]
   jobAlerts JobAlert[]
+
+  @@index([archivedAt])
 }
 
 model IndustryGroup {
-  id        String  @id @default(cuid())
-  name      String
-  nameUz    String?
-  nameRu    String?
-  slug      String  @unique
-  sortOrder Int     @default(0)
+  id         String    @id @default(cuid())
+  name       String
+  nameUz     String?
+  nameRu     String?
+  slug       String    @unique
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
+  curatedAt  DateTime?
 
   industries Industry[]
+
+  @@index([archivedAt])
 }
 
 model Industry {
-  id        String  @id @default(cuid())
-  name      String
-  nameUz    String?
-  nameRu    String?
-  slug      String  @unique
-  sortOrder Int     @default(0)
-  groupId   String
+  id         String    @id @default(cuid())
+  name       String
+  nameUz     String?
+  nameRu     String?
+  slug       String    @unique
+  sortOrder  Int       @default(0)
+  groupId    String
+  archivedAt DateTime?
+  curatedAt  DateTime?
 
   group     IndustryGroup @relation(fields: [groupId], references: [id])
   companies Company[]
 
   @@index([groupId])
+  @@index([archivedAt])
 }
 
 model Language {
@@ -332,6 +366,8 @@ model Language {
   i18nStatus      CatalogI18nStatus @default(PENDING)
   code            String            @unique
   normalizedKey   String?           @unique
+  archivedAt      DateTime?
+  curatedAt       DateTime?
   createdAt       DateTime          @default(now())
 
   aliases          LanguageAlias[]
@@ -339,6 +375,7 @@ model Language {
   jobLanguages     JobPostLanguage[]
 
   @@index([i18nStatus, createdAt])
+  @@index([archivedAt])
 }
 
 model LanguageAlias {
@@ -364,12 +401,15 @@ model Benefit {
   slug            String            @unique
   normalizedKey   String?           @unique
   icon            String?
+  archivedAt      DateTime?
+  curatedAt       DateTime?
   createdAt       DateTime          @default(now())
 
   aliases         BenefitAlias[]
   jobPostBenefits JobPostBenefit[]
 
   @@index([i18nStatus, createdAt])
+  @@index([archivedAt])
 }
 
 model BenefitAlias {
@@ -395,6 +435,8 @@ model JobTitle {
   i18nStatus      CatalogI18nStatus @default(PENDING)
   slug            String            @unique
   normalizedKey   String            @unique
+  archivedAt      DateTime?
+  curatedAt       DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -403,6 +445,7 @@ model JobTitle {
   resumes  Resume[]
 
   @@index([i18nStatus, createdAt])
+  @@index([archivedAt])
 }
 
 model JobTitleAlias {
@@ -453,6 +496,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   emailChangeTokens       EmailChangeToken[]
   refreshTokens           RefreshToken[]
+  companyInvitesSent      CompanyInvite[]          @relation("CompanyInvitesSent")
 }
 
 model RefreshToken {
@@ -538,6 +582,7 @@ model Company {
   messageTemplates MessageTemplate[]
   bulkCampaigns    BulkCampaign[]
   translations     CompanyTranslation[]
+  invites          CompanyInvite[]
 
   @@index([cityId])
   @@index([industryId])
@@ -555,6 +600,29 @@ model CompanyMember {
 
   @@unique([companyId, userId])
   @@index([userId])
+}
+
+/// Pending team invite. Raw token lives only in the email; we store SHA-256.
+model CompanyInvite {
+  id          String            @id @default(cuid())
+  companyId   String
+  email       String
+  role        CompanyMemberRole
+  /// Language used for the invitation email (uz/ru/en)
+  locale      String            @default("uz")
+  /// SHA-256 of the raw token sent by email — raw token is never stored
+  tokenHash   String            @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  invitedById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy User    @relation("CompanyInvitesSent", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, email])
+  @@index([expiresAt])
 }
 
 model Subscription {
@@ -707,8 +775,8 @@ model EmployeeProfile {
   userId            String            @unique
   headline          String?
   summary           String?
-  /// Detected language of the narrative fields, used to badge them for readers
-  /// browsing in another language. Null when the text gives no clear signal.
+  /// Detected language of the narrative fields, used to pick a translation
+  /// and to badge the original when a reader is browsing in another language.
   contentLocale     String?
   cityId            String?
   phone             String?           @unique
@@ -721,8 +789,8 @@ model EmployeeProfile {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  city           City?             @relation(fields: [cityId], references: [id])
+  user           User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city           City?                        @relation(fields: [cityId], references: [id])
   skills         ProfileSkill[]
   experiences    WorkExperience[]
   educations     Education[]
@@ -731,6 +799,7 @@ model EmployeeProfile {
   resumes        Resume[]
   applications   Application[]
   savedJobs      SavedJob[]
+  translations   EmployeeProfileTranslation[]
 
   @@index([cityId])
 }
@@ -760,8 +829,9 @@ model WorkExperience {
   endDate      DateTime?
   isCurrent    Boolean   @default(false)
 
-  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  city    City?           @relation(fields: [cityId], references: [id])
+  profile      EmployeeProfile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  city         City?                       @relation(fields: [cityId], references: [id])
+  translations WorkExperienceTranslation[]
 }
 
 model Education {
@@ -773,10 +843,64 @@ model Education {
   startDate DateTime?
   endDate   DateTime?
 
-  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile      EmployeeProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  translations EducationTranslation[]
 
   @@index([school])
   @@index([degree])
+}
+
+/// Per-language version of a candidate's headline and about text.
+model EmployeeProfileTranslation {
+  id         String   @id @default(cuid())
+  profileId  String
+  locale     String
+  headline   String?
+  summary    String?
+  isMachine  Boolean  @default(false)
+  sourceHash String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, locale])
+  @@index([profileId])
+}
+
+/// Per-language version of a work-experience title and description. Company names stay on the parent.
+model WorkExperienceTranslation {
+  id           String   @id @default(cuid())
+  experienceId String
+  locale       String
+  title        String
+  description  String?
+  isMachine    Boolean  @default(false)
+  sourceHash   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  experience WorkExperience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@unique([experienceId, locale])
+  @@index([experienceId])
+}
+
+/// Per-language version of an education field of study. School names stay on the parent.
+model EducationTranslation {
+  id          String   @id @default(cuid())
+  educationId String
+  locale      String
+  field       String
+  isMachine   Boolean  @default(false)
+  sourceHash  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  education Education @relation(fields: [educationId], references: [id], onDelete: Cascade)
+
+  @@unique([educationId, locale])
+  @@index([educationId])
 }
 
 model Certification {

@@ -17,6 +17,22 @@ const TITLE_SYNONYMS: Record<string, string> = {
   cppsystemsengineer: 'cplusplussystemsengineer',
   nodedev: 'nodejsdeveloper',
   reactjsdeveloper: 'reactdeveloper',
+  ithandler: 'itsupport',
+  helpdesk: 'itsupport',
+  helpdesktechnician: 'itsupport',
+  helpdeskspecialist: 'itsupport',
+  helpdeskanalyst: 'itsupport',
+  technicalsupport: 'itsupport',
+  technicalsupportspecialist: 'itsupport',
+  desktopsupport: 'itsupport',
+  itspecialist: 'itsupport',
+  itsupportengineer: 'itsupport',
+  itsupportspecialist: 'itsupport',
+  ithandlerspecialist: 'itsupport',
+  computertechnician: 'itsupport',
+  servicedesk: 'itsupport',
+  servicedeskanalyst: 'itsupport',
+  ittechnician: 'itsupport',
 };
 
 const SENIORITY_LEVEL: Record<string, ExperienceLevel> = {
@@ -132,6 +148,43 @@ export function normalizeJobTitleKey(input: string): string {
   return TITLE_SYNONYMS[s] ?? s;
 }
 
+/** Collapse a stored or live title key through TITLE_SYNONYMS. */
+export function canonicalTitleKey(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+  if (/^[a-z0-9]+$/i.test(trimmed)) {
+    const lower = trimmed.toLowerCase();
+    return TITLE_SYNONYMS[lower] ?? lower;
+  }
+  return normalizeJobTitleKey(trimmed);
+}
+
+/** Canonical key plus every synonym that maps to it (for catalog queries). */
+export function titleSynonymCluster(key: string): string[] {
+  const canonical = canonicalTitleKey(key);
+  if (!canonical) return [];
+  const cluster = new Set<string>([canonical]);
+  const compact = key.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (compact) cluster.add(compact);
+  for (const [variant, canon] of Object.entries(TITLE_SYNONYMS)) {
+    if (canon === canonical || variant === canonical) {
+      cluster.add(variant);
+      cluster.add(canon);
+    }
+  }
+  return [...cluster];
+}
+
+export function profileRoleTexts(p: {
+  desiredPosition?: string | null;
+  headline?: string | null;
+  experiences?: Array<{ title?: string | null }>;
+}): string[] {
+  return [p.desiredPosition, p.headline, ...(p.experiences || []).map((e) => e.title)]
+    .map((t) => (t || '').trim())
+    .filter(Boolean);
+}
+
 export function jobTitleSlugify(input: string): string {
   const { roleTitle } = stripSeniorityFromTitle(input);
   let s = roleTitle.trim().toLowerCase();
@@ -186,6 +239,10 @@ async function ensureCleanCatalogName(
   if (!titleHasSeniorityToken(jobTitle.name) && jobTitle.name === clean) {
     return jobTitle;
   }
+
+  // An admin-edited title keeps its wording even if it does not match what the
+  // canonicalizer would produce.
+  if (jobTitle.curatedAt) return jobTitle;
 
   // Prefer an already-clean twin with the same key
   if (key) {

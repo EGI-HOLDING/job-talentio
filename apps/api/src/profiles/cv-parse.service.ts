@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { StorageService } from '../storage/storage.service';
 import { CV_PARSE_PROVIDER, type CvParseProvider } from './parse/cv-parse.provider';
 
@@ -77,6 +78,7 @@ export class CvParseService {
 
     try {
       const knownSkills = await this.prisma.skill.findMany({
+        where: ACTIVE_CATALOG,
         select: { name: true, slug: true },
         take: 500,
       });

@@ -24,6 +24,7 @@ export type NewsArticleDetail = NewsListItem & {
   /** Language actually served, which may fall back to the original. */
   contentLocale?: string | null;
   isMachineTranslated?: boolean;
+  canMachineTranslate?: boolean;
   availableLocales?: string[];
 };
 

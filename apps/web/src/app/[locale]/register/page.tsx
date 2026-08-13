@@ -1,21 +1,58 @@
 'use client';
 
 import { Link, localeHref } from '@/lib/navigation';
-import { FormEvent, useId, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useId, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api, saveSession } from '@/lib/api';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
 import { useI18n } from '@/lib/i18n';
 
-export default function RegisterPage() {
+type InvitePreview = { companyName: string; email: string; role: string };
+
+function RegisterForm() {
   const { t, locale } = useI18n();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('invite')?.trim() ?? '';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<'EMPLOYEE' | 'RECRUITER'>('EMPLOYEE');
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [invite, setInvite] = useState<InvitePreview | null>(null);
+  const [inviteInvalid, setInviteInvalid] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const formHintId = useId();
   const roleGroupId = useId();
   const termsId = useId();
+  const joining = Boolean(invite);
+  const useInvite = Boolean(inviteToken) && !inviteInvalid;
+
+  useEffect(() => {
+    if (!inviteToken) {
+      setInviteLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setInviteLoading(true);
+    api<InvitePreview>(`/companies/invites/${encodeURIComponent(inviteToken)}`, { auth: false })
+      .then((preview) => {
+        if (cancelled) return;
+        setInvite(preview);
+        setRole('RECRUITER');
+        setInviteInvalid(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInvite(null);
+        setInviteInvalid(true);
+      })
+      .finally(() => {
+        if (!cancelled) setInviteLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,7 +76,8 @@ export default function RegisterPage() {
       setError(t('passwordsDoNotMatch'));
       return;
     }
-    if (role === 'RECRUITER' && companyName.length < 2) {
+    if (inviteLoading) return;
+    if (role === 'RECRUITER' && !useInvite && companyName.length < 2) {
       setError(t('companyNameRequired'));
       return;
     }
@@ -57,10 +95,11 @@ export default function RegisterPage() {
           email,
           password,
           fullName,
-          role,
+          role: useInvite ? 'RECRUITER' : role,
           locale,
           acceptTerms: true,
-          companyName: role === 'RECRUITER' ? companyName : undefined,
+          companyName: role === 'RECRUITER' && !useInvite ? companyName : undefined,
+          inviteToken: useInvite ? inviteToken : undefined,
         }),
       });
       saveSession(session as Parameters<typeof saveSession>[0]);
@@ -77,36 +116,45 @@ export default function RegisterPage() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <h1>{t('createAccount')}</h1>
-        <p className="muted">{t('joinTalentio')}</p>
-        <div
-          className="chips"
-          style={{ marginTop: '1rem' }}
-          role="radiogroup"
-          aria-labelledby={roleGroupId}
-        >
-          <p id={roleGroupId} className="sr-only">
-            {t('accountType')}
-          </p>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={role === 'EMPLOYEE'}
-            className={`chip ${role === 'EMPLOYEE' ? 'active' : ''}`}
-            onClick={() => setRole('EMPLOYEE')}
+        <h1>{useInvite ? t('inviteJoinTitle') : t('createAccount')}</h1>
+        <p className="muted">
+          {inviteLoading
+            ? t('inviteChecking')
+            : joining
+              ? t('inviteJoinSubtitle').replace('{company}', invite?.companyName ?? '')
+              : t('joinTalentio')}
+        </p>
+        {inviteInvalid ? <FormAlert>{t('inviteInvalid')}</FormAlert> : null}
+        {!useInvite ? (
+          <div
+            className="chips"
+            style={{ marginTop: '1rem' }}
+            role="radiogroup"
+            aria-labelledby={roleGroupId}
           >
-            {t('imCandidate')}
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={role === 'RECRUITER'}
-            className={`chip ${role === 'RECRUITER' ? 'active' : ''}`}
-            onClick={() => setRole('RECRUITER')}
-          >
-            {t('imHiring')}
-          </button>
-        </div>
+            <p id={roleGroupId} className="sr-only">
+              {t('accountType')}
+            </p>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={role === 'EMPLOYEE'}
+              className={`chip ${role === 'EMPLOYEE' ? 'active' : ''}`}
+              onClick={() => setRole('EMPLOYEE')}
+            >
+              {t('imCandidate')}
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={role === 'RECRUITER'}
+              className={`chip ${role === 'RECRUITER' ? 'active' : ''}`}
+              onClick={() => setRole('RECRUITER')}
+            >
+              {t('imHiring')}
+            </button>
+          </div>
+        ) : null}
         <p id={formHintId} className="required-note">
           {t('requiredFieldsNote')}
         </p>
@@ -116,12 +164,16 @@ export default function RegisterPage() {
           </FormField>
           <FormField label={t('email')} required>
             <input
+              key={invite?.email ?? 'email'}
               name="email"
               type="email"
               autoComplete="email"
               inputMode="email"
               required
               spellCheck={false}
+              defaultValue={invite?.email ?? ''}
+              readOnly={joining}
+              disabled={inviteLoading}
             />
           </FormField>
           <FormField label={t('password')} required hint={t('passwordHint')}>
@@ -135,7 +187,7 @@ export default function RegisterPage() {
               required
             />
           </FormField>
-          {role === 'RECRUITER' && (
+          {role === 'RECRUITER' && !useInvite && (
             <FormField label={t('companyName')} required>
               <input name="companyName" autoComplete="organization" minLength={2} required />
             </FormField>
@@ -156,11 +208,16 @@ export default function RegisterPage() {
             </span>
           </label>
           <FormAlert>{error}</FormAlert>
-          <button type="submit" className="cta" disabled={loading} aria-busy={loading}>
+          <button
+            type="submit"
+            className="cta"
+            disabled={loading || inviteLoading}
+            aria-busy={loading || inviteLoading}
+          >
             {loading ? t('creatingAccount') : t('createAccount')}
           </button>
         </form>
-        <GoogleSignIn />
+        <GoogleSignIn inviteToken={useInvite ? inviteToken : undefined} />
         <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>
           {t('alreadyRegistered')}{' '}
           <Link href="/login" style={{ color: 'var(--accent)' }}>
@@ -169,5 +226,13 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   );
 }

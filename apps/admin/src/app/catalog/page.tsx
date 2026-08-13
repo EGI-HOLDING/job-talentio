@@ -1,213 +1,292 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 import { api, apiPatch, apiPost } from '@/lib/api';
 import { downloadCsv, timestampedName } from '@/lib/csv';
 import { useAdminTable } from '@/lib/useAdminTable';
 import {
-  AdminCatalogEntry,
-  CATALOG_KINDS,
-  CATALOG_STATUSES,
-  type CatalogKind,
-  type CatalogStatus,
-  formatDate,
+  ArchiveResult,
+  CatalogKindSpec,
+  CatalogRow,
+  CatalogType,
+  CatalogUsage,
+  isCatalogType,
 } from '@/lib/types';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { DataTable, type Column } from '@/components/data/DataTable';
-import {
-  BulkBar,
-  FilterBar,
-  Pager,
-  SelectAllNotice,
-  type ActiveFilter,
-} from '@/components/data/TableChrome';
+import { FilterBar, Pager, type ActiveFilter } from '@/components/data/TableChrome';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
-import { Badge, DateField, SelectField } from '@/components/ui/primitives';
+import { Alert, Badge, SelectField } from '@/components/ui/primitives';
 import { useToast } from '@/components/ui/Toaster';
 
-const DEFAULTS = { page: '1', limit: '25', sort: 'createdAt', dir: 'desc', kind: 'skill', status: 'PENDING' };
-const FILTER_KEYS = [
-  'q',
-  'kind',
-  'status',
-  'createdFrom',
-  'createdTo',
-  'sort',
-  'dir',
-  'page',
-  'limit',
-];
+const DEFAULTS = { page: '1', limit: '25', sort: 'name', dir: 'asc', archived: 'false' };
+const FILTER_KEYS = ['q', 'archived', 'parentSlug', 'sort', 'dir', 'page', 'limit'];
 
-type Summary = Record<CatalogKind, { pending: number; complete: number; ignored: number }>;
-type Pending = { kind: 'status'; status: CatalogStatus } | { kind: 'translate' };
+function catalogKeyLabel(keyField?: 'slug' | 'code'): string {
+  return keyField === 'code' ? 'Code (ISO)' : 'Slug';
+}
+
+function rowIdentityKey(row: CatalogRow): string {
+  return row.slug ?? row.code ?? '';
+}
+
+type FormState = {
+  name: string;
+  key: string;
+  nameUz: string;
+  nameRu: string;
+  parentSlug: string;
+  sortOrder: string;
+  icon: string;
+};
+
+const EMPTY_FORM: FormState = {
+  name: '',
+  key: '',
+  nameUz: '',
+  nameRu: '',
+  parentSlug: '',
+  sortOrder: '0',
+  icon: '',
+};
 
 export default function CatalogPage() {
-  const table = useAdminTable<AdminCatalogEntry>({
-    path: '/admin/catalog/i18n',
+  const { notify } = useToast();
+  const [kinds, setKinds] = useState<CatalogKindSpec[]>([]);
+
+  // The catalog lives in the URL like every other filter, so a view can be
+  // shared and switching resets paging. It is read directly because the table
+  // hook needs it to build the request path.
+  const searchParams = useSearchParams();
+  const typeParam = searchParams.get('type');
+  const type: CatalogType = isCatalogType(typeParam) ? typeParam : 'skill';
+
+  const table = useAdminTable<CatalogRow>({
+    path: `/admin/catalog/type/${type}`,
     defaults: DEFAULTS,
     filterKeys: FILTER_KEYS,
   });
   const { query, setFilter } = table;
-  const { notify } = useToast();
 
-  const catalogKind = (query.kind ?? 'skill') as CatalogKind;
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [editing, setEditing] = useState<AdminCatalogEntry | null>(null);
-  const [draft, setDraft] = useState({ nameUz: '', nameRu: '' });
-  const [merging, setMerging] = useState<AdminCatalogEntry | null>(null);
-  const [mergeTarget, setMergeTarget] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<CatalogRow | null>(null);
+  const [editUsage, setEditUsage] = useState<CatalogUsage | null>(null);
+  const [pendingKeyConfirm, setPendingKeyConfirm] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [archiving, setArchiving] = useState<{ row: CatalogRow; usage: CatalogUsage } | null>(null);
+
+  const spec = kinds.find((k) => k.type === type);
 
   useEffect(() => {
-    let cancelled = false;
-    api<Summary>('/admin/catalog/i18n/summary')
-      .then((data) => {
-        if (!cancelled) setSummary(data);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [table.rows]);
+    api<CatalogKindSpec[]>('/admin/catalog/kinds')
+      .then(setKinds)
+      .catch((e) => notify(e instanceof Error ? e.message : 'Could not load catalogs', 'error'));
+  }, [notify]);
 
-  const columns: Array<Column<AdminCatalogEntry>> = [
+  const openArchive = useCallback(
+    async (row: CatalogRow) => {
+      try {
+        const usage = await api<CatalogUsage>(`/admin/catalog/type/${type}/${row.id}/usage`);
+        setArchiving({ row, usage });
+      } catch (e) {
+        notify(e instanceof Error ? e.message : 'Could not read usage', 'error');
+      }
+    },
+    [type, notify],
+  );
+
+  async function startEdit(row: CatalogRow) {
+    setEditing(row);
+    setEditUsage(null);
+    setPendingKeyConfirm(false);
+    setForm({
+      name: row.name,
+      key: rowIdentityKey(row),
+      nameUz: row.nameUz ?? '',
+      nameRu: row.nameRu ?? '',
+      parentSlug:
+        row.province?.slug ?? row.country?.slug ?? row.industryGroup?.slug ?? '',
+      sortOrder: String(row.sortOrder ?? 0),
+      icon: row.icon ?? '',
+    });
+    try {
+      const usage = await api<CatalogUsage>(`/admin/catalog/type/${type}/${row.id}/usage`);
+      setEditUsage(usage);
+    } catch {
+      // Confirm dialog treats missing usage as zero; save still works.
+      setEditUsage({ total: 0, byRelation: [] });
+    }
+  }
+
+  function buildEditPayload(row: CatalogRow) {
+    const original = rowIdentityKey(row);
+    const nextKey = form.key.trim();
+    return {
+      name: form.name.trim(),
+      ...(nextKey && nextKey !== original ? { key: nextKey } : {}),
+      ...(spec?.hasLocaleNames ? { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim() } : {}),
+      ...(spec?.parent && form.parentSlug.trim() ? { parentSlug: form.parentSlug.trim() } : {}),
+      ...(spec?.hasSortOrder ? { sortOrder: Number(form.sortOrder) || 0 } : {}),
+      ...(spec?.hasIcon ? { icon: form.icon.trim() || null } : {}),
+    };
+  }
+
+  const columns: Array<Column<CatalogRow>> = [
     {
       key: 'name',
-      label: 'English name',
+      label: 'Name',
       sortKey: 'name',
       render: (row) => (
         <span style={{ display: 'block', minWidth: 0 }}>
           <span className="cell-strong truncate">{row.name}</span>
-          <span className="cell-sub mono">{row.id}</span>
+          <span className="cell-sub mono">{row.slug ?? row.code}</span>
         </span>
       ),
     },
+    ...(spec?.hasLocaleNames
+      ? [
+          {
+            key: 'nameUz',
+            label: 'Uzbek',
+            render: (row: CatalogRow) => row.nameUz || <span className="muted">Missing</span>,
+          },
+          {
+            key: 'nameRu',
+            label: 'Russian',
+            render: (row: CatalogRow) => row.nameRu || <span className="muted">Missing</span>,
+          },
+        ]
+      : []),
+    ...(spec?.parent
+      ? [
+          {
+            key: 'parent',
+            label: spec.parent.label,
+            render: (row: CatalogRow) =>
+              row.province?.name ?? row.country?.name ?? row.industryGroup?.name ?? '-',
+          },
+        ]
+      : []),
+    ...(spec?.hasSortOrder
+      ? [
+          {
+            key: 'sortOrder',
+            label: 'Order',
+            sortKey: 'sortOrder',
+            align: 'right' as const,
+            render: (row: CatalogRow) => <span className="num">{row.sortOrder ?? 0}</span>,
+          },
+        ]
+      : []),
     {
-      key: 'nameUz',
-      label: 'Uzbek',
-      render: (row) => (
-        <span>
-          {row.nameUz || <span className="muted">Missing</span>}
-          {row.nameUzIsMachine && (
-            <>
-              {' '}
-              <Badge>machine</Badge>
-            </>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: 'nameRu',
-      label: 'Russian',
-      render: (row) => (
-        <span>
-          {row.nameRu || <span className="muted">Missing</span>}
-          {row.nameRuIsMachine && (
-            <>
-              {' '}
-              <Badge>machine</Badge>
-            </>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
+      key: 'state',
       label: 'State',
       render: (row) => (
-        <Badge
-          tone={
-            row.i18nStatus === 'COMPLETE' ? 'ok' : row.i18nStatus === 'IGNORED' ? 'default' : 'warn'
-          }
-        >
-          {row.i18nStatus}
-        </Badge>
+        <div className="btn-row">
+          {row.archivedAt ? (
+            <Badge tone="warn">Archived</Badge>
+          ) : (
+            <Badge tone="ok">Active</Badge>
+          )}
+          {row.curatedAt && <Badge tone="accent">Edited</Badge>}
+        </div>
       ),
-    },
-    {
-      key: 'createdAt',
-      label: 'Added',
-      sortKey: 'createdAt',
-      render: (row) => <span className="num">{formatDate(row.createdAt)}</span>,
     },
   ];
 
   const activeFilters: ActiveFilter[] = [];
-  if (query.createdFrom)
-    activeFilters.push({ key: 'createdFrom', label: `From ${query.createdFrom}` });
-  if (query.createdTo) activeFilters.push({ key: 'createdTo', label: `To ${query.createdTo}` });
+  if (query.archived === 'true') activeFilters.push({ key: 'archived', label: 'Archived only' });
+  if (query.archived === 'any') activeFilters.push({ key: 'archived', label: 'Any state' });
+  if (query.parentSlug)
+    activeFilters.push({ key: 'parentSlug', label: `Parent: ${query.parentSlug}` });
 
   function exportCsv() {
-    const rows = table.selected.size
-      ? table.rows.filter((row) => table.selected.has(row.id))
-      : table.rows;
-    downloadCsv(timestampedName(`catalog-${catalogKind}`), rows, [
+    downloadCsv(timestampedName(`catalog-${type}`), table.rows, [
       { header: 'id', value: (r) => r.id },
       { header: 'name', value: (r) => r.name },
+      { header: 'key', value: (r) => r.slug ?? r.code ?? '' },
       { header: 'nameUz', value: (r) => r.nameUz ?? '' },
       { header: 'nameRu', value: (r) => r.nameRu ?? '' },
-      { header: 'status', value: (r) => r.i18nStatus },
-      { header: 'createdAt', value: (r) => r.createdAt },
+      { header: 'archivedAt', value: (r) => r.archivedAt ?? '' },
+      { header: 'curatedAt', value: (r) => r.curatedAt ?? '' },
     ]);
   }
 
-  const kindSummary = summary?.[catalogKind];
+  async function submitCreate() {
+    const payload = {
+      name: form.name.trim(),
+      ...(form.key.trim() ? { key: form.key.trim() } : {}),
+      ...(spec?.parent ? { parentSlug: form.parentSlug.trim() } : {}),
+      ...(spec?.hasSortOrder ? { sortOrder: Number(form.sortOrder) || 0 } : {}),
+      ...(spec?.hasIcon && form.icon.trim() ? { icon: form.icon.trim() } : {}),
+    };
+    setCreating(false);
+    await table.runAction(apiPost(`/admin/catalog/type/${type}`, payload), 'Entry created');
+  }
+
+  async function submitEdit() {
+    const row = editing;
+    if (!row) return;
+    const original = rowIdentityKey(row);
+    const nextKey = form.key.trim();
+    const keyChanging = Boolean(nextKey && nextKey !== original);
+    if (keyChanging && (editUsage?.total ?? 0) > 0) {
+      setPendingKeyConfirm(true);
+      return;
+    }
+    await commitEdit();
+  }
+
+  async function commitEdit() {
+    const row = editing;
+    setPendingKeyConfirm(false);
+    setEditing(null);
+    setEditUsage(null);
+    if (!row) return;
+    await table.runAction(
+      apiPatch(`/admin/catalog/type/${type}/${row.id}`, buildEditPayload(row)),
+      'Entry saved',
+    );
+  }
 
   return (
     <>
       <PageHeader
-        title="Catalog translations"
-        subtitle="Terms users created while posting jobs or editing profiles. Missing translations fall back to the English name."
+        title="Catalog"
+        subtitle="Every lookup table users pick from. Archiving hides an entry from new selections without touching the records that already use it."
         actions={
           <>
+            <Link href="/catalog/translations" className="btn secondary">
+              Translation queue
+            </Link>
             <button
               type="button"
               className="secondary"
-              disabled={catalogKind === 'language' || table.busy}
-              title={
-                catalogKind === 'language'
-                  ? 'Language names always need a translation'
-                  : 'Move tech and brand names out of the queue'
-              }
-              onClick={() =>
-                table.runAction(
-                  apiPost(`/admin/catalog/${catalogKind}/reclassify`),
-                  'Tech terms moved out of the queue',
-                )
-              }
+              onClick={exportCsv}
+              disabled={!table.rows.length}
             >
-              Auto-mark tech terms
-            </button>
-            <button type="button" className="secondary" onClick={exportCsv} disabled={!table.rows.length}>
               Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setForm(EMPTY_FORM);
+                setCreating(true);
+              }}
+            >
+              New entry
             </button>
           </>
         }
       />
 
       <div className="content">
-        {kindSummary ? (
-          <div className="grid">
-            <div className="stat attention">
-              <div className="stat-label">Awaiting review</div>
-              <div className="stat-value">{kindSummary.pending}</div>
-            </div>
-            <div className="stat">
-              <div className="stat-label">Translated</div>
-              <div className="stat-value">{kindSummary.complete}</div>
-            </div>
-            <div className="stat">
-              <div className="stat-label">Tech identity</div>
-              <div className="stat-value">{kindSummary.ignored}</div>
-            </div>
-          </div>
-        ) : null}
-
         <FilterBar
           search={query.q ?? ''}
           onSearch={(next) => setFilter('q', next)}
-          searchPlaceholder="Search any language"
+          searchPlaceholder="Search any language or key"
           activeFilters={activeFilters}
           onClearFilter={(key) => setFilter(key, '')}
           onClearAll={table.reset}
@@ -215,49 +294,44 @@ export default function CatalogPage() {
             <>
               <SelectField
                 label=""
-                value={catalogKind}
-                onChange={(next) => setFilter('kind', next)}
-                allLabel="Skills"
-                options={CATALOG_KINDS.map((k) => ({
-                  value: k.value,
-                  label: summary
-                    ? `${k.label} (${summary[k.value]?.pending ?? 0})`
-                    : k.label,
-                }))}
+                value={type}
+                onChange={(next) => setFilter('type', next)}
+                allLabel={null}
+                options={kinds.map((k) => ({ value: k.type, label: k.label }))}
               />
               <SelectField
                 label=""
-                value={query.status ?? 'PENDING'}
-                onChange={(next) => setFilter('status', next)}
-                allLabel="Pending"
-                options={CATALOG_STATUSES.map((s) => ({ value: s, label: s }))}
+                value={query.archived ?? 'false'}
+                onChange={(next) => setFilter('archived', next)}
+                allLabel={null}
+                options={[
+                  { value: 'false', label: 'Active only' },
+                  { value: 'true', label: 'Archived only' },
+                  { value: 'any', label: 'Any state' },
+                ]}
               />
             </>
           }
           advanced={
-            <>
-              <DateField
-                label="Added from"
-                value={query.createdFrom ?? ''}
-                onChange={(next) => setFilter('createdFrom', next)}
-              />
-              <DateField
-                label="Added to"
-                value={query.createdTo ?? ''}
-                onChange={(next) => setFilter('createdTo', next)}
-              />
-            </>
+            spec?.parent ? (
+              <label>
+                {spec.parent.label} slug
+                <input
+                  value={query.parentSlug ?? ''}
+                  onChange={(e) => setFilter('parentSlug', e.target.value)}
+                  placeholder="tashkent"
+                />
+              </label>
+            ) : undefined
           }
         />
 
-        <SelectAllNotice
-          pageCount={table.rows.length}
-          total={table.total}
-          allMatchingSelected={table.allMatching.active}
-          capped={table.allMatching.capped}
-          onSelectAllMatching={table.selectAllMatching}
-          onClear={table.clearSelection}
-        />
+        {spec?.seedManaged ? (
+          <Alert tone="info">
+            This catalog is recreated from code on deploy, so entries here are archived rather than
+            deleted. Your edits are kept.
+          </Alert>
+        ) : null}
 
         <DataTable
           rows={table.rows}
@@ -265,11 +339,8 @@ export default function CatalogPage() {
           rowKey={(row) => row.id}
           loading={table.loading}
           error={table.error}
-          emptyTitle="Nothing in this queue"
-          emptyHint="New terms appear here as users create them."
-          selectable
-          selected={table.selected}
-          onSelectedChange={table.updateSelection}
+          emptyTitle="Nothing in this catalog"
+          emptyHint="Create an entry or widen the filters."
           sort={query.sort}
           dir={query.dir}
           onSort={table.toggleSort}
@@ -278,51 +349,34 @@ export default function CatalogPage() {
               <button
                 type="button"
                 className="secondary sm"
-                onClick={() => {
-                  setEditing(row);
-                  setDraft({ nameUz: row.nameUz ?? '', nameRu: row.nameRu ?? '' });
-                }}
+                onClick={() => void startEdit(row)}
               >
                 Edit
               </button>
-              <button
-                type="button"
-                className="secondary sm"
-                disabled={table.busy}
-                onClick={() =>
-                  table.runAction(
-                    apiPost(`/admin/catalog/${catalogKind}/${row.id}/translate`),
-                    'Translation requested',
-                  )
-                }
-              >
-                Translate
-              </button>
-              <button
-                type="button"
-                className="ghost sm"
-                disabled={table.busy}
-                onClick={() =>
-                  table.runAction(
-                    apiPost(`/admin/catalog/${catalogKind}/${row.id}/status`, {
-                      status: row.i18nStatus === 'IGNORED' ? 'PENDING' : 'IGNORED',
-                    }),
-                    row.i18nStatus === 'IGNORED' ? 'Moved back to the queue' : 'Marked as tech',
-                  )
-                }
-              >
-                {row.i18nStatus === 'IGNORED' ? 'Needs translation' : 'Mark tech'}
-              </button>
-              <button
-                type="button"
-                className="ghost sm"
-                onClick={() => {
-                  setMerging(row);
-                  setMergeTarget('');
-                }}
-              >
-                Merge
-              </button>
+              {row.archivedAt ? (
+                <button
+                  type="button"
+                  className="secondary sm"
+                  disabled={table.busy}
+                  onClick={() =>
+                    table.runAction(
+                      apiPost(`/admin/catalog/type/${type}/${row.id}/restore`),
+                      'Entry restored',
+                    )
+                  }
+                >
+                  Restore
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="danger sm"
+                  disabled={table.busy}
+                  onClick={() => openArchive(row)}
+                >
+                  Archive
+                </button>
+              )}
             </>
           )}
         />
@@ -335,55 +389,97 @@ export default function CatalogPage() {
           onPage={(next) => setFilter('page', next)}
           onLimit={(next) => setFilter('limit', next)}
         />
-
-        <BulkBar count={table.selected.size} onClear={table.clearSelection}>
-          <button
-            type="button"
-            className="secondary sm"
-            onClick={() => setPending({ kind: 'translate' })}
-          >
-            Translate
-          </button>
-          <button
-            type="button"
-            className="secondary sm"
-            onClick={() => setPending({ kind: 'status', status: 'IGNORED' })}
-          >
-            Mark tech
-          </button>
-          <button
-            type="button"
-            className="secondary sm"
-            onClick={() => setPending({ kind: 'status', status: 'PENDING' })}
-          >
-            Needs translation
-          </button>
-        </BulkBar>
       </div>
 
       <Modal
-        open={editing !== null}
-        title={`Edit ${editing?.name ?? ''}`}
-        description="Saving marks these as human translations, so machine output will never overwrite them."
-        onClose={() => setEditing(null)}
+        open={creating}
+        title={`New ${spec?.label ?? 'entry'}`}
+        description="Created through the same rules as user input, so matching and aliases stay consistent."
+        onClose={() => setCreating(false)}
         footer={
           <>
-            <button type="button" className="secondary" onClick={() => setEditing(null)}>
+            <button type="button" className="secondary" onClick={() => setCreating(false)}>
               Cancel
             </button>
+            <button type="button" disabled={!form.name.trim() || table.busy} onClick={submitCreate}>
+              Create
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>
+          <label>
+            Name
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              autoFocus
+            />
+          </label>
+          <label>
+            {catalogKeyLabel(spec?.keyField)} (optional)
+            <input
+              value={form.key}
+              onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
+              placeholder={
+                spec?.keyField === 'code'
+                  ? '2-3 letter ISO code (id, en, uz)'
+                  : 'Derived from the name when empty'
+              }
+            />
+          </label>
+          {spec?.parent ? (
+            <label>
+              {spec.parent.label} slug
+              <input
+                value={form.parentSlug}
+                onChange={(e) => setForm((f) => ({ ...f, parentSlug: e.target.value }))}
+              />
+            </label>
+          ) : null}
+          {spec?.hasSortOrder ? (
+            <label>
+              Sort order
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
+              />
+            </label>
+          ) : null}
+          {spec?.hasIcon ? (
+            <label>
+              Icon
+              <input
+                value={form.icon}
+                onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+              />
+            </label>
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={editing !== null && !pendingKeyConfirm}
+        title={`Edit ${editing?.name ?? ''}`}
+        description="Saving marks this entry as owned by an admin, so deploy backfills stop rewriting it."
+        onClose={() => {
+          setEditing(null);
+          setEditUsage(null);
+        }}
+        footer={
+          <>
             <button
               type="button"
-              disabled={table.busy}
-              onClick={async () => {
-                const row = editing;
+              className="secondary"
+              onClick={() => {
                 setEditing(null);
-                if (!row) return;
-                await table.runAction(
-                  apiPatch(`/admin/catalog/${catalogKind}/${row.id}`, draft),
-                  'Translation saved',
-                );
+                setEditUsage(null);
               }}
             >
+              Cancel
+            </button>
+            <button type="button" disabled={!form.name.trim() || table.busy} onClick={submitEdit}>
               Save
             </button>
           </>
@@ -391,96 +487,157 @@ export default function CatalogPage() {
       >
         <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>
           <label>
-            Uzbek
+            Name
             <input
-              value={draft.nameUz}
-              onChange={(e) => setDraft((d) => ({ ...d, nameUz: e.target.value }))}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
           </label>
           <label>
-            Russian
+            {catalogKeyLabel(spec?.keyField)}
             <input
-              value={draft.nameRu}
-              onChange={(e) => setDraft((d) => ({ ...d, nameRu: e.target.value }))}
+              value={form.key}
+              onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
+              placeholder={
+                spec?.keyField === 'code' ? '2-3 letter ISO code (id, en, uz)' : undefined
+              }
             />
+            {spec?.keyField === 'code' ? (
+              <span className="muted" style={{ display: 'block', fontSize: '0.8rem', marginTop: 4 }}>
+                Changing the code keeps the old value as an alias so existing input still matches.
+              </span>
+            ) : null}
           </label>
+          {spec?.hasLocaleNames ? (
+            <>
+              <label>
+                Uzbek
+                <input
+                  value={form.nameUz}
+                  onChange={(e) => setForm((f) => ({ ...f, nameUz: e.target.value }))}
+                />
+              </label>
+              <label>
+                Russian
+                <input
+                  value={form.nameRu}
+                  onChange={(e) => setForm((f) => ({ ...f, nameRu: e.target.value }))}
+                />
+              </label>
+            </>
+          ) : null}
+          {spec?.parent ? (
+            <label>
+              {spec.parent.label} slug
+              <input
+                value={form.parentSlug}
+                onChange={(e) => setForm((f) => ({ ...f, parentSlug: e.target.value }))}
+              />
+            </label>
+          ) : null}
+          {spec?.hasSortOrder ? (
+            <label>
+              Sort order
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
+              />
+            </label>
+          ) : null}
+          {spec?.hasIcon ? (
+            <label>
+              Icon
+              <input
+                value={form.icon}
+                onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+              />
+            </label>
+          ) : null}
         </div>
       </Modal>
 
+      <ConfirmDialog
+        open={pendingKeyConfirm && editing !== null}
+        title={`Change ${catalogKeyLabel(spec?.keyField).toLowerCase()}?`}
+        description={
+          <>
+            <p style={{ marginTop: 0 }}>
+              {editing
+                ? `"${rowIdentityKey(editing)}" → "${form.key.trim()}". Profiles and jobs keep the same record; matching on the old key will use an alias.`
+                : null}
+            </p>
+            {editUsage && editUsage.total > 0 ? (
+              <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
+                {editUsage.byRelation.map((relation) => (
+                  <li key={relation.label}>
+                    <span className="num">{relation.count}</span> {relation.label}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        }
+        confirmLabel="Change key"
+        busy={table.busy}
+        onConfirm={() => void commitEdit()}
+        onCancel={() => setPendingKeyConfirm(false)}
+      />
+
       <Modal
-        open={merging !== null}
-        title={`Merge ${merging?.name ?? ''}`}
-        description="The duplicate is removed and everything pointing at it moves to the entry you choose. Its old spelling keeps resolving to the survivor."
-        onClose={() => setMerging(null)}
+        open={archiving !== null}
+        title={`Archive ${archiving?.row.name ?? ''}`}
+        description={
+          archiving?.usage.total
+            ? 'It disappears from search, suggestions and filters. Records that already use it keep it.'
+            : spec?.seedManaged
+              ? 'Nothing uses it, but this catalog is rebuilt from code on deploy, so it is archived rather than deleted.'
+              : 'Nothing uses it, so it will be deleted outright.'
+        }
+        onClose={() => setArchiving(null)}
         footer={
           <>
-            <button type="button" className="secondary" onClick={() => setMerging(null)}>
+            <button type="button" className="secondary" onClick={() => setArchiving(null)}>
               Cancel
             </button>
             <button
               type="button"
               className="danger"
-              disabled={!mergeTarget.trim() || table.busy}
+              disabled={table.busy}
               onClick={async () => {
-                const row = merging;
-                const target = mergeTarget.trim();
-                setMerging(null);
-                if (!row || !target) return;
-                if (target === row.id) {
-                  notify('Pick a different entry to merge into', 'error');
-                  return;
+                const row = archiving?.row;
+                setArchiving(null);
+                if (!row) return;
+                try {
+                  const result = await apiPost<ArchiveResult>(
+                    `/admin/catalog/type/${type}/${row.id}/archive`,
+                  );
+                  notify(
+                    result.outcome === 'deleted'
+                      ? `${row.name} deleted, nothing referenced it.`
+                      : `${row.name} archived.`,
+                  );
+                  await table.reload();
+                } catch (e) {
+                  notify(e instanceof Error ? e.message : 'Could not archive', 'error');
                 }
-                await table.runAction(
-                  apiPost(`/admin/catalog/${catalogKind}/${row.id}/merge`, { targetId: target }),
-                  'Entry merged',
-                );
               }}
             >
-              Merge and delete
+              {archiving?.usage.total || spec?.seedManaged ? 'Archive it' : 'Delete it'}
             </button>
           </>
         }
       >
-        <label style={{ marginTop: '1rem' }}>
-          Keep this entry id
-          <input
-            value={mergeTarget}
-            onChange={(e) => setMergeTarget(e.target.value)}
-            placeholder="Paste the id of the entry to keep"
-          />
-        </label>
+        {archiving?.usage.total ? (
+          <ul style={{ marginTop: '1rem', paddingLeft: '1.1rem' }}>
+            {archiving.usage.byRelation.map((relation) => (
+              <li key={relation.label}>
+                <span className="num">{relation.count}</span> {relation.label}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </Modal>
-
-      <ConfirmDialog
-        open={pending !== null}
-        title={
-          pending?.kind === 'translate'
-            ? 'Machine translate selected terms'
-            : `Mark selected as ${pending?.status ?? ''}`
-        }
-        description={
-          pending?.kind === 'translate'
-            ? `${table.selected.size} terms will be sent to the translation provider. Human translations are never overwritten, and the run stops if the monthly budget is exhausted.`
-            : `${table.selected.size} terms will change state.`
-        }
-        confirmLabel={pending?.kind === 'translate' ? 'Translate them' : 'Change state'}
-        busy={table.busy}
-        onCancel={() => setPending(null)}
-        onConfirm={async () => {
-          const action = pending;
-          setPending(null);
-          if (!action) return;
-          if (action.kind === 'translate') {
-            await table.runBulk(`/admin/catalog/${catalogKind}/bulk/translate`, {}, 'translated');
-          } else {
-            await table.runBulk(
-              `/admin/catalog/${catalogKind}/bulk/status`,
-              { status: action.status },
-              'updated',
-            );
-          }
-        }}
-      />
     </>
   );
 }

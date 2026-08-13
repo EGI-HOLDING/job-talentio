@@ -35,6 +35,7 @@ import { TranslationService } from '../translation/translation.service';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { canTransition, transitionError } from './job-status';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -221,15 +222,17 @@ export class JobsService {
     return baseRecency + freshnessDecay + hotBoost + planBoost - qualityPenalty;
   }
 
+  // findFirst rather than findUnique: an archived entry must not be selectable
+  // for a new posting, and findUnique cannot filter on a non-unique column.
   private async resolveCityId(slug?: string | null) {
     if (!slug) return null;
-    const city = await this.prisma.city.findUnique({ where: { slug } });
+    const city = await this.prisma.city.findFirst({ where: { slug, ...ACTIVE_CATALOG } });
     return city?.id ?? null;
   }
 
   private async resolveCategoryId(slug?: string | null) {
     if (!slug) return null;
-    const cat = await this.prisma.jobCategory.findUnique({ where: { slug } });
+    const cat = await this.prisma.jobCategory.findFirst({ where: { slug, ...ACTIVE_CATALOG } });
     return cat?.id ?? null;
   }
 
@@ -905,7 +908,9 @@ export class JobsService {
     page: number;
     limit: number;
     profileId?: string;
+    locale?: Locale;
   }) {
+    const locale = query.locale ?? DEFAULT_LOCALE;
     const and: Prisma.JobPostWhereInput[] = [{ status: 'PUBLISHED' }];
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -1053,6 +1058,9 @@ export class JobsService {
     const scanCap = sort === 'match' ? MATCH_SCAN_CAP : RELEVANCE_SCAN_CAP;
 
     const jobInclude = {
+      translations: {
+        select: { locale: true, title: true, description: true, isMachine: true },
+      },
       company: {
         select: {
           id: true,
@@ -1181,9 +1189,15 @@ export class JobsService {
         categoryId: true,
         jobTitleId: true,
         experienceLevel: true,
-        city: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
-        category: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
-        jobTitle: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
+        // archivedAt comes along so an archived term can be left out of the
+        // facet options while the postings that use it still render normally.
+        city: { select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true } },
+        category: {
+          select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+        },
+        jobTitle: {
+          select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+        },
         company: {
           select: {
             slug: true,
@@ -1195,16 +1209,25 @@ export class JobsService {
                 name: true,
                 nameUz: true,
                 nameRu: true,
+                archivedAt: true,
                 group: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
               },
             },
           },
         },
         jobSkills: {
-          select: { skill: { select: { slug: true, name: true, nameUz: true, nameRu: true } } },
+          select: {
+            skill: {
+              select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+            },
+          },
         },
         jobLanguages: {
-          select: { language: { select: { code: true, name: true, nameUz: true, nameRu: true } } },
+          select: {
+            language: {
+              select: { code: true, name: true, nameUz: true, nameRu: true, archivedAt: true },
+            },
+          },
         },
       },
       take: 1000,
@@ -1235,13 +1258,13 @@ export class JobsService {
     > = {};
     const experienceFacets: Record<string, number> = {};
     for (const j of facetJobs) {
-      if (j.city) {
+      if (j.city && !j.city.archivedAt) {
         const key = j.city.slug;
         cityFacets[key] = cityFacets[key]
           ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
           : { slug: j.city.slug, name: j.city.name, nameUz: j.city.nameUz, nameRu: j.city.nameRu, count: 1 };
       }
-      if (j.category) {
+      if (j.category && !j.category.archivedAt) {
         const key = j.category.slug;
         categoryFacets[key] = categoryFacets[key]
           ? { ...categoryFacets[key], count: categoryFacets[key].count + 1 }
@@ -1253,7 +1276,7 @@ export class JobsService {
               count: 1,
             };
       }
-      if (j.jobTitle) {
+      if (j.jobTitle && !j.jobTitle.archivedAt) {
         const key = j.jobTitle.slug;
         jobTitleFacets[key] = jobTitleFacets[key]
           ? { ...jobTitleFacets[key], count: jobTitleFacets[key].count + 1 }
@@ -1275,7 +1298,7 @@ export class JobsService {
               logoUrl: j.company.logoUrl,
               count: 1,
             };
-        if (j.company.industry) {
+        if (j.company.industry && !j.company.industry.archivedAt) {
           const ik = j.company.industry.slug;
           industryFacets[ik] = industryFacets[ik]
             ? { ...industryFacets[ik], count: industryFacets[ik].count + 1 }
@@ -1295,14 +1318,14 @@ export class JobsService {
       }
       for (const js of j.jobSkills) {
         const sk = js.skill;
-        if (!sk) continue;
+        if (!sk || sk.archivedAt) continue;
         skillFacets[sk.slug] = skillFacets[sk.slug]
           ? { ...skillFacets[sk.slug], count: skillFacets[sk.slug].count + 1 }
           : { slug: sk.slug, name: sk.name, nameUz: sk.nameUz, nameRu: sk.nameRu, count: 1 };
       }
       for (const jl of j.jobLanguages) {
         const lang = jl.language;
-        if (!lang) continue;
+        if (!lang || lang.archivedAt) continue;
         languageFacets[lang.code] = languageFacets[lang.code]
           ? { ...languageFacets[lang.code], count: languageFacets[lang.code].count + 1 }
           : { code: lang.code, name: lang.name, nameUz: lang.nameUz, nameRu: lang.nameRu, count: 1 };
@@ -1310,7 +1333,7 @@ export class JobsService {
     }
 
     return {
-      items: sorted.map((job) => this.withResolvedIcons(job)),
+      items: sorted.map((job) => this.withContentLocale(this.withResolvedIcons(job), locale)),
       total,
       matchedTotal,
       truncated,
@@ -1346,6 +1369,7 @@ export class JobsService {
       }),
       this.prisma.skill.findMany({
         where: {
+          ...ACTIVE_CATALOG,
           OR: [
             { name: { contains: q, mode: 'insensitive' } },
             { slug: { contains: q, mode: 'insensitive' } },

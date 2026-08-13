@@ -19,8 +19,8 @@ import {
   companyBrowseSchema,
   companySchema,
   companyTranslationSchema,
+  companyInviteSchema,
 } from '@job-talentio/shared';
-import { CompanyMemberRole } from '@prisma/client';
 import { CompaniesService } from './companies.service';
 import {
   JwtAuthGuard,
@@ -72,9 +72,14 @@ export class CompaniesController {
     return this.companies.getBySlug(slug, requestLocale(req));
   }
 
-  /** Signed-in and rate limited: every miss costs money at the provider. */
+  @Get('invites/:token')
+  previewInvite(@Param('token') token: string) {
+    return this.companies.previewInvite(token);
+  }
+
+  /** Guests included. Rate limited and budgeted: first miss pays, later readers cache. */
   @Post('slug/:slug/translate/:locale')
-  @UseGuards(JwtAuthGuard, SearchRateLimitGuard)
+  @UseGuards(OptionalJwtAuthGuard, SearchRateLimitGuard)
   machineTranslate(@Param('slug') slug: string, @Param('locale') locale: string) {
     return this.companies.machineTranslate(slug, assertLocale(locale));
   }
@@ -149,9 +154,28 @@ export class CompaniesController {
   invite(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
-    @Body() body: { email: string; role?: CompanyMemberRole },
+    @Body() body: unknown,
   ) {
-    return this.companies.invite(user, id, body.email, body.role ?? 'RECRUITER');
+    const data = parseDto(companyInviteSchema, body);
+    return this.companies.invite(user, id, data.email, data.role, data.locale);
+  }
+
+  @Get(':id/invites')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  listInvites(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.companies.listPendingInvites(user, id);
+  }
+
+  @Delete(':id/invites/:inviteId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  revokeInvite(
+    @Param('id') id: string,
+    @Param('inviteId') inviteId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.companies.revokeInvite(user, id, inviteId);
   }
 
   @Delete(':id/members/:userId')

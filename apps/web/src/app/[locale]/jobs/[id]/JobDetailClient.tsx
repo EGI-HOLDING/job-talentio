@@ -76,6 +76,7 @@ function formatSalary(
 }
 
 type MatchBreakdownState = {
+  title?: number;
   skills?: number;
   experience?: number;
   location?: number;
@@ -402,7 +403,7 @@ export function JobDetailClient() {
               className="job-description"
               translating={translating}
               onTranslate={
-                session && job.canMachineTranslate ? () => void machineTranslate() : undefined
+                job.canMachineTranslate ? () => void machineTranslate() : undefined
               }
             />
           </div>

@@ -5,19 +5,28 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CompanyMemberRole, PlanCode, Prisma } from '@prisma/client';
-import { resolveCategoryIcon } from '@job-talentio/shared';
+import { randomBytes } from 'crypto';
+import { resolveCategoryIcon, translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { MailService } from '../mail/mail.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
-import { normalizeCompanyName } from '../common/dedupe';
+import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { sanitizeStoredText } from '../common/text-sanitize';
 import { contentHash as translationSourceHash, resolveContent } from '../common/i18n/content-locale';
 import { detectLocale } from '../common/i18n/detect-locale';
 import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
+import { emailLocale } from '../common/i18n/email-locale';
 import { TranslationService } from '../translation/translation.service';
+import { ACTIVE_CATALOG } from '../common/catalog-visibility';
+
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type DbClient = Prisma.TransactionClient | PrismaService;
 
 @Injectable()
 export class CompaniesService {
@@ -25,6 +34,8 @@ export class CompaniesService {
     private prisma: PrismaService,
     private storage: StorageService,
     private translation: TranslationService,
+    private mail: MailService,
+    private config: ConfigService,
   ) {}
 
   private async assertCompanyNameAvailable(name: string, excludeId?: string) {
@@ -332,15 +343,17 @@ export class CompaniesService {
     if (data.citySlug !== undefined) {
       if (!data.citySlug) cityId = null;
       else {
-        const city = await this.prisma.city.findUnique({ where: { slug: data.citySlug } });
+        const city = await this.prisma.city.findFirst({
+          where: { slug: data.citySlug, ...ACTIVE_CATALOG },
+        });
         cityId = city?.id ?? null;
       }
     }
     if (data.industrySlug !== undefined) {
       if (!data.industrySlug) industryId = null;
       else {
-        const ind = await this.prisma.industry.findUnique({
-          where: { slug: data.industrySlug },
+        const ind = await this.prisma.industry.findFirst({
+          where: { slug: data.industrySlug, ...ACTIVE_CATALOG },
         });
         industryId = ind?.id ?? null;
       }
@@ -427,30 +440,225 @@ export class CompaniesService {
     companyId: string,
     email: string,
     role: CompanyMemberRole = 'RECRUITER',
+    locale?: string,
   ) {
-    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
-    // OWNER transfer is a separate flow — invites may only grant ADMIN or RECRUITER
+    const { company } = await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
     if (role !== 'ADMIN' && role !== 'RECRUITER') {
       throw new BadRequestException('Invite role must be ADMIN or RECRUITER');
     }
-    const invitee = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!invitee) throw new NotFoundException('User must register first');
-    if (invitee.role === 'SUPER_ADMIN') {
-      throw new BadRequestException('Cannot invite a super admin as a company member');
+    const storedEmail = email.trim().toLowerCase();
+    if (!storedEmail || !storedEmail.includes('@')) {
+      throw new BadRequestException('Email is required');
     }
-    if (invitee.role === 'EMPLOYEE') {
-      throw new BadRequestException(
-        'User is registered as an employee. They must create a recruiter account before joining a company.',
-      );
+
+    const invitee = await this.findUserByInviteEmail(storedEmail);
+    if (invitee) {
+      if (invitee.role === 'SUPER_ADMIN') {
+        throw new BadRequestException('Cannot invite a super admin as a company member');
+      }
+      if (invitee.role === 'EMPLOYEE') {
+        throw new BadRequestException(
+          'User is registered as an employee. They must create a recruiter account before joining a company.',
+        );
+      }
+      try {
+        const member = await this.prisma.companyMember.create({
+          data: { companyId, userId: invitee.id, role },
+          include: { user: { select: { id: true, email: true, fullName: true } } },
+        });
+        await this.closePendingInvites(companyId, storedEmail);
+        await this.sendAddedEmail(invitee, company.name, locale);
+        return { status: 'added' as const, member };
+      } catch {
+        await this.closePendingInvites(companyId, storedEmail);
+        throw new ConflictException('User already a member');
+      }
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = sha256(rawToken);
+    const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    const emailLocaleCode = emailLocale(locale);
+    const pending = await this.prisma.companyInvite.findFirst({
+      where: { companyId, email: storedEmail, acceptedAt: null },
+    });
+    if (pending) {
+      await this.prisma.companyInvite.update({
+        where: { id: pending.id },
+        data: { tokenHash, expiresAt, role, locale: emailLocaleCode, invitedById: user.id },
+      });
+    } else {
+      await this.prisma.companyInvite.create({
+        data: {
+          companyId,
+          email: storedEmail,
+          role,
+          locale: emailLocaleCode,
+          tokenHash,
+          expiresAt,
+          invitedById: user.id,
+        },
+      });
+    }
+    await this.sendInviteEmail(storedEmail, company.name, rawToken, emailLocaleCode);
+    return { status: 'invited' as const, email: storedEmail, role, locale: emailLocaleCode, expiresAt };
+  }
+
+  async previewInvite(rawToken: string) {
+    const invite = await this.findPendingInvite(rawToken);
+    if (!invite) throw new NotFoundException('Invite not found');
+    return {
+      companyName: invite.company.name,
+      email: invite.email,
+      role: invite.role,
+    };
+  }
+
+  async listPendingInvites(user: AuthUser, companyId: string) {
+    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    return this.prisma.companyInvite.findMany({
+      where: { companyId, acceptedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, email: true, role: true, locale: true, expiresAt: true, createdAt: true },
+    });
+  }
+
+  async revokeInvite(user: AuthUser, companyId: string, inviteId: string) {
+    await this.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+    const invite = await this.prisma.companyInvite.findUnique({ where: { id: inviteId } });
+    if (!invite || invite.companyId !== companyId) throw new NotFoundException('Invite not found');
+    if (invite.acceptedAt) throw new BadRequestException('This invitation was already accepted');
+    await this.prisma.companyInvite.delete({ where: { id: inviteId } });
+    return { ok: true };
+  }
+
+  /**
+   * Marks a pending invite used and attaches membership. Call inside the same
+   * transaction that creates the user so a failed signup cannot leave a
+   * recruiter with no company.
+   */
+  async consumeInvite(db: DbClient, rawToken: string, email: string, userId: string) {
+    const invite = await db.companyInvite.findUnique({
+      where: { tokenHash: sha256(rawToken) },
+    });
+    if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+      throw new BadRequestException('This invitation is invalid or has expired');
+    }
+    if (invite.role !== 'ADMIN' && invite.role !== 'RECRUITER') {
+      throw new BadRequestException('This invitation is invalid or has expired');
+    }
+    if (normalizeEmail(invite.email) !== normalizeEmail(email)) {
+      throw new BadRequestException('This invitation was sent to a different email address');
+    }
+    const claimed = await db.companyInvite.updateMany({
+      where: { id: invite.id, acceptedAt: null, expiresAt: { gt: new Date() } },
+      data: { acceptedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      throw new BadRequestException('This invitation is invalid or has expired');
     }
     try {
-      return await this.prisma.companyMember.create({
-        data: { companyId, userId: invitee.id, role },
-        include: { user: { select: { id: true, email: true, fullName: true } } },
+      await db.companyMember.create({
+        data: { companyId: invite.companyId, userId, role: invite.role },
       });
     } catch {
       throw new ConflictException('User already a member');
     }
+    return invite;
+  }
+
+  /** Existing recruiter who later opens the invite link still gets membership. */
+  async consumeInviteForExistingUser(rawToken: string, email: string, userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('This invitation is invalid or has expired');
+    if (user.role === 'SUPER_ADMIN') {
+      throw new BadRequestException('Cannot invite a super admin as a company member');
+    }
+    if (user.role === 'EMPLOYEE') {
+      throw new BadRequestException(
+        'User is registered as an employee. They must create a recruiter account before joining a company.',
+      );
+    }
+    return this.consumeInvite(this.prisma, rawToken, email, userId);
+  }
+
+  private async findUserByInviteEmail(email: string) {
+    const raw = email.trim().toLowerCase();
+    const normalized = normalizeEmail(raw);
+    const exact = await this.prisma.user.findUnique({ where: { email: raw } });
+    if (exact) return exact;
+    if (normalized !== raw) {
+      const alias = await this.prisma.user.findUnique({ where: { email: normalized } });
+      if (alias) return alias;
+    }
+    if (!raw.endsWith('@gmail.com') && !raw.endsWith('@googlemail.com')) return null;
+    const users = await this.prisma.user.findMany({
+      where: {
+        OR: [{ email: { endsWith: '@gmail.com' } }, { email: { endsWith: '@googlemail.com' } }],
+      },
+      take: 5000,
+    });
+    return users.find((u) => normalizeEmail(u.email) === normalized) ?? null;
+  }
+
+  private async closePendingInvites(companyId: string, email: string) {
+    await this.prisma.companyInvite.updateMany({
+      where: { companyId, email, acceptedAt: null },
+      data: { acceptedAt: new Date() },
+    });
+  }
+
+  private async findPendingInvite(rawToken: string) {
+    const invite = await this.prisma.companyInvite.findUnique({
+      where: { tokenHash: sha256(rawToken) },
+      include: { company: { select: { name: true } } },
+    });
+    if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) return null;
+    return invite;
+  }
+
+  private webUrl() {
+    return this.config.get('WEB_URL', 'http://localhost:3000').replace(/\/$/, '');
+  }
+
+  private async sendInviteEmail(
+    email: string,
+    companyName: string,
+    rawToken: string,
+    locale = emailLocale(null),
+  ) {
+    const link = `${this.webUrl()}/register?invite=${rawToken}`;
+    const sent = await this.mail.send(
+      email,
+      translateMessage('email.invite.subject', locale, { company: companyName }),
+      `<p>${translateMessage('email.greetingShort', locale)}</p>
+       <p>${translateMessage('email.invite.intro', locale, { company: companyName })}</p>
+       <p><a href="${link}">${translateMessage('email.invite.cta', locale)}</a></p>
+       <p>${translateMessage('email.linkFallback', locale, { link })}</p>
+       <p>${translateMessage('email.expires7d', locale)} ${translateMessage('email.invite.ignore', locale)}</p>`,
+    );
+    if (!sent) {
+      throw new BadRequestException(
+        'Could not send the invitation email. Please try again in a moment.',
+      );
+    }
+  }
+
+  private async sendAddedEmail(
+    user: { email: string; fullName: string; locale?: string | null },
+    companyName: string,
+    chosenLocale?: string,
+  ) {
+    const link = `${this.webUrl()}/login`;
+    const locale = emailLocale(chosenLocale || user.locale);
+    await this.mail.send(
+      user.email,
+      translateMessage('email.inviteAdded.subject', locale, { company: companyName }),
+      `<p>${translateMessage('email.greeting', locale, { name: user.fullName })}</p>
+       <p>${translateMessage('email.inviteAdded.intro', locale, { company: companyName })}</p>
+       <p><a href="${link}">${translateMessage('email.inviteAdded.cta', locale)}</a></p>
+       <p>${translateMessage('email.linkFallback', locale, { link })}</p>`,
+    );
   }
 
   async follow(user: AuthUser, companyId: string) {
