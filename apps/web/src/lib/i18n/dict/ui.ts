@@ -137,22 +137,22 @@ export const ui = {
   'ui.privacyAndMessaging': {
     uz: 'Maxfiylik va xabarlar',
     ru: 'Конфиденциальность и сообщения',
-    en: 'Privacy & messaging',
+    en: 'Privacy and messaging',
   },
   'ui.privacyBulkIntro': {
-    uz: 'GDPR bo‘yicha rekruterlarning ommaviy xabarlaridan voz kechishingiz mumkin. Ariza holati haqidagi xabarlar va rekruterga o‘zingiz yozgan suhbatlar baribir keladi.',
-    ru: 'По GDPR вы можете отказаться от массовых сообщений рекрутеров. Уведомления о статусе откликов и личная переписка с рекрутером будут приходить по-прежнему.',
-    en: 'Under GDPR you can opt out of recruiter bulk / mass messages. You will still receive application status updates and one-to-one chat if you message a recruiter.',
+    uz: 'Rekruterlarning ommaviy xabarlarini o‘zingiz boshqarasiz. Ariza holati va shaxsiy suhbat o‘zgarmaydi.',
+    ru: 'Вы решаете, получать ли массовые сообщения рекрутеров. Статус откликов и личный чат не меняются.',
+    en: 'Choose whether recruiters can send you bulk messages. Application updates and one-to-one chat are not affected.',
   },
   'ui.optOutBulkTitle': {
-    uz: 'Rekruterlarning ommaviy xabarlaridan voz kechish',
-    ru: 'Отказаться от массовых сообщений рекрутеров',
-    en: 'Opt out of bulk recruiter messaging',
+    uz: 'Ommaviy xabarlarni o‘chirish',
+    ru: 'Не получать массовые сообщения',
+    en: 'Turn off bulk recruiter messages',
   },
   'ui.optOutBulkHint': {
-    uz: 'Rekruterlar sizga pipeline orqali ommaviy xabar yubora olmaydi. Pipeline bosqichi o‘zgarganda bildirishnoma kelishi mumkin.',
-    ru: 'Рекрутеры не смогут отправлять вам массовые сообщения из пайплайна. Уведомления о смене этапа могут приходить.',
-    en: 'Recruiters cannot send mass messages to you from the pipeline. Pipeline stage changes may still notify you.',
+    uz: 'Rekruter pipeline orqali ommaviy xabar yubora olmaydi. Bosqich o‘zgarganda bildirishnoma kelishi mumkin.',
+    ru: 'Рекрутеры не смогут слать массовые сообщения из пайплайна. Уведомления о смене этапа могут приходить.',
+    en: 'Recruiters cannot send mass pipeline messages. Stage-change notices may still arrive.',
   },
   'ui.bulkOptedOutMsg': {
     uz: 'Rekruterlarning ommaviy xabarlaridan voz kechdingiz',

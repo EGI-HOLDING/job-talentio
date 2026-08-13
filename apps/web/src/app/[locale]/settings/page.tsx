@@ -542,36 +542,27 @@ export default function SettingsPage() {
 
           {section === 'privacy' && isEmployee && (
             <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('ui.privacyAndMessaging')}</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
+              <h3 style={{ marginTop: 0 }}>{t('ui.privacy')}</h3>
+              <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>
                 {t('ui.privacyBulkIntro')}
               </p>
               <form onSubmit={savePrivacy} className="form-stack">
-                <label
-                  style={{
-                    display: 'flex',
-                    gap: '0.65rem',
-                    alignItems: 'flex-start',
-                    cursor: 'pointer',
-                  }}
-                >
+                <label className="settings-choice">
                   <input
                     type="checkbox"
                     checked={bulkOptedOut}
                     onChange={(e) => setBulkOptedOut(e.target.checked)}
-                    style={{ marginTop: '0.25rem' }}
                   />
-                  <span>
+                  <span className="settings-choice-copy">
                     <strong>{t('ui.optOutBulkTitle')}</strong>
-                    <br />
-                    <span className="muted" style={{ fontSize: '0.88rem' }}>
-                      {t('ui.optOutBulkHint')}
-                    </span>
+                    <span className="muted">{t('ui.optOutBulkHint')}</span>
                   </span>
                 </label>
-                <button type="submit" disabled={privacyLoading}>
-                  {privacyLoading ? t('saving') : t('save')}
-                </button>
+                <div className="settings-form-actions">
+                  <button type="submit" disabled={privacyLoading}>
+                    {privacyLoading ? t('saving') : t('save')}
+                  </button>
+                </div>
               </form>
             </div>
           )}
