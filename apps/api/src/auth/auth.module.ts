@@ -7,9 +7,11 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { AvatarBackfillService } from './avatar-backfill.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
+import { CompaniesModule } from '../companies/companies.module';
 
 @Module({
   imports: [
+    CompaniesModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

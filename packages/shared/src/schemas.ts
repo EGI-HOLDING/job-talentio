@@ -11,9 +11,10 @@ export const registerSchema = z
       .boolean()
       .refine((v) => v === true, { message: 'You must accept the terms to create an account' }),
     companyName: z.string().trim().min(2).max(160).optional(),
+    inviteToken: z.string().trim().min(20).max(200).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.role === 'RECRUITER') {
+    if (data.role === 'RECRUITER' && !data.inviteToken) {
       const name = data.companyName?.trim() ?? '';
       if (name.length < 2) {
         ctx.addIssue({
@@ -37,9 +38,10 @@ export const googleOAuthSchema = z
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     companyName: z.string().trim().min(2).max(160).optional(),
     locale: z.enum(['uz', 'ru', 'en']).optional(),
+    inviteToken: z.string().trim().min(20).max(200).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.role === 'RECRUITER' && (data.companyName?.trim() ?? '').length < 2) {
+    if (data.role === 'RECRUITER' && !data.inviteToken && (data.companyName?.trim() ?? '').length < 2) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['companyName'],
@@ -86,6 +88,11 @@ export const companySchema = z.object({
 
 export const companyTranslationSchema = z.object({
   description: z.string().min(20).max(5000),
+});
+
+export const companyInviteSchema = z.object({
+  email: z.string().trim().email(),
+  role: z.enum(['ADMIN', 'RECRUITER']).default('RECRUITER'),
 });
 
 export const jobPostSchema = z.object({

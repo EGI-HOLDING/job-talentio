@@ -160,7 +160,11 @@ function RecruiterDashboard() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [companyDetail, setCompanyDetail] = useState<any>(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'RECRUITER' | 'ADMIN'>('RECRUITER');
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<
+    Array<{ id: string; email: string; role: string; expiresAt: string }>
+  >([]);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [accountEmail, setAccountEmail] = useState('');
@@ -170,6 +174,10 @@ function RecruiterDashboard() {
     () => companyDetail || memberships.find((m) => m.companyId === companyId)?.company,
     [memberships, companyId, companyDetail],
   );
+  const canManageTeam = useMemo(() => {
+    const role = memberships.find((m) => m.companyId === companyId)?.role;
+    return role === 'OWNER' || role === 'ADMIN';
+  }, [memberships, companyId]);
   const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
   const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
   const activeJobLimit = PLAN_LIMITS[planCode].activeJobs;
@@ -368,8 +376,13 @@ function RecruiterDashboard() {
       loadSubscription(companyId).catch(() => setSubscription(null));
       loadBulkTemplates(companyId).catch(() => setBulkTemplates([]));
       loadCompanyDetail(companyId).catch(() => setCompanyDetail(null));
+      if (canManageTeam) {
+        loadPendingInvites(companyId).catch(() => setPendingInvites([]));
+      } else {
+        setPendingInvites([]);
+      }
     }
-  }, [companyId]);
+  }, [companyId, canManageTeam]);
 
   useEffect(() => {
     if ((tab === 'pipeline' || tab === 'bulk') && companyId) {
@@ -622,6 +635,14 @@ function RecruiterDashboard() {
     setCompanyDetail(detail);
   }
 
+  async function loadPendingInvites(cid: string) {
+    if (!cid) return;
+    const rows = await api<Array<{ id: string; email: string; role: string; expiresAt: string }>>(
+      `/companies/${cid}/invites`,
+    );
+    setPendingInvites(rows);
+  }
+
   async function updateCompany(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -646,13 +667,14 @@ function RecruiterDashboard() {
     if (!inviteEmail.trim() || inviteBusy) return;
     setInviteBusy(true);
     try {
-      await api(`/companies/${companyId}/invite`, {
+      const result = await api<{ status: 'added' | 'invited' }>(`/companies/${companyId}/invite`, {
         method: 'POST',
-        body: JSON.stringify({ email: inviteEmail.trim(), role: 'RECRUITER' }),
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
       });
       setInviteEmail('');
-      flash(t('rec.memberInvited'));
+      flash(result.status === 'added' ? t('rec.memberAdded') : t('rec.memberInvited'));
       await loadCompanyDetail(companyId);
+      await loadPendingInvites(companyId);
     } catch (err) {
       flash(err instanceof Error ? err.message : t('rec.inviteFailed'), 'error');
     } finally {
@@ -2008,6 +2030,8 @@ function RecruiterDashboard() {
                   </li>
                 ))}
               </ul>
+              {canManageTeam ? (
+              <>
               <form className="form-stack" onSubmit={inviteMember}>
                 <label>
                   <LabelText>{t('rec.inviteByEmail')}</LabelText>
@@ -2019,10 +2043,91 @@ function RecruiterDashboard() {
                     required
                   />
                 </label>
+                <label>
+                  <LabelText>{t('rec.inviteRole')}</LabelText>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value as 'RECRUITER' | 'ADMIN')}
+                  >
+                    <option value="RECRUITER">{t('rec.roleRecruiter')}</option>
+                    <option value="ADMIN">{t('rec.roleAdmin')}</option>
+                  </select>
+                </label>
                 <button type="submit" disabled={inviteBusy}>
                   {inviteBusy ? t('rec.inviting') : t('rec.inviteMember')}
                 </button>
               </form>
+              <div style={{ marginTop: '1.25rem' }}>
+                <h4 style={{ margin: '0 0 0.5rem' }}>{t('rec.pendingInvites')}</h4>
+                {pendingInvites.length === 0 ? (
+                  <p className="muted">{t('rec.noPendingInvites')}</p>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {pendingInvites.map((row) => (
+                      <li
+                        key={row.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: '0.75rem',
+                          padding: '0.45rem 0',
+                          borderBottom: '1px solid var(--border, #e5e7eb)',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span>
+                          {row.email} <span className="muted">({row.role})</span>
+                        </span>
+                        <span className="btn-row">
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={async () => {
+                              try {
+                                await api(`/companies/${companyId}/invite`, {
+                                  method: 'POST',
+                                  body: JSON.stringify({ email: row.email, role: row.role }),
+                                });
+                                flash(t('rec.memberInvited'));
+                                await loadPendingInvites(companyId);
+                              } catch (err) {
+                                flash(
+                                  err instanceof Error ? err.message : t('rec.inviteFailed'),
+                                  'error',
+                                );
+                              }
+                            }}
+                          >
+                            {t('rec.resendInvite')}
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={async () => {
+                              try {
+                                await api(`/companies/${companyId}/invites/${row.id}`, {
+                                  method: 'DELETE',
+                                });
+                                flash(t('rec.inviteCancelled'));
+                                await loadPendingInvites(companyId);
+                              } catch (err) {
+                                flash(
+                                  err instanceof Error ? err.message : t('rec.inviteFailed'),
+                                  'error',
+                                );
+                              }
+                            }}
+                          >
+                            {t('rec.cancelInvite')}
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              </>
+              ) : null}
             </div>
           </div>
         )}

@@ -18,6 +18,7 @@ import { StorageService } from '../storage/storage.service';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { UserRole } from '@prisma/client';
+import { CompaniesService } from '../companies/companies.service';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 min between sends
@@ -41,6 +42,7 @@ export class AuthService {
     private config: ConfigService,
     private mail: MailService,
     private storage: StorageService,
+    private companies: CompaniesService,
   ) {}
 
   private async assertEmailAvailable(email: string) {
@@ -181,6 +183,7 @@ export class AuthService {
     role: 'EMPLOYEE' | 'RECRUITER';
     locale?: string;
     companyName?: string;
+    inviteToken?: string;
   }) {
     const email = input.email.trim().toLowerCase();
     await this.assertEmailAvailable(email);
@@ -188,13 +191,15 @@ export class AuthService {
     const fullName = input.fullName.trim().replace(/\s+/g, ' ');
     if (fullName.length < 2) throw new BadRequestException('Full name is too short');
 
-    if (input.role === 'RECRUITER') {
+    const inviteToken = input.inviteToken?.trim();
+    const role: UserRole = inviteToken ? 'RECRUITER' : input.role;
+
+    if (role === 'RECRUITER' && !inviteToken) {
       const name = input.companyName?.trim() || `${fullName}'s Company`;
       await this.assertCompanyNameAvailable(name);
     }
 
     const passwordHash = await bcrypt.hash(input.password, 10);
-    const role: UserRole = input.role;
 
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
@@ -213,7 +218,9 @@ export class AuthService {
         await tx.employeeProfile.create({ data: { userId: created.id } });
       }
 
-      if (role === 'RECRUITER') {
+      if (role === 'RECRUITER' && inviteToken) {
+        await this.companies.consumeInvite(tx, inviteToken, email, created.id);
+      } else if (role === 'RECRUITER') {
         const name = input.companyName?.trim() || `${fullName}'s Company`;
         let slug = slugify(name) || `company-${Date.now()}`;
         const slugExists = await tx.company.findUnique({ where: { slug } });
@@ -442,8 +449,10 @@ export class AuthService {
     role?: 'EMPLOYEE' | 'RECRUITER';
     companyName?: string;
     locale?: string;
+    inviteToken?: string;
   }) {
     const google = await this.verifyGoogleIdToken(input.idToken);
+    const inviteToken = input.inviteToken?.trim();
 
     let user = await this.prisma.user.findUnique({ where: { googleId: google.googleId } });
     if (!user) {
@@ -462,7 +471,29 @@ export class AuthService {
 
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
+      if (inviteToken) {
+        await this.acceptInviteOnExistingUser(inviteToken, google.email, user.id);
+      }
       return this.tokenFor(user.id);
+    }
+
+    if (inviteToken) {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: google.email,
+            googleId: google.googleId,
+            fullName: google.fullName,
+            avatarUrl: google.avatarUrl,
+            role: 'RECRUITER',
+            locale: input.locale ?? 'uz',
+            emailVerified: false,
+          },
+        });
+        await this.companies.consumeInvite(tx, inviteToken, google.email, newUser.id);
+        return newUser;
+      });
+      return this.tokenFor(created.id);
     }
 
     // First Google sign-in: the frontend must supply a role (and company for recruiters)
@@ -517,6 +548,24 @@ export class AuthService {
     });
 
     return this.tokenFor(created.id);
+  }
+
+  private async acceptInviteOnExistingUser(rawToken: string, email: string, userId: string) {
+    try {
+      await this.companies.consumeInviteForExistingUser(rawToken, email, userId);
+    } catch (e) {
+      if (e instanceof ConflictException) return;
+      if (e instanceof BadRequestException) {
+        const message = String(e.message);
+        if (
+          message.includes('different email') ||
+          message.includes('employee') ||
+          message.includes('super admin')
+        ) {
+          throw e;
+        }
+      }
+    }
   }
 
   /** Confirm the emailed token, mark the account verified, and start a session. */

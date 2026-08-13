@@ -576,6 +576,26 @@ export const core = {
     ru: 'Присоединяйтесь к Job Talentio',
     en: 'Join Job Talentio',
   },
+  inviteChecking: {
+    uz: 'Taklif tekshirilmoqda...',
+    ru: 'Проверяем приглашение...',
+    en: 'Checking invitation...',
+  },
+  inviteJoinTitle: {
+    uz: 'Jamoaga qo‘shilish',
+    ru: 'Присоединиться к команде',
+    en: 'Join the team',
+  },
+  inviteJoinSubtitle: {
+    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Hisob oching (parol yoki Google).',
+    ru: '{company} приглашает вас в команду найма. Создайте аккаунт (пароль или Google).',
+    en: '{company} invited you to their hiring team. Create an account with a password or Google.',
+  },
+  inviteInvalid: {
+    uz: 'Taklif havolasi eskirgan yoki noto‘g‘ri. Oddiy ro‘yxatdan o‘tishdan foydalaning.',
+    ru: 'Ссылка приглашения недействительна или устарела. Зарегистрируйтесь обычным способом.',
+    en: 'This invitation link is invalid or expired. You can still register as usual.',
+  },
   imCandidate: { uz: 'Men nomzodman', ru: 'Я кандидат', en: "I'm a candidate" },
   imHiring: { uz: 'Men yollayman', ru: 'Я нанимаю', en: "I'm hiring" },
   companyName: { uz: 'Kompaniya nomi', ru: 'Название компании', en: 'Company name' },
