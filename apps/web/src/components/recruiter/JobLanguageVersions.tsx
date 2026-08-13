@@ -52,6 +52,7 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [drafts, setDrafts] = useState<Partial<Record<Locale, Draft>>>({});
   const [busyLocale, setBusyLocale] = useState<Locale | null>(null);
+  const [autoLocale, setAutoLocale] = useState<Locale | null>(null);
 
   // The parent rebuilds `flash` every render; keep it out of the load deps.
   const flashRef = useRef(onFlash);
@@ -103,6 +104,20 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
       ...prev,
       [locale]: { ...EMPTY_DRAFT, ...prev[locale], ...patch },
     }));
+  }
+
+  async function autoTranslate(locale: Locale) {
+    const langName = t(LOCALE_NAME_KEY[locale]);
+    setAutoLocale(locale);
+    try {
+      await api(`/jobs/${jobId}/translations/${locale}/auto`, { method: 'POST' });
+      onFlash(t('rec.langVersionSaved').replace('{lang}', langName));
+      await load();
+    } catch (err) {
+      onFlash(err instanceof Error ? err.message : t('ui.translateFailed'), 'error');
+    } finally {
+      setAutoLocale(null);
+    }
   }
 
   async function saveVersion(locale: Locale) {
@@ -185,7 +200,7 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
           {LOCALES.filter((locale) => locale !== data.sourceLocale).map((locale) => {
             const saved = data.translations.find((tr) => tr.locale === locale);
             const draft = drafts[locale] ?? EMPTY_DRAFT;
-            const busy = busyLocale === locale;
+            const busy = busyLocale === locale || autoLocale === locale;
             const langName = t(LOCALE_NAME_KEY[locale]);
             return (
               <div
@@ -255,11 +270,19 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
                 <div className="chips" style={{ marginTop: '0.6rem' }}>
                   <button
                     type="button"
+                    className="chip"
+                    disabled={busy}
+                    onClick={() => autoTranslate(locale)}
+                  >
+                    {autoLocale === locale ? t('ui.translating') : t('rec.langVersionAutoTranslate')}
+                  </button>
+                  <button
+                    type="button"
                     className="chip active"
                     disabled={busy}
                     onClick={() => saveVersion(locale)}
                   >
-                    {busy ? t('saving') : t('rec.langVersionSave')}
+                    {busyLocale === locale ? t('saving') : t('rec.langVersionSave')}
                   </button>
                   {saved && (
                     <button

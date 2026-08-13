@@ -39,6 +39,7 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [drafts, setDrafts] = useState<Partial<Record<Locale, string>>>({});
   const [busyLocale, setBusyLocale] = useState<Locale | null>(null);
+  const [autoLocale, setAutoLocale] = useState<Locale | null>(null);
 
   const flashRef = useRef(onFlash);
   useEffect(() => {
@@ -71,6 +72,20 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function autoTranslate(locale: Locale) {
+    const langName = t(LOCALE_NAME_KEY[locale]);
+    setAutoLocale(locale);
+    try {
+      await api(`/companies/${companyId}/translations/${locale}/auto`, { method: 'POST' });
+      onFlash(t('rec.langVersionSaved').replace('{lang}', langName));
+      await load();
+    } catch (err) {
+      onFlash(err instanceof Error ? err.message : t('ui.translateFailed'), 'error');
+    } finally {
+      setAutoLocale(null);
+    }
+  }
 
   async function saveVersion(locale: Locale) {
     const description = (drafts[locale] ?? '').trim();
@@ -135,7 +150,7 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
           </span>
           {LOCALES.filter((locale) => locale !== data.sourceLocale).map((locale) => {
             const saved = data.translations.find((tr) => tr.locale === locale);
-            const busy = busyLocale === locale;
+            const busy = busyLocale === locale || autoLocale === locale;
             const langName = t(LOCALE_NAME_KEY[locale]);
             return (
               <div
@@ -156,6 +171,11 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
                         : t('rec.langVersionHuman')}
                   </span>
                 </div>
+                {saved?.isMachine && (
+                  <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.8rem' }}>
+                    {t('rec.langVersionMachineNote')}
+                  </p>
+                )}
                 <label style={{ display: 'block', marginTop: '0.6rem' }}>
                   <LabelText required>{t('rec.description')}</LabelText>
                   <textarea
@@ -171,11 +191,19 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
                 <div className="chips" style={{ marginTop: '0.6rem' }}>
                   <button
                     type="button"
+                    className="chip"
+                    disabled={busy || !data.source.description?.trim()}
+                    onClick={() => autoTranslate(locale)}
+                  >
+                    {autoLocale === locale ? t('ui.translating') : t('rec.langVersionAutoTranslate')}
+                  </button>
+                  <button
+                    type="button"
                     className="chip active"
                     disabled={busy}
                     onClick={() => saveVersion(locale)}
                   >
-                    {busy ? t('saving') : t('rec.langVersionSave')}
+                    {busyLocale === locale ? t('saving') : t('rec.langVersionSave')}
                   </button>
                   {saved && (
                     <button

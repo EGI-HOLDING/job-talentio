@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { DEFAULT_LOCALE, isLocale } from './locale';
 import type { Locale } from './locale';
+import { effectiveSourceLocale } from './detect-locale';
 
 export type ContentTranslation<T> = T & {
   locale: string;
@@ -59,6 +60,38 @@ export function resolveContent<T>(
   if (exact) return result(stripMeta(exact), requested, exact.isMachine);
 
   return result(original, source, false);
+}
+
+export type ResolvedUgc<T> = Omit<ResolvedContent<T>, 'contentLocale'> & {
+  contentLocale: Locale | null;
+};
+
+/**
+ * Same as resolveContent, but never invents Uzbek when the stored locale is a
+ * leftover default and the text is clearly another language.
+ */
+export function resolveUgcContent<T>(
+  original: T,
+  storedLocale: string | null | undefined,
+  translations: Array<ContentTranslation<T>>,
+  requested: Locale,
+  detectFrom: string,
+): ResolvedUgc<T> {
+  const source = effectiveSourceLocale(storedLocale, detectFrom);
+  if (!source) {
+    const available = new Set<Locale>();
+    for (const t of translations) {
+      if (isLocale(t.locale)) available.add(t.locale);
+    }
+    return {
+      content: original,
+      contentLocale: null,
+      isMachineTranslated: false,
+      isFallback: false,
+      availableLocales: [...available],
+    };
+  }
+  return resolveContent(original, source, translations, requested);
 }
 
 function stripMeta<T>(translation: ContentTranslation<T>): T {

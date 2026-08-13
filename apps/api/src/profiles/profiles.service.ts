@@ -31,9 +31,9 @@ import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
 import { normalizeJobTitleKey, profileRoleTexts, resolveJobTitle } from '../common/title-resolve';
-import { detectLocale } from '../common/i18n/detect-locale';
-import { resolveContent } from '../common/i18n/content-locale';
-import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import { detectLocale, effectiveSourceLocale } from '../common/i18n/detect-locale';
+import { resolveUgcContent } from '../common/i18n/content-locale';
+import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { TranslationService } from '../translation/translation.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
@@ -117,9 +117,11 @@ export class ProfilesService {
     contentLocale?: string | null,
     headline?: string | null,
     summary?: string | null,
-  ): Locale {
-    if (isLocale(contentLocale)) return contentLocale;
-    return detectLocale([headline, summary].filter(Boolean).join('\n')) ?? DEFAULT_LOCALE;
+  ): Locale | null {
+    return effectiveSourceLocale(
+      contentLocale,
+      [headline, summary].filter(Boolean).join('\n'),
+    );
   }
 
   /** List/pipeline cards only need a localized headline when a cache row exists. */
@@ -132,16 +134,16 @@ export class ProfilesService {
   >(profile: T, locale: Locale): T {
     const { translations, ...rest } = profile;
     if (!translations?.length) return rest as T;
-    const source = this.sourceNarrativeLocale(rest.contentLocale, rest.headline, null);
-    const resolved = resolveContent(
+    const resolved = resolveUgcContent(
       { headline: rest.headline ?? '' },
-      source,
+      rest.contentLocale,
       translations.map((row) => ({
         locale: row.locale,
         headline: row.headline ?? '',
         isMachine: row.isMachine,
       })),
       locale,
+      rest.headline ?? '',
     );
     return { ...rest, headline: resolved.content.headline || rest.headline } as T;
   }
@@ -175,9 +177,9 @@ export class ProfilesService {
   >(profile: T, locale: Locale) {
     const { translations = [], ...rest } = profile;
     const source = this.sourceNarrativeLocale(rest.contentLocale, rest.headline, rest.summary);
-    const resolved = resolveContent(
+    const resolved = resolveUgcContent(
       { headline: rest.headline ?? '', summary: rest.summary ?? '' },
-      source,
+      rest.contentLocale,
       translations.map((row) => ({
         locale: row.locale,
         headline: row.headline ?? '',
@@ -185,13 +187,14 @@ export class ProfilesService {
         isMachine: row.isMachine,
       })),
       locale,
+      [rest.headline, rest.summary].filter(Boolean).join('\n'),
     );
 
     let anyFallback = resolved.isFallback && Boolean(rest.headline?.trim() || rest.summary?.trim());
 
     const experiences = rest.experiences.map((exp) => {
       const { translations: expT = [], ...e } = exp;
-      const r = resolveContent(
+      const r = resolveUgcContent(
         { title: e.title, description: e.description ?? '' },
         source,
         expT.map((row) => ({
@@ -201,6 +204,7 @@ export class ProfilesService {
           isMachine: row.isMachine,
         })),
         locale,
+        `${e.title}\n${e.description ?? ''}`,
       );
       if (r.isFallback && (e.title.trim() || e.description?.trim())) anyFallback = true;
       return {
@@ -217,7 +221,7 @@ export class ProfilesService {
       if (!e.field?.trim()) {
         return { ...e, contentLocale: source, isMachineTranslated: false };
       }
-      const r = resolveContent(
+      const r = resolveUgcContent(
         { field: e.field },
         source,
         eduT.map((row) => ({
@@ -226,6 +230,7 @@ export class ProfilesService {
           isMachine: row.isMachine,
         })),
         locale,
+        e.field,
       );
       if (r.isFallback) anyFallback = true;
       return {
@@ -244,7 +249,7 @@ export class ProfilesService {
       isMachineTranslated: resolved.isMachineTranslated,
       experiences,
       educations,
-      canMachineTranslate: this.translation.enabled && anyFallback,
+      canMachineTranslate: this.translation.enabled && anyFallback && Boolean(source),
     };
   }
 

@@ -16,9 +16,9 @@ import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { sanitizeStoredText } from '../common/text-sanitize';
-import { contentHash as translationSourceHash, resolveContent } from '../common/i18n/content-locale';
-import { detectLocale } from '../common/i18n/detect-locale';
-import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import { contentHash as translationSourceHash, resolveUgcContent } from '../common/i18n/content-locale';
+import { effectiveSourceLocale, pickStoredLocale } from '../common/i18n/detect-locale';
+import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { emailLocale } from '../common/i18n/email-locale';
 import { TranslationService } from '../translation/translation.service';
@@ -233,11 +233,12 @@ export class CompaniesService {
       ...described,
       // Listings on this page follow the same language rules as job search.
       jobPosts: company.jobPosts.map(({ translations: jobTranslations, ...job }) => {
-        const resolved = resolveContent(
+        const resolved = resolveUgcContent(
           { title: job.title, description: job.description },
           job.locale,
           jobTranslations,
           locale,
+          `${job.title}\n${job.description}`,
         );
         return {
           ...job,
@@ -264,11 +265,12 @@ export class CompaniesService {
     translations: Array<{ locale: string; description: string; isMachine: boolean }>,
     locale: Locale,
   ) {
-    const resolved = resolveContent(
+    const resolved = resolveUgcContent(
       { description: company.description ?? '' },
       company.locale,
       translations,
       locale,
+      company.description ?? '',
     );
     return {
       ...company,
@@ -277,7 +279,10 @@ export class CompaniesService {
       isMachineTranslated: resolved.isMachineTranslated,
       availableLocales: resolved.availableLocales,
       canMachineTranslate:
-        this.translation.enabled && resolved.isFallback && Boolean(company.description),
+        this.translation.enabled &&
+        resolved.isFallback &&
+        Boolean(company.description) &&
+        Boolean(resolved.contentLocale),
     };
   }
 
@@ -289,7 +294,8 @@ export class CompaniesService {
       select: { locale: true, description: true, isMachine: true },
     });
     return {
-      sourceLocale: company.locale,
+      sourceLocale:
+        effectiveSourceLocale(company.locale, company.description ?? '') ?? company.locale,
       source: { description: company.description },
       translations,
     };
@@ -302,7 +308,8 @@ export class CompaniesService {
     description: string,
   ) {
     const { company } = await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
-    if (locale === company.locale) {
+    const sourceLocale = effectiveSourceLocale(company.locale, company.description ?? '');
+    if (sourceLocale && locale === sourceLocale) {
       throw new BadRequestException(
         'This is the language the profile was written in; edit the company instead',
       );
@@ -340,6 +347,24 @@ export class CompaniesService {
     return { status: result.status, company: await this.getBySlug(slug, locale) };
   }
 
+  async autoTranslate(user: AuthUser, companyId: string, locale: Locale) {
+    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
+    const result = await this.translation.translateCompany(companyId, locale);
+    if (result.status === 'failed') {
+      throw new BadRequestException(result.reason);
+    }
+    if (result.status === 'disabled') {
+      throw new BadRequestException('Translation is not configured');
+    }
+    if (result.status === 'budget-exceeded') {
+      throw new BadRequestException('Translation budget exceeded');
+    }
+    if (result.status === 'unsupported') {
+      throw new BadRequestException('This language cannot be translated');
+    }
+    return this.listTranslations(user, companyId);
+  }
+
   async update(
     user: AuthUser,
     companyId: string,
@@ -353,7 +378,7 @@ export class CompaniesService {
       locale?: string;
     },
   ) {
-    await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
+    const { company } = await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     if (data.name) {
       await this.assertCompanyNameAvailable(data.name, companyId);
     }
@@ -379,15 +404,20 @@ export class CompaniesService {
     }
     const description =
       data.description !== undefined ? sanitizeStoredText(data.description) : undefined;
+    const nextDescription = description !== undefined ? description : company.description;
 
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
         name: data.name !== undefined ? sanitizeStoredText(data.name) : undefined,
         description,
-        // Recording the language the blurb is written in keeps readers in other
-        // languages from being told it is already theirs.
-        locale: this.descriptionLocale(description, data.locale),
+        // Detected language wins so a leftover schema default of uz cannot stick.
+        locale:
+          pickStoredLocale({
+            text: nextDescription,
+            explicit: data.locale,
+            existing: company.locale,
+          }) ?? undefined,
         website: data.website || null,
         cityId,
         industryId,
@@ -395,12 +425,6 @@ export class CompaniesService {
       },
       include: { subscription: true, city: true, industry: true },
     });
-  }
-
-  private descriptionLocale(description?: string, explicit?: string): Locale | undefined {
-    if (explicit && isLocale(explicit)) return explicit;
-    if (!description) return undefined;
-    return detectLocale(description) ?? undefined;
   }
 
   async uploadLogo(user: AuthUser, companyId: string, file: Express.Multer.File) {
