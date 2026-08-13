@@ -234,9 +234,18 @@ Staging domains (single-level hostnames for Cloudflare Universal SSL): `https://
 NEXT_PUBLIC_API_URL=https://api.jobtalent.io
 NEXT_PUBLIC_ADMIN_URL=https://admin.jobtalent.io   # web only
 NEXT_PUBLIC_APP_NAME=Job Talentio
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=<web-oauth-client-id>
+NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=<bot-username-without-at>
 ```
 
 After changing `NEXT_PUBLIC_*`, **redeploy** web/admin so values bake into the client bundle.
+
+**Telegram Login Widget:** one bot per domain (BotFather `/setdomain`). Staging example: bot `JobTalentioStagingBot`, domain `staging.jobtalent.io`.
+
+1. [@BotFather](https://t.me/BotFather) → `/newbot` → copy the HTTP API token (Railway `TELEGRAM_BOT_TOKEN` on **api** only; never git).
+2. Username without `@` → `TELEGRAM_BOT_USERNAME` (api) and `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` (web, build-time).
+3. Bind the domain via `/mybots` → select the bot → **Bot Settings** → **Domain** (do not type the bot name after `/setdomain`; that yields "Invalid bot selected"). Staging: `staging.jobtalent.io`. Production: a **second** bot with `jobtalent.io`.
+4. Open `t.me/<bot>` → Start, then test on the HTTPS origin that matches `/setdomain`.
 
 Railway sets `PORT` automatically; apps already listen on `PORT`.
 

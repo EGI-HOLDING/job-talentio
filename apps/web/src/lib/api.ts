@@ -24,6 +24,7 @@ export type AuthSession = {
     locale?: string;
     avatarUrl?: string | null;
     emailVerified?: boolean;
+    telegramLinked?: boolean;
     memberships?: Array<{ companyId: string; role: string }>;
     employeeProfileId?: string | null;
   };

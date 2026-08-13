@@ -6,6 +6,7 @@ import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useEnumLabel, useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
+import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 
 type Section = 'account' | 'preferences' | 'privacy' | 'security';
 
@@ -436,6 +437,27 @@ export default function SettingsPage() {
                 </label>
                 <button type="submit">{t('changePassword')}</button>
               </form>
+
+              <h3 style={{ marginTop: '2rem' }}>{t('telegramConnectTitle')}</h3>
+              {session.user.telegramLinked ? (
+                <p className="muted" style={{ marginTop: 0 }}>
+                  {t('telegramConnected')}
+                </p>
+              ) : (
+                <>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('telegramConnectHint')}
+                  </p>
+                  <TelegramSignIn
+                    mode="connect"
+                    onConnected={() => {
+                      const s = getSession();
+                      if (s) setSession(s);
+                      setMsg(t('telegramConnected'));
+                    }}
+                  />
+                </>
+              )}
 
               <h3 style={{ marginTop: '2rem' }}>{t('ui.changeEmail')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>

@@ -50,6 +50,39 @@ export const googleOAuthSchema = z
     }
   });
 
+/** Telegram Login Widget payload. role/email/companyName only needed for first sign-in. */
+export const telegramOAuthSchema = z
+  .object({
+    id: z.union([z.number(), z.string()]).transform((v) => String(v)),
+    first_name: z.string().trim().min(1).max(128),
+    last_name: z.string().trim().max(128).optional(),
+    username: z.string().trim().max(64).optional(),
+    photo_url: z.string().trim().max(500).optional(),
+    auth_date: z.coerce.number().int().positive(),
+    hash: z.string().min(32).max(128),
+    email: z.string().trim().email().optional(),
+    role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
+    companyName: z.string().trim().min(2).max(160).optional(),
+    locale: z.enum(['uz', 'ru', 'en']).optional(),
+    inviteToken: z.string().trim().min(20).max(200).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role && !data.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'Email is required to create an account with Telegram',
+      });
+    }
+    if (data.role === 'RECRUITER' && !data.inviteToken && (data.companyName?.trim() ?? '').length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['companyName'],
+        message: 'Company name is required for recruiter accounts',
+      });
+    }
+  });
+
 export const verifyEmailSchema = z.object({
   token: z.string().min(20).max(200),
 });

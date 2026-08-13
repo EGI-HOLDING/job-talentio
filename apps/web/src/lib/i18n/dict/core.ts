@@ -587,9 +587,9 @@ export const core = {
     en: 'Join the team',
   },
   inviteJoinSubtitle: {
-    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Hisob oching (parol yoki Google).',
-    ru: '{company} приглашает вас в команду найма. Создайте аккаунт (пароль или Google).',
-    en: '{company} invited you to their hiring team. Create an account with a password or Google.',
+    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Hisob oching (parol, Google yoki Telegram).',
+    ru: '{company} приглашает вас в команду найма. Создайте аккаунт (пароль, Google или Telegram).',
+    en: '{company} invited you to their hiring team. Create an account with a password, Google, or Telegram.',
   },
   inviteInvalid: {
     uz: 'Taklif havolasi eskirgan yoki noto‘g‘ri. Oddiy ro‘yxatdan o‘tishdan foydalaning.',
@@ -605,6 +605,26 @@ export const core = {
     uz: 'Hisob turini tanlang',
     ru: 'Выберите тип аккаунта',
     en: 'Choose your account type',
+  },
+  telegramSignInFailed: {
+    uz: 'Telegram orqali kirib bo‘lmadi',
+    ru: 'Не удалось войти через Telegram',
+    en: 'Telegram sign-in failed',
+  },
+  telegramConnectTitle: {
+    uz: 'Telegram',
+    ru: 'Telegram',
+    en: 'Telegram',
+  },
+  telegramConnected: {
+    uz: 'Telegram hisobi ulangan.',
+    ru: 'Аккаунт Telegram подключён.',
+    en: 'Telegram is connected.',
+  },
+  telegramConnectHint: {
+    uz: 'Mavjud hisobga Telegram orqali kirishni ulang.',
+    ru: 'Подключите Telegram, чтобы входить в этот аккаунт.',
+    en: 'Connect Telegram to sign in to this account next time.',
   },
   verifyEmailTitle: {
     uz: 'Emailingizni tasdiqlang',

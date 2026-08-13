@@ -19,6 +19,7 @@ import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { UserRole } from '@prisma/client';
 import { CompaniesService } from '../companies/companies.service';
+import { telegramFullName, verifyTelegramLogin } from './telegram-login';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 min between sends
@@ -131,6 +132,7 @@ export class AuthService {
         locale: user.locale,
         avatarUrl: user.avatarUrl,
         emailVerified: user.emailVerified,
+        telegramLinked: Boolean(user.telegramId),
         memberships: user.memberships,
         employeeProfileId: user.employeeProfile?.id ?? null,
       },
@@ -654,11 +656,181 @@ export class AuthService {
     };
   }
 
-  /** Optional Telegram Login stub */
-  async oauthTelegramStub() {
-    throw new BadRequestException(
-      'Telegram sign-in is not available yet. Please use email and password.',
-    );
+  private parseTelegramAuth(input: {
+    id: string;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date: number;
+    hash: string;
+  }) {
+    const botToken = (this.config.get<string>('TELEGRAM_BOT_TOKEN') || '').trim();
+    if (!botToken) {
+      throw new BadRequestException('Telegram sign-in is not available');
+    }
+    const payload = {
+      id: String(input.id),
+      first_name: input.first_name,
+      last_name: input.last_name || undefined,
+      username: input.username || undefined,
+      photo_url: input.photo_url || undefined,
+      auth_date: input.auth_date,
+      hash: input.hash,
+    };
+    if (!verifyTelegramLogin(payload, botToken)) {
+      throw new UnauthorizedException('Telegram login data is invalid or expired');
+    }
+    return {
+      telegramId: payload.id,
+      fullName: telegramFullName(payload) || `Telegram ${payload.id}`,
+      avatarUrl: payload.photo_url || null,
+      username: payload.username,
+    };
+  }
+
+  /**
+   * Telegram Login Widget. Returning users get a session immediately.
+   * New users must send email + role (Telegram does not provide an email).
+   */
+  async oauthTelegram(input: {
+    id: string;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date: number;
+    hash: string;
+    email?: string;
+    role?: 'EMPLOYEE' | 'RECRUITER';
+    companyName?: string;
+    locale?: string;
+    inviteToken?: string;
+  }) {
+    const tg = this.parseTelegramAuth(input);
+    const inviteToken = input.inviteToken?.trim();
+
+    let user = await this.prisma.user.findUnique({ where: { telegramId: tg.telegramId } });
+    if (user) {
+      if (user.isBanned) throw new ForbiddenException('Account banned');
+      if (inviteToken) {
+        await this.acceptInviteOnExistingUser(inviteToken, user.email, user.id);
+      }
+      return this.tokenFor(user.id);
+    }
+
+    if (!input.role || !input.email) {
+      return {
+        requiresRegistration: true as const,
+        fullName: tg.fullName,
+        username: tg.username ?? null,
+      };
+    }
+
+    const email = input.email.trim().toLowerCase();
+    const byEmail = await this.prisma.user.findUnique({ where: { email } });
+    if (byEmail) {
+      throw new ConflictException(
+        'An account with this email already exists. Sign in and connect Telegram from Settings.',
+      );
+    }
+
+    if (inviteToken) {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            telegramId: tg.telegramId,
+            fullName: tg.fullName,
+            avatarUrl: tg.avatarUrl,
+            role: 'RECRUITER',
+            locale: input.locale ?? 'uz',
+            emailVerified: false,
+          },
+        });
+        await this.companies.consumeInvite(tx, inviteToken, email, newUser.id);
+        return newUser;
+      });
+      return this.tokenFor(created.id);
+    }
+
+    if (input.role === 'RECRUITER') {
+      const name = input.companyName?.trim() ?? '';
+      if (name.length < 2) {
+        throw new BadRequestException('Company name is required for recruiter accounts');
+      }
+      await this.assertCompanyNameAvailable(name);
+    }
+
+    await this.assertEmailAvailable(email);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          telegramId: tg.telegramId,
+          fullName: tg.fullName,
+          avatarUrl: tg.avatarUrl,
+          role: input.role as UserRole,
+          locale: input.locale ?? 'uz',
+          emailVerified: false,
+        },
+      });
+
+      if (input.role === 'EMPLOYEE') {
+        await tx.employeeProfile.create({ data: { userId: newUser.id } });
+      }
+
+      if (input.role === 'RECRUITER') {
+        const name = input.companyName!.trim();
+        let slug = slugify(name) || `company-${Date.now()}`;
+        const slugExists = await tx.company.findUnique({ where: { slug } });
+        if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
+        const company = await tx.company.create({ data: { name, slug } });
+        await tx.subscription.create({
+          data: { companyId: company.id, plan: 'FREE', status: 'ACTIVE' },
+        });
+        await tx.companyMember.create({
+          data: { companyId: company.id, userId: newUser.id, role: 'OWNER' },
+        });
+      }
+
+      return newUser;
+    });
+
+    return this.tokenFor(created.id);
+  }
+
+  /** Logged-in user attaches a Telegram identity (Settings). */
+  async connectTelegram(
+    userId: string,
+    input: {
+      id: string;
+      first_name: string;
+      last_name?: string;
+      username?: string;
+      photo_url?: string;
+      auth_date: number;
+      hash: string;
+    },
+  ) {
+    const tg = this.parseTelegramAuth(input);
+    const taken = await this.prisma.user.findUnique({ where: { telegramId: tg.telegramId } });
+    if (taken && taken.id !== userId) {
+      throw new ConflictException('This Telegram account is already linked to another user');
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.isBanned) throw new ForbiddenException('Account banned');
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        telegramId: tg.telegramId,
+        ...(tg.avatarUrl && !user.avatarUrl ? { avatarUrl: tg.avatarUrl } : {}),
+      },
+    });
+    return this.tokenFor(userId);
   }
 
   /** Always returns ok — do not leak whether the email exists. */
