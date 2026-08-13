@@ -236,24 +236,34 @@ export const MESSAGES = {
     en: '{title} - {company} ({city})\n{url}',
   },
   'telegram.link.ok': {
-    uz: 'Telegram hisobingiz Job Talentio bilan ulandi. /stop yozsangiz uziladi.',
-    ru: 'Telegram привязан к Job Talentio. Напишите /stop, чтобы отключить.',
-    en: 'Telegram is linked to Job Talentio. Send /stop to unlink.',
+    uz: 'Telegram hisobingiz Job Talentio bilan ulandi. Ogohlantirishlarni kabinetda yoqing. /stop yozsangiz kirish ham uziladi.',
+    ru: 'Telegram привязан к Job Talentio. Включите оповещения в кабинете. /stop также отключает вход.',
+    en: 'Telegram is linked to Job Talentio. Enable Telegram on a job alert in your dashboard. /stop also turns off Telegram sign-in.',
+  },
+  'telegram.link.already': {
+    uz: 'Bu Telegram allaqachon Job Talentio bilan ulangan. Ogohlantirishlarni kabinetda yoqing. /stop yozsangiz uziladi.',
+    ru: 'Этот Telegram уже привязан к Job Talentio. Включите оповещения в кабинете. /stop отключает связь.',
+    en: 'This Telegram is already connected to Job Talentio. Enable Telegram on a job alert in your dashboard. Send /stop to unlink.',
+  },
+  'telegram.link.taken': {
+    uz: 'Bu Telegram boshqa Job Talentio hisobiga ulangan. Avval o‘sha hisobdan uzing yoki boshqa Telegramdan kiring.',
+    ru: 'Этот Telegram уже привязан к другому аккаунту Job Talentio. Сначала отвяжите его там или войдите с другого Telegram.',
+    en: 'This Telegram is already used by another Job Talentio account. Unlink it there first, or connect a different Telegram.',
   },
   'telegram.link.expired': {
-    uz: 'Bu havola eskirgan. Job Talentio sozlamalaridan yangi havola oling.',
-    ru: 'Ссылка устарела. Создайте новую в настройках Job Talentio.',
-    en: 'This link expired. Open Job Talentio settings and try again.',
+    uz: 'Bu havola eskirgan. Job Talentio sozlamalarida, Xavfsizlik bo‘limida qayta ulaning.',
+    ru: 'Ссылка устарела. Подключите Telegram снова в настройках, раздел Безопасность.',
+    en: 'This link expired. Connect Telegram again in Settings, Security.',
   },
   'telegram.link.help': {
-    uz: 'Job Talentio ogohlantirishlari. Hisobni ulash uchun kabinetdagi havolani oching.',
-    ru: 'Оповещения Job Talentio. Откройте ссылку в кабинете, чтобы привязать аккаунт.',
-    en: 'Job Talentio alerts. Open the link from your dashboard to connect this chat.',
+    uz: 'Job Talentio ogohlantirishlari. Avval sozlamalarda, Xavfsizlik bo‘limida Telegramni ulang, keyin shu yerda Start ni bosing.',
+    ru: 'Оповещения Job Talentio. Сначала подключите Telegram в настройках, раздел Безопасность, затем нажмите Start здесь.',
+    en: 'Job Talentio alerts. Connect Telegram in Settings, Security, then press Start here so we can message you.',
   },
   'telegram.link.stopped': {
-    uz: 'Telegram uzildi. Qayta ulash uchun kabinetdagi havolani oching.',
-    ru: 'Telegram отключён. Чтобы привязать снова, откройте ссылку в кабинете.',
-    en: 'Telegram unlinked. Open the link from your dashboard to connect again.',
+    uz: 'Telegram uzildi. Telegram orqali kirish ham o‘chdi. Qayta ulash: sozlamalar, Xavfsizlik.',
+    ru: 'Telegram отключён. Вход через Telegram тоже выключен. Подключить снова: настройки, Безопасность.',
+    en: 'Telegram unlinked. Telegram sign-in is off too. Connect again in Settings, Security.',
   },
 
   'email.applicationStatus.subject': {
