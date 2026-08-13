@@ -4,13 +4,16 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { backfillEgiHospitalityDemo } from '../common/egi-hospitality-demo';
+import { createDemoLogoUploaderFromEnv } from '../common/demo-logo-storage';
 
 async function main() {
   const prisma = new PrismaClient();
   try {
-    const result = await backfillEgiHospitalityDemo(prisma);
+    const result = await backfillEgiHospitalityDemo(prisma, {
+      logoUploader: createDemoLogoUploaderFromEnv(),
+    });
     console.log(
-      `EGI hospitality demo: companies=${result.companies} jobsCreated=${result.jobs}`,
+      `EGI hospitality demo: companies=${result.companies} jobsCreated=${result.jobs} logosUploaded=${result.logosUploaded} logosUpdated=${result.logosUpdated}`,
     );
   } finally {
     await prisma.$disconnect();

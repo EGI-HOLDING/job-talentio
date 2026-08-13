@@ -46,6 +46,7 @@ export async function needsCompanyLogoBackfill(
     select: { slug: true, logoUrl: true },
   });
   if (!rows.length) return false;
+  if (rows.length < slugs.length) return true;
   return rows.some((r) => {
     const expected = expectedDemoLogoUrl(uploader, r.slug);
     const legacy = legacyStaticCompanyLogoPath(r.slug);
