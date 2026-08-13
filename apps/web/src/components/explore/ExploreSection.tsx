@@ -9,6 +9,8 @@ type ExploreSectionProps = {
   viewAllHref: string;
   viewAllLabel: string;
   gridClassName?: string;
+  /** Skip the default explore-grid wrapper (custom layouts such as a carousel). */
+  bare?: boolean;
   children: ReactNode;
 };
 
@@ -18,6 +20,7 @@ export function ExploreSection({
   viewAllHref,
   viewAllLabel,
   gridClassName,
+  bare,
   children,
 }: ExploreSectionProps) {
   return (
@@ -32,7 +35,7 @@ export function ExploreSection({
           <span aria-hidden>→</span>
         </Link>
       </div>
-      <div className={`explore-grid ${gridClassName || ''}`.trim()}>{children}</div>
+      {bare ? children : <div className={`explore-grid ${gridClassName || ''}`.trim()}>{children}</div>}
     </section>
   );
 }

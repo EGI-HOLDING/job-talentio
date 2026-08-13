@@ -250,6 +250,16 @@ export const core = {
     ru: 'VIP работодатели - самые активные наниматели',
     en: 'VIP employers featured for hiring',
   },
+  topCompaniesCarousel: {
+    uz: 'Top kompaniyalar karuseli',
+    ru: 'Карусель топ компаний',
+    en: 'Top companies carousel',
+  },
+  topCompaniesGoToSlide: {
+    uz: '{n}-guruhni ko‘rsatish',
+    ru: 'Показать группу {n}',
+    en: 'Show group {n}',
+  },
   vipBadge: {
     uz: 'VIP',
     ru: 'VIP',
