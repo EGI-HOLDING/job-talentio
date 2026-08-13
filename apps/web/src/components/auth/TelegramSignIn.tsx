@@ -7,9 +7,9 @@ import { useI18n } from '@/lib/i18n';
 import { localeHref } from '@/lib/navigation';
 
 const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '';
-const WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const TELEGRAM_OAUTH = 'https://oauth.telegram.org';
+const LOGOUT_WAIT_MS = 2000;
 
 type TelegramUser = {
   id: number;
@@ -24,52 +24,6 @@ type TelegramUser = {
 type TelegramResponse =
   | { requiresRegistration: true; fullName: string; username: string | null }
   | { accessToken: string; user: { role: string; locale?: string } };
-
-type TelegramAuthFn = (
-  options: { bot_id: string | number; request_access?: string; lang?: string },
-  callback: (user: TelegramUser | false) => void,
-) => void;
-
-declare global {
-  interface Window {
-    Telegram?: { Login?: { auth?: TelegramAuthFn } };
-  }
-}
-
-let sdkPromise: Promise<void> | null = null;
-
-function loadTelegramSdk(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if (window.Telegram?.Login?.auth) return Promise.resolve();
-  if (sdkPromise) return sdkPromise;
-  sdkPromise = new Promise((resolve, reject) => {
-    const done = () => {
-      if (window.Telegram?.Login?.auth) resolve();
-      else reject(new Error('Telegram SDK failed to load'));
-    };
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${WIDGET_SRC}"]`);
-    if (existing) {
-      if (window.Telegram?.Login?.auth) {
-        resolve();
-        return;
-      }
-      existing.addEventListener('load', done, { once: true });
-      existing.addEventListener(
-        'error',
-        () => reject(new Error('Telegram SDK failed to load')),
-        { once: true },
-      );
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = WIDGET_SRC;
-    script.async = true;
-    script.onload = done;
-    script.onerror = () => reject(new Error('Telegram SDK failed to load'));
-    document.head.appendChild(script);
-  });
-  return sdkPromise;
-}
 
 function redirectAfterLogin(role: string) {
   if (role === 'RECRUITER') return '/';
@@ -105,22 +59,43 @@ function telegramPopupFeatures() {
   return `width=${width},height=${height},left=${left},top=${top},status=0,location=1,menubar=0,toolbar=0`;
 }
 
-function telegramLogoutUrl(botId: string) {
+function telegramAuthUrl(botId: string, lang: string) {
   const origin = window.location.origin;
-  const q = new URLSearchParams({ bot_id: botId, origin });
-  return `${TELEGRAM_OAUTH}/auth/logout?${q.toString()}`;
+  const q = new URLSearchParams({
+    bot_id: botId,
+    origin,
+    request_access: 'write',
+    return_to: origin,
+    prompt: 'login',
+  });
+  if (lang) q.set('lang', lang);
+  return `${TELEGRAM_OAUTH}/auth?${q.toString()}`;
 }
 
-function writeHoldingPage(popup: Window) {
-  try {
-    popup.document.open();
-    popup.document.write(
-      '<!doctype html><html><head><meta charset="utf-8"><title>Telegram</title></head><body style="font-family:sans-serif;padding:1.5rem;color:#334155">Telegram...</body></html>',
-    );
-    popup.document.close();
-  } catch {
-    /* popup already navigated or closed */
+function telegramBridgeUrl(botId: string) {
+  const origin = window.location.origin;
+  const q = new URLSearchParams({ bot_id: botId, origin });
+  return `${origin}/telegram-popup.html?${q.toString()}`;
+}
+
+function parseTelegramAuthMessage(event: MessageEvent): TelegramUser | null {
+  if (event.origin !== TELEGRAM_OAUTH) return null;
+  let data: unknown = event.data;
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
   }
+  if (!data || typeof data !== 'object') return null;
+  const payload = data as { event?: string; result?: unknown };
+  if (payload.event !== 'auth_result') return null;
+  const user = payload.result;
+  if (!user || typeof user !== 'object') return null;
+  const parsed = user as TelegramUser;
+  if (typeof parsed.id !== 'number' || !parsed.hash || !parsed.first_name) return null;
+  return parsed;
 }
 
 export function TelegramSignIn({
@@ -134,7 +109,6 @@ export function TelegramSignIn({
 } = {}) {
   const { t, locale } = useI18n();
   const [botId, setBotId] = useState<string | null>(null);
-  const [sdkReady, setSdkReady] = useState(false);
   const [widgetUser, setWidgetUser] = useState<TelegramUser | null>(null);
   const [pendingUser, setPendingUser] = useState<TelegramUser | null>(null);
   const [needsRole, setNeedsRole] = useState<{ fullName: string; username: string | null } | null>(
@@ -145,13 +119,16 @@ export function TelegramSignIn({
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [awaitingRelogin, setAwaitingRelogin] = useState(false);
   const aliveRef = useRef(true);
+  const attemptRef = useRef(0);
+  const rejectIdRef = useRef<number | null>(null);
+  const stopListenRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      stopListenRef.current?.();
     };
   }, []);
 
@@ -221,11 +198,6 @@ export function TelegramSignIn({
         if (!cancelled && r.available && r.botId) setBotId(r.botId);
       })
       .catch(() => undefined);
-    loadTelegramSdk()
-      .then(() => {
-        if (!cancelled) setSdkReady(true);
-      })
-      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -234,56 +206,77 @@ export function TelegramSignIn({
   const startTelegramAuth = useCallback(() => {
     if (!botId || busy) return;
     setError('');
-    setAwaitingRelogin(false);
-    const auth = window.Telegram?.Login?.auth;
-    if (!auth) {
-      setError(t('telegramSignInFailed'));
-      return;
-    }
-
-    const name = telegramWindowName(botId);
-    const features = telegramPopupFeatures();
-    const nativeOpen = window.open.bind(window);
-    const popup = nativeOpen('about:blank', name, features);
-    if (!popup) {
-      setError(t('telegramPopupBlocked'));
-      return;
-    }
-    writeHoldingPage(popup);
-
-    window.open = ((url: string | URL | undefined, _n?: string, feat?: string) =>
-      nativeOpen(url, name, feat ?? features)) as typeof window.open;
-    try {
-      auth({ bot_id: botId, request_access: 'write', lang: locale }, (user) => {
-        if (!aliveRef.current) return;
-        if (user && typeof user === 'object' && user.hash) {
-          setNeedsRole(null);
-          setWidgetUser(user);
-          setPendingUser(user);
-        }
-      });
-    } finally {
-      window.open = nativeOpen;
-    }
-  }, [botId, busy, locale, t]);
-
-  const switchTelegramAccount = useCallback(() => {
-    if (!botId || busy) return;
     setPendingUser(null);
     setWidgetUser(null);
     setNeedsRole(null);
-    setError('');
-    const popup = window.open(
-      telegramLogoutUrl(botId),
-      telegramWindowName(botId),
-      telegramPopupFeatures(),
-    );
+
+    stopListenRef.current?.();
+    const attempt = ++attemptRef.current;
+    const name = telegramWindowName(botId);
+    const features = telegramPopupFeatures();
+    const popup = window.open(telegramBridgeUrl(botId), name, features);
     if (!popup) {
       setError(t('telegramPopupBlocked'));
       return;
     }
-    setAwaitingRelogin(true);
-  }, [botId, busy, t]);
+
+    let finished = false;
+    let closeTimer = 0;
+    let authTimer = 0;
+
+    const onMessage = (event: MessageEvent) => {
+      const user = parseTelegramAuthMessage(event);
+      if (user) finish(user);
+    };
+
+    const finish = (user: TelegramUser | null) => {
+      if (finished || attempt !== attemptRef.current || !aliveRef.current) return;
+      finished = true;
+      window.removeEventListener('message', onMessage);
+      window.clearInterval(closeTimer);
+      window.clearTimeout(authTimer);
+      stopListenRef.current = null;
+      if (!user) return;
+      if (rejectIdRef.current && user.id === rejectIdRef.current) {
+        setError(t('telegramSameAccount'));
+        return;
+      }
+      rejectIdRef.current = null;
+      setNeedsRole(null);
+      setWidgetUser(user);
+      setPendingUser(user);
+    };
+
+    window.addEventListener('message', onMessage);
+
+    closeTimer = window.setInterval(() => {
+      if (finished || attempt !== attemptRef.current) {
+        window.clearInterval(closeTimer);
+        return;
+      }
+      if (popup.closed) {
+        window.clearInterval(closeTimer);
+        window.setTimeout(() => finish(null), 300);
+      }
+    }, 250);
+
+    authTimer = window.setTimeout(() => {
+      if (finished || attempt !== attemptRef.current || popup.closed) return;
+      window.open(telegramAuthUrl(botId, locale), name, features);
+    }, LOGOUT_WAIT_MS);
+
+    stopListenRef.current = () => {
+      finished = true;
+      window.removeEventListener('message', onMessage);
+      window.clearInterval(closeTimer);
+      window.clearTimeout(authTimer);
+    };
+  }, [botId, busy, locale, t]);
+
+  const switchTelegramAccount = useCallback(() => {
+    if (pendingUser) rejectIdRef.current = pendingUser.id;
+    startTelegramAuth();
+  }, [pendingUser, startTelegramAuth]);
 
   if (!TELEGRAM_BOT) return null;
 
@@ -430,7 +423,7 @@ export function TelegramSignIn({
   }
 
   const showDivider = mode === 'login' && !GOOGLE_CLIENT_ID;
-  const ready = Boolean(botId) && sdkReady;
+  const ready = Boolean(botId);
 
   return (
     <div className="google-signin">
@@ -452,11 +445,15 @@ export function TelegramSignIn({
               d="M21.5 3.2 2.8 10.4c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 11.1-7c.5-.3.9-.1.6.2l-9 8.1-.3 4.8c.4 0 .6-.2.8-.4l2.1-2 4.4 3.2c.8.5 1.4.2 1.6-.7l2.9-13.7c.3-1.2-.4-1.8-1.1-1.5z"
             />
           </svg>
-          {busy ? t('signingIn') : mode === 'connect' ? t('telegramConnectCta') : t('telegramContinue')}
+          {busy
+            ? t('signingIn')
+            : mode === 'connect'
+              ? t('telegramConnectCta')
+              : t('telegramContinue')}
         </button>
       </div>
       <p className="muted" style={{ fontSize: '0.8rem', margin: '0.55rem 0 0', textAlign: 'center' }}>
-        {t(awaitingRelogin ? 'telegramLogoutThenContinue' : 'telegramSwitchHint')}
+        {t('telegramSwitchHint')}
       </p>
       <FormAlert>{error}</FormAlert>
     </div>
