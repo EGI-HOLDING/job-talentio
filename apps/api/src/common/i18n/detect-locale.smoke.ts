@@ -1,8 +1,12 @@
-import { detectLocale } from './detect-locale';
+import { detectLocale, effectiveSourceLocale, pickStoredLocale } from './detect-locale';
 
 const CASES: Array<[string, ReturnType<typeof detectLocale>]> = [
   [
     'Apex Soft is hiring a Backend Developer in Tashkent.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan.\n\nRequirements:\n- Hands-on experience with Go and PostgreSQL\n- 3+ years relevant experience preferred',
+    'en',
+  ],
+  [
+    'Join our team. We are looking for a developer with experience in this role.',
     'en',
   ],
   [
@@ -24,6 +28,25 @@ for (const [text, expected] of CASES) {
     console.error(`detectLocale mismatch: expected ${expected}, got ${actual}\n  ${text.slice(0, 60)}`);
     failed += 1;
   }
+}
+
+const englishBody =
+  'Apex Soft is hiring a Backend Developer in Tashkent.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan.\n\nRequirements:\n- Hands-on experience with Go and PostgreSQL';
+if (effectiveSourceLocale('uz', englishBody) !== 'en') {
+  console.error('effectiveSourceLocale must prefer detected English over stored uz');
+  failed += 1;
+}
+if (pickStoredLocale({ text: englishBody, explicit: 'uz' }) !== 'en') {
+  console.error('pickStoredLocale must prefer detected English over an explicit uz');
+  failed += 1;
+}
+if (effectiveSourceLocale('en', 'Short text') !== 'en') {
+  console.error('effectiveSourceLocale must keep a valid stored locale when detect is unclear');
+  failed += 1;
+}
+if (effectiveSourceLocale(null, 'Short text') !== null) {
+  console.error('effectiveSourceLocale must not invent uz when detect fails');
+  failed += 1;
 }
 
 if (failed) {

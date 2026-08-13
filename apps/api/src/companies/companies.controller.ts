@@ -117,6 +117,17 @@ export class CompaniesController {
     return this.companies.deleteTranslation(user, id, assertLocale(locale));
   }
 
+  @Post(':id/translations/:locale/auto')
+  @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  autoTranslate(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.companies.autoTranslate(user, id, assertLocale(locale));
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   get(@Param('id') id: string, @CurrentUser() user: AuthUser) {

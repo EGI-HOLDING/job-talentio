@@ -1,4 +1,4 @@
-import type { Locale } from './locale';
+import { isLocale, type Locale } from './locale';
 
 /**
  * Cheap language guess for free text we already store, used to repair rows whose
@@ -63,6 +63,12 @@ const ENGLISH_WORDS = [
   'is',
   'to',
   'in',
+  'of',
+  'this',
+  'that',
+  'looking',
+  'seeking',
+  'join',
 ];
 
 /** Uzbek-specific letter pairs that English text effectively never contains. */
@@ -88,13 +94,42 @@ export function detectLocale(text: string): Locale | null {
     .toLowerCase()
     .split(/[^a-z\u2018\u2019']+/)
     .filter(Boolean);
-  if (tokens.length < 8) return null;
+  if (tokens.length < 5) return null;
 
-  const uzbek = countWords(UZBEK_WORDS, tokens) + (UZBEK_MARKERS.test(sample) ? 3 : 0);
+  const hasUzbekMarker = UZBEK_MARKERS.test(sample);
+  const uzbekWords = countWords(UZBEK_WORDS, tokens);
+  const uzbek = uzbekWords + (hasUzbekMarker ? 3 : 0);
   const english = countWords(ENGLISH_WORDS, tokens);
 
-  // Require a clear margin: near-ties are usually mixed-language postings.
-  if (english >= uzbek + 3) return 'en';
-  if (uzbek >= english + 3) return 'uz';
+  if (english > 0 && uzbekWords === 0 && !hasUzbekMarker) return 'en';
+  if (english >= uzbek + 2) return 'en';
+  if (uzbek >= english + 2) return 'uz';
+  return null;
+}
+
+/**
+ * Language the text is actually in. A confident detect always wins so a stale
+ * schema default of `uz` cannot keep tagging English copy as Uzbek.
+ */
+export function effectiveSourceLocale(
+  stored: string | null | undefined,
+  text: string,
+): Locale | null {
+  const detected = detectLocale(text);
+  if (detected) return detected;
+  if (isLocale(stored)) return stored;
+  return null;
+}
+
+/** Locale to persist on write: detect, then an explicit client value, then existing. */
+export function pickStoredLocale(input: {
+  text?: string | null;
+  explicit?: string | null;
+  existing?: string | null;
+}): Locale | null {
+  const detected = input.text ? detectLocale(input.text) : null;
+  if (detected) return detected;
+  if (isLocale(input.explicit)) return input.explicit;
+  if (isLocale(input.existing)) return input.existing;
   return null;
 }

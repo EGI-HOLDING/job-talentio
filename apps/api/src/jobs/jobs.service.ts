@@ -30,9 +30,10 @@ import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { JobsSearchService } from '../search/jobs-search.service';
-import { contentHash as translationSourceHash, resolveContent } from '../common/i18n/content-locale';
+import { contentHash as translationSourceHash, resolveUgcContent } from '../common/i18n/content-locale';
 import { TranslationService } from '../translation/translation.service';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
+import { effectiveSourceLocale, pickStoredLocale } from '../common/i18n/detect-locale';
 import type { Locale } from '../common/i18n/locale';
 import { canTransition, transitionError } from './job-status';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
@@ -56,15 +57,15 @@ function localizeQuestion<
   },
 >(question: T, sourceLocale: string, locale: Locale) {
   const { translations = [], ...rest } = question;
-  const resolved = resolveContent(
+  const resolved = resolveUgcContent(
     { question: rest.question },
     sourceLocale,
     translations,
     locale,
+    rest.question,
   );
   return { ...rest, question: resolved.content.question };
 }
-
 
 @Injectable()
 export class JobsService {
@@ -358,7 +359,10 @@ export class JobsService {
         currency: (data.currency as string) || 'UZS',
         experienceYearsMin: (data.experienceYearsMin as number) ?? null,
         experienceLevel,
-        locale: (data.locale as string) || 'uz',
+        locale: pickStoredLocale({
+          text: `${title}\n${description}`,
+          explicit: typeof data.locale === 'string' ? data.locale : null,
+        }) ?? undefined,
         status: 'DRAFT',
         fingerprint: hashes.fingerprint,
         contentHash: hashes.contentHash,
@@ -458,7 +462,12 @@ export class JobsService {
         salaryPeriod: data.salaryPeriod as never,
         experienceYearsMin: data.experienceYearsMin as number | null | undefined,
         experienceLevel: nextExperienceLevel as never,
-        locale: data.locale as string | undefined,
+        locale:
+          pickStoredLocale({
+            text: `${title}\n${description}`,
+            explicit: typeof data.locale === 'string' ? data.locale : null,
+            existing: job.locale,
+          }) ?? undefined,
         fingerprint: hashes.fingerprint,
         contentHash: hashes.contentHash,
       },
@@ -713,24 +722,27 @@ export class JobsService {
     },
   >(job: T, locale: Locale) {
     const { translations, ...rest } = job;
-    const resolved = resolveContent(
+    const resolved = resolveUgcContent(
       { title: rest.title, description: rest.description },
       rest.locale,
       translations,
       locale,
+      `${rest.title}\n${rest.description}`,
     );
+    const sourceLocale = resolved.contentLocale ?? rest.locale;
     return {
       ...rest,
       ...resolved.content,
       // Screening questions belong to the posting and follow its source language.
       ...(rest.questions
-        ? { questions: rest.questions.map((q) => localizeQuestion(q, rest.locale, locale)) }
+        ? { questions: rest.questions.map((q) => localizeQuestion(q, sourceLocale, locale)) }
         : {}),
       contentLocale: resolved.contentLocale,
       isMachineTranslated: resolved.isMachineTranslated,
       availableLocales: resolved.availableLocales,
       // Lets the UI offer a Translate action only when a provider is configured.
-      canMachineTranslate: this.translation.enabled && resolved.isFallback,
+      canMachineTranslate:
+        this.translation.enabled && resolved.isFallback && Boolean(resolved.contentLocale),
     };
   }
 
@@ -745,11 +757,16 @@ export class JobsService {
       questions?: Array<{ id: string; question: string }>;
     },
   ) {
-    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    const job = await this.prisma.jobPost.findUnique({
+      where: { id: jobId },
+      include: { company: { select: { anonymizedAt: true } } },
+    });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    this.companies.assertOpen(job.company);
 
-    if (locale === job.locale) {
+    const sourceLocale = effectiveSourceLocale(job.locale, `${job.title}\n${job.description}`);
+    if (sourceLocale && locale === sourceLocale) {
       throw new BadRequestException(
         'This is the language the posting was written in; edit the job itself instead',
       );
@@ -853,11 +870,36 @@ export class JobsService {
     await this.companies.assertMember(user, job.companyId);
 
     return {
-      sourceLocale: job.locale,
+      sourceLocale:
+        effectiveSourceLocale(job.locale, `${job.title}\n${job.description}`) ?? job.locale,
       source: { title: job.title, description: job.description },
       translations: job.translations,
       questions: job.questions,
     };
+  }
+
+  async autoTranslate(user: AuthUser, jobId: string, locale: Locale) {
+    const job = await this.prisma.jobPost.findUnique({
+      where: { id: jobId },
+      include: { company: { select: { anonymizedAt: true } } },
+    });
+    if (!job) throw new NotFoundException('Job not found');
+    await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    this.companies.assertOpen(job.company);
+    const result = await this.translation.translateJob(jobId, locale);
+    if (result.status === 'failed') {
+      throw new BadRequestException(result.reason);
+    }
+    if (result.status === 'disabled') {
+      throw new BadRequestException('Translation is not configured');
+    }
+    if (result.status === 'budget-exceeded') {
+      throw new BadRequestException('Translation budget exceeded');
+    }
+    if (result.status === 'unsupported') {
+      throw new BadRequestException('This language cannot be translated');
+    }
+    return this.listTranslations(user, jobId);
   }
 
   /** Live match for logged-in employees (pre-apply job detail breakdown). */
@@ -1469,7 +1511,9 @@ export class JobsService {
       orderBy: { sortOrder: 'asc' },
       include: { translations: { select: { locale: true, question: true, isMachine: true } } },
     });
-    return questions.map((q) => localizeQuestion(q, job.locale, locale));
+    const sourceLocale =
+      effectiveSourceLocale(job.locale, `${job.title}\n${job.description}`) ?? job.locale;
+    return questions.map((q) => localizeQuestion(q, sourceLocale, locale));
   }
 
   async addQuestion(

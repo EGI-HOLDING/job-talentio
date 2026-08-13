@@ -162,6 +162,18 @@ export class JobsController {
     return this.jobs.upsertTranslation(user, id, assertLocale(locale), data);
   }
 
+  /** Recruiter-triggered MT. Does not record a JobView. */
+  @Post(':id/translations/:locale/auto')
+  @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  autoTranslate(
+    @Param('id') id: string,
+    @Param('locale') locale: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.jobs.autoTranslate(user, id, assertLocale(locale));
+  }
+
   @Delete(':id/translations/:locale')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')

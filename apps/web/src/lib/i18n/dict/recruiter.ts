@@ -103,6 +103,11 @@ export const recruiter = {
     ru: 'Машинный перевод. Проверьте текст и подтвердите сохранением.',
     en: 'Machine translation. Review the text and save it to confirm.',
   },
+  'rec.langVersionAutoTranslate': {
+    uz: 'Avtomatik tarjima',
+    ru: 'Автоперевод',
+    en: 'Auto-translate',
+  },
   'rec.langVersionSave': {
     uz: 'Bu versiyani saqlash',
     ru: 'Сохранить эту версию',

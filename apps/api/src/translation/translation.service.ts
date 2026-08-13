@@ -6,8 +6,8 @@ import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
 import { catalogDelegate } from '../common/i18n/catalog-kind';
 import type { CatalogKind } from '../common/i18n/catalog-kind';
 import { contentHash } from '../common/i18n/content-locale';
-import { detectLocale } from '../common/i18n/detect-locale';
-import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import { detectLocale, effectiveSourceLocale } from '../common/i18n/detect-locale';
+import { isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 import { TRANSLATION_PROVIDER } from './translation.provider';
 import type { TranslationProvider } from './translation.provider';
@@ -72,8 +72,9 @@ export class TranslationService {
       include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
     });
     if (!job) return { status: 'failed', reason: 'Job not found' };
-    if (!isLocale(job.locale)) return { status: 'unsupported' };
-    if (target === job.locale) return { status: 'exists', locale: target };
+    const source = effectiveSourceLocale(job.locale, `${job.title}\n${job.description}`);
+    if (!source) return { status: 'unsupported' };
+    if (target === source) return { status: 'exists', locale: target };
 
     const hash = contentHash(job.title, job.description);
     const existing = job.translations.find((t) => t.locale === target);
@@ -93,7 +94,7 @@ export class TranslationService {
       const [translatedTitle, translatedDescription] = await this.provider.translate({
         texts: [title, description],
         targetLocale: target,
-        sourceLocale: job.locale,
+        sourceLocale: source,
       });
       if (!translatedTitle || !translatedDescription) {
         await this.refundBudget(chars);
@@ -112,7 +113,7 @@ export class TranslationService {
         create: { jobPostId: jobId, locale: target, ...value },
       });
       // Applicants answer in the language they read the posting in.
-      await this.translateJobQuestions(jobId, job.locale, target);
+      await this.translateJobQuestions(jobId, source, target);
       return { status: 'ready', locale: target };
     } catch (err) {
       await this.refundBudget(chars);
@@ -176,8 +177,9 @@ export class TranslationService {
     });
     if (!company) return { status: 'failed', reason: 'Company not found' };
     if (!company.description?.trim()) return { status: 'unsupported' };
-    if (!isLocale(company.locale)) return { status: 'unsupported' };
-    if (target === company.locale) return { status: 'exists', locale: target };
+    const source = effectiveSourceLocale(company.locale, company.description);
+    if (!source) return { status: 'unsupported' };
+    if (target === source) return { status: 'exists', locale: target };
 
     const hash = contentHash(company.description);
     const existing = company.translations.find((t) => t.locale === target);
@@ -194,7 +196,7 @@ export class TranslationService {
       const [translated] = await this.provider.translate({
         texts: [description],
         targetLocale: target,
-        sourceLocale: company.locale,
+        sourceLocale: source,
       });
       if (!translated) {
         await this.refundBudget(chars);
@@ -296,9 +298,11 @@ export class TranslationService {
     });
     if (!profile) return { status: 'failed', reason: 'Profile not found' };
 
-    const detected =
-      detectLocale([profile.headline, profile.summary].filter(Boolean).join('\n')) ?? DEFAULT_LOCALE;
-    const source: Locale = isLocale(profile.contentLocale) ? profile.contentLocale : detected;
+    const source = effectiveSourceLocale(
+      profile.contentLocale,
+      [profile.headline, profile.summary].filter(Boolean).join('\n'),
+    );
+    if (!source) return { status: 'unsupported' };
     if (target === source) return { status: 'exists', locale: target };
 
     type Pending = { texts: string[]; apply: (out: string[]) => Promise<void> };

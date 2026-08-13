@@ -16,8 +16,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
-import { resolveContent } from '../common/i18n/content-locale';
-import { DEFAULT_LOCALE, isLocale } from '../common/i18n/locale';
+import { resolveUgcContent } from '../common/i18n/content-locale';
+import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
 
 @Injectable()
@@ -311,18 +311,16 @@ export class ApplicationsService {
         safeSnapshot = { ...snap, resume: { ...resumeWithoutKey, hasFile: hasResumeFile } };
       }
       const { translations, ...profileRest } = profile;
-      const source = isLocale(profileRest.contentLocale)
-        ? profileRest.contentLocale
-        : DEFAULT_LOCALE;
-      const resolvedHeadline = resolveContent(
+      const resolvedHeadline = resolveUgcContent(
         { headline: profileRest.headline ?? '' },
-        source,
+        profileRest.contentLocale,
         (translations ?? []).map((t) => ({
           locale: t.locale,
           headline: t.headline ?? '',
           isMachine: t.isMachine,
         })),
         locale,
+        profileRest.headline ?? '',
       );
       return {
         ...rest,
