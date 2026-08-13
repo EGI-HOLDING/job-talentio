@@ -623,9 +623,9 @@ export const core = {
     en: 'Connect Telegram',
   },
   telegramSwitchHint: {
-    uz: 'Telegram oynasida boshqa akkaunt kerak bo‘lsa Log out ni bosing.',
-    ru: 'Если нужен другой аккаунт, нажмите Log out в окне Telegram.',
-    en: 'To use another Telegram account, click Log out in the Telegram window.',
+    uz: 'Har safar Telegram yangidan login so‘raydi. Avvalgi akkaunt saqlanmaydi.',
+    ru: 'Telegram каждый раз просит войти заново. Прошлый аккаунт не сохраняется.',
+    en: 'Telegram asks you to sign in from the start each time. The previous account is not kept.',
   },
   telegramSameAccount: {
     uz: 'Telegram hali ham avvalgi akkauntni yubordi. Oynada Log out qiling, keyin qayta urinib ko‘ring.',
