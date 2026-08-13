@@ -28,6 +28,10 @@ Semua password non-admin: `Password123!`
 | Akmal Rakhimov | `akmal.rakhimov@caravan.uz` | Caravan Marketplace |
 | Lola Nazarova | `lola.nazarova@nukussmart.uz` | Nukus Smart City |
 | Sardor Aliyev | `sardor.aliyev@chirchiqpharma.uz` | Chirchiq Pharma Lab |
+| Anvar Bekmurodov | `anvar.bekmurodov@hadith-hotel.com` | Hadith Hotel |
+| Zuhra Alimova | `zuhra.alimova@hotel-kampoengindonesia.com` | Kampoeng Indonesia |
+| Ravshan Qodirov | `ravshan.qodirov@7oz-espresso.com` | 7oz Espresso Cafe |
+| Munisa Ergasheva | `munisa.ergasheva@saji-nusantara.com` | Saji Nusantara |
 
 ### Recruiter (HR / member)
 | Nama | Email | Company |
@@ -104,6 +108,8 @@ Semua password non-admin: `Password123!`
 Dummy **employees** use `@jobtalent.io` and are seeded **email verified**.  
 Dummy **recruiters** keep their company emails and are also seeded **email verified**.  
 Password (non-admin): `Password123!`  
+
+Hadith Hotel, Kampoeng Indonesia, 7oz Espresso Cafe, and Saji Nusantara are seeded as **VIP** so they appear on the homepage Top Companies strip.  
 
 Platform email (Resend) is **not sent** to dummy mailboxes (`@jobtalent.io`, seed company domains, `@jobtalentio.uz`) so quota stays free for real users. In-app notifications still work.
 

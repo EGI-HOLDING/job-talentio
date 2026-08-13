@@ -46,6 +46,10 @@ export const VIP_DEMO_COMPANY_SLUGS = [
   'uztelecom-digital',
   'clickpay-solutions',
   'caravan-marketplace',
+  'hadith-hotel',
+  'kampoeng-indonesia',
+  '7oz-espresso',
+  'saji-nusantara',
 ] as const;
 
 export const HOT_JOB_DAYS = [7, 14, 30] as const;

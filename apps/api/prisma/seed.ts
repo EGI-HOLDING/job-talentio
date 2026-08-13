@@ -13,6 +13,7 @@ import { createDemoLogoUploaderFromEnv } from '../src/common/demo-logo-storage';
 import { backfillNews } from '../src/common/news-backfill';
 import { backfillCatalogI18n } from '../src/common/i18n/catalog-i18n-backfill';
 import { backfillJobLocale } from '../src/common/i18n/job-locale-backfill';
+import { EGI_HOSPITALITY_DEMO_COMPANIES } from '../src/common/egi-hospitality-demo';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -238,7 +239,20 @@ const BENEFITS = [
   { name: 'Performance Bonus', slug: 'bonus', icon: BENEFIT_ICONS.bonus },
 ];
 
-const COMPANIES = [
+type SeedCompany = {
+  name: string;
+  slug: string;
+  industry: string;
+  plan: PlanCode;
+  city: string;
+  color: string;
+  size: CompanySize;
+  mailDomain: string;
+  website?: string;
+  description?: string;
+};
+
+const COMPANIES: SeedCompany[] = [
   { name: 'Apex Soft Tashkent', slug: 'demo-tech-tashkent', industry: COMPANY_INDUSTRY_OVERRIDES['demo-tech-tashkent'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize, mailDomain: 'apexsoft.uz' },
   { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: COMPANY_INDUSTRY_OVERRIDES['uzpay-fintech'], plan: 'VIP' as PlanCode, city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize, mailDomain: 'uzpay.uz' },
   { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: COMPANY_INDUSTRY_OVERRIDES['silk-road-commerce'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'silkroad.uz' },
@@ -259,6 +273,18 @@ const COMPANIES = [
   { name: 'Caravan Marketplace', slug: 'caravan-marketplace', industry: COMPANY_INDUSTRY_OVERRIDES['caravan-marketplace'], plan: 'VIP' as PlanCode, city: 'tashkent', color: 'c2410c', size: 'SIZE_51_200' as CompanySize, mailDomain: 'caravan.uz' },
   { name: 'Nukus Smart City', slug: 'nukus-smart-city', industry: COMPANY_INDUSTRY_OVERRIDES['nukus-smart-city'], plan: 'FREE' as PlanCode, city: 'nukus', color: '0369a1', size: 'SIZE_11_50' as CompanySize, mailDomain: 'nukussmart.uz' },
   { name: 'Chirchiq Pharma Lab', slug: 'chirchiq-pharma', industry: COMPANY_INDUSTRY_OVERRIDES['chirchiq-pharma'], plan: 'STANDARD' as PlanCode, city: 'chirchiq', color: '0f766e', size: 'SIZE_51_200' as CompanySize, mailDomain: 'chirchiqpharma.uz' },
+  ...EGI_HOSPITALITY_DEMO_COMPANIES.map((c) => ({
+    name: c.name,
+    slug: c.slug,
+    industry: COMPANY_INDUSTRY_OVERRIDES[c.slug],
+    plan: 'VIP' as PlanCode,
+    city: c.city,
+    color: c.color,
+    size: c.size,
+    mailDomain: c.mailDomain,
+    website: c.website,
+    description: c.description,
+  })),
 ];
 
 type SeedPerson = { first: string; last: string; email: string };
@@ -354,6 +380,7 @@ const RECRUITER_PEOPLE: SeedPerson[] = (
     ['Akmal', 'Rakhimov'],
     ['Lola', 'Nazarova'],
     ['Sardor', 'Aliyev'],
+    ...EGI_HOSPITALITY_DEMO_COMPANIES.map((c) => [c.ownerFirst, c.ownerLast] as const),
   ] as const
 ).map(([first, last], i) => ({
   first,
@@ -684,10 +711,12 @@ async function main() {
       where: { slug: c.slug },
       update: {
         name: c.name,
-        description: `${c.name} is a leading ${c.industry} company in Uzbekistan, building modern products for the Central Asian market.`,
+        description:
+          c.description ??
+          `${c.name} is a leading ${c.industry} company in Uzbekistan, building modern products for the Central Asian market.`,
         // The blurb below is English; without this it would claim to be Uzbek.
         locale: 'en',
-        website: `https://${c.slug}.uz`,
+        website: c.website ?? `https://${c.slug}.uz`,
         cityId: cityMap[c.city].id,
         industryId: indMap[c.industry].id,
         size: c.size,
@@ -697,9 +726,11 @@ async function main() {
       create: {
         name: c.name,
         slug: c.slug,
-        description: `${c.name} is a leading ${c.industry} company in Uzbekistan, building modern products for the Central Asian market.`,
+        description:
+          c.description ??
+          `${c.name} is a leading ${c.industry} company in Uzbekistan, building modern products for the Central Asian market.`,
         locale: 'en',
-        website: `https://${c.slug}.uz`,
+        website: c.website ?? `https://${c.slug}.uz`,
         cityId: cityMap[c.city].id,
         industryId: indMap[c.industry].id,
         size: c.size,

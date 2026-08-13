@@ -20,6 +20,10 @@ export const DEMO_COMPANY_LOGO_SLUGS = [
   'caravan-marketplace',
   'nukus-smart-city',
   'chirchiq-pharma',
+  'hadith-hotel',
+  'kampoeng-indonesia',
+  '7oz-espresso',
+  'saji-nusantara',
 ] as const;
 
 export type DemoCompanyLogoSlug = (typeof DEMO_COMPANY_LOGO_SLUGS)[number];

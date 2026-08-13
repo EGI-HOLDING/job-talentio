@@ -87,7 +87,7 @@ export function SeekerHome() {
     api<{ items: Job[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false })
       .then((r) => setHotJobs(r.items))
       .catch(() => undefined);
-    api<{ items: VipCompany[] }>('/companies?plan=VIP&limit=8&sort=jobs', { auth: false })
+    api<{ items: VipCompany[] }>('/companies?plan=VIP&limit=12&sort=jobs', { auth: false })
       .then((r) => setTopCompanies(r.items || []))
       .catch(() => undefined);
     api<{
