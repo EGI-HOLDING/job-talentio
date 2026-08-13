@@ -218,6 +218,11 @@ RESEND_API_KEY=re_...
 # Without MEILI_HOST the API silently uses Postgres contains search.
 MEILI_HOST=http://meilisearch.railway.internal:7700
 MEILI_MASTER_KEY=<same-key-as-meilisearch-service>
+
+# Telegram job-alert bot (optional). Creates webhook at $API_URL/api/telegram/webhook.
+# TELEGRAM_BOT_TOKEN=
+# TELEGRAM_BOT_USERNAME=
+# TELEGRAM_WEBHOOK_SECRET=<long-random-secret>
 ```
 
 **Meilisearch ops:** Postgres stays the source of truth. Only PUBLISHED jobs are indexed (`jobs` index); create/update/status changes sync automatically, the API backfills the index on boot when it is empty, and if a query finds the index wiped or missing it reindexes in the background (searches fall back to Postgres meanwhile). To force a full reindex: delete the `jobs` index (`curl -X DELETE $MEILI_HOST/indexes/jobs -H "Authorization: Bearer $MEILI_MASTER_KEY"`) — no restart needed. If Meilisearch is down, job search degrades to Postgres (no typo tolerance) without errors.

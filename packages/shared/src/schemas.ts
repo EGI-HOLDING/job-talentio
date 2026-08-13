@@ -358,6 +358,9 @@ export const jobAlertSchema = z.object({
   categorySlug: z.string().max(120).optional(),
   skillSlugs: z.array(z.string()).max(20).default([]),
   frequency: z.enum(['DAILY', 'WEEKLY']).default('DAILY'),
+  notifyInApp: z.boolean().default(true),
+  notifyEmail: z.boolean().default(true),
+  notifyTelegram: z.boolean().default(false),
 });
 
 export const jobAlertUpdateSchema = z.object({
@@ -368,6 +371,9 @@ export const jobAlertUpdateSchema = z.object({
   skillSlugs: z.array(z.string()).max(20).optional(),
   frequency: z.enum(['DAILY', 'WEEKLY']).optional(),
   isActive: z.boolean().optional(),
+  notifyInApp: z.boolean().optional(),
+  notifyEmail: z.boolean().optional(),
+  notifyTelegram: z.boolean().optional(),
 });
 
 export const forgotPasswordSchema = z.object({

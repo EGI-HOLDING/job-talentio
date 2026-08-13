@@ -42,6 +42,8 @@ export default function SettingsPage() {
   const [bulkOptedOut, setBulkOptedOut] = useState(false);
   const [privacyLoading, setPrivacyLoading] = useState(false);
   const [verifyBusy, setVerifyBusy] = useState(false);
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [telegramBusy, setTelegramBusy] = useState(false);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
@@ -69,6 +71,7 @@ export default function SettingsPage() {
         setSession(fresh);
         setFullName(fresh.user.fullName);
         setAvatarUrl(fresh.user.avatarUrl || '');
+        setTelegramLinked(Boolean(fresh.user.telegramLinked));
       })
       .catch(() => undefined);
     if (s.user.role === 'EMPLOYEE') {
@@ -180,6 +183,41 @@ export default function SettingsPage() {
       setErr(error instanceof Error ? error.message : t('verifyEmailFailed'));
     } finally {
       setVerifyBusy(false);
+    }
+  }
+
+  async function refreshTelegramStatus() {
+    const fresh = await api<AuthSession>('/auth/me');
+    saveSession(fresh);
+    setSession(fresh);
+    setTelegramLinked(Boolean(fresh.user.telegramLinked));
+  }
+
+  async function linkTelegram() {
+    setTelegramBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const r = await api<{ url: string }>('/auth/telegram/link', { method: 'POST' });
+      window.open(r.url, '_blank', 'noopener,noreferrer');
+      setMsg(t('ui.telegramAlertsHint'));
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : t('ui.telegramLinkFailed'));
+    } finally {
+      setTelegramBusy(false);
+    }
+  }
+
+  async function unlinkTelegram() {
+    setTelegramBusy(true);
+    setErr(null);
+    try {
+      await api('/auth/telegram/link', { method: 'DELETE' });
+      await refreshTelegramStatus();
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : t('ui.telegramLinkFailed'));
+    } finally {
+      setTelegramBusy(false);
     }
   }
 
@@ -324,6 +362,7 @@ export default function SettingsPage() {
           )}
 
           {section === 'preferences' && (
+            <>
             <div className="card">
               <h3 style={{ marginTop: 0 }}>{t('language')}</h3>
               <p className="muted" style={{ marginTop: 0 }}>
@@ -356,6 +395,37 @@ export default function SettingsPage() {
                 </button>
               </form>
             </div>
+            {isEmployee && (
+              <div className="card" style={{ marginTop: '1rem' }}>
+                <h3 style={{ marginTop: 0 }}>{t('ui.telegramAlerts')}</h3>
+                <p className="muted" style={{ marginTop: 0 }}>
+                  {t('ui.telegramAlertsHint')}
+                </p>
+                <p>
+                  <strong>{telegramLinked ? t('ui.telegramLinked') : t('ui.telegramNotLinked')}</strong>
+                </p>
+                <div className="chips">
+                  {!telegramLinked ? (
+                    <button type="button" className="chip" disabled={telegramBusy} onClick={() => void linkTelegram()}>
+                      {t('ui.telegramLink')}
+                    </button>
+                  ) : (
+                    <button type="button" className="chip" disabled={telegramBusy} onClick={() => void unlinkTelegram()}>
+                      {t('ui.telegramUnlink')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="chip"
+                    disabled={telegramBusy}
+                    onClick={() => void refreshTelegramStatus().catch(() => undefined)}
+                  >
+                    {t('ui.telegramRefresh')}
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
 
           {section === 'privacy' && isEmployee && (
