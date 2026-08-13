@@ -490,6 +490,7 @@ function RecruiterDashboard() {
           currency: fd.get('currency') || 'UZS',
           employmentType: fd.get('employmentType') || 'FULL_TIME',
           workMode: fd.get('workMode') || 'ONSITE',
+          locale: fd.get('locale') || undefined,
           languages: editJobLanguages.map((l) => ({
             code: l.code,
             name: l.name,
@@ -815,6 +816,9 @@ function RecruiterDashboard() {
                       </option>
                     ))}
                   </select>
+                  <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                    {t('rec.cityRuleHint')}
+                  </span>
                 </label>
                 <label>
                   <LabelText>{t('category')}</LabelText>
@@ -921,15 +925,15 @@ function RecruiterDashboard() {
                         }
                       }}
                     >
-                      <option value="uz">uz</option>
-                      <option value="ru">ru</option>
-                      <option value="en">en</option>
+                      <option value="uz">{t('rec.localeNameUz')}</option>
+                      <option value="ru">{t('rec.localeNameRu')}</option>
+                      <option value="en">{t('rec.localeNameEn')}</option>
                     </select>
+                    <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                      {t('rec.postLocaleHint')}
+                    </span>
                   </label>
                 </div>
-                <p className="muted" style={{ fontSize: '0.78rem', margin: '-0.35rem 0 0.5rem' }}>
-                  {t('rec.cityRuleHint')}
-                </p>
                 <div>
                   <LabelText>{t('skills')}</LabelText>
                   <div className="chips" style={{ margin: '0.4rem 0' }}>
@@ -1183,6 +1187,9 @@ function RecruiterDashboard() {
                               </option>
                             ))}
                           </select>
+                          <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                            {t('rec.cityRuleHint')}
+                          </span>
                         </label>
                         <div className="grid-2">
                           <label>
@@ -1249,6 +1256,17 @@ function RecruiterDashboard() {
                             <option value="USD">USD</option>
                             <option value="EUR">EUR</option>
                           </select>
+                        </label>
+                        <label>
+                          <LabelText>{t('postLocale')}</LabelText>
+                          <select name="locale" defaultValue={j.locale || 'uz'}>
+                            <option value="uz">{t('rec.localeNameUz')}</option>
+                            <option value="ru">{t('rec.localeNameRu')}</option>
+                            <option value="en">{t('rec.localeNameEn')}</option>
+                          </select>
+                          <span className="muted" style={{ fontSize: '0.78rem', display: 'block', marginTop: '0.35rem' }}>
+                            {t('rec.postLocaleHint')}
+                          </span>
                         </label>
                         <div>
                           <LabelText>{t('languages')}</LabelText>

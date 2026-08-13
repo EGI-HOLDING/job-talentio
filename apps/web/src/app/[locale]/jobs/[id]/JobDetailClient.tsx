@@ -402,7 +402,7 @@ export function JobDetailClient() {
               className="job-description"
               translating={translating}
               onTranslate={
-                session && job.canMachineTranslate ? () => void machineTranslate() : undefined
+                job.canMachineTranslate ? () => void machineTranslate() : undefined
               }
             />
           </div>

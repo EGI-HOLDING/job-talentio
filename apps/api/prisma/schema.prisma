@@ -775,8 +775,8 @@ model EmployeeProfile {
   userId            String            @unique
   headline          String?
   summary           String?
-  /// Detected language of the narrative fields, used to badge them for readers
-  /// browsing in another language. Null when the text gives no clear signal.
+  /// Detected language of the narrative fields, used to pick a translation
+  /// and to badge the original when a reader is browsing in another language.
   contentLocale     String?
   cityId            String?
   phone             String?           @unique
@@ -789,8 +789,8 @@ model EmployeeProfile {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  city           City?             @relation(fields: [cityId], references: [id])
+  user           User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city           City?                        @relation(fields: [cityId], references: [id])
   skills         ProfileSkill[]
   experiences    WorkExperience[]
   educations     Education[]
@@ -799,6 +799,7 @@ model EmployeeProfile {
   resumes        Resume[]
   applications   Application[]
   savedJobs      SavedJob[]
+  translations   EmployeeProfileTranslation[]
 
   @@index([cityId])
 }
@@ -828,8 +829,9 @@ model WorkExperience {
   endDate      DateTime?
   isCurrent    Boolean   @default(false)
 
-  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  city    City?           @relation(fields: [cityId], references: [id])
+  profile      EmployeeProfile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  city         City?                       @relation(fields: [cityId], references: [id])
+  translations WorkExperienceTranslation[]
 }
 
 model Education {
@@ -841,10 +843,64 @@ model Education {
   startDate DateTime?
   endDate   DateTime?
 
-  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile      EmployeeProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  translations EducationTranslation[]
 
   @@index([school])
   @@index([degree])
+}
+
+/// Per-language version of a candidate's headline and about text.
+model EmployeeProfileTranslation {
+  id         String   @id @default(cuid())
+  profileId  String
+  locale     String
+  headline   String?
+  summary    String?
+  isMachine  Boolean  @default(false)
+  sourceHash String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, locale])
+  @@index([profileId])
+}
+
+/// Per-language version of a work-experience title and description. Company names stay on the parent.
+model WorkExperienceTranslation {
+  id           String   @id @default(cuid())
+  experienceId String
+  locale       String
+  title        String
+  description  String?
+  isMachine    Boolean  @default(false)
+  sourceHash   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  experience WorkExperience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@unique([experienceId, locale])
+  @@index([experienceId])
+}
+
+/// Per-language version of an education field of study. School names stay on the parent.
+model EducationTranslation {
+  id          String   @id @default(cuid())
+  educationId String
+  locale      String
+  field       String
+  isMachine   Boolean  @default(false)
+  sourceHash  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  education Education @relation(fields: [educationId], references: [id], onDelete: Cascade)
+
+  @@unique([educationId, locale])
+  @@index([educationId])
 }
 
 model Certification {

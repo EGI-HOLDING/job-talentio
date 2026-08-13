@@ -1070,7 +1070,7 @@ export const core = {
   postLocale: {
     uz: 'E’lon tili',
     ru: 'Язык объявления',
-    en: 'Post locale',
+    en: 'Language of this posting',
   },
   minLevel: {
     uz: 'Minimal daraja',

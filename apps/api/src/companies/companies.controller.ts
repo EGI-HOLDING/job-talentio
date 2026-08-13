@@ -77,9 +77,9 @@ export class CompaniesController {
     return this.companies.previewInvite(token);
   }
 
-  /** Signed-in and rate limited: every miss costs money at the provider. */
+  /** Guests included. Rate limited and budgeted: first miss pays, later readers cache. */
   @Post('slug/:slug/translate/:locale')
-  @UseGuards(JwtAuthGuard, SearchRateLimitGuard)
+  @UseGuards(OptionalJwtAuthGuard, SearchRateLimitGuard)
   machineTranslate(@Param('slug') slug: string, @Param('locale') locale: string) {
     return this.companies.machineTranslate(slug, assertLocale(locale));
   }

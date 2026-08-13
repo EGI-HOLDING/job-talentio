@@ -18,8 +18,10 @@ type CandidateDetail = {
   id: string;
   headline?: string | null;
   summary?: string | null;
-  /** Language the candidate wrote their profile in; never machine translated. */
+  /** Language the served narrative is in; may be a cached machine translation. */
   contentLocale?: string | null;
+  isMachineTranslated?: boolean;
+  canMachineTranslate?: boolean;
   desiredSalaryMin?: number | null;
   desiredSalaryMax?: number | null;
   desiredSalaryCurrency?: string | null;
@@ -37,6 +39,8 @@ type CandidateDetail = {
     endDate?: string | null;
     description?: string | null;
     city?: { name: string } | null;
+    contentLocale?: string | null;
+    isMachineTranslated?: boolean;
   }>;
   educations: Array<{
     id: string;
@@ -45,6 +49,8 @@ type CandidateDetail = {
     field?: string | null;
     startDate?: string | null;
     endDate?: string | null;
+    contentLocale?: string | null;
+    isMachineTranslated?: boolean;
   }>;
   certifications: Array<{ id: string; name: string; issuer?: string | null; issuedAt?: string | null }>;
   languages: Array<{ id: string; level?: string | null; language: { name: string } }>;
@@ -79,11 +85,13 @@ function CandidateInner() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [data, setData] = useState<CandidateDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
   const [canColdChat, setCanColdChat] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
   const [contacts, setContacts] = useState<{ email?: string | null; phone?: string | null } | null>(
@@ -92,6 +100,27 @@ function CandidateInner() {
   const [revealBusy, setRevealBusy] = useState(false);
   const [revealError, setRevealError] = useState<string | null>(null);
   const matchJobId = search.get('matchJobId');
+
+  async function machineTranslate() {
+    setTranslating(true);
+    setTranslateError(null);
+    try {
+      const res = await api<{ status: string; profile: CandidateDetail }>(
+        `/profiles/candidates/${id}/translate/${locale}${
+          matchJobId ? `?matchJobId=${matchJobId}` : ''
+        }`,
+        { method: 'POST' },
+      );
+      if (res.profile) setData(res.profile);
+      if (res.status === 'disabled' || res.status === 'budget-exceeded') {
+        setTranslateError(t('ui.translateFailed'));
+      }
+    } catch (e) {
+      setTranslateError(e instanceof Error ? e.message : t('ui.translateFailed'));
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   async function revealContacts() {
     setRevealBusy(true);
@@ -208,6 +237,23 @@ function CandidateInner() {
               {data.city ? ` | ${data.city.name}` : ''}
               {` | ${data.experienceYears} ${t('years')} ${t('experience').toLowerCase()}`}
             </p>
+            {data.canMachineTranslate && (
+              <p style={{ margin: '0.45rem 0 0' }}>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void machineTranslate()}
+                  disabled={translating}
+                >
+                  {translating ? t('ui.translating') : t('ui.translateThis')}
+                </button>
+                {translateError && (
+                  <span style={{ color: '#be123c', marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                    {translateError}
+                  </span>
+                )}
+              </p>
+            )}
             {salaryLabel && (
               <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
                 {t('talent.desiredSalary')}: {salaryLabel}
@@ -355,6 +401,7 @@ function CandidateInner() {
           <UgcText
             text={data.summary}
             contentLocale={data.contentLocale}
+            isMachineTranslated={data.isMachineTranslated}
             preserveLineBreaks
           />
         </div>
@@ -383,7 +430,14 @@ function CandidateInner() {
               {fmtDate(e.startDate, nowLabel)} - {fmtDate(e.endDate, nowLabel)}
               {e.city ? ` | ${e.city.name}` : ''}
             </div>
-            {e.description && <p style={{ marginTop: '0.35rem', fontSize: '0.9rem' }}>{e.description}</p>}
+            {e.description && (
+              <UgcText
+                text={e.description}
+                contentLocale={e.contentLocale}
+                isMachineTranslated={e.isMachineTranslated}
+                preserveLineBreaks
+              />
+            )}
           </div>
         ))}
       </div>
@@ -394,8 +448,16 @@ function CandidateInner() {
         {data.educations.map((e) => (
           <div key={e.id} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
             <strong>{e.school}</strong>
+            {e.field ? (
+              <UgcText
+                text={e.field}
+                contentLocale={e.contentLocale}
+                isMachineTranslated={e.isMachineTranslated}
+              />
+            ) : null}
             <div className="muted" style={{ fontSize: '0.85rem' }}>
-              {[enumLabel('degree', e.degree), e.field].filter(Boolean).join(' | ')} |{' '}
+              {[enumLabel('degree', e.degree)].filter(Boolean).join(' | ')}
+              {e.degree ? ' | ' : ''}
               {fmtDate(e.startDate, nowLabel)} - {fmtDate(e.endDate, nowLabel)}
             </div>
           </div>

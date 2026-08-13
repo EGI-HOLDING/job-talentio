@@ -39,6 +39,11 @@ export const recruiter = {
     ru: 'Удалённо: город необязателен (регион найма или часовой пояс). В офисе/гибрид: город обязателен до публикации.',
     en: 'Remote: city is optional (hiring region/timezone hub). Onsite/Hybrid: city required before publish.',
   },
+  'rec.postLocaleHint': {
+    uz: 'Sarlavha va tavsifni yozgan tilingiz. Boshqa tilda ko‘rayotganlar tarjima qilishi mumkin.',
+    ru: 'Язык, на котором вы написали заголовок и описание. Посетители на другом языке смогут перевести текст.',
+    en: 'This is the language you wrote the title and description in. People browsing in another language can translate it.',
+  },
   'rec.addSkillToJob': {
     uz: 'Ish e’loniga ko‘nikma qo‘shish',
     ru: 'Добавить навык к вакансии',

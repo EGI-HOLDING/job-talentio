@@ -1,13 +1,37 @@
 'use client';
 
+import { useState } from 'react';
 import { Link } from '@/lib/navigation';
+import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { UgcText } from '@/components/ui/UgcText';
 import { NEWS_CATEGORY_LABEL_KEY, formatNewsDate } from '@/components/news/NewsCard';
 import type { NewsArticleDetail } from '@/lib/newsSeo';
 
-export function NewsArticleView({ article }: { article: NewsArticleDetail }) {
+export function NewsArticleView({ article: initial }: { article: NewsArticleDetail }) {
   const { t, locale } = useI18n();
-  const paragraphs = article.body.split(/\n\n+/).filter((p) => p.trim().length > 0);
+  const [article, setArticle] = useState(initial);
+  const [translating, setTranslating] = useState(false);
+  const [error, setError] = useState('');
+
+  async function machineTranslate() {
+    setTranslating(true);
+    setError('');
+    try {
+      const res = await api<{ status: string; article: NewsArticleDetail }>(
+        `/news/slug/${encodeURIComponent(article.slug)}/translate/${locale}`,
+        { method: 'POST' },
+      );
+      if (res.article) setArticle(res.article);
+      if (res.status === 'disabled' || res.status === 'budget-exceeded') {
+        setError(t('ui.translateFailed'));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('ui.translateFailed'));
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   return (
     <div className="shell">
@@ -33,22 +57,23 @@ export function NewsArticleView({ article }: { article: NewsArticleDetail }) {
           </figure>
         )}
 
-        {article.contentLocale && article.contentLocale !== locale && (
-          <p className="ugc-notice muted">
-            {article.isMachineTranslated
-              ? t('ui.autoTranslated')
-              : t('ui.writtenInLanguage').replace(
-                  '{language}',
-                  t(`ui.locale${article.contentLocale.charAt(0).toUpperCase()}${article.contentLocale.slice(1)}`),
-                )}
+        {error && (
+          <p className="error" style={{ margin: '0 0 1rem' }}>
+            {error}
           </p>
         )}
 
-        <div className="news-article-body">
-          {paragraphs.map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-        </div>
+        <UgcText
+          text={article.body}
+          contentLocale={article.contentLocale}
+          isMachineTranslated={article.isMachineTranslated}
+          preserveLineBreaks
+          className="news-article-body"
+          translating={translating}
+          onTranslate={
+            article.canMachineTranslate ? () => void machineTranslate() : undefined
+          }
+        />
 
         {article.sourceName && article.sourceUrl && (
           <p className="muted" style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
