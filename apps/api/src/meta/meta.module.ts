@@ -4,6 +4,7 @@ import { MetaService } from './meta.service';
 import { GeoBackfillService } from './geo-backfill.service';
 import { IndustryBackfillService } from './industry-backfill.service';
 import { JobLanguageBackfillService } from './job-language-backfill.service';
+import { EgiHospitalityDemoBackfillService } from './egi-hospitality-demo-backfill.service';
 import { VipCompanyBackfillService } from './vip-company-backfill.service';
 import { CompanyLogoBackfillService } from './company-logo-backfill.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -17,6 +18,7 @@ import { StorageModule } from '../storage/storage.module';
     GeoBackfillService,
     IndustryBackfillService,
     JobLanguageBackfillService,
+    EgiHospitalityDemoBackfillService,
     VipCompanyBackfillService,
     CompanyLogoBackfillService,
   ],

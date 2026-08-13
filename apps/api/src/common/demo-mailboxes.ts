@@ -28,6 +28,10 @@ export const DEMO_MAILBOX_DOMAINS = [
   'caravan.uz',
   'nukussmart.uz',
   'chirchiqpharma.uz',
+  'hadith-hotel.com',
+  'hotel-kampoengindonesia.com',
+  '7oz-espresso.com',
+  'saji-nusantara.com',
 ] as const;
 
 const DEMO_DOMAIN_SET = new Set(

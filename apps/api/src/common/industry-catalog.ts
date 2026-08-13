@@ -138,6 +138,10 @@ export const COMPANY_INDUSTRY_OVERRIDES: Record<string, string> = {
   'uztelecom-digital': 'telecom-networking',
   'samarkand-digital': 'media',
   'bukhara-heritage': 'hospitality-restaurants',
+  'hadith-hotel': 'hospitality-restaurants',
+  'kampoeng-indonesia': 'hospitality-restaurants',
+  '7oz-espresso': 'hospitality-restaurants',
+  'saji-nusantara': 'hospitality-restaurants',
 };
 
 export function allIndustrySlugs(): string[] {
