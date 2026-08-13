@@ -26,6 +26,7 @@ export const ui = {
     en: 'Could not translate this text',
   },
   'ui.location': { uz: 'Manzil', ru: 'Локация', en: 'Location' },
+  'ui.matchRole': { uz: 'Lavozim', ru: 'Должность', en: 'Role' },
   'ui.matchOk': { uz: 'Mos', ru: 'Совпадает', en: 'OK' },
   'ui.matchMissing': { uz: 'Yetishmaydi', ru: 'Не хватает', en: 'Missing' },
   'ui.matchMissingRequired': {
