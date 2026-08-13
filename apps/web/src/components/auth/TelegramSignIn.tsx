@@ -452,7 +452,7 @@ export function TelegramSignIn({
               d="M21.5 3.2 2.8 10.4c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 11.1-7c.5-.3.9-.1.6.2l-9 8.1-.3 4.8c.4 0 .6-.2.8-.4l2.1-2 4.4 3.2c.8.5 1.4.2 1.6-.7l2.9-13.7c.3-1.2-.4-1.8-1.1-1.5z"
             />
           </svg>
-          {busy ? t('signingIn') : t('telegramContinue')}
+          {busy ? t('signingIn') : mode === 'connect' ? t('telegramConnectCta') : t('telegramContinue')}
         </button>
       </div>
       <p className="muted" style={{ fontSize: '0.8rem', margin: '0.55rem 0 0', textAlign: 'center' }}>

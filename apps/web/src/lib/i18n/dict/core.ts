@@ -457,6 +457,7 @@ export const core = {
   alerts: { uz: 'Ish ogohlantirishlari', ru: 'Оповещения', en: 'Job alerts' },
   profile: { uz: 'Profil', ru: 'Профиль', en: 'Profile' },
   account: { uz: 'Hisob', ru: 'Аккаунт', en: 'Account' },
+  security: { uz: 'Xavfsizlik', ru: 'Безопасность', en: 'Security' },
   fullName: { uz: 'To‘liq ism', ru: 'Полное имя', en: 'Full name' },
   email: { uz: 'Email', ru: 'Email', en: 'Email' },
   password: { uz: 'Parol', ru: 'Пароль', en: 'Password' },
@@ -616,6 +617,11 @@ export const core = {
     ru: 'Войти через Telegram',
     en: 'Continue with Telegram',
   },
+  telegramConnectCta: {
+    uz: 'Telegramni ulash',
+    ru: 'Подключить Telegram',
+    en: 'Connect Telegram',
+  },
   telegramSwitchHint: {
     uz: 'Agar Telegram avvalgi akkauntni tanlasa, boshqa akkauntni tanlang.',
     ru: 'Если Telegram подставил прошлый аккаунт, выберите другой.',
@@ -657,14 +663,34 @@ export const core = {
     en: 'Telegram',
   },
   telegramConnected: {
-    uz: 'Telegram hisobi ulangan.',
-    ru: 'Аккаунт Telegram подключён.',
-    en: 'Telegram is connected.',
+    uz: 'Telegram hisobi ulangan. Shu hisob orqali kirasiz va ish ogohlantirishlari shu yerga kelishi mumkin.',
+    ru: 'Telegram подключён. Им можно входить, и на него могут приходить оповещения о вакансиях.',
+    en: 'Telegram is connected. You can sign in with it, and job alerts can use the same chat.',
   },
   telegramConnectHint: {
-    uz: 'Mavjud hisobga Telegram orqali kirishni ulang.',
-    ru: 'Подключите Telegram, чтобы входить в этот аккаунт.',
-    en: 'Connect Telegram to sign in to this account next time.',
+    uz: 'Telegramni ulang: keyingi safar shu hisob bilan kirasiz va ish ogohlantirishlarini botga yuborish mumkin.',
+    ru: 'Подключите Telegram, чтобы входить в этот аккаунт и получать оповещения о вакансиях в боте.',
+    en: 'Connect Telegram to sign in to this account and to receive job alerts in the same chat.',
+  },
+  telegramOpenBot: {
+    uz: 'Botni ochish',
+    ru: 'Открыть бота',
+    en: 'Open bot',
+  },
+  telegramOpenBotHint: {
+    uz: 'Ogohlantirishlar yetib borishi uchun botda Start ni bosing.',
+    ru: 'Нажмите Start в боте, чтобы оповещения могли доходить.',
+    en: 'Press Start in the bot so job alerts can reach you.',
+  },
+  telegramUnlinkTitle: {
+    uz: 'Telegramni uzasizmi?',
+    ru: 'Отвязать Telegram?',
+    en: 'Unlink Telegram?',
+  },
+  telegramUnlinkMessage: {
+    uz: 'Telegram orqali kirish o‘chadi va Telegram ogohlantirishlari to‘xtaydi. Ilova va email ogohlantirishlari o‘zgarishsiz qoladi.',
+    ru: 'Вход через Telegram отключится, и оповещения в Telegram прекратятся. Оповещения в приложении и по email не изменятся.',
+    en: 'This turns off Telegram sign-in and stops Telegram job alerts. In-app and email alerts stay as they are.',
   },
   telegramEmailLaterHint: {
     uz: 'Email keyinroq Settings orqali qo‘shiladi va tasdiqlanadi.',

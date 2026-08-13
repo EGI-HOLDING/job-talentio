@@ -215,14 +215,14 @@ export const employee = {
   'emp.alertChannelEmail': { uz: 'Email', ru: 'Email', en: 'Email' },
   'emp.alertChannelTelegram': { uz: 'Telegram', ru: 'Telegram', en: 'Telegram' },
   'emp.alertTelegramLinkHint': {
-    uz: 'Avval Settings orqali Telegramni ulang.',
-    ru: 'Сначала привяжите Telegram в настройках.',
-    en: 'Link Telegram in Settings first.',
+    uz: 'Avval sozlamalarda, Xavfsizlik bo‘limida Telegramni ulang.',
+    ru: 'Сначала подключите Telegram в настройках, раздел Безопасность.',
+    en: 'Connect Telegram in Settings, Security first.',
   },
   'emp.alertTelegramNotLinked': {
-    uz: 'Telegram yoqilgan, lekin hisob ulanmagan.',
-    ru: 'Telegram включён, но аккаунт не привязан.',
-    en: 'Telegram is on, but this account is not linked yet.',
+    uz: 'Telegram yoqilgan, lekin hisob ulanmagan. Sozlamalar, Xavfsizlik bo‘limida ulang.',
+    ru: 'Telegram включён, но аккаунт не привязан. Подключите его в настройках, раздел Безопасность.',
+    en: 'Telegram is on, but this account is not linked yet. Connect it in Settings, Security.',
   },
 
   // Profile basics

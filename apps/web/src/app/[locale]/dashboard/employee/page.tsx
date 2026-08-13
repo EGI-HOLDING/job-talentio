@@ -1008,7 +1008,7 @@ function EmployeeDashboardInner() {
                   {notifyTelegram && !telegramLinked && (
                     <p className="muted" style={{ fontSize: '0.85rem', margin: '0.35rem 0 0' }}>
                       {t('emp.alertTelegramLinkHint')}{' '}
-                      <Link href="/settings">{t('settings')}</Link>
+                      <Link href="/settings#security">{t('settings')}</Link>
                     </p>
                   )}
                 </fieldset>
@@ -1035,7 +1035,7 @@ function EmployeeDashboardInner() {
                   {a.notifyTelegram && !telegramLinked && (
                     <p className="muted" style={{ fontSize: '0.85rem', margin: '0.25rem 0' }}>
                       {t('emp.alertTelegramNotLinked')}{' '}
-                      <Link href="/settings">{t('settings')}</Link>
+                      <Link href="/settings#security">{t('settings')}</Link>
                     </p>
                   )}
                   {(a.skills || []).length > 0 && (

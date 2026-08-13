@@ -11,6 +11,7 @@ import { translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { sha256 } from '../common/dedupe';
 import { emailLocale } from '../common/i18n/email-locale';
+import { decideBareStart, decideTokenLink } from './telegram.link';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -123,42 +124,62 @@ export class TelegramService implements OnModuleInit {
     if (chatId == null || !text) return { ok: true };
 
     const chat = String(chatId);
+    const linked = await this.prisma.user.findUnique({
+      where: { telegramId: chat },
+      select: { id: true, locale: true },
+    });
+    const chatLocale = linked ? emailLocale(linked.locale) : 'uz';
+
     if (text === '/stop' || text.startsWith('/stop ')) {
       await this.prisma.user.updateMany({
         where: { telegramId: chat },
         data: { telegramId: null },
       });
-      await this.sendMessage(chat, translateMessage('telegram.link.stopped', 'uz'));
+      await this.sendMessage(chat, translateMessage('telegram.link.stopped', chatLocale));
       return { ok: true };
     }
 
-    if (text === '/start' || text === '/start@' + this.botUsername()) {
-      await this.sendMessage(chat, translateMessage('telegram.link.help', 'uz'));
-      return { ok: true };
-    }
-
-    const startMatch = text.match(/^\/start(?:@[A-Za-z0-9_]+)?\s+([a-f0-9]{32,96})$/i);
+    const startMatch = text.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([a-f0-9]{32,96}))?$/i);
     if (!startMatch) {
-      await this.sendMessage(chat, translateMessage('telegram.link.help', 'uz'));
+      await this.sendMessage(chat, translateMessage('telegram.link.help', chatLocale));
       return { ok: true };
     }
 
-    const tokenHash = sha256(startMatch[1]);
+    const rawToken = startMatch[1];
+    if (!rawToken) {
+      const key =
+        decideBareStart(linked?.id ?? null) === 'already'
+          ? 'telegram.link.already'
+          : 'telegram.link.help';
+      await this.sendMessage(chat, translateMessage(key, chatLocale));
+      return { ok: true };
+    }
+
+    const tokenHash = sha256(rawToken);
     const row = await this.prisma.telegramLinkToken.findUnique({
       where: { tokenHash },
       include: { user: { select: { id: true, locale: true } } },
     });
     if (!row || row.expiresAt < new Date()) {
       if (row) await this.prisma.telegramLinkToken.delete({ where: { id: row.id } }).catch(() => undefined);
-      await this.sendMessage(chat, translateMessage('telegram.link.expired', 'uz'));
+      await this.sendMessage(chat, translateMessage('telegram.link.expired', chatLocale));
+      return { ok: true };
+    }
+
+    const locale = emailLocale(row.user.locale);
+    const decision = decideTokenLink(row.userId, linked?.id ?? null);
+    if (decision === 'taken') {
+      await this.sendMessage(chat, translateMessage('telegram.link.taken', locale));
+      return { ok: true };
+    }
+
+    if (decision === 'already') {
+      await this.prisma.telegramLinkToken.deleteMany({ where: { userId: row.userId } });
+      await this.sendMessage(chat, translateMessage('telegram.link.already', locale));
       return { ok: true };
     }
 
     await this.prisma.$transaction([
-      this.prisma.user.updateMany({
-        where: { telegramId: chat, id: { not: row.userId } },
-        data: { telegramId: null },
-      }),
       this.prisma.user.update({
         where: { id: row.userId },
         data: { telegramId: chat },
@@ -166,7 +187,6 @@ export class TelegramService implements OnModuleInit {
       this.prisma.telegramLinkToken.deleteMany({ where: { userId: row.userId } }),
     ]);
 
-    const locale = emailLocale(row.user.locale);
     await this.sendMessage(chat, translateMessage('telegram.link.ok', locale));
     return { ok: true };
   }

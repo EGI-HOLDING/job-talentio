@@ -6,9 +6,18 @@ import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useEnumLabel, useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 
 type Section = 'account' | 'preferences' | 'privacy' | 'security';
+
+const SETTINGS_SECTIONS: Section[] = ['account', 'preferences', 'privacy', 'security'];
+const TELEGRAM_BOT = (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '').replace(/^@/, '');
+const TELEGRAM_BOT_URL = TELEGRAM_BOT ? `https://t.me/${TELEGRAM_BOT}` : '';
+
+function isSettingsSection(value: string): value is Section {
+  return (SETTINGS_SECTIONS as string[]).includes(value);
+}
 
 function passwordStrength(pw: string): { score: number; labelKey: string; color: string } {
   let score = 0;
@@ -45,6 +54,7 @@ export default function SettingsPage() {
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramBusy, setTelegramBusy] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
@@ -84,6 +94,26 @@ export default function SettingsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    function applyHash() {
+      const hash = window.location.hash.replace(/^#/, '');
+      if (!isSettingsSection(hash)) return;
+      if (hash === 'privacy' && getSession()?.user.role !== 'EMPLOYEE') return;
+      setSection(hash);
+    }
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
+
+  function goToSection(next: Section) {
+    setSection(next);
+    setMsg(null);
+    setErr(null);
+    setPwMsg(null);
+    window.history.replaceState(null, '', `#${next}`);
+  }
 
   async function savePrivacy(e: React.FormEvent) {
     e.preventDefault();
@@ -217,6 +247,7 @@ export default function SettingsPage() {
     try {
       await api('/auth/telegram/link', { method: 'DELETE' });
       await refreshTelegramStatus();
+      setConfirmUnlink(false);
     } catch (error) {
       setErr(error instanceof Error ? error.message : t('ui.telegramLinkFailed'));
     } finally {
@@ -226,8 +257,27 @@ export default function SettingsPage() {
 
   if (!session) return null;
 
+  const openBotChip = TELEGRAM_BOT_URL ? (
+    <a className="chip" href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">
+      {t('telegramOpenBot')}
+    </a>
+  ) : null;
+
   return (
     <div className="shell">
+      {confirmUnlink ? (
+        <ConfirmModal
+          title={t('telegramUnlinkTitle')}
+          message={t('telegramUnlinkMessage')}
+          confirmLabel={t('ui.telegramUnlink')}
+          danger
+          busy={telegramBusy}
+          onCancel={() => {
+            if (!telegramBusy) setConfirmUnlink(false);
+          }}
+          onConfirm={() => void unlinkTelegram()}
+        />
+      ) : null}
       <div className="settings-layout">
         <aside className="settings-nav">
           {(
@@ -235,19 +285,14 @@ export default function SettingsPage() {
               ['account', t('account')],
               ['preferences', t('language')],
               ...(isEmployee ? [['privacy', t('ui.privacy')] as [Section, string]] : []),
-              ['security', t('changePassword')],
+              ['security', t('security')],
             ] as Array<[Section, string]>
           ).map(([k, label]) => (
             <button
               key={k}
               type="button"
               className={section === k ? 'active' : ''}
-              onClick={() => {
-                setSection(k);
-                setMsg(null);
-                setErr(null);
-                setPwMsg(null);
-              }}
+              onClick={() => goToSection(k)}
             >
               {label}
             </button>
@@ -427,13 +472,11 @@ export default function SettingsPage() {
                 </p>
                 <div className="chips">
                   {!telegramLinked ? (
-                    <button type="button" className="chip" disabled={telegramBusy} onClick={() => void linkTelegram()}>
-                      {t('ui.telegramLink')}
+                    <button type="button" className="chip" onClick={() => goToSection('security')}>
+                      {t('ui.telegramConnectInSecurity')}
                     </button>
                   ) : (
-                    <button type="button" className="chip" disabled={telegramBusy} onClick={() => void unlinkTelegram()}>
-                      {t('ui.telegramUnlink')}
-                    </button>
+                    openBotChip
                   )}
                   <button
                     type="button"
@@ -540,10 +583,32 @@ export default function SettingsPage() {
               )}
 
               <h3 style={{ marginTop: '2rem' }}>{t('telegramConnectTitle')}</h3>
-              {session.user.telegramLinked ? (
-                <p className="muted" style={{ marginTop: 0 }}>
-                  {t('telegramConnected')}
-                </p>
+              {telegramLinked ? (
+                <>
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('telegramConnected')}
+                  </p>
+                  <p className="muted">{t('telegramOpenBotHint')}</p>
+                  <div className="chips">
+                    {openBotChip}
+                    <button
+                      type="button"
+                      className="chip"
+                      disabled={telegramBusy}
+                      onClick={() => setConfirmUnlink(true)}
+                    >
+                      {t('ui.telegramUnlink')}
+                    </button>
+                    <button
+                      type="button"
+                      className="chip"
+                      disabled={telegramBusy}
+                      onClick={() => void refreshTelegramStatus().catch(() => undefined)}
+                    >
+                      {t('ui.telegramRefresh')}
+                    </button>
+                  </div>
+                </>
               ) : (
                 <>
                   <p className="muted" style={{ marginTop: 0 }}>
@@ -553,10 +618,25 @@ export default function SettingsPage() {
                     mode="connect"
                     onConnected={() => {
                       const s = getSession();
-                      if (s) setSession(s);
+                      if (s) {
+                        setSession(s);
+                        setTelegramLinked(Boolean(s.user.telegramLinked));
+                      }
                       setMsg(t('telegramConnected'));
                     }}
                   />
+                  {!TELEGRAM_BOT ? (
+                    <div className="chips" style={{ marginTop: '0.75rem' }}>
+                      <button
+                        type="button"
+                        className="chip"
+                        disabled={telegramBusy}
+                        onClick={() => void linkTelegram()}
+                      >
+                        {t('ui.telegramLink')}
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               )}
 

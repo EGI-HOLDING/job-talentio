@@ -115,15 +115,20 @@ export const ui = {
   'ui.privacy': { uz: 'Maxfiylik', ru: 'Конфиденциальность', en: 'Privacy' },
   'ui.telegramAlerts': { uz: 'Telegram ogohlantirishlari', ru: 'Оповещения Telegram', en: 'Telegram alerts' },
   'ui.telegramAlertsHint': {
-    uz: 'Ish ogohlantirishlarini Telegramga yuborish uchun botni ulang. /stop yozsangiz uziladi.',
-    ru: 'Привяжите бота, чтобы получать оповещения о вакансиях в Telegram. /stop отключает связь.',
-    en: 'Link the bot to receive job alerts in Telegram. Send /stop in the chat to unlink.',
+    uz: 'Ish ogohlantirishlari Telegram orqali kirishdagi bilan bir xil hisobga yuboriladi. Har bir ogohlantirishda kanalni yoqing. /stop yozsangiz kirish ham uziladi.',
+    ru: 'Оповещения о вакансиях идут на тот же Telegram, что и вход. Включите канал у каждого оповещения. /stop также отключает вход.',
+    en: 'Job alerts use the same Telegram account as sign-in. Turn the channel on for each alert. /stop also turns off Telegram sign-in.',
   },
   'ui.telegramLinked': { uz: 'Telegram ulangan', ru: 'Telegram привязан', en: 'Telegram linked' },
   'ui.telegramNotLinked': { uz: 'Telegram ulanmagan', ru: 'Telegram не привязан', en: 'Telegram not linked' },
   'ui.telegramLink': { uz: 'Telegramni ulash', ru: 'Привязать Telegram', en: 'Link Telegram' },
   'ui.telegramUnlink': { uz: 'Telegramni uzish', ru: 'Отвязать Telegram', en: 'Unlink Telegram' },
   'ui.telegramRefresh': { uz: 'Holatni yangilash', ru: 'Обновить статус', en: 'Refresh status' },
+  'ui.telegramConnectInSecurity': {
+    uz: 'Xavfsizlik bo‘limida ulash',
+    ru: 'Подключить в разделе Безопасность',
+    en: 'Connect in Security',
+  },
   'ui.telegramLinkFailed': {
     uz: 'Telegramni ulab bo‘lmadi',
     ru: 'Не удалось привязать Telegram',
