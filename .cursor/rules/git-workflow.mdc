@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Git workflow (Job Talentio)
 
-Also follow `.cursor/rules/development-lifecycle.mdc` (CI/CD + staging/prod gates) and `.cursor/rules/check-working-tree-before-execute.mdc` (inspect branch/PR before any mutating work).
+Also follow `.cursor/rules/development-lifecycle.mdc` (CI/CD + staging/prod gates) and `.cursor/rules/check-working-tree-before-execute.mdc` (Gate 1 before work, Gate 2 before commit/PR).
 
 ## Long-lived branches
 
@@ -35,6 +35,7 @@ This repo opts out of “wait for the user to ask before committing.”
 
 After finishing a coherent unit of work (feature, fix, or chore), **always** do this without asking:
 
+0. **Gate 2** in `check-working-tree-before-execute.mdc`: `git status`, `git diff` / `--stat`, `git log origin/develop..HEAD`, `git diff --stat origin/develop...HEAD`. Confirm the files and commits match the request.
 1. **Commit** relevant files (never secrets: `.env`, credentials, private keys).
    - Message: concise, why > what; match recent `git log` style.
    - PowerShell: `git commit -m @"...multiline..."@` (no interactive `-i`).

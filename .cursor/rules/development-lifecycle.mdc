@@ -37,8 +37,8 @@ local work → PR → develop → CI green → Railway staging → verify stagin
 
 ## Agent behavior (mandatory)
 
-- Sync `develop` before starting; work on a short-lived branch.
-- After a coherent unit of work: commit (no secrets) → push → PR to **`develop`**.
+- Sync `develop` before starting; work on a short-lived branch. Run Gate 1 (`check-working-tree-before-execute.mdc`) first.
+- After a coherent unit of work: Gate 2 (status + diff + log vs `develop`) → commit (no secrets) → push → PR to **`develop`**.
 - Treat CI failures as blockers; fix on the same branch.
 - Call out migration / env / `NEXT_PUBLIC_*` / Dockerfile changes in the PR (staging & prod need redeploy/config).
 - Do not invent ad-hoc deploy paths; use Railway Git deploy from `develop`/`main`.
