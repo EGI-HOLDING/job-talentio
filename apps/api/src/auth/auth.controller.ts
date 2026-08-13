@@ -26,6 +26,7 @@ import {
   confirmEmailChangeSchema,
   refreshTokenSchema,
   logoutSchema,
+  deleteAccountSchema,
 } from '@job-talentio/shared';
 import { AuthService } from './auth.service';
 import { parseDto } from '../common/utils';
@@ -102,6 +103,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   clearAvatar(@CurrentUser() user: AuthUser) {
     return this.auth.clearAvatar(user.id);
+  }
+
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  deleteMe(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const data = parseDto(deleteAccountSchema, body);
+    return this.auth.deleteMyAccount(user.id, data);
   }
 
   @Post('change-password')

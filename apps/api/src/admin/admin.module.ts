@@ -7,9 +7,10 @@ import { AdminCatalogService } from './admin-catalog.service';
 import { AdminUsersService } from './admin-users.service';
 import { BillingModule } from '../billing/billing.module';
 import { AuthModule } from '../auth/auth.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [BillingModule, AuthModule],
+  imports: [BillingModule, AuthModule, UsersModule],
   controllers: [AdminController],
   providers: [AdminService, AdminListsService, AdminBulkService, AdminCatalogService, AdminUsersService],
 })

@@ -20,6 +20,8 @@ import {
   companySchema,
   companyTranslationSchema,
   companyInviteSchema,
+  companyCloseSchema,
+  companyTransferOwnershipSchema,
 } from '@job-talentio/shared';
 import { CompaniesService } from './companies.service';
 import {
@@ -187,6 +189,26 @@ export class CompaniesController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.companies.removeMember(user, id, userId);
+  }
+
+  @Post(':id/transfer-ownership')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  transferOwnership(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(companyTransferOwnershipSchema, body);
+    return this.companies.transferOwnership(user, id, data.userId);
+  }
+
+  @Post(':id/close')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  closeCompany(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const data = parseDto(companyCloseSchema, body);
+    return this.companies.closeCompany(user, id, data.name);
   }
 
   @Post(':id/follow')

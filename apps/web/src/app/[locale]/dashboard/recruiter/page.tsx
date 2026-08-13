@@ -28,6 +28,7 @@ import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
 import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
@@ -163,6 +164,9 @@ function RecruiterDashboard() {
   const [inviteRole, setInviteRole] = useState<'RECRUITER' | 'ADMIN'>('RECRUITER');
   const [inviteLocale, setInviteLocale] = useState<'uz' | 'ru' | 'en'>(locale);
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmTransferId, setConfirmTransferId] = useState<string | null>(null);
+  const [companyBusy, setCompanyBusy] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<
     Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
   >([]);
@@ -179,6 +183,10 @@ function RecruiterDashboard() {
     const role = memberships.find((m) => m.companyId === companyId)?.role;
     return role === 'OWNER' || role === 'ADMIN';
   }, [memberships, companyId]);
+  const isOwner = useMemo(
+    () => memberships.find((m) => m.companyId === companyId)?.role === 'OWNER',
+    [memberships, companyId],
+  );
   const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
   const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
   const activeJobLimit = PLAN_LIMITS[planCode].activeJobs;
@@ -699,6 +707,43 @@ function RecruiterDashboard() {
     }
   }
 
+  async function transferOwnership(userId: string) {
+    setCompanyBusy(true);
+    try {
+      await api(`/companies/${companyId}/transfer-ownership`, {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      });
+      flash(t('rec.ownershipTransferred'));
+      setConfirmTransferId(null);
+      await refreshMemberships();
+      await loadCompanyDetail(companyId);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : t('rec.transferFailed'), 'error');
+    } finally {
+      setCompanyBusy(false);
+    }
+  }
+
+  async function closeCompany() {
+    if (!company?.name) return;
+    setCompanyBusy(true);
+    try {
+      await api(`/companies/${companyId}/close`, {
+        method: 'POST',
+        body: JSON.stringify({ name: company.name }),
+      });
+      flash(t('rec.companyClosed'));
+      setConfirmClose(false);
+      await refreshMemberships();
+      await loadCompanyDetail(companyId);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : t('rec.closeFailed'), 'error');
+    } finally {
+      setCompanyBusy(false);
+    }
+  }
+
   const byStage = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const s of STAGES) map[s] = [];
@@ -714,6 +759,33 @@ function RecruiterDashboard() {
 
   return (
     <div className="shell dash-grid">
+      {confirmClose && company?.name ? (
+        <ConfirmModal
+          title={t('rec.closeCompany')}
+          message={t('rec.closeCompanyConfirm')}
+          confirmLabel={t('rec.closeCompany')}
+          danger
+          busy={companyBusy}
+          requireTypedValue={company.name}
+          typedLabel={t('companyName')}
+          onCancel={() => {
+            if (!companyBusy) setConfirmClose(false);
+          }}
+          onConfirm={() => void closeCompany()}
+        />
+      ) : null}
+      {confirmTransferId ? (
+        <ConfirmModal
+          title={t('rec.transferOwnership')}
+          message={t('rec.confirmTransferOwnership')}
+          confirmLabel={t('rec.transferOwnership')}
+          busy={companyBusy}
+          onCancel={() => {
+            if (!companyBusy) setConfirmTransferId(null);
+          }}
+          onConfirm={() => void transferOwnership(confirmTransferId)}
+        />
+      ) : null}
       <aside className="dash-nav">
         {(
           [
@@ -2069,13 +2141,24 @@ function RecruiterDashboard() {
                       <span className="muted">({m.role})</span>
                     </span>
                     {m.role !== 'OWNER' && (
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => removeMember(m.userId || m.user?.id)}
-                      >
-                        {t('rec.remove')}
-                      </button>
+                      <span style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
+                        {isOwner && !company.anonymizedAt ? (
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => setConfirmTransferId(m.userId || m.user?.id)}
+                          >
+                            {t('rec.transferOwnership')}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => removeMember(m.userId || m.user?.id)}
+                        >
+                          {t('rec.remove')}
+                        </button>
+                      </span>
                     )}
                   </li>
                 ))}
@@ -2209,6 +2292,30 @@ function RecruiterDashboard() {
               </>
               ) : null}
             </div>
+            {isOwner ? (
+              <div className="card" style={{ gridColumn: '1 / -1' }}>
+                <h3>{t('rec.closeCompany')}</h3>
+                {company.anonymizedAt ? (
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('rec.companyAlreadyClosed')}{' '}
+                    <a href={localeHref('/settings#security')}>{t('ui.deleteAccount')}</a>
+                  </p>
+                ) : (company.members?.length ?? 0) > 1 ? (
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t('rec.closeCompanyNeedTransfer')}
+                  </p>
+                ) : (
+                  <>
+                    <p className="muted" style={{ marginTop: 0 }}>
+                      {t('rec.closeCompanyHint')}
+                    </p>
+                    <button type="button" className="danger" onClick={() => setConfirmClose(true)}>
+                      {t('rec.closeCompany')}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
       </section>

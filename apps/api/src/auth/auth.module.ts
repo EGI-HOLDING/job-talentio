@@ -9,11 +9,13 @@ import { AvatarBackfillService } from './avatar-backfill.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
 import { CompaniesModule } from '../companies/companies.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     CompaniesModule,
     TelegramModule,
+    UsersModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
