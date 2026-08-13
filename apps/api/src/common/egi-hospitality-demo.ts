@@ -2,6 +2,10 @@ import type { CompanySize, PrismaClient, WorkMode } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { jobFingerprint } from './dedupe';
 import { resolveJobTitle } from './title-resolve';
+import {
+  backfillCompanyLogos,
+  type DemoLogoUploader,
+} from './company-logo-backfill';
 
 /** Showcase hospitality brands for demo / staging (VIP + homepage). */
 export const EGI_HOSPITALITY_DEMO_COMPANIES = [
@@ -103,11 +107,12 @@ export async function needsEgiHospitalityDemoBackfill(db: Db): Promise<boolean> 
     where: { slug: { in: slugs } },
     select: {
       slug: true,
+      logoUrl: true,
       _count: { select: { jobPosts: { where: { status: 'PUBLISHED' } } } },
     },
   });
   if (rows.length < slugs.length) return true;
-  return rows.some((r) => r._count.jobPosts < 1);
+  return rows.some((r) => r._count.jobPosts < 1 || !r.logoUrl);
 }
 
 /**
@@ -116,8 +121,8 @@ export async function needsEgiHospitalityDemoBackfill(db: Db): Promise<boolean> 
  */
 export async function backfillEgiHospitalityDemo(
   db: Db,
-  opts?: { log?: (msg: string) => void },
-): Promise<{ companies: number; jobs: number }> {
+  opts?: { log?: (msg: string) => void; logoUploader?: DemoLogoUploader },
+): Promise<{ companies: number; jobs: number; logosUploaded: number; logosUpdated: number }> {
   const log = opts?.log ?? (() => undefined);
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const hospitality = await db.industry.findFirst({
@@ -130,7 +135,7 @@ export async function backfillEgiHospitalityDemo(
   });
   if (!hospitality || !category) {
     log('EGI hospitality demo skipped: industry or category missing');
-    return { companies: 0, jobs: 0 };
+    return { companies: 0, jobs: 0, logosUploaded: 0, logosUpdated: 0 };
   }
 
   let companies = 0;
@@ -237,5 +242,12 @@ export async function backfillEgiHospitalityDemo(
   }
 
   log(`EGI hospitality demo: companies=${companies} jobsCreated=${jobs}`);
-  return { companies, jobs };
+  let logosUploaded = 0;
+  let logosUpdated = 0;
+  if (opts?.logoUploader) {
+    const logos = await backfillCompanyLogos(db, opts.logoUploader, { log });
+    logosUploaded = logos.uploaded;
+    logosUpdated = logos.updated;
+  }
+  return { companies, jobs, logosUploaded, logosUpdated };
 }
