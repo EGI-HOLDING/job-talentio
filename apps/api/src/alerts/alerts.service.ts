@@ -14,6 +14,7 @@ import {
   buildJobAlertEmailHtml,
   buildJobAlertTelegramText,
   decideAlertChannels,
+  ensureDeliverableAlertChannels,
   hasAnyAlertChannel,
   shouldStampLastSentAt,
 } from './alerts.deliver';
@@ -31,6 +32,29 @@ export class AlertsService {
 
   setQueue(queue: Queue) {
     this.queue = queue;
+  }
+
+  private async userHasTelegram(userId: string) {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { telegramId: true },
+    });
+    return Boolean(row?.telegramId);
+  }
+
+  private async resolveAlertChannels(
+    userId: string,
+    flags: { notifyInApp?: boolean; notifyEmail?: boolean; notifyTelegram?: boolean },
+    current?: { notifyInApp: boolean; notifyEmail: boolean; notifyTelegram: boolean },
+  ) {
+    const linked = await this.userHasTelegram(userId);
+    const notifyInApp = flags.notifyInApp ?? current?.notifyInApp ?? true;
+    const notifyEmail = flags.notifyEmail ?? current?.notifyEmail ?? true;
+    let notifyTelegram = flags.notifyTelegram ?? current?.notifyTelegram ?? false;
+    if (!linked && (current == null || flags.notifyTelegram === true)) {
+      notifyTelegram = false;
+    }
+    return ensureDeliverableAlertChannels({ notifyInApp, notifyEmail, notifyTelegram });
   }
 
   async create(
@@ -84,6 +108,12 @@ export class AlertsService {
       throw new ConflictException('An identical job alert already exists');
     }
 
+    const channels = await this.resolveAlertChannels(user.id, {
+      notifyInApp: data.notifyInApp,
+      notifyEmail: data.notifyEmail,
+      notifyTelegram: data.notifyTelegram,
+    });
+
     const alert = await this.prisma.jobAlert.create({
       data: {
         userId: user.id,
@@ -92,9 +122,7 @@ export class AlertsService {
         cityId,
         categoryId,
         frequency: data.frequency ?? 'DAILY',
-        notifyInApp: data.notifyInApp ?? true,
-        notifyEmail: data.notifyEmail ?? true,
-        notifyTelegram: data.notifyTelegram ?? false,
+        ...channels,
       },
     });
 
@@ -170,6 +198,16 @@ export class AlertsService {
       }
     }
 
+    const channels = await this.resolveAlertChannels(
+      userId,
+      {
+        notifyInApp: data.notifyInApp,
+        notifyEmail: data.notifyEmail,
+        notifyTelegram: data.notifyTelegram,
+      },
+      alert,
+    );
+
     await this.prisma.jobAlert.update({
       where: { id },
       data: {
@@ -179,9 +217,7 @@ export class AlertsService {
         categoryId,
         frequency: data.frequency,
         isActive: data.isActive,
-        notifyInApp: data.notifyInApp,
-        notifyEmail: data.notifyEmail,
-        notifyTelegram: data.notifyTelegram,
+        ...channels,
       },
     });
 

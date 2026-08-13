@@ -589,7 +589,7 @@ function EmployeeDashboardInner() {
         frequency: fd.get('frequency'),
         notifyInApp,
         notifyEmail,
-        notifyTelegram,
+        notifyTelegram: notifyTelegram && telegramLinked,
       }),
     });
     setDraftAlertSkills([]);
@@ -919,6 +919,12 @@ function EmployeeDashboardInner() {
             <div className="card">
               <h3>{t('emp.createAlert')}</h3>
               <p className="required-note">{t('requiredFieldsNote')}</p>
+              {!telegramLinked ? (
+                <p className="muted" style={{ fontSize: '0.9rem', marginTop: 0 }}>
+                  {t('emp.alertTelegramLinkHint')}{' '}
+                  <Link href="/settings#security">{t('settings')}</Link>
+                </p>
+              ) : null}
               <form className="form-stack" onSubmit={createAlert}>
                 <label>
                   <LabelText required>{t('emp.name')}</LabelText>
@@ -1000,17 +1006,12 @@ function EmployeeDashboardInner() {
                   <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <input
                       type="checkbox"
-                      checked={notifyTelegram}
+                      checked={Boolean(notifyTelegram && telegramLinked)}
+                      disabled={!telegramLinked}
                       onChange={(e) => setNotifyTelegram(e.target.checked)}
                     />
                     {t('emp.alertChannelTelegram')}
                   </label>
-                  {notifyTelegram && !telegramLinked && (
-                    <p className="muted" style={{ fontSize: '0.85rem', margin: '0.35rem 0 0' }}>
-                      {t('emp.alertTelegramLinkHint')}{' '}
-                      <Link href="/settings#security">{t('settings')}</Link>
-                    </p>
-                  )}
                 </fieldset>
                 <button type="submit">{t('emp.saveAlert')}</button>
               </form>
@@ -1061,8 +1062,17 @@ function EmployeeDashboardInner() {
                     </button>
                     <button
                       type="button"
-                      className="chip"
-                      onClick={() => patchAlertChannel(a.id, 'notifyTelegram', !a.notifyTelegram)}
+                      className={a.notifyTelegram && telegramLinked ? 'chip active' : 'chip'}
+                      disabled={!telegramLinked && !a.notifyTelegram}
+                      onClick={() => {
+                        if (!telegramLinked) {
+                          if (a.notifyTelegram) {
+                            void patchAlertChannel(a.id, 'notifyTelegram', false);
+                          }
+                          return;
+                        }
+                        void patchAlertChannel(a.id, 'notifyTelegram', !a.notifyTelegram);
+                      }}
                     >
                       {t('emp.alertChannelTelegram')}
                     </button>

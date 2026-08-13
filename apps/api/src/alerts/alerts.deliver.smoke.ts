@@ -1,6 +1,7 @@
 import {
   buildJobAlertEmailHtml,
   decideAlertChannels,
+  ensureDeliverableAlertChannels,
   hasAnyAlertChannel,
   shouldStampLastSentAt,
 } from './alerts.deliver';
@@ -20,10 +21,24 @@ function emailSkippedWhenUnverified() {
     },
   );
   assert(decisions.email === 'skip', `expected email skip, got ${decisions.email}`);
-  assert(decisions.inApp === 'off', 'in-app should be off');
+  assert(decisions.inApp === 'send', 'unverified email-only alerts must still notify in-app');
 }
 
 function telegramSkippedWithoutChat() {
+  const decisions = decideAlertChannels(
+    { notifyInApp: true, notifyEmail: false, notifyTelegram: true },
+    {
+      emailVerified: true,
+      demoMailbox: false,
+      telegramId: null,
+      telegramConfigured: true,
+    },
+  );
+  assert(decisions.telegram === 'skip', `expected telegram skip, got ${decisions.telegram}`);
+  assert(decisions.inApp === 'send', 'in-app should still send when telegram is skipped');
+}
+
+function telegramUnlinkedFallsBackToInApp() {
   const decisions = decideAlertChannels(
     { notifyInApp: false, notifyEmail: false, notifyTelegram: true },
     {
@@ -33,7 +48,8 @@ function telegramSkippedWithoutChat() {
       telegramConfigured: true,
     },
   );
-  assert(decisions.telegram === 'skip', `expected telegram skip, got ${decisions.telegram}`);
+  assert(decisions.telegram === 'skip', 'unlinked telegram must skip');
+  assert(decisions.inApp === 'send', 'unlinked telegram-only alerts must still notify in-app');
 }
 
 function lastSentAtNotStampedWhenAllFail() {
@@ -77,11 +93,18 @@ function digestHtmlEscapesAndLinks() {
   assert(html.includes('Acme &amp; Co'), 'company was not escaped');
   assert(!html.includes('<script>'), 'raw script tag leaked into html');
   assert(!hasAnyAlertChannel({ notifyInApp: false, notifyEmail: false, notifyTelegram: false }), 'empty channels');
+  const forced = ensureDeliverableAlertChannels({
+    notifyInApp: false,
+    notifyEmail: false,
+    notifyTelegram: false,
+  });
+  assert(forced.notifyInApp === true, 'empty alert must keep in-app on');
 }
 
 function main() {
   emailSkippedWhenUnverified();
   telegramSkippedWithoutChat();
+  telegramUnlinkedFallsBackToInApp();
   lastSentAtNotStampedWhenAllFail();
   digestHtmlEscapesAndLinks();
   console.log('api: alerts.deliver smoke ok');
