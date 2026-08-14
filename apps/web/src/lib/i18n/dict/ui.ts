@@ -221,9 +221,14 @@ export const ui = {
   },
 
   'ui.cvReviewSubtitle': {
-    uz: 'Profilga nimani import qilishni tanlang. Noto‘g‘ri ko‘ringan bandlarni belgidan chiqaring.',
-    ru: 'Выберите, что импортировать в профиль. Снимите отметку с того, что выглядит неверно.',
-    en: 'Choose what to import into your profile. Uncheck anything that looks wrong.',
+    uz: 'Noto‘g‘ri bandlarni tahrirlang, keyin import qilmoqchi bo‘lganlarini tanlang. Katalog rad etadigan nomlar belgilinmagan holda qoladi.',
+    ru: 'Исправьте неверные поля, затем выберите, что импортировать. Имена, которые каталог отклонит, остаются без галочки.',
+    en: 'Edit anything that looks wrong, then choose what to import. Names the catalog will reject stay unchecked.',
+  },
+  'ui.cvCatalogLabelInvalid': {
+    uz: 'Bu nom import qilinmaydi. Haqiqiy ko‘nikma yoki til nomini yozing.',
+    ru: 'Это имя не будет импортировано. Укажите настоящее название навыка или языка.',
+    en: 'This name will be skipped. Use a real skill or language name.',
   },
   'ui.profileBasics': { uz: 'Profil asoslari', ru: 'Основное в профиле', en: 'Profile basics' },
   'ui.headline': { uz: 'Sarlavha', ru: 'Заголовок', en: 'Headline' },

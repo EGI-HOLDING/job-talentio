@@ -18,6 +18,7 @@ import {
   levelsAtOrAbove,
   parseLanguagesCsv,
   MAX_RESUMES_PER_PROFILE,
+  type ResumeImportInput,
 } from '@job-talentio/shared';
 import { LanguageLevel, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,6 +47,12 @@ import { PresenceService } from '../presence/presence.service';
 const resumeTargetTitleInclude = {
   targetJobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, slug: true } },
 } as const;
+
+function parseResumeDate(value?: string | null): Date | null {
+  if (!value?.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 /** Contact reveals allowed per recruiter per hour (anti bulk harvesting). */
 const REVEAL_LIMIT_PER_HOUR = 30;
@@ -1267,30 +1274,22 @@ export class ProfilesService {
     };
   }
 
-  async importParsedResume(
-    user: AuthUser,
-    resumeId: string,
-    selection: {
-      headline?: boolean;
-      summary?: boolean;
-      phone?: boolean;
-      skillIndexes?: number[];
-      experienceIndexes?: number[];
-      educationIndexes?: number[];
-      languageIndexes?: number[];
-    },
-  ) {
+  async importParsedResume(user: AuthUser, resumeId: string, draft: ResumeImportInput) {
     const { profile, resume } = await this.ownedResume(user.id, resumeId);
     const parsed = resume.parsedData as ParsedCvData | null;
     if (!parsed || typeof parsed !== 'object') {
       throw new BadRequestException('No parsed CV data on this resume - upload a CV first');
     }
 
+    const headline = draft.headline?.trim();
+    const summary = draft.summary?.trim();
+    const rawPhone = draft.phone?.trim();
+
     const profilePatch: Record<string, unknown> = {};
-    if (selection.headline && parsed.headline) profilePatch.headline = parsed.headline;
-    if (selection.summary && parsed.summary) profilePatch.summary = parsed.summary;
-    if (selection.phone && parsed.phone) {
-      const phone = normalizePhone(parsed.phone);
+    if (headline) profilePatch.headline = headline;
+    if (summary) profilePatch.summary = summary;
+    if (rawPhone) {
+      const phone = normalizePhone(rawPhone);
       const taken = await this.prisma.employeeProfile.findFirst({
         where: { phone, NOT: { id: profile.id } },
         select: { id: true },
@@ -1316,14 +1315,14 @@ export class ProfilesService {
       educations: 0,
       languages: 0,
       skippedSkills: 0,
-      skippedPhoneTaken: Boolean(selection.phone && parsed.phone && !profilePatch.phone),
+      skippedPhoneTaken: Boolean(rawPhone && !profilePatch.phone),
     };
 
-    for (const idx of selection.skillIndexes || []) {
-      const name = parsed.skillNames?.[idx];
-      if (!name) continue;
+    for (const name of draft.skills || []) {
+      const trimmed = name.trim();
+      if (!trimmed) continue;
       try {
-        const { skill } = await resolveSkill(this.prisma, { name, allowCreate: true });
+        const { skill } = await resolveSkill(this.prisma, { name: trimmed, allowCreate: true });
         await this.prisma.profileSkill.upsert({
           where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
           create: { profileId: profile.id, skillId: skill.id, level: 'INTERMEDIATE' },
@@ -1331,7 +1330,7 @@ export class ProfilesService {
         });
         imported.skills += 1;
       } catch (err) {
-        // One parsed label must not abort the rest of the import.
+        // One reviewed label must not abort the rest of the import.
         if (err instanceof BadRequestException) {
           imported.skippedSkills += 1;
           continue;
@@ -1340,48 +1339,45 @@ export class ProfilesService {
       }
     }
 
-    for (const idx of selection.experienceIndexes || []) {
-      const exp = parsed.experiences?.[idx];
-      if (!exp?.title || !exp.companyName) continue;
+    for (const exp of draft.experiences || []) {
+      if (!exp.title.trim() || !exp.companyName.trim()) continue;
       await this.prisma.workExperience.create({
         data: {
           profileId: profile.id,
-          title: exp.title,
-          companyName: exp.companyName,
-          description: exp.description,
-          startDate: exp.startDate ? new Date(exp.startDate) : new Date(),
-          endDate: exp.endDate ? new Date(exp.endDate) : null,
+          title: exp.title.trim(),
+          companyName: exp.companyName.trim(),
+          description: exp.description?.trim() || undefined,
+          startDate: parseResumeDate(exp.startDate) ?? new Date(),
+          endDate: parseResumeDate(exp.endDate),
           isCurrent: Boolean(exp.isCurrent),
         },
       });
       imported.experiences += 1;
     }
 
-    for (const idx of selection.educationIndexes || []) {
-      const edu = parsed.educations?.[idx];
-      if (!edu?.school) continue;
+    for (const edu of draft.educations || []) {
+      if (!edu.school.trim()) continue;
       await this.prisma.education.create({
         data: {
           profileId: profile.id,
-          school: edu.school,
-          degree: edu.degree as never,
-          field: edu.field,
-          startDate: edu.startDate ? new Date(edu.startDate) : null,
-          endDate: edu.endDate ? new Date(edu.endDate) : null,
+          school: edu.school.trim(),
+          degree: edu.degree,
+          field: edu.field?.trim() || undefined,
+          startDate: parseResumeDate(edu.startDate),
+          endDate: parseResumeDate(edu.endDate),
         },
       });
       imported.educations += 1;
     }
 
-    for (const idx of selection.languageIndexes || []) {
-      const lang = parsed.languages?.[idx];
-      if (!lang) continue;
+    for (const lang of draft.languages || []) {
+      if (!lang.name.trim()) continue;
       let language = lang.code
         ? await this.prisma.language.findUnique({ where: { code: lang.code } })
         : null;
       if (!language) {
         language = await this.prisma.language.findFirst({
-          where: { name: { equals: lang.name, mode: 'insensitive' } },
+          where: { name: { equals: lang.name.trim(), mode: 'insensitive' } },
         });
       }
       if (!language) continue;

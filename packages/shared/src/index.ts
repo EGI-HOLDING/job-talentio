@@ -6,3 +6,6 @@ export * from './icons';
 export * from './resume';
 export * from './languages';
 export * from './messages';
+export * from './catalog-blocklist';
+export * from './catalog-tech-identity';
+export * from './catalog-label';

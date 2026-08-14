@@ -1,3 +1,4 @@
+import { catalogLabelIssue } from '@job-talentio/shared';
 import { assertCatalogLabel, isGibberishCatalogKey, normalizeLookupKey } from './lookup-normalize';
 import { isBlockedCatalogKey } from './catalog-blocklist';
 
@@ -49,5 +50,11 @@ assert(isGibberishCatalogKey('qwerty', 'qwerty'), 'qwerty gibberish');
 assert(!isGibberishCatalogKey('react', 'React'), 'react not gibberish');
 assert(!isGibberishCatalogKey('c', 'C++'), 'C++ is not gibberish');
 assert(!isGibberishCatalogKey('html5', 'HTML5'), 'HTML5 is not gibberish');
+
+assert(catalogLabelIssue('C++') === null, 'C++ allowed');
+assert(catalogLabelIssue('HTML5') === null, 'HTML5 allowed');
+assert(catalogLabelIssue('Unit Testing') === null, 'Unit Testing allowed');
+assert(catalogLabelIssue('testing') === 'blocked', 'testing blocked');
+assert(catalogLabelIssue('11111') === 'gibberish', 'all-digit rejected');
 
 console.log('api: catalog-label guard smoke ok');
