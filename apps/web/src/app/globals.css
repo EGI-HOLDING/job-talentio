@@ -2511,11 +2511,41 @@ a.card.job-card--hot {
   border-radius: 10px;
   margin-bottom: 0.45rem;
   background: #fff;
-  cursor: pointer;
 }
-.cv-check input { width: auto; margin-top: 0.2rem; }
+.cv-check input[type="checkbox"] { width: auto; margin-top: 0.2rem; flex-shrink: 0; }
 .cv-check strong { display: block; font-size: 0.9rem; }
 .cv-check span { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }
+.cv-check--invalid {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+.cv-check-fields {
+  display: grid;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+.cv-check-fields input,
+.cv-check-fields textarea,
+.cv-check-fields select {
+  width: 100%;
+}
+.cv-check-warn {
+  margin: 0;
+  color: #b45309;
+  font-size: 0.78rem;
+}
+.cv-check-fields .check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.cv-check-fields .check-row span {
+  display: inline;
+  color: inherit;
+  font-size: inherit;
+  margin: 0;
+}
 
 /* Profile tab list layouts */
 .profile-page .profile-block {

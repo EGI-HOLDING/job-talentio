@@ -446,15 +446,41 @@ export const resumeSchema = z.object({
 /** Max non-deleted resumes per employee profile. */
 export const MAX_RESUMES_PER_PROFILE = 10;
 
-export const resumeImportSchema = z.object({
-  headline: z.boolean().optional(),
-  summary: z.boolean().optional(),
-  phone: z.boolean().optional(),
-  skillIndexes: z.array(z.number().int().min(0)).max(50).default([]),
-  experienceIndexes: z.array(z.number().int().min(0)).max(20).default([]),
-  educationIndexes: z.array(z.number().int().min(0)).max(10).default([]),
-  languageIndexes: z.array(z.number().int().min(0)).max(15).default([]),
+export const resumeImportExperienceSchema = z.object({
+  title: z.string().min(1).max(160),
+  companyName: z.string().min(1).max(160),
+  description: z.string().max(5000).optional(),
+  startDate: z.string().max(40).optional().nullable(),
+  endDate: z.string().max(40).optional().nullable(),
+  isCurrent: z.boolean().optional(),
 });
+
+export const resumeImportEducationSchema = z.object({
+  school: z.string().min(1).max(200),
+  degree: z.enum(['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD']).optional(),
+  field: z.string().max(160).optional(),
+  startDate: z.string().max(40).optional().nullable(),
+  endDate: z.string().max(40).optional().nullable(),
+});
+
+export const resumeImportLanguageSchema = z.object({
+  name: z.string().min(1).max(80),
+  code: z.string().max(16).optional(),
+  level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']).optional(),
+});
+
+/** Reviewed CV draft. Omitted headline / summary / phone are not imported. */
+export const resumeImportSchema = z.object({
+  headline: z.string().max(200).optional(),
+  summary: z.string().max(5000).optional(),
+  phone: z.string().max(40).optional(),
+  skills: z.array(z.string().min(1).max(80)).max(50).default([]),
+  experiences: z.array(resumeImportExperienceSchema).max(20).default([]),
+  educations: z.array(resumeImportEducationSchema).max(10).default([]),
+  languages: z.array(resumeImportLanguageSchema).max(15).default([]),
+});
+
+export type ResumeImportInput = z.infer<typeof resumeImportSchema>;
 
 export const resumeTemplateKeys = ['classic', 'modern', 'compact'] as const;
 export type ResumeTemplateKey = (typeof resumeTemplateKeys)[number];
