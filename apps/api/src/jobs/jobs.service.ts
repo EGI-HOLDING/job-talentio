@@ -18,6 +18,7 @@ import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
+import { effectivePlan, subscriptionPlanSelect } from '../common/effective-plan';
 import { slugify } from '../common/utils';
 import {
   contentHash,
@@ -175,7 +176,7 @@ export class JobsService {
         isVerified: true,
         city: true,
         industry: true,
-        subscription: { select: { plan: true } },
+        subscription: { select: subscriptionPlanSelect },
         members: { select: { userId: true, role: true }, take: 5 },
         _count: { select: { followers: true } },
       },
@@ -529,7 +530,7 @@ export class JobsService {
     if (status === 'PUBLISHED') {
       this.assertLocationRules(job.workMode, job.cityId, true);
 
-      const plan = job.company.subscription?.plan ?? 'FREE';
+      const plan = effectivePlan(job.company.subscription);
       const limit = this.planLimits(plan).activeJobs;
       const active = await this.prisma.jobPost.count({
         where: { companyId: job.companyId, status: 'PUBLISHED' },
@@ -1119,7 +1120,7 @@ export class JobsService {
           name: true,
           slug: true,
           logoUrl: true,
-          subscription: { select: { plan: true } },
+          subscription: { select: subscriptionPlanSelect },
         },
       },
       city: true,
@@ -1162,7 +1163,7 @@ export class JobsService {
         ...job,
         rankScore: this.computeRankScore({
           ...job,
-          plan: job.company.subscription?.plan,
+          plan: effectivePlan(job.company.subscription),
           skillCount: job.jobSkills.length,
         }),
         isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),
@@ -1198,7 +1199,7 @@ export class JobsService {
         ...job,
         rankScore: this.computeRankScore({
           ...job,
-          plan: job.company.subscription?.plan,
+          plan: effectivePlan(job.company.subscription),
           skillCount: job.jobSkills.length,
         }),
         isHot: !!(job.boostUntil && job.boostUntil.getTime() > Date.now()),

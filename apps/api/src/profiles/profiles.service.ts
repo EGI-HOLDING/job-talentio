@@ -25,6 +25,7 @@ import { StorageService } from '../storage/storage.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
 import { AuthUser } from '../common/auth.decorators';
+import { effectivePlan } from '../common/effective-plan';
 import { slugify } from '../common/utils';
 import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
@@ -1457,7 +1458,7 @@ export class ProfilesService {
       const sub = await this.prisma.subscription.findUnique({
         where: { companyId: membership.companyId },
       });
-      const plan = sub?.plan ?? 'FREE';
+      const plan = effectivePlan(sub);
       limited = PLAN_LIMITS[plan].candidateSearch === 'limited';
     }
 
@@ -1827,7 +1828,7 @@ export class ProfilesService {
       const sub = await this.prisma.subscription.findUnique({
         where: { companyId: membership.companyId },
       });
-      const plan = sub?.plan ?? 'FREE';
+      const plan = effectivePlan(sub);
       limited = PLAN_LIMITS[plan].candidateSearch === 'limited';
     }
 
