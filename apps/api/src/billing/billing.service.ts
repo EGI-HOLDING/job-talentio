@@ -13,6 +13,12 @@ import { CompaniesService } from '../companies/companies.service';
 import { JobsService } from '../jobs/jobs.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment.provider';
 import { AuthUser } from '../common/auth.decorators';
+import {
+  decidePaymentConfirm,
+  hotJobIsBoostable,
+  jobBelongsToPayer,
+  paymentConfirmRejectMessage,
+} from './payment-settlement';
 
 @Injectable()
 export class BillingService {
@@ -106,6 +112,9 @@ export class BillingService {
     if (!job || job.companyId !== companyId) {
       throw new NotFoundException('Job not found');
     }
+    if (!hotJobIsBoostable(job)) {
+      throw new BadRequestException('Only published jobs can be boosted');
+    }
     const key = `HOT_JOB_${days}D` as keyof typeof PLAN_PRICES_UZS;
     const amount = PLAN_PRICES_UZS[key];
     const intent = await this.payments.createPayment({
@@ -146,16 +155,13 @@ export class BillingService {
       );
     }
 
-    if (payment.status === 'MOCKED' || payment.status === 'PAID') {
-      return payment;
+    const decision = decidePaymentConfirm(payment.status);
+    if (decision.action === 'already-settled') return payment;
+    if (decision.action === 'reject') {
+      throw new BadRequestException(paymentConfirmRejectMessage(decision.reason));
     }
 
-    const updated = await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: 'MOCKED' },
-    });
-
-    await this.applyPaymentEffects(payment);
+    const settled = await this.claimAndApplyEffects(payment, 'MOCKED');
 
     await this.prisma.auditLog.create({
       data: {
@@ -167,7 +173,35 @@ export class BillingService {
       },
     });
 
-    return updated;
+    return settled;
+  }
+
+  /**
+   * Claim PENDING -> settled, then grant entitlements. If effects fail the
+   * row returns to PENDING so a retry can still deliver what was paid for.
+   */
+  private async claimAndApplyEffects(payment: Payment, settledStatus: 'MOCKED' | 'PAID') {
+    const claimed = await this.prisma.payment.updateMany({
+      where: { id: payment.id, status: 'PENDING' },
+      data: { status: settledStatus },
+    });
+    if (claimed.count === 0) {
+      const current = await this.prisma.payment.findUnique({ where: { id: payment.id } });
+      if (!current) throw new NotFoundException('Payment not found');
+      return current;
+    }
+    try {
+      await this.applyPaymentEffects(payment);
+    } catch (err) {
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: 'PENDING' },
+      });
+      throw err;
+    }
+    const settled = await this.prisma.payment.findUnique({ where: { id: payment.id } });
+    if (!settled) throw new NotFoundException('Payment not found');
+    return settled;
   }
 
   /** Grant what the payment bought. Caller has already authorized the payment. */
@@ -187,9 +221,17 @@ export class BillingService {
 
     if (payment.purpose.startsWith('hot_job_')) {
       const meta = payment.metadata as { jobId?: string; days?: number } | null;
-      if (meta?.jobId && meta.days) {
-        await this.jobs.activateHotJobSystem(meta.jobId, meta.days as 7 | 14 | 30);
+      if (!meta?.jobId || !meta.days) {
+        throw new BadRequestException('Hot job payment is missing job details');
       }
+      const job = await this.prisma.jobPost.findUnique({ where: { id: meta.jobId } });
+      if (!jobBelongsToPayer(job, payment.companyId)) {
+        throw new BadRequestException('Hot job payment does not match this company');
+      }
+      if (!hotJobIsBoostable(job)) {
+        throw new BadRequestException('Only published jobs can be boosted');
+      }
+      await this.jobs.activateHotJobSystem(meta.jobId, meta.days as 7 | 14 | 30);
     }
   }
 
@@ -216,15 +258,20 @@ export class BillingService {
     });
     if (!payment) throw new NotFoundException('Payment not found');
 
-    if (payment.status === 'PAID' || payment.status === 'MOCKED') {
+    const settledAlready = decidePaymentConfirm(payment.status);
+    if (settledAlready.action === 'already-settled') {
       return { ok: true, paymentId: payment.id, status: payment.status };
     }
 
     if (event.status === 'FAILED') {
-      const failed = await this.prisma.payment.update({
-        where: { id: payment.id },
+      const failed = await this.prisma.payment.updateMany({
+        where: { id: payment.id, status: 'PENDING' },
         data: { status: 'FAILED' },
       });
+      if (failed.count === 0) {
+        const current = await this.prisma.payment.findUnique({ where: { id: payment.id } });
+        return { ok: true, paymentId: payment.id, status: current?.status ?? payment.status };
+      }
       await this.prisma.auditLog.create({
         data: {
           actorId: null,
@@ -234,14 +281,14 @@ export class BillingService {
           metadata: { purpose: payment.purpose, provider: providerName },
         },
       });
-      return { ok: true, paymentId: failed.id, status: failed.status };
+      return { ok: true, paymentId: payment.id, status: 'FAILED' };
     }
 
-    const paid = await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: 'PAID' },
-    });
-    await this.applyPaymentEffects(paid);
+    if (settledAlready.action === 'reject') {
+      throw new BadRequestException(paymentConfirmRejectMessage(settledAlready.reason));
+    }
+
+    const paid = await this.claimAndApplyEffects(payment, 'PAID');
     await this.prisma.auditLog.create({
       data: {
         actorId: null,
