@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { JOBS_INDEX_SETTINGS } from './jobs-search.settings';
 
 const INDEX = 'jobs';
 /** Mirror of JobsService relevance scan cap so id-filtering never shrinks results. */
@@ -87,19 +88,7 @@ export class JobsSearchService implements OnModuleInit {
     await this.request('POST', '/indexes', { uid: INDEX, primaryKey: 'id' }).catch(
       () => undefined,
     );
-    await this.request('PATCH', `/indexes/${INDEX}/settings`, {
-      searchableAttributes: [
-        'title',
-        'titleAlt',
-        'companyName',
-        'skills',
-        'categoryName',
-        'cityName',
-        'description',
-        'descriptionAlt',
-      ],
-      displayedAttributes: ['id'],
-    });
+    await this.request('PATCH', `/indexes/${INDEX}/settings`, JOBS_INDEX_SETTINGS);
     const stats = await this.request<{ numberOfDocuments: number }>(
       'GET',
       `/indexes/${INDEX}/stats`,
