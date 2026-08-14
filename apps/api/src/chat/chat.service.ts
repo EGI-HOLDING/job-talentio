@@ -8,6 +8,7 @@ import { PLAN_LIMITS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 import { AuthUser } from '../common/auth.decorators';
+import { effectivePlan } from '../common/effective-plan';
 
 @Injectable()
 export class ChatService {
@@ -31,7 +32,7 @@ export class ChatService {
 
   async canColdOutreach(recruiterUserId: string, companyId: string) {
     const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
-    const plan = sub?.plan ?? 'FREE';
+    const plan = effectivePlan(sub);
     if (!PLAN_LIMITS[plan].coldChat) return false;
 
     const start = new Date();

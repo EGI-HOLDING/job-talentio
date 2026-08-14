@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { MailService } from '../mail/mail.service';
 import { AuthUser } from '../common/auth.decorators';
+import { effectivePlan, subscriptionPlanSelect } from '../common/effective-plan';
 import { slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { sanitizeStoredText } from '../common/text-sanitize';
@@ -129,7 +130,19 @@ export class CompaniesService {
     const where: Prisma.CompanyWhereInput = {
       isBanned: false,
       jobPosts: { some: { status: 'PUBLISHED' } },
-      ...(query.plan ? { subscription: { plan: query.plan } } : {}),
+      ...(query.plan
+        ? {
+            subscription: {
+              plan: query.plan,
+              ...(query.plan !== 'FREE'
+                ? {
+                    status: 'ACTIVE' as const,
+                    OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
+                  }
+                : {}),
+            },
+          }
+        : {}),
       ...(query.industrySlug ? { industry: { slug: query.industrySlug } } : {}),
       ...(q
         ? {
@@ -152,7 +165,7 @@ export class CompaniesService {
         name: true,
         logoUrl: true,
         industry: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
-        subscription: { select: { plan: true } },
+        subscription: { select: subscriptionPlanSelect },
         _count: {
           select: { jobPosts: { where: { status: 'PUBLISHED' } } },
         },
@@ -171,7 +184,7 @@ export class CompaniesService {
         name: c.name,
         logoUrl: c.logoUrl,
         industry: c.industry,
-        plan: c.subscription?.plan ?? 'FREE',
+        plan: effectivePlan(c.subscription),
         openJobsCount: c._count.jobPosts,
       })),
       total,

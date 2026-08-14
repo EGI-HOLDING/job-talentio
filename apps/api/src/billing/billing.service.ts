@@ -13,6 +13,7 @@ import { CompaniesService } from '../companies/companies.service';
 import { JobsService } from '../jobs/jobs.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment.provider';
 import { AuthUser } from '../common/auth.decorators';
+import { effectivePlan } from '../common/effective-plan';
 import {
   decidePaymentConfirm,
   hotJobIsBoostable,
@@ -56,7 +57,12 @@ export class BillingService {
     const activeJobs = await this.prisma.jobPost.count({
       where: { companyId, status: 'PUBLISHED' },
     });
-    return { ...sub, activePublishedJobs: activeJobs, prices: PLAN_PRICES_UZS };
+    return {
+      ...sub,
+      effectivePlan: effectivePlan(sub),
+      activePublishedJobs: activeJobs,
+      prices: PLAN_PRICES_UZS,
+    };
   }
 
   async getPayment(user: AuthUser, paymentId: string) {
@@ -76,8 +82,9 @@ export class BillingService {
       PlanCode.PREMIUM,
       PlanCode.VIP,
     ];
-    if (order.indexOf(current.plan) >= order.indexOf(plan as PlanCode)) {
-      throw new BadRequestException(`Already on ${current.plan} or higher`);
+    const currentPlan = effectivePlan(current);
+    if (order.indexOf(currentPlan) >= order.indexOf(plan as PlanCode)) {
+      throw new BadRequestException(`Already on ${currentPlan} or higher`);
     }
     const amount = PLAN_PRICES_UZS[plan];
     const intent = await this.payments.createPayment({
