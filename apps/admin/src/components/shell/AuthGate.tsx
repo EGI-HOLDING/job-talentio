@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
-import { api, clearToken, getToken, saveToken } from '@/lib/api';
+import { api, clearToken, getToken, logout, saveToken } from '@/lib/api';
 import { Alert } from '@/components/ui/primitives';
 
 type Session = {
@@ -56,9 +56,10 @@ export function readIdentity(): AdminIdentity | null {
 }
 
 export function signOut() {
-  clearToken();
-  localStorage.removeItem(IDENTITY_KEY);
-  window.location.href = '/';
+  void logout().finally(() => {
+    localStorage.removeItem(IDENTITY_KEY);
+    window.location.href = '/';
+  });
 }
 
 /**
@@ -73,8 +74,35 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    setAuthed(Boolean(getToken()));
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      if (!getToken()) {
+        if (!cancelled) setReady(true);
+        return;
+      }
+      try {
+        const session = await api<Session>('/auth/me');
+        if (cancelled) return;
+        if (session.user.role !== 'SUPER_ADMIN') {
+          clearToken();
+          localStorage.removeItem(IDENTITY_KEY);
+          setAuthed(false);
+        } else {
+          setAuthed(true);
+        }
+      } catch {
+        if (!cancelled) {
+          clearToken();
+          localStorage.removeItem(IDENTITY_KEY);
+          setAuthed(false);
+        }
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function login(e: FormEvent<HTMLFormElement>) {

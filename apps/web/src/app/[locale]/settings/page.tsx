@@ -164,10 +164,11 @@ export default function SettingsPage() {
     setPwMsg(null);
     setErr(null);
     try {
-      await api('/auth/change-password', {
+      const session = await api<AuthSession>('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
+      if (session.accessToken) saveSession(session);
       setPwMsg(t('ui.passwordUpdated'));
       setCurrentPassword('');
       setNewPassword('');

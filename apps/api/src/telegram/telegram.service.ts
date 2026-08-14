@@ -12,6 +12,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { sha256 } from '../common/dedupe';
 import { emailLocale } from '../common/i18n/email-locale';
 import { decideBareStart, decideTokenLink } from './telegram.link';
+import { isSecureRuntime } from '../common/jwt-secret';
+import { telegramWebhookSecretRequired } from '../auth/session-policy';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -65,6 +67,9 @@ export class TelegramService implements OnModuleInit {
 
   assertWebhookSecret(header: string | undefined) {
     const expected = this.webhookSecret();
+    if (telegramWebhookSecretRequired(isSecureRuntime(), this.isConfigured(), expected)) {
+      throw new UnauthorizedException('Telegram webhook secret is not configured');
+    }
     if (!expected) return;
     const got = header || '';
     const a = Buffer.from(expected);

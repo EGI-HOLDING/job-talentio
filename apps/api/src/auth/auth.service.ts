@@ -22,6 +22,8 @@ import { CompaniesService } from '../companies/companies.service';
 import { UserErasureService } from '../users/user-erasure.service';
 import { confirmationMatchesAccount } from '../users/erasure-guards';
 import { telegramFullName, verifyTelegramLogin } from './telegram-login';
+import { isSecureRuntime } from '../common/jwt-secret';
+import { isDevLoginAllowed } from './session-policy';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 min between sends
@@ -154,11 +156,8 @@ export class AuthService {
     if (!record) throw new UnauthorizedException('Invalid refresh token');
 
     if (record.revokedAt) {
-      // Reuse of a rotated token - treat as theft and revoke the whole family.
-      await this.prisma.refreshToken.updateMany({
-        where: { userId: record.userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+      // Reuse of a rotated token - treat as theft and kill refresh + access JWTs.
+      await this.revokeAllSessions(record.userId);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
     if (record.expiresAt.getTime() < Date.now()) {
@@ -178,10 +177,12 @@ export class AuthService {
   /** Best-effort revoke; safe to call with an expired access token. */
   async logout(refreshToken?: string) {
     if (refreshToken) {
-      await this.prisma.refreshToken.updateMany({
-        where: { tokenHash: sha256(refreshToken), revokedAt: null },
-        data: { revokedAt: new Date() },
+      const record = await this.prisma.refreshToken.findUnique({
+        where: { tokenHash: sha256(refreshToken) },
       });
+      if (record) {
+        await this.revokeAllSessions(record.userId);
+      }
     }
     return { ok: true };
   }
@@ -370,7 +371,7 @@ export class AuthService {
   }
 
   async devLogin(email: string, role?: UserRole) {
-    if (this.config.get('DEV_AUTH_ENABLED') !== 'true') {
+    if (!isDevLoginAllowed(this.config.get('DEV_AUTH_ENABLED') === 'true', isSecureRuntime())) {
       throw new ForbiddenException('Dev login disabled');
     }
     const normalized = email.toLowerCase();
@@ -465,7 +466,8 @@ export class AuthService {
       where: { id: userId },
       data: { passwordHash: await bcrypt.hash(newPassword, 10) },
     });
-    return { ok: true };
+    await this.revokeAllSessions(userId);
+    return this.tokenFor(userId);
   }
 
   // ── Google Sign-In (GIS ID-token flow) ─────────────────────
@@ -1017,6 +1019,7 @@ export class AuthService {
         data: { passwordHash },
       }),
     ]);
+    await this.revokeAllSessions(record.userId);
     return { ok: true };
   }
 
@@ -1085,6 +1088,7 @@ export class AuthService {
         data: { email: record.newEmail, emailVerified: true },
       }),
     ]);
+    await this.revokeAllSessions(record.userId);
     return this.tokenFor(record.userId);
   }
 
