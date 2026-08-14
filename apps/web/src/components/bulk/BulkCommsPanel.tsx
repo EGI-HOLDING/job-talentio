@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { FormAlert, LabelText } from '@/components/ui/Field';
 
 type Template = {
@@ -49,6 +50,7 @@ export function BulkCommsPanel({
   jobPostId?: string;
 }) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [name, setName] = useState('');
@@ -112,7 +114,12 @@ export function BulkCommsPanel({
   }
 
   async function removeTemplate(id: string) {
-    if (!confirm(t('ui.deleteTemplateConfirm'))) return;
+    const ok = await confirm({
+      title: t('ui.deleteTemplateConfirm'),
+      tone: 'danger',
+      confirmLabel: t('ui.delete'),
+    });
+    if (!ok) return;
     setErr(null);
     try {
       await api(`/bulk-comms/templates/${id}`, { method: 'DELETE' });

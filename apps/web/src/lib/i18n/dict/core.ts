@@ -1081,11 +1081,20 @@ export const core = {
   },
   addBenefit: { uz: 'Imtiyoz qo‘shish', ru: 'Добавить льготу', en: 'Add benefit' },
   addLanguage: { uz: 'Til qo‘shish', ru: 'Добавить язык', en: 'Add language' },
-  confirmAddLookup: {
-    uz: '“{name}” katalogda yo‘q ({kind}). Yangi yozuv sifatida qo‘shilsinmi?',
-    ru: '«{name}» нет в каталоге ({kind}). Добавить как новую запись?',
-    en: '“{name}” is not in the catalog ({kind}). Add it as a new entry?',
+  confirmAddLookupTitle: {
+    uz: 'Yangi {kind} qo‘shilsinmi?',
+    ru: 'Добавить {kind}?',
+    en: 'Add a new {kind}?',
   },
+  confirmAddLookup: {
+    uz: 'Bu nom katalogda yo‘q. Tasdiqlasangiz, yangi yozuv yaratiladi va shu yerga qo‘shiladi.',
+    ru: 'Этого названия ещё нет в каталоге. Подтвердите, чтобы создать запись и добавить её сюда.',
+    en: 'This name is not in the catalog yet. Confirm to create it and add it here.',
+  },
+  lookupKindSkill: { uz: 'ko‘nikma', ru: 'навык', en: 'skill' },
+  lookupKindBenefit: { uz: 'imtiyoz', ru: 'льгота', en: 'benefit' },
+  lookupKindLanguage: { uz: 'til', ru: 'язык', en: 'language' },
+  lookupKindCity: { uz: 'shahar', ru: 'город', en: 'city' },
   benefitSearchPlaceholder: {
     uz: 'Imtiyoz qidiring...',
     ru: 'Поиск льготы...',

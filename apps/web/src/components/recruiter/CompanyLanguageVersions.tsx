@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { LOCALES, type Locale } from '@/lib/locale';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { LabelText } from '@/components/ui/Field';
 
 type CompanyTranslation = {
@@ -35,6 +36,7 @@ type Props = {
  */
 export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const [data, setData] = useState<CompanyTranslations | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [drafts, setDrafts] = useState<Partial<Record<Locale, string>>>({});
@@ -111,7 +113,12 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
 
   async function deleteVersion(locale: Locale) {
     const langName = t(LOCALE_NAME_KEY[locale]);
-    if (!confirm(t('rec.langVersionConfirmDelete').replace('{lang}', langName))) return;
+    const ok = await confirm({
+      title: t('rec.langVersionConfirmDelete').replace('{lang}', langName),
+      tone: 'danger',
+      confirmLabel: t('rec.langVersionDelete'),
+    });
+    if (!ok) return;
     setBusyLocale(locale);
     try {
       await api(`/companies/${companyId}/translations/${locale}`, { method: 'DELETE' });

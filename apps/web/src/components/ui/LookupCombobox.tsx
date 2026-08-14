@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { benefitIconLabel } from '@/lib/icons';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { useI18n } from '@/lib/i18n';
 
 export type LookupSuggestion = {
@@ -51,6 +52,13 @@ const KIND_LABEL_KEY: Record<LookupKind, string> = {
   cities: 'city',
 };
 
+const KIND_SINGULAR_KEY: Record<LookupKind, string> = {
+  skills: 'lookupKindSkill',
+  benefits: 'lookupKindBenefit',
+  languages: 'lookupKindLanguage',
+  cities: 'lookupKindCity',
+};
+
 export function LookupCombobox({
   kind,
   onPick,
@@ -63,6 +71,7 @@ export function LookupCombobox({
   placeholder,
 }: LookupComboboxProps) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const listId = useId();
   const statusId = useId();
   const levelRef = useRef<HTMLSelectElement>(null);
@@ -137,9 +146,15 @@ export function LookupCombobox({
       return;
     }
     const name = query.trim();
-    if (!window.confirm(t('confirmAddLookup').replace('{name}', name).replace('{kind}', kind))) {
-      return;
-    }
+    const kindLabel = t(KIND_SINGULAR_KEY[kind]);
+    const ok = await confirm({
+      title: t('confirmAddLookupTitle').replace('{kind}', kindLabel),
+      message: t('confirmAddLookup'),
+      highlight: name,
+      tone: 'create',
+      confirmLabel: submitLabel || t('addSkill'),
+    });
+    if (!ok) return;
     setStatus(t('skillCreating').replace('{name}', name));
     setQuery('');
     await onPick({ slug: '', name, isNew: true, level });
