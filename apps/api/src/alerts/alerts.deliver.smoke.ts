@@ -1,4 +1,5 @@
 import {
+  alertMatchSince,
   buildAlertJobsListPath,
   buildInAppJobAlert,
   buildJobAlertEmailHtml,
@@ -140,6 +141,19 @@ function inAppAlertLinksFollowMatchCount() {
   assert(listPath.includes('sort=newest'), `missing newest sort: ${listPath}`);
 }
 
+function weeklyFirstRunLooksBackSevenDays() {
+  const now = Date.parse('2026-08-14T12:00:00.000Z');
+  const weekly = alertMatchSince({ frequency: 'WEEKLY', lastSentAt: null }, now);
+  const daily = alertMatchSince({ frequency: 'DAILY', lastSentAt: null }, now);
+  assert(now - weekly.getTime() === 7 * 24 * 60 * 60 * 1000, 'weekly first run must look back 7d');
+  assert(now - daily.getTime() === 24 * 60 * 60 * 1000, 'daily first run must look back 24h');
+  const stamped = new Date('2026-08-10T00:00:00.000Z');
+  assert(
+    alertMatchSince({ frequency: 'WEEKLY', lastSentAt: stamped }, now).getTime() === stamped.getTime(),
+    'later runs must use lastSentAt',
+  );
+}
+
 function main() {
   emailSkippedWhenUnverified();
   telegramSkippedWithoutChat();
@@ -147,6 +161,7 @@ function main() {
   lastSentAtNotStampedWhenAllFail();
   digestHtmlEscapesAndLinks();
   inAppAlertLinksFollowMatchCount();
+  weeklyFirstRunLooksBackSevenDays();
   console.log('api: alerts.deliver smoke ok');
 }
 
