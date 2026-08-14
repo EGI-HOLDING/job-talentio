@@ -3,6 +3,7 @@
 import { useI18n } from '@/lib/i18n';
 import { sanitizeMojibake } from '@/lib/text';
 import { isLocale, type Locale } from '@/lib/locale';
+import { BusyOverlay } from '@/components/ui/BusyOverlay';
 
 const LOCALE_LABEL_KEY: Record<Locale, string> = {
   uz: 'ui.localeUz',
@@ -42,7 +43,7 @@ export function UgcText({
   const showNotice = Boolean(contentLocale) && contentLocale !== locale;
 
   return (
-    <div className={className}>
+    <BusyOverlay active={translating} label={t('ui.translating')} className={className}>
       {showNotice && (
         <p className="ugc-notice muted">
           {isMachineTranslated
@@ -64,6 +65,6 @@ export function UgcText({
         </p>
       )}
       <div style={preserveLineBreaks ? { whiteSpace: 'pre-wrap' } : undefined}>{clean}</div>
-    </div>
+    </BusyOverlay>
   );
 }

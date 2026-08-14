@@ -1564,6 +1564,61 @@ a.card.job-card--hot {
   }
 }
 
+.busy-overlay-host {
+  position: relative;
+}
+.busy-overlay-host.card {
+  overflow: hidden;
+}
+.busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: center;
+  font-size: 0.9rem;
+}
+.busy-spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: busy-spin 0.7s linear infinite;
+}
+@keyframes busy-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-spinner { animation: none; }
+}
+.work-modal-backdrop {
+  cursor: default;
+}
+.work-modal {
+  width: min(420px, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+}
+.work-modal h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.lang-version-block {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
 /* Dashboard */
 .dash-grid {
   display: grid;

@@ -20,6 +20,16 @@ export const ui = {
     ru: 'Переводим...',
     en: 'Translating...',
   },
+  'ui.parsingCv': {
+    uz: 'CV tahlil qilinmoqda...',
+    ru: 'Разбираем ваш CV...',
+    en: 'Parsing your CV...',
+  },
+  'ui.cvParseStillRunning': {
+    uz: 'Tahlil hali davom etmoqda. Birozdan so‘ng qayta tekshiring.',
+    ru: 'Разбор ещё идёт. Проверьте чуть позже.',
+    en: 'Parse is still running. Check back shortly.',
+  },
   'ui.translateFailed': {
     uz: 'Tarjima qilib bo‘lmadi',
     ru: 'Не удалось перевести',
