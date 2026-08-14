@@ -9,6 +9,7 @@ import { localizedJobLocation } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
@@ -95,6 +96,7 @@ const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
 
 function EmployeeDashboardInner() {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const enumLabel = useEnumLabel();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -327,7 +329,12 @@ function EmployeeDashboardInner() {
   }
 
   async function withdrawApplication(appId: string) {
-    if (!confirm(t('emp.withdrawConfirm'))) return;
+    const ok = await confirm({
+      title: t('emp.withdrawConfirm'),
+      tone: 'danger',
+      confirmLabel: t('emp.withdraw'),
+    });
+    if (!ok) return;
     try {
       await api(`/applications/${appId}/status`, {
         method: 'POST',
@@ -341,7 +348,12 @@ function EmployeeDashboardInner() {
   }
 
   async function deleteAlert(id: string) {
-    if (!confirm(t('emp.deleteAlertConfirm'))) return;
+    const ok = await confirm({
+      title: t('emp.deleteAlertConfirm'),
+      tone: 'danger',
+      confirmLabel: t('emp.delete'),
+    });
+    if (!ok) return;
     await api(`/alerts/${id}`, { method: 'DELETE' });
     await load();
   }

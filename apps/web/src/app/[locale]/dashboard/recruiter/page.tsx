@@ -29,6 +29,7 @@ import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
 import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
@@ -96,6 +97,7 @@ function jobSelectLabel(
 
 function RecruiterDashboard() {
   const { t, locale } = useI18n();
+  const confirm = useConfirm();
   const enumLabel = useEnumLabel();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -697,7 +699,12 @@ function RecruiterDashboard() {
   }
 
   async function removeMember(userId: string) {
-    if (!confirm(t('rec.confirmRemoveMember'))) return;
+    const ok = await confirm({
+      title: t('rec.confirmRemoveMember'),
+      tone: 'danger',
+      confirmLabel: t('rec.remove'),
+    });
+    if (!ok) return;
     try {
       await api(`/companies/${companyId}/members/${userId}`, { method: 'DELETE' });
       flash(t('rec.memberRemoved'));

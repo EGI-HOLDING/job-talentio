@@ -3,6 +3,7 @@ import '../globals.css';
 import { SiteNav } from '@/components/SiteNav';
 import { SiteFooter } from '@/components/SiteFooter';
 import { I18nProvider } from '@/lib/i18n';
+import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { PresenceConnection } from '@/lib/presence';
 import { DEFAULT_LOCALE, LOCALES, isLocale } from '@/lib/locale';
 
@@ -39,10 +40,12 @@ export default async function RootLayout({
       </head>
       <body>
         <I18nProvider locale={locale}>
-          <PresenceConnection />
-          <SiteNav />
-          <main>{children}</main>
-          <SiteFooter />
+          <ConfirmProvider>
+            <PresenceConnection />
+            <SiteNav />
+            <main>{children}</main>
+            <SiteFooter />
+          </ConfirmProvider>
         </I18nProvider>
       </body>
     </html>
