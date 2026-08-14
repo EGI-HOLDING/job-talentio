@@ -1,4 +1,6 @@
 import {
+  buildAlertJobsListPath,
+  buildInAppJobAlert,
   buildJobAlertEmailHtml,
   decideAlertChannels,
   ensureDeliverableAlertChannels,
@@ -101,12 +103,50 @@ function digestHtmlEscapesAndLinks() {
   assert(forced.notifyInApp === true, 'empty alert must keep in-app on');
 }
 
+function inAppAlertLinksFollowMatchCount() {
+  const one = buildInAppJobAlert({
+    alertName: 'Waiters',
+    listPath: '/jobs?city=tashkent&sort=newest',
+    jobs: [{ id: 'job-1', title: 'Waiter', companyName: 'Hadith', cityName: 'Tashkent' }],
+  });
+  assert(one.linkUrl === '/jobs/job-1', `single match should open the job, got ${one.linkUrl}`);
+  assert(one.titleKey === 'notify.jobAlert.singleTitle', 'single match should use the job title key');
+
+  const many = buildInAppJobAlert({
+    alertName: 'Waiters',
+    listPath: '/jobs?city=tashkent&skills=waiter&sort=newest',
+    jobs: [
+      { id: 'job-1', title: 'Waiter', companyName: 'Hadith', cityName: 'Tashkent' },
+      { id: 'job-2', title: 'Host', companyName: 'Saji', cityName: 'Tashkent' },
+    ],
+  });
+  assert(
+    many.linkUrl === '/jobs?city=tashkent&skills=waiter&sort=newest',
+    `digest should open the filtered list, got ${many.linkUrl}`,
+  );
+  assert(many.titleKey === 'notify.jobAlert.title', 'digest should keep the alert title');
+
+  const listPath = buildAlertJobsListPath({
+    query: 'waiter',
+    frequency: 'DAILY',
+    city: { slug: 'tashkent' },
+    category: null,
+    skills: [{ skill: { slug: 'hospitality' } }],
+  });
+  assert(listPath.includes('q=waiter'), `missing keyword: ${listPath}`);
+  assert(listPath.includes('city=tashkent'), `missing city: ${listPath}`);
+  assert(listPath.includes('skills=hospitality'), `missing skills: ${listPath}`);
+  assert(listPath.includes('postedWithin=24h'), `daily digest should hint 24h: ${listPath}`);
+  assert(listPath.includes('sort=newest'), `missing newest sort: ${listPath}`);
+}
+
 function main() {
   emailSkippedWhenUnverified();
   telegramSkippedWithoutChat();
   telegramUnlinkedFallsBackToInApp();
   lastSentAtNotStampedWhenAllFail();
   digestHtmlEscapesAndLinks();
+  inAppAlertLinksFollowMatchCount();
   console.log('api: alerts.deliver smoke ok');
 }
 

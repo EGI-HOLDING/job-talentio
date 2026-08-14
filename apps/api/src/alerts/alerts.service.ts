@@ -11,6 +11,8 @@ import { resolveSkill } from '../common/skill-resolve';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { isDemoMailbox } from '../common/demo-mailboxes';
 import {
+  buildAlertJobsListPath,
+  buildInAppJobAlert,
   buildJobAlertEmailHtml,
   buildJobAlertTelegramText,
   decideAlertChannels,
@@ -324,15 +326,20 @@ export class AlertsService {
 
       if (decisions.inApp === 'send') {
         try {
+          const inApp = buildInAppJobAlert({
+            alertName: alert.name,
+            jobs: digestJobs,
+            listPath: buildAlertJobsListPath(alert),
+          });
           await this.notifications.create({
             userId: alert.userId,
             type: 'NEW_JOB_MATCH',
-            title: `Job alert: ${alert.name}`,
-            body: `${jobs.length} new matching job(s)`,
-            titleKey: 'notify.jobAlert.title',
-            bodyKey: 'notify.jobAlert.body',
-            params: { alert: alert.name, count: jobs.length },
-            linkUrl: `/jobs/${jobs[0].id}`,
+            title: inApp.title,
+            body: inApp.body,
+            titleKey: inApp.titleKey,
+            bodyKey: inApp.bodyKey,
+            params: inApp.params,
+            linkUrl: inApp.linkUrl,
           });
           results.inApp = true;
         } catch {

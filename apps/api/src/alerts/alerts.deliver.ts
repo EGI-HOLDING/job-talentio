@@ -90,6 +90,70 @@ export function jobPublicUrl(jobId: string, locale: string, webBase?: string): s
   return publicSiteUrl(locale, `/jobs/${jobId}`, webBase);
 }
 
+export type AlertJobsListInput = {
+  query?: string | null;
+  frequency?: string | null;
+  city?: { slug: string } | null;
+  category?: { slug: string } | null;
+  skills: Array<{ skill?: { slug: string } | null }>;
+};
+
+/** Jobs browse URL that mirrors the alert filters (city, skills, keywords). */
+export function buildAlertJobsListPath(alert: AlertJobsListInput): string {
+  const params = new URLSearchParams();
+  const q = alert.query?.trim();
+  if (q) params.set('q', q);
+  if (alert.city?.slug) params.set('city', alert.city.slug);
+  if (alert.category?.slug) params.set('category', alert.category.slug);
+  const skillSlugs = [
+    ...new Set(alert.skills.map((row) => row.skill?.slug?.trim()).filter(Boolean) as string[]),
+  ];
+  if (skillSlugs.length) params.set('skills', skillSlugs.join(','));
+  if (alert.frequency === 'WEEKLY') params.set('postedWithin', '7d');
+  else params.set('postedWithin', '24h');
+  params.set('sort', 'newest');
+  return `/jobs?${params.toString()}`;
+}
+
+export function buildInAppJobAlert(opts: {
+  alertName: string;
+  jobs: DigestJob[];
+  listPath: string;
+}): {
+  title: string;
+  body: string;
+  titleKey: string;
+  bodyKey: string;
+  params: Record<string, string | number>;
+  linkUrl: string;
+} {
+  const job = opts.jobs[0];
+  if (opts.jobs.length === 1 && job) {
+    const hasCity = Boolean(job.cityName);
+    return {
+      title: job.title,
+      body: hasCity ? `${job.companyName} | ${job.cityName}` : job.companyName,
+      titleKey: 'notify.jobAlert.singleTitle',
+      bodyKey: hasCity ? 'notify.jobAlert.singleBodyCity' : 'notify.jobAlert.singleBody',
+      params: {
+        title: job.title,
+        company: job.companyName,
+        city: job.cityName || '',
+        alert: opts.alertName,
+      },
+      linkUrl: `/jobs/${job.id}`,
+    };
+  }
+  return {
+    title: `Job alert: ${opts.alertName}`,
+    body: `${opts.jobs.length} new matching job(s)`,
+    titleKey: 'notify.jobAlert.title',
+    bodyKey: 'notify.jobAlert.body',
+    params: { alert: opts.alertName, count: opts.jobs.length },
+    linkUrl: opts.listPath,
+  };
+}
+
 export function buildJobAlertEmailHtml(opts: {
   locale: MessageLocale;
   alertName: string;
