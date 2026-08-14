@@ -611,6 +611,11 @@ export const core = {
   imHiring: { uz: 'Men yollayman', ru: 'Я нанимаю', en: "I'm hiring" },
   companyName: { uz: 'Kompaniya nomi', ru: 'Название компании', en: 'Company name' },
   orContinueWith: { uz: 'yoki davom eting', ru: 'или продолжить с', en: 'or continue with' },
+  googleContinue: {
+    uz: 'Google orqali kirish',
+    ru: 'Войти через Google',
+    en: 'Continue with Google',
+  },
   continueLabel: { uz: 'Davom etish', ru: 'Продолжить', en: 'Continue' },
   googleChooseRole: {
     uz: 'Hisob turini tanlang',
