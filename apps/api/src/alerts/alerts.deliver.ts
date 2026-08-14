@@ -29,6 +29,16 @@ export type DigestJob = {
   cityName: string | null;
 };
 
+/** First digest lookback: 24h for daily, 7d for weekly. Later runs use lastSentAt. */
+export function alertMatchSince(
+  alert: { frequency?: string | null; lastSentAt?: Date | null },
+  now = Date.now(),
+): Date {
+  if (alert.lastSentAt) return alert.lastSentAt;
+  const hours = alert.frequency === 'WEEKLY' ? 7 * 24 : 24;
+  return new Date(now - hours * 60 * 60 * 1000);
+}
+
 export function hasAnyAlertChannel(flags: AlertChannelFlags): boolean {
   return flags.notifyInApp || flags.notifyEmail || flags.notifyTelegram;
 }

@@ -19,6 +19,7 @@ import {
   ensureDeliverableAlertChannels,
   hasAnyAlertChannel,
   shouldStampLastSentAt,
+  alertMatchSince,
 } from './alerts.deliver';
 
 @Injectable()
@@ -256,7 +257,7 @@ export class AlertsService {
 
     for (const alert of alerts) {
       if (!hasAnyAlertChannel(alert)) continue;
-      const since = alert.lastSentAt ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const since = alertMatchSince(alert);
       if (alert.frequency === 'WEEKLY') {
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         if (alert.lastSentAt && alert.lastSentAt > weekAgo) continue;

@@ -340,12 +340,14 @@ export class ApplicationsService {
     applicationId: string,
     status: ApplicationStatus,
     note?: string,
+    opts?: { notify?: boolean },
   ) {
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
       include: {
         jobPost: true,
         profile: { include: { user: true } },
+        events: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
     });
     if (!application) throw new NotFoundException('Application not found');
@@ -358,6 +360,10 @@ export class ApplicationsService {
         'ADMIN',
         'RECRUITER',
       ]);
+    }
+
+    if (application.status === status) {
+      return application;
     }
 
     const updated = await this.prisma.application.update({
@@ -376,22 +382,24 @@ export class ApplicationsService {
       include: { events: { orderBy: { createdAt: 'desc' }, take: 10 } },
     });
 
-    await this.notifications.create({
-      userId: application.profile.userId,
-      type: 'APPLICATION_STATUS',
-      title: `Application update: ${application.jobPost.title}`,
-      body: `Status is now ${status}${note ? `. Note: ${note}` : ''}`,
-      titleKey: 'notify.applicationStatus.title',
-      bodyKey: note
-        ? 'notify.applicationStatus.bodyWithNote'
-        : 'notify.applicationStatus.body',
-      params: {
-        job: application.jobPost.title,
-        status,
-        ...(note ? { note } : {}),
-      },
-      linkUrl: `/dashboard/employee`,
-    });
+    if (opts?.notify !== false) {
+      await this.notifications.create({
+        userId: application.profile.userId,
+        type: 'APPLICATION_STATUS',
+        title: `Application update: ${application.jobPost.title}`,
+        body: `Status is now ${status}${note ? `. Note: ${note}` : ''}`,
+        titleKey: 'notify.applicationStatus.title',
+        bodyKey: note
+          ? 'notify.applicationStatus.bodyWithNote'
+          : 'notify.applicationStatus.body',
+        params: {
+          job: application.jobPost.title,
+          status,
+          ...(note ? { note } : {}),
+        },
+        linkUrl: `/dashboard/employee`,
+      });
+    }
 
     // Email only for recruiter forward (right) moves, and only if the
     // candidate has verified their platform email. Left moves / withdraw = in-app only.
@@ -509,7 +517,9 @@ export class ApplicationsService {
     });
 
     if (application.status !== 'INTERVIEW') {
-      await this.updateStatus(user, applicationId, 'INTERVIEW', 'Interview scheduled');
+      await this.updateStatus(user, applicationId, 'INTERVIEW', 'Interview scheduled', {
+        notify: false,
+      });
     }
 
     await this.notifications.create({
