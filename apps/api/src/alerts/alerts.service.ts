@@ -332,7 +332,7 @@ export class AlertsService {
             titleKey: 'notify.jobAlert.title',
             bodyKey: 'notify.jobAlert.body',
             params: { alert: alert.name, count: jobs.length },
-            linkUrl: `/jobs?q=${encodeURIComponent(alert.query || '')}`,
+            linkUrl: `/jobs/${jobs[0].id}`,
           });
           results.inApp = true;
         } catch {
