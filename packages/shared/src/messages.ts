@@ -63,6 +63,21 @@ export const MESSAGES = {
     ru: 'Новых подходящих вакансий: {count}',
     en: '{count} new matching job(s)',
   },
+  'notify.jobAlert.singleTitle': {
+    uz: '{title}',
+    ru: '{title}',
+    en: '{title}',
+  },
+  'notify.jobAlert.singleBody': {
+    uz: '{company} | {alert}',
+    ru: '{company} | {alert}',
+    en: '{company} | {alert}',
+  },
+  'notify.jobAlert.singleBodyCity': {
+    uz: '{company} | {city} | {alert}',
+    ru: '{company} | {city} | {alert}',
+    en: '{company} | {city} | {alert}',
+  },
 
   // Pipeline stage names, resolved inside notification params so a stored
   // notification never shows a raw enum like IN_REVIEW.
