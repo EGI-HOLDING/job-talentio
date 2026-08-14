@@ -9,6 +9,8 @@ import { localizedJobLocation } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { BusyOverlay } from '@/components/ui/BusyOverlay';
+import { WorkModal } from '@/components/ui/WorkModal';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -120,6 +122,8 @@ function EmployeeDashboardInner() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [cvBusy, setCvBusy] = useState(false);
+  const [cvParsing, setCvParsing] = useState(false);
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvDragOver, setCvDragOver] = useState(false);
   const [draftAlertSkills, setDraftAlertSkills] = useState<Array<{ slug: string; name: string }>>([]);
@@ -532,6 +536,7 @@ function EmployeeDashboardInner() {
       return;
     }
     setUploading(true);
+    setCvBusy(true);
     setError('');
     try {
       const fd = new FormData();
@@ -542,9 +547,8 @@ function EmployeeDashboardInner() {
         { method: 'POST', body: fd },
       );
       setCvFile(null);
-      setMsg(t('cvParsing'));
       await load();
-      setUploading(false);
+      setCvParsing(true);
       const parse = await waitForResumeParse(resume.id);
       await load();
       if (parse.parseStatus === 'READY' && parse.parsedData) {
@@ -553,11 +557,13 @@ function EmployeeDashboardInner() {
       } else if (parse.parseStatus === 'FAILED') {
         setError(parse.parseError || t('cvParseFailed'));
       } else {
-        setMsg(t('cvParsing'));
+        setError(t('ui.cvParseStillRunning'));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('emp.uploadFailed'));
     } finally {
+      setCvParsing(false);
+      setCvBusy(false);
       setUploading(false);
     }
   }
@@ -630,6 +636,7 @@ function EmployeeDashboardInner() {
 
   return (
     <div className="shell dash-grid">
+      <WorkModal open={cvParsing} title={t('ui.parsingCv')} />
       {cvReview && (
         <CvReviewModal
           resumeId={cvReview.resumeId}
@@ -1204,7 +1211,11 @@ function EmployeeDashboardInner() {
               </form>
             </div>
 
-            <div className="card profile-block">
+            <BusyOverlay
+              active={cvBusy}
+              label={cvParsing ? t('ui.parsingCv') : t('emp.uploading')}
+              className="card profile-block"
+            >
               <h2 className="section-title" style={{ marginTop: 0 }}>{t('emp.importFromCv')}</h2>
               <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
                 {t('emp.importFromCvHint')}
@@ -1276,7 +1287,7 @@ function EmployeeDashboardInner() {
                   )}
                 </div>
               </form>
-            </div>
+            </BusyOverlay>
 
             <div className="profile-block" style={{ marginBottom: '0.35rem' }}>
               <h2 className="section-title" style={{ margin: 0 }}>{t('emp.careerHistory')}</h2>

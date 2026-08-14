@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { LOCALES, type Locale } from '@/lib/locale';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { LabelText } from '@/components/ui/Field';
+import { BusyOverlay } from '@/components/ui/BusyOverlay';
 
 type CompanyTranslation = {
   locale: Locale;
@@ -160,13 +161,11 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
             const busy = busyLocale === locale || autoLocale === locale;
             const langName = t(LOCALE_NAME_KEY[locale]);
             return (
-              <div
+              <BusyOverlay
                 key={locale}
-                style={{
-                  marginTop: '0.85rem',
-                  paddingTop: '0.85rem',
-                  borderTop: '1px solid var(--border)',
-                }}
+                active={busy}
+                label={autoLocale === locale ? t('ui.translating') : t('ui.working')}
+                className="lang-version-block"
               >
                 <div className="chips" style={{ alignItems: 'center' }}>
                   <strong>{langName}</strong>
@@ -223,7 +222,7 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
                     </button>
                   )}
                 </div>
-              </div>
+              </BusyOverlay>
             );
           })}
         </>
