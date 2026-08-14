@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { benefitIconLabel } from '@/lib/icons';
 import { useI18n } from '@/lib/i18n';
@@ -65,7 +65,7 @@ export function LookupCombobox({
   const { t } = useI18n();
   const listId = useId();
   const statusId = useId();
-  const formRef = useRef<HTMLFormElement>(null);
+  const levelRef = useRef<HTMLSelectElement>(null);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<LookupSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,9 +95,8 @@ export function LookupCombobox({
   }, [query, kind]);
 
   function currentLevel() {
-    if (!levelOptions?.length || !formRef.current) return defaultLevel;
-    const fd = new FormData(formRef.current);
-    return String(fd.get(levelName) || defaultLevel || '');
+    if (!levelOptions?.length) return defaultLevel;
+    return String(levelRef.current?.value || defaultLevel || '');
   }
 
   const exact = suggestions.find(
@@ -121,8 +120,7 @@ export function LookupCombobox({
     });
   }
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function submitPick() {
     if (disabled) return;
     const level = currentLevel();
 
@@ -148,7 +146,7 @@ export function LookupCombobox({
   }
 
   return (
-    <form ref={formRef} className="form-stack skill-combobox" onSubmit={onSubmit}>
+    <div className="form-stack skill-combobox">
       <label>
         <span className="sr-only">{t(KIND_LABEL_KEY[kind])}</span>
         <input
@@ -173,6 +171,10 @@ export function LookupCombobox({
             } else if (e.key === 'Escape') {
               setSuggestions([]);
               setHighlight(-1);
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              e.stopPropagation();
+              void submitPick();
             }
           }}
         />
@@ -223,7 +225,7 @@ export function LookupCombobox({
       {levelOptions && levelOptions.length > 0 && (
         <label>
           <span className="sr-only">{t('ui.level')}</span>
-          <select name={levelName} defaultValue={defaultLevel} disabled={disabled}>
+          <select ref={levelRef} name={levelName} defaultValue={defaultLevel} disabled={disabled}>
             {levelOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -232,12 +234,16 @@ export function LookupCombobox({
           </select>
         </label>
       )}
-      <button type="submit" disabled={disabled || (!query.trim() && highlight < 0)}>
+      <button
+        type="button"
+        disabled={disabled || (!query.trim() && highlight < 0)}
+        onClick={() => void submitPick()}
+      >
         {submitLabel || t('addSkill')}
       </button>
       <p id={statusId} className="sr-only" aria-live="polite">
         {status}
       </p>
-    </form>
+    </div>
   );
 }
