@@ -323,10 +323,10 @@ export function TelegramSignIn({
           <span>{t('orContinueWith')}</span>
         </div>
       )}
-      <div className="telegram-btn-slot" style={{ marginTop: showDivider ? 0 : '0.75rem' }}>
+      <div className="telegram-btn-slot">
         <button
           type="button"
-          className="telegram-login-btn"
+          className="auth-social-btn auth-social-btn--telegram"
           disabled={!ready || busy}
           onClick={startTelegramAuth}
         >

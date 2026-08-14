@@ -1950,6 +1950,9 @@ a.card.job-card--hot {
 .google-signin {
   margin-top: 1.1rem;
 }
+.google-signin + .google-signin {
+  margin-top: 0.65rem;
+}
 .auth-divider {
   display: flex;
   align-items: center;
@@ -1967,35 +1970,52 @@ a.card.job-card--hot {
 }
 .google-btn-slot,
 .telegram-btn-slot {
-  display: flex;
-  justify-content: center;
-  min-height: 44px;
+  display: block;
+  width: 100%;
 }
-.telegram-login-btn {
-  display: inline-flex;
+.auth-social-gis {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.auth-social-btn {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  min-width: 238px;
-  height: 40px;
+  gap: 0.6rem;
+  width: 100%;
+  height: 44px;
   padding: 0 1rem;
-  border: 0;
   border-radius: 8px;
-  background: #54a9eb;
-  color: #fff;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
+  box-sizing: border-box;
 }
-.telegram-login-btn:hover {
-  background: #4a9cd9;
+.auth-social-btn svg {
+  flex-shrink: 0;
 }
-.telegram-login-btn:disabled {
+.auth-social-btn:disabled {
   opacity: 0.65;
   cursor: default;
 }
-.telegram-login-btn svg {
-  flex-shrink: 0;
+.auth-social-btn--google {
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid var(--border-strong);
+}
+.auth-social-btn--google:hover:not(:disabled) {
+  background: #f8fafc;
+}
+.auth-social-btn--telegram {
+  background: #54a9eb;
+  color: #fff;
+  border: 0;
+}
+.auth-social-btn--telegram:hover:not(:disabled) {
+  background: #4a9cd9;
 }
 .telegram-confirm-identity {
   display: flex;
