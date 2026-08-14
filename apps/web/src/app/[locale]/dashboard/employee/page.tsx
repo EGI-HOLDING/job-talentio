@@ -9,7 +9,7 @@ import { localizedJobLocation } from '@/lib/location';
 import { CvReviewModal, ParsedCv } from '@/components/CvReviewModal';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { FormAlert, LabelText } from '@/components/ui/Field';
+import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
@@ -930,10 +930,9 @@ function EmployeeDashboardInner() {
                   <LabelText required>{t('emp.name')}</LabelText>
                   <input name="name" required />
                 </label>
-                <label>
-                  <LabelText>{t('emp.keywords')}</LabelText>
-                  <input name="query" />
-                </label>
+                <FormField label={t('emp.keywords')} hint={t('emp.keywordsHint')}>
+                  <input name="query" placeholder={t('emp.keywordsPlaceholder')} />
+                </FormField>
                 <label>
                   <LabelText>{t('city')}</LabelText>
                   <select name="citySlug">
