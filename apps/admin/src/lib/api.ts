@@ -17,6 +17,23 @@ export function clearToken() {
   localStorage.removeItem('jt_admin_refresh');
 }
 
+/** Revoke the refresh family server-side (best effort), then clear local tokens. */
+export async function logout() {
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch {
+      /* offline logout still clears local state */
+    }
+  }
+  clearToken();
+}
+
 function getRefreshToken() {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('jt_admin_refresh');
@@ -36,11 +53,15 @@ async function tryRefresh(): Promise<string | null> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          clearToken();
+          return null;
+        }
         const session = (await res.json()) as { accessToken: string; refreshToken?: string };
         saveToken(session.accessToken, session.refreshToken);
         return session.accessToken;
       } catch {
+        clearToken();
         return null;
       } finally {
         refreshPromise = null;
@@ -159,6 +180,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (rotated) {
       headers.set('Authorization', `Bearer ${rotated}`);
       res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+    } else if (getRefreshToken()) {
+      clearToken();
     }
   }
 
