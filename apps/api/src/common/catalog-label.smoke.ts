@@ -23,15 +23,31 @@ expectOk('React');
 expectOk('Node.js');
 expectOk('Ozbek');
 expectOk('Full-stack Developer');
+expectOk('C++');
+expectOk('C#');
+expectOk('HTML5');
+expectOk('HTTPS');
+expectOk('Unit Testing');
+expectOk('A/B Testing');
+expectOk('R');
 
 expectThrow('fuck');
 expectThrow('asdfgh');
 expectThrow('xxx');
 expectThrow('11111');
 expectThrow('aaaa');
+expectThrow('test');
+expectThrow('testing');
 
 assert(isBlockedCatalogKey(normalizeLookupKey('shit')), 'shit blocked');
+assert(isBlockedCatalogKey(normalizeLookupKey('testing')), 'exact testing blocked');
+assert(
+  !isBlockedCatalogKey(normalizeLookupKey('Unit Testing')),
+  'Unit Testing must not inherit the testing block',
+);
 assert(isGibberishCatalogKey('qwerty', 'qwerty'), 'qwerty gibberish');
 assert(!isGibberishCatalogKey('react', 'React'), 'react not gibberish');
+assert(!isGibberishCatalogKey('c', 'C++'), 'C++ is not gibberish');
+assert(!isGibberishCatalogKey('html5', 'HTML5'), 'HTML5 is not gibberish');
 
 console.log('api: catalog-label guard smoke ok');

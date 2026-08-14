@@ -1315,19 +1315,29 @@ export class ProfilesService {
       experiences: 0,
       educations: 0,
       languages: 0,
+      skippedSkills: 0,
       skippedPhoneTaken: Boolean(selection.phone && parsed.phone && !profilePatch.phone),
     };
 
     for (const idx of selection.skillIndexes || []) {
       const name = parsed.skillNames?.[idx];
       if (!name) continue;
-      const { skill } = await resolveSkill(this.prisma, { name, allowCreate: true });
-      await this.prisma.profileSkill.upsert({
-        where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
-        create: { profileId: profile.id, skillId: skill.id, level: 'INTERMEDIATE' },
-        update: {},
-      });
-      imported.skills += 1;
+      try {
+        const { skill } = await resolveSkill(this.prisma, { name, allowCreate: true });
+        await this.prisma.profileSkill.upsert({
+          where: { profileId_skillId: { profileId: profile.id, skillId: skill.id } },
+          create: { profileId: profile.id, skillId: skill.id, level: 'INTERMEDIATE' },
+          update: {},
+        });
+        imported.skills += 1;
+      } catch (err) {
+        // One parsed label must not abort the rest of the import.
+        if (err instanceof BadRequestException) {
+          imported.skippedSkills += 1;
+          continue;
+        }
+        throw err;
+      }
     }
 
     for (const idx of selection.experienceIndexes || []) {

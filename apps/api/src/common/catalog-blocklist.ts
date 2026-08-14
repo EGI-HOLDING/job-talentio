@@ -62,7 +62,13 @@ export const CATALOG_BLOCKLIST = new Set([
   'amasing',
   'amsing',
   'jallad',
-  // spam / throwaway
+]);
+
+/**
+ * Throwaway labels: reject the exact key only. Embedding them would block
+ * real CV skills such as "Unit Testing" (contains "testing").
+ */
+export const CATALOG_EXACT_BLOCKLIST = new Set([
   'asdf',
   'asdfgh',
   'qwer',
@@ -87,7 +93,7 @@ export const CATALOG_BLOCKLIST = new Set([
 export function isBlockedCatalogKey(normalizedKey: string): boolean {
   const key = (normalizedKey || '').trim().toLowerCase();
   if (!key) return true;
-  if (CATALOG_BLOCKLIST.has(key)) return true;
+  if (CATALOG_BLOCKLIST.has(key) || CATALOG_EXACT_BLOCKLIST.has(key)) return true;
   for (const bad of CATALOG_BLOCKLIST) {
     // Avoid short-token false positives (e.g. "test" inside longer words).
     if (bad.length >= 5 && key.includes(bad)) return true;
