@@ -196,6 +196,16 @@ export const employee = {
     en: 'Delete this job alert?',
   },
   'emp.keywords': { uz: 'Kalit so‘zlar', ru: 'Ключевые слова', en: 'Keywords' },
+  'emp.keywordsHint': {
+    uz: 'Sarlavha yoki tavsifida shu ibora bor ishlar. Bo‘sh qoldirish mumkin. Katalog ko‘nikmalarini pastdagi maydonga qo‘shing.',
+    ru: 'Вакансии, в названии или описании которых есть эта фраза. Можно оставить пустым. Навыки из каталога добавляйте ниже.',
+    en: 'Jobs whose title or description contain this phrase. Leave empty to skip. Add catalog skills in the field below.',
+  },
+  'emp.keywordsPlaceholder': {
+    uz: 'masalan, ofitsiant',
+    ru: 'например, официант',
+    en: 'e.g. waiter',
+  },
   'emp.addSkillToAlert': {
     uz: 'Ogohlantirishga ko‘nikma qo‘shish',
     ru: 'Добавить навык в оповещение',
