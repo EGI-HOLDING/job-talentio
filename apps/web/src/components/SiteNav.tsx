@@ -189,17 +189,28 @@ export function SiteNav() {
                       )}
                     </div>
                     {notifs.length === 0 && <div className="notif-item muted">{t('noNotifications')}</div>}
-                    {notifs.map((n) => (
-                      <a
-                        key={n.id}
-                        href={n.linkUrl || '#'}
-                        className={`notif-item ${n.readAt ? '' : 'unread'}`}
-                        onClick={() => api(`/notifications/${n.id}/read`, { method: 'POST' }).catch(() => undefined)}
-                      >
-                        <strong>{n.title}</strong>
-                        {n.body && <span>{n.body}</span>}
-                      </a>
-                    ))}
+                    {notifs.map((n) => {
+                      const href = n.linkUrl && n.linkUrl !== '#' ? n.linkUrl : null;
+                      const className = `notif-item ${n.readAt ? '' : 'unread'}`;
+                      const openNotif = () => {
+                        setOpen(false);
+                        void api(`/notifications/${n.id}/read`, { method: 'POST' }).catch(() => undefined);
+                      };
+                      if (!href) {
+                        return (
+                          <button key={n.id} type="button" className={className} onClick={openNotif}>
+                            <strong>{n.title}</strong>
+                            {n.body && <span>{n.body}</span>}
+                          </button>
+                        );
+                      }
+                      return (
+                        <Link key={n.id} href={href} className={className} onClick={openNotif}>
+                          <strong>{n.title}</strong>
+                          {n.body && <span>{n.body}</span>}
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
