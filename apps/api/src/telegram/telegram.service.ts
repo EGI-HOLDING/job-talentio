@@ -12,8 +12,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { sha256 } from '../common/dedupe';
 import { emailLocale } from '../common/i18n/email-locale';
 import { decideBareStart, decideTokenLink } from './telegram.link';
+import { isTelegramChatReply } from './telegram.chat';
 import { isSecureRuntime } from '../common/jwt-secret';
 import { telegramWebhookSecretRequired } from '../auth/session-policy';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
 
@@ -31,6 +33,7 @@ export class TelegramService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private notifications: NotificationsService,
   ) {}
 
   isConfigured(): boolean {
@@ -146,6 +149,10 @@ export class TelegramService implements OnModuleInit {
 
     const startMatch = text.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([a-f0-9]{32,96}))?$/i);
     if (!startMatch) {
+      if (linked && isTelegramChatReply(text)) {
+        await this.ingestChatReply(linked.id, text, chat, chatLocale);
+        return { ok: true };
+      }
       await this.sendMessage(chat, translateMessage('telegram.link.help', chatLocale));
       return { ok: true };
     }
@@ -194,6 +201,52 @@ export class TelegramService implements OnModuleInit {
 
     await this.sendMessage(chat, translateMessage('telegram.link.ok', locale));
     return { ok: true };
+  }
+
+  private async ingestChatReply(
+    userId: string,
+    body: string,
+    telegramChatId: string,
+    locale: ReturnType<typeof emailLocale>,
+  ) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { OR: [{ userAId: userId }, { userBId: userId }] },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!conversation) {
+      await this.sendMessage(telegramChatId, translateMessage('telegram.chat.helpNoThread', locale));
+      return;
+    }
+
+    const sender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, fullName: true },
+    });
+    if (!sender) return;
+
+    await this.prisma.chatMessage.create({
+      data: { conversationId: conversation.id, senderId: userId, body },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { updatedAt: new Date() },
+    });
+
+    const peerId = conversation.userAId === userId ? conversation.userBId : conversation.userAId;
+    try {
+      await this.notifications.create({
+        userId: peerId,
+        type: 'CHAT_MESSAGE',
+        title: `New message from ${sender.fullName}`,
+        body: 'Open the conversation to read it',
+        titleKey: 'notify.chatMessage.title',
+        bodyKey: 'notify.chatMessage.body',
+        params: { name: sender.fullName },
+        linkUrl: `/messages?peer=${userId}`,
+      });
+    } catch (err) {
+      this.logger.warn(`Inbound Telegram notify failed: ${(err as Error).message}`);
+    }
   }
 
   private async telegramCall(method: string, payload: Record<string, unknown>) {

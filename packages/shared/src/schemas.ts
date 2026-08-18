@@ -599,6 +599,13 @@ export const bulkCampaignSchema = z
     templateId: z.string().min(1).optional(),
     messageBody: z.string().trim().min(1).max(5000).optional(),
     note: z.string().max(2000).optional(),
+    channels: z
+      .object({
+        app: z.boolean().optional(),
+        email: z.boolean().optional(),
+        telegram: z.boolean().optional(),
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.toStatus && !data.templateId && !data.messageBody) {

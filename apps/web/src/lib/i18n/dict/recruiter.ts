@@ -373,10 +373,19 @@ export const recruiter = {
     ru: 'Применить к выбранным',
     en: 'Apply to selected',
   },
+  'rec.sendVia': { uz: 'Yuborish:', ru: 'Отправить:', en: 'Send via' },
+  'rec.channelApp': { uz: 'Ilova', ru: 'Приложение', en: 'App' },
+  'rec.channelEmail': { uz: 'Email', ru: 'Email', en: 'Email' },
+  'rec.channelTelegram': { uz: 'Telegram', ru: 'Telegram', en: 'Telegram' },
+  'rec.channelRequired': {
+    uz: 'Xabar uchun kamida bitta kanalni tanlang',
+    ru: 'Выберите хотя бы один канал для сообщения',
+    en: 'Pick at least one channel for the message',
+  },
   'rec.bulkOptOutNote': {
-    uz: 'Ommaviy xabarlardan voz kechgan nomzodlarga chat yuborilmaydi (GDPR), lekin ularni bosqichlar bo‘ylab siljitish mumkin.',
-    ru: 'Кандидатам, отказавшимся от массовых сообщений, чат не отправляется (GDPR), но их можно перемещать по этапам.',
-    en: 'Candidates who opted out of bulk messaging are skipped for chat (GDPR) but can still be moved.',
+    uz: 'Ommaviy xabarlardan voz kechgan nomzodlarga chat, email va Telegram yuborilmaydi (GDPR), lekin ularni bosqichlar bo‘ylab siljitish mumkin. Email faqat tasdiqlangan manzilga, Telegram faqat ulangan hisobga ketadi.',
+    ru: 'Кандидатам, отказавшимся от массовых сообщений, чат, email и Telegram не отправляются (GDPR), но их можно перемещать по этапам. Email только на подтверждённый адрес, Telegram только если аккаунт связан.',
+    en: 'Candidates who opted out of bulk messaging are skipped for chat, email, and Telegram (GDPR) but can still be moved. Email needs a verified address; Telegram needs a linked account.',
   },
   'rec.bulkChooseTarget': {
     uz: 'Maqsadli bosqich va/yoki xabar yoki shablon tanlang',

@@ -38,6 +38,16 @@ export const MESSAGES = {
     ru: 'Текущий статус: {status}. Комментарий: {note}',
     en: 'Status is now {status}. Note: {note}',
   },
+  'notify.chatMessage.title': {
+    uz: 'Yangi xabar: {name}',
+    ru: 'Новое сообщение: {name}',
+    en: 'New message from {name}',
+  },
+  'notify.chatMessage.body': {
+    uz: 'Suhbatni ochib o‘qing',
+    ru: 'Откройте переписку, чтобы прочитать',
+    en: 'Open the conversation to read it',
+  },
   'notify.interviewScheduled.title': {
     uz: 'Suhbat belgilandi: {job}',
     ru: 'Назначено собеседование: {job}',
@@ -280,6 +290,16 @@ export const MESSAGES = {
     ru: 'Telegram отключён. Вход через Telegram тоже выключен. Подключить снова: настройки, Безопасность.',
     en: 'Telegram unlinked. Telegram sign-in is off too. Connect again in Settings, Security.',
   },
+  'telegram.chat.body': {
+    uz: '{sender} Job Talentio orqali yozdi:\n\n{message}\n\nJavob: {url}',
+    ru: '{sender} написал в Job Talentio:\n\n{message}\n\nОтветить: {url}',
+    en: '{sender} sent you a Job Talentio message:\n\n{message}\n\nReply: {url}',
+  },
+  'telegram.chat.helpNoThread': {
+    uz: 'Hali ochiq suhbat yo‘q. Avval Job Talentio xabarlar sahifasidan yozing, keyin shu yerda javob berishingiz mumkin.',
+    ru: 'Пока нет переписки. Сначала напишите в сообщениях Job Talentio, потом можно отвечать здесь.',
+    en: 'There is no open conversation yet. Message them in Job Talentio first, then you can reply here.',
+  },
 
   'email.applicationStatus.subject': {
     uz: 'Ariza yangilandi - {job}',
@@ -330,6 +350,16 @@ export const MESSAGES = {
     uz: 'Afsuski, bu safar tanlov boshqa nomzodga nasib etdi.',
     ru: 'К сожалению, в этот раз выбрали другого кандидата.',
     en: 'Unfortunately the team moved forward with another candidate.',
+  },
+  'email.chatMessage.subject': {
+    uz: '{name} sizga Job Talentio orqali yozdi',
+    ru: '{name} написал вам в Job Talentio',
+    en: '{name} sent you a message on Job Talentio',
+  },
+  'email.chatMessage.cta': {
+    uz: 'Suhbatni ochish',
+    ru: 'Открыть переписку',
+    en: 'Open conversation',
   },
 } as const satisfies Record<string, MessageEntry>;
 

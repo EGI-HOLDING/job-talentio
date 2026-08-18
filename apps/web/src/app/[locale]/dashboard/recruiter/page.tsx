@@ -160,6 +160,9 @@ function RecruiterDashboard() {
   const [bulkToStatus, setBulkToStatus] = useState('');
   const [bulkTemplateId, setBulkTemplateId] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkChannelApp, setBulkChannelApp] = useState(true);
+  const [bulkChannelEmail, setBulkChannelEmail] = useState(false);
+  const [bulkChannelTelegram, setBulkChannelTelegram] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [companyDetail, setCompanyDetail] = useState<any>(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -594,6 +597,18 @@ function RecruiterDashboard() {
       flash(t('rec.bulkChooseTarget'), 'error');
       return;
     }
+    const wantsMessage = Boolean(bulkTemplateId || bulkMessage.trim());
+    const channels = wantsMessage
+      ? {
+          app: bulkChannelApp,
+          email: bulkChannelEmail,
+          telegram: bulkChannelTelegram,
+        }
+      : undefined;
+    if (wantsMessage && !channels?.app && !channels?.email && !channels?.telegram) {
+      flash(t('rec.channelRequired'), 'error');
+      return;
+    }
     setBulkBusy(true);
     try {
       const campaign = await api<any>('/bulk-comms/campaigns', {
@@ -605,6 +620,7 @@ function RecruiterDashboard() {
           toStatus: bulkToStatus || undefined,
           templateId: bulkTemplateId || undefined,
           messageBody: bulkMessage.trim() || undefined,
+          channels,
         }),
       });
       const sent = campaign.recipients?.filter((r: any) => r.deliveryStatus === 'SENT').length ?? 0;
@@ -1533,6 +1549,37 @@ function RecruiterDashboard() {
                           placeholder={t('rec.bulkMessagePlaceholder')}
                         />
                       </label>
+                      {(bulkTemplateId || bulkMessage.trim()) && (
+                        <div className="bulk-channels">
+                          <span className="muted" style={{ fontSize: '0.78rem' }}>
+                            {t('rec.sendVia')}
+                          </span>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={bulkChannelApp}
+                              onChange={(e) => setBulkChannelApp(e.target.checked)}
+                            />
+                            {t('rec.channelApp')}
+                          </label>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={bulkChannelEmail}
+                              onChange={(e) => setBulkChannelEmail(e.target.checked)}
+                            />
+                            {t('rec.channelEmail')}
+                          </label>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={bulkChannelTelegram}
+                              onChange={(e) => setBulkChannelTelegram(e.target.checked)}
+                            />
+                            {t('rec.channelTelegram')}
+                          </label>
+                        </div>
+                      )}
                       <button
                         type="button"
                         className="chip active"

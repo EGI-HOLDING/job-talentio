@@ -340,7 +340,7 @@ export class ApplicationsService {
     applicationId: string,
     status: ApplicationStatus,
     note?: string,
-    opts?: { notify?: boolean },
+    opts?: { notify?: boolean; skipStatusEmail?: boolean },
   ) {
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
@@ -409,7 +409,7 @@ export class ApplicationsService {
       this.isForwardMove(application.status, status) &&
       Boolean(application.profile.user.emailVerified);
 
-    if (shouldEmail) {
+    if (shouldEmail && !opts?.skipStatusEmail) {
       const to = application.profile.user.email;
       if (to) {
         const { subject, html } = this.stageEmail(
