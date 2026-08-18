@@ -5,11 +5,17 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ApplicationStatus, BulkDeliveryStatus } from '@prisma/client';
+import { translateMessage } from '@job-talentio/shared';
+import type { MessageLocale } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { ChatService } from '../chat/chat.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { MailService } from '../mail/mail.service';
 import { AuthUser } from '../common/auth.decorators';
+import { emailLocale } from '../common/i18n/email-locale';
+import { formatTelegramChatText } from '../telegram/telegram.chat';
 
 type CampaignInput = {
   companyId: string;
@@ -20,7 +26,28 @@ type CampaignInput = {
   templateId?: string;
   messageBody?: string;
   note?: string;
+  channels?: { app?: boolean; email?: boolean; telegram?: boolean };
 };
+
+function resolveBulkChannels(
+  raw: CampaignInput['channels'] | undefined,
+  wantsMessage: boolean,
+): { app: boolean; email: boolean; telegram: boolean } {
+  if (!wantsMessage) return { app: false, email: false, telegram: false };
+  const app = raw?.app !== false;
+  const email = Boolean(raw?.email);
+  const telegram = Boolean(raw?.telegram);
+  if (!app && !email && !telegram) return { app: true, email: false, telegram: false };
+  return { app, email, telegram };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 @Injectable()
 export class BulkCommsService {
@@ -29,6 +56,8 @@ export class BulkCommsService {
     private companies: CompaniesService,
     private applications: ApplicationsService,
     private chat: ChatService,
+    private telegram: TelegramService,
+    private mail: MailService,
   ) {}
 
   private async assertCompany(user: AuthUser, companyId: string) {
@@ -183,7 +212,16 @@ export class BulkCommsService {
             id: true,
             userId: true,
             bulkCommsOptOut: true,
-            user: { select: { id: true, fullName: true, email: true } },
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                emailVerified: true,
+                telegramId: true,
+                locale: true,
+              },
+            },
           },
         },
       },
@@ -206,6 +244,8 @@ export class BulkCommsService {
         );
       }
     }
+
+    const channels = resolveBulkChannels(input.channels, wantsMessage);
 
     const campaign = await this.prisma.bulkCampaign.create({
       data: {
@@ -245,6 +285,7 @@ export class BulkCommsService {
             app.id,
             input.toStatus,
             input.note ?? 'Bulk pipeline update',
+            { skipStatusEmail: wantsMessage && channels.email },
           );
           statusMoved = true;
         }
@@ -260,19 +301,70 @@ export class BulkCommsService {
               companyName: job.company.name,
               status: input.toStatus ?? app.status,
             });
-            const conversation = await this.chat.startConversation(
-              user,
-              app.profile.userId,
-              { jobPostId: job.id, companyId: input.companyId },
-            );
-            const message = await this.chat.sendMessage(user, conversation.id, body);
-            conversationId = conversation.id;
-            messageId = message.id;
-            deliveryStatus = 'SENT';
-            sentAt = new Date();
+            const recipientUser = app.profile.user;
+            let delivered = false;
+            const skipped: string[] = [];
+
+            if (channels.app) {
+              const conversation = await this.chat.startConversation(
+                user,
+                recipientUser.id,
+                { jobPostId: job.id, companyId: input.companyId },
+              );
+              const message = await this.chat.sendMessage(user, conversation.id, body, {
+                telegram: 'never',
+              });
+              conversationId = conversation.id;
+              messageId = message.id;
+              delivered = true;
+            }
+
+            if (channels.email) {
+              if (!recipientUser.emailVerified || !recipientUser.email) {
+                skipped.push('email');
+              } else {
+                const sent = await this.sendOutreachEmail({
+                  to: recipientUser.email,
+                  locale: emailLocale(recipientUser.locale),
+                  senderName: user.fullName || 'Job Talentio',
+                  senderId: user.id,
+                  body,
+                });
+                if (sent) delivered = true;
+                else skipped.push('email');
+              }
+            }
+
+            if (channels.telegram) {
+              if (!recipientUser.telegramId) {
+                skipped.push('telegram');
+              } else {
+                const locale = emailLocale(recipientUser.locale);
+                const webUrl = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+                const text = formatTelegramChatText({
+                  locale,
+                  sender: user.fullName || 'Job Talentio',
+                  message: body,
+                  url: `${webUrl}/${locale}/messages?peer=${user.id}`,
+                });
+                const ok = await this.telegram.sendMessage(recipientUser.telegramId, text);
+                if (ok) delivered = true;
+                else skipped.push('telegram');
+              }
+            }
+
+            if (!delivered) {
+              deliveryStatus = 'FAILED';
+              errorMessage = skipped.length
+                ? `No available channels (${skipped.join(', ')})`
+                : 'No delivery channels selected';
+            } else {
+              deliveryStatus = 'SENT';
+              sentAt = new Date();
+              if (skipped.length) errorMessage = `Skipped: ${skipped.join(', ')}`;
+            }
           }
         } else {
-          // Move-only campaign: no message to deliver
           deliveryStatus = 'SENT';
           sentAt = new Date();
         }
@@ -295,6 +387,28 @@ export class BulkCommsService {
     }
 
     return this.getCampaign(user, campaign.id);
+  }
+
+  private async sendOutreachEmail(opts: {
+    to: string;
+    locale: MessageLocale;
+    senderName: string;
+    senderId: string;
+    body: string;
+  }) {
+    const webUrl = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+    const t = (key: string, params?: Record<string, string | number>) =>
+      translateMessage(key, opts.locale, params);
+    const html = `<p>${t('email.greetingShort')}</p><p>${escapeHtml(opts.body).replace(/\n/g, '<br>')}</p><p><a href="${webUrl}/${opts.locale}/messages?peer=${opts.senderId}">${t(
+      'email.chatMessage.cta',
+    )}</a></p>
+       <p style="color:#64748b;font-size:12px">${t('email.footer')}</p>`;
+    const result = await this.mail.send(
+      opts.to,
+      t('email.chatMessage.subject', { name: opts.senderName }),
+      html,
+    );
+    return Boolean(result) && !(result as { skipped?: boolean } | null)?.skipped;
   }
 
   // ── GDPR opt-out (candidate) ───────────────────────────────

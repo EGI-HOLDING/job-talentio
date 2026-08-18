@@ -3,18 +3,27 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PLAN_LIMITS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { formatTelegramChatText } from '../telegram/telegram.chat';
+import { emailLocale } from '../common/i18n/email-locale';
 import { AuthUser } from '../common/auth.decorators';
 import { effectivePlan } from '../common/effective-plan';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private prisma: PrismaService,
     private presence: PresenceService,
+    private notifications: NotificationsService,
+    private telegram: TelegramService,
   ) {}
 
   private pairIds(a: string, b: string) {
@@ -199,7 +208,12 @@ export class ChatService {
     });
   }
 
-  async sendMessage(user: AuthUser, conversationId: string, body: string) {
+  async sendMessage(
+    user: AuthUser,
+    conversationId: string,
+    body: string,
+    opts?: { telegram?: 'offline' | 'always' | 'never' },
+  ) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
@@ -215,6 +229,62 @@ export class ChatService {
       where: { id: conversationId },
       data: { updatedAt: new Date() },
     });
+    const peerId = conversation.userAId === user.id ? conversation.userBId : conversation.userAId;
+    await this.notifyPeer({
+      peerId,
+      senderId: user.id,
+      senderName: message.sender.fullName,
+      body,
+      telegram: opts?.telegram ?? 'offline',
+    });
     return message;
+  }
+
+  async notifyPeer(opts: {
+    peerId: string;
+    senderId: string;
+    senderName: string;
+    body: string;
+    telegram: 'offline' | 'always' | 'never';
+  }) {
+    try {
+      await this.notifications.create({
+        userId: opts.peerId,
+        type: 'CHAT_MESSAGE',
+        title: `New message from ${opts.senderName}`,
+        body: 'Open the conversation to read it',
+        titleKey: 'notify.chatMessage.title',
+        bodyKey: 'notify.chatMessage.body',
+        params: { name: opts.senderName },
+        linkUrl: `/messages?peer=${opts.senderId}`,
+      });
+    } catch (err) {
+      this.logger.warn(`Chat notification failed: ${(err as Error).message}`);
+    }
+
+    if (opts.telegram === 'never') return;
+    try {
+      const peer = await this.prisma.user.findUnique({
+        where: { id: opts.peerId },
+        select: { telegramId: true, locale: true },
+      });
+      if (!peer?.telegramId) return;
+      if (opts.telegram === 'offline') {
+        const presence = await this.presence.getOne(opts.peerId);
+        if (presence.isOnline) return;
+      }
+      const locale = emailLocale(peer.locale);
+      const webUrl = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+      const url = `${webUrl}/${locale}/messages?peer=${opts.senderId}`;
+      const text = formatTelegramChatText({
+        locale,
+        sender: opts.senderName,
+        message: opts.body,
+        url,
+      });
+      await this.telegram.sendMessage(peer.telegramId, text);
+    } catch (err) {
+      this.logger.warn(`Chat Telegram fan-out failed: ${(err as Error).message}`);
+    }
   }
 }

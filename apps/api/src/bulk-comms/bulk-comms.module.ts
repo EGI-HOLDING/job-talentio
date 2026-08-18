@@ -4,9 +4,10 @@ import { BulkCommsService } from './bulk-comms.service';
 import { CompaniesModule } from '../companies/companies.module';
 import { ApplicationsModule } from '../applications/applications.module';
 import { ChatModule } from '../chat/chat.module';
+import { TelegramModule } from '../telegram/telegram.module';
 
 @Module({
-  imports: [CompaniesModule, ApplicationsModule, ChatModule],
+  imports: [CompaniesModule, ApplicationsModule, ChatModule, TelegramModule],
   controllers: [BulkCommsController],
   providers: [BulkCommsService],
   exports: [BulkCommsService],

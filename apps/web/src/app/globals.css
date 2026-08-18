@@ -1844,6 +1844,27 @@ a.card.job-card--hot {
 .bulk-action-message {
   min-width: 0;
 }
+.bulk-channels {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.bulk-channels label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.bulk-channels input {
+  width: auto;
+}
+.bulk-action-fields .bulk-channels input {
+  width: auto;
+}
 .bulk-action-fields textarea,
 .bulk-action-fields select,
 .bulk-action-fields input {
