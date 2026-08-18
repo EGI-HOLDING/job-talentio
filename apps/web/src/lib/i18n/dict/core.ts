@@ -165,6 +165,12 @@ export const core = {
   companiesStat: { uz: 'Kompaniyalar', ru: 'Компании', en: 'Companies' },
   talentProfiles: { uz: 'Nomzodlar', ru: 'Профили талантов', en: 'Talent profiles' },
   citiesCovered: { uz: 'Shaharlar', ru: 'Городов', en: 'Cities covered' },
+  'home.forYou': { uz: 'Siz uchun', ru: 'Для вас', en: 'For you' },
+  'home.forYouSubtitle': {
+    uz: 'Ko‘nikma va sarlavhangizga mos ochiq ishlar',
+    ru: 'Открытые вакансии под ваши навыки и должность',
+    en: 'Open roles that match your skills and headline',
+  },
   hotJobs: { uz: 'Dolzarb vakansiyalar', ru: 'Горячие вакансии', en: 'Hot jobs' },
   hot: { uz: 'Dolzarb', ru: 'Горячее', en: 'Hot' },
   hotJobsEmpty: {
@@ -461,7 +467,7 @@ export const core = {
   jobsFound: { uz: 'ta ish topildi', ru: 'вакансий найдено', en: 'jobs found' },
   clearFilters: { uz: 'Filtrlarni tozalash', ru: 'Сбросить фильтры', en: 'Clear filters' },
   overview: { uz: 'Umumiy', ru: 'Обзор', en: 'Overview' },
-  recommended: { uz: 'Tavsiya etilgan', ru: 'Рекомендации', en: 'Recommended' },
+  recommended: { uz: 'Siz uchun', ru: 'Для вас', en: 'For you' },
   applications: { uz: 'Arizalar', ru: 'Отклики', en: 'Applications' },
   savedJobs: { uz: 'Saqlangan ishlar', ru: 'Сохранённые', en: 'Saved jobs' },
   alerts: { uz: 'Ish ogohlantirishlari', ru: 'Оповещения', en: 'Job alerts' },

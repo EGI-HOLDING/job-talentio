@@ -13,6 +13,7 @@ import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
 import { ExploreTitleCard } from '@/components/explore/ExploreTitleCard';
 import { TopCompaniesCarousel, type TopCompany } from '@/components/home/TopCompaniesCarousel';
+import { ForYouJobsSection } from '@/components/home/ForYouJobsSection';
 import { NewsCard } from '@/components/news/NewsCard';
 import type { NewsListItem } from '@/lib/newsSeo';
 
@@ -57,7 +58,7 @@ function rolesLabel(t: (k: string) => string, n: number) {
   return t('openRolesCount').replace('{n}', String(n));
 }
 
-export function SeekerHome() {
+export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   const router = useRouter();
   const { t } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -166,6 +167,8 @@ export function SeekerHome() {
           </div>
         </div>
       </section>
+
+      {isEmployee && <ForYouJobsSection />}
 
       {topCompanies.length > 0 && (
         <ExploreSection

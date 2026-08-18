@@ -828,13 +828,19 @@ function EmployeeDashboardInner() {
             })}
             {!recommended.length && (
               <p className="muted">
-                {profile?.skills?.length || profile?.headline || profile?.desiredPosition ? (
+                {profile?.skills?.length ||
+                profile?.headline ||
+                profile?.desiredPosition ||
+                (profile?.experiences || []).some((row: { title?: string | null }) => row.title) ? (
                   <>
                     {t('emp.recommendedEmptyNoOverlap')}{' '}
                     <Link href="/jobs">{t('jobs')}</Link>
                   </>
                 ) : (
-                  t('emp.recommendedEmpty')
+                  <>
+                    {t('emp.recommendedEmpty')}{' '}
+                    <Link href="/dashboard/employee?tab=profile">{t('profile')}</Link>
+                  </>
                 )}
               </p>
             )}

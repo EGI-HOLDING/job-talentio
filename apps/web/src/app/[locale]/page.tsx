@@ -19,5 +19,5 @@ export default function HomePage() {
   }
 
   if (role === 'RECRUITER') return <RecruiterHome />;
-  return <SeekerHome />;
+  return <SeekerHome isEmployee={role === 'EMPLOYEE'} />;
 }

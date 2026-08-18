@@ -139,15 +139,15 @@ export const employee = {
 
   // Recommended jobs
   'emp.jobsMatchedTitle': {
-    uz: 'Profilingizga mos ishlar',
-    ru: 'Вакансии по вашему профилю',
-    en: 'Jobs matched to your profile',
+    uz: 'Siz uchun ishlar',
+    ru: 'Вакансии для вас',
+    en: 'Jobs for you',
   },
   'emp.details': { uz: 'batafsil', ru: 'подробнее', en: 'details' },
   'emp.recommendedEmpty': {
-    uz: 'Mos ishlarni ko‘rish uchun profilingizga ko‘nikma qo‘shing. Ko‘nikmalaringiz chop etilgan vakansiyalarga mos kelmaguncha tavsiyalar bo‘sh qoladi.',
-    ru: 'Добавьте навыки в профиль, чтобы получать подходящие вакансии. Рекомендации остаются пустыми, пока ваши навыки не совпадут с опубликованными вакансиями.',
-    en: 'Add skills to your profile to get job matches. Recommendations stay empty until your skills overlap with published roles.',
+    uz: 'Mos ishlarni ko‘rish uchun profilingizga ko‘nikma yoki sarlavha qo‘shing. Ular chop etilgan vakansiyalarga mos kelmaguncha ro‘yxat bo‘sh qoladi.',
+    ru: 'Добавьте навыки или должность в профиль, чтобы видеть подходящие вакансии. Список остаётся пустым, пока они не совпадут с опубликованными вакансиями.',
+    en: 'Add skills or a headline to your profile to see matching jobs. This list stays empty until they overlap with published roles.',
   },
   'emp.recommendedEmptyNoOverlap': {
     uz: 'Hozircha sarlavhangiz yoki ko‘nikmalaringizga mos ochiq ish yo‘q. Barcha e’lonlarni ko‘rish uchun',
