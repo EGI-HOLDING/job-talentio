@@ -127,7 +127,11 @@ const EMPTY: Filters = {
   limit: DEFAULT_LIMIT,
 };
 
-function filtersFromParams(sp: URLSearchParams): Filters {
+function defaultJobSort(isEmployee: boolean): string {
+  return isEmployee ? 'match' : 'relevance';
+}
+
+function filtersFromParams(sp: URLSearchParams, implicitSort: string): Filters {
   const rawLimit = Number(sp.get('limit') || DEFAULT_LIMIT);
   const limit = PAGE_SIZE_OPTIONS.includes(rawLimit as (typeof PAGE_SIZE_OPTIONS)[number])
     ? rawLimit
@@ -150,13 +154,13 @@ function filtersFromParams(sp: URLSearchParams): Filters {
     salaryMax: sp.get('salaryMax') ?? '',
     postedWithin: sp.get('postedWithin') ?? '',
     hotOnly: sp.get('hotOnly') === 'true',
-    sort: sp.get('sort') ?? 'relevance',
+    sort: sp.get('sort') ?? implicitSort,
     page: Math.max(1, Number(sp.get('page') || 1)),
     limit,
   };
 }
 
-function toParams(f: Filters, view?: string | null): URLSearchParams {
+function toParams(f: Filters, view?: string | null, implicitSort = 'relevance'): URLSearchParams {
   const p = new URLSearchParams();
   (Object.keys(EMPTY) as Array<keyof Filters>).forEach((key) => {
     const value = f[key];
@@ -170,7 +174,7 @@ function toParams(f: Filters, view?: string | null): URLSearchParams {
       return;
     }
     if (key === 'sort') {
-      if (value !== 'relevance') p.set('sort', String(value));
+      if (value !== implicitSort) p.set('sort', String(value));
       return;
     }
     if (key === 'skillMode') {
@@ -208,7 +212,13 @@ function JobsInner() {
   const searchParams = useSearchParams();
   const { t } = useI18n();
   const enumLabel = useEnumLabel();
-  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
+  const session = typeof window !== 'undefined' ? getSession() : null;
+  const isEmployee = session?.user.role === 'EMPLOYEE';
+  const implicitSort = defaultJobSort(Boolean(isEmployee));
+  const filters = useMemo(
+    () => filtersFromParams(searchParams, implicitSort),
+    [searchParams, implicitSort],
+  );
   const browseCompanies = searchParams.get('view') === 'companies';
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -222,7 +232,6 @@ function JobsInner() {
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
-  const session = typeof window !== 'undefined' ? getSession() : null;
 
   useEffect(() => {
     Promise.all([
@@ -250,27 +259,32 @@ function JobsInner() {
       const next = { ...filters, ...patch };
       if (patch.page === undefined && !('page' in patch)) next.page = 1;
       const keepBrowse = opts?.keepBrowse ?? browseCompanies;
-      router.push(`/jobs?${toParams(next, keepBrowse ? 'companies' : null).toString()}`);
+      router.push(`/jobs?${toParams(next, keepBrowse ? 'companies' : null, implicitSort).toString()}`);
     },
-    [filters, router, browseCompanies],
+    [filters, router, browseCompanies, implicitSort],
   );
 
   useEffect(() => {
     setLoading(true);
     setError('');
-    const p = toParams(filters);
+    const p = toParams(filters, null, implicitSort);
+    // Always send sort to the API: omitted URL sort is the implicit default
+    // (match for employees, relevance for guests).
+    p.set('sort', filters.sort);
     // Send auth when logged in so sort=match can use the employee profile
     api<SearchResponse>(`/jobs?${p.toString()}`)
       .then((res) => {
         setData(res);
         // Keep URL in sync when the API clamps an out-of-range page.
         if (res.page !== filters.page) {
-          router.replace(`/jobs?${toParams({ ...filters, page: res.page }, browseCompanies ? 'companies' : null).toString()}`);
+          router.replace(
+            `/jobs?${toParams({ ...filters, page: res.page }, browseCompanies ? 'companies' : null, implicitSort).toString()}`,
+          );
         }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [filters, router, browseCompanies]);
+  }, [filters, router, browseCompanies, implicitSort]);
 
   const selectedSkills = filters.skills.split(',').filter(Boolean);
   const selectedCities = filters.city.split(',').filter(Boolean);
