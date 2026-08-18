@@ -343,7 +343,6 @@ function JobsInner() {
     filters.postedWithin,
     filters.salaryMin,
     filters.salaryMax,
-    filters.hotOnly ? '1' : '',
     filters.skillMode !== 'OR' ? filters.skillMode : '',
   ].filter(Boolean).length;
   const forceAdvancedOpen = advancedActiveCount > 0;
@@ -592,15 +591,6 @@ function JobsInner() {
               />
             </FormField>
           </div>
-
-          <label className="filter-check">
-            <input
-              type="checkbox"
-              checked={filters.hotOnly}
-              onChange={(e) => apply({ hotOnly: e.target.checked })}
-            />
-            {t('hotJobsOnly')}
-          </label>
         </AdvancedFiltersPanel>
 
         <button type="button" className="secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={() => router.push('/jobs')}>
@@ -750,10 +740,27 @@ function JobsInner() {
                   {tok.minLevel}+ x
                 </button>
               ))}
-              {filters.hotOnly && (
-                <button type="button" className="chip chip-hot" onClick={() => apply({ hotOnly: false })}>
-                  {t('hot')} x
-                </button>
+              {filters.hotOnly ? (
+                <span className="chip-dismiss-wrap">
+                  <span className="chip chip-hot">{t('hot')}</span>
+                  <button
+                    type="button"
+                    className="chip-dismiss-btn"
+                    onClick={() => apply({ hotOnly: false })}
+                    aria-label={t('clearHotJobsFilter')}
+                  >
+                    x
+                  </button>
+                </span>
+              ) : (
+                <label className="filter-check jobs-hot-toggle">
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={(e) => apply({ hotOnly: e.target.checked })}
+                  />
+                  {t('hotJobsOnly')}
+                </label>
               )}
             </div>
           </div>

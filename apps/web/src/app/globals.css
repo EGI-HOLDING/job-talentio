@@ -381,6 +381,42 @@ button.chip.chip-hot:hover,
   border-color: color-mix(in srgb, var(--hot) 40%, var(--border));
   color: var(--hot-deep);
 }
+.chip-dismiss-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.chip-dismiss-wrap .chip {
+  cursor: default;
+}
+.chip-dismiss-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border-radius: 999px;
+  background: #fff;
+  border: 1.5px solid var(--hot);
+  color: var(--hot-deep);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.chip-dismiss-btn:hover,
+.chip-dismiss-btn:focus-visible {
+  background: var(--hot);
+  border-color: var(--hot);
+  color: #fff;
+}
+.jobs-hot-toggle {
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+}
 
 /* Cards & grids */
 .grid-2 {
