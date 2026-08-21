@@ -2424,96 +2424,152 @@ a.card.job-card--hot {
 .lang-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.55rem;
   margin-top: 0.65rem;
 }
 .lang-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   max-width: 100%;
-  padding: 0.28rem 0.3rem 0.28rem 0.7rem;
-  background: #fff;
+  padding: 0.45rem 0.4rem 0.45rem 0.8rem;
+  background: #f8fafc;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 12px;
+}
+.lang-chip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 .lang-chip-name {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   color: var(--text);
-  max-width: 10rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.lang-chip .cefr {
+.lang-chip-optional {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.lang-chip .cefr,
+.lang-chip-cefr {
   margin: 0;
   flex-shrink: 0;
 }
-.lang-chip-level {
-  width: auto;
-  min-width: 0;
-  margin: 0;
-  padding: 0.18rem 0.45rem;
+button.lang-chip-cefr,
+button.lang-chip-cefr:hover,
+button.lang-chip-cefr:focus-visible,
+button.lang-chip-cefr:active {
+  padding: 0.18rem 0.5rem;
   border: 0;
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
-  cursor: pointer;
   background: #e0e7ff;
   color: #3730a3;
-  flex-shrink: 0;
 }
-.lang-chip-level.cefr-native,
-.lang-chip-level.cefr-c2,
-.lang-chip-level.cefr-c1 {
+button.lang-chip-cefr.cefr-native,
+button.lang-chip-cefr.cefr-c2,
+button.lang-chip-cefr.cefr-c1,
+button.lang-chip-cefr.cefr-native:hover,
+button.lang-chip-cefr.cefr-c2:hover,
+button.lang-chip-cefr.cefr-c1:hover,
+button.lang-chip-cefr.cefr-native:focus-visible,
+button.lang-chip-cefr.cefr-c2:focus-visible,
+button.lang-chip-cefr.cefr-c1:focus-visible {
   background: #d1fae5;
   color: #047857;
 }
-.lang-chip-level.cefr-b2,
-.lang-chip-level.cefr-b1 {
+button.lang-chip-cefr.cefr-b2,
+button.lang-chip-cefr.cefr-b1,
+button.lang-chip-cefr.cefr-b2:hover,
+button.lang-chip-cefr.cefr-b1:hover {
   background: #e0e7ff;
   color: #3730a3;
 }
-.lang-chip-level.cefr-a2,
-.lang-chip-level.cefr-a1 {
+button.lang-chip-cefr.cefr-a2,
+button.lang-chip-cefr.cefr-a1,
+button.lang-chip-cefr.cefr-a2:hover,
+button.lang-chip-cefr.cefr-a1:hover {
   background: #f1f5f9;
   color: #475569;
 }
-.lang-chip-optional {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.lang-chip-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  padding: 0;
-  margin: 0;
+.lang-chip-level-wrap {
+  position: relative;
   flex-shrink: 0;
-  border-radius: 999px;
+}
+.lang-chip-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  width: 11.5rem;
+  padding: 0.45rem;
+  background: #fff;
   border: 1px solid var(--border);
-  background: #f8fafc;
-  color: var(--muted);
-  font-size: 0.8rem;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+button.lang-chip-menu-opt,
+button.lang-chip-menu-opt:hover,
+button.lang-chip-menu-opt:focus-visible,
+button.lang-chip-menu-opt:active {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.72rem;
   font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
+  background: #e0e7ff;
+  color: #3730a3;
 }
-.lang-chip-remove:hover,
-.lang-chip-remove:focus-visible {
-  border-color: var(--accent);
+button.lang-chip-menu-opt.cefr-native,
+button.lang-chip-menu-opt.cefr-c2,
+button.lang-chip-menu-opt.cefr-c1,
+button.lang-chip-menu-opt.cefr-native:hover,
+button.lang-chip-menu-opt.cefr-c2:hover,
+button.lang-chip-menu-opt.cefr-c1:hover {
+  background: #d1fae5;
+  color: #047857;
+}
+button.lang-chip-menu-opt.cefr-b2,
+button.lang-chip-menu-opt.cefr-b1,
+button.lang-chip-menu-opt.cefr-b2:hover,
+button.lang-chip-menu-opt.cefr-b1:hover {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+button.lang-chip-menu-opt.cefr-a2,
+button.lang-chip-menu-opt.cefr-a1,
+button.lang-chip-menu-opt.cefr-a2:hover,
+button.lang-chip-menu-opt.cefr-a1:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+button.lang-chip-menu-opt.is-selected {
+  border-color: currentColor;
+}
+button.ghost.lang-chip-remove {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+button.ghost.lang-chip-remove:hover,
+button.ghost.lang-chip-remove:focus-visible {
   color: var(--accent);
-  background: var(--accent-soft);
 }
-.lang-chip-remove:active {
+button.ghost.lang-chip-remove:active {
   transform: none;
 }
 .cefr {
