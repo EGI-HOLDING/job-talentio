@@ -122,6 +122,11 @@ export const ui = {
     en: 'Failed to send',
   },
 
+  'ui.removeLanguage': {
+    uz: '{name} tilini olib tashlash',
+    ru: 'Убрать язык {name}',
+    en: 'Remove {name}',
+  },
   'ui.privacy': { uz: 'Maxfiylik', ru: 'Конфиденциальность', en: 'Privacy' },
   'ui.telegramAlerts': { uz: 'Telegram ogohlantirishlari', ru: 'Оповещения Telegram', en: 'Telegram alerts' },
   'ui.telegramAlertsHint': {

@@ -16,6 +16,7 @@ import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
+import { LanguageChip, CEFR_LEVELS } from '@/components/ui/LanguageChip';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
@@ -94,7 +95,7 @@ function completeness(profile: any) {
 
 const LEVEL_ORDER = ['EXPERT', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'] as const;
 const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] as const;
-const LANG_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'] as const;
+const LANG_LEVELS = CEFR_LEVELS;
 
 function EmployeeDashboardInner() {
   const { t } = useI18n();
@@ -1564,30 +1565,19 @@ function EmployeeDashboardInner() {
                     {openForm === 'lang' ? t('closeDialog') : `+ ${t('emp.add')}`}
                   </button>
                 </div>
-                <ul className="profile-list">
-                  {(profile.languages || []).map((x: any) => (
-                    <li key={x.id} className="profile-list-row">
-                      <div className="profile-list-main">
-                        <strong className="profile-list-title">{x.language?.name}</strong>
-                        <span className={`cefr cefr-${String(x.level || 'b1').toLowerCase()}`}>{x.level}</span>
-                      </div>
-                      <div className="profile-list-actions">
-                        <select
-                          aria-label={t('emp.levelFor').replace('{name}', x.language?.name)}
-                          value={x.level || 'B1'}
-                          onChange={(e) => updateLanguageLevel(x.id, e.target.value)}
-                        >
-                          {LANG_LEVELS.map((l) => (
-                            <option key={l} value={l}>{l}</option>
-                          ))}
-                        </select>
-                        <button type="button" className="ghost" onClick={() => removeItem('languages', x.id)}>
-                          {t('emp.remove')}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                {(profile.languages || []).length > 0 && (
+                  <div className="lang-grid">
+                    {(profile.languages || []).map((x: any) => (
+                      <LanguageChip
+                        key={x.id}
+                        name={x.language?.name || x.language?.code || ''}
+                        level={x.level || 'B1'}
+                        onLevelChange={(level) => updateLanguageLevel(x.id, level)}
+                        onRemove={() => removeItem('languages', x.id)}
+                      />
+                    ))}
+                  </div>
+                )}
                 {!(profile.languages || []).length && <p className="muted">{t('emp.noLanguages')}</p>}
                 {openForm === 'lang' && (
                   <div style={{ marginTop: '1rem' }}>
