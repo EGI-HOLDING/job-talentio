@@ -2422,20 +2422,99 @@ a.card.job-card--hot {
   align-items: flex-start;
 }
 .lang-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-.lang-pill {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  background: #f8fafc;
+  margin-top: 0.65rem;
+}
+.lang-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.28rem 0.3rem 0.28rem 0.7rem;
+  background: #fff;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.65rem 0.75rem;
+  border-radius: 999px;
+}
+.lang-chip-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lang-chip .cefr {
+  margin: 0;
+  flex-shrink: 0;
+}
+.lang-chip-level {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.18rem 0.45rem;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  background: #e0e7ff;
+  color: #3730a3;
+  flex-shrink: 0;
+}
+.lang-chip-level.cefr-native,
+.lang-chip-level.cefr-c2,
+.lang-chip-level.cefr-c1 {
+  background: #d1fae5;
+  color: #047857;
+}
+.lang-chip-level.cefr-b2,
+.lang-chip-level.cefr-b1 {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.lang-chip-level.cefr-a2,
+.lang-chip-level.cefr-a1 {
+  background: #f1f5f9;
+  color: #475569;
+}
+.lang-chip-optional {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lang-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.lang-chip-remove:hover,
+.lang-chip-remove:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.lang-chip-remove:active {
+  transform: none;
 }
 .cefr {
   display: inline-block;

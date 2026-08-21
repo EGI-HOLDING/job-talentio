@@ -21,6 +21,7 @@ import { FormAlert, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
+import { LanguageChip, CEFR_LEVELS } from '@/components/ui/LanguageChip';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { MatchRing } from '@/components/ui/MatchRing';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
@@ -1119,22 +1120,22 @@ function RecruiterDashboard() {
                   <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
                     {t('jobLanguagesHint')}
                   </p>
-                  <div className="chips" style={{ margin: '0.4rem 0' }}>
+                  <div className="lang-grid" style={{ margin: '0.4rem 0' }}>
                     {draftJobLanguages.map((l) => (
-                      <span key={l.code} className="badge">
-                        {l.name} {l.minLevel}
-                        {l.isRequired ? '' : ` (${t('optional')})`}
-                        <button
-                          type="button"
-                          className="ghost"
-                          style={{ marginLeft: 6, padding: 0 }}
-                          onClick={() =>
-                            setDraftJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
-                          }
-                        >
-                          x
-                        </button>
-                      </span>
+                      <LanguageChip
+                        key={l.code}
+                        name={l.name}
+                        level={l.minLevel}
+                        optional={!l.isRequired}
+                        onLevelChange={(minLevel) =>
+                          setDraftJobLanguages((prev) =>
+                            prev.map((row) => (row.code === l.code ? { ...row, minLevel } : row)),
+                          )
+                        }
+                        onRemove={() =>
+                          setDraftJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
+                        }
+                      />
                     ))}
                   </div>
                   {draftJobLanguages.length < 4 && (
@@ -1143,7 +1144,7 @@ function RecruiterDashboard() {
                       allowCreate={false}
                       submitLabel={t('addLanguage')}
                       placeholder={t('languageSearchPlaceholder')}
-                      levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((v) => ({
+                      levelOptions={CEFR_LEVELS.map((v) => ({
                         value: v,
                         label: v,
                       }))}
@@ -1383,22 +1384,22 @@ function RecruiterDashboard() {
                           <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
                             {t('jobLanguagesHint')}
                           </p>
-                          <div className="chips" style={{ margin: '0.4rem 0' }}>
+                          <div className="lang-grid" style={{ margin: '0.4rem 0' }}>
                             {editJobLanguages.map((l) => (
-                              <span key={l.code} className="badge">
-                                {l.name} {l.minLevel}
-                                {l.isRequired ? '' : ` (${t('optional')})`}
-                                <button
-                                  type="button"
-                                  className="ghost"
-                                  style={{ marginLeft: 6, padding: 0 }}
-                                  onClick={() =>
-                                    setEditJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
-                                  }
-                                >
-                                  x
-                                </button>
-                              </span>
+                              <LanguageChip
+                                key={l.code}
+                                name={l.name}
+                                level={l.minLevel}
+                                optional={!l.isRequired}
+                                onLevelChange={(minLevel) =>
+                                  setEditJobLanguages((prev) =>
+                                    prev.map((row) => (row.code === l.code ? { ...row, minLevel } : row)),
+                                  )
+                                }
+                                onRemove={() =>
+                                  setEditJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
+                                }
+                              />
                             ))}
                           </div>
                           {editJobLanguages.length < 4 && (
@@ -1407,7 +1408,7 @@ function RecruiterDashboard() {
                               allowCreate={false}
                               submitLabel={t('addLanguage')}
                               placeholder={t('languageSearchPlaceholder')}
-                              levelOptions={['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'].map((v) => ({
+                              levelOptions={CEFR_LEVELS.map((v) => ({
                                 value: v,
                                 label: v,
                               }))}
