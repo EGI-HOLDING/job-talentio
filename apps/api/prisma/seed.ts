@@ -2,7 +2,7 @@ import { PrismaClient, PlanCode, ExperienceLevel, EmploymentType, WorkMode, Degr
 import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
 import * as bcrypt from 'bcryptjs';
 import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
-import { jobFingerprint } from '../src/common/dedupe';
+import { contentHash, jobFingerprint } from '../src/common/dedupe';
 import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
 import { backfillIndustries } from '../src/common/industry-backfill';
 import { backfillJobLanguages } from '../src/common/job-language-backfill';
@@ -995,20 +995,42 @@ async function main() {
     // ASCII-only separators — em-dash (U+2014) previously corrupted to "???" in some seed environments
     const resolvedTitle = await resolveJobTitle(prisma, { name: tpl.title });
     const title = resolvedTitle.jobTitle.name;
+    const workMode = workModes[i % workModes.length];
+    const fingerprint = jobFingerprint({
+      title,
+      workMode,
+      cityId: city.id,
+    });
+    const description = `${company.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan and Central Asia.\n\nResponsibilities:\n- Own delivery for ${tpl.skills.slice(0, 2).join(' and ')} workstreams\n- Collaborate with product, design, and operations\n- Improve quality, documentation, and mentoring\n\nRequirements:\n- Hands-on experience with ${tpl.skills.join(', ')}\n- ${tpl.years}+ years relevant experience preferred\n- Communication in Uzbek/Russian/English\n\nBenefits include competitive pay, learning budget, and modern tooling.`;
+
+    const clash = await prisma.jobPost.findFirst({
+      where: {
+        companyId: company.id,
+        fingerprint,
+        status: { in: ['DRAFT', 'PUBLISHED', 'PAUSED'] },
+      },
+      select: { id: true },
+    });
+    if (clash) {
+      console.warn(
+        `Skip seed job "${title}" for ${company.name}: active fingerprint exists (${clash.id})`,
+      );
+      continue;
+    }
 
     const job = await prisma.jobPost.create({
       data: {
         companyId: company.id,
         jobTitleId: resolvedTitle.jobTitle.id,
         title,
-        description: `${company.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan and Central Asia.\n\nResponsibilities:\n- Own delivery for ${tpl.skills.slice(0, 2).join(' and ')} workstreams\n- Collaborate with product, design, and operations\n- Improve quality, documentation, and mentoring\n\nRequirements:\n- Hands-on experience with ${tpl.skills.join(', ')}\n- ${tpl.years}+ years relevant experience preferred\n- Communication in Uzbek/Russian/English\n\nBenefits include competitive pay, learning budget, and modern tooling.`,
+        description,
         cityId: city.id,
         categoryId: catMap[tpl.cat].id,
         // The demo copy above is English; leaving this to the schema default
         // would label every seeded posting as Uzbek.
         locale: 'en',
         employmentType: employmentTypes[i % employmentTypes.length],
-        workMode: workModes[i % workModes.length],
+        workMode,
         salaryMin: 8_000_000 + (tpl.years || 0) * 2_000_000,
         salaryMax: 15_000_000 + (tpl.years || 0) * 3_000_000,
         salaryPeriod: 'MONTHLY',
@@ -1019,11 +1041,8 @@ async function main() {
         publishedAt: status === 'PUBLISHED' ? new Date(Date.now() - i * 86_400_000) : null,
         boostWeight: isHot ? 1.2 : 0,
         boostUntil: isHot ? new Date(Date.now() + 14 * 86_400_000) : null,
-        fingerprint: jobFingerprint({
-          title,
-          workMode: workModes[i % workModes.length],
-          cityId: city.id,
-        }),
+        fingerprint,
+        contentHash: contentHash(description),
       },
     });
 
@@ -1082,7 +1101,10 @@ async function main() {
   // Applications + matching-ish scores
   const publishedJobs = jobRecords.filter((j) => j.status === 'PUBLISHED');
   let appCount = 0;
-  for (let i = 0; i < 140; i++) {
+  if (publishedJobs.length === 0) {
+    console.warn('No published seed jobs; skipping applications');
+  }
+  for (let i = 0; i < 140 && publishedJobs.length > 0; i++) {
     const job = publishedJobs[i % publishedJobs.length];
     const profile = employeeProfiles[i % employeeProfiles.length];
     try {
