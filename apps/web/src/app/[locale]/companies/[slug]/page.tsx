@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { UgcText } from '@/components/ui/UgcText';
+import { PreviewableImage } from '@/components/ui/ImagePreview';
+import { isPreviewableImageUrl } from '@/lib/image-preview';
 import { useI18n } from '@/lib/i18n';
 
 type Company = {
@@ -100,15 +102,15 @@ export default function CompanyPage() {
   return (
     <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>
       <div className="job-detail-header">
-        <span className="company-logo-tile" aria-hidden>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+        <span
+          className="company-logo-tile"
+          aria-hidden={isPreviewableImageUrl(company.logoUrl) ? undefined : true}
+        >
+          <PreviewableImage
             className="company-logo"
-            src={
-              company.logoUrl ||
-              `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(company.name)}`
-            }
-            alt=""
+            fill
+            src={company.logoUrl}
+            fallbackSrc={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(company.name)}`}
           />
         </span>
         <div>

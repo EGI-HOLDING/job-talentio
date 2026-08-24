@@ -84,6 +84,8 @@ export const ui = {
   },
 
   'ui.noImage': { uz: 'Rasm yo‘q', ru: 'Нет изображения', en: 'No image' },
+  'ui.previewPhoto': { uz: 'Rasmni ko‘rish', ru: 'Просмотр фото', en: 'View photo' },
+  'ui.closePreview': { uz: 'Yopish', ru: 'Закрыть', en: 'Close' },
   'ui.uploadAndCrop': { uz: 'Yuklash va kesish', ru: 'Загрузить и обрезать', en: 'Upload & crop' },
   'ui.cropPhoto': { uz: 'Rasmni kesish', ru: 'Обрезать фото', en: 'Crop photo' },
   'ui.cropLogo': { uz: 'Logoni kesish', ru: 'Обрезать логотип', en: 'Crop logo' },

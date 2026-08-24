@@ -11,6 +11,7 @@ import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { BusyOverlay } from '@/components/ui/BusyOverlay';
 import { WorkModal } from '@/components/ui/WorkModal';
+import { PreviewableImage } from '@/components/ui/ImagePreview';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { FormAlert, FormField, LabelText } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
@@ -742,11 +743,10 @@ function EmployeeDashboardInner() {
             <div className="grid-2">
             <div className="card">
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <PreviewableImage
                   className="avatar avatar-lg"
-                  src={profile?.user?.avatarUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${profile?.user?.fullName}`}
-                  alt=""
+                  src={profile?.user?.avatarUrl}
+                  fallbackSrc={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(profile?.user?.fullName || '')}`}
                 />
                 <div>
                   <h2 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>{profile?.user?.fullName}</h2>
