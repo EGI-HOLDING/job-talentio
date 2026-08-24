@@ -2,13 +2,15 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useRouter } from '@/lib/navigation';
+import { Link, useRouter } from '@/lib/navigation';
 import { api, getSession, AuthSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 
 type Peer = { id: string; fullName: string; email: string };
+type ChatCompany = { id: string; name: string; slug: string };
+type ChatJob = { id: string; title: string; status: string; companyId: string };
 type Conversation = {
   id: string;
   userAId: string;
@@ -20,7 +22,21 @@ type Conversation = {
   updatedAt: string;
   messages: Array<{ id: string; body: string; senderId: string; createdAt: string }>;
   peerPresence?: PresenceStatus | null;
+  peerCandidateId?: string | null;
+  company?: ChatCompany | null;
+  job?: ChatJob | null;
 };
+
+function candidateHref(profileId: string, jobId?: string | null) {
+  return jobId ? `/candidates/${profileId}?matchJobId=${jobId}` : `/candidates/${profileId}`;
+}
+
+function canLinkJob(session: AuthSession, job: ChatJob) {
+  if (job.status === 'PUBLISHED') return true;
+  if (session.user.role === 'SUPER_ADMIN') return true;
+  return (session.user.memberships ?? []).some((m) => m.companyId === job.companyId);
+}
+
 type Message = {
   id: string;
   body: string;
@@ -181,6 +197,9 @@ function MessagesInner() {
                   {peer.fullName}
                   <PresenceDot status={presenceOf(c)} />
                 </strong>
+                {(c.job?.title || c.company?.name) && (
+                  <span className="chat-conv-context">{c.job?.title || c.company?.name}</span>
+                )}
                 <span className="preview">{last ? last.body : '-'}</span>
               </button>
             );
@@ -193,14 +212,40 @@ function MessagesInner() {
           ) : (
             <>
               <div className="chat-header">
-                {peerOf(active).fullName}
-                <span style={{ marginLeft: '0.55rem' }}>
-                  <PresenceDot status={presenceOf(active)} showLabel />
-                </span>
-                {active.isColdOutreach && (
-                  <span className="chip" style={{ marginLeft: '0.5rem', fontSize: '0.72rem' }}>
-                    {t('ui.coldOutreach')}
+                <div className="chat-header-title">
+                  {active.peerCandidateId ? (
+                    <Link
+                      href={candidateHref(active.peerCandidateId, active.job?.id)}
+                      className="chat-header-name"
+                      aria-label={t('viewProfile')}
+                    >
+                      {peerOf(active).fullName}
+                    </Link>
+                  ) : (
+                    <span className="chat-header-name">{peerOf(active).fullName}</span>
+                  )}
+                  <span style={{ marginLeft: '0.55rem' }}>
+                    <PresenceDot status={presenceOf(active)} showLabel />
                   </span>
+                  {active.isColdOutreach && (
+                    <span className="chip" style={{ marginLeft: '0.5rem', fontSize: '0.72rem' }}>
+                      {t('ui.coldOutreach')}
+                    </span>
+                  )}
+                </div>
+                {(active.company || active.job) && (
+                  <div className="chat-header-meta">
+                    {active.company && (
+                      <Link href={`/companies/${active.company.slug}`}>{active.company.name}</Link>
+                    )}
+                    {active.company && active.job ? ' | ' : null}
+                    {active.job &&
+                      (canLinkJob(session, active.job) ? (
+                        <Link href={`/jobs/${active.job.id}`}>{active.job.title}</Link>
+                      ) : (
+                        <span>{active.job.title}</span>
+                      ))}
+                  </div>
                 )}
               </div>
               <div className="chat-thread">

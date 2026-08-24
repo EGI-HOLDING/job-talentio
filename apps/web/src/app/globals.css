@@ -2330,6 +2330,44 @@ button.previewable-image--fill {
   color: var(--text);
   font-weight: 700;
 }
+.chat-header-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.chat-header-name {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+a.chat-header-name:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.chat-header-meta {
+  margin-top: 0.2rem;
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.chat-header-meta a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.chat-header-meta a:hover {
+  text-decoration: underline;
+}
+.chat-conv-context {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 0.1rem;
+}
 .chat-thread {
   flex: 1;
   overflow-y: auto;

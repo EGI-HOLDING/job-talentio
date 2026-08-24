@@ -11,7 +11,7 @@ export class ChatController {
 
   @Get('conversations')
   list(@CurrentUser() user: AuthUser) {
-    return this.chat.listConversations(user.id);
+    return this.chat.listConversations(user);
   }
 
   @Post('conversations')

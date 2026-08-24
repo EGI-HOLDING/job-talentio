@@ -142,13 +142,14 @@ export class ChatService {
     });
   }
 
-  async listConversations(userId: string) {
+  async listConversations(user: AuthUser) {
+    const userId = user.id;
     const conversations = await this.prisma.conversation.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
       include: {
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-        userA: { select: { id: true, fullName: true, email: true } },
-        userB: { select: { id: true, fullName: true, email: true } },
+        userA: { select: { id: true, fullName: true, email: true, role: true } },
+        userB: { select: { id: true, fullName: true, email: true, role: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -167,11 +168,109 @@ export class ChatService {
 
     const peerIds = conversations.map((c) => (c.userAId === userId ? c.userBId : c.userAId));
     const presence = await this.presence.getPresence(peerIds);
+    const context = await this.inboxContextFor(user, conversations);
 
-    return conversations.map((c) => ({
-      ...c,
-      peerPresence: presence[c.userAId === userId ? c.userBId : c.userAId] ?? null,
-    }));
+    return conversations.map((c) => {
+      const peerId = c.userAId === userId ? c.userBId : c.userAId;
+      const job = c.jobPostId ? context.jobById.get(c.jobPostId) ?? null : null;
+      const companyId = c.companyId ?? job?.companyId ?? null;
+      return {
+        ...c,
+        peerPresence: presence[peerId] ?? null,
+        peerCandidateId: context.peerCandidateByUserId.get(peerId) ?? null,
+        company: companyId ? context.companyById.get(companyId) ?? null : null,
+        job,
+      };
+    });
+  }
+
+  /**
+   * Batch company / job / candidate-profile context for the inbox header.
+   * Candidate ids follow the same PRIVATE gate as GET /profiles/candidates/:id.
+   */
+  private async inboxContextFor(
+    user: AuthUser,
+    conversations: Array<{
+      userAId: string;
+      userBId: string;
+      companyId: string | null;
+      jobPostId: string | null;
+      userA: { id: string; role: string };
+      userB: { id: string; role: string };
+    }>,
+  ) {
+    const canViewCandidates = user.role === 'RECRUITER' || user.role === 'SUPER_ADMIN';
+    const employeePeerIds = canViewCandidates
+      ? [
+          ...new Set(
+            conversations
+              .map((c) => (c.userAId === user.id ? c.userB : c.userA))
+              .filter((peer) => peer.role === 'EMPLOYEE')
+              .map((peer) => peer.id),
+          ),
+        ]
+      : [];
+
+    const profiles =
+      employeePeerIds.length > 0
+        ? await this.prisma.employeeProfile.findMany({
+            where: { userId: { in: employeePeerIds } },
+            select: { id: true, userId: true, visibility: true },
+          })
+        : [];
+
+    const privateProfileIds = profiles
+      .filter((p) => p.visibility === 'PRIVATE')
+      .map((p) => p.id);
+    const viewerCompanyIds = (user.memberships ?? []).map((m) => m.companyId).filter(Boolean);
+    const appliedProfileIds = new Set<string>();
+    if (user.role === 'SUPER_ADMIN') {
+      for (const id of privateProfileIds) appliedProfileIds.add(id);
+    } else if (privateProfileIds.length > 0 && viewerCompanyIds.length > 0) {
+      const applied = await this.prisma.application.findMany({
+        where: {
+          profileId: { in: privateProfileIds },
+          jobPost: { companyId: { in: viewerCompanyIds } },
+        },
+        select: { profileId: true },
+      });
+      for (const row of applied) appliedProfileIds.add(row.profileId);
+    }
+
+    const peerCandidateByUserId = new Map<string, string>();
+    for (const profile of profiles) {
+      if (profile.visibility === 'PRIVATE' && !appliedProfileIds.has(profile.id)) continue;
+      peerCandidateByUserId.set(profile.userId, profile.id);
+    }
+
+    const jobIds = [
+      ...new Set(conversations.map((c) => c.jobPostId).filter((id): id is string => Boolean(id))),
+    ];
+    const jobs =
+      jobIds.length > 0
+        ? await this.prisma.jobPost.findMany({
+            where: { id: { in: jobIds } },
+            select: { id: true, title: true, status: true, companyId: true },
+          })
+        : [];
+    const jobById = new Map(jobs.map((job) => [job.id, job]));
+
+    const companyIds = new Set<string>();
+    for (const c of conversations) {
+      if (c.companyId) companyIds.add(c.companyId);
+    }
+    for (const job of jobs) companyIds.add(job.companyId);
+
+    const companies =
+      companyIds.size > 0
+        ? await this.prisma.company.findMany({
+            where: { id: { in: [...companyIds] } },
+            select: { id: true, name: true, slug: true },
+          })
+        : [];
+    const companyById = new Map(companies.map((company) => [company.id, company]));
+
+    return { peerCandidateByUserId, jobById, companyById };
   }
 
   /** Thread open/poll = Read (+ Delivered if somehow still missing). */
