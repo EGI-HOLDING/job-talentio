@@ -8,6 +8,11 @@ import {
   jobTitleSlugify,
 } from './title-resolve';
 import { jobFingerprint } from './dedupe';
+import {
+  closeFingerprintCollision,
+  isUniqueConstraintError,
+  repairActiveJobDuplicates,
+} from './job-dedupe-repair';
 import { sanitizeStoredText } from './text-sanitize';
 
 type Db = Pick<PrismaClient, 'jobPost' | 'jobTitle' | 'jobTitleAlias'>;
@@ -19,6 +24,8 @@ export type JobTitleBackfillResult = {
   errors: number;
   catalogCleaned: number;
   catalogMerged: number;
+  dedupeClosed: number;
+  dedupeRemainingAbc: number;
 };
 
 /** True when posts/catalog still need seniority purge or missing jobTitleId. */
@@ -197,6 +204,7 @@ export async function backfillJobTitles(
   const posts = await db.jobPost.findMany({
     select: {
       id: true,
+      companyId: true,
       title: true,
       description: true,
       experienceLevel: true,
@@ -243,36 +251,29 @@ export async function backfillJobTitles(
         continue;
       }
 
+      const titleData = {
+        jobTitleId: resolved.jobTitle.id,
+        title: nextTitle,
+        description: nextDescription,
+        ...(post.experienceLevel ? {} : nextLevel ? { experienceLevel: nextLevel } : {}),
+        fingerprint: nextFingerprint,
+      };
       try {
         await db.jobPost.update({
           where: { id: post.id },
-          data: {
-            jobTitleId: resolved.jobTitle.id,
-            title: nextTitle,
-            description: nextDescription,
-            ...(post.experienceLevel
-              ? {}
-              : nextLevel
-                ? { experienceLevel: nextLevel }
-                : {}),
-            fingerprint: nextFingerprint,
-          },
+          data: titleData,
         });
-      } catch {
-        // Fingerprint collision within company — still persist clean title/link
+      } catch (err) {
+        if (!isUniqueConstraintError(err)) throw err;
+        await closeFingerprintCollision(db, {
+          postId: post.id,
+          companyId: post.companyId,
+          nextFingerprint,
+          log,
+        });
         await db.jobPost.update({
           where: { id: post.id },
-          data: {
-            jobTitleId: resolved.jobTitle.id,
-            title: nextTitle,
-            description: nextDescription,
-            ...(post.experienceLevel
-              ? {}
-              : nextLevel
-                ? { experienceLevel: nextLevel }
-                : {}),
-            fingerprint: `${nextFingerprint}:${post.id.slice(-8)}`,
-          },
+          data: titleData,
         });
       }
       updated += 1;
@@ -286,6 +287,8 @@ export async function backfillJobTitles(
     }
   }
 
+  const dedupe = await repairActiveJobDuplicates(db, log);
+
   return {
     scanned: posts.length,
     updated,
@@ -293,5 +296,8 @@ export async function backfillJobTitles(
     errors,
     catalogCleaned,
     catalogMerged,
+    dedupeClosed: dedupe.closed,
+    dedupeRemainingAbc:
+      dedupe.remaining.A + dedupe.remaining.B + dedupe.remaining.C,
   };
 }

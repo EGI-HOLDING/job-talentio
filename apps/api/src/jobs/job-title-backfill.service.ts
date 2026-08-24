@@ -26,7 +26,7 @@ export class JobTitleBackfillService implements OnApplicationBootstrap {
         log: (msg) => this.logger.warn(msg),
       });
       this.logger.log(
-        `JobTitle backfill done: scanned=${result.scanned} updated=${result.updated} skipped=${result.skipped} catalogCleaned=${result.catalogCleaned} catalogMerged=${result.catalogMerged} errors=${result.errors}`,
+        `JobTitle backfill done: scanned=${result.scanned} updated=${result.updated} skipped=${result.skipped} catalogCleaned=${result.catalogCleaned} catalogMerged=${result.catalogMerged} errors=${result.errors} dedupeClosed=${result.dedupeClosed} dedupeRemainingAbc=${result.dedupeRemainingAbc}`,
       );
     } catch (err) {
       this.logger.error(

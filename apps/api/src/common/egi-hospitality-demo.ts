@@ -1,6 +1,6 @@
 import type { CompanySize, PrismaClient, WorkMode } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { jobFingerprint } from './dedupe';
+import { contentHash, jobFingerprint } from './dedupe';
 import { resolveJobTitle } from './title-resolve';
 import {
   backfillCompanyLogos,
@@ -215,12 +215,32 @@ export async function backfillEgiHospitalityDemo(
     for (const opening of spec.jobs) {
       const resolved = await resolveJobTitle(db, { name: opening.title });
       const title = resolved.jobTitle.name;
+      const description = `${spec.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will welcome guests and keep daily operations running smoothly.\n\nRequirements:\n- Hospitality experience\n- Communication in Uzbek, Russian, or English\n- Comfortable with a guest-facing shift`;
+      const fingerprint = jobFingerprint({
+        title,
+        workMode: opening.workMode,
+        cityId: city.id,
+      });
+      const clash = await db.jobPost.findFirst({
+        where: {
+          companyId: company.id,
+          fingerprint,
+          status: { in: ['DRAFT', 'PUBLISHED', 'PAUSED'] },
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        log(
+          `Skip hospitality job "${title}" for ${spec.slug}: active fingerprint exists (${clash.id})`,
+        );
+        continue;
+      }
       await db.jobPost.create({
         data: {
           companyId: company.id,
           jobTitleId: resolved.jobTitle.id,
           title,
-          description: `${spec.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will welcome guests and keep daily operations running smoothly.\n\nRequirements:\n- Hospitality experience\n- Communication in Uzbek, Russian, or English\n- Comfortable with a guest-facing shift`,
+          description,
           cityId: city.id,
           categoryId: category.id,
           locale: 'en',
@@ -230,11 +250,8 @@ export async function backfillEgiHospitalityDemo(
           currency: 'UZS',
           status: 'PUBLISHED',
           publishedAt: new Date(),
-          fingerprint: jobFingerprint({
-            title,
-            workMode: opening.workMode,
-            cityId: city.id,
-          }),
+          fingerprint,
+          contentHash: contentHash(description),
         },
       });
       jobs += 1;
