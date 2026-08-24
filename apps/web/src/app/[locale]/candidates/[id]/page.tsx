@@ -13,6 +13,7 @@ import { formatThousands } from '@/lib/numberFormat';
 import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import { UgcText } from '@/components/ui/UgcText';
+import { PreviewableImage } from '@/components/ui/ImagePreview';
 
 type CandidateDetail = {
   id: string;
@@ -217,15 +218,11 @@ function CandidateInner() {
     <div className="shell" style={{ padding: '2.5rem 1.5rem', maxWidth: 900 }}>
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={
-              data.user.avatarUrl ||
-              `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(data.user.fullName)}`
-            }
-            alt=""
+          <PreviewableImage
             className="avatar"
             style={{ width: 72, height: 72 }}
+            src={data.user.avatarUrl}
+            fallbackSrc={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(data.user.fullName)}`}
           />
           <div style={{ flex: 1, minWidth: 220 }}>
             <h1 style={{ margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>

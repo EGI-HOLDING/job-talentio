@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import Cropper, { Area } from 'react-easy-crop';
 import { getToken } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { PreviewableImage } from '@/components/ui/ImagePreview';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -212,10 +213,9 @@ export function ImageCropUpload({
           }}
         >
           {preview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <PreviewableImage
               src={preview}
-              alt=""
+              fill
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (

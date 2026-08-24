@@ -6,6 +6,7 @@ import { api, getSession, saveSession, logout, AuthSession } from '@/lib/api';
 import { useEnumLabel, useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
+import { PreviewableImage } from '@/components/ui/ImagePreview';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 
@@ -66,11 +67,6 @@ export default function SettingsPage() {
   const canVerifyEmail = (isEmployee || isRecruiter) && Boolean(session?.user.email);
   const hasPassword = session?.user.hasPassword !== false;
   const hasEmail = Boolean(session?.user.email);
-  const previewAvatar =
-    avatarUrl ||
-    (session
-      ? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(session.user.fullName)}`
-      : '');
 
   useEffect(() => {
     const s = getSession();
@@ -350,8 +346,14 @@ export default function SettingsPage() {
 
         <section>
           <div className="settings-hero card">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewAvatar} alt="" />
+            <PreviewableImage
+              src={avatarUrl || null}
+              fallbackSrc={
+                session.user.fullName
+                  ? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(session.user.fullName)}`
+                  : undefined
+              }
+            />
             <div>
               <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.5rem' }}>
                 {fullName || session.user.fullName}
