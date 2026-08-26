@@ -21,7 +21,7 @@ Full local stack (optional, needs Docker): `pnpm docker:up` then `pnpm dev`. Com
 
 Put Cloud Agent secrets in the [Cloud Agents dashboard](https://cursor.com/dashboard/cloud-agents) (JWT, database, OpenAI, etc.). Never paste them into the repo.
 
-Bugbot reads `.cursor/BUGBOT.md` (and `apps/api/.cursor/BUGBOT.md` for API diffs), not `.cursor/rules/*.mdc`. Enable the GitHub app on `EGI-HOLDING/job-talentio` via [Bugbot automations](https://cursor.com/automations/from-cursor/bugbot). Locally, run `/review-bugbot` before pushing.
+Do not enable Cursor Bugbot on this repo (separate usage-based billing). Do not run `/review-bugbot`. For review, use the local Agent in Cursor against `.cursor/rules`.
 
 ## Git
 
