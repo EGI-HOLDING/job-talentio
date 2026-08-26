@@ -1,0 +1,4 @@
+{
+  "name": "job-talentio",
+  "install": "corepack enable && corepack prepare pnpm@9.15.9 --activate && pnpm install --frozen-lockfile=false && pnpm --filter @job-talentio/shared build && DATABASE_URL='postgresql://talentio:talentio@127.0.0.1:5432/job_talentio?schema=public' pnpm --filter @job-talentio/api prisma:generate"
+}
