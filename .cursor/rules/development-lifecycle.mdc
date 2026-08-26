@@ -51,3 +51,4 @@ local work → PR → develop → CI green → Railway staging → verify stagin
 - Treat local-only success as production-ready without staging when the change is user-facing or API/deploy-sensitive
 - Commit `.env` / credentials; use `.env.example` + Railway env vars
 - Attach both apex and `www` as Railway custom domains (Hobby: 2/service; `www` via Cloudflare redirect)
+- Enable Cursor Bugbot, Cloud Agents, or Automations (separate usage billing). Stay on the local Agent. GitHub Actions remains CI.
