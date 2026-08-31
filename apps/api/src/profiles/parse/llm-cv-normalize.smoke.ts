@@ -71,10 +71,63 @@ function llmPayloadNormalized() {
   assert(parsed.meta?.provider === 'llm', 'provider meta wrong');
 }
 
+function llmKeepsLongDescriptionAndNewlines() {
+  const longDuty = `${'Duty line with enough text to pad. '.repeat(40)}end.`;
+  assert(longDuty.length > 1000, 'fixture should exceed old 1000 cap');
+  const parsed = normalizeLlmCvPayload(
+    {
+      headline: 'IT Specialist',
+      skillNames: [],
+      experiences: [
+        {
+          title: 'IT Infrastructure & Support Specialist',
+          companyName: 'Acme',
+          startDate: '2023-01-01',
+          endDate: '2024-12-01',
+          isCurrent: false,
+          description: `• Manage infrastructure\n• Provide Level 1 and Level 2 support\n${longDuty}`,
+        },
+        {
+          title: 'IT Support Engineer',
+          companyName: 'Acme',
+          startDate: '2022-01-01',
+          endDate: null,
+          isCurrent: true,
+          description: ['Configure switches', 'Handle tickets'],
+        },
+      ],
+      educations: [],
+      languages: [],
+    },
+    { sourceText: 'Contact me at alice@example.com. '.repeat(10), knownSkills: [], ocrUsed: false },
+  );
+
+  const first = parsed.experiences[0]?.description || '';
+  assert(first.length > 1000, `description truncated to ${first.length}`);
+  assert(first.length <= 5000, `description over schema max: ${first.length}`);
+  assert(first.includes('\n'), `newlines collapsed: ${JSON.stringify(first.slice(0, 80))}`);
+  assert(/Level 1 and Level 2/i.test(first), 'Level 1/2 bullet dropped in normalize');
+  assert(!/IT Support Engineer/i.test(first), 'next title leaked into first description');
+  assert(
+    parsed.experiences[1]?.description === 'Configure switches\nHandle tickets',
+    `array description not joined: ${parsed.experiences[1]?.description}`,
+  );
+}
+
+function truncateRejoinsWraps() {
+  const wrapped =
+    '• Provide Level 1 and Level 2 support for Windows workstations, printers, POS devices, IP phones, and operational\nsystems.\nIT Support Engineer';
+  const out = truncateCvTextForLlm(wrapped);
+  assert(/operational systems\./i.test(out), `truncate did not rejoin:\n${out}`);
+  assert(/\nIT Support Engineer/.test(out), `truncate glued next title:\n${out}`);
+}
+
 async function main() {
   truncatesLongText();
   skillNormalizePrefersCatalog();
   llmPayloadNormalized();
+  llmKeepsLongDescriptionAndNewlines();
+  truncateRejoinsWraps();
   console.log('api: llm-cv-normalize smoke ok');
 }
 

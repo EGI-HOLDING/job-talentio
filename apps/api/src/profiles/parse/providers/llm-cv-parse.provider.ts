@@ -49,7 +49,7 @@ export class LlmCvParseProvider implements CvParseProvider {
       const payload = await this.openai.chatJson<unknown>({
         system: LLM_CV_SYSTEM_PROMPT,
         user: truncated,
-        maxTokens: 2_500,
+        maxTokens: 6_000,
       });
       return normalizeLlmCvPayload(payload, {
         sourceText: text,

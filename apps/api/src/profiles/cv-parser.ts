@@ -1,4 +1,10 @@
 import { normalizePhone } from '../common/dedupe';
+import {
+  isCvBulletLine,
+  isCvRoleBoundary,
+  isCvTitleLikeHeading,
+  rejoinWrappedCvLines,
+} from './parse/cv-line-rejoin';
 
 export type ParsedExperience = {
   title: string;
@@ -264,12 +270,28 @@ function extractExperiences(text: string): ParsedExperience[] {
     if (atMatch) {
       title = atMatch[1].trim();
       companyName = atMatch[2].trim();
-    } else if (next && next.length < 80 && !dateRe.test(next) && !eduHint.test(next)) {
+    } else if (
+      next &&
+      !isCvBulletLine(next) &&
+      isCvTitleLikeHeading(next) &&
+      !eduHint.test(next)
+    ) {
       companyName = next;
     }
 
     if (!title || title.length < 2) title = 'Role';
     if (!companyName) companyName = 'Company';
+
+    const descParts: string[] = [];
+    let j = i + 1;
+    if (companyName && chunks[j] === companyName) j += 1;
+    while (j < chunks.length) {
+      const block = chunks[j];
+      dateRe.lastIndex = 0;
+      if (dateRe.test(block) || (isCvRoleBoundary(block) && !isCvBulletLine(block))) break;
+      descParts.push(block);
+      j += 1;
+    }
 
     experiences.push({
       title: title.slice(0, 160),
@@ -277,7 +299,7 @@ function extractExperiences(text: string): ParsedExperience[] {
       startDate,
       endDate,
       isCurrent,
-      description: next && next !== companyName ? next.slice(0, 500) : undefined,
+      description: descParts.length ? descParts.join('\n').slice(0, 5000) : undefined,
     });
   }
 
@@ -381,7 +403,7 @@ export function parseCvText(
   knownSkills: Array<{ name: string; slug: string }> = [],
 ): ParsedCvData {
   const text = stripNullBytes(rawText).replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').trim();
-  const collapsed = text.replace(/\n{3,}/g, '\n\n');
+  const collapsed = rejoinWrappedCvLines(text).replace(/\n{3,}/g, '\n\n');
 
   return stripNullBytesDeep({
     email: extractEmail(collapsed),

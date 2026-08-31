@@ -9,6 +9,7 @@ import {
   type ParsedExperience,
   type ParsedLanguage,
 } from '../cv-parser';
+import { rejoinWrappedCvLines } from './cv-line-rejoin';
 
 const DEGREE_SET = new Set<ParsedEducation['degree']>([
   'HIGH_SCHOOL',
@@ -34,9 +35,11 @@ export function isCvTextRichEnoughForLlm(text: string): boolean {
   return text.replace(/\s+/g, ' ').trim().length >= MIN_LLM_TEXT_CHARS;
 }
 
-/** Keep prompt cost low: head + tail of long CVs. */
+const EXPERIENCE_DESCRIPTION_MAX = 5000;
+
+/** Keep prompt cost low: head + tail of long CVs. Rejoin wraps first. */
 export function truncateCvTextForLlm(text: string, maxChars = 12_000): string {
-  const cleaned = text.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').trim();
+  const cleaned = rejoinWrappedCvLines(text);
   if (cleaned.length <= maxChars) return cleaned;
   const head = Math.floor(maxChars * 0.7);
   const tail = maxChars - head - 32;
@@ -46,6 +49,24 @@ export function truncateCvTextForLlm(text: string, maxChars = 12_000): string {
 function asString(value: unknown, max = 500): string | undefined {
   if (typeof value !== 'string') return undefined;
   const s = value.replace(/\s+/g, ' ').trim();
+  if (!s) return undefined;
+  return s.slice(0, max);
+}
+
+/** Keep bullet line breaks; collapse only spaces/tabs on a line. */
+function asMultilineString(value: unknown, max = EXPERIENCE_DESCRIPTION_MAX): string | undefined {
+  const raw = Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === 'string').join('\n')
+    : value;
+  if (typeof raw !== 'string') return undefined;
+  const s = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   if (!s) return undefined;
   return s.slice(0, max);
 }
@@ -76,7 +97,7 @@ function normalizeExperiences(raw: unknown): ParsedExperience[] {
       startDate: asDate(row.startDate) ?? null,
       endDate: asDate(row.endDate) ?? null,
       isCurrent: Boolean(row.isCurrent),
-      description: asString(row.description, 1000),
+      description: asMultilineString(row.description, EXPERIENCE_DESCRIPTION_MAX),
     });
     if (out.length >= 12) break;
   }
@@ -173,4 +194,8 @@ skillNames (string[]), experiences (array of {title, companyName, startDate, end
 educations (array of {school, degree, field, startDate, endDate}),
 languages (array of {name, code, level}).
 Dates ISO YYYY-MM-DD or null. degree one of HIGH_SCHOOL|VOCATIONAL|BACHELOR|MASTER|PHD or null.
-level one of A1|A2|B1|B2|C1|C2|NATIVE. Omit invented facts; use null/[] when unknown. Keep text concise.`;
+level one of A1|A2|B1|B2|C1|C2|NATIVE. Omit invented facts; use null/[] when unknown.
+For each role, put every job-duty line in description. Do not summarize or omit bullets.
+PDF line wraps without a bullet belong to the previous sentence; join them.
+description is one string with a newline between bullets.
+Never put the next role's title, company, or dates inside the previous description; start a new experiences item instead.`;
