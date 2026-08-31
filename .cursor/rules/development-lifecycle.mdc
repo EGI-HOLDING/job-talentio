@@ -29,8 +29,9 @@ local work → PR → develop → CI green → Railway staging → verify stagin
 3. **Validate locally** before push when feasible: shared build, typecheck, relevant app smoke.
 4. **PR into `develop`** (never feature → `main`). Include Summary + Test plan.
 5. **CI must pass** (`.github/workflows/ci.yml`: install, shared build, prisma generate, typecheck, test, build).
-6. **Staging is the QA gate** after merge to `develop`. Prefer checking:
+6. **Staging is the QA gate** after merge to `develop`. **Watch Railway until the deploy is SUCCESS** (see `railway-deploy-watch.mdc`); CI green is not enough. Prefer checking:
    - `GET https://api-staging.jobtalent.io/api/health`
+   - `GET https://staging.jobtalent.io/uz` (200; `/` 307s to `/uz` and fails Railway healthchecks)
    - affected UI on `https://staging.jobtalent.io` (and admin if touched)
 7. **Production only via** PR `develop` → `main` when the user explicitly wants a release (or hotfix from `main`). Do not push/merge to `main` unprompted.
 8. After **hotfix** on `main`, sync back into `develop`.

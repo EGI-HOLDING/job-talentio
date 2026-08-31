@@ -1,0 +1,35 @@
+---
+description: After merge to develop/main, watch Railway until deploy is SUCCESS and health URLs respond — do not stop at CI green
+alwaysApply: true
+---
+
+# Railway deploy watch (Job Talentio)
+
+CI green is not done. Staging auto-deploys from `develop`; production from `main`. Stay with the deploy until it is actually live.
+
+CLI: `railway` (project `job-talentio`). Staging env is linked by default.
+
+## After a merge (or when the user reports a failed deploy)
+
+1. `railway status` — which services are Online vs Deploy failed.
+2. `railway deployment list --service <name> --json --limit 5` for each touched app:
+   - `website-job-talentio` (web)
+   - `api-stage-job-talentio` (api, staging)
+   - `admin-stage-job-talentio` (admin, staging)
+3. A latest row of `FAILED`, `CRASHED`, or still `BUILDING`/`DEPLOYING` is a blocker. Do not treat `SKIPPED` (no watched files) as failure.
+4. On failure: `railway logs <deploymentId> --service <name> --build --lines 200` and `--deployment --lines 200`. Fix the root cause; do not `railway redeploy` the same broken config.
+5. Poll until the new deployment is `SUCCESS` (or `SKIPPED` if that service had no file changes). Then smoke:
+   - `GET https://api-staging.jobtalent.io/api/health`
+   - `GET https://staging.jobtalent.io/uz` (200; `/` is a locale 307 and is not a healthcheck)
+   - affected UI on `https://staging.jobtalent.io`
+6. Do not stop at "PR merged" or "GitHub Actions green."
+
+## Healthcheck gotcha
+
+Web middleware redirects unprefixed `/` to `/uz` with **HTTP 307**. Railway does not follow that. Web healthcheck must be a 2xx path (`/uz` in `apps/web/railway.toml`). API uses `/api/health`.
+
+## Do not
+
+- Call the task done while the latest watched deploy is FAILED
+- Redeploy blindly without reading build/deploy logs
+- Point the web healthcheck at `/`
