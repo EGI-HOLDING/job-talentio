@@ -97,4 +97,36 @@ assert(en.skillNames.includes('React') && en.skillNames.includes('TypeScript'), 
 const enLang = en.languages.find((l) => l.code === 'en');
 assert(enLang?.level === 'NATIVE', `EN: english level got ${enLang?.level}`);
 
+const wrappedCv = `
+Jane Doe
+IT Specialist
+jane@example.com
+Experience
+IT Infrastructure & Support Specialist
+Acme
+Jan 2023 – Dec 2024
+• Manage and maintain IT infrastructure supporting 150+ users
+• Configure and troubleshoot managed switches LAN connectivity.
+• Provide Level 1 and Level 2 support for Windows workstations, printers, POS devices, IP phones, and operational
+systems.
+IT Support Engineer
+Jan 2022 – Present
+Education
+National University
+Bachelor 2015 2019
+`;
+
+const wrapped = parseCvText(wrappedCv, skills);
+assert(wrapped.experiences.length >= 2, `WRAP: expected 2 roles, got ${wrapped.experiences.length}`);
+const first = wrapped.experiences[0];
+assert(first.description, 'WRAP: first role description missing');
+assert(/operational systems/i.test(first.description), `WRAP: wrap not joined: ${first.description}`);
+assert(/Level 1 and Level 2/i.test(first.description), `WRAP: Level 1/2 dropped: ${first.description}`);
+assert(
+  !/IT Support Engineer/i.test(first.description),
+  `WRAP: next title leaked into description: ${first.description}`,
+);
+const second = wrapped.experiences[1];
+assert(/IT Support Engineer/i.test(second.title), `WRAP: second title got ${second.title}`);
+
 console.log('api: cv-parser RU/UZ/EN smoke ok');
