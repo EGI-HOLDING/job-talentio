@@ -4,6 +4,7 @@ export * from './types';
 export * from './location';
 export * from './icons';
 export * from './resume';
+export * from './profile-completeness';
 export * from './languages';
 export * from './messages';
 export * from './catalog-blocklist';

@@ -22,6 +22,11 @@ import { CompaniesService } from '../companies/companies.service';
 import { UserErasureService } from '../users/user-erasure.service';
 import { confirmationMatchesAccount } from '../users/erasure-guards';
 import { telegramFullName, verifyTelegramLogin } from './telegram-login';
+import {
+  googleTokenEmailVerified,
+  shouldMarkGoogleMailboxVerified,
+  telegramTypedEmailVerified,
+} from './oauth-email-verified';
 import { isSecureRuntime } from '../common/jwt-secret';
 import { isDevLoginAllowed } from './session-policy';
 
@@ -501,6 +506,7 @@ export class AuthService {
         email: payload.email.trim().toLowerCase(),
         fullName: (payload.name || payload.email.split('@')[0]).trim(),
         avatarUrl: payload.picture ?? null,
+        emailVerified: googleTokenEmailVerified(payload),
       };
     } catch (err) {
       if (err instanceof UnauthorizedException) throw err;
@@ -551,8 +557,8 @@ export class AuthService {
 
   /**
    * Google sign-in for job seekers and recruiters.
-   * Issues a session immediately. Platform email stays unverified until the user
-   * requests verification from their profile (job seekers).
+   * If Google already verified that mailbox, we trust it. Telegram-typed emails
+   * stay unverified until the user confirms the address on this platform.
    */
   async oauthGoogle(input: {
     idToken: string;
@@ -563,17 +569,22 @@ export class AuthService {
   }) {
     const google = await this.verifyGoogleIdToken(input.idToken);
     const inviteToken = input.inviteToken?.trim();
+    const googleMailboxVerified = shouldMarkGoogleMailboxVerified({
+      tokenEmail: google.email,
+      tokenEmailVerified: google.emailVerified,
+      storedEmail: google.email,
+    });
 
     let user = await this.prisma.user.findUnique({ where: { googleId: google.googleId } });
     if (!user) {
       const byEmail = await this.prisma.user.findUnique({ where: { email: google.email } });
       if (byEmail) {
-        // Link Google identity; keep existing emailVerified status
         user = await this.prisma.user.update({
           where: { id: byEmail.id },
           data: {
             googleId: google.googleId,
             ...(google.avatarUrl && !byEmail.avatarUrl ? { avatarUrl: google.avatarUrl } : {}),
+            ...(googleMailboxVerified && !byEmail.emailVerified ? { emailVerified: true } : {}),
           },
         });
       }
@@ -581,6 +592,7 @@ export class AuthService {
 
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
+      await this.syncGoogleMailboxVerified(user, google);
       if (inviteToken) {
         await this.acceptInviteOnExistingUser(inviteToken, google.email, user.id);
       }
@@ -597,7 +609,7 @@ export class AuthService {
             avatarUrl: google.avatarUrl,
             role: 'RECRUITER',
             locale: input.locale ?? 'uz',
-            emailVerified: false,
+            emailVerified: googleMailboxVerified,
           },
         });
         await this.companies.consumeInvite(tx, inviteToken, google.email, newUser.id);
@@ -632,7 +644,7 @@ export class AuthService {
           avatarUrl: google.avatarUrl,
           role: input.role as UserRole,
           locale: input.locale ?? 'uz',
-          emailVerified: false,
+          emailVerified: googleMailboxVerified,
         },
       });
 
@@ -658,6 +670,26 @@ export class AuthService {
     });
 
     return this.tokenFor(created.id);
+  }
+
+  private async syncGoogleMailboxVerified(
+    user: { id: string; email: string | null; emailVerified: boolean },
+    google: { email: string; emailVerified: boolean },
+  ) {
+    if (
+      user.emailVerified ||
+      !shouldMarkGoogleMailboxVerified({
+        tokenEmail: google.email,
+        tokenEmailVerified: google.emailVerified,
+        storedEmail: user.email,
+      })
+    ) {
+      return;
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true },
+    });
   }
 
   private async acceptInviteOnExistingUser(rawToken: string, email: string, userId: string) {
@@ -888,7 +920,7 @@ export class AuthService {
             avatarUrl: tg.avatarUrl,
             role: 'RECRUITER',
             locale: input.locale ?? 'uz',
-            emailVerified: false,
+            emailVerified: telegramTypedEmailVerified(),
           },
         });
         await this.companies.consumeInvite(tx, inviteToken, inviteEmail, newUser.id);
@@ -916,7 +948,7 @@ export class AuthService {
           avatarUrl: tg.avatarUrl,
           role: input.role as UserRole,
           locale: input.locale ?? 'uz',
-          emailVerified: false,
+          emailVerified: telegramTypedEmailVerified(),
         },
       });
 

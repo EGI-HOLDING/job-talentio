@@ -30,7 +30,7 @@ import {
   readStoredDashboardTab,
   storeDashboardTab,
 } from '@/lib/dashboardTab';
-import { MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
+import { MAX_RESUMES_PER_PROFILE, scoreProfileCompleteness } from '@job-talentio/shared';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
 const EMPLOYEE_TABS: Tab[] = [
@@ -73,25 +73,6 @@ function dateInputValue(d?: string | Date | null) {
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return '';
   return dt.toISOString().slice(0, 10);
-}
-
-function completeness(profile: any) {
-  const checks = [
-    {
-      ok: Boolean(profile?.user?.emailVerified),
-      labelKey: profile?.user?.email ? 'emp.checkVerifyEmail' : 'emp.checkAddEmail',
-    },
-    { ok: Boolean(profile?.user?.avatarUrl), labelKey: 'emp.checkAddPhoto' },
-    { ok: Boolean(profile?.headline), labelKey: 'emp.checkAddHeadline' },
-    { ok: Boolean(profile?.city), labelKey: 'emp.checkSetCity' },
-    { ok: (profile?.skills || []).length >= 3, labelKey: 'emp.checkAddSkills' },
-    { ok: (profile?.experiences || []).length >= 1, labelKey: 'emp.checkAddExperience' },
-    { ok: (profile?.educations || []).length >= 1, labelKey: 'emp.checkAddEducation' },
-    { ok: (profile?.languages || []).length >= 1, labelKey: 'emp.checkAddLanguage' },
-    { ok: (profile?.resumes || []).length >= 1, labelKey: 'emp.checkAddResume' },
-  ];
-  const done = checks.filter((c) => c.ok).length;
-  return { percent: Math.round((done / checks.length) * 100), checks, missing: checks.filter((c) => !c.ok) };
 }
 
 const LEVEL_ORDER = ['EXPERT', 'ADVANCED', 'INTERMEDIATE', 'BEGINNER'] as const;
@@ -619,7 +600,25 @@ function EmployeeDashboardInner() {
     await load();
   }
 
-  const complete = useMemo(() => (profile ? completeness(profile) : null), [profile]);
+  const complete = useMemo(
+    () =>
+      profile
+        ? scoreProfileCompleteness({
+            headline: profile.headline,
+            city: profile.city,
+            skills: profile.skills,
+            experiences: profile.experiences,
+            educations: profile.educations,
+            languages: profile.languages,
+            resumes: profile.resumes,
+            avatarUrl: profile.user?.avatarUrl,
+            email: profile.user?.email,
+            emailVerified: profile.user?.emailVerified,
+            telegramLinked,
+          })
+        : null,
+    [profile, telegramLinked],
+  );
   const skillsByLevel = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const lvl of LEVEL_ORDER) map[lvl] = [];
@@ -728,7 +727,7 @@ function EmployeeDashboardInner() {
                   <div className="chips" style={{ marginTop: '0.75rem' }}>
                     {complete.missing.slice(0, 4).map((m) => (
                       <button
-                        key={m.labelKey}
+                        key={m.id}
                         type="button"
                         className="chip"
                         onClick={() => setTab('profile')}
