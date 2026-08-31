@@ -9,5 +9,9 @@ dockerfilePath = "apps/web/Dockerfile"
 watchPatterns = ["apps/web/**", "packages/shared/**", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]
 
 [deploy]
+# `/` 307s to `/uz` (locale middleware). Railway healthchecks require 2xx, not redirects.
+# `/uz` is the default-locale homepage (SSG) and returns 200.
+healthcheckPath = "/uz"
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
