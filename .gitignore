@@ -14,6 +14,7 @@ uploads
 .idea
 .vscode
 *.tsbuildinfo
+/reports/
 
 # Local-only notes / source copies (not shipped)
 assets/company-logos/
