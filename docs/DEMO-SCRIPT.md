@@ -5,7 +5,8 @@ Alur 10 menit untuk demo terpandu, lalu checklist agar klien bisa mencoba sendir
 ## H-1: persiapan
 
 1. Reset data demo agar pipeline penuh dan lowongan hero ada di atas:
-   `railway ssh --service api-stage-job-talentio -- sh -c "ALLOW_DEMO_RESET=1 node dist/scripts/demo-reset.js"`
+   `railway ssh --service api-stage-job-talentio --environment staging "cd /app/apps/api && ALLOW_DEMO_RESET=1 node dist/scripts/demo-reset.js"`
+   (pass the command as one quoted string; `-- sh -c` is swallowed by the PowerShell shim and nothing runs). Output ends with `Demo reset complete: jobs=... (hero=6 ...) applications=...`.
 2. Siapkan dua perangkat: HP (pencari kerja, browser Chrome/Safari, Telegram terpasang) dan laptop (recruiter + admin).
 3. Siapkan satu CV PDF contoh pencari kerja IT support (pengalaman "IT Infrastructure & Support Specialist", 3+ tahun, Windows Server / AD / jaringan). Lowongan hero pertama ditulis agar skor match-nya tinggi.
 4. Login sekali di HP sebagai employee `madina.karimova@jobtalent.io` dan tautkan Telegram (Settings > Security > Telegram) supaya alert dan relay chat terlihat saat demo. Alternatif: daftar akun baru lewat tombol Telegram saat demo (lebih meyakinkan, tetapi bergantung sinyal).
