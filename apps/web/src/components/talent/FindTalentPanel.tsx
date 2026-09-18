@@ -150,6 +150,7 @@ export function FindTalentPanel() {
   const [candLoading, setCandLoading] = useState(false);
   const [error, setError] = useState('');
   const [skillQ, setSkillQ] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
   const [planCode, setPlanCode] = useState<PlanCode>('FREE');
   const [meta, setMeta] = useState<{
@@ -375,7 +376,17 @@ export function FindTalentPanel() {
       )}
 
       <div className="jobs-layout" style={{ padding: 0 }}>
-        <aside className="filters">
+        <button
+          type="button"
+          className="filters-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="talent-filters"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          <span>{filtersOpen ? t('filtersHide') : t('filters')}</span>
+          <span aria-hidden>{filtersOpen ? '-' : '+'}</span>
+        </button>
+        <aside id="talent-filters" className={`filters${filtersOpen ? ' filters--open' : ''}`}>
           <h3>{t('filters')}</h3>
           <form
             className="filter-group"
