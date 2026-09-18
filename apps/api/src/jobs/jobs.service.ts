@@ -931,6 +931,18 @@ export class JobsService {
         category: true,
         jobSkills: { include: { skill: true } },
         jobLanguages: { include: { language: true } },
+        // Source-language wording: the owner edits what they wrote, not a translation.
+        questions: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            question: true,
+            type: true,
+            isRequired: true,
+            sortOrder: true,
+            _count: { select: { answers: true } },
+          },
+        },
         _count: { select: { applications: true, views: true } },
       },
     });
@@ -1534,6 +1546,38 @@ export class JobsService {
         sortOrder: data.sortOrder ?? 0,
       },
     });
+  }
+
+  async updateQuestion(
+    user: AuthUser,
+    jobId: string,
+    questionId: string,
+    data: { question?: string; type?: string; isRequired?: boolean; sortOrder?: number },
+  ) {
+    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+    await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    const existing = await this.prisma.jobQuestion.findFirst({
+      where: { id: questionId, jobPostId: jobId },
+      select: { id: true, question: true },
+    });
+    if (!existing) throw new NotFoundException('Question not found');
+    const updated = await this.prisma.jobQuestion.update({
+      where: { id: existing.id },
+      data: {
+        ...(data.question !== undefined ? { question: data.question } : {}),
+        ...(data.type !== undefined ? { type: data.type as never } : {}),
+        ...(data.isRequired !== undefined ? { isRequired: data.isRequired } : {}),
+        ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+      },
+    });
+    // Reworded question: machine translations now describe the old wording.
+    if (data.question !== undefined && data.question !== existing.question) {
+      await this.prisma.jobQuestionTranslation.deleteMany({
+        where: { questionId: existing.id, isMachine: true },
+      });
+    }
+    return updated;
   }
 
   async removeQuestion(user: AuthUser, jobId: string, questionId: string) {
