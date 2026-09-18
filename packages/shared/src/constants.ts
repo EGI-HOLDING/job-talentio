@@ -1,6 +1,7 @@
 export const PLAN_LIMITS = {
+  /** Three free postings: the local norm (ish.uz gives 3/month; OLX, Career Centre post free). */
   FREE: {
-    activeJobs: 1,
+    activeJobs: 3,
     coldChat: false,
     candidateSearch: 'limited' as const,
     matchingBoost: false,

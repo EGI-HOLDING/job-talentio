@@ -100,7 +100,7 @@ Production DB migrate: `pnpm db:migrate:deploy` (also runs on API container star
 
 ## Plans & billing (local)
 
-- Free: 1 active published job
+- Free: 3 active published jobs
 - Standard: 5
 - Premium: 20 + cold chat
 - Hot Job: time-boxed ranking boost
