@@ -1,7 +1,7 @@
 'use client';
 
 import { Link, localeHref } from '@/lib/navigation';
-import { FormEvent, Suspense, useEffect, useId, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useId, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, saveSession } from '@/lib/api';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
@@ -10,6 +10,15 @@ import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 import { useI18n } from '@/lib/i18n';
 
 type InvitePreview = { companyName: string; email: string; role: string };
+
+/** Split "I agree to the {terms} and {privacy}" and drop links into the slots. */
+function renderConsentSentence(template: string, slots: Record<string, ReactNode>): ReactNode[] {
+  return template.split(/(\{[a-z]+\})/g).map((part, index) => {
+    const slot = part.match(/^\{([a-z]+)\}$/)?.[1];
+    if (slot && slots[slot] !== undefined) return slots[slot];
+    return <span key={`text-${index}`}>{part}</span>;
+  });
+}
 
 function RegisterForm() {
   const { t, locale } = useI18n();
@@ -202,7 +211,18 @@ function RegisterForm() {
               aria-required="true"
             />
             <span>
-              {t('acceptTermsLabel')}
+              {renderConsentSentence(t('acceptTermsTemplate'), {
+                terms: (
+                  <Link key="terms" href="/terms" target="_blank" rel="noopener">
+                    {t('termsOfServiceObject')}
+                  </Link>
+                ),
+                privacy: (
+                  <Link key="privacy" href="/privacy" target="_blank" rel="noopener">
+                    {t('privacyPolicyObject')}
+                  </Link>
+                ),
+              })}
               <abbr className="field-req" title={t('required')}>
                 *
               </abbr>

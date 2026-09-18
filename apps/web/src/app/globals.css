@@ -3699,6 +3699,32 @@ button.linkish:hover,
   max-width: 780px;
   margin: 0 auto;
 }
+.legal-doc {
+  max-width: 780px;
+  margin: 0 auto;
+  padding-top: 1.5rem;
+  padding-bottom: 3rem;
+}
+.legal-doc h1 {
+  margin-bottom: 0.25rem;
+}
+.legal-doc h2 {
+  font-size: 1.05rem;
+  margin: 1.6rem 0 0.5rem;
+}
+.legal-doc p,
+.legal-doc li {
+  line-height: 1.7;
+}
+.legal-doc ul {
+  padding-left: 1.2rem;
+  margin: 0.4rem 0 0.8rem;
+}
+.legal-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 1.2rem;
+}
 .news-article-cover {
   width: 100%;
   aspect-ratio: 16 / 9;

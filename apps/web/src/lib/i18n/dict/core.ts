@@ -897,10 +897,32 @@ export const core = {
     ru: 'Чтобы создать аккаунт, примите условия',
     en: 'Please accept the terms to create an account',
   },
-  acceptTermsLabel: {
-    uz: 'Men Foydalanish shartlari va Maxfiylik siyosatiga roziman',
-    ru: 'Я принимаю Условия использования и Политику конфиденциальности',
-    en: 'I agree to the Terms of Service and Privacy Policy',
+  /** {terms} and {privacy} are replaced with links to the legal pages. */
+  acceptTermsTemplate: {
+    uz: 'Men {terms} va {privacy}ga roziman',
+    ru: 'Я принимаю {terms} и {privacy}',
+    en: 'I agree to the {terms} and {privacy}',
+  },
+  termsOfService: {
+    uz: 'Foydalanish shartlari',
+    ru: 'Условия использования',
+    en: 'Terms of Service',
+  },
+  privacyPolicy: {
+    uz: 'Maxfiylik siyosati',
+    ru: 'Политика конфиденциальности',
+    en: 'Privacy Policy',
+  },
+  /** Accusative forms used inside the consent sentence. */
+  termsOfServiceObject: {
+    uz: 'Foydalanish shartlari',
+    ru: 'Условия использования',
+    en: 'Terms of Service',
+  },
+  privacyPolicyObject: {
+    uz: 'Maxfiylik siyosati',
+    ru: 'Политику конфиденциальности',
+    en: 'Privacy Policy',
   },
   creatingAccount: {
     uz: 'Hisob yaratilmoqda...',

@@ -4,7 +4,16 @@ import { LOCALES } from '@/lib/locale';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jobtalent.io').replace(/\/$/, '');
 
-const STATIC_PATHS = ['', '/jobs', '/news', '/explore/categories', '/explore/cities', '/explore/companies'];
+const STATIC_PATHS = [
+  '',
+  '/jobs',
+  '/news',
+  '/explore/categories',
+  '/explore/cities',
+  '/explore/companies',
+  '/terms',
+  '/privacy',
+];
 
 /** Every URL is emitted once per locale with hreflang alternates. */
 function entry(path: string, lastModified?: Date): MetadataRoute.Sitemap {
