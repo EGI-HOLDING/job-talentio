@@ -104,6 +104,9 @@ function EmployeeDashboardInner() {
   const [saved, setSaved] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  // Shown once after a CV import: the matches the new profile unlocked plus a one-click alert.
+  const [postImportBanner, setPostImportBanner] = useState(false);
+  const [quickAlertBusy, setQuickAlertBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cvBusy, setCvBusy] = useState(false);
   const [cvParsing, setCvParsing] = useState(false);
@@ -600,6 +603,41 @@ function EmployeeDashboardInner() {
     await load();
   }
 
+  /** Alert built from the profile the CV just filled: headline as query, top skills, home city. */
+  async function quickAlertFromProfile() {
+    if (!profile) return;
+    setQuickAlertBusy(true);
+    setError('');
+    try {
+      const focus = (profile.headline || profile.desiredPosition || '').trim();
+      const skillSlugs = (profile.skills || [])
+        .map((s: any) => s.skill?.slug)
+        .filter((slug: unknown): slug is string => typeof slug === 'string' && slug.length > 0)
+        .slice(0, 8);
+      await api('/alerts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: (focus || t('emp.quickAlertName')).slice(0, 120),
+          query: focus ? focus.slice(0, 200) : undefined,
+          citySlug: profile.city?.slug || undefined,
+          skillSlugs,
+          frequency: 'DAILY',
+          notifyInApp: true,
+          notifyEmail: true,
+          notifyTelegram: telegramLinked,
+        }),
+      });
+      setPostImportBanner(false);
+      setMsg(t('emp.quickAlertCreated'));
+      await load();
+      setTab('alerts');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('emp.quickAlertFailed'));
+    } finally {
+      setQuickAlertBusy(false);
+    }
+  }
+
   const complete = useMemo(
     () =>
       profile
@@ -646,8 +684,10 @@ function EmployeeDashboardInner() {
           onImported={async () => {
             setCvReview(null);
             setMsg(t('emp.cvImported'));
-            setTab('profile');
             await load();
+            // Land on the matches the fresh profile unlocked, not on the form they just filled.
+            setTab('recommended');
+            setPostImportBanner(true);
           }}
         />
       )}
@@ -771,6 +811,43 @@ function EmployeeDashboardInner() {
         {tab === 'recommended' && (
           <div>
             <h2 className="section-title">{t('emp.jobsMatchedTitle')}</h2>
+            {postImportBanner && (
+              <div
+                className="card"
+                style={{ marginBottom: '1rem', borderColor: 'var(--accent)', outline: '2px solid var(--accent-soft)' }}
+                role="status"
+              >
+                <strong>{t('emp.postImportTitle')}</strong>
+                <p className="muted" style={{ margin: '0.35rem 0 0.75rem' }}>
+                  {recommended.length
+                    ? t('emp.postImportBody').replace('{n}', String(recommended.length))
+                    : t('emp.postImportBodyEmpty')}
+                </p>
+                <div className="chips">
+                  <button
+                    type="button"
+                    className="chip active"
+                    disabled={quickAlertBusy}
+                    onClick={() => void quickAlertFromProfile()}
+                  >
+                    {quickAlertBusy ? '...' : t('emp.postImportCreateAlert')}
+                  </button>
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => {
+                      setPostImportBanner(false);
+                      setTab('profile');
+                    }}
+                  >
+                    {t('emp.postImportReviewProfile')}
+                  </button>
+                  <button type="button" className="chip" onClick={() => setPostImportBanner(false)}>
+                    {t('emp.postImportDismiss')}
+                  </button>
+                </div>
+              </div>
+            )}
             {recommended.map((item) => {
               const rowId = `rec-${item.job.id}`;
               const open = breakdownId === rowId;
