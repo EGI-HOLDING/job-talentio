@@ -29,6 +29,11 @@ import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
 import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
+import {
+  ScreeningQuestionsEditor,
+  screeningDraftsFromJob,
+  type ScreeningQuestionDraft,
+} from '@/components/recruiter/ScreeningQuestionsEditor';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 
@@ -128,6 +133,10 @@ function RecruiterDashboard() {
   const [editJobLanguages, setEditJobLanguages] = useState<
     Array<{ code: string; name: string; minLevel: string; isRequired: boolean }>
   >([]);
+  const [draftQuestions, setDraftQuestions] = useState<ScreeningQuestionDraft[]>([]);
+  const [editQuestions, setEditQuestions] = useState<ScreeningQuestionDraft[]>([]);
+  const [editQuestionsOriginal, setEditQuestionsOriginal] = useState<ScreeningQuestionDraft[]>([]);
+  const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
   // Recruiters almost always write in the language they are using the site in;
   // a fixed 'uz' default silently mislabels English and Russian postings.
   const [draftJobLocale, setDraftJobLocale] = useState<'uz' | 'ru' | 'en'>(locale);
@@ -441,10 +450,62 @@ function RecruiterDashboard() {
     }
   }, [tab, focusFromUrl]);
 
+  /**
+   * Bring the posting's screening questions in line with the editor: delete
+   * removed ones, edit changed ones in place (answers survive), add new ones.
+   */
+  async function syncScreeningQuestions(
+    jobId: string,
+    next: ScreeningQuestionDraft[],
+    original: ScreeningQuestionDraft[],
+  ) {
+    const keptIds = new Set(next.map((q) => q.id).filter(Boolean));
+    for (const gone of original.filter((q) => q.id && !keptIds.has(q.id))) {
+      await api(`/jobs/${jobId}/questions/${gone.id}`, { method: 'DELETE' });
+    }
+    for (let i = 0; i < next.length; i++) {
+      const q = next[i];
+      const question = q.question.trim();
+      if (question.length < 3) continue;
+      const payload = { question, type: q.type, isRequired: q.isRequired, sortOrder: i };
+      if (!q.id) {
+        await api(`/jobs/${jobId}/questions`, { method: 'POST', body: JSON.stringify(payload) });
+        continue;
+      }
+      const before = original.find((o) => o.id === q.id);
+      const originalIndex = original.findIndex((o) => o.id === q.id);
+      const changed =
+        !before ||
+        before.question !== question ||
+        before.type !== q.type ||
+        before.isRequired !== q.isRequired ||
+        originalIndex !== i;
+      if (changed) {
+        await api(`/jobs/${jobId}/questions/${q.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+      }
+    }
+  }
+
+  async function confirmRemoveSavedQuestion(question: ScreeningQuestionDraft) {
+    if (!question.answerCount) return true;
+    return confirm({
+      title: t('rec.screeningDeleteConfirm'),
+      message: t('rec.screeningDeleteConfirmBody').replace(
+        '{n}',
+        String(question.answerCount),
+      ),
+      tone: 'danger',
+      confirmLabel: t('rec.screeningRemove'),
+    });
+  }
+
   async function createJob(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await api(`/jobs/company/${companyId}`, {
+    const created = await api<{ id: string }>(`/jobs/company/${companyId}`, {
       method: 'POST',
       body: JSON.stringify({
         title: fd.get('title'),
@@ -478,12 +539,22 @@ function RecruiterDashboard() {
         })),
       }),
     });
+    let questionsFailed = false;
+    if (created?.id && draftQuestions.length) {
+      try {
+        await syncScreeningQuestions(created.id, draftQuestions, []);
+      } catch {
+        questionsFailed = true;
+      }
+    }
     setDraftJobSkills([]);
     setDraftJobBenefits([]);
     setDraftJobLanguages([]);
+    setDraftQuestions([]);
     localeLangSuggested.current = false;
     setDraftJobLevel('');
-    flash(t('rec.jobCreatedDraft'));
+    if (questionsFailed) flash(t('rec.screeningSaveFailed'), 'error');
+    else flash(t('rec.jobCreatedDraft'));
     await loadJobs(companyId);
   }
 
@@ -513,13 +584,22 @@ function RecruiterDashboard() {
           })),
         }),
       });
+      await syncScreeningQuestions(jobId, editQuestions, editQuestionsOriginal);
       setEditingJobId(null);
       setEditJobLanguages([]);
+      setEditQuestions([]);
+      setEditQuestionsOriginal([]);
       flash(t('rec.jobUpdated'));
       await loadJobs(companyId);
     } catch (err) {
       flash(err instanceof Error ? err.message : t('rec.jobUpdateFailed'), 'error');
     }
+  }
+
+  function hydrateEditQuestions(job: any) {
+    const drafts = screeningDraftsFromJob(job);
+    setEditQuestions(drafts);
+    setEditQuestionsOriginal(drafts);
   }
 
   function hydrateEditLanguages(job: any) {
@@ -1168,6 +1248,11 @@ function RecruiterDashboard() {
                     />
                   )}
                 </div>
+                <ScreeningQuestionsEditor
+                  idPrefix="create-job"
+                  value={draftQuestions}
+                  onChange={setDraftQuestions}
+                />
                 <button type="submit">{t('rec.createDraft')}</button>
               </form>
             </div>
@@ -1185,6 +1270,9 @@ function RecruiterDashboard() {
                           '{date}',
                           new Date(j.boostUntil).toLocaleDateString(),
                         )}`
+                      : ''}
+                    {(j.questions?.length ?? 0) > 0
+                      ? ` | ${t('rec.screeningCount').replace('{n}', String(j.questions.length))}`
                       : ''}
                   </p>
                   <div className="chips">
@@ -1237,9 +1325,12 @@ function RecruiterDashboard() {
                         if (editingJobId === j.id) {
                           setEditingJobId(null);
                           setEditJobLanguages([]);
+                          setEditQuestions([]);
+                          setEditQuestionsOriginal([]);
                         } else {
                           setEditingJobId(j.id);
                           hydrateEditLanguages(j);
+                          hydrateEditQuestions(j);
                         }
                       }}
                     >
@@ -1432,6 +1523,12 @@ function RecruiterDashboard() {
                             />
                           )}
                         </div>
+                        <ScreeningQuestionsEditor
+                          idPrefix={`edit-job-${j.id}`}
+                          value={editQuestions}
+                          onChange={setEditQuestions}
+                          onRemoveSaved={confirmRemoveSavedQuestion}
+                        />
                         <button type="submit">{t('rec.saveChanges')}</button>
                       </form>
                       <JobLanguageVersions jobId={j.id} onFlash={flash} />
@@ -1727,7 +1824,67 @@ function RecruiterDashboard() {
                                 >
                                   {t('rec.chat')}
                                 </Link>
+                                {(a.answers?.length ?? 0) > 0 || a.coverLetter ? (
+                                  <button
+                                    type="button"
+                                    className={`chip${answersOpenId === a.id ? ' active' : ''}`}
+                                    style={{ fontSize: '0.72rem' }}
+                                    aria-expanded={answersOpenId === a.id}
+                                    onClick={() =>
+                                      setAnswersOpenId(answersOpenId === a.id ? null : a.id)
+                                    }
+                                  >
+                                    {answersOpenId === a.id
+                                      ? t('rec.answersHide')
+                                      : t('rec.answersShow').replace(
+                                          '{n}',
+                                          String(a.answers?.length ?? 0),
+                                        )}
+                                  </button>
+                                ) : null}
                               </div>
+                              {answersOpenId === a.id && (
+                                <div
+                                  className="screening-answers"
+                                  style={{
+                                    marginTop: '0.5rem',
+                                    padding: '0.5rem 0.6rem',
+                                    borderRadius: 8,
+                                    background: 'var(--surface-2, #f5f7fa)',
+                                    fontSize: '0.8rem',
+                                    display: 'grid',
+                                    gap: '0.45rem',
+                                  }}
+                                >
+                                  {a.coverLetter ? (
+                                    <div>
+                                      <div className="muted" style={{ fontSize: '0.72rem' }}>
+                                        {t('coverLetter')}
+                                      </div>
+                                      <div style={{ whiteSpace: 'pre-wrap' }}>
+                                        {sanitizeMojibake(a.coverLetter)}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {(a.answers || []).map((ans: any) => (
+                                    <div key={ans.id || ans.questionId}>
+                                      <div className="muted" style={{ fontSize: '0.72rem' }}>
+                                        {sanitizeMojibake(ans.question?.question || '')}
+                                      </div>
+                                      <div style={{ whiteSpace: 'pre-wrap' }}>
+                                        {ans.answer === 'Yes'
+                                          ? t('job.yes')
+                                          : ans.answer === 'No'
+                                            ? t('job.no')
+                                            : sanitizeMojibake(String(ans.answer ?? ''))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {(a.answers?.length ?? 0) === 0 ? (
+                                    <div className="muted">{t('rec.answersNone')}</div>
+                                  ) : null}
+                                </div>
+                              )}
                               <select
                                 style={{ marginTop: '0.5rem', fontSize: '0.8rem', width: '100%' }}
                                 value={a.status}

@@ -17,6 +17,7 @@ import {
   jobPostSchema,
   jobSearchSchema,
   jobQuestionSchema,
+  jobQuestionUpdateSchema,
   jobTranslationSchema,
 } from '@job-talentio/shared';
 import { JobStatus } from '@prisma/client';
@@ -215,6 +216,19 @@ export class JobsController {
   ) {
     const data = parseDto(jobQuestionSchema, body);
     return this.jobs.addQuestion(user, id, data);
+  }
+
+  @Patch(':id/questions/:questionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  updateQuestion(
+    @Param('id') id: string,
+    @Param('questionId') questionId: string,
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+  ) {
+    const data = parseDto(jobQuestionUpdateSchema, body);
+    return this.jobs.updateQuestion(user, id, questionId, data);
   }
 
   @Delete(':id/questions/:questionId')

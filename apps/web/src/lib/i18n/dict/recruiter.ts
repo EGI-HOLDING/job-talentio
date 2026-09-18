@@ -56,6 +56,72 @@ export const recruiter = {
     en: 'Save changes',
   },
 
+  // Screening questions (asked when a candidate applies)
+  'rec.screeningTitle': {
+    uz: 'Saralash savollari',
+    ru: 'Вопросы для отбора',
+    en: 'Screening questions',
+  },
+  'rec.screeningHint': {
+    uz: 'Nomzod ariza berishda javob beradigan 20 tagacha qisqa savol. Majburiy savolga javob bermasdan ariza yuborilmaydi.',
+    ru: 'До 20 коротких вопросов, на которые кандидат отвечает при отклике. Без ответа на обязательный вопрос отклик не отправится.',
+    en: 'Up to 20 short questions a candidate answers when applying. A required question blocks the application until answered.',
+  },
+  'rec.screeningEmpty': {
+    uz: 'Hali saralash savollari yo‘q.',
+    ru: 'Вопросов для отбора пока нет.',
+    en: 'No screening questions yet.',
+  },
+  'rec.screeningAdd': { uz: 'Savol qo‘shish', ru: 'Добавить вопрос', en: 'Add question' },
+  'rec.screeningQuestionLabel': { uz: '{n}-savol', ru: 'Вопрос {n}', en: 'Question {n}' },
+  'rec.screeningQuestionPlaceholder': {
+    uz: 'Masalan: 1C bilan necha yil ishlagansiz?',
+    ru: 'Например: Сколько лет вы работали с 1C?',
+    en: 'e.g. How many years have you worked with 1C?',
+  },
+  'rec.screeningType': { uz: 'Javob turi', ru: 'Тип ответа', en: 'Answer type' },
+  'rec.screeningTypeText': { uz: 'Matn', ru: 'Текст', en: 'Text' },
+  'rec.screeningTypeYesNo': { uz: 'Ha yoki yo‘q', ru: 'Да или нет', en: 'Yes or no' },
+  'rec.screeningTypeNumber': { uz: 'Raqam', ru: 'Число', en: 'Number' },
+  'rec.screeningRequired': { uz: 'Majburiy', ru: 'Обязательный', en: 'Required' },
+  'rec.screeningRemove': { uz: 'O‘chirish', ru: 'Удалить', en: 'Remove' },
+  'rec.screeningAnswerCount': {
+    uz: 'Javoblar: {n}',
+    ru: 'Ответов: {n}',
+    en: 'Answers: {n}',
+  },
+  'rec.screeningDeleteConfirm': {
+    uz: 'Bu savol o‘chirilsinmi?',
+    ru: 'Удалить этот вопрос?',
+    en: 'Delete this question?',
+  },
+  'rec.screeningDeleteConfirmBody': {
+    uz: 'Nomzodlar bergan {n} ta javob ham o‘chiriladi. Savol matnini o‘zgartirish javoblarni saqlab qoladi.',
+    ru: 'Вместе с ним удалятся {n} ответов кандидатов. Изменение текста вопроса ответы сохраняет.',
+    en: '{n} candidate answers will be deleted with it. Editing the wording keeps the answers.',
+  },
+  'rec.screeningSaveFailed': {
+    uz: 'E’lon yaratildi, lekin saralash savollari saqlanmadi. Tahrirlashda qayta qo‘shing.',
+    ru: 'Вакансия создана, но вопросы для отбора не сохранились. Добавьте их снова при редактировании.',
+    en: 'The job was created but the screening questions were not saved. Add them again when editing.',
+  },
+  'rec.screeningCount': {
+    uz: 'Saralash savollari: {n}',
+    ru: 'Вопросы для отбора: {n}',
+    en: 'Screening questions: {n}',
+  },
+  'rec.answersShow': {
+    uz: 'Javoblarni ko‘rish ({n})',
+    ru: 'Показать ответы ({n})',
+    en: 'Show answers ({n})',
+  },
+  'rec.answersHide': { uz: 'Javoblarni yashirish', ru: 'Скрыть ответы', en: 'Hide answers' },
+  'rec.answersNone': {
+    uz: 'Nomzod saralash savollariga javob bermagan.',
+    ru: 'Кандидат не отвечал на вопросы отбора.',
+    en: 'The candidate did not answer any screening questions.',
+  },
+
   // Optional extra language versions of one posting
   'rec.langVersionsTitle': {
     uz: 'Til versiyalari',

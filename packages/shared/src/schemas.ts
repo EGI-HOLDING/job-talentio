@@ -542,6 +542,18 @@ export const jobQuestionSchema = z.object({
   sortOrder: z.number().int().min(0).default(0),
 });
 
+/** Edit an existing screening question in place so submitted answers survive. */
+export const jobQuestionUpdateSchema = z
+  .object({
+    question: z.string().min(3).max(500).optional(),
+    type: z.enum(['TEXT', 'YES_NO', 'NUMBER']).optional(),
+    isRequired: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'Nothing to update',
+  });
+
 export const interviewSchema = z.object({
   scheduledAt: z.string(),
   durationMins: z.number().int().min(15).max(480).default(60),
