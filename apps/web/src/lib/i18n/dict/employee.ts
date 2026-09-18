@@ -32,6 +32,39 @@ export const employee = {
     ru: 'Выбранные данные CV импортированы в профиль',
     en: 'Selected CV data imported into your profile',
   },
+  'emp.postImportTitle': {
+    uz: 'Profil yangilandi. Sizga mos ish o‘rinlari:',
+    ru: 'Профиль обновлён. Подходящие вакансии:',
+    en: 'Profile updated. Jobs that match you:',
+  },
+  'emp.postImportBody': {
+    uz: 'CV’dagi ko‘nikma va tajribangiz asosida {n} ta mos e’lon topildi. Yangi mos e’lonlar chiqsa xabar olish uchun ogohlantirish yarating.',
+    ru: 'По навыкам и опыту из CV найдено подходящих вакансий: {n}. Создайте оповещение, чтобы узнавать о новых.',
+    en: 'We found {n} jobs matching the skills and experience in your CV. Create an alert to hear about new ones.',
+  },
+  'emp.postImportBodyEmpty': {
+    uz: 'Hozircha to‘liq mos e’lon yo‘q. Ogohlantirish yarating, mos e’lon chiqishi bilan xabar beramiz.',
+    ru: 'Пока нет точных совпадений. Создайте оповещение, и мы сообщим, как только появится подходящая вакансия.',
+    en: 'No close matches yet. Create an alert and we will tell you as soon as one appears.',
+  },
+  'emp.postImportCreateAlert': {
+    uz: 'Profil asosida ogohlantirish yaratish',
+    ru: 'Создать оповещение по профилю',
+    en: 'Create alert from my profile',
+  },
+  'emp.postImportReviewProfile': { uz: 'Profilni ko‘rish', ru: 'Открыть профиль', en: 'Review profile' },
+  'emp.postImportDismiss': { uz: 'Yopish', ru: 'Закрыть', en: 'Dismiss' },
+  'emp.quickAlertName': { uz: 'Mening profilim', ru: 'Мой профиль', en: 'My profile' },
+  'emp.quickAlertCreated': {
+    uz: 'Ogohlantirish yaratildi. Yangi mos e’lonlar haqida xabar olasiz.',
+    ru: 'Оповещение создано. Вы будете получать новые подходящие вакансии.',
+    en: 'Alert created. You will hear about new matching jobs.',
+  },
+  'emp.quickAlertFailed': {
+    uz: 'Ogohlantirish yaratib bo‘lmadi',
+    ru: 'Не удалось создать оповещение',
+    en: 'Could not create the alert',
+  },
   'emp.deleteFailed': { uz: 'O‘chirib bo‘lmadi', ru: 'Не удалось удалить', en: 'Delete failed' },
   'emp.uploadFailed': { uz: 'Yuklab bo‘lmadi', ru: 'Не удалось загрузить', en: 'Upload failed' },
   'emp.attachFailed': {
