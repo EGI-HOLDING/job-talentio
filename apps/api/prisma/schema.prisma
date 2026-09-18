@@ -981,6 +981,8 @@ model Application {
   resumeSnapshot Json?
   matchScore     Float?
   matchBreakdown Json?
+  /// Acquisition source (`utm_source[:utm_medium]`, e.g. telegram:channel, pwa); null = direct.
+  source         String?           @db.VarChar(40)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -996,6 +998,7 @@ model Application {
   @@index([status])
   @@index([matchScore])
   @@index([resumeId])
+  @@index([jobPostId, source])
 }
 
 model PipelineEvent {

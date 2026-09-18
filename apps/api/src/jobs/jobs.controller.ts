@@ -105,6 +105,13 @@ export class JobsController {
     return this.jobs.listMine(user, companyId);
   }
 
+  @Get('company/:companyId/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  companyStats(@Param('companyId') companyId: string, @CurrentUser() user: AuthUser) {
+    return this.jobs.getCompanyStats(user, companyId);
+  }
+
   @Post('company/:companyId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')

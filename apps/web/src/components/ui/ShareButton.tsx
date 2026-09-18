@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { localeHref } from '@/lib/navigation';
+import { withUtm } from '@/lib/acquisition';
 
 type Props = {
   /** Locale-less path, e.g. `/jobs/abc`; the active locale is added. */
@@ -40,13 +41,15 @@ export function ShareButton({ path, title, text, className = 'secondary' }: Prop
     };
   }, [open]);
 
-  function absoluteUrl(): string {
-    if (typeof window === 'undefined') return path;
-    return `${window.location.origin}${localeHref(path)}`;
+  /** Shared links carry a source so applications can be attributed later. */
+  function absoluteUrl(medium: 'telegram' | 'copy' | 'sheet'): string {
+    const tagged = withUtm(path, 'share', medium);
+    if (typeof window === 'undefined') return tagged;
+    return `${window.location.origin}${localeHref(tagged)}`;
   }
 
   async function onShare() {
-    const url = absoluteUrl();
+    const url = absoluteUrl('sheet');
     const coarse =
       typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
     if (coarse && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
@@ -61,7 +64,7 @@ export function ShareButton({ path, title, text, className = 'secondary' }: Prop
   }
 
   async function copyLink() {
-    const url = absoluteUrl();
+    const url = absoluteUrl('copy');
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -71,7 +74,7 @@ export function ShareButton({ path, title, text, className = 'secondary' }: Prop
     }
   }
 
-  const telegramHref = `https://t.me/share/url?url=${encodeURIComponent(absoluteUrl())}&text=${encodeURIComponent(text || title)}`;
+  const telegramHref = `https://t.me/share/url?url=${encodeURIComponent(absoluteUrl('telegram'))}&text=${encodeURIComponent(text || title)}`;
 
   return (
     <span ref={rootRef} className="share-wrap">

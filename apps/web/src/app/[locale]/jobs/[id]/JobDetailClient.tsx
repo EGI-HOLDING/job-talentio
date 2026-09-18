@@ -4,6 +4,7 @@ import { Link, localeHref } from '@/lib/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
+import { readSource, rememberSource } from '@/lib/acquisition';
 import { benefitIconLabel } from '@/lib/icons';
 import { sanitizeMojibake } from '@/lib/text';
 import { localizedJobLocation } from '@/lib/location';
@@ -138,6 +139,8 @@ export function JobDetailClient() {
   }
 
   useEffect(() => {
+    // Keep the utm source from the link (Telegram, PWA, share) for the apply call.
+    rememberSource(id);
     api<Job>(`/jobs/${id}`)
       .then(async (j) => {
         setJob({
@@ -213,6 +216,7 @@ export function JobDetailClient() {
           coverLetter: String(fd.get('coverLetter') || '').trim() || undefined,
           answers,
           resumeId: selectedResumeId || undefined,
+          source: readSource(id),
         }),
       });
       setMyApplication({

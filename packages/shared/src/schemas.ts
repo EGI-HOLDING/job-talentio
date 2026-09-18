@@ -269,6 +269,13 @@ export const applicationStatusSchema = z.object({
 export const applySchema = z.object({
   coverLetter: z.string().max(5000).optional(),
   resumeId: z.string().min(1).optional(),
+  /** Acquisition source captured from utm params, e.g. `telegram:channel`. */
+  source: z
+    .string()
+    .trim()
+    .max(40)
+    .regex(/^[a-z0-9_:-]+$/i)
+    .optional(),
   // Optional questions may arrive as empty strings from the form; drop them after trim.
   answers: z
     .array(

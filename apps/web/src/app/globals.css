@@ -3747,6 +3747,78 @@ button.linkish:hover,
   font-size: 0.85rem;
   margin: 0 0 1.2rem;
 }
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+.stat-tile {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.stat-tile strong {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+.stat-tile span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.stat-tile--warn {
+  background: #fff4e5;
+}
+.stat-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 56px;
+  padding: 0.25rem 0;
+}
+.stat-trend-bar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  opacity: 0.85;
+}
+.funnel-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 140px) 1fr minmax(70px, auto);
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.85rem;
+  margin: 0.3rem 0;
+}
+.funnel-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.funnel-track {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+.funnel-fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--accent);
+}
+.funnel-value {
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 520px) {
+  .funnel-row {
+    grid-template-columns: minmax(80px, 110px) 1fr minmax(60px, auto);
+    font-size: 0.78rem;
+  }
+}
 .install-bar {
   position: fixed;
   left: 0.75rem;

@@ -44,6 +44,11 @@ import {
   maskAnonymousCompany,
   revealsAnonymousEmployer,
 } from '../common/anonymous-job';
+import { bucketByDay, buildFunnel, groupSources, summarizeResponseTimes } from './job-stats';
+
+const STATS_TREND_DAYS = 14;
+const STATS_TREND_SAMPLE = 5000;
+const STATS_RESPONSE_SAMPLE = 300;
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -1517,22 +1522,72 @@ export class JobsService {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId);
+    return this.collectStats({ jobPostId: jobId });
+  }
 
-    const [views, applications] = await Promise.all([
-      this.prisma.jobView.count({ where: { jobPostId: jobId } }),
-      this.prisma.application.groupBy({
-        by: ['status'],
-        where: { jobPostId: jobId },
-        _count: true,
+  /** Same shape as per-job stats, across every posting of the company. */
+  async getCompanyStats(user: AuthUser, companyId: string) {
+    await this.companies.assertMember(user, companyId);
+    return this.collectStats({ jobPost: { companyId } }, { jobPost: { companyId } });
+  }
+
+  private async collectStats(
+    applicationWhere: Prisma.ApplicationWhereInput,
+    viewWhere: Prisma.JobViewWhereInput = applicationWhere as Prisma.JobViewWhereInput,
+  ) {
+    const now = new Date();
+    const since = new Date(now.getTime() - STATS_TREND_DAYS * 86_400_000);
+    const [views, applications, sources, responseRows, viewDates, applicationDates] = await Promise.all([
+      this.prisma.jobView.count({ where: viewWhere }),
+      this.prisma.application.groupBy({ by: ['status'], where: applicationWhere, _count: true }),
+      this.prisma.application.groupBy({ by: ['source'], where: applicationWhere, _count: true }),
+      this.prisma.application.findMany({
+        where: applicationWhere,
+        orderBy: { createdAt: 'desc' },
+        take: STATS_RESPONSE_SAMPLE,
+        select: {
+          createdAt: true,
+          status: true,
+          events: {
+            where: { toStatus: { not: 'NEW' } },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      }),
+      this.prisma.jobView.findMany({
+        where: { ...viewWhere, createdAt: { gte: since } },
+        select: { createdAt: true },
+        take: STATS_TREND_SAMPLE,
+      }),
+      this.prisma.application.findMany({
+        where: { ...applicationWhere, createdAt: { gte: since } },
+        select: { createdAt: true },
+        take: STATS_TREND_SAMPLE,
       }),
     ]);
 
+    const applicationsByStatus = Object.fromEntries(applications.map((a) => [a.status, a._count]));
     return {
       views,
-      applicationsByStatus: Object.fromEntries(
-        applications.map((a) => [a.status, a._count]),
-      ),
+      applicationsByStatus,
       totalApplications: applications.reduce((s, a) => s + a._count, 0),
+      funnel: buildFunnel(views, applicationsByStatus),
+      sources: groupSources(sources.map((s) => ({ source: s.source, count: s._count }))),
+      responseTime: summarizeResponseTimes(
+        responseRows.map((r) => ({
+          createdAt: r.createdAt,
+          status: r.status,
+          firstResponseAt: r.events[0]?.createdAt ?? null,
+        })),
+        now,
+      ),
+      trend: {
+        days: STATS_TREND_DAYS,
+        views: bucketByDay(viewDates.map((v) => v.createdAt), STATS_TREND_DAYS, now),
+        applications: bucketByDay(applicationDates.map((a) => a.createdAt), STATS_TREND_DAYS, now),
+      },
     };
   }
 
