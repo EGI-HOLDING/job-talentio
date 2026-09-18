@@ -24,6 +24,7 @@ import { isSecureRuntime } from '../common/jwt-secret';
 import { telegramWebhookSecretRequired } from '../auth/session-policy';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MatchingService } from '../matching/matching.service';
+import { displayCompanyName } from '../common/anonymous-job';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
 const BOT_JOBS_LIMIT = 5;
@@ -187,7 +188,7 @@ export class TelegramService implements OnModuleInit {
           jobs = rows.map((row) => ({
             id: row.job.id,
             title: row.job.title,
-            companyName: row.job.company.name,
+            companyName: displayCompanyName(row.job, row.job.company.name, locale),
             cityName: row.job.city?.name ?? null,
           }));
           personalised = jobs.length > 0;
@@ -201,12 +202,18 @@ export class TelegramService implements OnModuleInit {
         where: { status: 'PUBLISHED' },
         orderBy: { publishedAt: 'desc' },
         take: BOT_JOBS_LIMIT,
-        select: { id: true, title: true, company: { select: { name: true } }, city: { select: { name: true } } },
+        select: {
+          id: true,
+          title: true,
+          isAnonymous: true,
+          company: { select: { name: true } },
+          city: { select: { name: true } },
+        },
       });
       jobs = latest.map((j) => ({
         id: j.id,
         title: j.title,
-        companyName: j.company.name,
+        companyName: displayCompanyName(j, j.company.name, locale),
         cityName: j.city?.name ?? null,
       }));
     }

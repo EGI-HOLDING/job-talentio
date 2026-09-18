@@ -39,6 +39,11 @@ import { effectiveSourceLocale, pickStoredLocale } from '../common/i18n/detect-l
 import type { Locale } from '../common/i18n/locale';
 import { canTransition, transitionError } from './job-status';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
+import {
+  displayCompanyName,
+  maskAnonymousCompany,
+  revealsAnonymousEmployer,
+} from '../common/anonymous-job';
 
 type JobSkillInput = { slug?: string; name?: string; isRequired?: boolean; weight?: number };
 type JobBenefitInput = { slug?: string; name?: string } | string;
@@ -362,6 +367,7 @@ export class JobsService {
         currency: (data.currency as string) || 'UZS',
         experienceYearsMin: (data.experienceYearsMin as number) ?? null,
         experienceLevel,
+        isAnonymous: data.isAnonymous === true,
         locale: pickStoredLocale({
           text: `${title}\n${description}`,
           explicit: typeof data.locale === 'string' ? data.locale : null,
@@ -465,6 +471,7 @@ export class JobsService {
         salaryPeriod: data.salaryPeriod as never,
         experienceYearsMin: data.experienceYearsMin as number | null | undefined,
         experienceLevel: nextExperienceLevel as never,
+        isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : undefined,
         locale:
           pickStoredLocale({
             text: `${title}\n${description}`,
@@ -580,7 +587,7 @@ export class JobsService {
             id: updated.id,
             title: updated.title,
             locale: updated.locale,
-            companyName: updated.company.name,
+            companyName: displayCompanyName(updated, updated.company.name, updated.locale),
             cityName: updated.city?.name ?? null,
             workMode: updated.workMode,
             employmentType: updated.employmentType,
@@ -678,12 +685,24 @@ export class JobsService {
     }
 
     const stripped = this.stripPrivateCompanyFields(resolved);
-    const chatPeerUserId = await this.chatPeerUserIdForCompany(job.companyId);
+    // Confidential posting: the employer stays hidden until this candidate is at interview stage.
+    const reveal = job.isAnonymous ? await this.viewerReachedInterview(viewer, id) : true;
+    const masked = maskAnonymousCompany(stripped, locale, { reveal });
+    const chatPeerUserId = reveal ? await this.chatPeerUserIdForCompany(job.companyId) : null;
     return {
-      ...stripped,
+      ...masked,
       chatPeerUserId,
       ...(viewerMatch || {}),
     };
+  }
+
+  private async viewerReachedInterview(viewer: AuthUser | undefined, jobId: string): Promise<boolean> {
+    if (!viewer) return false;
+    const application = await this.prisma.application.findFirst({
+      where: { jobPostId: jobId, profile: { userId: viewer.id } },
+      select: { status: true },
+    });
+    return revealsAnonymousEmployer(application?.status);
   }
 
   /** Minimal public fields for JobPosting JSON-LD. No JobView side effect. */
@@ -708,6 +727,7 @@ export class JobsService {
         publishedAt: true,
         closedAt: true,
         createdAt: true,
+        isAnonymous: true,
         company: { select: { name: true, slug: true, logoUrl: true } },
         city: { select: { name: true } },
       },
@@ -716,7 +736,7 @@ export class JobsService {
       throw new NotFoundException('Job not found');
     }
     const job = this.withContentLocale(found, locale);
-    const { status: _status, ...publicJob } = job;
+    const { status: _status, ...publicJob } = maskAnonymousCompany(job, locale);
     return publicJob;
   }
 
@@ -1274,6 +1294,7 @@ export class JobsService {
         categoryId: true,
         jobTitleId: true,
         experienceLevel: true,
+        isAnonymous: true,
         // archivedAt comes along so an archived term can be left out of the
         // facet options while the postings that use it still render normally.
         city: { select: { slug: true, name: true, nameUz: true, nameRu: true, archivedAt: true } },
@@ -1373,7 +1394,8 @@ export class JobsService {
               count: 1,
             };
       }
-      if (j.company) {
+      // A company facet on a confidential posting would name the employer.
+      if (j.company && !j.isAnonymous) {
         const key = j.company.slug;
         companyFacets[key] = companyFacets[key]
           ? { ...companyFacets[key], count: companyFacets[key].count + 1 }
@@ -1418,7 +1440,9 @@ export class JobsService {
     }
 
     return {
-      items: sorted.map((job) => this.withContentLocale(this.withResolvedIcons(job), locale)),
+      items: sorted.map((job) =>
+        maskAnonymousCompany(this.withContentLocale(this.withResolvedIcons(job), locale), locale),
+      ),
       total,
       matchedTotal,
       truncated,
@@ -1512,7 +1536,7 @@ export class JobsService {
     };
   }
 
-  async recommendedForUser(user: AuthUser) {
+  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE) {
     const profile = await this.prisma.employeeProfile.findUnique({
       where: { userId: user.id },
     });
@@ -1520,7 +1544,7 @@ export class JobsService {
     const rows = await this.matching.recommendJobsForProfile(profile.id);
     return rows.map((row) => ({
       ...row,
-      job: this.withResolvedIcons(row.job),
+      job: maskAnonymousCompany(this.withResolvedIcons(row.job), locale),
     }));
   }
 

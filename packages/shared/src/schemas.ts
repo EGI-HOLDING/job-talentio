@@ -151,6 +151,8 @@ export const jobPostSchema = z.object({
     .enum(['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'])
     .optional()
     .nullable(),
+  /** Hide the employer from candidates until they reach the interview stage. */
+  isAnonymous: z.boolean().optional(),
   skills: z
     .array(
       z

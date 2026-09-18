@@ -30,8 +30,8 @@ export class ApplicationsController {
 
   @Get('mine')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  mine(@CurrentUser() user: AuthUser) {
-    return this.applications.myApplications(user);
+  mine(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.applications.myApplications(user, requestLocale(req));
   }
 
   @Get('mine/jobs/:jobId')

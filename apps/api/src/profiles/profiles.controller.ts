@@ -373,7 +373,7 @@ export class ProfilesController {
 
   @Get('me/saved-jobs')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  saved(@CurrentUser() user: AuthUser) {
-    return this.profiles.listSaved(user);
+  saved(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.profiles.listSaved(user, requestLocale(req));
   }
 }

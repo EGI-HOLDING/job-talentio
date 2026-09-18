@@ -680,6 +680,8 @@ model JobPost {
   currency           String           @default("UZS")
   experienceYearsMin Int?
   experienceLevel    ExperienceLevel?
+  /// Confidential posting: company hidden from candidates until INTERVIEW stage.
+  isAnonymous        Boolean          @default(false)
   locale             String           @default("uz")
   status             JobStatus        @default(DRAFT)
   publishedAt        DateTime?

@@ -65,6 +65,16 @@ export const jobs = {
     en: '{n} views | {m} applicants',
   },
   'job.appliedBadge': { uz: 'Ariza berilgan', ru: 'Отклик отправлен', en: 'Applied' },
+  'job.confidentialEmployer': {
+    uz: 'Maxfiy ish beruvchi',
+    ru: 'Конфиденциальный работодатель',
+    en: 'Confidential employer',
+  },
+  'job.confidentialEmployerHint': {
+    uz: 'Kompaniya nomi suhbat bosqichiga o‘tgan nomzodlarga ochiladi.',
+    ru: 'Название компании откроется кандидатам, приглашённым на собеседование.',
+    en: 'The company name is revealed to candidates who reach the interview stage.',
+  },
   'job.viewMyApplications': {
     uz: 'Arizalarimni ko‘rish',
     ru: 'Мои отклики',

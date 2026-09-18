@@ -19,6 +19,7 @@ import { emailLocale } from '../common/i18n/email-locale';
 import { resolveUgcContent } from '../common/i18n/content-locale';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
+import { maskAnonymousCompany, revealsAnonymousEmployer } from '../common/anonymous-job';
 
 @Injectable()
 export class ApplicationsService {
@@ -209,7 +210,7 @@ export class ApplicationsService {
     };
   }
 
-  async myApplications(user: AuthUser) {
+  async myApplications(user: AuthUser, locale: Locale = DEFAULT_LOCALE) {
     const profile = await this.prisma.employeeProfile.findUnique({ where: { userId: user.id } });
     if (!profile) return [];
     const rows = await this.prisma.application.findMany({
@@ -244,15 +245,16 @@ export class ApplicationsService {
       const members = app.jobPost.company.members ?? [];
       const peer = members.find((m) => m.role === 'OWNER') ?? members[0];
       const { members: _members, ...company } = app.jobPost.company;
+      // Confidential posting: the employer (and its chat) stays hidden until interview stage.
+      const reveal = !app.jobPost.isAnonymous || revealsAnonymousEmployer(app.status);
+      const jobPost = maskAnonymousCompany(
+        { ...app.jobPost, company: { ...company, chatPeerUserId: reveal ? peer?.userId ?? null : null } },
+        locale,
+        { reveal },
+      );
       return {
         ...app,
-        jobPost: {
-          ...app.jobPost,
-          company: {
-            ...company,
-            chatPeerUserId: peer?.userId ?? null,
-          },
-        },
+        jobPost,
       };
     });
   }

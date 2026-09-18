@@ -94,8 +94,8 @@ export class JobsController {
   @Get('recommended')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  recommended(@CurrentUser() user: AuthUser) {
-    return this.jobs.recommendedForUser(user);
+  recommended(@CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.jobs.recommendedForUser(user, requestLocale(req));
   }
 
   @Get('company/:companyId')

@@ -522,6 +522,7 @@ function RecruiterDashboard() {
         currency: fd.get('currency') || 'UZS',
         employmentType: fd.get('employmentType') || 'FULL_TIME',
         workMode: fd.get('workMode') || 'ONSITE',
+        isAnonymous: fd.get('isAnonymous') === 'on',
         locale: draftJobLocale,
         skills: draftJobSkills.map((s) =>
           s.slug
@@ -575,6 +576,7 @@ function RecruiterDashboard() {
           currency: fd.get('currency') || 'UZS',
           employmentType: fd.get('employmentType') || 'FULL_TIME',
           workMode: fd.get('workMode') || 'ONSITE',
+          isAnonymous: fd.get('isAnonymous') === 'on',
           locale: fd.get('locale') || undefined,
           languages: editJobLanguages.map((l) => ({
             code: l.code,
@@ -1248,6 +1250,15 @@ function RecruiterDashboard() {
                     />
                   )}
                 </div>
+                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                  <input type="checkbox" name="isAnonymous" style={{ marginTop: '0.2rem' }} />
+                  <span>
+                    <span>{t('rec.anonymousPosting')}</span>
+                    <span className="muted" style={{ display: 'block', fontSize: '0.78rem' }}>
+                      {t('rec.anonymousPostingHint')}
+                    </span>
+                  </span>
+                </label>
                 <ScreeningQuestionsEditor
                   idPrefix="create-job"
                   value={draftQuestions}
@@ -1274,6 +1285,7 @@ function RecruiterDashboard() {
                     {(j.questions?.length ?? 0) > 0
                       ? ` | ${t('rec.screeningCount').replace('{n}', String(j.questions.length))}`
                       : ''}
+                    {j.isAnonymous ? ` | ${t('rec.anonymousChip')}` : ''}
                   </p>
                   <div className="chips">
                     {j.status === 'DRAFT' && (
@@ -1523,6 +1535,20 @@ function RecruiterDashboard() {
                             />
                           )}
                         </div>
+                        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                          <input
+                            type="checkbox"
+                            name="isAnonymous"
+                            defaultChecked={Boolean(j.isAnonymous)}
+                            style={{ marginTop: '0.2rem' }}
+                          />
+                          <span>
+                            <span>{t('rec.anonymousPosting')}</span>
+                            <span className="muted" style={{ display: 'block', fontSize: '0.78rem' }}>
+                              {t('rec.anonymousPostingHint')}
+                            </span>
+                          </span>
+                        </label>
                         <ScreeningQuestionsEditor
                           idPrefix={`edit-job-${j.id}`}
                           value={editQuestions}
