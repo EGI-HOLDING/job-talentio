@@ -29,6 +29,7 @@ import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
 import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
+import { RecruiterAnalytics } from '@/components/recruiter/RecruiterAnalytics';
 import {
   ScreeningQuestionsEditor,
   screeningDraftsFromJob,
@@ -2064,42 +2065,16 @@ function RecruiterDashboard() {
         )}
 
         {tab === 'analytics' && (
-          <div className="grid-2">
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <RecruiterAnalytics
+              companyId={companyId}
+              jobs={jobs}
+              selectedJob={selectedJob}
+              onSelectJob={setSelectedJob}
+              jobLabel={(j) => jobSelectLabel(j as any, enumLabel, t)}
+            />
             <div className="card">
-              <h3>{t('rec.jobAnalytics')}</h3>
-              <select
-                value={selectedJob}
-                onChange={(e) => setSelectedJob(e.target.value)}
-                className="job-select"
-                title={t('rec.selectJobPost')}
-                aria-label={t('rec.selectJobPost')}
-              >
-                {jobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {jobSelectLabel(j, enumLabel, t)}
-                  </option>
-                ))}
-              </select>
-              {stats && (
-                <div style={{ marginTop: '1rem' }}>
-                  <p>
-                    <strong>{stats.views}</strong> {t('rec.viewsWord')}
-                  </p>
-                  <p>
-                    <strong>{stats.totalApplications}</strong> {t('rec.applicationsWord')}
-                  </p>
-                  <ul>
-                    {Object.entries(stats.applicationsByStatus || {}).map(([k, v]) => (
-                      <li key={k}>
-                        {enumLabel('applicationStatus', k)}: {String(v)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-            <div className="card">
-              <h3>{t('rec.plan')}</h3>
+              <h3 style={{ marginTop: 0 }}>{t('rec.plan')}</h3>
               <p>
                 {t('rec.currentPlan')}: <strong>{enumLabel('plan', planCode)}</strong>
               </p>

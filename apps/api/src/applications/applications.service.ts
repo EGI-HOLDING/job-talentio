@@ -38,6 +38,7 @@ export class ApplicationsService {
     coverLetter?: string,
     answers?: Array<{ questionId: string; answer: string }>,
     resumeId?: string,
+    source?: string,
   ) {
     if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Only employees can apply');
@@ -132,6 +133,7 @@ export class ApplicationsService {
           profileId: profile.id,
           resumeId: selectedResume?.id ?? null,
           coverLetter,
+          source: source ? source.toLowerCase().slice(0, 40) : null,
           resumeSnapshot,
           matchScore: breakdown.total,
           matchBreakdown: breakdown,

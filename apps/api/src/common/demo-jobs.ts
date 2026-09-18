@@ -1076,6 +1076,19 @@ async function createDemoJob(prisma: PrismaClient, input: CreateDemoJobInput): P
   return job;
 }
 
+/** Roughly: half direct, a third Telegram, the rest app and shared links. */
+export const DEMO_APPLICATION_SOURCES: Array<string | null> = [
+  null,
+  'telegram:channel',
+  null,
+  'telegram:bot',
+  'pwa',
+  null,
+  'telegram:channel',
+  'share:telegram',
+  null,
+];
+
 export type DemoApplicationsContext = {
   /** Published postings; hero jobs first so demo recruiters see a full pipeline. */
   jobs: Array<Pick<JobPost, 'id' | 'status' | 'locale'>>;
@@ -1111,6 +1124,8 @@ export async function seedDemoApplications(
           jobPostId: job.id,
           profileId: profile.id,
           coverLetter: demoCoverLetter(locale, i),
+          // Mirrors the channels the demo talks about; null is a direct site visit.
+          source: DEMO_APPLICATION_SOURCES[i % DEMO_APPLICATION_SOURCES.length],
           matchScore,
           matchBreakdown: {
             skills: Math.round(matchScore * 0.45),
