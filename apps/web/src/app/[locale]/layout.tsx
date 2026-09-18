@@ -1,15 +1,35 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import '../globals.css';
 import { SiteNav } from '@/components/SiteNav';
 import { SiteFooter } from '@/components/SiteFooter';
 import { I18nProvider } from '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { PresenceConnection } from '@/lib/presence';
+import { PwaRegister } from '@/components/pwa/PwaRegister';
+import { InstallPrompt } from '@/components/pwa/InstallPrompt';
 import { DEFAULT_LOCALE, LOCALES, isLocale } from '@/lib/locale';
 
 export const metadata: Metadata = {
   title: 'Job Talentio',
   description: 'Job portal for Uzbekistan - find work and hire talent',
+  applicationName: 'Job Talentio',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Job Talentio',
+    statusBarStyle: 'default',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#4f46e5',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export function generateStaticParams() {
@@ -42,9 +62,11 @@ export default async function RootLayout({
         <I18nProvider locale={locale}>
           <ConfirmProvider>
             <PresenceConnection />
+            <PwaRegister />
             <SiteNav />
             <main>{children}</main>
             <SiteFooter />
+            <InstallPrompt />
           </ConfirmProvider>
         </I18nProvider>
       </body>

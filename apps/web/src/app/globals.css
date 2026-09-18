@@ -3747,6 +3747,48 @@ button.linkish:hover,
   font-size: 0.85rem;
   margin: 0 0 1.2rem;
 }
+.install-bar {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+.install-bar-icon {
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+.install-bar-body {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+  min-width: 0;
+  flex: 1;
+}
+.install-bar-body strong {
+  font-size: 0.9rem;
+}
+.install-bar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+.install-bar-actions .cta {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+}
+.install-bar-actions .ghost {
+  font-size: 0.8rem;
+}
 .news-article-cover {
   width: 100%;
   aspect-ratio: 16 / 9;

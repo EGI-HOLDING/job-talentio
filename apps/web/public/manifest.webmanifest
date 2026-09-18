@@ -1,0 +1,24 @@
+{
+  "name": "Job Talentio",
+  "short_name": "Job Talentio",
+  "description": "Ish o'rinlari va nomzodlar - O'zbekiston uchun ish portali",
+  "id": "/uz",
+  "start_url": "/uz?utm_source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f8fb",
+  "theme_color": "#4f46e5",
+  "lang": "uz",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Ish o'rinlari", "short_name": "Ishlar", "url": "/uz/jobs?utm_source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Xabarlar", "short_name": "Xabarlar", "url": "/uz/messages?utm_source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
