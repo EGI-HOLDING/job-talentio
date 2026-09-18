@@ -644,6 +644,63 @@ export const core = {
     ru: 'Войти через Telegram',
     en: 'Continue with Telegram',
   },
+  // Phone number sign-in (Telegram contact share, optional SMS code)
+  'phone.telegramCta': {
+    uz: 'Telefon raqam bilan kirish (Telegram orqali)',
+    ru: 'Войти по номеру телефона (через Telegram)',
+    en: 'Sign in with phone number (via Telegram)',
+  },
+  'phone.waitingShort': {
+    uz: 'Telegramda tasdiqlash kutilmoqda...',
+    ru: 'Ждём подтверждения в Telegram...',
+    en: 'Waiting for Telegram...',
+  },
+  'phone.openBot': {
+    uz: 'Telegramda botni oching',
+    ru: 'Откройте бота в Telegram',
+    en: 'Open the bot in Telegram',
+  },
+  'phone.tapShare': {
+    uz: 'Telegramda "Telefon raqamimni ulashish" tugmasini bosing',
+    ru: 'Нажмите в Telegram кнопку "Поделиться номером телефона"',
+    en: 'Tap "Share my phone number" in Telegram',
+  },
+  'phone.telegramSteps': {
+    uz: '{bot} chatida Start ni bosing, so‘ng raqamingizni ulashing. Telegram raqamni tasdiqlaydi, SMS kerak emas. Bu sahifa o‘zi kiradi.',
+    ru: 'В чате {bot} нажмите Start, затем поделитесь номером. Telegram подтверждает номер, SMS не нужен. Эта страница войдёт сама.',
+    en: 'In the {bot} chat press Start, then share your number. Telegram verifies it; no SMS needed. This page signs you in automatically.',
+  },
+  'phone.reopenTelegram': {
+    uz: 'Telegramni qayta ochish',
+    ru: 'Открыть Telegram ещё раз',
+    en: 'Open Telegram again',
+  },
+  'phone.expired': {
+    uz: 'Vaqt tugadi. Qayta urinib ko‘ring.',
+    ru: 'Время истекло. Попробуйте ещё раз.',
+    en: 'The link expired. Try again.',
+  },
+  'phone.failed': {
+    uz: 'Telefon raqam bilan kirib bo‘lmadi',
+    ru: 'Не удалось войти по номеру телефона',
+    en: 'Phone sign-in failed',
+  },
+  'phone.smsCta': {
+    uz: 'SMS kod bilan kirish',
+    ru: 'Войти по SMS-коду',
+    en: 'Sign in with an SMS code',
+  },
+  'phone.number': { uz: 'Telefon raqami', ru: 'Номер телефона', en: 'Phone number' },
+  'phone.sendCode': { uz: 'Kod yuborish', ru: 'Отправить код', en: 'Send code' },
+  'phone.sending': { uz: 'Yuborilmoqda...', ru: 'Отправляем...', en: 'Sending...' },
+  'phone.codeSentTo': {
+    uz: '{phone} raqamiga SMS kod yuborildi.',
+    ru: 'Код отправлен по SMS на {phone}.',
+    en: 'We sent an SMS code to {phone}.',
+  },
+  'phone.code': { uz: 'SMS dagi kod', ru: 'Код из SMS', en: 'Code from the SMS' },
+  'phone.verify': { uz: 'Tasdiqlash va kirish', ru: 'Подтвердить и войти', en: 'Verify and sign in' },
+  'phone.changeNumber': { uz: 'Raqamni o‘zgartirish', ru: 'Изменить номер', en: 'Change number' },
   telegramConnectCta: {
     uz: 'Telegramni ulash',
     ru: 'Подключить Telegram',

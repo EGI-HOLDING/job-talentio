@@ -5,6 +5,7 @@ import {
   Get,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -27,8 +28,13 @@ import {
   refreshTokenSchema,
   logoutSchema,
   deleteAccountSchema,
+  phoneLoginStartSchema,
+  phoneLoginStatusSchema,
+  phoneOtpRequestSchema,
+  phoneOtpVerifySchema,
 } from '@job-talentio/shared';
 import { AuthService } from './auth.service';
+import { PhoneAuthService } from './phone-auth.service';
 import { parseDto } from '../common/utils';
 import { CurrentUser, JwtAuthGuard, AuthUser } from '../common/auth.decorators';
 import { imageUploadOptions } from '../common/upload';
@@ -39,7 +45,38 @@ export class AuthController {
   constructor(
     private auth: AuthService,
     private telegramService: TelegramService,
+    private phoneAuth: PhoneAuthService,
   ) {}
+
+  // ─── Phone number sign-in (Telegram contact share, optional SMS code) ───
+  @Get('phone/providers')
+  phoneProviders() {
+    return this.phoneAuth.providers();
+  }
+
+  @Post('phone/telegram/start')
+  phoneTelegramStart(@Body() body: unknown) {
+    const data = parseDto(phoneLoginStartSchema, body ?? {});
+    return this.phoneAuth.startTelegramLogin(data.locale);
+  }
+
+  @Get('phone/telegram/status')
+  phoneTelegramStatus(@Query() query: unknown) {
+    const data = parseDto(phoneLoginStatusSchema, query);
+    return this.phoneAuth.telegramLoginStatus(data.token);
+  }
+
+  @Post('phone/request')
+  phoneRequest(@Body() body: unknown) {
+    const data = parseDto(phoneOtpRequestSchema, body);
+    return this.phoneAuth.requestOtp(data.phone);
+  }
+
+  @Post('phone/verify')
+  phoneVerify(@Body() body: unknown) {
+    const data = parseDto(phoneOtpVerifySchema, body);
+    return this.phoneAuth.verifyOtp(data.phone, data.code, data.locale);
+  }
 
   @Post('register')
   register(@Body() body: unknown) {

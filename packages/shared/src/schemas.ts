@@ -109,6 +109,25 @@ export const logoutSchema = z.object({
   refreshToken: z.string().min(20).max(300).optional(),
 });
 
+/** Phone sign-in: Telegram contact share (polling token) and SMS codes. */
+export const phoneLoginStartSchema = z.object({
+  locale: z.enum(['uz', 'ru', 'en']).optional(),
+});
+
+export const phoneLoginStatusSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{32,96}$/i),
+});
+
+export const phoneOtpRequestSchema = z.object({
+  phone: z.string().trim().min(7).max(24),
+});
+
+export const phoneOtpVerifySchema = z.object({
+  phone: z.string().trim().min(7).max(24),
+  code: z.string().trim().regex(/^\d{4,8}$/),
+  locale: z.enum(['uz', 'ru', 'en']).optional(),
+});
+
 export const companySchema = z.object({
   name: z.string().min(2).max(160),
   description: z.string().max(5000).optional(),

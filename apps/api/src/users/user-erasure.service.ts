@@ -80,6 +80,8 @@ export class UserErasureService {
           passwordHash: null,
           googleId: null,
           telegramId: null,
+          phone: null,
+          phoneVerifiedAt: null,
           avatarUrl: null,
           fullName: ANONYMIZED_DISPLAY_NAME,
           emailVerified: false,
