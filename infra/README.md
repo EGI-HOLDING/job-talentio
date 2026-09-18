@@ -128,6 +128,14 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 
 **News translations:** `node dist/scripts/backfill-news.js` (idempotent) seeds the curated articles and their uz/ru versions.
 
+**Demo reset (staging only):** between client test sessions, restore the demo postings and applications without touching accounts, companies, profiles or catalogs. It deletes every job post (applications cascade), chats, notifications, reports, views and saved jobs, then recreates the uz/ru/en demo postings, the hand-written hero vacancies and ~140 applications from `src/common/demo-jobs.ts`, and clears the Meilisearch index so the API reindexes on the next search:
+
+```bash
+railway ssh --service api-stage-job-talentio -- sh -c "ALLOW_DEMO_RESET=1 node dist/scripts/demo-reset.js"
+```
+
+The guard variable is mandatory; never run this against production.
+
 **Job source language:** `JobPost.locale` defaults to `uz`, so postings created before the field was filled in claim to be Uzbek whatever they are written in. That mislabel is user-visible ("This text is written in Uzbek" on an English posting) and also drives hreflang and machine translation. Repair it once per environment with an idempotent detector that only rewrites rows it can read confidently:
 
 ```bash
