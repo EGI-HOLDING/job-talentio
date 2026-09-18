@@ -128,6 +128,22 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 
 **News translations:** `node dist/scripts/backfill-news.js` (idempotent) seeds the curated articles and their uz/ru versions.
 
+**Demo readiness checklist (staging):** the client demo depends on these api variables being set (verify with `railway variables --service api-stage-job-talentio --json`):
+
+| Variable | Expected | Why |
+|----------|----------|-----|
+| `CV_PARSE_PROVIDER` | `llm` | CV upload is structured by OpenAI with local fallback; `local` only extracts contact details and one-line experiences |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | set, `gpt-4o-mini` | CV parse and machine translation |
+| `TRANSLATION_PROVIDER` | `openai` | Translate button on jobs, companies, profiles, news; `TRANSLATION_MONTHLY_CHAR_BUDGET` caps spend |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | set (`JobTalentioStagingBot`) | Telegram sign-in, account link, alerts, chat relay; web needs `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` with the same username |
+| `GOOGLE_CLIENT_ID` | set; same value on web as `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google sign-in |
+| `RESEND_API_KEY`, `SMTP_FROM` | set, `Job Talentio <info@jobtalent.io>` | Verification, reset and alert emails to real mailboxes |
+| `MEILI_HOST`, `MEILI_MASTER_KEY` | set | Typo-tolerant search in uz/ru; falls back to Prisma when absent |
+| `DEV_AUTH_ENABLED` | `false` | Never expose dev login on a public host |
+| `PAYMENT_PROVIDER` | `mock` | Checkout runs in demo mode until Payme/Click land |
+
+Then walk through [docs/DEMO-SCRIPT.md](../docs/DEMO-SCRIPT.md) pre-flight from a phone.
+
 **Demo reset (staging only):** between client test sessions, restore the demo postings and applications without touching accounts, companies, profiles or catalogs. It deletes every job post (applications cascade), chats, notifications, reports, views and saved jobs, then recreates the uz/ru/en demo postings, the hand-written hero vacancies and ~140 applications from `src/common/demo-jobs.ts`, and clears the Meilisearch index so the API reindexes on the next search:
 
 ```bash

@@ -28,6 +28,7 @@ flowchart LR
 | [docker](../docker) | Postgres, Redis, MinIO, Mailpit lokal |
 | [infra](../infra) | Deploy Railway / Cloudflare / staging docs |
 | [JOBTALENTIO-DUMMY.md](../JOBTALENTIO-DUMMY.md) | Akun seed demo (recruiter/employee/admin) |
+| [docs/DEMO-SCRIPT.md](DEMO-SCRIPT.md) | Skrip demo 10 menit, pre-flight, checklist klien, troubleshooting |
 
 ## Backend modules
 
