@@ -13,17 +13,32 @@ import { sha256 } from '../common/dedupe';
 import { emailLocale } from '../common/i18n/email-locale';
 import { decideBareStart, decideTokenLink } from './telegram.link';
 import { isTelegramChatReply } from './telegram.chat';
+import {
+  buildChannelPost,
+  buildJobsCommandText,
+  channelLocale,
+  type BotJobLine,
+  type ChannelJobInput,
+} from './telegram.channel';
 import { isSecureRuntime } from '../common/jwt-secret';
 import { telegramWebhookSecretRequired } from '../auth/session-policy';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MatchingService } from '../matching/matching.service';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
+const BOT_JOBS_LIMIT = 5;
 
 type TelegramUpdate = {
   message?: {
     chat?: { id?: number };
     text?: string;
   };
+};
+
+type SendMessageExtra = {
+  parse_mode?: 'HTML';
+  disable_web_page_preview?: boolean;
+  reply_markup?: { inline_keyboard: Array<Array<{ text: string; url: string }>> };
 };
 
 @Injectable()
@@ -34,10 +49,16 @@ export class TelegramService implements OnModuleInit {
     private prisma: PrismaService,
     private config: ConfigService,
     private notifications: NotificationsService,
+    private matching: MatchingService,
   ) {}
 
   isConfigured(): boolean {
     return Boolean(this.botToken() && this.botUsername());
+  }
+
+  /** Public channel that receives a card for every newly published posting. */
+  channelConfigured(): boolean {
+    return Boolean(this.botToken() && this.channelId());
   }
 
   private botToken(): string {
@@ -46,6 +67,15 @@ export class TelegramService implements OnModuleInit {
 
   private botUsername(): string {
     return this.config.get<string>('TELEGRAM_BOT_USERNAME', '').replace(/^@/, '').trim();
+  }
+
+  /** `@channelname` or the numeric `-100...` id; the bot must be a channel admin. */
+  private channelId(): string {
+    return this.config.get<string>('TELEGRAM_CHANNEL_ID', '').trim();
+  }
+
+  private webBase(): string | undefined {
+    return this.config.get<string>('WEB_URL') || undefined;
   }
 
   private webhookSecret(): string {
@@ -110,19 +140,87 @@ export class TelegramService implements OnModuleInit {
     return { ok: true, telegramLinked: false };
   }
 
-  async sendMessage(chatId: string, text: string): Promise<boolean> {
+  async sendMessage(chatId: string, text: string, extra: SendMessageExtra = {}): Promise<boolean> {
     if (!this.botToken()) return false;
     try {
       await this.telegramCall('sendMessage', {
         chat_id: chatId,
         text,
         disable_web_page_preview: false,
+        ...extra,
       });
       return true;
     } catch (err) {
       this.logger.warn(`Telegram sendMessage failed: ${(err as Error).message}`);
       return false;
     }
+  }
+
+  /**
+   * Post a freshly published job to the public channel. Fire-and-forget: a
+   * missing channel or a Telegram outage must never block publishing.
+   */
+  async announceJob(job: ChannelJobInput): Promise<boolean> {
+    if (!this.channelConfigured()) return false;
+    const post = buildChannelPost(job, this.webBase());
+    const sent = await this.sendMessage(this.channelId(), post.text, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: { inline_keyboard: [[{ text: post.button, url: post.url }]] },
+    });
+    if (sent) this.logger.log(`Telegram channel: posted job ${job.id}`);
+    return sent;
+  }
+
+  /** `/jobs`: five matching postings for a linked profile, else the five latest. */
+  private async replyJobs(chat: string, linkedUserId: string | null, locale: ReturnType<typeof emailLocale>) {
+    let jobs: BotJobLine[] = [];
+    let personalised = false;
+    if (linkedUserId) {
+      const profile = await this.prisma.employeeProfile.findUnique({
+        where: { userId: linkedUserId },
+        select: { id: true },
+      });
+      if (profile) {
+        try {
+          const rows = await this.matching.recommendJobsForProfile(profile.id, BOT_JOBS_LIMIT);
+          jobs = rows.map((row) => ({
+            id: row.job.id,
+            title: row.job.title,
+            companyName: row.job.company.name,
+            cityName: row.job.city?.name ?? null,
+          }));
+          personalised = jobs.length > 0;
+        } catch (err) {
+          this.logger.warn(`Telegram /jobs recommendation failed: ${(err as Error).message}`);
+        }
+      }
+    }
+    if (jobs.length === 0) {
+      const latest = await this.prisma.jobPost.findMany({
+        where: { status: 'PUBLISHED' },
+        orderBy: { publishedAt: 'desc' },
+        take: BOT_JOBS_LIMIT,
+        select: { id: true, title: true, company: { select: { name: true } }, city: { select: { name: true } } },
+      });
+      jobs = latest.map((j) => ({
+        id: j.id,
+        title: j.title,
+        companyName: j.company.name,
+        cityName: j.city?.name ?? null,
+      }));
+    }
+    await this.sendMessage(
+      chat,
+      buildJobsCommandText({
+        locale: channelLocale(locale),
+        jobs,
+        personalised,
+        linked: Boolean(linkedUserId),
+        webBase: this.webBase(),
+      }),
+      { disable_web_page_preview: true },
+    );
   }
 
   async handleUpdate(body: unknown) {
@@ -137,6 +235,11 @@ export class TelegramService implements OnModuleInit {
       select: { id: true, locale: true },
     });
     const chatLocale = linked ? emailLocale(linked.locale) : 'uz';
+
+    if (/^\/jobs(?:@[A-Za-z0-9_]+)?(?:\s|$)/i.test(text)) {
+      await this.replyJobs(chat, linked?.id ?? null, chatLocale);
+      return { ok: true };
+    }
 
     if (text === '/stop' || text.startsWith('/stop ')) {
       await this.prisma.user.updateMany({

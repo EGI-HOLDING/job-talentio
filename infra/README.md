@@ -136,6 +136,7 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | set, `gpt-4o-mini` | CV parse and machine translation |
 | `TRANSLATION_PROVIDER` | `openai` | Translate button on jobs, companies, profiles, news; `TRANSLATION_MONTHLY_CHAR_BUDGET` caps spend |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | set (`JobTalentioStagingBot`) | Telegram sign-in, account link, alerts, chat relay; web needs `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` with the same username |
+| `TELEGRAM_CHANNEL_ID` | `@channel` or `-100...` id, bot is channel admin | Every first publish posts a card with a deep link (`utm_source=telegram`); `/jobs` in the bot lists matches. Unset = no channel posts |
 | `GOOGLE_CLIENT_ID` | set; same value on web as `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google sign-in |
 | `RESEND_API_KEY`, `SMTP_FROM` | set, `Job Talentio <info@jobtalent.io>` | Verification, reset and alert emails to real mailboxes |
 | `MEILI_HOST`, `MEILI_MASTER_KEY` | set | Typo-tolerant search in uz/ru; falls back to Prisma when absent |
