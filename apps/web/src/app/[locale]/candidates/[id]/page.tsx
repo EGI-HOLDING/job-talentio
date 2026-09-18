@@ -14,6 +14,7 @@ import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import { UgcText } from '@/components/ui/UgcText';
 import { PreviewableImage } from '@/components/ui/ImagePreview';
+import { ShareButton } from '@/components/ui/ShareButton';
 
 type CandidateDetail = {
   id: string;
@@ -312,6 +313,12 @@ function CandidateInner() {
                 {t('talent.upgradeForChat')}
               </Link>
             )}
+            <ShareButton
+              path={`/candidates/${data.id}`}
+              title={data.user.fullName}
+              text={data.headline ? `${data.user.fullName} - ${data.headline}` : data.user.fullName}
+              className="chip"
+            />
           </div>
         </div>
       </div>

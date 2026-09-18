@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { ShareButton } from '@/components/ui/ShareButton';
 import { UgcText } from '@/components/ui/UgcText';
 import { PreviewableImage } from '@/components/ui/ImagePreview';
 import { isPreviewableImageUrl } from '@/lib/image-preview';
@@ -125,7 +126,7 @@ export default function CompanyPage() {
             )}
             {company.city && <span>{company.city.name}</span>}
             {company.size && <span>{company.size.replace('SIZE_', '').replace(/_/g, '-')}</span>}
-            <span>{company._count?.followers ?? 0} followers</span>
+            <span>{t('followersCount').replace('{n}', String(company._count?.followers ?? 0))}</span>
           </div>
           {company.website && (
             <a href={company.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
@@ -146,9 +147,12 @@ export default function CompanyPage() {
             />
           )}
         </div>
-        <button type="button" className={following ? 'secondary' : 'cta'} onClick={toggleFollow}>
-          {following ? 'Following' : 'Follow'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <button type="button" className={following ? 'secondary' : 'cta'} onClick={toggleFollow}>
+            {following ? t('following') : t('followCompany')}
+          </button>
+          <ShareButton path={`/companies/${company.slug}`} title={company.name} />
+        </div>
       </div>
 
       <h2 className="section-title" style={{ marginTop: '2rem' }}>
