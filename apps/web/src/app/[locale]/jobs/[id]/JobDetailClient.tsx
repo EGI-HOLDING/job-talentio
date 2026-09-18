@@ -9,6 +9,7 @@ import { sanitizeMojibake } from '@/lib/text';
 import { localizedJobLocation } from '@/lib/location';
 import { FormField, LabelText } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { ShareButton } from '@/components/ui/ShareButton';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { UgcText } from '@/components/ui/UgcText';
@@ -376,6 +377,11 @@ export function JobDetailClient() {
           <button type="button" className="secondary" onClick={toggleFollow}>
             {following ? t('following') : t('followCompany')}
           </button>
+          <ShareButton
+            path={`/jobs/${job.id}`}
+            title={sanitizeMojibake(job.title)}
+            text={`${sanitizeMojibake(job.title)} - ${job.company.name}`}
+          />
           {session?.user.role === 'EMPLOYEE' && job.chatPeerUserId && (
             <Link
               href={`/messages?peer=${job.chatPeerUserId}&job=${job.id}`}
