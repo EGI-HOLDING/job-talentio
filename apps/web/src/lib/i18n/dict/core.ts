@@ -455,6 +455,7 @@ export const core = {
     en: 'Normalized data, analytics, notifications, moderation tools.',
   },
   filters: { uz: 'Filtrlar', ru: 'Фильтры', en: 'Filters' },
+  filtersHide: { uz: 'Filtrlarni yashirish', ru: 'Скрыть фильтры', en: 'Hide filters' },
   city: { uz: 'Shahar', ru: 'Город', en: 'City' },
   category: { uz: 'Kategoriya', ru: 'Категория', en: 'Category' },
   skills: { uz: 'Ko‘nikmalar', ru: 'Навыки', en: 'Skills' },

@@ -1046,6 +1046,78 @@ img.company-logo {
 }
 .filter-check input { width: auto; }
 .facet-count { color: var(--muted); font-size: 0.75rem; margin-left: auto; }
+/* Phones: the filter column starts collapsed behind this bar (see @media below). */
+.filters-toggle {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 1rem;
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+.filters-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+@media (max-width: 900px) {
+  .filters-toggle { display: flex; }
+  .filters { display: none; }
+  .filters.filters--open { display: block; }
+}
+
+/* Touch devices: 44px targets for anything a thumb has to hit. */
+@media (pointer: coarse) {
+  .nav-links a,
+  .nav-links > button,
+  .nav-links .chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .footer nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .chip {
+    min-height: 40px;
+  }
+  .lang-switch > button,
+  .notif-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .filter-check {
+    min-height: 40px;
+    margin: 0;
+  }
+  .filter-check input[type='checkbox'],
+  .filter-check input[type='radio'] {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+  }
+  .cta,
+  .secondary,
+  button[type='submit'] {
+    min-height: 44px;
+  }
+  .top-companies-carousel__dot {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+  .top-companies-carousel__dot.is-active {
+    width: 1.6rem;
+  }
+  .top-companies-carousel__dots {
+    gap: 0.75rem;
+  }
+}
 
 .jobs-toolbar {
   display: flex;

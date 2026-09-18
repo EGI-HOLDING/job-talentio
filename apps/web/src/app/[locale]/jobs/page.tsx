@@ -229,6 +229,7 @@ function JobsInner() {
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
   const [languages, setLanguages] = useState<LangMeta[]>([]);
   const [skillQ, setSkillQ] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
@@ -359,6 +360,8 @@ function JobsInner() {
     filters.salaryMax,
     filters.skillMode !== 'OR' ? filters.skillMode : '',
   ].filter(Boolean).length;
+  const activeFilterCount =
+    advancedActiveCount + [filters.q, filters.city, filters.category].filter(Boolean).length;
   const forceAdvancedOpen = advancedActiveCount > 0;
 
   function onSearch(e: FormEvent) {
@@ -371,7 +374,21 @@ function JobsInner() {
 
   return (
     <div className="shell jobs-layout">
-      <aside className="filters">
+      {/* On phones the filter column would push every job below the fold; it starts collapsed. */}
+      <button
+        type="button"
+        className="filters-toggle"
+        aria-expanded={filtersOpen}
+        aria-controls="jobs-filters"
+        onClick={() => setFiltersOpen((v) => !v)}
+      >
+        <span>
+          {filtersOpen ? t('filtersHide') : t('filters')}
+          {!filtersOpen && activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+        </span>
+        <span aria-hidden>{filtersOpen ? '-' : '+'}</span>
+      </button>
+      <aside id="jobs-filters" className={`filters${filtersOpen ? ' filters--open' : ''}`}>
         <h3>{t('filters')}</h3>
         <form onSubmit={onSearch} className="filter-group">
           <FormField label={t('keyword')} optional>
