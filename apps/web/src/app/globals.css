@@ -939,9 +939,21 @@ img.company-logo {
   }
 }
 @media (max-width: 520px) {
-  .hiring-grid,
-  .company-browse-grid {
+  .hiring-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* Phones: one swipeable row instead of a stack that pushes every job below the fold. */
+  .company-browse-grid {
+    display: flex;
+    overflow-x: auto;
+    gap: 0.6rem;
+    padding-bottom: 0.35rem;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .company-browse-grid > * {
+    flex: 0 0 210px;
+    scroll-snap-align: start;
   }
 }
 .company-browse {
@@ -1070,8 +1082,8 @@ img.company-logo {
   .filters.filters--open { display: block; }
 }
 
-/* Touch devices: 44px targets for anything a thumb has to hit. */
-@media (pointer: coarse) {
+/* Touch devices and narrow screens: 44px targets for anything a thumb has to hit. */
+@media (pointer: coarse), (max-width: 720px) {
   .nav-links a,
   .nav-links > button,
   .nav-links .chip {
