@@ -50,8 +50,11 @@ type Job = {
     slug: string;
     logoUrl?: string | null;
     isVerified?: boolean;
+    /** Confidential posting: placeholder company, nothing to link or follow. */
+    anonymous?: boolean;
     _count?: { followers: number };
   };
+  isAnonymous?: boolean;
   city?: { name: string } | null;
   category?: { name: string } | null;
   jobSkills?: Array<{ skill: { name: string }; isRequired: boolean }>;
@@ -301,10 +304,16 @@ export function JobDetailClient() {
             {sanitizeMojibake(job.title)}
           </h1>
           <div className="job-meta">
-            <Link href={`/companies/${job.company.slug}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
-              {job.company.name}
-              {job.company.isVerified ? ' ✓' : ''}
-            </Link>
+            {job.company.anonymous ? (
+              <span className="badge" title={t('job.confidentialEmployerHint')}>
+                {t('job.confidentialEmployer')}
+              </span>
+            ) : (
+              <Link href={`/companies/${job.company.slug}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                {job.company.name}
+                {job.company.isVerified ? ' ✓' : ''}
+              </Link>
+            )}
             <span>{localizedJobLocation(job, t)}</span>
             {job.employmentType && <span>{enumLabel('employmentType', job.employmentType)}</span>}
             {job._count && (
@@ -374,9 +383,11 @@ export function JobDetailClient() {
           <button type="button" className="secondary" onClick={saveJob}>
             {t('saveJob')}
           </button>
-          <button type="button" className="secondary" onClick={toggleFollow}>
-            {following ? t('following') : t('followCompany')}
-          </button>
+          {!job.company.anonymous && (
+            <button type="button" className="secondary" onClick={toggleFollow}>
+              {following ? t('following') : t('followCompany')}
+            </button>
+          )}
           <ShareButton
             path={`/jobs/${job.id}`}
             title={sanitizeMojibake(job.title)}

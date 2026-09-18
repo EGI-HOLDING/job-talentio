@@ -56,6 +56,19 @@ export const recruiter = {
     en: 'Save changes',
   },
 
+  // Confidential posting
+  'rec.anonymousPosting': {
+    uz: 'Maxfiy e’lon (kompaniya nomini yashirish)',
+    ru: 'Конфиденциальная вакансия (скрыть компанию)',
+    en: 'Confidential posting (hide the company)',
+  },
+  'rec.anonymousPostingHint': {
+    uz: 'Nomzodlar "Maxfiy ish beruvchi" ko‘radi; nom, logotip va kompaniya sahifasi suhbat bosqichida ochiladi. E’lon kompaniya sahifasida ko‘rinmaydi.',
+    ru: 'Кандидаты видят "Конфиденциальный работодатель"; название, логотип и страница компании открываются на этапе собеседования. Вакансия не показывается на странице компании.',
+    en: 'Candidates see "Confidential employer"; the name, logo and company page are revealed at the interview stage. The posting is not listed on your company page.',
+  },
+  'rec.anonymousChip': { uz: 'Maxfiy', ru: 'Конфиденциально', en: 'Confidential' },
+
   // Screening questions (asked when a candidate applies)
   'rec.screeningTitle': {
     uz: 'Saralash savollari',

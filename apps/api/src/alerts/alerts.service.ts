@@ -4,6 +4,7 @@ import { translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
+import { displayCompanyName } from '../common/anonymous-job';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuthUser } from '../common/auth.decorators';
@@ -306,7 +307,7 @@ export class AlertsService {
       const digestJobs = jobs.map((j) => ({
         id: j.id,
         title: j.title,
-        companyName: j.company.name,
+        companyName: displayCompanyName(j, j.company.name, locale),
         cityName: j.city?.name ?? null,
       }));
       const decisions = decideAlertChannels(

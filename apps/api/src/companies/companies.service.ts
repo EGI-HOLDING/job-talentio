@@ -222,7 +222,8 @@ export class CompaniesService {
         subscription: { select: { plan: true } },
         translations: { select: { locale: true, description: true, isMachine: true } },
         jobPosts: {
-          where: { status: 'PUBLISHED' },
+          // Confidential postings never appear on the company's own public page.
+          where: { status: 'PUBLISHED', isAnonymous: false },
           include: {
             city: true,
             category: true,

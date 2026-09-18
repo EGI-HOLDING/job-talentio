@@ -37,6 +37,7 @@ import { detectLocale, effectiveSourceLocale } from '../common/i18n/detect-local
 import { resolveUgcContent } from '../common/i18n/content-locale';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
+import { maskAnonymousCompany } from '../common/anonymous-job';
 import { TranslationService } from '../translation/translation.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { ParsedCvData } from './cv-parser';
@@ -2071,9 +2072,9 @@ export class ProfilesService {
     return { ok: true };
   }
 
-  async listSaved(user: AuthUser) {
+  async listSaved(user: AuthUser, locale: Locale = DEFAULT_LOCALE) {
     const profile = await this.getProfileForUser(user.id);
-    return this.prisma.savedJob.findMany({
+    const rows = await this.prisma.savedJob.findMany({
       where: { profileId: profile.id },
       include: {
         jobPost: {
@@ -2085,5 +2086,7 @@ export class ProfilesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    // Saving a confidential posting must not reveal who posted it.
+    return rows.map((row) => ({ ...row, jobPost: maskAnonymousCompany(row.jobPost, locale) }));
   }
 }
