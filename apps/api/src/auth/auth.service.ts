@@ -147,11 +147,17 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         emailVerified: user.emailVerified,
         telegramLinked: Boolean(user.telegramId),
+        phone: user.phone,
         hasPassword: Boolean(user.passwordHash),
         memberships: user.memberships,
         employeeProfileId: user.employeeProfile?.id ?? null,
       },
     };
+  }
+
+  /** Session for a user already authenticated elsewhere (phone via Telegram, SMS code). */
+  sessionForUser(userId: string) {
+    return this.tokenFor(userId);
   }
 
   /** Rotate a refresh token: revoke the presented one, mint a new pair. */

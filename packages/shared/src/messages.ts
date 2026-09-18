@@ -334,6 +334,51 @@ export const MESSAGES = {
     ru: 'Чтобы получать персональную подборку, привяжите аккаунт Job Talentio: настройки, раздел Безопасность.',
     en: 'Link your Job Talentio account (Settings, Security) to get a personalised list.',
   },
+  'telegram.phone.askContact': {
+    uz: 'Job Talentio ga telefon raqam bilan kirish uchun pastdagi tugmani bosib raqamingizni ulashing. Telegram raqamni tasdiqlaydi, SMS kerak emas.',
+    ru: 'Чтобы войти в Job Talentio по номеру телефона, нажмите кнопку ниже и поделитесь номером. Telegram подтверждает номер, SMS не нужен.',
+    en: 'To sign in to Job Talentio with your phone number, tap the button below and share your number. Telegram confirms it; no SMS needed.',
+  },
+  'telegram.phone.shareButton': {
+    uz: 'Telefon raqamimni ulashish',
+    ru: 'Поделиться номером телефона',
+    en: 'Share my phone number',
+  },
+  'telegram.phone.notOwn': {
+    uz: 'Iltimos, boshqa kontakt emas, o‘zingizning raqamingizni ulashing.',
+    ru: 'Пожалуйста, поделитесь своим номером, а не чужим контактом.',
+    en: 'Please share your own number, not another contact.',
+  },
+  'telegram.phone.loggedIn': {
+    uz: 'Raqam {phone} tasdiqlandi. Brauzerga qayting: siz allaqachon kirdingiz.',
+    ru: 'Номер {phone} подтверждён. Вернитесь в браузер: вход выполнен.',
+    en: 'Number {phone} confirmed. Go back to the browser: you are signed in.',
+  },
+  'telegram.phone.created': {
+    uz: 'Raqam {phone} bilan yangi Job Talentio hisobi yaratildi. Brauzerga qayting va profilingizni to‘ldiring.',
+    ru: 'Создан новый аккаунт Job Talentio с номером {phone}. Вернитесь в браузер и заполните профиль.',
+    en: 'A new Job Talentio account was created for {phone}. Go back to the browser and complete your profile.',
+  },
+  'telegram.phone.saved': {
+    uz: 'Raqam {phone} hisobingizga qo‘shildi. Endi shu raqam bilan kirishingiz mumkin.',
+    ru: 'Номер {phone} добавлен к вашему аккаунту. Теперь можно входить по нему.',
+    en: 'Number {phone} was added to your account. You can sign in with it from now on.',
+  },
+  'telegram.phone.taken': {
+    uz: 'Bu raqam boshqa Job Talentio hisobiga bog‘langan. Avval o‘sha hisobga kiring yoki qo‘llab-quvvatlashga yozing.',
+    ru: 'Этот номер привязан к другому аккаунту Job Talentio. Войдите в тот аккаунт или напишите в поддержку.',
+    en: 'This number belongs to another Job Talentio account. Sign in to that account or contact support.',
+  },
+  'telegram.phone.expired': {
+    uz: 'Kirish havolasi eskirgan. Saytda "Telefon raqam bilan kirish" tugmasini qayta bosing.',
+    ru: 'Ссылка для входа устарела. Нажмите "Войти по номеру телефона" на сайте ещё раз.',
+    en: 'The sign-in link expired. Press "Sign in with phone number" on the site again.',
+  },
+  'telegram.phone.invalid': {
+    uz: 'Raqamni o‘qib bo‘lmadi. Iltimos, qayta urinib ko‘ring.',
+    ru: 'Не удалось прочитать номер. Попробуйте ещё раз.',
+    en: 'The number could not be read. Please try again.',
+  },
   'telegram.link.ok': {
     uz: 'Telegram hisobingiz Job Talentio bilan ulandi. Ogohlantirishlarni kabinetda yoqing. /stop yozsangiz kirish ham uziladi.',
     ru: 'Telegram привязан к Job Talentio. Включите оповещения в кабинете. /stop также отключает вход.',

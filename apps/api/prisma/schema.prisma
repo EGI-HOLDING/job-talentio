@@ -480,6 +480,9 @@ model User {
   emailVerified Boolean   @default(false)
   googleId      String?   @unique
   telegramId    String?   @unique
+  /// Login identity in E.164 (+998...), verified via a Telegram contact share or SMS code.
+  phone           String?   @unique @db.VarChar(20)
+  phoneVerifiedAt DateTime?
   /// Cold-read fallback for presence when Redis has no live entry
   lastSeenAt    DateTime?
   /// Bumped to invalidate access JWTs (force logout / ban) without a blacklist.
@@ -510,6 +513,7 @@ model User {
   telegramLinkTokens      TelegramLinkToken[]
   verificationsSubmitted  CompanyVerificationRequest[] @relation("VerificationSubmitter")
   verificationsReviewed   CompanyVerificationRequest[] @relation("VerificationReviewer")
+  phoneLoginTokens        PhoneLoginToken[]
 }
 
 model RefreshToken {
@@ -1135,6 +1139,44 @@ model TelegramLinkToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+enum PhoneLoginStatus {
+  PENDING
+  CONTACT_REQUESTED
+  COMPLETED
+}
+
+/// One web sign-in attempt through the bot. The browser polls the token until
+/// the bot has received the contact and resolved (or created) the account.
+model PhoneLoginToken {
+  id        String           @id @default(cuid())
+  /// SHA-256 of the raw start payload — raw token is never stored
+  tokenHash String           @unique
+  status    PhoneLoginStatus @default(PENDING)
+  chatId    String?
+  userId    String?
+  locale    String           @default("uz")
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+  @@index([expiresAt])
+}
+
+/// SMS one-time code; only issued when an SMS provider is configured.
+model PhoneOtp {
+  id        String   @id @default(cuid())
+  phone     String   @db.VarChar(20)
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@index([expiresAt])
 }
 
 model JobAlertSkill {

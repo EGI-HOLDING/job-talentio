@@ -25,6 +25,7 @@ import { telegramWebhookSecretRequired } from '../auth/session-policy';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MatchingService } from '../matching/matching.service';
 import { displayCompanyName } from '../common/anonymous-job';
+import { maskPhone, normalizePhone, parsePhoneStartPayload } from '../auth/phone.util';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
 const BOT_JOBS_LIMIT = 5;
@@ -32,14 +33,23 @@ const BOT_JOBS_LIMIT = 5;
 type TelegramUpdate = {
   message?: {
     chat?: { id?: number };
+    from?: { id?: number; first_name?: string; last_name?: string; language_code?: string };
     text?: string;
+    contact?: { phone_number?: string; user_id?: number; first_name?: string; last_name?: string };
   };
 };
 
 type SendMessageExtra = {
   parse_mode?: 'HTML';
   disable_web_page_preview?: boolean;
-  reply_markup?: { inline_keyboard: Array<Array<{ text: string; url: string }>> };
+  reply_markup?:
+    | { inline_keyboard: Array<Array<{ text: string; url: string }>> }
+    | {
+        keyboard: Array<Array<{ text: string; request_contact?: boolean }>>;
+        one_time_keyboard?: boolean;
+        resize_keyboard?: boolean;
+      }
+    | { remove_keyboard: true };
 };
 
 @Injectable()
@@ -234,7 +244,7 @@ export class TelegramService implements OnModuleInit {
     const update = (body ?? {}) as TelegramUpdate;
     const chatId = update.message?.chat?.id;
     const text = (update.message?.text || '').trim();
-    if (chatId == null || !text) return { ok: true };
+    if (chatId == null) return { ok: true };
 
     const chat = String(chatId);
     const linked = await this.prisma.user.findUnique({
@@ -243,8 +253,20 @@ export class TelegramService implements OnModuleInit {
     });
     const chatLocale = linked ? emailLocale(linked.locale) : 'uz';
 
+    if (update.message?.contact) {
+      await this.handleContact(chat, update.message.contact, update.message.from, linked, chatLocale);
+      return { ok: true };
+    }
+    if (!text) return { ok: true };
+
     if (/^\/jobs(?:@[A-Za-z0-9_]+)?(?:\s|$)/i.test(text)) {
       await this.replyJobs(chat, linked?.id ?? null, chatLocale);
+      return { ok: true };
+    }
+
+    const phoneStart = text.match(/^\/start(?:@[A-Za-z0-9_]+)?\s+(phone_[a-f0-9]{32,96})$/i);
+    if (phoneStart) {
+      await this.handlePhoneStart(chat, phoneStart[1], chatLocale);
       return { ok: true };
     }
 
@@ -311,6 +333,127 @@ export class TelegramService implements OnModuleInit {
 
     await this.sendMessage(chat, translateMessage('telegram.link.ok', locale));
     return { ok: true };
+  }
+
+  /** `/start phone_<token>`: remember the chat behind the web sign-in and ask for the contact. */
+  private async handlePhoneStart(chat: string, payload: string, fallbackLocale: ReturnType<typeof emailLocale>) {
+    const rawToken = parsePhoneStartPayload(payload);
+    if (!rawToken) {
+      await this.sendMessage(chat, translateMessage('telegram.phone.expired', fallbackLocale));
+      return;
+    }
+    const row = await this.prisma.phoneLoginToken.findUnique({ where: { tokenHash: sha256(rawToken) } });
+    if (!row || row.expiresAt < new Date() || row.status === 'COMPLETED') {
+      await this.sendMessage(chat, translateMessage('telegram.phone.expired', fallbackLocale));
+      return;
+    }
+    const locale = emailLocale(row.locale);
+    await this.prisma.phoneLoginToken.update({
+      where: { id: row.id },
+      data: { chatId: chat, status: 'CONTACT_REQUESTED' },
+    });
+    await this.sendMessage(chat, translateMessage('telegram.phone.askContact', locale), {
+      reply_markup: {
+        keyboard: [[{ text: translateMessage('telegram.phone.shareButton', locale), request_contact: true }]],
+        one_time_keyboard: true,
+        resize_keyboard: true,
+      },
+    });
+  }
+
+  /**
+   * A shared contact verifies the phone number without SMS. It completes a
+   * pending web sign-in when one exists for this chat, otherwise it attaches
+   * the number to the linked account.
+   */
+  private async handleContact(
+    chat: string,
+    contact: NonNullable<TelegramUpdate['message']>['contact'],
+    from: NonNullable<TelegramUpdate['message']>['from'],
+    linked: { id: string; locale: string } | null,
+    chatLocale: ReturnType<typeof emailLocale>,
+  ) {
+    const pending = await this.prisma.phoneLoginToken.findFirst({
+      where: { chatId: chat, status: 'CONTACT_REQUESTED', expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const locale = pending ? emailLocale(pending.locale) : chatLocale;
+    const remove = { reply_markup: { remove_keyboard: true as const } };
+
+    if (!contact?.user_id || !from?.id || contact.user_id !== from.id) {
+      await this.sendMessage(chat, translateMessage('telegram.phone.notOwn', locale));
+      return;
+    }
+    const phone = normalizePhone(contact.phone_number);
+    if (!phone) {
+      await this.sendMessage(chat, translateMessage('telegram.phone.invalid', locale), remove);
+      return;
+    }
+
+    const byPhone = await this.prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, telegramId: true, isBanned: true },
+    });
+    let userId: string | null = null;
+    let outcome: 'loggedIn' | 'created' | 'saved' = 'loggedIn';
+
+    if (linked) {
+      if (byPhone && byPhone.id !== linked.id) {
+        await this.sendMessage(chat, translateMessage('telegram.phone.taken', locale), remove);
+        return;
+      }
+      await this.prisma.user.update({
+        where: { id: linked.id },
+        data: { phone, phoneVerifiedAt: new Date() },
+      });
+      userId = linked.id;
+      outcome = pending ? 'loggedIn' : 'saved';
+    } else if (byPhone) {
+      if (byPhone.isBanned) {
+        await this.sendMessage(chat, translateMessage('telegram.phone.taken', locale), remove);
+        return;
+      }
+      // Same person on a new Telegram account: adopt the chat unless another one is attached.
+      await this.prisma.user.update({
+        where: { id: byPhone.id },
+        data: {
+          phoneVerifiedAt: new Date(),
+          ...(byPhone.telegramId ? {} : { telegramId: chat }),
+        },
+      });
+      userId = byPhone.id;
+    } else {
+      const fullName = [from.first_name, from.last_name].filter(Boolean).join(' ').trim() || 'Job Talentio';
+      const created = await this.prisma.user.create({
+        data: {
+          fullName,
+          role: 'EMPLOYEE',
+          locale: pending?.locale ?? (from.language_code && ['uz', 'ru', 'en'].includes(from.language_code) ? from.language_code : 'uz'),
+          phone,
+          phoneVerifiedAt: new Date(),
+          telegramId: chat,
+          // EmployeeProfile.phone is unique too; leave it for the profile form.
+          employeeProfile: { create: {} },
+        },
+        select: { id: true },
+      });
+      userId = created.id;
+      outcome = 'created';
+    }
+
+    if (pending) {
+      await this.prisma.phoneLoginToken.update({
+        where: { id: pending.id },
+        data: { status: 'COMPLETED', userId },
+      });
+    }
+    const key =
+      outcome === 'created'
+        ? 'telegram.phone.created'
+        : outcome === 'saved'
+          ? 'telegram.phone.saved'
+          : 'telegram.phone.loggedIn';
+    await this.sendMessage(chat, translateMessage(key, locale, { phone: maskPhone(phone) }), remove);
   }
 
   private async ingestChatReply(

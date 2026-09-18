@@ -25,6 +25,8 @@ export type AuthSession = {
     avatarUrl?: string | null;
     emailVerified?: boolean;
     telegramLinked?: boolean;
+    /** E.164 login phone, set after a Telegram contact share or SMS code. */
+    phone?: string | null;
     hasPassword?: boolean;
     memberships?: Array<{ companyId: string; role: string }>;
     employeeProfileId?: string | null;

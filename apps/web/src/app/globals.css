@@ -2209,6 +2209,15 @@ button.previewable-image--fill {
 .auth-social-btn--telegram:hover:not(:disabled) {
   background: #4a9cd9;
 }
+.auth-social-btn--phone {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.auth-social-btn--phone:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .telegram-confirm-identity {
   display: flex;
   align-items: center;
