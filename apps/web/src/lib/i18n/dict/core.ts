@@ -846,6 +846,23 @@ export const core = {
     ru: 'Job Talentio',
     en: 'Job Talentio',
   },
+  'pwa.installTitle': {
+    uz: 'Job Talentio ilovasini o‘rnating',
+    ru: 'Установите приложение Job Talentio',
+    en: 'Install the Job Talentio app',
+  },
+  'pwa.installBody': {
+    uz: 'Bosh ekrandan bir bosishda ish o‘rinlari va xabarlar.',
+    ru: 'Вакансии и сообщения в одно касание с главного экрана.',
+    en: 'Jobs and messages one tap away from your home screen.',
+  },
+  'pwa.iosHint': {
+    uz: 'Safari-da Ulashish tugmasini bosib, "Bosh ekranga qo‘shish"ni tanlang.',
+    ru: 'В Safari нажмите Поделиться и выберите "На экран Домой".',
+    en: 'In Safari tap Share, then "Add to Home Screen".',
+  },
+  'pwa.installAction': { uz: 'O‘rnatish', ru: 'Установить', en: 'Install' },
+  'pwa.dismiss': { uz: 'Keyinroq', ru: 'Позже', en: 'Not now' },
   experienceLevel: { uz: 'Tajriba darajasi', ru: 'Уровень опыта', en: 'Experience level' },
   workMode: { uz: 'Ish tartibi', ru: 'Формат работы', en: 'Work mode' },
   employmentType: { uz: 'Bandlik turi', ru: 'Тип занятости', en: 'Employment type' },
