@@ -33,6 +33,7 @@ import { resolveLanguage } from '../common/language-resolve';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { contentHash as translationSourceHash, resolveUgcContent } from '../common/i18n/content-locale';
 import { TranslationService } from '../translation/translation.service';
+import { TelegramService } from '../telegram/telegram.service';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import { effectiveSourceLocale, pickStoredLocale } from '../common/i18n/detect-locale';
 import type { Locale } from '../common/i18n/locale';
@@ -77,6 +78,7 @@ export class JobsService {
     private notifications: NotificationsService,
     private jobsSearch: JobsSearchService,
     private translation: TranslationService,
+    private telegram: TelegramService,
   ) {}
 
   private planLimits(plan: PlanCode) {
@@ -570,6 +572,24 @@ export class JobsService {
           params: { company: job.company.name },
           linkUrl: `/jobs/${updated.id}`,
         });
+      }
+      // First publish only: pausing and resuming must not spam the channel.
+      if (!job.publishedAt) {
+        void this.telegram
+          .announceJob({
+            id: updated.id,
+            title: updated.title,
+            locale: updated.locale,
+            companyName: updated.company.name,
+            cityName: updated.city?.name ?? null,
+            workMode: updated.workMode,
+            employmentType: updated.employmentType,
+            salaryMin: updated.salaryMin,
+            salaryMax: updated.salaryMax,
+            currency: updated.currency,
+            skills: updated.jobSkills.map((js) => js.skill.name),
+          })
+          .catch(() => undefined);
       }
     }
 
