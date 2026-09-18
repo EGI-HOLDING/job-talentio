@@ -501,10 +501,11 @@ export const recruiter = {
     en: 'renews/ends {date}',
   },
   'rec.demoCheckoutNote': {
-    uz: 'Demo to‘lov (sinov rejimi). Haqiqiy Payme/Click keyinroq.',
-    ru: 'Демо-оплата (тестовый режим). Реальные Payme/Click позже.',
-    en: 'Demo checkout (mock payments). Real Payme/Click later.',
+    uz: 'Demo rejimi: tarifni tanlash pul yechmaydi, Payme va Click keyinroq ulanadi.',
+    ru: 'Демо-режим: выбор тарифа не списывает деньги, Payme и Click подключим позже.',
+    en: 'Demo mode: choosing a plan does not charge anything; Payme and Click come later.',
   },
+  'rec.demoModeBadge': { uz: 'Demo rejimi', ru: 'Демо-режим', en: 'Demo mode' },
   'rec.free': { uz: 'Bepul', ru: 'Бесплатно', en: 'Free' },
   'rec.perMonth': { uz: '/oyiga', ru: '/мес', en: '/mo' },
   'rec.upgradeTo': {
@@ -536,7 +537,7 @@ export const recruiter = {
   'rec.daysShort': { uz: '{n} kun', ru: '{n} дн', en: '{n}d' },
 
   // Plan feature lists
-  'rec.planFeature1Job': { uz: '1 ta faol e’lon', ru: '1 активная вакансия', en: '1 active job' },
+  'rec.planFeature3Jobs': { uz: '3 ta faol e’lon', ru: '3 активные вакансии', en: '3 active jobs' },
   'rec.planFeature5Jobs': { uz: '5 ta faol e’lon', ru: '5 активных вакансий', en: '5 active jobs' },
   'rec.planFeature20Jobs': {
     uz: '20 ta faol e’lon',

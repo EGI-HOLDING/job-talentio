@@ -53,7 +53,7 @@ const PLAN_ORDER: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM', 'VIP'];
 /** Dictionary keys, resolved with `t()` where the plan cards render. */
 const PLAN_FEATURES: Record<PlanCode, string[]> = {
   FREE: [
-    'rec.planFeature1Job',
+    'rec.planFeature3Jobs',
     'rec.planFeatureContactsBlurred',
     'rec.planFeatureNoColdChat',
   ],
@@ -2089,7 +2089,10 @@ function RecruiterDashboard() {
 
         {tab === 'billing' && (
           <div>
-            <h2 className="section-title">{t('rec.tabBilling')}</h2>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              {t('rec.tabBilling')}
+              <span className="badge" style={{ fontSize: '0.7rem' }}>{t('rec.demoModeBadge')}</span>
+            </h2>
             <p className="muted" style={{ marginTop: 0 }}>
               {t('rec.currentPlan')}: <strong>{enumLabel('plan', planCode)}</strong>
               {subscription?.endsAt
