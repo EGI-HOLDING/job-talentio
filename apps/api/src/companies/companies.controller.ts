@@ -22,6 +22,7 @@ import {
   companyInviteSchema,
   companyCloseSchema,
   companyTransferOwnershipSchema,
+  companyVerificationRequestSchema,
 } from '@job-talentio/shared';
 import { CompaniesService } from './companies.service';
 import {
@@ -33,7 +34,7 @@ import {
   OptionalJwtAuthGuard,
 } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
-import { imageUploadOptions } from '../common/upload';
+import { documentUploadOptions, imageUploadOptions } from '../common/upload';
 import { requestLocale } from '../common/i18n/request-locale';
 import { isLocale } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
@@ -159,6 +160,29 @@ export class CompaniesController {
   @Roles('RECRUITER', 'SUPER_ADMIN')
   clearLogo(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.companies.clearLogo(user, id);
+  }
+
+  /** Latest verification request plus the current badge state, for the company tab. */
+  @Get(':id/verification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  verification(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.companies.getVerification(user, id);
+  }
+
+  /** Multipart: legalName, taxId, note and an optional `document` (PDF or photo). */
+  @Post(':id/verification')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  @UseInterceptors(FileInterceptor('document', documentUploadOptions))
+  requestVerification(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() body: unknown,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const data = parseDto(companyVerificationRequestSchema, body ?? {});
+    return this.companies.requestVerification(user, id, data, file);
   }
 
   @Post(':id/invite')

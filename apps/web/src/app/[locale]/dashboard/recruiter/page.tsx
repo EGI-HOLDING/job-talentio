@@ -30,6 +30,7 @@ import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
 import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
 import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
 import { RecruiterAnalytics } from '@/components/recruiter/RecruiterAnalytics';
+import { CompanyVerificationCard } from '@/components/recruiter/CompanyVerificationCard';
 import {
   ScreeningQuestionsEditor,
   screeningDraftsFromJob,
@@ -2217,6 +2218,12 @@ function RecruiterDashboard() {
 
         {tab === 'company' && company && (
           <div className="grid-2">
+            <CompanyVerificationCard
+              companyId={companyId}
+              canSubmit={canManageTeam}
+              onFlash={flash}
+              onChanged={() => loadCompanyDetail(companyId).catch(() => undefined)}
+            />
             <div className="card">
               <h3 style={{ marginTop: 0 }}>
                 {accountEmail ? t('verifyEmailTitle') : t('addEmailTitle')}

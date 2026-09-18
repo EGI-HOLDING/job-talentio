@@ -181,6 +181,12 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ProvinceType {
   REGION
   CITY
@@ -502,6 +508,8 @@ model User {
   refreshTokens           RefreshToken[]
   companyInvitesSent      CompanyInvite[]          @relation("CompanyInvitesSent")
   telegramLinkTokens      TelegramLinkToken[]
+  verificationsSubmitted  CompanyVerificationRequest[] @relation("VerificationSubmitter")
+  verificationsReviewed   CompanyVerificationRequest[] @relation("VerificationReviewer")
 }
 
 model RefreshToken {
@@ -590,9 +598,37 @@ model Company {
   bulkCampaigns    BulkCampaign[]
   translations     CompanyTranslation[]
   invites          CompanyInvite[]
+  verificationRequests CompanyVerificationRequest[]
 
   @@index([cityId])
   @@index([industryId])
+}
+
+/// Request for the verified badge: legal identity plus an optional document, reviewed by an admin.
+model CompanyVerificationRequest {
+  id            String             @id @default(cuid())
+  companyId     String
+  submittedById String?
+  legalName     String
+  /// STIR / INN of the legal entity (9 digits for Uzbek companies).
+  taxId         String             @db.VarChar(20)
+  note          String?
+  /// Private object key (registration certificate, licence); served via presigned URL.
+  documentKey   String?
+  documentName  String?
+  status        VerificationStatus @default(PENDING)
+  reviewNote    String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  submittedBy User?   @relation("VerificationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy  User?   @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([status])
 }
 
 model CompanyMember {
