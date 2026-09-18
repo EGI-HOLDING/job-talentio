@@ -1,8 +1,7 @@
-import { PrismaClient, PlanCode, ExperienceLevel, EmploymentType, WorkMode, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
+import { PrismaClient, PlanCode, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
 import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
 import * as bcrypt from 'bcryptjs';
 import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
-import { contentHash, jobFingerprint } from '../src/common/dedupe';
 import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
 import { backfillIndustries } from '../src/common/industry-backfill';
 import { backfillJobLanguages } from '../src/common/job-language-backfill';
@@ -14,6 +13,12 @@ import { backfillNews } from '../src/common/news-backfill';
 import { backfillCatalogI18n } from '../src/common/i18n/catalog-i18n-backfill';
 import { backfillJobLocale } from '../src/common/i18n/job-locale-backfill';
 import { EGI_HOSPITALITY_DEMO_COMPANIES } from '../src/common/egi-hospitality-demo';
+import {
+  DEMO_CITY_SLUGS,
+  DEMO_JOB_TEMPLATES,
+  seedDemoApplications,
+  seedDemoJobs,
+} from '../src/common/demo-jobs';
 
 /** Orthographic aliases → canonical title name (seeded after jobs resolve). */
 const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
@@ -46,23 +51,7 @@ function logo(slug: string, name: string, color: string) {
 }
 
 /** Primary hubs used for round-robin seed of jobs/companies/profiles */
-const SEED_CITY_SLUGS = [
-  'tashkent',
-  'samarkand',
-  'bukhara',
-  'andijan',
-  'namangan',
-  'fergana',
-  'nukus',
-  'urgench',
-  'navoi',
-  'karshi',
-  'termez',
-  'jizzakh',
-  'gulistan',
-  'chirchiq',
-  'angren',
-];
+const SEED_CITY_SLUGS = DEMO_CITY_SLUGS;
 
 const CATEGORIES = [
   { name: 'IT & Software', slug: 'it-software', icon: CATEGORY_ICONS['it-software'] },
@@ -439,70 +428,8 @@ const EDUCATION_FIELDS = [
   'Communications',
 ];
 
-/** ~4 templates per category → even mix when JOB_COUNT is a multiple of length */
-/** Role-only titles — seniority lives on experienceLevel */
-const JOB_TITLES = [
-  // IT & Software (4)
-  { title: 'Full-stack Developer', skills: ['typescript', 'react', 'nestjs', 'postgresql'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'DevOps Engineer', skills: ['docker', 'kubernetes', 'aws', 'ci-cd'], cat: 'it-software', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Java Developer', skills: ['java', 'spring-boot', 'sql'], cat: 'it-software', level: 'JUNIOR' as ExperienceLevel, years: 0 },
-  { title: 'C++ Systems Engineer', skills: ['cplusplus', 'linux', 'problem-solving'], cat: 'it-software', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  // Finance (4)
-  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Accountant', skills: ['accounting', '1c', 'excel'], cat: 'finance', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Credit Risk Analyst', skills: ['financial-analysis', 'excel', 'sql'], cat: 'finance', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Banking Associate', skills: ['excel', 'communication', 'customer-support'], cat: 'finance', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  // Sales & Marketing (4)
-  { title: 'Digital Marketing Specialist', skills: ['digital-marketing', 'seo', 'smm'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Sales Manager', skills: ['sales', 'communication', 'excel'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'SEO Specialist', skills: ['seo', 'google-analytics', 'content-writing'], cat: 'sales-marketing', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'SMM Manager', skills: ['smm', 'digital-marketing', 'content-writing'], cat: 'sales-marketing', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  // Design (4)
-  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Graphic Designer', skills: ['adobe-photoshop', 'figma', 'ui-ux'], cat: 'design', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Product Designer', skills: ['figma', 'ui-ux', 'product-management'], cat: 'design', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Motion Designer', skills: ['adobe-photoshop', 'figma', 'communication'], cat: 'design', level: 'INTERN' as ExperienceLevel, years: 0 },
-  // HR (4)
-  { title: 'HR Recruiter', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Talent Acquisition Partner', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'HR Business Partner', skills: ['hr-management', 'leadership', 'communication'], cat: 'hr', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'People Operations Specialist', skills: ['hr-management', 'excel', 'teamwork'], cat: 'hr', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  // Education (4)
-  { title: 'English Teacher (Corporate)', skills: ['english', 'teaching', 'communication'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Curriculum Designer', skills: ['curriculum-design', 'teaching', 'english'], cat: 'education', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Online Course Instructor', skills: ['teaching', 'content-writing', 'communication'], cat: 'education', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Teaching Assistant', skills: ['teaching', 'uzbek', 'teamwork'], cat: 'education', level: 'JUNIOR' as ExperienceLevel, years: 0 },
-  // Healthcare (4)
-  { title: 'Registered Nurse', skills: ['nursing', 'patient-care', 'communication'], cat: 'healthcare', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Clinical Research Associate', skills: ['clinical-research', 'excel', 'english'], cat: 'healthcare', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Pharmacy Specialist', skills: ['pharmacy', 'patient-care', 'communication'], cat: 'healthcare', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  { title: 'Patient Care Coordinator', skills: ['patient-care', 'customer-support', 'communication'], cat: 'healthcare', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  // Engineering (4)
-  { title: 'Engineering Project Lead', skills: ['project-management', 'leadership', 'autocad'], cat: 'engineering', level: 'LEAD' as ExperienceLevel, years: 8 },
-  { title: 'Mechanical Design Engineer', skills: ['mechanical-design', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Electrical Engineer', skills: ['electrical-engineering', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Site Engineer', skills: ['autocad', 'excel', 'teamwork'], cat: 'engineering', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  // Customer Support (4)
-  { title: 'Customer Support Lead', skills: ['customer-support', 'communication', 'leadership'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Support Specialist', skills: ['customer-support', 'communication', 'russian'], cat: 'customer-support', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Technical Support Engineer', skills: ['customer-support', 'problem-solving', 'english'], cat: 'customer-support', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Call Center Supervisor', skills: ['customer-support', 'leadership', 'communication'], cat: 'customer-support', level: 'SENIOR' as ExperienceLevel, years: 4 },
-  // Logistics (4)
-  { title: 'Logistics Coordinator', skills: ['supply-chain', 'excel', 'communication'], cat: 'logistics', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'Warehouse Supervisor', skills: ['supply-chain', 'leadership', 'excel'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Supply Chain Analyst', skills: ['supply-chain', 'excel', 'data-analysis'], cat: 'logistics', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Fleet Operations Manager', skills: ['supply-chain', 'leadership', 'project-management'], cat: 'logistics', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  // Legal (4)
-  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'Compliance Officer', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR' as ExperienceLevel, years: 5 },
-  { title: 'Contract Specialist', skills: ['contract-law', 'excel', 'communication'], cat: 'legal', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Paralegal Assistant', skills: ['legal-research', 'communication', 'english'], cat: 'legal', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  // Hospitality (4)
-  { title: 'Hotel Front Office Manager', skills: ['hospitality-management', 'customer-support', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 3 },
-  { title: 'Restaurant Supervisor', skills: ['food-safety', 'hospitality-management', 'leadership'], cat: 'hospitality', level: 'MIDDLE' as ExperienceLevel, years: 2 },
-  { title: 'Guest Relations Officer', skills: ['hospitality-management', 'communication', 'english'], cat: 'hospitality', level: 'JUNIOR' as ExperienceLevel, years: 1 },
-  { title: 'F&B Operations Lead', skills: ['food-safety', 'leadership', 'hospitality-management'], cat: 'hospitality', level: 'SENIOR' as ExperienceLevel, years: 4 },
-];
+/** Role-only templates shared with the demo-reset script (seniority lives on experienceLevel). */
+const JOB_TITLES = DEMO_JOB_TEMPLATES;
 
 const SCHOOLS = ['TUIT', 'NUUz', 'Westminster International University in Tashkent', 'INHA University in Tashkent', 'Amity University Tashkent', 'Turin Polytechnic University in Tashkent'];
 const LEVELS: SkillLevel[] = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
@@ -981,104 +908,19 @@ async function main() {
       }
     }
   }
-  const jobRecords = [];
-  // 96 = 2×48 templates → every category twice; cities round-robin all 15
-  const JOB_COUNT = 96;
-  for (let i = 0; i < JOB_COUNT; i++) {
-    const tpl = JOB_TITLES[i % JOB_TITLES.length];
-    const company = companyRecords[i % companyRecords.length];
-    const city = cities[i % cities.length];
-    const isHot = i < 10;
-    const status = i % 14 === 0 ? 'DRAFT' : i % 16 === 0 ? 'CLOSED' : 'PUBLISHED';
-    const employmentTypes: EmploymentType[] = ['FULL_TIME', 'FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'];
-    const workModes: WorkMode[] = ['ONSITE', 'HYBRID', 'REMOTE', 'HYBRID', 'ONSITE'];
-    // ASCII-only separators — em-dash (U+2014) previously corrupted to "???" in some seed environments
-    const resolvedTitle = await resolveJobTitle(prisma, { name: tpl.title });
-    const title = resolvedTitle.jobTitle.name;
-    const workMode = workModes[i % workModes.length];
-    const fingerprint = jobFingerprint({
-      title,
-      workMode,
-      cityId: city.id,
-    });
-    const description = `${company.name} is hiring a ${title} in ${city.name}.\n\nAbout the role:\nYou will help build products used by customers across Uzbekistan and Central Asia.\n\nResponsibilities:\n- Own delivery for ${tpl.skills.slice(0, 2).join(' and ')} workstreams\n- Collaborate with product, design, and operations\n- Improve quality, documentation, and mentoring\n\nRequirements:\n- Hands-on experience with ${tpl.skills.join(', ')}\n- ${tpl.years}+ years relevant experience preferred\n- Communication in Uzbek/Russian/English\n\nBenefits include competitive pay, learning budget, and modern tooling.`;
+  // Jobs — generic postings in uz/ru/en plus hand-written hero vacancies (shared with demo-reset)
+  const demoJobs = await seedDemoJobs(prisma, {
+    companies: companyRecords.map((c) => ({ id: c.id, name: c.name, slug: c.slug, cityId: c.cityId })),
+    cities: cities.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+    catMap,
+    skillMap,
+    benefits,
+    log: (msg) => console.warn(msg),
+  });
+  const heroIds = new Set(demoJobs.heroJobs.map((j) => j.id));
+  // Hero jobs first so the demo recruiter's pipeline is full.
+  const jobRecords = [...demoJobs.heroJobs, ...demoJobs.jobs.filter((j) => !heroIds.has(j.id))];
 
-    const clash = await prisma.jobPost.findFirst({
-      where: {
-        companyId: company.id,
-        fingerprint,
-        status: { in: ['DRAFT', 'PUBLISHED', 'PAUSED'] },
-      },
-      select: { id: true },
-    });
-    if (clash) {
-      console.warn(
-        `Skip seed job "${title}" for ${company.name}: active fingerprint exists (${clash.id})`,
-      );
-      continue;
-    }
-
-    const job = await prisma.jobPost.create({
-      data: {
-        companyId: company.id,
-        jobTitleId: resolvedTitle.jobTitle.id,
-        title,
-        description,
-        cityId: city.id,
-        categoryId: catMap[tpl.cat].id,
-        // The demo copy above is English; leaving this to the schema default
-        // would label every seeded posting as Uzbek.
-        locale: 'en',
-        employmentType: employmentTypes[i % employmentTypes.length],
-        workMode,
-        salaryMin: 8_000_000 + (tpl.years || 0) * 2_000_000,
-        salaryMax: 15_000_000 + (tpl.years || 0) * 3_000_000,
-        salaryPeriod: 'MONTHLY',
-        currency: 'UZS',
-        experienceYearsMin: tpl.years,
-        experienceLevel: tpl.level,
-        status,
-        publishedAt: status === 'PUBLISHED' ? new Date(Date.now() - i * 86_400_000) : null,
-        boostWeight: isHot ? 1.2 : 0,
-        boostUntil: isHot ? new Date(Date.now() + 14 * 86_400_000) : null,
-        fingerprint,
-        contentHash: contentHash(description),
-      },
-    });
-
-    for (const slug of tpl.skills) {
-      const skill = skillMap[slug];
-      if (!skill) continue;
-      await prisma.jobPostSkill.create({
-        data: {
-          jobPostId: job.id,
-          skillId: skill.id,
-          isRequired: true,
-          weight: 1 + (slug === tpl.skills[0] ? 0.5 : 0),
-        },
-      });
-    }
-
-    // Benefits
-    for (let b = 0; b < 3 + (i % 3); b++) {
-      await prisma.jobPostBenefit.create({
-        data: { jobPostId: job.id, benefitId: benefits[b % benefits.length].id },
-      }).catch(() => undefined);
-    }
-
-    // Screening questions on ~15 jobs
-    if (i % 3 === 0) {
-      await prisma.jobQuestion.createMany({
-        data: [
-          { jobPostId: job.id, question: 'How many years of relevant experience do you have?', type: 'NUMBER', isRequired: true, sortOrder: 0 },
-          { jobPostId: job.id, question: 'Are you available to start within 2 weeks?', type: 'YES_NO', isRequired: true, sortOrder: 1 },
-          { jobPostId: job.id, question: 'Why do you want to join our team?', type: 'TEXT', isRequired: false, sortOrder: 2 },
-        ],
-      });
-    }
-
-    jobRecords.push(job);
-  }
 
   await backfillJobLanguages(prisma, { log: (msg) => console.warn(msg) });
 
@@ -1098,62 +940,13 @@ async function main() {
     });
   }
 
-  // Applications + matching-ish scores
+  // Applications with localized cover letters, screening answers and interviews
   const publishedJobs = jobRecords.filter((j) => j.status === 'PUBLISHED');
-  let appCount = 0;
-  if (publishedJobs.length === 0) {
-    console.warn('No published seed jobs; skipping applications');
-  }
-  for (let i = 0; i < 140 && publishedJobs.length > 0; i++) {
-    const job = publishedJobs[i % publishedJobs.length];
-    const profile = employeeProfiles[i % employeeProfiles.length];
-    try {
-      const questions = await prisma.jobQuestion.findMany({ where: { jobPostId: job.id } });
-      const matchScore = 40 + ((i * 7) % 55);
-      const app = await prisma.application.create({
-        data: {
-          jobPostId: job.id,
-          profileId: profile.id,
-          coverLetter: 'I am excited to apply for this role and believe my skills are a strong match.',
-          matchScore,
-          matchBreakdown: {
-            skills: Math.round(matchScore * 0.45),
-            experience: Math.round(matchScore * 0.2),
-            location: Math.round(matchScore * 0.15),
-            education: Math.round(matchScore * 0.1),
-            language: Math.round(matchScore * 0.1),
-            total: matchScore,
-          },
-          status: (['NEW', 'IN_REVIEW', 'INTERVIEW', 'OFFER', 'REJECTED', 'NEW'] as const)[i % 6],
-          events: {
-            create: { toStatus: 'NEW', note: 'Application submitted' },
-          },
-          answers: {
-            create: questions.map((q) => ({
-              questionId: q.id,
-              answer: q.type === 'YES_NO' ? 'Yes' : q.type === 'NUMBER' ? String(2 + (i % 5)) : 'I am motivated to grow with your company.',
-            })),
-          },
-        },
-      });
-      appCount++;
-
-      if (app.status === 'INTERVIEW' || i % 10 === 0) {
-        await prisma.interview.create({
-          data: {
-            applicationId: app.id,
-            scheduledAt: new Date(Date.now() + (i + 1) * 86_400_000),
-            durationMins: 60,
-            meetingUrl: 'https://meet.example.com/interview',
-            note: 'Technical interview',
-            status: 'SCHEDULED',
-          },
-        });
-      }
-    } catch {
-      // unique constraint — skip duplicate profile/job
-    }
-  }
+  const appCount = await seedDemoApplications(prisma, {
+    jobs: jobRecords,
+    profiles: employeeProfiles,
+    log: (msg) => console.warn(msg),
+  });
 
   // Saved jobs, alerts, follows, views, notifications, chats, reports
   for (let i = 0; i < 35; i++) {
@@ -1255,7 +1048,10 @@ async function main() {
         isColdOutreach: false,
         messages: {
           create: [
-            { senderId: emp.id, body: 'Hello! I applied to your Full-stack role and would love to discuss.' },
+            {
+              senderId: emp.id,
+              body: `Hello! I applied to your ${publishedJobs[0]?.title ?? 'open'} role and would love to discuss.`,
+            },
             { senderId: rec.id, body: 'Hi! Thanks for applying. Your profile looks promising. Are you available for a call this week?' },
           ],
         },

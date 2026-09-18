@@ -115,6 +115,21 @@ Platform email (Resend) is **not sent** to dummy mailboxes (`@jobtalent.io`, see
 
 **Quick smoke test:** employee `madina.karimova@jobtalent.io` | recruiter `jasur.tursunov@apexsoft.uz` | admin `sarvar.adminov@jobtalentio.uz`
 
+### Hero vacancies (demo script)
+
+Seed dan `demo-reset` membuat 6 lowongan tulisan tangan yang selalu tampil paling atas (hot, terbit beberapa jam lalu) dan punya screening question dalam bahasa postingannya:
+
+| Perusahaan | Lowongan | Bahasa | Untuk skenario |
+|------------|----------|--------|----------------|
+| Apex Soft Tashkent | IT Infrastructure & Support Specialist | uz | Upload CV IT support, skor match tinggi, apply dengan screening |
+| Apex Soft Tashkent | Frontend Developer | ru | Pipeline recruiter Jasur, chat, bulk |
+| UzPay Fintech | Sales Manager | uz | Lowongan non-IT, KPI di gaji |
+| Orient Bank Digital | Accountant | ru | 1C / soliq, pertanyaan ya-tidak |
+| Hadith Hotel | Hotel Front Office Manager | uz | Merek hospitality holding |
+| EduNest Uzbekistan | English Teacher (Corporate) | en | Paruh waktu, hybrid |
+
+Lowongan generik lainnya (96) ditulis campuran uz/ru/en dengan gaji UZS per kategori dan level. Reset data staging: lihat `infra/README.md` bagian "Demo reset".
+
 ### News (seeded editorial content)
 
 Section **News** berisi 14 artikel kurasi (kategori CAREER / INSIGHT / EVENT / EDUCATION) tentang pasar kerja Uzbekistan. Semua artikel adalah **ringkasan editorial orisinal** yang ditulis untuk Job Talentio - bukan hasil scraping isi artikel pihak ketiga. Setiap artikel mencantumkan `sourceName`/`sourceUrl` (homepage publikasi/institusi terkait untuk bacaan lanjutan) dan cover dari Unsplash CDN (lisensi Unsplash mengizinkan hotlink + penggunaan komersial).
