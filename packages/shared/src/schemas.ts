@@ -709,6 +709,12 @@ export const adminReportListSchema = z.object({
   sort: z.enum(['createdAt', 'status']).default('createdAt'),
 });
 
+export const adminVerificationListSchema = z.object({
+  ...adminListBase,
+  status: z.string().max(60).optional(),
+  sort: z.enum(['createdAt', 'status']).default('createdAt'),
+});
+
 export const adminAuditListSchema = z.object({
   ...adminListBase,
   action: z.string().max(200).optional(),
@@ -759,6 +765,21 @@ export const companyCloseSchema = z.object({
 
 export const companyTransferOwnershipSchema = z.object({
   userId: z.string().min(1).max(40),
+});
+
+/** Employer asks for the verified badge. STIR/INN is 9 digits in Uzbekistan; other formats allowed for foreign entities. */
+export const companyVerificationRequestSchema = z.object({
+  legalName: z.string().trim().min(2).max(200),
+  taxId: z
+    .string()
+    .trim()
+    .regex(/^[0-9A-Za-z-]{6,20}$/, 'Tax id must be 6-20 letters or digits'),
+  note: z.string().trim().max(1000).optional(),
+});
+
+export const adminVerificationDecisionSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
+  reviewNote: z.string().trim().max(1000).optional(),
 });
 
 export const adminBulkPlanSchema = z.object({

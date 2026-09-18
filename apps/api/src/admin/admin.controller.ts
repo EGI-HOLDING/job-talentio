@@ -29,8 +29,11 @@ import {
   adminReportListSchema,
   adminUserAnonymizeSchema,
   adminUserListSchema,
+  adminVerificationDecisionSchema,
+  adminVerificationListSchema,
 } from '@job-talentio/shared';
 import { AdminService } from './admin.service';
+import { AdminVerificationService } from './admin-verification.service';
 import { AdminListsService } from './admin-lists.service';
 import { AdminBulkService } from './admin-bulk.service';
 import { AdminCatalogService } from './admin-catalog.service';
@@ -80,6 +83,7 @@ export class AdminController {
     private bulk: AdminBulkService,
     private catalog: AdminCatalogService,
     private accounts: AdminUsersService,
+    private verificationQueue: AdminVerificationService,
   ) {}
 
   @Get('metrics')
@@ -250,6 +254,18 @@ export class AdminController {
     @Body() body: { status: 'RESOLVED' | 'DISMISSED'; resolution?: string },
   ) {
     return this.admin.resolveReport(user.id, id, body.status, body.resolution);
+  }
+
+  // ─── Company verification queue ───────────────────────────
+  @Get('verifications')
+  verifications(@Query() query: unknown) {
+    return this.verificationQueue.list(parseDto(adminVerificationListSchema, query));
+  }
+
+  @Post('verifications/:id/decide')
+  decideVerification(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const data = parseDto(adminVerificationDecisionSchema, body);
+    return this.verificationQueue.decide(user.id, id, data.status, data.reviewNote);
   }
 
   // ─── Feature flags and audit ──────────────────────────────

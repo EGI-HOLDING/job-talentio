@@ -461,6 +461,72 @@ export class CompaniesService {
     return updated;
   }
 
+  /** Badge state plus the latest request, so the company tab can show pending / rejected reasons. */
+  async getVerification(user: AuthUser, companyId: string) {
+    const { company } = await this.assertMember(user, companyId);
+    const latest = await this.prisma.companyVerificationRequest.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        legalName: true,
+        taxId: true,
+        note: true,
+        documentName: true,
+        status: true,
+        reviewNote: true,
+        reviewedAt: true,
+        createdAt: true,
+      },
+    });
+    return { isVerified: company.isVerified, request: latest };
+  }
+
+  /**
+   * Employer submits legal identity for the verified badge. One open request at
+   * a time; a rejected one can be followed by a new submission.
+   */
+  async requestVerification(
+    user: AuthUser,
+    companyId: string,
+    data: { legalName: string; taxId: string; note?: string },
+    file?: Express.Multer.File,
+  ) {
+    const { company } = await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
+    if (company.isVerified) throw new BadRequestException('Company is already verified');
+    const pending = await this.prisma.companyVerificationRequest.findFirst({
+      where: { companyId, status: 'PENDING' },
+      select: { id: true },
+    });
+    if (pending) throw new ConflictException('A verification request is already under review');
+
+    let documentKey: string | null = null;
+    let documentName: string | null = null;
+    if (file?.buffer?.length) {
+      const uploaded = await this.storage.upload(
+        file.buffer,
+        file.originalname || 'document',
+        file.mimetype,
+        'private/verification',
+      );
+      documentKey = uploaded.key;
+      documentName = file.originalname || 'document';
+    }
+
+    return this.prisma.companyVerificationRequest.create({
+      data: {
+        companyId,
+        submittedById: user.id,
+        legalName: data.legalName,
+        taxId: data.taxId,
+        note: data.note || null,
+        documentKey,
+        documentName,
+      },
+      select: { id: true, status: true, createdAt: true, legalName: true, taxId: true, documentName: true },
+    });
+  }
+
   async clearLogo(user: AuthUser, companyId: string) {
     await this.assertOpenMember(user, companyId, ['OWNER', 'ADMIN']);
     const company = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId } });

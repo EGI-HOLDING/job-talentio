@@ -63,6 +63,31 @@ export const MESSAGES = {
     ru: 'Новая вакансия в {company}',
     en: 'New job at {company}',
   },
+  'notify.verification.approved.title': {
+    uz: 'Kompaniya tasdiqlandi',
+    ru: 'Компания подтверждена',
+    en: 'Company verified',
+  },
+  'notify.verification.approved.body': {
+    uz: '{company} endi tasdiqlangan ish beruvchi belgisiga ega.',
+    ru: 'У {company} теперь есть значок подтверждённого работодателя.',
+    en: '{company} now carries the verified employer badge.',
+  },
+  'notify.verification.rejected.title': {
+    uz: 'Tasdiqlash so‘rovi rad etildi',
+    ru: 'Запрос на подтверждение отклонён',
+    en: 'Verification request declined',
+  },
+  'notify.verification.rejected.body': {
+    uz: '{company}: {note}',
+    ru: '{company}: {note}',
+    en: '{company}: {note}',
+  },
+  'notify.verification.rejected.bodyNoNote': {
+    uz: '{company}: hujjatlarni tekshirib, so‘rovni qayta yuboring.',
+    ru: '{company}: проверьте документы и отправьте запрос снова.',
+    en: '{company}: check the documents and submit the request again.',
+  },
   'notify.jobAlert.title': {
     uz: 'Ish xabarnomasi: {alert}',
     ru: 'Подписка на вакансии: {alert}',

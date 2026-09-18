@@ -21,6 +21,18 @@ export const resumeUploadOptions: MulterOptions = {
   },
 };
 
+/** Registration certificates and licences for company verification: PDF or a photo. */
+export const documentUploadOptions: MulterOptions = {
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== 'application/pdf' && !ALLOWED_IMAGE_MIME.has(file.mimetype)) {
+      cb(new BadRequestException('Only PDF, JPEG, PNG, or WebP files are allowed') as never, false);
+      return;
+    }
+    cb(null, true);
+  },
+};
+
 /** Avatars and company logos (cropped client-side before upload). */
 export const imageUploadOptions: MulterOptions = {
   limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },

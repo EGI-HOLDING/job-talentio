@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { readIdentity, signOut } from './AuthGate';
 
-type NavEntry = { href: string; label: string; countKey?: 'reports' | 'catalog' };
+type NavEntry = { href: string; label: string; countKey?: 'reports' | 'catalog' | 'verifications' };
 
 const PRIMARY: NavEntry[] = [{ href: '/', label: 'Overview' }];
 
@@ -18,6 +18,7 @@ const DIRECTORY: NavEntry[] = [
 
 const OPERATIONS: NavEntry[] = [
   { href: '/reports', label: 'Reports', countKey: 'reports' },
+  { href: '/verifications', label: 'Verification', countKey: 'verifications' },
   { href: '/catalog', label: 'Catalog' },
   { href: '/catalog/translations', label: 'Translations', countKey: 'catalog' },
   { href: '/flags', label: 'Feature flags' },
@@ -28,9 +29,10 @@ type CatalogSummary = Record<string, { pending: number }>;
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [counts, setCounts] = useState<{ reports: number; catalog: number }>({
+  const [counts, setCounts] = useState<{ reports: number; catalog: number; verifications: number }>({
     reports: 0,
     catalog: 0,
+    verifications: 0,
   });
   const [identity, setIdentity] = useState<{ email: string; fullName: string } | null>(null);
 
@@ -44,16 +46,17 @@ export function Sidebar() {
     let cancelled = false;
     async function loadCounts() {
       try {
-        const [reports, catalog] = await Promise.all([
+        const [reports, catalog, verifications] = await Promise.all([
           api<{ total: number }>('/admin/reports?status=OPEN&limit=1'),
           api<CatalogSummary>('/admin/catalog/i18n/summary'),
+          api<{ total: number }>('/admin/verifications?status=PENDING&limit=1').catch(() => ({ total: 0 })),
         ]);
         if (cancelled) return;
         const catalogPending = Object.values(catalog).reduce(
           (sum, entry) => sum + (entry?.pending ?? 0),
           0,
         );
-        setCounts({ reports: reports.total, catalog: catalogPending });
+        setCounts({ reports: reports.total, catalog: catalogPending, verifications: verifications.total });
       } catch {
         // Counts are a convenience; navigation still works without them.
       }

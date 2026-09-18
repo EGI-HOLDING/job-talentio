@@ -56,6 +56,79 @@ export const recruiter = {
     en: 'Save changes',
   },
 
+  // Verified employer badge
+  'rec.verification.title': {
+    uz: 'Tasdiqlangan ish beruvchi',
+    ru: 'Подтверждённый работодатель',
+    en: 'Verified employer',
+  },
+  'rec.verification.badgeVerified': { uz: 'Tasdiqlangan', ru: 'Подтверждено', en: 'Verified' },
+  'rec.verification.badgePending': { uz: 'Ko‘rib chiqilmoqda', ru: 'На проверке', en: 'Under review' },
+  'rec.verification.verifiedBody': {
+    uz: 'Kompaniyangiz tasdiqlangan: e’lonlar va sahifada belgi ko‘rinadi, nomzodlar ishonchi oshadi.',
+    ru: 'Компания подтверждена: значок виден на вакансиях и странице компании, кандидаты доверяют больше.',
+    en: 'Your company is verified: the badge shows on postings and the company page, and candidates trust it more.',
+  },
+  'rec.verification.pendingBody': {
+    uz: '{legalName} uchun so‘rov {date} da yuborildi. Moderator tekshirgach xabar beramiz.',
+    ru: 'Запрос для {legalName} отправлен {date}. Мы сообщим, когда модератор его проверит.',
+    en: 'Request for {legalName} submitted on {date}. We will notify you once a moderator has reviewed it.',
+  },
+  'rec.verification.intro': {
+    uz: 'Yuridik nomi, STIR va hujjatni yuboring. Tasdiqlangan kompaniyalar e’lonlarida belgi bilan ko‘rinadi.',
+    ru: 'Укажите юридическое название, ИНН/СТИР и приложите документ. Подтверждённые компании получают значок на вакансиях.',
+    en: 'Send your legal name, tax id and a document. Verified companies show a badge on their postings.',
+  },
+  'rec.verification.rejectedNotice': {
+    uz: 'Oldingi so‘rov rad etildi. Ma’lumotlarni tuzatib qayta yuboring.',
+    ru: 'Предыдущий запрос отклонён. Исправьте данные и отправьте снова.',
+    en: 'The previous request was declined. Correct the details and submit again.',
+  },
+  'rec.verification.legalName': { uz: 'Yuridik nomi', ru: 'Юридическое название', en: 'Legal name' },
+  'rec.verification.legalNamePlaceholder': {
+    uz: 'Masalan: "Apex Soft" MChJ',
+    ru: 'Например: ООО "Apex Soft"',
+    en: 'e.g. Apex Soft LLC',
+  },
+  'rec.verification.taxId': { uz: 'STIR (INN)', ru: 'ИНН (СТИР)', en: 'Tax id (STIR/INN)' },
+  'rec.verification.taxIdHint': {
+    uz: 'O‘zbekiston yuridik shaxslari uchun 9 raqam.',
+    ru: 'Для юрлиц Узбекистана - 9 цифр.',
+    en: '9 digits for Uzbek legal entities.',
+  },
+  'rec.verification.document': {
+    uz: 'Hujjat (guvohnoma yoki litsenziya)',
+    ru: 'Документ (свидетельство или лицензия)',
+    en: 'Document (registration certificate or licence)',
+  },
+  'rec.verification.documentHint': {
+    uz: 'PDF yoki rasm, 5 MB gacha. Faqat moderatorlar ko‘radi.',
+    ru: 'PDF или фото до 5 МБ. Видят только модераторы.',
+    en: 'PDF or photo up to 5 MB. Only moderators can see it.',
+  },
+  'rec.verification.note': { uz: 'Izoh', ru: 'Комментарий', en: 'Note' },
+  'rec.verification.submit': {
+    uz: 'Tasdiqlashga yuborish',
+    ru: 'Отправить на проверку',
+    en: 'Submit for verification',
+  },
+  'rec.verification.submitting': { uz: 'Yuborilmoqda...', ru: 'Отправляем...', en: 'Submitting...' },
+  'rec.verification.submitted': {
+    uz: 'So‘rov yuborildi. Moderator tekshirgach xabar beramiz.',
+    ru: 'Запрос отправлен. Мы сообщим, когда модератор его проверит.',
+    en: 'Request sent. We will notify you once a moderator has reviewed it.',
+  },
+  'rec.verification.submitFailed': {
+    uz: 'So‘rovni yuborib bo‘lmadi',
+    ru: 'Не удалось отправить запрос',
+    en: 'Could not send the request',
+  },
+  'rec.verification.ownerOnly': {
+    uz: 'So‘rovni kompaniya egasi yoki administratori yuboradi.',
+    ru: 'Запрос отправляет владелец или администратор компании.',
+    en: 'The company owner or an admin submits the request.',
+  },
+
   // Confidential posting
   'rec.anonymousPosting': {
     uz: 'Maxfiy e’lon (kompaniya nomini yashirish)',
