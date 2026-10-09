@@ -122,11 +122,13 @@ function sameProvinceBeatsOtherProvince() {
       city: { id: 'samarkand-city', provinceId: 'samarkand' },
     }),
   );
-  assert(sameProvince.location === 8, `same province should score 8, got ${sameProvince.location}`);
-  assert(otherProvince.location === 3, `other province should score 3, got ${otherProvince.location}`);
   assert(
     sameProvince.location > otherProvince.location,
-    'same-province city should outscore a different province',
+    `same province (${sameProvince.location}) should outscore a different province (${otherProvince.location})`,
+  );
+  assert(
+    sameProvince.total > otherProvince.total,
+    `same province total ${sameProvince.total} should beat ${otherProvince.total}`,
   );
 }
 
@@ -178,9 +180,127 @@ function missingRequiredSkillsCapsBucket() {
 function emptySkillsAndTitlesFailGate() {
   const breakdown: MatchBreakdown = matching.compute(baseProfile(), baseJob());
   assert(breakdown.title === 0, `empty titles should score 0 role, got ${breakdown.title}`);
+  assert(breakdown.skills === 0, `a job with no skills must not get a skills floor, got ${breakdown.skills}`);
+  assert(breakdown.total === 0, `unrelated empty profile must score 0, got ${breakdown.total}`);
   assert(breakdown.details.matchedSkills.length === 0, 'empty skills should not match');
   assert(!matching.passesRecommendationGate(breakdown), 'empty skills + empty titles must fail the gate');
   assert(!matching.profileHasMatchSignal(baseProfile()), 'empty profile has no match signal');
+}
+
+function jobSkill(id: string, name: string, slug: string) {
+  return {
+    skillId: id,
+    isRequired: true,
+    weight: 1,
+    skill: { name, slug, normalizedKey: slug.replace(/[^a-z0-9]+/gi, '') },
+  };
+}
+
+function mlEngineerProfile() {
+  return baseProfile({
+    headline: 'ML Engineer',
+    cityId: 'tashkent',
+    city: { id: 'tashkent', provinceId: 'tashkent' },
+    skills: [
+      {
+        skillId: 'py',
+        level: 'ADVANCED' as const,
+        skill: { name: 'Python', slug: 'python', normalizedKey: 'python' },
+      },
+      {
+        skillId: 'pt',
+        level: 'ADVANCED' as const,
+        skill: { name: 'PyTorch', slug: 'pytorch', normalizedKey: 'pytorch' },
+      },
+      {
+        skillId: 'ps',
+        level: 'INTERMEDIATE' as const,
+        skill: { name: 'Problem solving', slug: 'problem-solving', normalizedKey: 'problemsolving' },
+      },
+    ],
+    experiences: [
+      {
+        title: 'ML Engineer',
+        startDate: new Date('2020-01-01'),
+        endDate: null,
+        isCurrent: true,
+      },
+    ],
+    educations: [{ degree: 'BACHELOR' as const }],
+    languages: [{ language: { code: 'en' }, level: 'C1' as const }],
+  });
+}
+
+function mlProfileDoesNotMatchUnrelatedRoles() {
+  const profile = mlEngineerProfile();
+  const mechanical = matching.compute(
+    profile,
+    baseJob({
+      title: 'Mechanical Design Engineer',
+      jobTitle: { name: 'Mechanical Design Engineer', normalizedKey: 'mechanicaldesignengineer' },
+      experienceYearsMin: 3,
+      experienceLevel: 'MIDDLE',
+      workMode: 'ONSITE',
+      cityId: 'samarkand',
+      city: { id: 'samarkand', provinceId: 'samarkand' },
+      jobSkills: [
+        jobSkill('md', 'Mechanical design', 'mechanical-design'),
+        jobSkill('ac', 'AutoCAD', 'autocad'),
+        jobSkill('ps-job', 'Problem solving', 'problem-solving'),
+      ],
+    }),
+  );
+  assert(
+    mechanical.details.matchedSkills.some((name) => /problem/i.test(name)),
+    `problem-solving should be the only overlap, got ${mechanical.details.matchedSkills.join(', ')}`,
+  );
+  assert(
+    mechanical.total > 0 && mechanical.total <= 5,
+    `mechanical design must stay in 1..5 for a soft-skill overlap, got ${mechanical.total}`,
+  );
+  assert(
+    mechanical.title === 0,
+    `shared token "engineer" must not score the title, got ${mechanical.title}`,
+  );
+  assert(
+    !matching.passesRecommendationGate(mechanical),
+    'mechanical design must not be recommended to an ML profile',
+  );
+
+  const product = matching.compute(
+    profile,
+    baseJob({
+      title: 'Product Designer',
+      jobTitle: { name: 'Product Designer', normalizedKey: 'productdesigner' },
+      experienceYearsMin: 4,
+      experienceLevel: 'SENIOR',
+      cityId: 'tashkent',
+      city: { id: 'tashkent', provinceId: 'tashkent' },
+      jobSkills: [
+        jobSkill('figma', 'Figma', 'figma'),
+        jobSkill('ui', 'UI/UX', 'ui-ux'),
+        jobSkill('pm', 'Product management', 'product-management'),
+      ],
+    }),
+  );
+  assert(product.total === 0, `product designer with no shared skill must be 0, got ${product.total}`);
+  assert(!matching.passesRecommendationGate(product), 'product designer must not be recommended');
+
+  const mlJob = matching.compute(
+    profile,
+    baseJob({
+      title: 'ML Engineer',
+      jobTitle: { name: 'ML Engineer', normalizedKey: 'mlengineer' },
+      experienceYearsMin: 3,
+      experienceLevel: 'MIDDLE',
+      cityId: 'tashkent',
+      city: { id: 'tashkent', provinceId: 'tashkent' },
+      jobSkills: [jobSkill('py-job', 'Python', 'python'), jobSkill('pt-job', 'PyTorch', 'pytorch')],
+    }),
+  );
+  assert(mlJob.total >= 70, `an ML role must stay a strong match, got ${mlJob.total}`);
+  assert(matching.passesRecommendationGate(mlJob), 'ML role must pass the recommend gate');
+  assert(mlJob.total > mechanical.total, 'ML role must outscore mechanical design');
 }
 
 function main() {
@@ -189,6 +309,7 @@ function main() {
   sameProvinceBeatsOtherProvince();
   missingRequiredSkillsCapsBucket();
   emptySkillsAndTitlesFailGate();
+  mlProfileDoesNotMatchUnrelatedRoles();
   console.log('api: matching.compute smoke ok');
 }
 

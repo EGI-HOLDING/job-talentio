@@ -117,10 +117,51 @@ const TITLE_TOKEN_STOP = new Set([
   'or',
 ]);
 
-/** Floor for surfacing recommendations (baseline scoring can hit ~30+ on empty signals). */
+/** Role nouns that show up in unrelated titles ("ML Engineer" vs "Mechanical Design Engineer"). */
+const GENERIC_TITLE_TOKENS = new Set([
+  'analyst',
+  'assistant',
+  'associate',
+  'consultant',
+  'coordinator',
+  'design',
+  'designer',
+  'developer',
+  'development',
+  'director',
+  'engineer',
+  'engineering',
+  'executive',
+  'expert',
+  'head',
+  'intern',
+  'junior',
+  'lead',
+  'management',
+  'manager',
+  'officer',
+  'senior',
+  'specialist',
+  'staff',
+]);
+
+/** Keys after normalizeSkillKey. These must not carry a role match by themselves. */
+const SOFT_SKILL_KEYS = new Set([
+  'communication',
+  'english',
+  'excel',
+  'leadership',
+  'problemsolving',
+  'teamwork',
+]);
+
+/** Floor once a role signal exists. Context alone must not clear this. */
 const MIN_RECOMMENDATION_SCORE = 35;
 const SKILLS_BUCKET = 40;
 const TITLE_BUCKET = 15;
+const ROLE_MAX = SKILLS_BUCKET + TITLE_BUCKET;
+/** Soft-skill-only overlap must not look like a role match. */
+const SOFT_ONLY_CAP = 5;
 const REQUIRED_SKILLS_MISS_CAP = 12;
 const RECOMMEND_QUERY_CAP = 200;
 const RECOMMEND_FALLBACK_SCAN = 120;
@@ -161,6 +202,19 @@ function significantTitleTokens(input: string): Set<string> {
   );
 }
 
+function distinctiveTitleTokens(input: string): Set<string> {
+  return new Set([...significantTitleTokens(input)].filter((t) => !GENERIC_TITLE_TOKENS.has(t)));
+}
+
+function isSoftSkill(skill: SkillRef): boolean {
+  const keys = [skill.normalizedKey, skill.slug, skill.name].filter((v): v is string => Boolean(v));
+  return keys.some((key) => SOFT_SKILL_KEYS.has(normalizeSkillKey(key)));
+}
+
+function isSoftSkillLabel(name: string): boolean {
+  return SOFT_SKILL_KEYS.has(normalizeSkillKey(name));
+}
+
 function roleMatchScore(profileTexts: string[], job: MatchJob): number {
   if (!profileTexts.length) return 0;
   const jobName = job.jobTitle?.name || job.title || '';
@@ -187,11 +241,11 @@ function roleMatchScore(profileTexts: string[], job: MatchJob): number {
   const jobTokens = new Set<string>();
   for (const text of [jobName, job.title || '']) {
     if (!text) continue;
-    for (const tok of significantTitleTokens(text)) jobTokens.add(tok);
+    for (const tok of distinctiveTitleTokens(text)) jobTokens.add(tok);
   }
   if (!jobTokens.size) return 0;
   for (const text of profileTexts) {
-    for (const tok of significantTitleTokens(text)) {
+    for (const tok of distinctiveTitleTokens(text)) {
       if (jobTokens.has(tok)) return 6;
     }
   }
@@ -235,8 +289,11 @@ export class MatchingService {
   }
 
   passesRecommendationGate(breakdown: MatchBreakdown) {
+    // Exact or synonym title is a role match even when the profile has no skills yet.
+    if (breakdown.title >= 12) return true;
     if (breakdown.total < MIN_RECOMMENDATION_SCORE) return false;
-    return breakdown.details.matchedSkills.length > 0 || breakdown.title >= 6;
+    const distinctive = breakdown.details.matchedSkills.filter((name) => !isSoftSkillLabel(name));
+    return distinctive.length > 0 || breakdown.title >= 6;
   }
 
   async scoreProfileAgainstJob(
@@ -273,10 +330,10 @@ export class MatchingService {
     const matchedSkills: string[] = [];
     const missingRequiredSkills: string[] = [];
 
-    let skillsScore = SKILLS_BUCKET;
-    if (job.jobSkills.length === 0) {
-      skillsScore = 16;
-    } else {
+    let skillsScore = 0;
+    let matchedDistinctive = 0;
+    let matchedSoft = 0;
+    if (job.jobSkills.length > 0) {
       let weightedHit = 0;
       let weightedTotal = 0;
       for (const js of job.jobSkills) {
@@ -286,13 +343,15 @@ export class MatchingService {
         if (ps) {
           weightedHit += w * Math.min(1.15, SKILL_LEVEL_SCORE[ps.level]);
           matchedSkills.push(js.skill.name);
+          if (isSoftSkill(js.skill)) matchedSoft += 1;
+          else matchedDistinctive += 1;
         } else if (js.isRequired) {
           missingRequiredSkills.push(js.skill.name);
         }
       }
       skillsScore = weightedTotal
         ? Math.round((weightedHit / weightedTotal) * SKILLS_BUCKET)
-        : 16;
+        : 0;
       const requiredCount = job.jobSkills.filter((js) => js.isRequired).length;
       if (requiredCount > 0 && missingRequiredSkills.length === requiredCount) {
         skillsScore = Math.min(skillsScore, REQUIRED_SKILLS_MISS_CAP);
@@ -386,20 +445,35 @@ export class MatchingService {
       languageScore = Math.min(10, languageScore);
     }
 
-    const total = Math.min(
-      100,
-      Math.round(
-        skillsScore + titleScore + experienceScore + locationScore + educationScore + languageScore,
-      ),
-    );
+    // Experience, city, education and language scale a real role signal.
+    // They must not add a floor when the title and distinctive skills miss.
+    const softOnly = matchedDistinctive === 0 && matchedSoft > 0 && titleScore === 0;
+    const role = titleScore + (softOnly ? 0 : skillsScore);
+    let experienceOut = 0;
+    let locationOut = 0;
+    let educationOut = 0;
+    let languageOut = 0;
+    let total = 0;
+    if (softOnly) {
+      skillsScore = Math.min(skillsScore, SOFT_ONLY_CAP);
+      total = skillsScore;
+    } else if (role > 0) {
+      const scale = role / ROLE_MAX;
+      const context = experienceScore + locationScore + educationScore + languageScore;
+      experienceOut = Math.round(experienceScore * scale);
+      locationOut = Math.round(locationScore * scale);
+      educationOut = Math.round(educationScore * scale);
+      languageOut = Math.round(languageScore * scale);
+      total = Math.min(100, Math.round(role + context * scale));
+    }
 
     return {
       skills: skillsScore,
       title: titleScore,
-      experience: experienceScore,
-      location: locationScore,
-      education: educationScore,
-      language: languageScore,
+      experience: experienceOut,
+      location: locationOut,
+      education: educationOut,
+      language: languageOut,
       total,
       details: {
         matchedSkills,
@@ -490,10 +564,7 @@ export class MatchingService {
         take: RECOMMEND_FALLBACK_SCAN,
         orderBy: { updatedAt: 'desc' },
       });
-      const keep = extra.filter((p) => {
-        const breakdown = this.compute(p, job);
-        return breakdown.details.matchedSkills.length > 0 || breakdown.title >= 6;
-      });
+      const keep = extra.filter((p) => this.passesRecommendationGate(this.compute(p, job)));
       profiles = mergeById(profiles, keep);
     }
 
@@ -587,10 +658,7 @@ export class MatchingService {
         take: RECOMMEND_FALLBACK_SCAN,
         orderBy: { publishedAt: 'desc' },
       });
-      const keep = extra.filter((j) => {
-        const breakdown = this.compute(profile, j);
-        return breakdown.details.matchedSkills.length > 0 || breakdown.title >= 6;
-      });
+      const keep = extra.filter((j) => this.passesRecommendationGate(this.compute(profile, j)));
       jobs = mergeById(jobs, keep);
     }
 

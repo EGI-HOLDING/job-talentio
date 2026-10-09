@@ -146,7 +146,7 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 
 Then walk through [docs/DEMO-SCRIPT.md](../docs/DEMO-SCRIPT.md) pre-flight from a phone.
 
-**Demo reset (staging only):** between client test sessions, restore the demo postings and applications without touching accounts, companies, profiles or catalogs. It deletes every job post (applications cascade), chats, notifications, reports, views and saved jobs, then recreates the uz/ru/en demo postings, the hand-written hero vacancies and ~140 applications from `src/common/demo-jobs.ts`, and clears the Meilisearch index so the API reindexes on the next search:
+**Demo reset (staging only):** between client test sessions, restore the demo postings and applications without touching accounts, companies, profiles or catalogs. It deletes every job post (applications cascade), chats, notifications, reports, views and saved jobs, then recreates the uz/ru/en demo postings, the hand-written hero vacancies and ~140 applications from `src/common/demo-jobs.ts`, and rebuilds the Meilisearch index from the postings it just created (a failed rebuild leaves keyword search on the database until the API index catches up):
 
 ```bash
 railway ssh --service api-stage-job-talentio --environment staging "cd /app/apps/api && ALLOW_DEMO_RESET=1 node dist/scripts/demo-reset.js"

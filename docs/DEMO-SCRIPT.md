@@ -72,6 +72,6 @@ Batasan yang perlu disebut sebelum mereka mencoba: pembayaran berjalan dalam mod
 | Parse CV tetap "pending" | Worker BullMQ / Redis, atau OpenAI lambat | Tunggu 60 detik, refresh; cek log api `railway logs --service api-stage-job-talentio`; fallback parser lokal tetap mengisi data dasar |
 | Telegram tidak menerima pesan | Akun belum ditautkan atau webhook belum terdaftar | Settings > Security > tautkan ulang; `GET /api/telegram/webhook` harus `{ok:true}`; cek `TELEGRAM_WEBHOOK_SECRET` |
 | Tombol terjemah tidak muncul / "budget exceeded" | `TRANSLATION_PROVIDER=none` atau kuota bulanan habis | Set provider `openai`, naikkan `TRANSLATION_MONTHLY_CHAR_BUDGET`, redeploy api |
-| Pencarian tidak menemukan lowongan baru | Indeks Meilisearch kosong setelah reset | Lakukan satu pencarian; API mengindeks ulang otomatis, atau redeploy api |
+| Pencarian tidak menemukan lowongan baru | Indeks Meilisearch basi atau rebuild saat reset gagal | Ulangi demo-reset; pencarian tetap membaca database dan API mengindeks ulang di background |
 | Pipeline recruiter kosong | Reset belum dijalankan atau memakai recruiter lain | Jalankan demo-reset; gunakan Jasur (Apex Soft Tashkent) |
 | Email tidak sampai | Domain Resend belum terverifikasi atau mailbox dummy | Pakai mailbox sungguhan; alamat seed `@jobtalent.io` sengaja tidak dikirimi email |

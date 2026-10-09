@@ -2,29 +2,17 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { JOBS_INDEX_SETTINGS } from './jobs-search.settings';
+import {
+  indexPublishedJobs,
+  jobIndexInclude,
+  rebuildJobsIndex,
+  toJobSearchDocument,
+} from './jobs-index.sync';
 
 const INDEX = 'jobs';
 /** Mirror of JobsService relevance scan cap so id-filtering never shrinks results. */
 const SEARCH_ID_LIMIT = 1000;
-const BACKFILL_BATCH = 500;
 const REQUEST_TIMEOUT_MS = 3_000;
-
-type LocalizedName = { name: string; nameUz?: string | null; nameRu?: string | null };
-
-type JobDocument = {
-  id: string;
-  title: string;
-  companyName: string;
-  cityName: string | null;
-  categoryName: string | null;
-  skills: string[];
-  description: string;
-  /** Titles and bodies of every stored translation, so a Russian query finds a
-   * posting written in Uzbek and vice versa. */
-  titleAlt: string[];
-  descriptionAlt: string[];
-  publishedAt: number | null;
-};
 
 /**
  * Typo-tolerant job search via Meilisearch (plain REST - the official JS SDK
@@ -102,21 +90,34 @@ export class JobsSearchService implements OnModuleInit {
   private lastBackfillKick = 0;
 
   /**
-   * Meilisearch may restart empty (staging runs it stateless: Railway volumes
-   * put this image in a silent crash loop). Rebuild the index in the
-   * background so search self-heals without an API redeploy.
+   * Full replace of the jobs index. Throttled so a burst of searches that miss
+   * a stale index does not rebuild on every request. Also used when Meili
+   * restarts empty (staging has no volume) so search self-heals.
    */
-  private kickBackfill(): void {
+  reindexInBackground(): void {
+    this.scheduleRebuild('index out of date with published jobs');
+  }
+
+  private scheduleRebuild(reason: string): void {
     const now = Date.now();
-    if (this.backfillInFlight || now - this.lastBackfillKick < 30_000) return;
+    if (!this.host || this.backfillInFlight || now - this.lastBackfillKick < 30_000) return;
     this.backfillInFlight = true;
     this.lastBackfillKick = now;
-    this.logger.warn('Meilisearch index empty or missing; reindexing in background');
-    void this.initIndex()
+    this.logger.warn(`Meilisearch ${reason}; reindexing in background`);
+    void rebuildJobsIndex({
+      prisma: this.prisma,
+      host: this.host,
+      apiKey: this.apiKey,
+      log: (message) => this.logger.log(message),
+    })
       .catch((err) => this.logger.warn(`Meilisearch reindex failed: ${(err as Error).message}`))
       .finally(() => {
         this.backfillInFlight = false;
       });
+  }
+
+  private kickBackfill(): void {
+    this.scheduleRebuild('index empty or missing');
   }
 
   /** Ranked job ids for a text query, or null when Meili is unavailable. */
@@ -137,16 +138,18 @@ export class JobsSearchService implements OnModuleInit {
         },
       );
       if (res.hits.length === 0) {
-        // 0 hits from a wiped index is indistinguishable from a genuine miss;
-        // check stats and reindex + fall back to Prisma when the index is empty.
+        // 0 hits is not a trustworthy filter: an empty array is truthy and
+        // `id IN ()` hides every posting, including ones the index never saw.
+        // An empty index still needs a rebuild; a non-empty miss falls through
+        // to Postgres, which rebuilds only when it actually finds rows.
         const stats = await this.request<{ numberOfDocuments: number }>(
           'GET',
           `/indexes/${INDEX}/stats`,
         ).catch(() => null);
         if (!stats || stats.numberOfDocuments === 0) {
           this.kickBackfill();
-          return null;
         }
+        return null;
       }
       return res.hits.map((h) => h.id);
     } catch (err) {
@@ -166,7 +169,7 @@ export class JobsSearchService implements OnModuleInit {
     try {
       const job = await this.fetchJob(jobId);
       if (job && job.status === 'PUBLISHED') {
-        await this.request('PUT', `/indexes/${INDEX}/documents`, [this.toDocument(job)]);
+        await this.request('PUT', `/indexes/${INDEX}/documents`, [toJobSearchDocument(job)]);
       } else {
         await this.request('DELETE', `/indexes/${INDEX}/documents/${jobId}`).catch(
           () => undefined,
@@ -196,70 +199,15 @@ export class JobsSearchService implements OnModuleInit {
   }
 
   private async backfill(): Promise<void> {
-    let skip = 0;
-    let indexed = 0;
-    for (;;) {
-      const batch = await this.prisma.jobPost.findMany({
-        where: { status: 'PUBLISHED' },
-        skip,
-        take: BACKFILL_BATCH,
-        orderBy: { createdAt: 'asc' },
-        include: this.syncInclude,
-      });
-      if (!batch.length) break;
-      await this.request(
-        'PUT',
-        `/indexes/${INDEX}/documents`,
-        batch.map((job) => this.toDocument(job)),
-      );
-      indexed += batch.length;
-      skip += BACKFILL_BATCH;
-    }
+    if (!this.host) return;
+    const indexed = await indexPublishedJobs(this.prisma, this.host, this.apiKey);
     this.logger.log(`Meilisearch backfill indexed ${indexed} published job(s)`);
   }
-
-  private syncInclude = {
-    company: { select: { name: true } },
-    city: { select: { name: true, nameUz: true, nameRu: true } },
-    category: { select: { name: true, nameUz: true, nameRu: true } },
-    jobSkills: { select: { skill: { select: { name: true, nameUz: true, nameRu: true } } } },
-    translations: { select: { title: true, description: true } },
-  } as const;
 
   private fetchJob(jobId: string) {
     return this.prisma.jobPost.findUnique({
       where: { id: jobId },
-      include: this.syncInclude,
+      include: jobIndexInclude,
     });
-  }
-
-  private toDocument(job: {
-    id: string;
-    title: string;
-    description: string;
-    publishedAt: Date | null;
-    company: { name: string };
-    city: LocalizedName | null;
-    category: LocalizedName | null;
-    jobSkills: Array<{ skill: LocalizedName }>;
-    translations: Array<{ title: string; description: string }>;
-  }): JobDocument {
-    // Catalog names are indexed in every language so a Russian query for a city
-    // still matches a posting whose row was written in Uzbek.
-    const names = (row: LocalizedName | null | undefined): string[] =>
-      row ? [row.name, row.nameUz, row.nameRu].filter((v): v is string => Boolean(v)) : [];
-
-    return {
-      id: job.id,
-      title: job.title,
-      companyName: job.company.name,
-      cityName: names(job.city).join(' ') || null,
-      categoryName: names(job.category).join(' ') || null,
-      skills: job.jobSkills.flatMap((s) => names(s.skill)),
-      description: job.description.slice(0, 600),
-      titleAlt: job.translations.map((t) => t.title),
-      descriptionAlt: job.translations.map((t) => t.description.slice(0, 600)),
-      publishedAt: job.publishedAt ? job.publishedAt.getTime() : null,
-    };
   }
 }
