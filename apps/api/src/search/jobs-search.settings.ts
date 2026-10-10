@@ -7,6 +7,7 @@ export const JOBS_INDEX_SETTINGS = {
   searchableAttributes: [
     'title',
     'titleAlt',
+    'jobTitle',
     'companyName',
     'skills',
     'categoryName',

@@ -30,6 +30,7 @@ import { resolveSkill } from '../common/skill-resolve';
 import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
+import { jobKeywordOr, shouldTrustMeiliIds } from '../search/job-keyword';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { contentHash as translationSourceHash, resolveUgcContent } from '../common/i18n/content-locale';
 import { TranslationService } from '../translation/translation.service';
@@ -1124,36 +1125,25 @@ export class JobsService {
       and.push({ publishedAt: { gte: new Date(Date.now() - hours * 3_600_000) } });
     }
 
-    if (query.q) {
+    // Typo-tolerant path: Meilisearch narrows to ranked ids, Prisma applies
+    // every other filter. A miss, an empty id list, or ids that are no longer
+    // published fall back to `contains` — otherwise `id IN ()` hides jobs that
+    // are on the board but missing from a stale index.
+    let meiliTrusted = false;
+    if (query.q?.trim()) {
       const q = query.q.trim();
-      // Typo-tolerant path: Meilisearch narrows to ranked ids, Prisma applies
-      // every other filter. Falls back to `contains` when Meili is down.
-      const meiliIds = q ? await this.jobsSearch.searchJobIds(q) : null;
-      if (meiliIds) {
+      const meiliIds = await this.jobsSearch.searchJobIds(q);
+      const live = meiliIds?.length
+        ? await this.prisma.jobPost.count({
+            where: { status: 'PUBLISHED', id: { in: meiliIds } },
+          })
+        : 0;
+      if (shouldTrustMeiliIds(meiliIds, live) && meiliIds) {
         and.push({ id: { in: meiliIds } });
+        meiliTrusted = true;
       } else {
-        const terms = q.split(/\s+/).filter(Boolean);
-        for (const term of terms) {
-          const like = { contains: term, mode: 'insensitive' as const };
-          and.push({
-            OR: [
-              { title: like },
-              { description: like },
-              // Translated versions, so a Russian query still finds an Uzbek posting.
-              { translations: { some: { title: like } } },
-              { translations: { some: { description: like } } },
-              { company: { name: like } },
-              {
-                jobSkills: {
-                  some: {
-                    skill: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] },
-                  },
-                },
-              },
-              { city: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
-              { category: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
-            ],
-          });
+        for (const term of q.split(/\s+/).filter(Boolean)) {
+          and.push(jobKeywordOr(term));
         }
       }
     }
@@ -1200,6 +1190,9 @@ export class JobsService {
               : ([{ publishedAt: 'desc' }] as const);
 
     const matchedTotal = await this.prisma.jobPost.count({ where });
+    if (query.q?.trim() && !meiliTrusted && this.jobsSearch.enabled && matchedTotal > 0) {
+      this.jobsSearch.reindexInBackground();
+    }
     let page = Math.max(1, query.page);
     let truncated = false;
     let total = matchedTotal;

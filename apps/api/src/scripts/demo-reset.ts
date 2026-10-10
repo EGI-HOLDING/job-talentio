@@ -10,24 +10,9 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { DEMO_CITY_SLUGS, seedDemoApplications, seedDemoJobs } from '../common/demo-jobs';
+import { rebuildJobsIndex } from '../search/jobs-index.sync';
 
 const SEED_EMPLOYEE_EMAIL_SUFFIX = '@jobtalent.io';
-
-async function wipeMeilisearchJobs(log: (msg: string) => void) {
-  const host = (process.env.MEILI_HOST || '').replace(/\/$/, '');
-  if (!host) return;
-  const key = process.env.MEILI_MASTER_KEY;
-  try {
-    const res = await fetch(`${host}/indexes/jobs/documents`, {
-      method: 'DELETE',
-      headers: key ? { Authorization: `Bearer ${key}` } : {},
-      signal: AbortSignal.timeout(10_000),
-    });
-    log(`Meilisearch: cleared jobs index (${res.status}); the API reindexes on the next search`);
-  } catch (err) {
-    log(`Meilisearch: could not clear index (${(err as Error).message}); redeploy the API to reindex`);
-  }
-}
 
 async function main() {
   if (process.env.ALLOW_DEMO_RESET !== '1') {
@@ -94,7 +79,18 @@ async function main() {
       });
     }
 
-    await wipeMeilisearchJobs(log);
+    try {
+      await rebuildJobsIndex({
+        prisma,
+        host: process.env.MEILI_HOST,
+        apiKey: process.env.MEILI_MASTER_KEY,
+        log,
+      });
+    } catch (err) {
+      log(
+        `Meilisearch: reindex failed (${(err as Error).message}); keyword search uses the database until the index catches up`,
+      );
+    }
 
     log(
       `Demo reset complete: jobs=${result.jobs.length} (hero=${result.heroJobs.length}, skipped=${result.skipped}) applications=${applications} profiles=${profiles.length} companies=${companies.length}`,
