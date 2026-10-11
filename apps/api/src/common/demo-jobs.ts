@@ -20,12 +20,18 @@ import { contentHash, jobFingerprint } from './dedupe';
 
 export type DemoLocale = 'uz' | 'ru' | 'en';
 
+export type DemoJobLane = 'it' | 'other' | 'ambiguous';
+
 export type DemoJobTemplate = {
   title: string;
   skills: string[];
   cat: string;
   level: ExperienceLevel;
   years: number;
+  /** Published copies of this role. Profiles still use each template once. */
+  copies: number;
+  /** it and other are woven 2:1; ambiguous roles are inserted in the middle third. */
+  lane: DemoJobLane;
 };
 
 /** Primary hubs used for round-robin seed of jobs, companies and profiles. */
@@ -47,69 +53,126 @@ export const DEMO_CITY_SLUGS = [
   'angren',
 ];
 
-/** ~4 role-only templates per category; seniority lives on experienceLevel. */
+/**
+ * One row per role. `copies` is how many published postings the board gets.
+ * IT 152 + ambiguous 24 + other 76 = 252, plus the six hero vacancies.
+ */
 export const DEMO_JOB_TEMPLATES: DemoJobTemplate[] = [
-  // IT & Software
-  { title: 'Full-stack Developer', skills: ['typescript', 'react', 'nestjs', 'postgresql'], cat: 'it-software', level: 'SENIOR', years: 5 },
-  { title: 'DevOps Engineer', skills: ['docker', 'kubernetes', 'aws', 'ci-cd'], cat: 'it-software', level: 'SENIOR', years: 4 },
-  { title: 'Java Developer', skills: ['java', 'spring-boot', 'sql'], cat: 'it-software', level: 'JUNIOR', years: 0 },
-  { title: 'C++ Systems Engineer', skills: ['cplusplus', 'linux', 'problem-solving'], cat: 'it-software', level: 'MIDDLE', years: 3 },
-  // Finance
-  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE', years: 2 },
-  { title: 'Accountant', skills: ['accounting', '1c', 'excel'], cat: 'finance', level: 'MIDDLE', years: 3 },
-  { title: 'Credit Risk Analyst', skills: ['financial-analysis', 'excel', 'sql'], cat: 'finance', level: 'SENIOR', years: 4 },
-  { title: 'Banking Associate', skills: ['excel', 'communication', 'customer-support'], cat: 'finance', level: 'JUNIOR', years: 1 },
-  // Sales & Marketing
-  { title: 'Digital Marketing Specialist', skills: ['digital-marketing', 'seo', 'smm'], cat: 'sales-marketing', level: 'JUNIOR', years: 1 },
-  { title: 'Sales Manager', skills: ['sales', 'communication', 'excel'], cat: 'sales-marketing', level: 'MIDDLE', years: 3 },
-  { title: 'SEO Specialist', skills: ['seo', 'google-analytics', 'content-writing'], cat: 'sales-marketing', level: 'JUNIOR', years: 1 },
-  { title: 'SMM Manager', skills: ['smm', 'digital-marketing', 'content-writing'], cat: 'sales-marketing', level: 'MIDDLE', years: 2 },
-  // Design
-  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE', years: 2 },
-  { title: 'Graphic Designer', skills: ['adobe-photoshop', 'figma', 'ui-ux'], cat: 'design', level: 'JUNIOR', years: 1 },
-  { title: 'Product Designer', skills: ['figma', 'ui-ux', 'product-management'], cat: 'design', level: 'SENIOR', years: 4 },
-  { title: 'Motion Designer', skills: ['adobe-photoshop', 'figma', 'communication'], cat: 'design', level: 'INTERN', years: 0 },
-  // HR
-  { title: 'HR Recruiter', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'JUNIOR', years: 1 },
-  { title: 'Talent Acquisition Partner', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'MIDDLE', years: 3 },
-  { title: 'HR Business Partner', skills: ['hr-management', 'leadership', 'communication'], cat: 'hr', level: 'SENIOR', years: 5 },
-  { title: 'People Operations Specialist', skills: ['hr-management', 'excel', 'teamwork'], cat: 'hr', level: 'MIDDLE', years: 2 },
-  // Education
-  { title: 'English Teacher (Corporate)', skills: ['english', 'teaching', 'communication'], cat: 'education', level: 'MIDDLE', years: 2 },
-  { title: 'Curriculum Designer', skills: ['curriculum-design', 'teaching', 'english'], cat: 'education', level: 'SENIOR', years: 4 },
-  { title: 'Online Course Instructor', skills: ['teaching', 'content-writing', 'communication'], cat: 'education', level: 'MIDDLE', years: 2 },
-  { title: 'Teaching Assistant', skills: ['teaching', 'uzbek', 'teamwork'], cat: 'education', level: 'JUNIOR', years: 0 },
-  // Healthcare
-  { title: 'Registered Nurse', skills: ['nursing', 'patient-care', 'communication'], cat: 'healthcare', level: 'MIDDLE', years: 3 },
-  { title: 'Clinical Research Associate', skills: ['clinical-research', 'excel', 'english'], cat: 'healthcare', level: 'MIDDLE', years: 2 },
-  { title: 'Pharmacy Specialist', skills: ['pharmacy', 'patient-care', 'communication'], cat: 'healthcare', level: 'SENIOR', years: 4 },
-  { title: 'Patient Care Coordinator', skills: ['patient-care', 'customer-support', 'communication'], cat: 'healthcare', level: 'JUNIOR', years: 1 },
-  // Engineering
-  { title: 'Engineering Project Lead', skills: ['project-management', 'leadership', 'autocad'], cat: 'engineering', level: 'LEAD', years: 8 },
-  { title: 'Mechanical Design Engineer', skills: ['mechanical-design', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE', years: 3 },
-  { title: 'Electrical Engineer', skills: ['electrical-engineering', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE', years: 2 },
-  { title: 'Site Engineer', skills: ['autocad', 'excel', 'teamwork'], cat: 'engineering', level: 'JUNIOR', years: 1 },
-  // Customer Support
-  { title: 'Customer Support Lead', skills: ['customer-support', 'communication', 'leadership'], cat: 'customer-support', level: 'MIDDLE', years: 3 },
-  { title: 'Support Specialist', skills: ['customer-support', 'communication', 'russian'], cat: 'customer-support', level: 'JUNIOR', years: 1 },
-  { title: 'Technical Support Engineer', skills: ['customer-support', 'problem-solving', 'english'], cat: 'customer-support', level: 'MIDDLE', years: 2 },
-  { title: 'Call Center Supervisor', skills: ['customer-support', 'leadership', 'communication'], cat: 'customer-support', level: 'SENIOR', years: 4 },
-  // Logistics
-  { title: 'Logistics Coordinator', skills: ['supply-chain', 'excel', 'communication'], cat: 'logistics', level: 'JUNIOR', years: 1 },
-  { title: 'Warehouse Supervisor', skills: ['supply-chain', 'leadership', 'excel'], cat: 'logistics', level: 'MIDDLE', years: 3 },
-  { title: 'Supply Chain Analyst', skills: ['supply-chain', 'excel', 'data-analysis'], cat: 'logistics', level: 'MIDDLE', years: 2 },
-  { title: 'Fleet Operations Manager', skills: ['supply-chain', 'leadership', 'project-management'], cat: 'logistics', level: 'SENIOR', years: 5 },
-  // Legal
-  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR', years: 5 },
-  { title: 'Compliance Officer', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR', years: 5 },
-  { title: 'Contract Specialist', skills: ['contract-law', 'excel', 'communication'], cat: 'legal', level: 'MIDDLE', years: 3 },
-  { title: 'Paralegal Assistant', skills: ['legal-research', 'communication', 'english'], cat: 'legal', level: 'JUNIOR', years: 1 },
-  // Hospitality
-  { title: 'Hotel Front Office Manager', skills: ['hospitality-management', 'customer-support', 'leadership'], cat: 'hospitality', level: 'MIDDLE', years: 3 },
-  { title: 'Restaurant Supervisor', skills: ['food-safety', 'hospitality-management', 'leadership'], cat: 'hospitality', level: 'MIDDLE', years: 2 },
-  { title: 'Guest Relations Officer', skills: ['hospitality-management', 'communication', 'english'], cat: 'hospitality', level: 'JUNIOR', years: 1 },
-  { title: 'F&B Operations Lead', skills: ['food-safety', 'leadership', 'hospitality-management'], cat: 'hospitality', level: 'SENIOR', years: 4 },
+  // IT — 12 copies
+  { title: 'Full-stack Developer', skills: ['typescript', 'react', 'nestjs', 'postgresql'], cat: 'it-software', level: 'SENIOR', years: 5, copies: 12, lane: 'it' },
+  { title: 'Frontend Developer', skills: ['typescript', 'react', 'next-js'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 12, lane: 'it' },
+  { title: 'Backend Developer', skills: ['node-js', 'nestjs', 'postgresql'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 12, lane: 'it' },
+  { title: 'DevOps Engineer', skills: ['docker', 'kubernetes', 'aws', 'ci-cd'], cat: 'it-software', level: 'SENIOR', years: 4, copies: 12, lane: 'it' },
+  { title: 'AI Engineer', skills: ['python', 'machine-learning', 'data-analysis'], cat: 'it-software', level: 'SENIOR', years: 4, copies: 12, lane: 'it' },
+  { title: 'Machine Learning Engineer', skills: ['python', 'machine-learning', 'sql'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 12, lane: 'it' },
+  // IT — 8 copies
+  { title: 'Data Engineer', skills: ['python', 'sql', 'postgresql'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 8, lane: 'it' },
+  { title: 'QA Engineer', skills: ['qa-testing', 'cypress', 'selenium'], cat: 'it-software', level: 'MIDDLE', years: 2, copies: 8, lane: 'it' },
+  { title: 'Mobile Developer', skills: ['flutter', 'mobile-development', 'kotlin'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 8, lane: 'it' },
+  { title: 'Java Developer', skills: ['java', 'spring-boot', 'sql'], cat: 'it-software', level: 'JUNIOR', years: 0, copies: 8, lane: 'it' },
+  { title: 'Python Developer', skills: ['python', 'django', 'postgresql'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 8, lane: 'it' },
+  { title: 'C++ Systems Engineer', skills: ['cplusplus', 'linux', 'problem-solving'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 8, lane: 'it' },
+  { title: 'Site Reliability Engineer', skills: ['kubernetes', 'linux', 'docker'], cat: 'it-software', level: 'SENIOR', years: 5, copies: 8, lane: 'it' },
+  { title: 'Cloud Engineer', skills: ['aws', 'docker', 'linux'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 8, lane: 'it' },
+  { title: 'Data Analyst', skills: ['data-analysis', 'sql', 'excel'], cat: 'it-software', level: 'JUNIOR', years: 1, copies: 8, lane: 'it' },
+  { title: 'Security Engineer', skills: ['linux', 'python', 'problem-solving'], cat: 'it-software', level: 'MIDDLE', years: 3, copies: 8, lane: 'it' },
+  // Ambiguous titles: AI in the name, writing or a mixed skill set in the posting.
+  { title: 'AI Content Writer', skills: ['content-writing', 'english', 'communication'], cat: 'sales-marketing', level: 'MIDDLE', years: 2, copies: 8, lane: 'ambiguous' },
+  { title: 'AI Content Creator', skills: ['content-writing', 'smm', 'adobe-photoshop'], cat: 'sales-marketing', level: 'JUNIOR', years: 1, copies: 8, lane: 'ambiguous' },
+  { title: 'Prompt Engineer', skills: ['python', 'content-writing', 'english'], cat: 'it-software', level: 'MIDDLE', years: 2, copies: 8, lane: 'ambiguous' },
+  // Non-software — 4 copies, so the board is not only engineering roles.
+  { title: 'Accountant', skills: ['accounting', '1c', 'excel'], cat: 'finance', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
+  { title: 'Financial Analyst', skills: ['financial-analysis', 'excel', 'accounting'], cat: 'finance', level: 'MIDDLE', years: 2, copies: 4, lane: 'other' },
+  { title: 'Banking Associate', skills: ['excel', 'communication', 'customer-support'], cat: 'finance', level: 'JUNIOR', years: 1, copies: 4, lane: 'other' },
+  { title: 'Sales Manager', skills: ['sales', 'communication', 'excel'], cat: 'sales-marketing', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
+  { title: 'Digital Marketing Specialist', skills: ['digital-marketing', 'seo', 'smm'], cat: 'sales-marketing', level: 'JUNIOR', years: 1, copies: 4, lane: 'other' },
+  { title: 'UI/UX Designer', skills: ['figma', 'ui-ux', 'adobe-photoshop'], cat: 'design', level: 'MIDDLE', years: 2, copies: 4, lane: 'other' },
+  { title: 'Graphic Designer', skills: ['adobe-photoshop', 'figma', 'ui-ux'], cat: 'design', level: 'JUNIOR', years: 1, copies: 4, lane: 'other' },
+  { title: 'Product Designer', skills: ['figma', 'ui-ux', 'product-management'], cat: 'design', level: 'SENIOR', years: 4, copies: 4, lane: 'other' },
+  { title: 'HR Recruiter', skills: ['recruiting', 'hr-management', 'communication'], cat: 'hr', level: 'JUNIOR', years: 1, copies: 4, lane: 'other' },
+  { title: 'English Teacher (Corporate)', skills: ['english', 'teaching', 'communication'], cat: 'education', level: 'MIDDLE', years: 2, copies: 4, lane: 'other' },
+  { title: 'Registered Nurse', skills: ['nursing', 'patient-care', 'communication'], cat: 'healthcare', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
+  { title: 'Mechanical Design Engineer', skills: ['mechanical-design', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
+  { title: 'Electrical Engineer', skills: ['electrical-engineering', 'autocad', 'problem-solving'], cat: 'engineering', level: 'MIDDLE', years: 2, copies: 4, lane: 'other' },
+  { title: 'Customer Support Lead', skills: ['customer-support', 'communication', 'leadership'], cat: 'customer-support', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
+  { title: 'Technical Support Engineer', skills: ['customer-support', 'problem-solving', 'english'], cat: 'customer-support', level: 'MIDDLE', years: 2, copies: 4, lane: 'other' },
+  { title: 'Logistics Coordinator', skills: ['supply-chain', 'excel', 'communication'], cat: 'logistics', level: 'JUNIOR', years: 1, copies: 4, lane: 'other' },
+  { title: 'Warehouse Supervisor', skills: ['supply-chain', 'leadership', 'excel'], cat: 'logistics', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
+  { title: 'Legal Counsel', skills: ['legal-research', 'contract-law', 'communication'], cat: 'legal', level: 'SENIOR', years: 5, copies: 4, lane: 'other' },
+  { title: 'Hotel Front Office Manager', skills: ['hospitality-management', 'customer-support', 'leadership'], cat: 'hospitality', level: 'MIDDLE', years: 3, copies: 4, lane: 'other' },
 ];
+
+const PLACEMENT_MODES: WorkMode[] = ['ONSITE', 'HYBRID', 'REMOTE'];
+
+function repeatLane(templates: DemoJobTemplate[], lane: DemoJobLane): DemoJobTemplate[] {
+  return templates
+    .filter((tpl) => tpl.lane === lane)
+    .flatMap((tpl) => Array.from({ length: tpl.copies }, () => tpl));
+}
+
+/**
+ * 252 slots: two IT postings, then one other role, repeated.
+ * Ambiguous titles are spread through the middle third so they are not the
+ * newest or the oldest rows on the board.
+ */
+export function expandDemoJobPlan(templates: DemoJobTemplate[] = DEMO_JOB_TEMPLATES): DemoJobTemplate[] {
+  const it = repeatLane(templates, 'it');
+  const other = repeatLane(templates, 'other');
+  const ambiguous = repeatLane(templates, 'ambiguous');
+  const weave: DemoJobTemplate[] = [];
+  let itIndex = 0;
+  let otherIndex = 0;
+  while (itIndex < it.length || otherIndex < other.length) {
+    for (let n = 0; n < 2 && itIndex < it.length; n += 1) weave.push(it[itIndex++]);
+    if (otherIndex < other.length) weave.push(other[otherIndex++]);
+  }
+
+  const total = weave.length + ambiguous.length;
+  if (!ambiguous.length) return weave;
+
+  const start = Math.floor(total / 3);
+  const end = Math.floor((total * 2) / 3);
+  const span = Math.max(1, end - start);
+  const slots = new Set<number>();
+  for (let k = 0; k < ambiguous.length; k += 1) {
+    let idx = start + Math.floor(((k + 0.5) * span) / ambiguous.length);
+    while (slots.has(idx) && idx < end) idx += 1;
+    slots.add(idx);
+  }
+
+  const out: DemoJobTemplate[] = [];
+  let weaveIndex = 0;
+  let ambiguousIndex = 0;
+  for (let n = 0; n < total; n += 1) {
+    if (slots.has(n)) out.push(ambiguous[ambiguousIndex++]);
+    else out.push(weave[weaveIndex++]);
+  }
+  return out;
+}
+
+/**
+ * Next city and work mode whose title fingerprint is still free.
+ * Heroes are reserved first so a generic copy cannot take their slot.
+ */
+export function takeOpenPlacement(
+  title: string,
+  cities: DemoCityRow[],
+  used: Set<string>,
+  cursor: number,
+): { city: DemoCityRow; workMode: WorkMode; nextCursor: number } | null {
+  if (!cities.length) return null;
+  const span = cities.length * PLACEMENT_MODES.length;
+  for (let step = 0; step < span; step += 1) {
+    const n = cursor + step;
+    const city = cities[n % cities.length];
+    const workMode = PLACEMENT_MODES[Math.floor(n / cities.length) % PLACEMENT_MODES.length];
+    const key = jobFingerprint({ title, workMode, cityId: city.id });
+    if (used.has(key)) continue;
+    used.add(key);
+    return { city, workMode, nextCursor: n + 1 };
+  }
+  return null;
+}
 
 /** Half of the generic postings are Uzbek, a third Russian, the rest English. */
 export const DEMO_JOB_LOCALES: DemoLocale[] = ['uz', 'uz', 'ru', 'en', 'uz', 'ru'];
@@ -840,7 +903,7 @@ export type DemoSeedContext = {
   catMap: Record<string, { id: string }>;
   skillMap: Record<string, { id: string; name: string }>;
   benefits: Array<{ id: string }>;
-  /** Generic postings to create on top of the hero jobs. */
+  /** Optional cap on the expanded generic plan (local experiments). */
   jobCount?: number;
   log?: (message: string) => void;
 };
@@ -862,25 +925,53 @@ export async function seedDemoJobs(prisma: PrismaClient, ctx: DemoSeedContext): 
   }
 
   const employmentTypes: EmploymentType[] = ['FULL_TIME', 'FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP'];
-  const workModes: WorkMode[] = ['ONSITE', 'HYBRID', 'REMOTE', 'HYBRID', 'ONSITE'];
-  const jobCount = ctx.jobCount ?? 96;
+  const fullPlan = expandDemoJobPlan();
+  const plan = ctx.jobCount === undefined ? fullPlan : fullPlan.slice(0, ctx.jobCount);
+  const usedFingerprints = new Set<string>();
+  const cityBySlug = Object.fromEntries(ctx.cities.map((c) => [c.slug, c]));
+  const cityById = Object.fromEntries(ctx.cities.map((c) => [c.id, c]));
+  for (const hero of DEMO_HERO_JOBS) {
+    const company = ctx.companies.find((c) => c.slug === hero.companySlug);
+    const city =
+      (hero.citySlug && cityBySlug[hero.citySlug]) ||
+      (company?.cityId && cityById[company.cityId]) ||
+      cityBySlug.tashkent ||
+      ctx.cities[0];
+    if (!city) continue;
+    const reserved = await resolveJobTitle(prisma, { name: hero.title });
+    usedFingerprints.add(
+      jobFingerprint({ title: reserved.jobTitle.name, workMode: hero.workMode, cityId: city.id }),
+    );
+  }
+  const placementCursor = new Map<string, number>();
 
-  for (let i = 0; i < jobCount; i++) {
-    const tpl = DEMO_JOB_TEMPLATES[i % DEMO_JOB_TEMPLATES.length];
+  for (let i = 0; i < plan.length; i++) {
+    const tpl = plan[i];
     const company = ctx.companies[i % ctx.companies.length];
-    const city = ctx.cities[i % ctx.cities.length];
     const locale = DEMO_JOB_LOCALES[i % DEMO_JOB_LOCALES.length];
     const isHot = i < 6;
-    const status = i % 14 === 0 ? 'DRAFT' : i % 16 === 0 ? 'CLOSED' : 'PUBLISHED';
-    const workMode = workModes[i % workModes.length];
+    const status = 'PUBLISHED' as const;
+    const resolvedTitle = await resolveJobTitle(prisma, { name: tpl.title });
+    const title = resolvedTitle.jobTitle.name;
+    const placement = takeOpenPlacement(
+      title,
+      ctx.cities,
+      usedFingerprints,
+      placementCursor.get(title) ?? 0,
+    );
+    if (!placement) {
+      log(`Skip demo job "${title}": no free city and work mode left`);
+      skipped += 1;
+      continue;
+    }
+    placementCursor.set(title, placement.nextCursor);
+    const city = placement.city;
+    const workMode = placement.workMode;
     const employmentType = employmentTypes[i % employmentTypes.length];
     const band = demoSalaryBand(tpl.cat, tpl.level);
     // Small per-posting spread so identical roles do not all show one number.
     const salaryMin = roundUzs(band.min * (1 + ((i % 3) - 1) * 0.05));
     const salaryMax = roundUzs(band.max * (1 + ((i % 4) - 1) * 0.05));
-
-    const resolvedTitle = await resolveJobTitle(prisma, { name: tpl.title });
-    const title = resolvedTitle.jobTitle.name;
     const skillNames = tpl.skills.map((slug) => ctx.skillMap[slug]?.name ?? slug);
     const description = buildDemoJobDescription({
       locale,
@@ -926,8 +1017,6 @@ export async function seedDemoJobs(prisma: PrismaClient, ctx: DemoSeedContext): 
     jobs.push(created);
   }
 
-  const cityBySlug = Object.fromEntries(ctx.cities.map((c) => [c.slug, c]));
-  const cityById = Object.fromEntries(ctx.cities.map((c) => [c.id, c]));
   for (let h = 0; h < DEMO_HERO_JOBS.length; h++) {
     const hero = DEMO_HERO_JOBS[h];
     const company = ctx.companies.find((c) => c.slug === hero.companySlug);
