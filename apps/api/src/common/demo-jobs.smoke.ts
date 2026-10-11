@@ -7,6 +7,7 @@ import {
   demoCoverLetter,
   demoSalaryBand,
   demoScreeningQuestions,
+  expandDemoJobPlan,
   type DemoLocale,
 } from './demo-jobs';
 
@@ -102,6 +103,36 @@ function localizedScreeningAndAnswers() {
   assert(demoScreeningQuestions('uz')[0].question !== demoScreeningQuestions('ru')[0].question, 'questions must differ per locale');
 }
 
+function quotaFillsTheBoardWithoutCrowdingTheEnds() {
+  const expanded = expandDemoJobPlan();
+  const planned = DEMO_JOB_TEMPLATES.reduce((sum, tpl) => sum + tpl.copies, 0);
+  assert(planned === 252, `quota should be 252 published generics, got ${planned}`);
+  assert(expanded.length === 252, `expanded plan should be 252, got ${expanded.length}`);
+
+  for (const tpl of DEMO_JOB_TEMPLATES) {
+    assert(tpl.copies >= 1 && tpl.copies <= 12, `${tpl.title}: copies ${tpl.copies} outside 1..12`);
+    const placed = expanded.filter((row) => row.title === tpl.title).length;
+    assert(placed === tpl.copies, `${tpl.title}: expanded ${placed} !== copies ${tpl.copies}`);
+  }
+
+  const it = expanded.filter((row) => row.lane === 'it').length;
+  assert(it > expanded.length / 2, `IT should be more than half the board, got ${it}/${expanded.length}`);
+  assert(it === 152, `IT quota should be 152, got ${it}`);
+
+  const start = Math.floor(expanded.length / 3);
+  const end = Math.floor((expanded.length * 2) / 3);
+  for (const title of ['AI Content Writer', 'AI Content Creator', 'Prompt Engineer']) {
+    const indexes = expanded.flatMap((row, index) => (row.title === title ? [index] : []));
+    assert(indexes.length === 8, `${title}: expected 8 copies, got ${indexes.length}`);
+    for (const index of indexes) {
+      assert(
+        index >= start && index < end,
+        `${title} at ${index} is outside the middle third [${start}, ${end})`,
+      );
+    }
+  }
+}
+
 function localeMixFavoursUzbek() {
   const uz = DEMO_JOB_LOCALES.filter((l) => l === 'uz').length;
   assert(uz / DEMO_JOB_LOCALES.length >= 0.5, 'at least half of demo postings should be Uzbek');
@@ -112,5 +143,6 @@ descriptionsReadInEveryLanguage();
 salaryBandsAreSane();
 heroJobsAreComplete();
 localizedScreeningAndAnswers();
+quotaFillsTheBoardWithoutCrowdingTheEnds();
 localeMixFavoursUzbek();
 console.log('api: demo-jobs smoke ok');
