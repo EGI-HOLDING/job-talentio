@@ -303,6 +303,176 @@ function mlProfileDoesNotMatchUnrelatedRoles() {
   assert(mlJob.total > mechanical.total, 'ML role must outscore mechanical design');
 }
 
+function profileSkill(
+  id: string,
+  name: string,
+  slug: string,
+  level: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' = 'ADVANCED',
+) {
+  return {
+    skillId: id,
+    level,
+    skill: { name, slug, normalizedKey: slug.replace(/[^a-z0-9]+/gi, '') },
+  };
+}
+
+function mlHeadlineBeatsDataAndPythonJobs() {
+  assert(
+    normalizeJobTitleKey('ML Engineer') === normalizeJobTitleKey('Machine Learning Engineer'),
+    'ML Engineer must share a key with Machine Learning Engineer',
+  );
+  assert(
+    normalizeJobTitleKey('AI Engineer') === normalizeJobTitleKey('Machine Learning Engineer'),
+    'AI Engineer must share the ML family',
+  );
+  assert(
+    normalizeJobTitleKey('Data Engineer') !== normalizeJobTitleKey('Machine Learning Engineer'),
+    'Data Engineer must stay outside the ML family',
+  );
+  assert(
+    normalizeJobTitleKey('Python Developer') !== normalizeJobTitleKey('ML Engineer'),
+    'Python Developer must stay outside the ML family',
+  );
+
+  const profile = baseProfile({
+    headline: 'ML Engineer',
+    cityId: 'tashkent',
+    city: { id: 'tashkent', provinceId: 'tashkent' },
+    skills: [
+      profileSkill('py', 'Python', 'python'),
+      profileSkill('sql', 'SQL', 'sql'),
+      profileSkill('pg', 'PostgreSQL', 'postgresql'),
+    ],
+    experiences: [
+      {
+        title: 'Data Engineer',
+        startDate: new Date('2016-01-01'),
+        endDate: new Date('2019-12-01'),
+        isCurrent: false,
+      },
+    ],
+    educations: [{ degree: 'BACHELOR' as const }],
+    languages: [{ language: { code: 'en' }, level: 'C1' as const }],
+  });
+  const place = {
+    experienceYearsMin: 3,
+    experienceLevel: 'MIDDLE' as const,
+    cityId: 'tashkent',
+    city: { id: 'tashkent', provinceId: 'tashkent' },
+  };
+  const ml = matching.compute(
+    profile,
+    baseJob({
+      ...place,
+      title: 'Machine Learning Engineer',
+      jobTitle: { name: 'Machine Learning Engineer', normalizedKey: 'machinelearningengineer' },
+      jobSkills: [
+        jobSkill('py-job', 'Python', 'python'),
+        jobSkill('ml', 'Machine Learning', 'machine-learning'),
+        jobSkill('sql-job', 'SQL', 'sql'),
+      ],
+    }),
+  );
+  const data = matching.compute(
+    profile,
+    baseJob({
+      ...place,
+      title: 'Data Engineer',
+      jobTitle: { name: 'Data Engineer', normalizedKey: 'dataengineer' },
+      jobSkills: [
+        jobSkill('py-data', 'Python', 'python'),
+        jobSkill('sql-data', 'SQL', 'sql'),
+        jobSkill('pg-data', 'PostgreSQL', 'postgresql'),
+      ],
+    }),
+  );
+  const python = matching.compute(
+    profile,
+    baseJob({
+      ...place,
+      title: 'Python Developer',
+      jobTitle: { name: 'Python Developer', normalizedKey: 'pythondeveloper' },
+      jobSkills: [
+        jobSkill('py-dev', 'Python', 'python'),
+        jobSkill('django', 'Django', 'django'),
+        jobSkill('pg-dev', 'PostgreSQL', 'postgresql'),
+      ],
+    }),
+  );
+  const ai = matching.compute(
+    profile,
+    baseJob({
+      ...place,
+      title: 'AI Engineer',
+      jobTitle: { name: 'AI Engineer', normalizedKey: 'aiengineer' },
+      jobSkills: [
+        jobSkill('py-ai', 'Python', 'python'),
+        jobSkill('ml-ai', 'Machine Learning', 'machine-learning'),
+        jobSkill('da', 'Data Analysis', 'data-analysis'),
+      ],
+    }),
+  );
+  assert(
+    ml.total >= data.total + 15,
+    `ML ${ml.total} must lead Data Engineer ${data.total} by at least 15`,
+  );
+  assert(
+    ml.total >= python.total + 15,
+    `ML ${ml.total} must lead Python Developer ${python.total} by at least 15`,
+  );
+  assert(ai.total > data.total, `AI Engineer ${ai.total} must beat Data Engineer ${data.total}`);
+}
+
+function accountantBeatsSalesThatOnlySharesExcel() {
+  const profile = baseProfile({
+    headline: 'Accountant',
+    cityId: 'tashkent',
+    city: { id: 'tashkent', provinceId: 'tashkent' },
+    skills: [
+      profileSkill('acc', 'Accounting', 'accounting'),
+      profileSkill('1c', '1C', '1c'),
+      profileSkill('excel', 'Excel', 'excel'),
+    ],
+    educations: [{ degree: 'BACHELOR' as const }],
+  });
+  const place = {
+    experienceYearsMin: 3,
+    experienceLevel: 'MIDDLE' as const,
+    cityId: 'tashkent',
+    city: { id: 'tashkent', provinceId: 'tashkent' },
+  };
+  const accountant = matching.compute(
+    profile,
+    baseJob({
+      ...place,
+      title: 'Accountant',
+      jobTitle: { name: 'Accountant', normalizedKey: 'accountant' },
+      jobSkills: [
+        jobSkill('acc-job', 'Accounting', 'accounting'),
+        jobSkill('1c-job', '1C', '1c'),
+        jobSkill('excel-job', 'Excel', 'excel'),
+      ],
+    }),
+  );
+  const sales = matching.compute(
+    profile,
+    baseJob({
+      ...place,
+      title: 'Sales Manager',
+      jobTitle: { name: 'Sales Manager', normalizedKey: 'salesmanager' },
+      jobSkills: [
+        jobSkill('sales', 'Sales', 'sales'),
+        jobSkill('comm', 'Communication', 'communication'),
+        jobSkill('excel-sales', 'Excel', 'excel'),
+      ],
+    }),
+  );
+  assert(
+    accountant.total >= sales.total + 15,
+    `Accountant ${accountant.total} must lead Sales Manager ${sales.total} by at least 15`,
+  );
+}
+
 function main() {
   duplicateSkillKeysCountAsHit();
   itHandlerMatchesItSupportRole();
@@ -310,6 +480,8 @@ function main() {
   missingRequiredSkillsCapsBucket();
   emptySkillsAndTitlesFailGate();
   mlProfileDoesNotMatchUnrelatedRoles();
+  mlHeadlineBeatsDataAndPythonJobs();
+  accountantBeatsSalesThatOnlySharesExcel();
   console.log('api: matching.compute smoke ok');
 }
 

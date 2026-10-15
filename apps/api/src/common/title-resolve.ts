@@ -17,6 +17,10 @@ const TITLE_SYNONYMS: Record<string, string> = {
   cppsystemsengineer: 'cplusplussystemsengineer',
   nodedev: 'nodejsdeveloper',
   reactjsdeveloper: 'reactdeveloper',
+  // One family. Data Engineer and Python Developer stay outside it.
+  mlengineer: 'machinelearningengineer',
+  aiengineer: 'machinelearningengineer',
+  artificialintelligenceengineer: 'machinelearningengineer',
   ithandler: 'itsupport',
   helpdesk: 'itsupport',
   helpdesktechnician: 'itsupport',
@@ -120,6 +124,32 @@ export function stripSeniorityFromTitle(input: string): StripSeniorityResult {
   }
 
   return { roleTitle: s, inferredLevel: inferred };
+}
+
+/**
+ * Whole-word abbreviations that are shorter than a distinctive title token.
+ * Applied before tokens are cut so "ML" still means machine learning.
+ * Not a catalog of IT roles.
+ */
+const TITLE_ABBREVIATIONS: Array<[RegExp, string]> = [
+  [/\bml\b/g, 'machine learning'],
+  [/\bai\b/g, 'artificial intelligence'],
+  [/\bhr\b/g, 'human resources'],
+  [/\bqa\b/g, 'quality assurance'],
+  [/\bui\b/g, 'user interface'],
+  [/\bux\b/g, 'user experience'],
+  [/\bpr\b/g, 'public relations'],
+];
+
+export function expandTitleAbbreviations(input: string): string {
+  let s = input.toLowerCase();
+  // Keep the existing UI/UX compound intact so it does not expand twice.
+  s = s.replace(/ui\s*\/\s*ux/g, 'uiux');
+  for (const [pattern, phrase] of TITLE_ABBREVIATIONS) {
+    pattern.lastIndex = 0;
+    s = s.replace(pattern, phrase);
+  }
+  return s;
 }
 
 export function normalizeJobTitleKey(input: string): string {
