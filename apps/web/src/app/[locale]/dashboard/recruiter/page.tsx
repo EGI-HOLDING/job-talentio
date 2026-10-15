@@ -45,6 +45,25 @@ const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing
 function isRecruiterTab(v: string): v is Tab {
   return (RECRUITER_TABS as string[]).includes(v);
 }
+
+/** Pipeline and bulk deep-link a job. Other tabs must not write `job` or the URL fights the tab. */
+const JOB_QUERY_TABS: Tab[] = ['pipeline', 'bulk'];
+
+function canonicalQuery(input: { toString(): string }): string {
+  const params = new URLSearchParams(input.toString());
+  return [...params.entries()]
+    .sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+}
+
+function dashboardQuery(tab: Tab, selectedJob: string, base: { toString(): string }): URLSearchParams {
+  const params = new URLSearchParams(base.toString());
+  params.set('tab', tab);
+  if (JOB_QUERY_TABS.includes(tab) && selectedJob) params.set('job', selectedJob);
+  else params.delete('job');
+  return params;
+}
 type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 type CheckoutResponse = {
   payment: { id: string; status: string; amountUzs: number; purpose: string };
@@ -114,16 +133,28 @@ function RecruiterDashboard() {
   const focusFromUrl = searchParams.get('focus') || '';
   const [tab, setTab] = useState<Tab>(() => {
     if (tabFromUrl === 'candidates') return 'jobs';
+    // An explicit tab wins. `job` opens Pipeline only when the URL never named a tab.
     if (isRecruiterTab(tabFromUrl)) return tabFromUrl;
     const stored = readStoredDashboardTab(RECRUITER_TAB_KEY);
     if (stored && isRecruiterTab(stored)) return stored;
     if (jobFromUrl) return 'pipeline';
     return 'jobs';
   });
+  const [selectedJob, setSelectedJob] = useState(jobFromUrl);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const selectedJobRef = useRef(selectedJob);
+  selectedJobRef.current = selectedJob;
+  const urlWrites = useRef(new Map<number, string>());
+  const urlWriteGen = useRef(0);
+  const latestWrittenQuery = useRef<string | null>(null);
   const [memberships, setMemberships] = useState<any[]>([]);
   const [companyId, setCompanyId] = useState('');
   const [jobs, setJobs] = useState<any[]>([]);
-  const [selectedJob, setSelectedJob] = useState(jobFromUrl);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [recommended, setRecommended] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -421,30 +452,49 @@ function RecruiterDashboard() {
       window.location.replace('/talent');
       return;
     }
-    if (isRecruiterTab(tabFromUrl) && tabFromUrl !== tab) {
+    const seen = canonicalQuery(searchParams);
+    let matchedGen: number | null = null;
+    for (const [gen, qs] of urlWrites.current) {
+      if (qs === seen) matchedGen = gen;
+    }
+    if (matchedGen != null) {
+      urlWrites.current.delete(matchedGen);
+      const newerInFlight = [...urlWrites.current.keys()].some((gen) => gen > matchedGen);
+      if (newerInFlight) return;
+      const latest = latestWrittenQuery.current;
+      const latestKey = latest == null ? null : canonicalQuery(new URLSearchParams(latest));
+      if (latest != null && latestKey != null && seen !== latestKey) {
+        const gen = ++urlWriteGen.current;
+        urlWrites.current.set(gen, latestKey);
+        routerRef.current.replace(latest ? `/dashboard/recruiter?${latest}` : '/dashboard/recruiter');
+      }
+      return;
+    }
+    if (isRecruiterTab(tabFromUrl) && tabFromUrl !== tabRef.current) {
       setTab(tabFromUrl);
     }
-  }, [tabFromUrl]);
-
-  useEffect(() => {
-    if (jobFromUrl && jobFromUrl !== selectedJob) {
+    const explicitTab = isRecruiterTab(tabFromUrl) ? tabFromUrl : tabRef.current;
+    if (
+      jobFromUrl &&
+      (explicitTab === 'pipeline' || explicitTab === 'bulk') &&
+      jobFromUrl !== selectedJobRef.current
+    ) {
       setSelectedJob(jobFromUrl);
     }
-  }, [jobFromUrl]);
+  }, [tabFromUrl, jobFromUrl, searchParams]);
 
-  // Keep URL + sessionStorage in sync so browser Back returns to the last section.
+  // One writer. It does not depend on searchParams or router identity, so its own replace cannot schedule another.
   useEffect(() => {
     storeDashboardTab(RECRUITER_TAB_KEY, tab);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', tab);
-    if (selectedJob) params.set('job', selectedJob);
-    else params.delete('job');
+    const params = dashboardQuery(tab, selectedJob, searchParamsRef.current);
+    const next = canonicalQuery(params);
+    if (next === canonicalQuery(searchParamsRef.current)) return;
+    const gen = ++urlWriteGen.current;
     const qs = params.toString();
-    const current = searchParams.toString();
-    if (qs !== current) {
-      router.replace(qs ? `/dashboard/recruiter?${qs}` : '/dashboard/recruiter');
-    }
-  }, [tab, selectedJob, router, searchParams]);
+    urlWrites.current.set(gen, next);
+    latestWrittenQuery.current = qs;
+    routerRef.current.replace(qs ? `/dashboard/recruiter?${qs}` : '/dashboard/recruiter');
+  }, [tab, selectedJob]);
 
   useEffect(() => {
     if (tab === 'jobs' && focusFromUrl === 'create') {
