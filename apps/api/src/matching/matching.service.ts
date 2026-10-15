@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import {
   canonicalTitleKey,
+  expandTitleAbbreviations,
   normalizeJobTitleKey,
   profileRoleTexts,
   stripSeniorityFromTitle,
@@ -162,6 +163,10 @@ const TITLE_BUCKET = 15;
 const ROLE_MAX = SKILLS_BUCKET + TITLE_BUCKET;
 /** Soft-skill-only overlap must not look like a role match. */
 const SOFT_ONLY_CAP = 5;
+/** A past job title can support a match, but it is not the current role. */
+const HISTORY_TITLE_CAP = 8;
+/** Shared generic skills must not outrank a different role family. */
+const CONFLICT_SKILL_FACTOR = 0.5;
 const REQUIRED_SKILLS_MISS_CAP = 12;
 const RECOMMEND_QUERY_CAP = 200;
 const RECOMMEND_FALLBACK_SCAN = 120;
@@ -195,8 +200,7 @@ function findProfileSkill(
 function significantTitleTokens(input: string): Set<string> {
   const { roleTitle } = stripSeniorityFromTitle(input);
   return new Set(
-    roleTitle
-      .toLowerCase()
+    expandTitleAbbreviations(roleTitle)
       .split(/[^a-z0-9]+/)
       .filter((t) => t.length >= 4 && !TITLE_TOKEN_STOP.has(t)),
   );
@@ -215,8 +219,7 @@ function isSoftSkillLabel(name: string): boolean {
   return SOFT_SKILL_KEYS.has(normalizeSkillKey(name));
 }
 
-function roleMatchScore(profileTexts: string[], job: MatchJob): number {
-  if (!profileTexts.length) return 0;
+function jobTitleKeys(job: MatchJob): Set<string> {
   const jobName = job.jobTitle?.name || job.title || '';
   const jobKeys = new Set<string>();
   if (job.jobTitle?.normalizedKey) {
@@ -226,7 +229,30 @@ function roleMatchScore(profileTexts: string[], job: MatchJob): number {
   if (jobName) jobKeys.add(normalizeJobTitleKey(jobName));
   if (job.title) jobKeys.add(normalizeJobTitleKey(job.title));
   jobKeys.delete('');
+  return jobKeys;
+}
 
+function jobTitleTokens(job: MatchJob): Set<string> {
+  const tokens = new Set<string>();
+  for (const text of [job.jobTitle?.name || '', job.title || '']) {
+    if (!text) continue;
+    for (const tok of distinctiveTitleTokens(text)) tokens.add(tok);
+  }
+  return tokens;
+}
+
+function textTitleTokens(texts: string[]): Set<string> {
+  const tokens = new Set<string>();
+  for (const text of texts) {
+    for (const tok of distinctiveTitleTokens(text)) tokens.add(tok);
+  }
+  return tokens;
+}
+
+/** Exact, synonym, or distinctive-token score for one set of role texts. */
+function scoreTitleTexts(profileTexts: string[], job: MatchJob): number {
+  if (!profileTexts.length) return 0;
+  const jobKeys = jobTitleKeys(job);
   const profileKeys = profileTexts.map((t) => normalizeJobTitleKey(t)).filter(Boolean);
   if (profileKeys.some((k) => jobKeys.has(k))) return TITLE_BUCKET;
 
@@ -238,18 +264,52 @@ function roleMatchScore(profileTexts: string[], job: MatchJob): number {
     return 12;
   }
 
-  const jobTokens = new Set<string>();
-  for (const text of [jobName, job.title || '']) {
-    if (!text) continue;
-    for (const tok of distinctiveTitleTokens(text)) jobTokens.add(tok);
-  }
+  const jobTokens = jobTitleTokens(job);
   if (!jobTokens.size) return 0;
-  for (const text of profileTexts) {
-    for (const tok of distinctiveTitleTokens(text)) {
-      if (jobTokens.has(tok)) return 6;
-    }
+  for (const tok of textTitleTokens(profileTexts)) {
+    if (jobTokens.has(tok)) return 6;
   }
   return 0;
+}
+
+/**
+ * Primary role (desired position, headline, current job) disagrees with the
+ * vacancy: both sides have distinctive tokens, none are shared, and the titles
+ * are not synonyms. A missing token on either side is not a conflict.
+ */
+function titleFamiliesConflict(primaryTexts: string[], job: MatchJob): boolean {
+  if (!primaryTexts.length) return false;
+  if (scoreTitleTexts(primaryTexts, job) >= 12) return false;
+  const profileTokens = textTitleTokens(primaryTexts);
+  const jobTokens = jobTitleTokens(job);
+  if (!profileTokens.size || !jobTokens.size) return false;
+  for (const tok of profileTokens) {
+    if (jobTokens.has(tok)) return false;
+  }
+  return true;
+}
+
+function roleMatchScore(primaryTexts: string[], historyTexts: string[], job: MatchJob): number {
+  const primaryScore = scoreTitleTexts(primaryTexts, job);
+  // A past title must not pull the score toward a role the person has left.
+  if (titleFamiliesConflict(primaryTexts, job)) return primaryScore;
+  const historyScore = Math.min(HISTORY_TITLE_CAP, scoreTitleTexts(historyTexts, job));
+  return Math.max(primaryScore, historyScore);
+}
+
+function splitRoleTexts(profile: MatchProfile): { primary: string[]; history: string[] } {
+  const clean = (value: string | null | undefined) => (value || '').trim();
+  const primary = [profile.desiredPosition, profile.headline]
+    .map(clean)
+    .filter(Boolean);
+  const history: string[] = [];
+  for (const exp of profile.experiences) {
+    const title = clean(exp.title);
+    if (!title) continue;
+    if (exp.isCurrent) primary.push(title);
+    else history.push(title);
+  }
+  return { primary, history };
 }
 
 function mergeById<T extends { id: string }>(primary: T[], extra: T[], cap = RECOMMEND_QUERY_CAP): T[] {
@@ -333,6 +393,7 @@ export class MatchingService {
     let skillsScore = 0;
     let matchedDistinctive = 0;
     let matchedSoft = 0;
+    let coverage = 0;
     if (job.jobSkills.length > 0) {
       let weightedHit = 0;
       let weightedTotal = 0;
@@ -349,16 +410,34 @@ export class MatchingService {
           missingRequiredSkills.push(js.skill.name);
         }
       }
-      skillsScore = weightedTotal
-        ? Math.round((weightedHit / weightedTotal) * SKILLS_BUCKET)
-        : 0;
+      coverage = weightedTotal ? Math.min(1, weightedHit / weightedTotal) : 0;
+      skillsScore = weightedTotal ? Math.round(coverage * SKILLS_BUCKET) : 0;
       const requiredCount = job.jobSkills.filter((js) => js.isRequired).length;
       if (requiredCount > 0 && missingRequiredSkills.length === requiredCount) {
         skillsScore = Math.min(skillsScore, REQUIRED_SKILLS_MISS_CAP);
       }
     }
 
-    const titleScore = roleMatchScore(profileRoleTexts(profile), job);
+    const roles = splitRoleTexts(profile);
+    const titleScore = roleMatchScore(roles.primary, roles.history, job);
+    const softOnlyPreview = matchedDistinctive === 0 && matchedSoft > 0 && titleScore === 0;
+    const conflict = titleFamiliesConflict(roles.primary, job);
+    if (conflict && !softOnlyPreview && job.jobSkills.length > 0) {
+      const profileDistinctive = profile.skills.filter((s) => !isSoftSkill(s.skill));
+      const fit = profileDistinctive.length
+        ? profileDistinctive.filter((ps) =>
+            job.jobSkills.some(
+              (js) =>
+                ps.skillId === js.skillId ||
+                (skillIdentityKey(ps.skill) !== '' &&
+                  skillIdentityKey(ps.skill) === skillIdentityKey(js.skill)),
+            ),
+          ).length / profileDistinctive.length
+        : 0;
+      skillsScore = Math.round(
+        Math.sqrt(coverage * fit) * SKILLS_BUCKET * CONFLICT_SKILL_FACTOR,
+      );
+    }
 
     const experienceYears = this.totalExperienceYears(profile.experiences);
     const requiredYears =
