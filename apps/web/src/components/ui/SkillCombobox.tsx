@@ -4,6 +4,7 @@ import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 
 type SkillComboboxProps = {
+  focusSuggestions?: boolean;
   onPick: (skill: {
     slug: string;
     name: string;
@@ -20,6 +21,7 @@ type SkillComboboxProps = {
 
 /** Skills-specific wrapper around LookupCombobox. */
 export function SkillCombobox({
+  focusSuggestions = false,
   onPick,
   levelSelect = true,
   levelName = 'level',
@@ -32,6 +34,7 @@ export function SkillCombobox({
   const enumLabel = useEnumLabel();
   return (
     <LookupCombobox
+      focusSuggestions={focusSuggestions}
       kind="skills"
       onPick={onPick}
       allowCreate={allowCreate}

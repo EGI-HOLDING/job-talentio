@@ -3,9 +3,9 @@ import { Suspense } from 'react';
 import { NewsListClient } from './NewsListClient';
 
 export const metadata: Metadata = {
-  title: 'News - Job Talentio',
+  title: 'Career insights - Job Talentio',
   description:
-    'Career news, labor-market insights, events and education updates across Uzbekistan.',
+    'Ideas and guidance for your next career move: career advice, labor-market insights, events and education.',
 };
 
 export default function NewsPage() {

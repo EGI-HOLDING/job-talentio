@@ -1,0 +1,103 @@
+.landing { border-bottom-color: transparent; background: rgba(255, 255, 255, .96); }
+.landing .landingNav { width: min(1560px, calc(100% - 3rem)); padding: 1.15rem 0; min-height: 80px; gap: 1.75rem; }
+.primary { display: flex; align-items: center; gap: clamp(1.5rem, 4vw, 4rem); }
+.landing .brand { font-size: 1.7rem; white-space: nowrap; color: #4427c5; }
+.landing .employerBrand { display: flex; flex-direction: column; align-items: flex-start; gap: .25rem; line-height: 1.15; }
+.employerBrand small { font-family: var(--font-body); font-size: .48rem; font-weight: 600; letter-spacing: .22em; color: #8b78cb; }
+.browse { display: flex; align-items: center; gap: clamp(1rem, 2.2vw, 2.4rem); font-size: .95rem; font-weight: 550; color: #171a2e; }
+.browse a { white-space: nowrap; }
+.browse a:hover { color: #5032df; }
+.landing .landingLinks { gap: 1.6rem; color: #171a2e; font-size: .9rem; }
+.employer { display: inline-flex; align-items: center; gap: .6rem; margin-right: .75rem; white-space: nowrap; }
+.browse .mobileEmployer { display: none; }
+.landingLinks .register { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .65rem 1.2rem; border: 1px solid #6042e8; border-radius: 8px; color: #4b2dd5; font-weight: 600; white-space: nowrap; }
+.landingLinks .register:hover { background: #f3f0ff; color: #3920ac; }
+.landing a:focus-visible { outline: 2px solid #6042e8; outline-offset: 4px; border-radius: 4px; }
+.menuButton { display: none; align-items: center; justify-content: center; width: 42px; height: 42px; padding: .5rem; background: transparent; color: #20164e; border: 0; border-radius: 6px; }
+.mobileMenu { display: none; }
+.account { position: relative; }
+.accountButton { display: flex; align-items: center; gap: .6rem; padding: .2rem .3rem; border: 0; background: transparent; color: #23304a; font-size: .82rem; }
+.accountButton:hover { background: #f6f4fc; }
+.initial { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #ede8ff; color: #5635e8; font-weight: 700; }
+.accountMenu { position: absolute; z-index: 80; top: calc(100% + 14px); right: 0; width: min(270px, calc(100vw - 32px)); padding: 8px; border: 1px solid #e5e8f1; border-radius: 12px; background: #fff; box-shadow: 0 16px 48px #1824481c; }
+.accountIdentity { padding: 12px 10px; border-bottom: 1px solid #edf0f5; margin-bottom: 5px; }
+.accountIdentity strong, .accountIdentity span { display: block; overflow-wrap: anywhere; }
+.accountIdentity span { margin-top: 5px; font-size: .72rem; color: #8290a7; }
+.accountMenu a, .accountMenu > button { display: block; width: 100%; text-align: left; padding: 11px 10px; font-size: .8rem; font-weight: 500; color: #35425c; border: 0; border-radius: 6px; background: transparent; }
+.accountMenu a:hover, .accountMenu > button:hover { background: #f6f3ff; color: #5635e8; }
+.accountResources { border-block: 1px solid #edf0f5; margin-block: 5px; padding-block: 4px; }
+.employee .primary { gap: clamp(1.5rem, 3vw, 3rem); }
+.employee .browse { gap: clamp(1rem, 2vw, 2rem); }
+.recruiter .primary { gap: clamp(1.5rem, 3vw, 3rem); }
+.recruiter .browse { gap: clamp(1rem, 2vw, 2rem); }
+.recruiter .brand small { font-size:.42rem; }
+.jobs .landingNav { width: calc(100% - 3.5rem); max-width: none; min-height: 64px; padding: .6rem 0; }
+.jobs .brand { font-size: 1.45rem; }
+.jobs .browse { font-size: .85rem; }
+.jobs .browse a[aria-current=page] { position: relative; color: #5635e8; }
+.jobs .browse a[aria-current=page]::after { content: ''; position: absolute; bottom: -22px; left: 0; right: 0; height: 3px; border-radius: 3px; background: #5635e8; }
+.jobs .landingLinks { font-size: .8rem; }
+.jobs .landingLinks .register { min-height: 38px; padding-block: .5rem; }
+
+@media (max-width: 1200px) {
+  .landing .landingNav { gap: 1rem; }
+  .landing .brand { font-size: 1.45rem; }
+  .primary { gap: 1.5rem; }
+  .browse { gap: 1.1rem; font-size: .86rem; }
+  .landing .landingLinks { gap: 1rem; font-size: .85rem; }
+  .employer { gap: .3rem; margin-right: 0; }
+  .landingLinks .register { padding-inline: .8rem; }
+}
+
+@media (max-width: 1000px) {
+  .landing .landingNav { flex-wrap: wrap; }
+  .primary { flex: 1; justify-content: space-between; }
+  .landing .landingLinks { margin-left: auto; }
+  .landingLinks .employer { display: none; }
+  .browse .mobileEmployer { display: inline-flex; gap: .25rem; }
+}
+
+@media (max-width: 760px) {
+  .landing .landingNav { display: grid; grid-template-columns: 1fr auto; width: calc(100% - 2rem); padding: .65rem 0 .4rem; gap: .4rem .7rem; }
+  .primary { display: contents; }
+  .landing .brand { grid-column: 1; grid-row: 1; font-size: 1.2rem; }
+  .browse { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; flex-wrap: wrap; gap: 0 .8rem; font-size: .8rem; }
+  .browse a { display: inline-flex; align-items: center; min-height: 40px; }
+  .browse .mobileEmployer { margin-left: auto; font-size: .75rem; }
+  .landing .landingLinks { grid-column: 2; grid-row: 1; gap: .6rem; flex-wrap: nowrap; font-size: .8rem; }
+  .landingLinks .register { padding: .5rem .65rem; min-height: 38px; font-size: .75rem; }
+  .landingLinks :global(.nav-user) > a > span { display: none; }
+  .landing .signedIn { grid-column: 1 / -1; grid-row: 3; flex-wrap: wrap; justify-content: space-between; margin-left: 0; }
+  .landing .landingNav { padding: .65rem 0; min-height: 68px; }
+  .landing .browse { display: none; }
+  .landing .landingLinks > a { display: none; }
+  .menuButton { display: inline-flex; }
+  .mobileMenu { display: flex; grid-column: 1 / -1; flex-direction: column; width: 100%; border-top: 1px solid #eeebf8; padding: .65rem 0; }
+  .mobileMenu a { padding: .8rem .5rem; font-size: .9rem; }
+  .mobileMenu a:hover { background: #f5f2ff; color: #5032df; }
+}
+
+@media (max-width: 420px) {
+  .landing .brand { font-size: 1.15rem; }
+  .landing .landingLinks { gap: .4rem; }
+  .landingLinks .register { padding-inline: .55rem; font-size: .7rem; }
+}
+
+@media (max-width: 760px) {
+  .employee.landing .signedIn { grid-column: 2; grid-row: 1; flex-wrap: nowrap; gap: .6rem; }
+  .employee .accountButton > span:not(.initial), .employee .accountButton > svg { display: none; }
+  .employee .landingLinks :global(.nav-user) { gap: .6rem; }
+  .employee .landingLinks :global(.avatar) { width: 30px; height: 30px; }
+  .employee .accountMenu a { display: block; }
+  .recruiter.landing .signedIn { grid-column: 2; grid-row: 1; flex-wrap: nowrap; gap:.6rem; }
+  .recruiter .accountButton > span:not(.initial), .recruiter .accountButton > svg { display:none; }
+  .recruiter .landingLinks :global(.nav-user) { gap:.6rem; }
+  .recruiter .landingLinks :global(.avatar) { width:30px; height:30px; }
+  .recruiter .accountMenu a { display:block; }
+}
+
+@media (max-width: 360px) {
+  .landingLinks .register { display: none; }
+  .employee .landingLinks { gap: .3rem; }
+  .employee .menuButton { width: 32px; padding-inline: .2rem; }
+}

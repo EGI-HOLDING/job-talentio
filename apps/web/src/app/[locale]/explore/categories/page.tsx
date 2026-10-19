@@ -1,59 +1,28 @@
 'use client';
-
 import { useEffect, useState } from 'react';
-import { Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { BrowsePage, DirectoryStatus } from '@/components/public/BrowsePage';
+import s from '@/components/public/PublicPages.module.css';
 import { ExploreCategoryCard } from '@/components/explore/ExploreCategoryCard';
-
 type Category = { name: string; slug: string; icon?: string | null };
-type Facet = { slug: string; name: string; count: number };
-
 export default function ExploreCategoriesPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [categories, setCategories] = useState<Category[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
-    api<Category[]>('/meta/categories', { auth: false }).then(setCategories).catch(() => undefined);
-    api<{ facets?: { categories?: Facet[] } }>('/jobs?limit=1&sort=newest', { auth: false })
-      .then((r) => {
-        const map: Record<string, number> = {};
-        for (const c of r.facets?.categories || []) map[c.slug] = c.count;
-        setCounts(map);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  function rolesLabel(n: number) {
-    return t('openRolesCount').replace('{n}', String(n));
-  }
-
-  return (
-    <div className="shell">
-      <section className="section" style={{ paddingTop: '2rem' }}>
-        <p className="muted" style={{ marginBottom: '0.35rem' }}>
-          <Link href="/">{t('home')}</Link>
-          {' / '}
-          <span>{t('exploreCategoriesTitle')}</span>
-        </p>
-        <h1 className="section-title" style={{ fontSize: '1.75rem' }}>
-          {t('exploreCategoriesTitle')}
-        </h1>
-        <p className="muted">{t('exploreCategoriesSubtitle')}</p>
-        <div className="explore-grid" style={{ marginTop: '1.5rem' }}>
-          {categories.map((c) => (
-            <ExploreCategoryCard
-              key={c.slug}
-              name={c.name}
-              slug={c.slug}
-              icon={c.icon}
-              count={counts[c.slug] ?? 0}
-              countLabel={rolesLabel(counts[c.slug] ?? 0)}
-            />
-          ))}
-        </div>
-      </section>
-    </div>
-  );
+    const controller = new AbortController();
+    setLoading(true); setError(false);
+    Promise.all([api<Category[]>('/meta/categories', { auth: false, signal: controller.signal }), api<{ facets?: { categories?: Array<{slug: string; count: number}> } }>('/jobs?limit=1&sort=newest', { auth: false, signal: controller.signal })])
+      .then(([items, response]) => { if (!controller.signal.aborted) { setCategories(items); setCounts(Object.fromEntries((response.facets?.categories || []).map((item) => [item.slug, item.count]))); } })
+      .catch(() => { if (!controller.signal.aborted) setError(true); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [locale, retry]);
+  return <BrowsePage title={t('exploreCategoriesTitle')}>
+    {loading || error || !categories.length ? <DirectoryStatus loading={loading} error={error} onRetry={() => setRetry((v) => v + 1)} /> : <div className={s.grid}>{[...categories].sort((a,b) => (counts[b.slug] || 0) - (counts[a.slug] || 0)).map((item) => <ExploreCategoryCard key={item.slug} name={item.name} slug={item.slug} icon={item.icon} count={counts[item.slug] || 0} countLabel={t('openRolesCount').replace('{n}', String(counts[item.slug] || 0))} />)}</div>}
+  </BrowsePage>;
 }

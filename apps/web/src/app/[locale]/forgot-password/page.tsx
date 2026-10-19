@@ -1,12 +1,17 @@
 'use client';
+import { AuthLink } from '@/components/auth/AuthLink';
 
-import { Link } from '@/lib/navigation';
-import { FormEvent, useState } from 'react';
+
+
+import { FormEvent, Suspense, useState } from 'react';
 import { api } from '@/lib/api';
+import { useSearchParams } from 'next/navigation';
+import auth from '@/components/recruiter/EmployerAuth.module.css';
 import { useI18n } from '@/lib/i18n';
 import { FormAlert, FormField } from '@/components/ui/Field';
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordInner() {
+  const params = useSearchParams();
   const { t } = useI18n();
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
@@ -33,7 +38,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="auth-wrap">
+    <div className={'auth-wrap' + (params.get('role') === 'RECRUITER' ? ' ' + auth.page : '')}>
       <div className="auth-card">
         <h1>{t('ui.forgotPassword')}</h1>
         <p className="muted">{t('ui.forgotPasswordHint')}</p>
@@ -48,11 +53,13 @@ export default function ForgotPasswordPage() {
           </button>
         </form>
         <p className="muted" style={{ marginTop: '1rem' }}>
-          <Link href="/login" style={{ color: 'var(--accent)' }}>
+          <AuthLink href="/login" style={{ color: 'var(--accent)' }}>
             {t('ui.backToSignIn')}
-          </Link>
+          </AuthLink>
         </p>
       </div>
     </div>
   );
 }
+
+export default function ForgotPasswordPage() { return <Suspense fallback={null}><ForgotPasswordInner /></Suspense>; }

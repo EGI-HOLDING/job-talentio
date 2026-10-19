@@ -1,21 +1,21 @@
 'use client';
+import { authLink } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
 import { readSource, rememberSource } from '@/lib/acquisition';
-import { benefitIconLabel } from '@/lib/icons';
+
 import { sanitizeMojibake } from '@/lib/text';
-import { localizedJobLocation } from '@/lib/location';
+
 import { FormField, LabelText } from '@/components/ui/Field';
-import { DetailPageSkeleton } from '@/components/ui/Skeleton';
-import { ShareButton } from '@/components/ui/ShareButton';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
 import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
-import { UgcText } from '@/components/ui/UgcText';
-import { useEnumLabel, useI18n } from '@/lib/i18n';
-import { formatSalaryRange } from '@/lib/numberFormat';
+import { useI18n } from '@/lib/i18n';
+
+import { JobPreview } from '@/components/jobs/JobPreview';
+import workspaceStyles from '@/components/jobs/JobsWorkspace.module.css';
 
 type Question = { id: string; question: string; type: string; isRequired: boolean };
 type ResumeOption = {
@@ -36,6 +36,8 @@ type Job = {
   canMachineTranslate?: boolean;
   salaryMin?: number | null;
   salaryMax?: number | null;
+  currency?: string;
+  salaryPeriod?: string;
   workMode?: string;
   employmentType?: string;
   experienceLevel?: string | null;
@@ -71,14 +73,6 @@ type Job = {
   matchBreakdown?: MatchBreakdownState | null;
 };
 
-function formatSalary(
-  min: number | null | undefined,
-  max: number | null | undefined,
-  negotiable: string,
-) {
-  if (!min && !max) return negotiable;
-  return formatSalaryRange(min, max) || negotiable;
-}
 
 type MatchBreakdownState = {
   title?: number;
@@ -104,10 +98,12 @@ type MyApplicationState = {
   createdAt: string;
 };
 
-export function JobDetailClient() {
-  const { id } = useParams<{ id: string }>();
+type DetailProps = { jobId?: string; embedded?: boolean; country?: string; onBack?: () => void; saveState?: { saved: boolean; pending: boolean; onToggle: () => Promise<void> } };
+
+export function JobDetailClient({ jobId, embedded = false, country, onBack, saveState }: DetailProps = {}) {
+  const params = useParams<{ id?: string }>();
+  const id = jobId || params.id || '';
   const { t, locale } = useI18n();
-  const enumLabel = useEnumLabel();
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -117,6 +113,9 @@ export function JobDetailClient() {
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
@@ -128,6 +127,13 @@ export function JobDetailClient() {
   const viewerMatchBreakdown = myApplication?.matchBreakdown || job?.matchBreakdown || null;
   const viewerMatchScore =
     myApplication?.matchScore != null ? myApplication.matchScore : job?.matchScore ?? null;
+  const isEmployee = session?.user.role === 'EMPLOYEE';
+  useEffect(() => {
+    if (embedded || !isEmployee) return;
+    let active = true;
+    api<Array<{jobPostId: string}>>('/profiles/me/saved-jobs').then((rows) => { if (active) setSaved(rows.some((row) => row.jobPostId === id)); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [id, embedded, isEmployee]);
 
   async function loadResumes() {
     const p = await api<{ resumes?: ResumeOption[] }>('/profiles/me');
@@ -139,10 +145,16 @@ export function JobDetailClient() {
   }
 
   useEffect(() => {
+    let active = true;
+    setError('');
+    setJob(null);
+    setFollowing(false);
+    setMyApplication(null);
     // Keep the utm source from the link (Telegram, PWA, share) for the apply call.
     rememberSource(id);
     api<Job>(`/jobs/${id}`)
       .then(async (j) => {
+        if (!active) return;
         setJob({
           ...j,
           isHot: !!(j.boostUntil && new Date(j.boostUntil).getTime() > Date.now()),
@@ -150,7 +162,7 @@ export function JobDetailClient() {
         if (session) {
           try {
             const f = await api<{ following: boolean }>(`/companies/${j.company.id}/following`);
-            setFollowing(f.following);
+            if (active) setFollowing(f.following);
           } catch {
             /* ignore */
           }
@@ -161,18 +173,19 @@ export function JobDetailClient() {
               applied: boolean;
               application: MyApplicationState | null;
             }>(`/applications/mine/jobs/${id}`);
-            setMyApplication(mine.application);
+            if (active) setMyApplication(mine.application);
           } catch {
             /* ignore - guest / network */
           }
         }
       })
-      .catch((e) => setError(e.message));
-  }, [id]);
+      .catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [id, locale, retry]);
 
   async function toggleFollow() {
     if (!session || !job) {
-      window.location.href = localeHref('/login');
+      window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
       return;
     }
     if (following) {
@@ -193,7 +206,7 @@ export function JobDetailClient() {
     setError('');
     setSuccess('');
     if (!session) {
-      window.location.href = localeHref('/login');
+      window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
       return;
     }
     if (alreadyApplied || submitting) return;
@@ -248,13 +261,38 @@ export function JobDetailClient() {
     }
   }
 
+
+  async function beginApply() {
+                  if (!session) {
+                    window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
+                    return;
+                  }
+                  try {
+                    const list = await loadResumes();
+                    if (list.length === 0) {
+                      setShowCreateResume(true);
+                      return;
+                    }
+                  } catch {
+                    setResumes([]);
+                    setSelectedResumeId('');
+                    setShowCreateResume(true);
+                    return;
+                  }
+                  setShowApply(true);
+  }
+
   async function saveJob() {
     if (!session) {
-      window.location.href = localeHref('/login');
+      window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
       return;
     }
-    await api(`/profiles/me/saved-jobs/${id}`, { method: 'POST' });
-    setSuccess(t('job.savedToList'));
+    if (saving || !isEmployee) return;
+    setSaving(true);
+    try {
+      await api(`/profiles/me/saved-jobs/${id}`, { method: saved ? 'DELETE' : 'POST' });
+      setSaved(!saved);
+    } finally { setSaving(false); }
   }
 
   /** Machine translation is cached server-side, so this costs at most once. */
@@ -276,219 +314,11 @@ export function JobDetailClient() {
     }
   }
 
-  if (!job && !error) return <DetailPageSkeleton />;
-  if (error && !job) return <div className="shell"><div className="error">{error}</div></div>;
+  if (!job && !error) return <div className={`${workspaceStyles.previewLoading} ${embedded ? '' : workspaceStyles.standalone}`} role="status" aria-label={t('ui.loading')}><span /><span /><span /><span /></div>;
+  if (error && !job) return <div className={workspaceStyles.previewLoading}><p className="error" role="alert">{t('public.loadError')}</p><button type="button" className={workspaceStyles.primaryButton} onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button><p>{onBack ? <button type="button" className={workspaceStyles.textAction} onClick={onBack}>{t('workspace.back')}</button> : <Link href="/jobs">{t('workspace.back')}</Link>}</p></div>;
   if (!job) return null;
 
-  return (
-    <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>
-      <div className={`job-detail-header${job.isHot ? ' job-detail-header--hot' : ''}`}>
-        <span className="company-logo-tile" aria-hidden>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="company-logo"
-            src={
-              job.company.logoUrl ||
-              `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(job.company.name)}`
-            }
-            alt=""
-          />
-        </span>
-        <div>
-          <div className="chips" style={{ marginBottom: '0.5rem' }}>
-            {job.isHot && <span className="badge hot">{t('hot')}</span>}
-            {job.category && <span className="badge">{job.category.name}</span>}
-            {job.experienceLevel && (
-              <span className="badge skill">
-                {enumLabel('experienceLevel', job.experienceLevel)}
-              </span>
-            )}
-          </div>
-          <h1 style={{ margin: '0 0 0.35rem', fontFamily: 'var(--font-display)', fontSize: '1.75rem' }}>
-            {sanitizeMojibake(job.title)}
-          </h1>
-          <div className="job-meta">
-            {job.company.anonymous ? (
-              <span className="badge" title={t('job.confidentialEmployerHint')}>
-                {t('job.confidentialEmployer')}
-              </span>
-            ) : (
-              <Link href={`/companies/${job.company.slug}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                {job.company.name}
-                {job.company.isVerified ? ' ✓' : ''}
-              </Link>
-            )}
-            <span>{localizedJobLocation(job, t)}</span>
-            {job.employmentType && <span>{enumLabel('employmentType', job.employmentType)}</span>}
-            {job._count && (
-              <span className="muted">
-                {t('job.viewsAndApplicants')
-                  .replace('{n}', String(job._count.views))
-                  .replace('{m}', String(job._count.applications))}
-              </span>
-            )}
-          </div>
-          <p className="salary">{formatSalary(job.salaryMin, job.salaryMax, t('job.negotiable'))}</p>
-          {job.isHot && (
-            <div className="hot-urgency">
-              {job.boostUntil
-                ? t('job.boostedUntil').replace(
-                    '{date}',
-                    new Date(job.boostUntil).toLocaleDateString(),
-                  )
-                : t('job.hotLimitedBoost')}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {alreadyApplied ? (
-            <>
-              <div className="badge match" style={{ justifyContent: 'center', textAlign: 'center' }}>
-                {t('job.appliedBadge')} | {enumLabel('applicationStatus', myApplication?.status)}
-              </div>
-              <Link
-                href="/dashboard/employee?tab=applications"
-                className="secondary"
-                style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
-              >
-                {t('job.viewMyApplications')}
-              </Link>
-            </>
-          ) : (
-            (session?.user.role === 'EMPLOYEE' || !session) && (
-              <button
-                type="button"
-                className="cta"
-                onClick={async () => {
-                  if (!session) {
-                    window.location.href = localeHref('/login');
-                    return;
-                  }
-                  try {
-                    const list = await loadResumes();
-                    if (list.length === 0) {
-                      setShowCreateResume(true);
-                      return;
-                    }
-                  } catch {
-                    setResumes([]);
-                    setSelectedResumeId('');
-                    setShowCreateResume(true);
-                    return;
-                  }
-                  setShowApply(true);
-                }}
-                disabled={submitting}
-              >
-                {t('applyNow')}
-              </button>
-            )
-          )}
-          <button type="button" className="secondary" onClick={saveJob}>
-            {t('saveJob')}
-          </button>
-          {!job.company.anonymous && (
-            <button type="button" className="secondary" onClick={toggleFollow}>
-              {following ? t('following') : t('followCompany')}
-            </button>
-          )}
-          <ShareButton
-            path={`/jobs/${job.id}`}
-            title={sanitizeMojibake(job.title)}
-            text={`${sanitizeMojibake(job.title)} - ${job.company.name}`}
-          />
-          {session?.user.role === 'EMPLOYEE' && job.chatPeerUserId && (
-            <Link
-              href={`/messages?peer=${job.chatPeerUserId}&job=${job.id}`}
-              className="secondary"
-              style={{ textAlign: 'center', padding: '0.55rem 1rem', borderRadius: 10 }}
-            >
-              {t('chatWithRecruiter')}
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {success && <div className="success" style={{ marginTop: '1rem' }}>{success}</div>}
-      {error && <div className="error" style={{ marginTop: '1rem' }}>{error}</div>}
-
-      <div className="grid-2" style={{ marginTop: '1.25rem' }}>
-        <div style={{ display: 'grid', gap: '1rem', alignContent: 'start' }}>
-          <div className="card">
-            <h2 className="section-title">{t('job.aboutTheRole')}</h2>
-            <UgcText
-              text={job.description}
-              contentLocale={job.contentLocale}
-              isMachineTranslated={job.isMachineTranslated}
-              preserveLineBreaks
-              className="job-description"
-              translating={translating}
-              onTranslate={
-                job.canMachineTranslate ? () => void machineTranslate() : undefined
-              }
-            />
-          </div>
-          {session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown && (
-            <div className="card">
-              <h2 className="section-title" style={{ marginBottom: '0.35rem' }}>
-                {t('job.yourMatch')}
-                {viewerMatchScore != null ? ` ${viewerMatchScore}%` : ''}
-              </h2>
-              <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
-                {t('job.yourMatchHint')}
-              </p>
-              <MatchBreakdownPanel breakdown={viewerMatchBreakdown} />
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          <div className="card">
-            <h3>{t('skills')}</h3>
-            <div className="chips" style={{ marginTop: '0.75rem' }}>
-              {(job.jobSkills || []).map((js, i) => (
-                <span key={i} className={`badge ${js.isRequired ? '' : 'skill'}`}>
-                  {js.skill.name}
-                  {js.isRequired ? ' *' : ''}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="card">
-            <h3>{t('benefits')}</h3>
-            <div className="chips" style={{ marginTop: '0.75rem' }}>
-              {(job.benefits || []).map((b, i) => (
-                <span key={i} className="chip">
-                  {benefitIconLabel(b.benefit.slug, b.benefit.icon)}
-                  {b.benefit.name}
-                </span>
-              ))}
-              {!job.benefits?.length && <span className="muted">{t('job.noBenefits')}</span>}
-            </div>
-          </div>
-          {(job.jobLanguages || []).length > 0 && (
-            <div className="card">
-              <h3>{t('languages')}</h3>
-              <div className="chips" style={{ marginTop: '0.75rem' }}>
-                {(job.jobLanguages || []).map((jl, i) => (
-                  <span key={i} className={`badge ${jl.isRequired ? '' : 'skill'}`}>
-                    {jl.language.name} {jl.minLevel}+
-                    {jl.isRequired ? ' *' : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {job.experienceYearsMin != null && (
-            <div className="card">
-              <h3>{t('experience')}</h3>
-              <p className="muted">
-                {t('job.yearsPreferred').replace('{n}', String(job.experienceYearsMin))}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
+  const applicationDialogs = <>
       <CreateResumeModal
         open={showCreateResume && !alreadyApplied}
         defaultJobTitle={defaultApplyRole}
@@ -605,6 +435,19 @@ export function JobDetailClient() {
           </div>
         </div>
       )}
-    </div>
-  );
+  </>;
+
+  return <JobPreview standalone={!embedded}
+    chatHref={isEmployee && job.chatPeerUserId ? `/messages?peer=${job.chatPeerUserId}&job=${id}` : undefined}
+    job={job} country={country} onBack={onBack}
+    onApply={!alreadyApplied && (!session || session.user.role === 'EMPLOYEE') ? () => void beginApply() : undefined}
+    onSave={() => { if (saveState) void saveState.onToggle(); else void saveJob().catch((error) => setError(error.message)); }}
+    saved={saveState?.saved ?? saved} saving={saveState?.pending ?? saving}
+    canSave={!session || session.user.role === 'EMPLOYEE'}
+    onFollow={() => void toggleFollow().catch((error) => setError(error.message))} following={following}
+    appliedStatus={myApplication?.status} guest={!session} busy={submitting}
+    success={success} error={error} translating={translating}
+    onTranslate={job.canMachineTranslate ? () => void machineTranslate() : undefined}
+    matchContent={session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown ? <section><h3>{t('job.yourMatch')}{viewerMatchScore != null ? ' ' + viewerMatchScore + '%' : ''}</h3><MatchBreakdownPanel breakdown={viewerMatchBreakdown} /></section> : null}
+  >{applicationDialogs}</JobPreview>;
 }

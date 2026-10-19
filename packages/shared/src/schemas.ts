@@ -29,6 +29,7 @@ export const registerSchema = z
 export const loginSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(1, 'Password is required'),
+  expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
 });
 
 /** Google Identity Services ID-token sign-in. role/companyName only needed for first sign-in. */
@@ -36,6 +37,7 @@ export const googleOAuthSchema = z
   .object({
     idToken: z.string().min(20),
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
+    expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     companyName: z.string().trim().min(2).max(160).optional(),
     locale: z.enum(['uz', 'ru', 'en']).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),
@@ -65,6 +67,7 @@ export const telegramOAuthSchema = z
       z.string().trim().email().optional(),
     ),
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
+    expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     companyName: z.string().trim().min(2).max(160).optional(),
     locale: z.enum(['uz', 'ru', 'en']).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),

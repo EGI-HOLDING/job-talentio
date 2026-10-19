@@ -4,6 +4,10 @@ import { useMemo, useState } from 'react';
 import { catalogLabelIssue } from '@job-talentio/shared';
 import { api } from '@/lib/api';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
+import { ProfileDialog } from '@/components/profile/ProfileDialog';
+import { ProfileIcon } from '@/components/profile/ProfileIcon';
+import type { ImportedResult } from '@/components/profile/types';
+import workspace from '@/components/profile/ProfileWorkspace.module.css';
 
 export type ParsedCv = {
   email?: string;
@@ -57,7 +61,8 @@ type Props = {
   resumeId: string;
   parsed: ParsedCv;
   onClose: () => void;
-  onImported: () => void;
+  onImported: (result?: ImportedResult) => void | Promise<void>;
+  presentation?: 'modal' | 'workspace';
 };
 
 function dateInputValue(raw?: string | null) {
@@ -77,7 +82,7 @@ function coerceLevel(raw?: string) {
   return LANG_LEVELS.includes(value as (typeof LANG_LEVELS)[number]) ? value : 'B1';
 }
 
-export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) {
+export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentation = 'modal' }: Props) {
   const { t } = useI18n();
   const enumLabel = useEnumLabel();
 
@@ -178,10 +183,15 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
   }
 
   async function importSelected() {
+    if (busy) return;
+    if (experiences.some((row) => row.include && !row.isCurrent && row.startDate && row.endDate && row.endDate < row.startDate) || educations.some((row) => row.include && row.startDate && row.endDate && row.endDate < row.startDate)) {
+      setError(t('pc.dateOrder'));
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      await api(`/profiles/me/resumes/${resumeId}/import`, {
+      const result = await api<ImportedResult>(`/profiles/me/resumes/${resumeId}/import`, {
         method: 'POST',
         body: JSON.stringify({
           headline: includeHeadline && headline.trim() ? headline.trim() : undefined,
@@ -218,7 +228,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
             })),
         }),
       });
-      onImported();
+      await onImported(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('ui.importFailed'));
     } finally {
@@ -226,28 +236,29 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
     }
   }
 
-  return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
+  const content = (
       <div
         className="modal cv-review-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cv-review-title"
+        role={presentation === 'modal' ? 'dialog' : undefined}
+        aria-modal={presentation === 'modal' ? true : undefined}
+        aria-labelledby={presentation === 'modal' ? 'cv-review-title' : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="cv-review-header">
           <div>
             <h2 id="cv-review-title" style={{ margin: 0 }}>
-              {t('reviewParsedData')}
+              {t(presentation === 'workspace' ? 'pc.importReview' : 'reviewParsedData')}
             </h2>
             <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
               {t('ui.cvReviewSubtitle')}
             </p>
           </div>
-          <button type="button" className="ghost" onClick={onClose} aria-label={t('closeDialog')}>
+          <button type="button" className="ghost" disabled={busy} onClick={onClose} aria-label={t('closeDialog')}>
             x
           </button>
         </div>
+
+        {presentation === 'workspace' && <div className={workspace.reviewWarning}><ProfileIcon kind="info" />{t('pc.reviewWarning')}</div>}
 
         {error && (
           <div className="error" style={{ marginBottom: '1rem' }} role="alert">
@@ -638,10 +649,12 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported }: Props) 
           <button type="button" onClick={importSelected} disabled={busy || selectedCount === 0}>
             {busy
               ? t('ui.importing')
-              : t('ui.importSelected').replace('{n}', String(selectedCount))}
+              : presentation === 'workspace' ? t('pc.confirmImport') : t('ui.importSelected').replace('{n}', String(selectedCount))}
           </button>
         </div>
       </div>
-    </div>
   );
+  return presentation === 'workspace'
+    ? <ProfileDialog title={t('pc.importReview')} onClose={onClose} busy={busy} wide hideHeader><div className={workspace.review}>{content}</div></ProfileDialog>
+    : <div className="modal-backdrop" role="presentation" onClick={() => { if (!busy) onClose(); }}>{content}</div>;
 }

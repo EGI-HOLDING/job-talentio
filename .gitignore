@@ -19,3 +19,6 @@ uploads
 # Local-only notes / source copies (not shipped)
 assets/company-logos/
 docs/AFFINDA-AND-LLM.md
+
+# Local Markdown notes and generated documentation stay out of commits
+*.md

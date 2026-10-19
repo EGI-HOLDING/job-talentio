@@ -409,7 +409,7 @@ export class ProfilesService {
   }
 
   private async resolveExperienceCityId(citySlug?: unknown) {
-    if (!citySlug) return undefined;
+    if (!citySlug) return null;
     const city = await this.prisma.city.findFirst({
       where: { slug: String(citySlug), ...ACTIVE_CATALOG },
     });
@@ -938,6 +938,7 @@ export class ProfilesService {
             themeAccent: resume.themeAccent,
             inclusion,
             hasFile: Boolean(resume.fileKey),
+            targetJobTitle: profile.resumes.find((item) => item.id === resume.id)?.targetJobTitle ?? null,
           }
         : null,
       document,

@@ -1,9 +1,13 @@
 'use client';
 
-import { Link, localeHref } from '@/lib/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { Link, localeHref, usePathname } from '@/lib/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ADMIN_URL, api, getSession, logout, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
+import styles from './SiteNav.module.css';
+import { AuthLink } from './auth/AuthLink';
+import { authRoleFrom } from '@/lib/authReturn';
 
 type Notif = {
   id: string;
@@ -16,15 +20,48 @@ type Notif = {
 
 const LOCALE_LABELS: Record<Locale, string> = { uz: "O'z", ru: 'Ру', en: 'En' };
 
-export function SiteNav() {
+function SiteNavContent() {
   const { locale, setLocale, t } = useI18n();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [unread, setUnread] = useState(0);
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [open, setOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const ref = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
+  const navWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = navWrapRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => document.documentElement.style.setProperty('--app-nav-height', element.getBoundingClientRect().height + 'px'));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const refreshSession = () => setSession(getSession());
+    window.addEventListener('jt-session-updated', refreshSession);
+    window.addEventListener('storage', refreshSession);
+    return () => { window.removeEventListener('jt-session-updated', refreshSession); window.removeEventListener('storage', refreshSession); };
+  }, []);
+
+  useEffect(() => { setMenuOpen(false); setAccountOpen(false); }, [pathname, searchParams, locale]);
+  useEffect(() => {
+    function onEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape' && menuOpen) { setMenuOpen(false); menuButtonRef.current?.focus(); }
+      if (event.key === 'Escape' && accountOpen) { setAccountOpen(false); accountButtonRef.current?.focus(); }
+    }
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [menuOpen, accountOpen]);
 
   useEffect(() => {
     const s = getSession();
@@ -40,6 +77,7 @@ export function SiteNav() {
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
       if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false);
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) setAccountOpen(false);
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
@@ -75,6 +113,25 @@ export function SiteNav() {
   }
 
   const isRecruiter = session?.user.role === 'RECRUITER';
+  const isEmployee = session?.user.role === 'EMPLOYEE';
+  const isJobs = pathname === '/jobs' || pathname.startsWith('/jobs/');
+  const isCompanies = pathname === '/explore/companies' || pathname.startsWith('/companies/');
+  const isInsights = pathname === '/news' || pathname.startsWith('/news/');
+  const isPublic = !/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname);
+  const isEmployerContext = pathname === '/employers' || (/^\/(login|register|forgot-password|reset-password)$/.test(pathname) && (searchParams.get('role') === 'RECRUITER' || Boolean(searchParams.get('invite'))));
+  const accountRole = isEmployerContext ? 'RECRUITER' : authRoleFrom(searchParams.get('role'));
+  const isLanding = isEmployee || isRecruiter || (isPublic && isEmployerContext) || (isPublic && !session);
+  const isDiscovery = isEmployee || isRecruiter || (isLanding && pathname !== '/' && pathname !== '/employers');
+  const employeeTab = searchParams.get('tab');
+  const recruiterTab = searchParams.get('tab') || 'jobs';
+  const recruiterActive = [pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab), pathname === '/talent' || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
+  const browseLinks = isRecruiter
+    ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/talent', 'findTalent'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]
+    : isEmployee
+    ? [['/jobs', 'home.findJobs'], ['/dashboard/employee?tab=applications', 'applications'], ['/dashboard/employee?tab=saved', 'savedJobs'], ['/messages', 'messages']]
+    : isEmployerContext
+    ? [['/employers#find-talent', 'employers.search'], ['/employers#how-it-works', 'employers.how'], ['/employers#hiring-insights', 'employers.insights']]
+    : [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']];
   const dash =
     session?.user.role === 'EMPLOYEE'
       ? '/dashboard/employee'
@@ -83,26 +140,24 @@ export function SiteNav() {
         : null;
 
   return (
-    <div className="nav-wrap">
-      <nav className="nav shell">
-        <Link href="/" className="brand">
-          Job Talentio
+    <div ref={navWrapRef} className={`nav-wrap ${isLanding ? styles.landing : ''} ${isDiscovery ? styles.jobs : ''} ${isEmployee ? styles.employee : ''} ${isRecruiter ? styles.recruiter : ''}`}>
+      <nav className={`nav shell ${isLanding ? styles.landingNav : ''}`}>
+        <div className={isLanding ? styles.primary : undefined}>
+        <Link href={isRecruiter ? '/dashboard/recruiter?tab=jobs' : isEmployee ? '/jobs' : isEmployerContext ? '/employers' : '/'} className={`brand ${isLanding ? styles.brand : ''} ${(isRecruiter || isEmployerContext) && !isEmployee ? styles.employerBrand : ''}`}>
+          <span>Job Talentio</span>{(isRecruiter || isEmployerContext) && !isEmployee && <small>{t('employers.badge')}</small>}
         </Link>
-        <div className="nav-links">
-          {isRecruiter ? (
-            <>
-              <Link href="/talent">{t('findTalent')}</Link>
-              <Link href="/dashboard/recruiter?tab=jobs&focus=create">{t('postAJob')}</Link>
-              {dash && <Link href={dash}>{t('dashboard')}</Link>}
-            </>
-          ) : (
-            <>
-              <Link href="/jobs">{t('jobs')}</Link>
-              {dash && <Link href={dash}>{t('dashboard')}</Link>}
-            </>
-          )}
-          <Link href="/news">{t('news')}</Link>
-          {session && <Link href="/messages">{t('messages')}</Link>}
+        {isLanding && (
+          <div className={styles.browse}>
+            {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={(isRecruiter ? recruiterActive[index] : isEmployee ? [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'][index] : !isEmployerContext && [isJobs, isCompanies, isInsights][index]) ? 'page' : undefined}>{t(key)}</Link>)}
+            {!session && <Link className={styles.mobileEmployer} href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')} <span aria-hidden="true">{'\u2197'}</span></Link>}
+          </div>
+        )}
+        </div>
+        <div className={`nav-links ${isLanding ? styles.landingLinks : ''} ${isLanding && session ? styles.signedIn : ''}`}>
+          {!isLanding && <><Link href="/jobs">{t('jobs')}</Link>{dash && <Link href={dash}>{t('dashboard')}</Link>}</>}
+          {!isLanding && <Link href="/news">{t('news')}</Link>}
+          {isLanding && !session && <Link className={styles.employer} href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')} <span aria-hidden="true">{'\u2197'}</span></Link>}
+          {session && !isEmployee && !isRecruiter && <Link href="/messages">{t('messages')}</Link>}
           {session?.user.role === 'SUPER_ADMIN' && (
             <a href={ADMIN_URL} target="_blank" rel="noreferrer">
               Admin
@@ -159,10 +214,10 @@ export function SiteNav() {
           </div>
           {!session ? (
             <>
-              <Link href="/login">{t('login')}</Link>
-              <Link href="/register" className="chip" style={{ background: 'var(--accent)', color: '#fff', border: 0 }}>
-                {t('register')}
-              </Link>
+              <AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink>
+              <AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined} className={isLanding ? styles.register : 'chip'} style={isLanding ? undefined : { background: 'var(--accent)', color: '#fff', border: 0 }}>
+                {isEmployerContext ? t('postAJob') : isLanding ? t('home.createProfile') : t('register')}
+              </AuthLink>
             </>
           ) : (
             <div className="nav-user" ref={ref}>
@@ -214,7 +269,19 @@ export function SiteNav() {
                   </div>
                 )}
               </div>
-              <Link href="/settings" className="nav-user" title={t('settings')}>
+              {isEmployee || isRecruiter ? <div className={styles.account} ref={accountRef}>
+                <button ref={accountButtonRef} type="button" className={styles.accountButton} aria-label={t('workspace.accountMenu')} aria-expanded={accountOpen} aria-controls="workspace-account-menu" onClick={() => { setAccountOpen((value) => !value); setOpen(false); setLangOpen(false); }}>
+                  {session.user.avatarUrl ? <img className="avatar" src={session.user.avatarUrl} alt="" /> : <span className={styles.initial}>{session.user.fullName.charAt(0)}</span>}
+                  <span>{session.user.fullName.split(' ')[0]}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                {accountOpen && <div id="workspace-account-menu" className={styles.accountMenu}>
+                  <div className={styles.accountIdentity}><strong>{session.user.fullName}</strong><span>{session.user.email}</span></div>
+                  {isRecruiter ? <><Link href="/dashboard/recruiter?tab=company">{t('company')}</Link><Link href="/dashboard/recruiter?tab=billing">{t('rw.billing')}</Link></> : <><Link href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}</Link><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')}</Link></>}
+                  <Link href="/settings">{t('settings')}</Link>
+                  <div className={styles.accountResources}>{!isRecruiter && <Link href="/explore/companies">{t('companiesStat')}</Link>}<Link href="/news">{t('landing.insights')}</Link>{isRecruiter && <Link href="/employers">{t('employers.badge')}</Link>}</div>
+                  <button type="button" onClick={async () => { await logout(); window.location.href = localeHref('/'); }}>{t('logout')}</button>
+                </div>}
+              </div> : <><Link href="/settings" className="nav-user" title={t('settings')}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   className="avatar"
@@ -235,11 +302,17 @@ export function SiteNav() {
                 }}
               >
                 {t('logout')}
-              </button>
+              </button></>}
             </div>
           )}
+          {isLanding && <button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label={t('landing.menu')} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen((value) => !value)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'm6 6 12 12M6 18 18 6' : 'M3 5h18M3 12h18M3 19h18'} /></svg></button>}
         </div>
+        {isLanding && menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} onClick={() => setMenuOpen(false)}>{browseLinks.map(([href, key]) => <Link href={href} key={href}>{t(key)}</Link>)}{!session && <><Link href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')}</Link><AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink><AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined}>{t(isEmployerContext ? 'postAJob' : 'home.createProfile')}</AuthLink></>}</div>}
       </nav>
     </div>
   );
+}
+
+export function SiteNav() {
+  return <Suspense fallback={<div className="nav-wrap" style={{ minHeight: 80 }} />}><SiteNavContent /></Suspense>;
 }

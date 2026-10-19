@@ -1,157 +1,45 @@
 'use client';
-
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { BrowsePage, DirectoryStatus } from '@/components/public/BrowsePage';
+import s from '@/components/public/PublicPages.module.css';
 import { ExploreCityCard } from '@/components/explore/ExploreCityCard';
-
-type CityRow = {
-  name: string;
-  slug: string;
-  province?: { slug: string; name: string; type?: string };
-};
-
-type ProvinceSection = {
-  province: { slug: string; name: string; type: string };
-  cities: CityRow[];
-};
-
-type GroupedResponse = { group: 'province'; sections: ProvinceSection[] };
-
-type Facet = { slug: string; name: string; count: number };
-
-type GroupMode = 'province' | 'alpha';
-
+type City = { name: string; slug: string; province?: { name: string; slug: string; country?: { name: string; slug: string } } };
 export default function ExploreCitiesPage() {
-  const { t } = useI18n();
-  const [mode, setMode] = useState<GroupMode>('province');
-  const [flat, setFlat] = useState<CityRow[]>([]);
-  const [sections, setSections] = useState<ProvinceSection[]>([]);
-  const [facets, setFacets] = useState<Facet[]>([]);
-
+  const { t, locale } = useI18n();
+  const [cities, setCities] = useState<City[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [query, setQuery] = useState('');
+  const [mode, setMode] = useState<'country' | 'province' | 'alpha'>('country');
+  const [onlyHiring, setOnlyHiring] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
-    api<CityRow[] | GroupedResponse>('/meta/cities?group=province', { auth: false })
-      .then((res) => {
-        if (res && typeof res === 'object' && 'group' in res && res.group === 'province') {
-          setSections(res.sections || []);
-          setFlat(res.sections.flatMap((s) => s.cities));
-        } else if (Array.isArray(res)) {
-          setFlat(res);
-          setSections([]);
-        }
-      })
-      .catch(() => undefined);
-    api<{ facets?: { cities?: Facet[] } }>('/jobs?limit=1&sort=newest', { auth: false })
-      .then((r) => setFacets(r.facets?.cities || []))
-      .catch(() => undefined);
-  }, []);
-
-  const countMap = useMemo(() => new Map(facets.map((f) => [f.slug, f.count])), [facets]);
-
-  const alphaSections = useMemo(() => {
-    const map = new Map<string, CityRow[]>();
-    for (const c of [...flat].sort((a, b) => a.name.localeCompare(b.name))) {
-      const letter = (c.name[0] || '#').toUpperCase();
-      if (!map.has(letter)) map.set(letter, []);
-      map.get(letter)!.push(c);
+    const controller = new AbortController(); setLoading(true); setError(false);
+    Promise.all([api<City[]>('/meta/cities', { auth:false, signal:controller.signal }), api<{facets?:{cities?:Array<{slug:string;count:number}>}}>('/jobs?limit=1&sort=newest', {auth:false,signal:controller.signal})])
+      .then(([items,response]) => { if (!controller.signal.aborted) { setCities(items); setCounts(Object.fromEntries((response.facets?.cities || []).map((item) => [item.slug,item.count]))); } })
+      .catch(() => { if (!controller.signal.aborted) setError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  },[locale,retry]);
+  const sections = useMemo(() => {
+    const groups = new Map<string,{title:string; cities:City[]}>();
+    const term = query.trim().toLocaleLowerCase();
+    const filtered = cities.filter((city) => (!onlyHiring || (counts[city.slug] || 0) > 0) && (!term || [city.name,city.province?.name,city.province?.country?.name].filter(Boolean).join(' ').toLocaleLowerCase().includes(term)));
+    filtered.sort((a,b) => mode === 'alpha' ? a.name.localeCompare(b.name,locale) : (counts[b.slug] || 0) - (counts[a.slug] || 0) || a.name.localeCompare(b.name,locale));
+    for (const city of filtered) {
+      const province = city.province;
+      const key = mode === 'country' ? province?.country?.slug || 'other' : mode === 'alpha' ? city.name.charAt(0).toLocaleUpperCase() : [province?.country?.slug,province?.slug || 'other'].filter(Boolean).join(':');
+      const title = mode === 'country' ? province?.country?.name || t('landing.allLocations') : mode === 'alpha' ? key : [province?.country?.name,province?.name || t('exploreCitiesOtherProvince')].filter(Boolean).join(' / ');
+      if (!groups.has(key)) groups.set(key,{title,cities:[]});
+      groups.get(key)!.cities.push(city);
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [flat]);
-
-  const provinceSections = useMemo(() => {
-    if (sections.length) {
-      return sections.map((s) => ({
-        key: s.province.slug,
-        title: s.province.name,
-        cities: [...s.cities].sort((a, b) => a.name.localeCompare(b.name)),
-      }));
-    }
-    const map = new Map<string, { title: string; cities: CityRow[] }>();
-    for (const c of flat) {
-      const key = c.province?.slug || 'other';
-      const title = c.province?.name || t('exploreCitiesOtherProvince');
-      if (!map.has(key)) map.set(key, { title, cities: [] });
-      map.get(key)!.cities.push(c);
-    }
-    return [...map.entries()]
-      .map(([key, v]) => ({
-        key,
-        title: v.title,
-        cities: v.cities.sort((a, b) => a.name.localeCompare(b.name)),
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [sections, flat, t]);
-
-  function rolesLabel(n: number) {
-    return t('openRolesCount').replace('{n}', String(n));
-  }
-
-  const displaySections =
-    mode === 'province'
-      ? provinceSections
-      : alphaSections.map(([letter, cities]) => ({
-          key: letter,
-          title: letter,
-          cities,
-        }));
-
-  return (
-    <div className="shell">
-      <section className="section" style={{ paddingTop: '2rem' }}>
-        <p className="muted" style={{ marginBottom: '0.35rem' }}>
-          <Link href="/">{t('home')}</Link>
-          {' / '}
-          <span>{t('exploreCitiesTitle')}</span>
-        </p>
-        <h1 className="section-title" style={{ fontSize: '1.75rem' }}>
-          {t('exploreCitiesTitle')}
-        </h1>
-        <p className="muted">{t('exploreCitiesSubtitle')}</p>
-
-        <div className="explore-group-toggle" role="tablist" aria-label={t('exploreCitiesGroupBy')}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'province'}
-            className={mode === 'province' ? 'active' : ''}
-            onClick={() => setMode('province')}
-          >
-            {t('exploreCitiesByProvince')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'alpha'}
-            className={mode === 'alpha' ? 'active' : ''}
-            onClick={() => setMode('alpha')}
-          >
-            {t('exploreCitiesAlphabetical')}
-          </button>
-        </div>
-
-        <div style={{ marginTop: '1.5rem' }}>
-          {displaySections.map((section) => (
-            <div key={section.key} className="explore-city-section">
-              <h2 className="explore-city-section__title">{section.title}</h2>
-              <div className="explore-grid">
-                {section.cities.map((c) => {
-                  const count = countMap.get(c.slug) ?? 0;
-                  return (
-                    <ExploreCityCard
-                      key={c.slug}
-                      name={c.name}
-                      slug={c.slug}
-                      count={count}
-                      countLabel={rolesLabel(count)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
+    return [...groups.values()];
+  },[cities,counts,query,onlyHiring,mode,locale,t]);
+  return <BrowsePage title={t('exploreCitiesTitle')}>
+    <div className={s.controls}><label className={s.search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('public.searchCities')} aria-label={t('public.searchCities')} /></label><label className={s.check}><input type="checkbox" checked={onlyHiring} onChange={(event) => setOnlyHiring(event.target.checked)} />{t('public.onlyHiring')}</label></div>
+    <div className={s.toggle}><button type="button" aria-pressed={mode === 'country'} onClick={() => setMode('country')}>{t('public.byCountry')}</button><button type="button" aria-pressed={mode === 'province'} onClick={() => setMode('province')}>{t('exploreCitiesByProvince')}</button><button type="button" aria-pressed={mode === 'alpha'} onClick={() => setMode('alpha')}>{t('exploreCitiesAlphabetical')}</button></div>
+    {loading || error || !sections.length ? <DirectoryStatus onReset={() => { setQuery(''); setOnlyHiring(true); setMode('country'); }} loading={loading} error={error} onRetry={() => setRetry((v) => v + 1)} /> : sections.map((section) => <section className={s.group} key={section.title}><h2>{section.title}</h2><div className={s.grid}>{section.cities.map((city) => <ExploreCityCard key={city.slug} name={city.name} slug={city.slug} count={counts[city.slug] || 0} countLabel={t('openRolesCount').replace('{n}',String(counts[city.slug] || 0))} />)}</div></section>)}
+  </BrowsePage>;
 }

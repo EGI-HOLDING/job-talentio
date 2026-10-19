@@ -1,0 +1,62 @@
+.page { padding: 28px 32px 36px; background: #f7f8fc; color: #17213a; min-height: calc(100dvh - var(--app-nav-height, 76px) - 74px); }
+.layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); max-width: 1220px; margin: 0 auto; background: #fff; border: 1px solid #e5e8f2; border-radius: 20px; overflow: clip; }
+.story { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: space-between; gap: 190px; padding: 44px; color: #fff; background-size: cover; background-position: 72% center; }
+.seeker { background-image: linear-gradient(180deg, rgba(48, 27, 149, .97) 0%, rgba(57, 34, 169, .88) 30%, rgba(44, 28, 121, .2) 57%, rgba(29, 20, 80, .95) 100%), url('/images/talentio-hero-global-hd.webp'); background-position: 85% center; }
+.employer { background-image: linear-gradient(180deg, rgba(48, 27, 149, .97) 0%, rgba(57, 34, 169, .88) 30%, rgba(44, 28, 121, .15) 57%, rgba(29, 20, 80, .95) 100%), url('/images/talentio-employer-hero-hd.webp'); background-position: 76% center; }
+.employerPage .layout { display:block; max-width:610px; border-radius:14px; }
+.employerPage .story { display:none; }
+.employerPage .formPanel { padding:32px 38px; }
+.employerPage .formInner { max-width:none; }
+.eyebrow { display: block; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; color: #ded7ff; margin-bottom: 24px; }
+.story h2 { font-family: var(--font-display); font-size: clamp(30px, 3.1vw, 43px); line-height: 1.18; letter-spacing: -.045em; margin: 0 0 18px; max-width: 400px; color: #fff; }
+.storyTop > p { font-size: 14px; line-height: 1.7; margin: 0; color: #e1dcff; max-width: 340px; }
+.benefits { list-style: none; display: grid; gap: 17px; padding: 0; margin: 0; }
+.benefits li { display: flex; align-items: center; gap: 13px; font-size: 13px; line-height: 1.5; color: #fff; }
+.benefitIcon { width: 35px; height: 35px; flex: 0 0 35px; display: grid; place-items: center; color: #e4dcff; border: 1px solid #ffffff35; border-radius: 9px; background: #ffffff0c; }
+.formPanel { padding: 32px 44px; min-width: 0; }
+.formInner { max-width: 470px; margin-inline: auto; }
+.roleBadge { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: #5836df; background: #f3efff; padding: 6px 9px; border-radius: 6px; margin-bottom: 14px; }
+.roleBadge svg { width: 14px; height: 14px; }
+.formPanel h1 { font-family: var(--font-display); font-size: 28px; line-height: 1.25; letter-spacing: -.045em; margin: 0 0 9px; }
+.subtitle { font-size: 13px; line-height: 1.6; color: #68788e; margin: 0 0 22px; }
+.social { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.social > :global(.google-signin) { margin: 0; min-width: 0; }
+.social > :global(.google-signin):nth-child(3), .social > :has(:global(.google-verify-card)) { grid-column: 1 / -1; }
+.social :global(.auth-divider) { display: none; }
+.social :global(.auth-social-btn) { border: 1px solid #dce1ed; border-radius: 8px; height: auto; min-height: 44px; padding: 10px 8px; background: #fff; color: #28344c; font-size: 12px; font-weight: 600; line-height: 1.4; gap: 8px; }
+.social :global(.auth-social-btn--telegram) svg { color: #289bd3; }
+.social :global(.auth-social-btn):hover:not(:disabled) { background: #f7f5ff; border-color: #b8a5f5; color: #4e32ca; }
+.social :global(.auth-social-btn):disabled { opacity: .6; cursor: not-allowed; }
+.social :global(.error) { margin-top: 8px; font-size: 12px; }
+.social :global(.google-verify-card) { font-size: 13px; }
+.social :global(.chips) { margin-block: 8px; }
+.divider { display: flex; align-items: center; gap: 12px; color: #8590a3; font-size: 11px; margin: 21px 0; }
+.divider::before, .divider::after { content: ''; height: 1px; background: #e8ebf3; flex: 1; }
+.form { display: grid; gap: 15px; }
+.form label { color: #39465e; font-size: 12px; gap: 7px; }
+.form input:not([type=checkbox]) { min-width: 0; height: 43px; border: 1px solid #dce1ed; border-radius: 8px; background: #fff; padding: 10px 12px; font-size: 13px; color: #17213a; }
+.form input:focus { outline: 3px solid #efebff; border-color: #9277ef; }
+.form input[readonly] { background: #f6f7fb; color: #66768e; }
+.form :global(.field-hint) { font-size: 10px; color: #8490a3; }
+.passwords { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; align-items: start; }
+.passwords label { min-width: 0; }
+.form :global(.pw-field) input { padding-right: 40px; }
+.form :global(.pw-toggle) { width: 36px; height: 36px; padding: 0; border-radius: 6px; }
+.form :global(.pw-toggle):hover { background: #f1edff; color: #5836df; }
+.form .terms { display: flex; align-items: flex-start; gap: 9px; font-size: 11px; line-height: 1.6; font-weight: 400; color: #69778e; }
+.terms input { width: 15px; height: 15px; margin-top: 2px; accent-color: #5635e8; }
+.terms a, .login a, .switchRole a { color: #5635e8; font-weight: 600; }
+.terms a:hover, .login a:hover, .switchRole a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.form .submit { min-height: 45px; border-radius: 8px; background: #5635e8; color: #fff; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.form .submit:hover { background: #4527c8; }
+.form .submit:disabled { opacity: .65; cursor: wait; }
+.form :global(.error) { font-size: 12px; }
+.login { font-size: 12px; text-align: center; color: #738198; margin: 19px 0 0; }
+.switchRole { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px 8px; border-top: 1px solid #eceef5; padding-top: 17px; margin-top: 21px; color: #8190a3; font-size: 11px; }
+.switchRole a { display: inline-flex; align-items: center; gap: 3px; }
+.switchRole svg { width: 13px; height: 13px; }
+.page a:focus-visible, .page button:focus-visible { outline: 3px solid #b7a3f5; outline-offset: 3px; }
+@media (min-width: 1600px) { .page { padding-block: 40px; } .formPanel { padding-block: 40px; } }
+@media (max-width: 1050px) { .page { padding: 24px; } .layout { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); } .story { padding: 30px; } .formPanel { padding: 30px; } .social { grid-template-columns: 1fr; } .social > * { grid-column: 1 !important; } }
+@media (max-width: 760px) { .page { padding: 0; background: #fff; } .layout { display: block; border: 0; border-radius: 0; } .story { display: none; } .formPanel { padding: 28px 22px 34px; } .formPanel h1 { font-size: 27px; } .social { grid-template-columns: repeat(2, minmax(0, 1fr)); } .social > * { grid-column: auto !important; } .social > :nth-child(3), .social > :has(:global(.google-verify-card)) { grid-column: 1 / -1 !important; } }
+@media (max-width: 390px) { .social { grid-template-columns: 1fr; } .passwords { grid-template-columns: 1fr; } .formPanel { padding-inline: 18px; } }

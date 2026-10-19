@@ -32,6 +32,34 @@ import { isDevLoginAllowed } from './session-policy';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 min between sends
+const GOOGLE_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const GOOGLE_AVATAR_TIMEOUT_MS = 5_000;
+
+function isGoogleAvatarUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && /^lh\d+\.googleusercontent\.com$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function googleAvatarFormat(bytes: Buffer): { contentType: string; extension: string } | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { contentType: 'image/jpeg', extension: 'jpg' };
+  }
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return { contentType: 'image/png', extension: 'png' };
+  }
+  if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
+    return { contentType: 'image/webp', extension: 'webp' };
+  }
+  if (bytes.length >= 6 && ['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6))) {
+    return { contentType: 'image/gif', extension: 'gif' };
+  }
+  return null;
+}
 
 /** Parse "15m" / "7d" style TTLs into milliseconds. */
 function parseTtlMs(value: string | undefined, fallbackMs: number): number {
@@ -371,13 +399,20 @@ export class AuthService {
     return this.tokenFor(user.id);
   }
 
-  async login(email: string, password: string) {
+  private assertLoginRole(actual: UserRole, expected?: 'EMPLOYEE' | 'RECRUITER') {
+    if (expected && actual !== expected) {
+      throw new ForbiddenException(`AUTH_ROLE_MISMATCH_${actual}`);
+    }
+  }
+
+  async login(email: string, password: string, expectedRole?: 'EMPLOYEE' | 'RECRUITER') {
     const normalized = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (!user?.passwordHash) throw new UnauthorizedException('Invalid email or password');
     if (user.isBanned) throw new ForbiddenException('Account banned');
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid email or password');
+    this.assertLoginRole(user.role, expectedRole);
     return this.tokenFor(user.id);
   }
 
@@ -496,6 +531,76 @@ export class AuthService {
     return this.googleClient;
   }
 
+  /** Cache Google's provider-hosted profile image in app storage so browsers can render it reliably. */
+  private async cacheGoogleAvatar(avatarUrl: string | null): Promise<string | null> {
+    if (!avatarUrl || !isGoogleAvatarUrl(avatarUrl)) return null;
+
+    try {
+      let source = new URL(avatarUrl);
+      for (let redirects = 0; redirects <= 3; redirects += 1) {
+        const response = await fetch(source, {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(GOOGLE_AVATAR_TIMEOUT_MS),
+          headers: { Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' },
+        });
+
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location || redirects === 3) return null;
+          source = new URL(location, source);
+          if (!isGoogleAvatarUrl(source.href)) return null;
+          continue;
+        }
+        if (!response.ok || !response.body) return null;
+
+        const length = Number(response.headers.get('content-length'));
+        if (Number.isFinite(length) && length > GOOGLE_AVATAR_MAX_BYTES) return null;
+
+        const reader = response.body.getReader();
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.byteLength;
+          if (totalBytes > GOOGLE_AVATAR_MAX_BYTES) {
+            await reader.cancel();
+            return null;
+          }
+          chunks.push(Buffer.from(value));
+        }
+
+        const buffer = Buffer.concat(chunks);
+        const format = googleAvatarFormat(buffer);
+        if (!format) return null;
+        const saved = await this.storage.upload(
+          buffer,
+          `google-avatar.${format.extension}`,
+          format.contentType,
+          'public/avatars/google',
+        );
+        return saved.url;
+      }
+    } catch {
+      // Google photo caching is best-effort and must not block sign-in.
+    }
+    return null;
+  }
+
+  private async googleAvatarForExistingUser(currentAvatarUrl: string | null, googleAvatarUrl: string | null) {
+    const cachedGoogleAvatar = currentAvatarUrl
+      ? this.storage.keyFromPublicUrl(currentAvatarUrl)?.startsWith('public/avatars/google/') === true
+      : false;
+    if (!googleAvatarUrl || (currentAvatarUrl && !isGoogleAvatarUrl(currentAvatarUrl) && !cachedGoogleAvatar)) {
+      return null;
+    }
+    return (await this.cacheGoogleAvatar(googleAvatarUrl)) ?? googleAvatarUrl;
+  }
+
+  private async googleAvatarForNewUser(googleAvatarUrl: string | null) {
+    return (await this.cacheGoogleAvatar(googleAvatarUrl)) ?? googleAvatarUrl;
+  }
+
   private async verifyGoogleIdToken(idToken: string) {
     const client = this.getGoogleClient();
     try {
@@ -569,6 +674,7 @@ export class AuthService {
   async oauthGoogle(input: {
     idToken: string;
     role?: 'EMPLOYEE' | 'RECRUITER';
+    expectedRole?: 'EMPLOYEE' | 'RECRUITER';
     companyName?: string;
     locale?: string;
     inviteToken?: string;
@@ -585,11 +691,11 @@ export class AuthService {
     if (!user) {
       const byEmail = await this.prisma.user.findUnique({ where: { email: google.email } });
       if (byEmail) {
+        if (!inviteToken) this.assertLoginRole(byEmail.role, input.expectedRole);
         user = await this.prisma.user.update({
           where: { id: byEmail.id },
           data: {
             googleId: google.googleId,
-            ...(google.avatarUrl && !byEmail.avatarUrl ? { avatarUrl: google.avatarUrl } : {}),
             ...(googleMailboxVerified && !byEmail.emailVerified ? { emailVerified: true } : {}),
           },
         });
@@ -598,6 +704,18 @@ export class AuthService {
 
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
+      if (!inviteToken) this.assertLoginRole(user.role, input.expectedRole);
+      const refreshedAvatarUrl = await this.googleAvatarForExistingUser(user.avatarUrl, google.avatarUrl);
+      if (refreshedAvatarUrl && refreshedAvatarUrl !== user.avatarUrl) {
+        const oldGoogleAvatarKey = this.storage.keyFromPublicUrl(user.avatarUrl);
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { avatarUrl: refreshedAvatarUrl },
+        });
+        if (oldGoogleAvatarKey?.startsWith('public/avatars/google/')) {
+          await this.storage.delete(oldGoogleAvatarKey);
+        }
+      }
       await this.syncGoogleMailboxVerified(user, google);
       if (inviteToken) {
         await this.acceptInviteOnExistingUser(inviteToken, google.email, user.id);
@@ -606,13 +724,14 @@ export class AuthService {
     }
 
     if (inviteToken) {
+      const avatarUrl = await this.googleAvatarForNewUser(google.avatarUrl);
       const created = await this.prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
           data: {
             email: google.email,
             googleId: google.googleId,
             fullName: google.fullName,
-            avatarUrl: google.avatarUrl,
+            avatarUrl,
             role: 'RECRUITER',
             locale: input.locale ?? 'uz',
             emailVerified: googleMailboxVerified,
@@ -625,6 +744,7 @@ export class AuthService {
     }
 
     // First Google sign-in: the frontend must supply a role (and company for recruiters)
+    if (input.role) this.assertLoginRole(input.role, input.expectedRole);
     if (!input.role) {
       return {
         requiresRegistration: true as const,
@@ -641,13 +761,14 @@ export class AuthService {
       await this.assertCompanyNameAvailable(name);
     }
 
+    const avatarUrl = await this.googleAvatarForNewUser(google.avatarUrl);
     const created = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
           email: google.email,
           googleId: google.googleId,
           fullName: google.fullName,
-          avatarUrl: google.avatarUrl,
+          avatarUrl,
           role: input.role as UserRole,
           locale: input.locale ?? 'uz',
           emailVerified: googleMailboxVerified,
@@ -878,6 +999,7 @@ export class AuthService {
     hash: string;
     email?: string;
     role?: 'EMPLOYEE' | 'RECRUITER';
+    expectedRole?: 'EMPLOYEE' | 'RECRUITER';
     companyName?: string;
     locale?: string;
     inviteToken?: string;
@@ -888,12 +1010,14 @@ export class AuthService {
     let user = await this.prisma.user.findUnique({ where: { telegramId: tg.telegramId } });
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
+      if (!inviteToken) this.assertLoginRole(user.role, input.expectedRole);
       if (inviteToken && user.email) {
         await this.acceptInviteOnExistingUser(inviteToken, user.email, user.id);
       }
       return this.tokenFor(user.id);
     }
 
+    if (input.role && !inviteToken) this.assertLoginRole(input.role, input.expectedRole);
     if (!input.role) {
       return {
         requiresRegistration: true as const,

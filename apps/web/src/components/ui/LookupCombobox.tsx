@@ -20,6 +20,7 @@ export type LookupSuggestion = {
 type LookupKind = 'skills' | 'benefits' | 'languages' | 'cities';
 
 type LookupComboboxProps = {
+  focusSuggestions?: boolean;
   kind: LookupKind;
   onPick: (item: {
     slug: string;
@@ -60,6 +61,7 @@ const KIND_SINGULAR_KEY: Record<LookupKind, string> = {
 };
 
 export function LookupCombobox({
+  focusSuggestions = false,
   kind,
   onPick,
   levelOptions,
@@ -80,10 +82,13 @@ export function LookupCombobox({
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [highlight, setHighlight] = useState(-1);
+  const [isOpen, setIsOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let active = true;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (focusSuggestions && !isOpen) { setLoading(false); return; }
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       const q = query.trim();
@@ -92,16 +97,18 @@ export function LookupCombobox({
         { auth: false },
       )
         .then((rows) => {
+          if (!active) return;
           setSuggestions(rows || []);
           setHighlight(-1);
         })
-        .catch(() => setSuggestions([]))
-        .finally(() => setLoading(false));
+        .catch(() => { if (active) setSuggestions([]); })
+        .finally(() => { if (active) setLoading(false); });
     }, 220);
     return () => {
+      active = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, kind]);
+  }, [query, kind, focusSuggestions, isOpen]);
 
   function currentLevel() {
     if (!levelOptions?.length) return defaultLevel;
@@ -118,6 +125,7 @@ export function LookupCombobox({
   const canCreate = allowCreate && query.trim().length >= 2 && !exact && !loading;
 
   async function choose(item: LookupSuggestion) {
+    if (focusSuggestions) { setIsOpen(false); setSuggestions([]); }
     setStatus(t('skillMatched').replace('{name}', item.name));
     setQuery('');
     await onPick({
@@ -167,7 +175,7 @@ export function LookupCombobox({
         <input
           type="text"
           role="combobox"
-          aria-expanded={suggestions.length > 0}
+          aria-expanded={suggestions.length > 0 && (!focusSuggestions || isOpen)}
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
@@ -175,7 +183,9 @@ export function LookupCombobox({
           value={query}
           disabled={disabled}
           placeholder={placeholder || t('skillSearchPlaceholder')}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); if (focusSuggestions) setIsOpen(true); }}
+          onFocus={() => { if (focusSuggestions) setIsOpen(true); }}
+          onBlur={() => { if (focusSuggestions) setIsOpen(false); }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {
               e.preventDefault();
@@ -184,6 +194,7 @@ export function LookupCombobox({
               e.preventDefault();
               setHighlight((h) => Math.max(h - 1, 0));
             } else if (e.key === 'Escape') {
+              if (focusSuggestions) { e.preventDefault(); e.stopPropagation(); setIsOpen(false); }
               setSuggestions([]);
               setHighlight(-1);
             } else if (e.key === 'Enter') {
@@ -200,7 +211,7 @@ export function LookupCombobox({
           <span className="skel skel-line short" />
         </div>
       )}
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && (!focusSuggestions || isOpen) && (
         <ul id={listId} role="listbox" className="skill-suggest-list">
           {suggestions.map((s, i) => (
             <li key={s.id} role="presentation">
@@ -210,6 +221,7 @@ export function LookupCombobox({
                 role="option"
                 aria-selected={highlight === i}
                 className={`skill-suggest-item ${highlight === i ? 'active' : ''}`}
+                onMouseDown={(event) => { if (focusSuggestions) event.preventDefault(); }}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => choose(s)}
               >

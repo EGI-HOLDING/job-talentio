@@ -1,43 +1,29 @@
 ﻿'use client';
 
-import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { allowEmployerContextChange } from '@/components/recruiter/useEmployerUnsaved';
+import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
+import { RecruiterJobs } from '@/components/recruiter/RecruiterJobs';
+import { RecruiterPipeline } from '@/components/recruiter/RecruiterPipeline';
+import { RecruiterCompany } from '@/components/recruiter/RecruiterCompany';
+import { preferredCompany, rememberCompany } from '@/components/recruiter/RecruiterPrimitives';
+import { WorkspaceEmpty, WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
+import rw from '@/components/recruiter/RecruiterWorkspace.module.css';
 import { Link, localeHref } from '@/lib/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/lib/navigation';
-import { PLAN_LIMITS, PLAN_PRICES_UZS, HOT_JOB_DAYS } from '@job-talentio/shared';
+import { PLAN_PRICES_UZS } from '@job-talentio/shared';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
-import { localizedJobLocation } from '@/lib/location';
-import { formatUzs as formatUzsShared } from '@/lib/numberFormat';
-import { sanitizeMojibake } from '@/lib/text';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
-import { usePresence } from '@/lib/presence';
-import { PresenceDot } from '@/components/presence/PresenceDot';
 import {
   RECRUITER_TAB_KEY,
   readStoredDashboardTab,
   storeDashboardTab,
 } from '@/lib/dashboardTab';
-import { FormAlert, LabelText } from '@/components/ui/Field';
-import { NumberInput } from '@/components/ui/NumberInput';
-import { SkillCombobox } from '@/components/ui/SkillCombobox';
-import { LookupCombobox } from '@/components/ui/LookupCombobox';
-import { LanguageChip, CEFR_LEVELS } from '@/components/ui/LanguageChip';
-import { JobTitleInput } from '@/components/ui/JobTitleInput';
-import { MatchRing } from '@/components/ui/MatchRing';
-import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
-import { BulkCommsPanel } from '@/components/bulk/BulkCommsPanel';
-import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
-import { JobLanguageVersions } from '@/components/recruiter/JobLanguageVersions';
-import { CompanyLanguageVersions } from '@/components/recruiter/CompanyLanguageVersions';
-import { RecruiterAnalytics } from '@/components/recruiter/RecruiterAnalytics';
-import { CompanyVerificationCard } from '@/components/recruiter/CompanyVerificationCard';
-import {
-  ScreeningQuestionsEditor,
-  screeningDraftsFromJob,
-  type ScreeningQuestionDraft,
-} from '@/components/recruiter/ScreeningQuestionsEditor';
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { useConfirm } from '@/components/ui/ConfirmProvider';
+import { RecruiterAnalyticsView } from '@/components/recruiter/RecruiterAnalyticsView';
+import { RecruiterBilling } from '@/components/recruiter/RecruiterBilling';
+import { RecruiterTemplates } from '@/components/recruiter/RecruiterTemplates';
+import { RoleGate } from '@/components/auth/RoleGate';
 
 type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
 const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
@@ -70,61 +56,8 @@ type CheckoutResponse = {
   checkoutUrl: string | null;
 };
 
-const PLAN_ORDER: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM', 'VIP'];
-/** Dictionary keys, resolved with `t()` where the plan cards render. */
-const PLAN_FEATURES: Record<PlanCode, string[]> = {
-  FREE: [
-    'rec.planFeature3Jobs',
-    'rec.planFeatureContactsBlurred',
-    'rec.planFeatureNoColdChat',
-  ],
-  STANDARD: [
-    'rec.planFeature5Jobs',
-    'rec.planFeatureContactsFull',
-    'rec.planFeatureNoColdChat',
-  ],
-  PREMIUM: [
-    'rec.planFeature20Jobs',
-    'rec.planFeatureContactsFull',
-    'rec.planFeatureColdChat20',
-  ],
-  VIP: [
-    'rec.planFeature50Jobs',
-    'rec.planFeatureContactsFull',
-    'rec.planFeatureColdChat50',
-    'rec.planFeatureVipBadge',
-  ],
-};
-
-function formatUzs(n: number) {
-  return formatUzsShared(n);
-}
-
-function planRank(plan: PlanCode) {
-  return PLAN_ORDER.indexOf(plan);
-}
-
-const STAGES = ['NEW', 'IN_REVIEW', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED', 'WITHDRAWN'] as const;
-/** Distinguish same-title openings by location + status in selects */
-function jobSelectLabel(
-  j: {
-    title: string;
-    status?: string;
-    workMode?: string | null;
-    city?: { name: string } | null;
-  },
-  enumLabel: (group: string, value?: string | null) => string,
-  t: (key: string) => string,
-) {
-  const location = localizedJobLocation(j, t);
-  const status =
-    j.status && j.status !== 'PUBLISHED' ? ` | ${enumLabel('jobStatus', j.status)}` : '';
-  return `${j.title} - ${location}${status}`;
-}
-
 function RecruiterDashboard() {
   const { t, locale } = useI18n();
-  const confirm = useConfirm();
   const enumLabel = useEnumLabel();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -154,27 +87,15 @@ function RecruiterDashboard() {
   const latestWrittenQuery = useRef<string | null>(null);
   const [memberships, setMemberships] = useState<any[]>([]);
   const [companyId, setCompanyId] = useState('');
+  const companyIdRef = useRef(companyId); companyIdRef.current = companyId;
+  const [bootLoading, setBootLoading] = useState(true);
+  const bootGeneration = useRef(0);
+  const companyGeneration = useRef(0);
+  const jobGeneration = useRef(0);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
   const [applicants, setApplicants] = useState<any[]>([]);
-  const [recommended, setRecommended] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>(null);
-  const [draftJobSkills, setDraftJobSkills] = useState<Array<{ slug: string; name: string }>>([]);
-  const [draftJobBenefits, setDraftJobBenefits] = useState<Array<{ slug: string; name: string }>>([]);
-  const [draftJobLanguages, setDraftJobLanguages] = useState<
-    Array<{ code: string; name: string; minLevel: string; isRequired: boolean }>
-  >([]);
-  const [editJobLanguages, setEditJobLanguages] = useState<
-    Array<{ code: string; name: string; minLevel: string; isRequired: boolean }>
-  >([]);
-  const [draftQuestions, setDraftQuestions] = useState<ScreeningQuestionDraft[]>([]);
-  const [editQuestions, setEditQuestions] = useState<ScreeningQuestionDraft[]>([]);
-  const [editQuestionsOriginal, setEditQuestionsOriginal] = useState<ScreeningQuestionDraft[]>([]);
-  const [answersOpenId, setAnswersOpenId] = useState<string | null>(null);
-  // Recruiters almost always write in the language they are using the site in;
-  // a fixed 'uz' default silently mislabels English and Russian postings.
-  const [draftJobLocale, setDraftJobLocale] = useState<'uz' | 'ru' | 'en'>(locale);
-  const localeLangSuggested = useRef(false);
-  const [draftJobLevel, setDraftJobLevel] = useState('');
+  const [applicantsLoading, setApplicantsLoading] = useState(false);
   const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
     cities: [],
     skills: [],
@@ -185,7 +106,6 @@ function RecruiterDashboard() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [msgTone, setMsgTone] = useState<'success' | 'error'>('success');
-  const [breakdownId, setBreakdownId] = useState<string | null>(null);
   const [industryGroups, setIndustryGroups] = useState<
     Array<{ slug: string; name: string; industries: Array<{ slug: string; name: string }> }>
   >([]);
@@ -196,29 +116,10 @@ function RecruiterDashboard() {
     endsAt?: string | null;
   } | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
-  const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [bulkTemplates, setBulkTemplates] = useState<Array<{ id: string; name: string; body: string }>>(
     [],
   );
-  const [bulkToStatus, setBulkToStatus] = useState('');
-  const [bulkTemplateId, setBulkTemplateId] = useState('');
-  const [bulkMessage, setBulkMessage] = useState('');
-  const [bulkChannelApp, setBulkChannelApp] = useState(true);
-  const [bulkChannelEmail, setBulkChannelEmail] = useState(false);
-  const [bulkChannelTelegram, setBulkChannelTelegram] = useState(false);
-  const [bulkBusy, setBulkBusy] = useState(false);
   const [companyDetail, setCompanyDetail] = useState<any>(null);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'RECRUITER' | 'ADMIN'>('RECRUITER');
-  const [inviteLocale, setInviteLocale] = useState<'uz' | 'ru' | 'en'>(locale);
-  const [inviteBusy, setInviteBusy] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
-  const [confirmTransferId, setConfirmTransferId] = useState<string | null>(null);
-  const [companyBusy, setCompanyBusy] = useState(false);
-  const [pendingInvites, setPendingInvites] = useState<
-    Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
-  >([]);
-  const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [accountEmail, setAccountEmail] = useState<string | null>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
@@ -236,11 +137,6 @@ function RecruiterDashboard() {
     [memberships, companyId],
   );
   const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
-  const canColdChat = planCode === 'PREMIUM' || planCode === 'VIP';
-  const activeJobLimit = PLAN_LIMITS[planCode].activeJobs;
-  const activePublishedJobs =
-    subscription?.activePublishedJobs ??
-    jobs.filter((j) => j.status === 'PUBLISHED').length;
 
   async function requestEmailVerification() {
     setVerifyBusy(true);
@@ -279,6 +175,12 @@ function RecruiterDashboard() {
     setMemberships(mine);
   }
 
+  async function selectTab(next: Tab) { if (await allowEmployerContextChange()) setTab(next); }
+  async function chooseCompany(id: string) {
+    if (id === companyId || !await allowEmployerContextChange()) return;
+    setCompanyDetail(null); setSubscription(null); setApplicants([]); setSelectedJob(''); setCompanyId(id); rememberCompany(id);
+
+  }
   async function loadSubscription(cid: string) {
     if (!cid) return;
     const sub = await api<{
@@ -287,7 +189,7 @@ function RecruiterDashboard() {
       prices: typeof PLAN_PRICES_UZS;
       endsAt?: string | null;
     }>(`/billing/companies/${cid}/subscription`);
-    setSubscription(sub);
+    if (companyIdRef.current === cid) setSubscription(sub);
   }
 
   async function startCheckout(res: CheckoutResponse, successMsg: string) {
@@ -340,8 +242,12 @@ function RecruiterDashboard() {
 
   async function bootstrap() {
     const session = getSession();
-    if (!session || (session.user.role !== 'RECRUITER' && session.user.role !== 'SUPER_ADMIN')) {
-      window.location.href = localeHref('/login');
+    if (!session) {
+      window.location.href = localeHref('/login?role=RECRUITER&next=' + encodeURIComponent('/dashboard/recruiter?' + searchParams.toString()));
+      return;
+    }
+    if (session.user.role !== 'RECRUITER' && session.user.role !== 'SUPER_ADMIN') {
+      window.location.href = localeHref(session.user.role === 'EMPLOYEE' ? '/jobs' : '/');
       return;
     }
     setAccountEmail(session.user.email);
@@ -373,73 +279,68 @@ function RecruiterDashboard() {
       languages: langs as any[],
     });
     setIndustryGroups(Array.isArray(inds) ? [] : inds.groups || []);
-    const first = mine[0]?.companyId;
+    const requested = searchParams.get('company');
+    const first = mine.find((item) => item.companyId === requested)?.companyId || preferredCompany(mine)?.companyId;
     if (first) {
       setCompanyId(first);
+      rememberCompany(first);
       await loadJobs(first);
     }
   }
 
-  useEffect(() => {
-    if (localeLangSuggested.current || draftJobLanguages.length > 0) return;
-    const lang = meta.languages.find((l) => l.code === draftJobLocale);
-    if (!lang) return;
-    localeLangSuggested.current = true;
-    setDraftJobLanguages([
-      { code: lang.code, name: lang.name, minLevel: 'B1', isRequired: true },
-    ]);
-  }, [meta.languages, draftJobLocale, draftJobLanguages.length]);
-
   async function loadJobs(cid: string) {
+    const generation = ++companyGeneration.current;
+    setJobsLoading(true);
+    try {
     const list = await api<any[]>(`/jobs/company/${cid}`);
+    if (generation !== companyGeneration.current || companyIdRef.current !== cid) return;
     setJobs(list);
     const preferred =
-      (jobFromUrl && list.some((j) => j.id === jobFromUrl) && jobFromUrl) ||
-      (selectedJob && list.some((j) => j.id === selectedJob) && selectedJob) ||
+      (searchParamsRef.current.get('job') && list.some((j) => j.id === searchParamsRef.current.get('job')) && searchParamsRef.current.get('job')) ||
+      (selectedJobRef.current && list.some((j) => j.id === selectedJobRef.current) && selectedJobRef.current) ||
       list[0]?.id ||
       '';
-    if (preferred && preferred !== selectedJob) {
+    if (preferred !== selectedJobRef.current) {
       setSelectedJob(preferred);
     } else if (preferred) {
       await loadJobData(preferred);
     }
+    } finally { if (generation === companyGeneration.current) setJobsLoading(false); }
   }
 
   async function loadJobData(jobId: string) {
-    if (!jobId) return;
-    const [apps, reco, st] = await Promise.all([
-      api<any[]>(`/applications/jobs/${jobId}?sort=match`),
-      api(`/jobs/${jobId}/recommended-candidates`).catch(() => []),
-      api(`/jobs/${jobId}/stats`).catch(() => null),
-    ]);
+    if (!jobId || selectedJobRef.current !== jobId) return;
+    const generation = ++jobGeneration.current;
+    setApplicantsLoading(true);
+    try {
+    const apps = await api<any[]>(`/applications/jobs/${jobId}?sort=match`);
+    if (generation !== jobGeneration.current || selectedJobRef.current !== jobId) return;
     setApplicants(apps);
-    setRecommended(reco as any[]);
-    setStats(st);
+    } finally { if (generation === jobGeneration.current) setApplicantsLoading(false); }
   }
 
   useEffect(() => {
-    bootstrap().catch((e) => setError(e.message));
+    const generation = ++bootGeneration.current;
+    setBootLoading(true);
+    bootstrap().catch((e) => { if (generation === bootGeneration.current) setError(e.message); }).finally(() => { if (generation === bootGeneration.current) setBootLoading(false); });
   }, []);
 
   useEffect(() => {
+    setApplicants([]); ++jobGeneration.current;
     if (selectedJob) {
-      setSelectedAppIds([]);
+
       loadJobData(selectedJob).catch((e) => setError(e.message));
     }
   }, [selectedJob]);
 
   useEffect(() => {
-    if (companyId) {
-      loadSubscription(companyId).catch(() => setSubscription(null));
-      loadBulkTemplates(companyId).catch(() => setBulkTemplates([]));
-      loadCompanyDetail(companyId).catch(() => setCompanyDetail(null));
-      if (canManageTeam) {
-        loadPendingInvites(companyId).catch(() => setPendingInvites([]));
-      } else {
-        setPendingInvites([]);
-      }
-    }
-  }, [companyId, canManageTeam]);
+    if (!companyId) return;
+    setCompanyDetail(null); setSubscription(null); setJobs([]); setJobsLoading(true); setSelectedJob(''); setApplicants([]); ++jobGeneration.current;
+    loadSubscription(companyId).catch((reason) => { if (companyIdRef.current === companyId) flash(reason.message, 'error'); });
+    loadBulkTemplates(companyId).catch(() => { if (companyIdRef.current === companyId) setBulkTemplates([]); });
+    loadCompanyDetail(companyId).catch((reason) => { if (companyIdRef.current === companyId) flash(reason.message, 'error'); });
+    void loadJobs(companyId).catch((reason) => flash(reason.message, 'error'));
+  }, [companyId]);
 
   useEffect(() => {
     if ((tab === 'pipeline' || tab === 'bulk') && companyId) {
@@ -449,7 +350,7 @@ function RecruiterDashboard() {
 
   useEffect(() => {
     if (tabFromUrl === 'candidates') {
-      window.location.replace('/talent');
+      window.location.replace(localeHref('/talent'));
       return;
     }
     const seen = canonicalQuery(searchParams);
@@ -483,10 +384,21 @@ function RecruiterDashboard() {
     }
   }, [tabFromUrl, jobFromUrl, searchParams]);
 
+  useEffect(() => {
+    const requested = searchParams.get('company');
+    if (requested && requested !== companyId && memberships.some((membership) => membership.companyId === requested)) {
+      setCompanyDetail(null); setSubscription(null); setApplicants([]); setSelectedJob(jobFromUrl); setCompanyId(requested); rememberCompany(requested);
+    }
+  }, [searchParams, memberships]);
+
   // One writer. It does not depend on searchParams or router identity, so its own replace cannot schedule another.
   useEffect(() => {
     storeDashboardTab(RECRUITER_TAB_KEY, tab);
+    if (bootLoading || jobsLoading || !companyId) return;
     const params = dashboardQuery(tab, selectedJob, searchParamsRef.current);
+    if (companyId) params.set('company', companyId);
+    if (tab !== 'pipeline' || selectedJob !== searchParamsRef.current.get('job') || (searchParamsRef.current.get('company') && companyId !== searchParamsRef.current.get('company'))) params.delete('application');
+    if (tab !== 'jobs') params.delete('focus');
     const next = canonicalQuery(params);
     if (next === canonicalQuery(searchParamsRef.current)) return;
     const gen = ++urlWriteGen.current;
@@ -494,178 +406,7 @@ function RecruiterDashboard() {
     urlWrites.current.set(gen, next);
     latestWrittenQuery.current = qs;
     routerRef.current.replace(qs ? `/dashboard/recruiter?${qs}` : '/dashboard/recruiter');
-  }, [tab, selectedJob]);
-
-  useEffect(() => {
-    if (tab === 'jobs' && focusFromUrl === 'create') {
-      document.getElementById('create-job-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [tab, focusFromUrl]);
-
-  /**
-   * Bring the posting's screening questions in line with the editor: delete
-   * removed ones, edit changed ones in place (answers survive), add new ones.
-   */
-  async function syncScreeningQuestions(
-    jobId: string,
-    next: ScreeningQuestionDraft[],
-    original: ScreeningQuestionDraft[],
-  ) {
-    const keptIds = new Set(next.map((q) => q.id).filter(Boolean));
-    for (const gone of original.filter((q) => q.id && !keptIds.has(q.id))) {
-      await api(`/jobs/${jobId}/questions/${gone.id}`, { method: 'DELETE' });
-    }
-    for (let i = 0; i < next.length; i++) {
-      const q = next[i];
-      const question = q.question.trim();
-      if (question.length < 3) continue;
-      const payload = { question, type: q.type, isRequired: q.isRequired, sortOrder: i };
-      if (!q.id) {
-        await api(`/jobs/${jobId}/questions`, { method: 'POST', body: JSON.stringify(payload) });
-        continue;
-      }
-      const before = original.find((o) => o.id === q.id);
-      const originalIndex = original.findIndex((o) => o.id === q.id);
-      const changed =
-        !before ||
-        before.question !== question ||
-        before.type !== q.type ||
-        before.isRequired !== q.isRequired ||
-        originalIndex !== i;
-      if (changed) {
-        await api(`/jobs/${jobId}/questions/${q.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        });
-      }
-    }
-  }
-
-  async function confirmRemoveSavedQuestion(question: ScreeningQuestionDraft) {
-    if (!question.answerCount) return true;
-    return confirm({
-      title: t('rec.screeningDeleteConfirm'),
-      message: t('rec.screeningDeleteConfirmBody').replace(
-        '{n}',
-        String(question.answerCount),
-      ),
-      tone: 'danger',
-      confirmLabel: t('rec.screeningRemove'),
-    });
-  }
-
-  async function createJob(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const created = await api<{ id: string }>(`/jobs/company/${companyId}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        title: fd.get('title'),
-        description: fd.get('description'),
-        citySlug: fd.get('citySlug') || undefined,
-        categorySlug: fd.get('categorySlug') || undefined,
-        experienceLevel: fd.get('experienceLevel') || undefined,
-        experienceYearsMin: fd.get('experienceYearsMin')
-          ? Number(fd.get('experienceYearsMin'))
-          : null,
-        salaryMin: fd.get('salaryMin') ? Number(fd.get('salaryMin')) : null,
-        salaryMax: fd.get('salaryMax') ? Number(fd.get('salaryMax')) : null,
-        salaryPeriod: fd.get('salaryPeriod') || 'MONTHLY',
-        currency: fd.get('currency') || 'UZS',
-        employmentType: fd.get('employmentType') || 'FULL_TIME',
-        workMode: fd.get('workMode') || 'ONSITE',
-        isAnonymous: fd.get('isAnonymous') === 'on',
-        locale: draftJobLocale,
-        skills: draftJobSkills.map((s) =>
-          s.slug
-            ? { slug: s.slug, isRequired: true, weight: 1 }
-            : { name: s.name, isRequired: true, weight: 1 },
-        ),
-        benefits: draftJobBenefits.map((b) =>
-          b.slug ? { slug: b.slug } : { name: b.name },
-        ),
-        languages: draftJobLanguages.map((l) => ({
-          code: l.code,
-          name: l.name,
-          minLevel: l.minLevel,
-          isRequired: l.isRequired,
-        })),
-      }),
-    });
-    let questionsFailed = false;
-    if (created?.id && draftQuestions.length) {
-      try {
-        await syncScreeningQuestions(created.id, draftQuestions, []);
-      } catch {
-        questionsFailed = true;
-      }
-    }
-    setDraftJobSkills([]);
-    setDraftJobBenefits([]);
-    setDraftJobLanguages([]);
-    setDraftQuestions([]);
-    localeLangSuggested.current = false;
-    setDraftJobLevel('');
-    if (questionsFailed) flash(t('rec.screeningSaveFailed'), 'error');
-    else flash(t('rec.jobCreatedDraft'));
-    await loadJobs(companyId);
-  }
-
-  async function updateJob(e: FormEvent<HTMLFormElement>, jobId: string) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    try {
-      await api(`/jobs/${jobId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          title: fd.get('title'),
-          description: fd.get('description'),
-          citySlug: fd.get('citySlug') || undefined,
-          experienceLevel: fd.get('experienceLevel') || undefined,
-          salaryMin: fd.get('salaryMin') ? Number(fd.get('salaryMin')) : null,
-          salaryMax: fd.get('salaryMax') ? Number(fd.get('salaryMax')) : null,
-          salaryPeriod: fd.get('salaryPeriod') || 'MONTHLY',
-          currency: fd.get('currency') || 'UZS',
-          employmentType: fd.get('employmentType') || 'FULL_TIME',
-          workMode: fd.get('workMode') || 'ONSITE',
-          isAnonymous: fd.get('isAnonymous') === 'on',
-          locale: fd.get('locale') || undefined,
-          languages: editJobLanguages.map((l) => ({
-            code: l.code,
-            name: l.name,
-            minLevel: l.minLevel,
-            isRequired: l.isRequired,
-          })),
-        }),
-      });
-      await syncScreeningQuestions(jobId, editQuestions, editQuestionsOriginal);
-      setEditingJobId(null);
-      setEditJobLanguages([]);
-      setEditQuestions([]);
-      setEditQuestionsOriginal([]);
-      flash(t('rec.jobUpdated'));
-      await loadJobs(companyId);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.jobUpdateFailed'), 'error');
-    }
-  }
-
-  function hydrateEditQuestions(job: any) {
-    const drafts = screeningDraftsFromJob(job);
-    setEditQuestions(drafts);
-    setEditQuestionsOriginal(drafts);
-  }
-
-  function hydrateEditLanguages(job: any) {
-    setEditJobLanguages(
-      (job.jobLanguages || []).map((jl: any) => ({
-        code: jl.language?.code || '',
-        name: jl.language?.name || jl.language?.code || '',
-        minLevel: jl.minLevel || 'B1',
-        isRequired: jl.isRequired !== false,
-      })).filter((l: { code: string }) => l.code),
-    );
-  }
+  }, [tab, selectedJob, companyId, bootLoading, jobsLoading]);
 
   async function changeJobStatus(jobId: string, status: string, okMsg: string) {
     try {
@@ -680,1917 +421,47 @@ function RecruiterDashboard() {
     }
   }
 
-  async function setStatus(appId: string, status: string) {
-    await api(`/applications/${appId}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ status }),
-    });
-    await loadJobData(selectedJob);
-  }
-
-  async function viewApplicationCv(appId: string) {
-    try {
-      const res = await api<{ url: string }>(`/applications/${appId}/resume-download`);
-      window.open(res.url, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('viewCvFailed'), 'error');
-    }
-  }
-
   async function loadBulkTemplates(cid: string) {
     if (!cid) return;
     try {
       const list = await api<Array<{ id: string; name: string; body: string }>>(
         `/bulk-comms/templates?companyId=${cid}`,
       );
-      setBulkTemplates(list);
+      if (companyIdRef.current === cid) setBulkTemplates(list);
     } catch {
-      setBulkTemplates([]);
+      if (companyIdRef.current === cid) setBulkTemplates([]);
     }
-  }
-
-  function toggleAppSelected(appId: string) {
-    setSelectedAppIds((prev) =>
-      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId],
-    );
-  }
-
-  function toggleStageSelect(stage: string) {
-    const ids = (byStage[stage] || []).map((a: any) => a.id as string);
-    const allSelected = ids.length > 0 && ids.every((id) => selectedAppIds.includes(id));
-    setSelectedAppIds((prev) => {
-      if (allSelected) return prev.filter((id) => !ids.includes(id));
-      const set = new Set(prev);
-      ids.forEach((id) => set.add(id));
-      return Array.from(set);
-    });
-  }
-
-  async function runBulkAction() {
-    if (!companyId || !selectedJob || selectedAppIds.length === 0) return;
-    if (!bulkToStatus && !bulkTemplateId && !bulkMessage.trim()) {
-      flash(t('rec.bulkChooseTarget'), 'error');
-      return;
-    }
-    const wantsMessage = Boolean(bulkTemplateId || bulkMessage.trim());
-    const channels = wantsMessage
-      ? {
-          app: bulkChannelApp,
-          email: bulkChannelEmail,
-          telegram: bulkChannelTelegram,
-        }
-      : undefined;
-    if (wantsMessage && !channels?.app && !channels?.email && !channels?.telegram) {
-      flash(t('rec.channelRequired'), 'error');
-      return;
-    }
-    setBulkBusy(true);
-    try {
-      const campaign = await api<any>('/bulk-comms/campaigns', {
-        method: 'POST',
-        body: JSON.stringify({
-          companyId,
-          jobPostId: selectedJob,
-          applicationIds: selectedAppIds,
-          toStatus: bulkToStatus || undefined,
-          templateId: bulkTemplateId || undefined,
-          messageBody: bulkMessage.trim() || undefined,
-          channels,
-        }),
-      });
-      const sent = campaign.recipients?.filter((r: any) => r.deliveryStatus === 'SENT').length ?? 0;
-      const skipped =
-        campaign.recipients?.filter((r: any) => r.deliveryStatus === 'SKIPPED_OPTED_OUT').length ?? 0;
-      const failed = campaign.recipients?.filter((r: any) => r.deliveryStatus === 'FAILED').length ?? 0;
-      flash(
-        `${t('rec.bulkDoneSent').replace('{n}', String(sent))}${
-          skipped ? t('rec.bulkDoneSkipped').replace('{n}', String(skipped)) : ''
-        }${failed ? t('rec.bulkDoneFailed').replace('{n}', String(failed)) : ''}`,
-      );
-      setSelectedAppIds([]);
-      setBulkMessage('');
-      await loadJobData(selectedJob);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.bulkActionFailed'), 'error');
-    } finally {
-      setBulkBusy(false);
-    }
-  }
-
-  async function scheduleInterview(e: FormEvent<HTMLFormElement>, appId: string) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    await api(`/applications/${appId}/interviews`, {
-      method: 'POST',
-      body: JSON.stringify({
-        scheduledAt: fd.get('scheduledAt'),
-        meetingUrl: fd.get('meetingUrl'),
-        note: fd.get('note'),
-      }),
-    });
-    flash(t('rec.interviewScheduled'));
-    await loadJobData(selectedJob);
   }
 
   async function loadCompanyDetail(cid: string) {
     if (!cid) return;
     const detail = await api(`/companies/${cid}`);
-    setCompanyDetail(detail);
+    if (companyIdRef.current === cid) setCompanyDetail(detail);
   }
-
-  async function loadPendingInvites(cid: string) {
-    if (!cid) return;
-    const rows = await api<
-      Array<{ id: string; email: string; role: string; locale?: string; expiresAt: string }>
-    >(`/companies/${cid}/invites`);
-    setPendingInvites(rows);
-  }
-
-  async function updateCompany(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    await api(`/companies/${companyId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        name: fd.get('name'),
-        description: fd.get('description') || undefined,
-        website: fd.get('website') || '',
-        citySlug: fd.get('citySlug') || undefined,
-        industrySlug: fd.get('industrySlug') || undefined,
-        size: fd.get('size') || undefined,
-      }),
-    });
-    flash(t('rec.companyUpdated'));
-    await refreshMemberships();
-    await loadCompanyDetail(companyId);
-  }
-
-  async function inviteMember(e: FormEvent) {
-    e.preventDefault();
-    if (!inviteEmail.trim() || inviteBusy) return;
-    setInviteBusy(true);
-    try {
-      const result = await api<{ status: 'added' | 'invited' }>(`/companies/${companyId}/invite`, {
-        method: 'POST',
-        body: JSON.stringify({
-          email: inviteEmail.trim(),
-          role: inviteRole,
-          locale: inviteLocale,
-        }),
-      });
-      setInviteEmail('');
-      flash(result.status === 'added' ? t('rec.memberAdded') : t('rec.memberInvited'));
-      await loadCompanyDetail(companyId);
-      await loadPendingInvites(companyId);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.inviteFailed'), 'error');
-    } finally {
-      setInviteBusy(false);
-    }
-  }
-
-  async function removeMember(userId: string) {
-    const ok = await confirm({
-      title: t('rec.confirmRemoveMember'),
-      tone: 'danger',
-      confirmLabel: t('rec.remove'),
-    });
-    if (!ok) return;
-    try {
-      await api(`/companies/${companyId}/members/${userId}`, { method: 'DELETE' });
-      flash(t('rec.memberRemoved'));
-      await loadCompanyDetail(companyId);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.removeFailed'), 'error');
-    }
-  }
-
-  async function transferOwnership(userId: string) {
-    setCompanyBusy(true);
-    try {
-      await api(`/companies/${companyId}/transfer-ownership`, {
-        method: 'POST',
-        body: JSON.stringify({ userId }),
-      });
-      flash(t('rec.ownershipTransferred'));
-      setConfirmTransferId(null);
-      await refreshMemberships();
-      await loadCompanyDetail(companyId);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.transferFailed'), 'error');
-    } finally {
-      setCompanyBusy(false);
-    }
-  }
-
-  async function closeCompany() {
-    if (!company?.name) return;
-    setCompanyBusy(true);
-    try {
-      await api(`/companies/${companyId}/close`, {
-        method: 'POST',
-        body: JSON.stringify({ name: company.name }),
-      });
-      flash(t('rec.companyClosed'));
-      setConfirmClose(false);
-      await refreshMemberships();
-      await loadCompanyDetail(companyId);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.closeFailed'), 'error');
-    } finally {
-      setCompanyBusy(false);
-    }
-  }
-
-  const byStage = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const s of STAGES) map[s] = [];
-    for (const a of applicants) {
-      (map[a.status] || (map[a.status] = [])).push(a);
-    }
-    return map;
-  }, [applicants]);
-
-  const pipelinePresence = usePresence(
-    applicants.map((a: any) => a.profile?.user?.id as string | undefined),
-  );
 
   return (
-    <div className="shell dash-grid">
-      {confirmClose && company?.name ? (
-        <ConfirmModal
-          title={t('rec.closeCompany')}
-          message={t('rec.closeCompanyConfirm')}
-          confirmLabel={t('rec.closeCompany')}
-          danger
-          busy={companyBusy}
-          requireTypedValue={company.name}
-          typedLabel={t('companyName')}
-          onCancel={() => {
-            if (!companyBusy) setConfirmClose(false);
-          }}
-          onConfirm={() => void closeCompany()}
-        />
-      ) : null}
-      {confirmTransferId ? (
-        <ConfirmModal
-          title={t('rec.transferOwnership')}
-          message={t('rec.confirmTransferOwnership')}
-          confirmLabel={t('rec.transferOwnership')}
-          busy={companyBusy}
-          onCancel={() => {
-            if (!companyBusy) setConfirmTransferId(null);
-          }}
-          onConfirm={() => void transferOwnership(confirmTransferId)}
-        />
-      ) : null}
-      <aside className="dash-nav">
-        {(
-          [
-            ['jobs', 'jobs'],
-            ['pipeline', 'rec.tabPipeline'],
-            ['bulk', 'rec.tabBulk'],
-            ['analytics', 'rec.tabAnalytics'],
-            ['billing', 'rec.tabBilling'],
-            ['company', 'company'],
-          ] as Array<[Tab, string]>
-        ).map(([k, labelKey]) => (
-          <button key={k} type="button" className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
-            {t(labelKey)}
-          </button>
-        ))}
-        {memberships.length > 1 && (
-          <select
-            value={companyId}
-            onChange={(e) => {
-              setCompanyId(e.target.value);
-              loadJobs(e.target.value);
-            }}
-            aria-label={t('company')}
-            style={{ marginTop: '0.75rem' }}
-          >
-            {memberships.map((m) => (
-              <option key={m.companyId} value={m.companyId}>
-                {m.company.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </aside>
-
-      <section>
-        {error && <FormAlert>{error}</FormAlert>}
-        {msg && <FormAlert tone={msgTone}>{msg}</FormAlert>}
-
-        {!accountEmail && emailVerified !== null && (
-          <div
-            className="card"
-            style={{
-              marginBottom: '1rem',
-              background: 'rgba(245, 158, 11, 0.12)',
-              borderColor: 'rgba(245, 158, 11, 0.35)',
-            }}
-          >
-            <h3 style={{ marginTop: 0 }}>{t('addEmailTitle')}</h3>
-            <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-              {t('addEmailDashboardHint')}
-            </p>
-            <Link href="/settings" style={{ color: 'var(--accent)' }}>
-              {t('addEmailGoToSettings')}
-            </Link>
-          </div>
-        )}
-
-        {accountEmail && emailVerified === false && (
-          <div
-            className="card"
-            style={{
-              marginBottom: '1rem',
-              background: 'rgba(245, 158, 11, 0.12)',
-              borderColor: 'rgba(245, 158, 11, 0.35)',
-            }}
-          >
-            <h3 style={{ marginTop: 0 }}>{t('verifyEmailTitle')}</h3>
-            <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-              {accountEmail} - <strong>{t('emailUnverifiedBadge')}</strong>
-            </p>
-            <p className="muted" style={{ fontSize: '0.9rem' }}>
-              {t('verifyEmailProfileHint')}
-            </p>
-            <button type="button" disabled={verifyBusy} onClick={() => requestEmailVerification()}>
-              {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
-            </button>
-            <p className="muted" style={{ marginBottom: 0, marginTop: '0.65rem', fontSize: '0.85rem' }}>
-              {t('rec.orOpen')}{' '}
-              <Link href="/settings" style={{ color: 'var(--accent)' }}>
-                {t('settings')}
-              </Link>
-              .
-            </p>
-          </div>
-        )}
-
-        {tab === 'jobs' && (
-          <div className="grid-2">
-            <div className="card" id="create-job-form">
-              <h3>{t('rec.createJob')}</h3>
-              <p className="required-note">{t('requiredFieldsNote')}</p>
-              <form className="form-stack" onSubmit={createJob}>
-                <label>
-                  <LabelText required>{t('jobTitleFilter')}</LabelText>
-                  <JobTitleInput
-                    name="title"
-                    required
-                    minLength={3}
-                    placeholder={t('rec.jobTitlePlaceholder')}
-                    onInferredLevel={(level) => {
-                      setDraftJobLevel((prev) => prev || level);
-                    }}
-                  />
-                  <span className="field-hint muted">
-                    {t('jobTitleHint')}
-                  </span>
-                </label>
-                <label>
-                  <LabelText required>{t('rec.description')}</LabelText>
-                  <textarea name="description" rows={5} required minLength={20} />
-                </label>
-                <div className="grid-2">
-                  <label>
-                    <LabelText>{t('city')}</LabelText>
-                    <select name="citySlug">
-                      <option value="">-</option>
-                      {meta.cities.map((c) => (
-                        <option key={c.slug} value={c.slug}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <LabelText>{t('workMode')}</LabelText>
-                    <select name="workMode" defaultValue="HYBRID">
-                      <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
-                      <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
-                      <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
-                    </select>
-                  </label>
-                </div>
-                <p className="field-hint muted">{t('rec.cityRuleHint')}</p>
-                <label>
-                  <LabelText>{t('category')}</LabelText>
-                  <select name="categorySlug">
-                    <option value="">-</option>
-                    {meta.categories.map((c) => (
-                      <option key={c.slug} value={c.slug}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <LabelText>{t('experienceLevel')}</LabelText>
-                  <select
-                    name="experienceLevel"
-                    value={draftJobLevel}
-                    onChange={(e) => setDraftJobLevel(e.target.value)}
-                  >
-                    <option value="">-</option>
-                    {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
-                      <option key={l} value={l}>
-                        {enumLabel('experienceLevel', l)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <LabelText>{t('rec.minYears')}</LabelText>
-                  <input name="experienceYearsMin" type="number" />
-                </label>
-                <div className="grid-2">
-                  <label>
-                    <LabelText>{t('rec.salaryMin')}</LabelText>
-                    <NumberInput
-                      name="salaryMin"
-                      placeholder={t('rec.salaryMinPlaceholder')}
-                      min={0}
-                    />
-                  </label>
-                  <label>
-                    <LabelText>{t('rec.salaryMax')}</LabelText>
-                    <NumberInput
-                      name="salaryMax"
-                      placeholder={t('rec.salaryMaxPlaceholder')}
-                      min={0}
-                    />
-                  </label>
-                </div>
-                <div className="grid-2">
-                  <label>
-                    <LabelText>{t('employmentType')}</LabelText>
-                    <select name="employmentType" defaultValue="FULL_TIME">
-                      <option value="FULL_TIME">{enumLabel('employmentType', 'FULL_TIME')}</option>
-                      <option value="PART_TIME">{enumLabel('employmentType', 'PART_TIME')}</option>
-                      <option value="CONTRACT">{enumLabel('employmentType', 'CONTRACT')}</option>
-                      <option value="INTERNSHIP">
-                        {enumLabel('employmentType', 'INTERNSHIP')}
-                      </option>
-                    </select>
-                  </label>
-                  <label>
-                    <LabelText>{t('rec.salaryPeriod')}</LabelText>
-                    <select name="salaryPeriod" defaultValue="MONTHLY">
-                      <option value="MONTHLY">{t('rec.periodMonthly')}</option>
-                      <option value="YEARLY">{t('rec.periodYearly')}</option>
-                      <option value="HOURLY">{t('rec.periodHourly')}</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="grid-2">
-                  <label>
-                    <LabelText>{t('rec.currency')}</LabelText>
-                    <select name="currency" defaultValue="UZS">
-                      <option value="UZS">UZS</option>
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                    </select>
-                  </label>
-                  <label>
-                    <LabelText>{t('postLocale')}</LabelText>
-                    <select
-                      name="locale"
-                      value={draftJobLocale}
-                      onChange={(e) => {
-                        const next = e.target.value as 'uz' | 'ru' | 'en';
-                        setDraftJobLocale(next);
-                        if (!localeLangSuggested.current || draftJobLanguages.length <= 1) {
-                          const lang = meta.languages.find((l) => l.code === next);
-                          if (lang) {
-                            localeLangSuggested.current = true;
-                            setDraftJobLanguages([
-                              { code: lang.code, name: lang.name, minLevel: 'B1', isRequired: true },
-                            ]);
-                          }
-                        }
-                      }}
-                    >
-                      <option value="uz">{t('rec.localeNameUz')}</option>
-                      <option value="ru">{t('rec.localeNameRu')}</option>
-                      <option value="en">{t('rec.localeNameEn')}</option>
-                    </select>
-                  </label>
-                </div>
-                <p className="field-hint muted">{t('rec.postLocaleHint')}</p>
-                <div>
-                  <LabelText>{t('skills')}</LabelText>
-                  <div className="chips" style={{ margin: '0.4rem 0' }}>
-                    {draftJobSkills.map((s) => (
-                      <span key={s.slug || s.name} className="badge">
-                        {s.name}
-                        <button
-                          type="button"
-                          className="ghost"
-                          style={{ marginLeft: 6, padding: 0 }}
-                          onClick={() =>
-                            setDraftJobSkills((prev) =>
-                              prev.filter((x) => (x.slug || x.name) !== (s.slug || s.name)),
-                            )
-                          }
-                        >
-                          x
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <SkillCombobox
-                    levelSelect={false}
-                    submitLabel={t('rec.addSkillToJob')}
-                    onPick={(skill) => {
-                      setDraftJobSkills((prev) => {
-                        const key = skill.slug || skill.name;
-                        if (prev.some((p) => (p.slug || p.name) === key)) return prev;
-                        return [...prev, { slug: skill.slug, name: skill.name }];
-                      });
-                    }}
-                  />
-                </div>
-                <div>
-                  <LabelText>{t('benefits')}</LabelText>
-                  <div className="chips" style={{ margin: '0.4rem 0' }}>
-                    {draftJobBenefits.map((b) => (
-                      <span key={b.slug || b.name} className="badge">
-                        {b.name}
-                        <button
-                          type="button"
-                          className="ghost"
-                          style={{ marginLeft: 6, padding: 0 }}
-                          onClick={() =>
-                            setDraftJobBenefits((prev) =>
-                              prev.filter((x) => (x.slug || x.name) !== (b.slug || b.name)),
-                            )
-                          }
-                        >
-                          x
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <LookupCombobox
-                    kind="benefits"
-                    allowCreate
-                    submitLabel={t('addBenefit')}
-                    placeholder={t('benefitSearchPlaceholder')}
-                    onPick={(item) => {
-                      setDraftJobBenefits((prev) => {
-                        const key = item.slug || item.name;
-                        if (prev.some((p) => (p.slug || p.name) === key)) return prev;
-                        return [...prev, { slug: item.slug, name: item.name }];
-                      });
-                    }}
-                  />
-                </div>
-                <div>
-                  <LabelText>{t('languages')}</LabelText>
-                  <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
-                    {t('jobLanguagesHint')}
-                  </p>
-                  <div className="lang-grid" style={{ margin: '0.4rem 0' }}>
-                    {draftJobLanguages.map((l) => (
-                      <LanguageChip
-                        key={l.code}
-                        name={l.name}
-                        level={l.minLevel}
-                        optional={!l.isRequired}
-                        onLevelChange={(minLevel) =>
-                          setDraftJobLanguages((prev) =>
-                            prev.map((row) => (row.code === l.code ? { ...row, minLevel } : row)),
-                          )
-                        }
-                        onRemove={() =>
-                          setDraftJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
-                        }
-                      />
-                    ))}
-                  </div>
-                  {draftJobLanguages.length < 4 && (
-                    <LookupCombobox
-                      kind="languages"
-                      allowCreate={false}
-                      submitLabel={t('addLanguage')}
-                      placeholder={t('languageSearchPlaceholder')}
-                      levelOptions={CEFR_LEVELS.map((v) => ({
-                        value: v,
-                        label: v,
-                      }))}
-                      defaultLevel="B1"
-                      onPick={(item) => {
-                        const code = item.code || item.slug;
-                        if (!code) return;
-                        setDraftJobLanguages((prev) => {
-                          if (prev.some((p) => p.code === code) || prev.length >= 4) return prev;
-                          return [
-                            ...prev,
-                            {
-                              code,
-                              name: item.name,
-                              minLevel: item.level || 'B1',
-                              isRequired: true,
-                            },
-                          ];
-                        });
-                      }}
-                    />
-                  )}
-                </div>
-                <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                  <input type="checkbox" name="isAnonymous" style={{ marginTop: '0.2rem' }} />
-                  <span>
-                    <span>{t('rec.anonymousPosting')}</span>
-                    <span className="muted" style={{ display: 'block', fontSize: '0.78rem' }}>
-                      {t('rec.anonymousPostingHint')}
-                    </span>
-                  </span>
-                </label>
-                <ScreeningQuestionsEditor
-                  idPrefix="create-job"
-                  value={draftQuestions}
-                  onChange={setDraftQuestions}
-                />
-                <button type="submit">{t('rec.createDraft')}</button>
-              </form>
-            </div>
-            <div>
-              <h2 className="section-title">{t('rec.yourJobs')}</h2>
-              {jobs.map((j) => (
-                <div key={j.id} className="card" style={{ marginBottom: '0.5rem' }}>
-                  <strong>{j.title}</strong>
-                  <p className="muted" style={{ margin: '0.25rem 0' }}>
-                    {enumLabel('jobStatus', j.status)} | {localizedJobLocation(j, t)} |{' '}
-                    {j._count?.applications ?? 0} {t('rec.appsWord')} | {j._count?.views ?? 0}{' '}
-                    {t('rec.viewsWord')}
-                    {j.boostUntil && new Date(j.boostUntil) > new Date()
-                      ? ` | ${t('rec.hotUntil').replace(
-                          '{date}',
-                          new Date(j.boostUntil).toLocaleDateString(),
-                        )}`
-                      : ''}
-                    {(j.questions?.length ?? 0) > 0
-                      ? ` | ${t('rec.screeningCount').replace('{n}', String(j.questions.length))}`
-                      : ''}
-                    {j.isAnonymous ? ` | ${t('rec.anonymousChip')}` : ''}
-                  </p>
-                  <div className="chips">
-                    {j.status === 'DRAFT' && (
-                      <button
-                        type="button"
-                        className="chip active"
-                        onClick={() => changeJobStatus(j.id, 'PUBLISHED', t('rec.jobPublished'))}
-                      >
-                        {t('rec.publish')}
-                      </button>
-                    )}
-                    {(j.status === 'CLOSED' || j.status === 'PAUSED') && (
-                      <button
-                        type="button"
-                        className="chip active"
-                        onClick={() =>
-                          changeJobStatus(
-                            j.id,
-                            'PUBLISHED',
-                            j.status === 'CLOSED' ? t('rec.jobReopened') : t('rec.jobResumed'),
-                          )
-                        }
-                      >
-                        {j.status === 'CLOSED' ? t('rec.reopen') : t('rec.resumeJob')}
-                      </button>
-                    )}
-                    {j.status === 'PUBLISHED' && (
-                      <button
-                        type="button"
-                        className="chip"
-                        onClick={() => changeJobStatus(j.id, 'PAUSED', t('rec.jobPaused'))}
-                      >
-                        {t('rec.pause')}
-                      </button>
-                    )}
-                    {(j.status === 'DRAFT' || j.status === 'PUBLISHED' || j.status === 'PAUSED') && (
-                      <button
-                        type="button"
-                        className="chip"
-                        onClick={() => changeJobStatus(j.id, 'CLOSED', t('rec.jobClosed'))}
-                      >
-                        {t('rec.closeJob')}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="chip"
-                      onClick={() => {
-                        if (editingJobId === j.id) {
-                          setEditingJobId(null);
-                          setEditJobLanguages([]);
-                          setEditQuestions([]);
-                          setEditQuestionsOriginal([]);
-                        } else {
-                          setEditingJobId(j.id);
-                          hydrateEditLanguages(j);
-                          hydrateEditQuestions(j);
-                        }
-                      }}
-                    >
-                      {editingJobId === j.id ? t('rec.cancelEdit') : t('rec.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      className="chip"
-                      onClick={() => {
-                        setSelectedJob(j.id);
-                        setTab('pipeline');
-                      }}
-                    >
-                      {t('rec.pipeline')}
-                    </button>
-                    {j.status === 'PUBLISHED' &&
-                      HOT_JOB_DAYS.map((days) => (
-                        <button
-                          key={days}
-                          type="button"
-                          className="chip"
-                          disabled={billingBusy}
-                          title={formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
-                          onClick={() => buyHotBoost(j.id, days)}
-                        >
-                          {t('rec.boostDays').replace('{n}', String(days))}
-                        </button>
-                      ))}
-                  </div>
-                  {editingJobId === j.id && (
-                    <>
-                      <form
-                        className="form-stack"
-                        style={{ marginTop: '0.75rem' }}
-                        onSubmit={(e) => updateJob(e, j.id)}
-                      >
-                        <label>
-                          <LabelText required>{t('jobTitleFilter')}</LabelText>
-                          <input name="title" defaultValue={j.title} required minLength={2} />
-                        </label>
-                        <label>
-                          <LabelText required>{t('rec.description')}</LabelText>
-                          <textarea
-                            name="description"
-                            rows={4}
-                            defaultValue={j.description || ''}
-                            required
-                            minLength={20}
-                          />
-                        </label>
-                        <div className="grid-2">
-                          <label>
-                            <LabelText>{t('city')}</LabelText>
-                            <select name="citySlug" defaultValue={j.city?.slug || ''}>
-                              <option value="">-</option>
-                              {meta.cities.map((c) => (
-                                <option key={c.slug} value={c.slug}>
-                                  {c.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <LabelText>{t('workMode')}</LabelText>
-                            <select name="workMode" defaultValue={j.workMode || 'HYBRID'}>
-                              <option value="ONSITE">{enumLabel('workMode', 'ONSITE')}</option>
-                              <option value="HYBRID">{enumLabel('workMode', 'HYBRID')}</option>
-                              <option value="REMOTE">{enumLabel('workMode', 'REMOTE')}</option>
-                            </select>
-                          </label>
-                        </div>
-                        <p className="field-hint muted">{t('rec.cityRuleHint')}</p>
-                        <div className="grid-2">
-                          <label>
-                            <LabelText>{t('experienceLevel')}</LabelText>
-                            <select name="experienceLevel" defaultValue={j.experienceLevel || ''}>
-                              <option value="">-</option>
-                              {['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map((l) => (
-                                <option key={l} value={l}>
-                                  {enumLabel('experienceLevel', l)}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <LabelText>{t('employmentType')}</LabelText>
-                            <select name="employmentType" defaultValue={j.employmentType || 'FULL_TIME'}>
-                              <option value="FULL_TIME">
-                                {enumLabel('employmentType', 'FULL_TIME')}
-                              </option>
-                              <option value="PART_TIME">
-                                {enumLabel('employmentType', 'PART_TIME')}
-                              </option>
-                              <option value="CONTRACT">
-                                {enumLabel('employmentType', 'CONTRACT')}
-                              </option>
-                              <option value="INTERNSHIP">
-                                {enumLabel('employmentType', 'INTERNSHIP')}
-                              </option>
-                            </select>
-                          </label>
-                        </div>
-                        <div className="grid-2">
-                          <label>
-                            <LabelText>{t('rec.salaryPeriod')}</LabelText>
-                            <select name="salaryPeriod" defaultValue={j.salaryPeriod || 'MONTHLY'}>
-                              <option value="MONTHLY">{t('rec.periodMonthly')}</option>
-                              <option value="YEARLY">{t('rec.periodYearly')}</option>
-                              <option value="HOURLY">{t('rec.periodHourly')}</option>
-                            </select>
-                          </label>
-                          <label>
-                            <LabelText>{t('rec.currency')}</LabelText>
-                            <select name="currency" defaultValue={j.currency || 'UZS'}>
-                              <option value="UZS">UZS</option>
-                              <option value="USD">USD</option>
-                              <option value="EUR">EUR</option>
-                            </select>
-                          </label>
-                        </div>
-                        <div className="grid-2">
-                          <label>
-                            <LabelText>{t('rec.salaryMin')}</LabelText>
-                            <NumberInput name="salaryMin" defaultValue={j.salaryMin ?? undefined} min={0} />
-                          </label>
-                          <label>
-                            <LabelText>{t('rec.salaryMax')}</LabelText>
-                            <NumberInput name="salaryMax" defaultValue={j.salaryMax ?? undefined} min={0} />
-                          </label>
-                        </div>
-                        <label>
-                          <LabelText>{t('postLocale')}</LabelText>
-                          <select name="locale" defaultValue={j.locale || 'uz'}>
-                            <option value="uz">{t('rec.localeNameUz')}</option>
-                            <option value="ru">{t('rec.localeNameRu')}</option>
-                            <option value="en">{t('rec.localeNameEn')}</option>
-                          </select>
-                        </label>
-                        <p className="field-hint muted">{t('rec.postLocaleHint')}</p>
-                        <div>
-                          <LabelText>{t('languages')}</LabelText>
-                          <p className="muted" style={{ fontSize: '0.78rem', margin: '0.25rem 0 0.4rem' }}>
-                            {t('jobLanguagesHint')}
-                          </p>
-                          <div className="lang-grid" style={{ margin: '0.4rem 0' }}>
-                            {editJobLanguages.map((l) => (
-                              <LanguageChip
-                                key={l.code}
-                                name={l.name}
-                                level={l.minLevel}
-                                optional={!l.isRequired}
-                                onLevelChange={(minLevel) =>
-                                  setEditJobLanguages((prev) =>
-                                    prev.map((row) => (row.code === l.code ? { ...row, minLevel } : row)),
-                                  )
-                                }
-                                onRemove={() =>
-                                  setEditJobLanguages((prev) => prev.filter((x) => x.code !== l.code))
-                                }
-                              />
-                            ))}
-                          </div>
-                          {editJobLanguages.length < 4 && (
-                            <LookupCombobox
-                              kind="languages"
-                              allowCreate={false}
-                              submitLabel={t('addLanguage')}
-                              placeholder={t('languageSearchPlaceholder')}
-                              levelOptions={CEFR_LEVELS.map((v) => ({
-                                value: v,
-                                label: v,
-                              }))}
-                              defaultLevel="B1"
-                              onPick={(item) => {
-                                const code = item.code || item.slug;
-                                if (!code) return;
-                                setEditJobLanguages((prev) => {
-                                  if (prev.some((p) => p.code === code) || prev.length >= 4) return prev;
-                                  return [
-                                    ...prev,
-                                    {
-                                      code,
-                                      name: item.name,
-                                      minLevel: item.level || 'B1',
-                                      isRequired: true,
-                                    },
-                                  ];
-                                });
-                              }}
-                            />
-                          )}
-                        </div>
-                        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                          <input
-                            type="checkbox"
-                            name="isAnonymous"
-                            defaultChecked={Boolean(j.isAnonymous)}
-                            style={{ marginTop: '0.2rem' }}
-                          />
-                          <span>
-                            <span>{t('rec.anonymousPosting')}</span>
-                            <span className="muted" style={{ display: 'block', fontSize: '0.78rem' }}>
-                              {t('rec.anonymousPostingHint')}
-                            </span>
-                          </span>
-                        </label>
-                        <ScreeningQuestionsEditor
-                          idPrefix={`edit-job-${j.id}`}
-                          value={editQuestions}
-                          onChange={setEditQuestions}
-                          onRemoveSaved={confirmRemoveSavedQuestion}
-                        />
-                        <button type="submit">{t('rec.saveChanges')}</button>
-                      </form>
-                      <JobLanguageVersions jobId={j.id} onFlash={flash} />
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === 'pipeline' && (
-          <div className="pipeline-page">
-            <div className="pipeline-toolbar">
-              <div>
-                <h2 className="section-title" style={{ margin: 0 }}>
-                  {t('rec.pipelineTitle')}
-                </h2>
-                <p className="muted" style={{ margin: '0.3rem 0 0', fontSize: '0.9rem' }}>
-                  {t('rec.pipelineSubtitle')}
-                </p>
-              </div>
-              <label style={{ display: 'grid', gap: '0.3rem' }}>
-                <span className="muted" style={{ fontSize: '0.8rem' }}>
-                  {t('rec.jobPost')}
-                </span>
-                <select
-                  value={selectedJob}
-                  onChange={(e) => setSelectedJob(e.target.value)}
-                  className="job-select"
-                  title={t('rec.selectJobPost')}
-                  aria-label={t('rec.selectJobPost')}
-                >
-                  {jobs.length === 0 && <option value="">{t('rec.noJobsYet')}</option>}
-                  {jobs.map((j) => (
-                    <option key={j.id} value={j.id}>
-                      {jobSelectLabel(j, enumLabel, t)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {!selectedJob ? (
-              <div className="card">
-                <p className="muted" style={{ margin: 0 }}>
-                  {t('rec.pipelineEmpty')}
-                </p>
-              </div>
-            ) : (
-              <>
-                {selectedAppIds.length > 0 && (
-                  <div className="bulk-action-bar card">
-                    <div className="bulk-action-bar-head">
-                      <strong>
-                        {t('rec.selectedCount').replace('{n}', String(selectedAppIds.length))}
-                      </strong>
-                      <button type="button" className="chip" onClick={() => setSelectedAppIds([])}>
-                        {t('rec.clear')}
-                      </button>
-                      <button
-                        type="button"
-                        className="chip"
-                        onClick={() => setTab('bulk')}
-                      >
-                        {t('rec.templatesHistory')}
-                      </button>
-                    </div>
-                    <div className="bulk-action-fields">
-                      <label>
-                        <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          {t('rec.moveToStage')}
-                        </span>
-                        <select
-                          value={bulkToStatus}
-                          onChange={(e) => setBulkToStatus(e.target.value)}
-                          aria-label={t('rec.bulkTargetStage')}
-                        >
-                          <option value="">{t('rec.keepStage')}</option>
-                          {STAGES.map((s) => (
-                            <option key={s} value={s}>
-                              {enumLabel('applicationStatus', s)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          {t('rec.template')}
-                        </span>
-                        <select
-                          value={bulkTemplateId}
-                          onChange={(e) => {
-                            setBulkTemplateId(e.target.value);
-                            const t = bulkTemplates.find((x) => x.id === e.target.value);
-                            if (t) setBulkMessage(t.body);
-                          }}
-                          aria-label={t('rec.bulkTemplateAria')}
-                        >
-                          <option value="">{t('rec.customNone')}</option>
-                          {bulkTemplates.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="bulk-action-message">
-                        <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          {t('rec.messageOptional')}
-                        </span>
-                        <textarea
-                          value={bulkMessage}
-                          onChange={(e) => setBulkMessage(e.target.value)}
-                          rows={2}
-                          placeholder={t('rec.bulkMessagePlaceholder')}
-                        />
-                      </label>
-                      {(bulkTemplateId || bulkMessage.trim()) && (
-                        <div className="bulk-channels">
-                          <span className="muted" style={{ fontSize: '0.78rem' }}>
-                            {t('rec.sendVia')}
-                          </span>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={bulkChannelApp}
-                              onChange={(e) => setBulkChannelApp(e.target.checked)}
-                            />
-                            {t('rec.channelApp')}
-                          </label>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={bulkChannelEmail}
-                              onChange={(e) => setBulkChannelEmail(e.target.checked)}
-                            />
-                            {t('rec.channelEmail')}
-                          </label>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={bulkChannelTelegram}
-                              onChange={(e) => setBulkChannelTelegram(e.target.checked)}
-                            />
-                            {t('rec.channelTelegram')}
-                          </label>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        className="chip active"
-                        disabled={bulkBusy}
-                        onClick={() => runBulkAction()}
-                      >
-                        {bulkBusy ? t('rec.running') : t('rec.applyToSelected')}
-                      </button>
-                    </div>
-                    <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.78rem' }}>
-                      {t('rec.bulkOptOutNote')}
-                    </p>
-                  </div>
-                )}
-
-                <div className="pipeline">
-                  {STAGES.map((stage) => {
-                    const cards = byStage[stage] || [];
-                    const stageIds = cards.map((a: any) => a.id as string);
-                    const allSelected =
-                      stageIds.length > 0 && stageIds.every((id) => selectedAppIds.includes(id));
-                    return (
-                      <div key={stage} className="pipeline-col">
-                        <h4>
-                          <label className="pipeline-col-select">
-                            <input
-                              type="checkbox"
-                              checked={allSelected}
-                              disabled={cards.length === 0}
-                              onChange={() => toggleStageSelect(stage)}
-                              aria-label={t('rec.selectAllIn').replace(
-                                '{name}',
-                                enumLabel('applicationStatus', stage),
-                              )}
-                            />
-                            <span>{enumLabel('applicationStatus', stage)}</span>
-                          </label>
-                          <span className="pipeline-col-count">{cards.length}</span>
-                        </h4>
-                        {cards.length === 0 && (
-                          <div className="pipeline-empty">{t('rec.noCandidates')}</div>
-                        )}
-                        {cards.map((a) => {
-                          const name = a.profile?.user?.fullName || t('rec.candidateFallback');
-                          const avatar =
-                            a.profile?.user?.avatarUrl ||
-                            `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
-                          const score = a.matchScore != null ? Math.round(a.matchScore) : null;
-                          const selected = selectedAppIds.includes(a.id);
-                          return (
-                            <div
-                              key={a.id}
-                              className={`candidate-card${selected ? ' selected' : ''}`}
-                            >
-                              <div className="candidate-card-head">
-                                <label className="bulk-card-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={selected}
-                                    onChange={() => toggleAppSelected(a.id)}
-                                    aria-label={t('rec.selectCandidate').replace('{name}', name)}
-                                  />
-                                </label>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img className="avatar avatar-sm" src={avatar} alt="" />
-                                <div className="candidate-card-meta">
-                                  <strong
-                                    style={{
-                                      fontSize: '0.9rem',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.35rem',
-                                      minWidth: 0,
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {name}
-                                    </span>
-                                    <PresenceDot status={pipelinePresence[a.profile?.user?.id]} />
-                                  </strong>
-                                  <div
-                                    className="muted"
-                                    style={{
-                                      fontSize: '0.75rem',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {a.profile?.headline || '-'}
-                                  </div>
-                                </div>
-                                {score != null && <MatchRing score={score} size="sm" />}
-                              </div>
-                              {score != null && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="badge match"
-                                    style={{ marginTop: '0.55rem', border: 0, width: '100%', cursor: 'pointer' }}
-                                    onClick={() => setBreakdownId(breakdownId === a.id ? null : a.id)}
-                                  >
-                                    {t('rec.matchDetails').replace('{n}', String(score))}
-                                  </button>
-                                  {breakdownId === a.id && a.matchBreakdown && (
-                                    <MatchBreakdownPanel
-                                      breakdown={a.matchBreakdown}
-                                      showSkillChips={false}
-                                    />
-                                  )}
-                                  <div className="match-bar">
-                                    <span style={{ width: `${score}%` }} />
-                                  </div>
-                                </>
-                              )}
-                              <div className="chips" style={{ marginTop: '0.55rem' }}>
-                                {a.hasResumeFile ? (
-                                  <button
-                                    type="button"
-                                    className="chip"
-                                    style={{ fontSize: '0.72rem' }}
-                                    onClick={() => viewApplicationCv(a.id)}
-                                  >
-                                    {t('viewCv')}
-                                  </button>
-                                ) : null}
-                                <Link
-                                  href={`/candidates/${a.profile?.id}?matchJobId=${selectedJob}`}
-                                  className="chip"
-                                  style={{ fontSize: '0.72rem' }}
-                                >
-                                  {t('viewProfile')}
-                                </Link>
-                                <Link
-                                  href={`/messages?peer=${a.profile?.user?.id}&job=${selectedJob}`}
-                                  className="chip"
-                                  style={{ fontSize: '0.72rem' }}
-                                >
-                                  {t('rec.chat')}
-                                </Link>
-                                {(a.answers?.length ?? 0) > 0 || a.coverLetter ? (
-                                  <button
-                                    type="button"
-                                    className={`chip${answersOpenId === a.id ? ' active' : ''}`}
-                                    style={{ fontSize: '0.72rem' }}
-                                    aria-expanded={answersOpenId === a.id}
-                                    onClick={() =>
-                                      setAnswersOpenId(answersOpenId === a.id ? null : a.id)
-                                    }
-                                  >
-                                    {answersOpenId === a.id
-                                      ? t('rec.answersHide')
-                                      : t('rec.answersShow').replace(
-                                          '{n}',
-                                          String(a.answers?.length ?? 0),
-                                        )}
-                                  </button>
-                                ) : null}
-                              </div>
-                              {answersOpenId === a.id && (
-                                <div
-                                  className="screening-answers"
-                                  style={{
-                                    marginTop: '0.5rem',
-                                    padding: '0.5rem 0.6rem',
-                                    borderRadius: 8,
-                                    background: 'var(--surface-2, #f5f7fa)',
-                                    fontSize: '0.8rem',
-                                    display: 'grid',
-                                    gap: '0.45rem',
-                                  }}
-                                >
-                                  {a.coverLetter ? (
-                                    <div>
-                                      <div className="muted" style={{ fontSize: '0.72rem' }}>
-                                        {t('coverLetter')}
-                                      </div>
-                                      <div style={{ whiteSpace: 'pre-wrap' }}>
-                                        {sanitizeMojibake(a.coverLetter)}
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                  {(a.answers || []).map((ans: any) => (
-                                    <div key={ans.id || ans.questionId}>
-                                      <div className="muted" style={{ fontSize: '0.72rem' }}>
-                                        {sanitizeMojibake(ans.question?.question || '')}
-                                      </div>
-                                      <div style={{ whiteSpace: 'pre-wrap' }}>
-                                        {ans.answer === 'Yes'
-                                          ? t('job.yes')
-                                          : ans.answer === 'No'
-                                            ? t('job.no')
-                                            : sanitizeMojibake(String(ans.answer ?? ''))}
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {(a.answers?.length ?? 0) === 0 ? (
-                                    <div className="muted">{t('rec.answersNone')}</div>
-                                  ) : null}
-                                </div>
-                              )}
-                              <select
-                                style={{ marginTop: '0.5rem', fontSize: '0.8rem', width: '100%' }}
-                                value={a.status}
-                                onChange={(e) => setStatus(a.id, e.target.value)}
-                                aria-label={t('rec.statusFor').replace('{name}', name)}
-                              >
-                                {STAGES.map((s) => (
-                                  <option key={s} value={s}>
-                                    {enumLabel('applicationStatus', s)}
-                                  </option>
-                                ))}
-                              </select>
-                              {stage === 'INTERVIEW' || stage === 'IN_REVIEW' ? (
-                                <form
-                                  style={{ marginTop: '0.5rem', display: 'grid', gap: '0.25rem' }}
-                                  onSubmit={(e) => scheduleInterview(e, a.id)}
-                                >
-                                  <label>
-                                    <LabelText required>{t('rec.interviewTime')}</LabelText>
-                                    <input
-                                      name="scheduledAt"
-                                      type="datetime-local"
-                                      required
-                                      style={{ fontSize: '0.75rem', width: '100%' }}
-                                    />
-                                  </label>
-                                  <label>
-                                    <LabelText>{t('rec.meetingUrl')}</LabelText>
-                                    <input
-                                      name="meetingUrl"
-                                      placeholder={t('rec.meetingUrlPlaceholder')}
-                                      style={{ fontSize: '0.75rem', width: '100%' }}
-                                    />
-                                  </label>
-                                  <button type="submit" style={{ padding: '0.35rem', fontSize: '0.75rem' }}>
-                                    {t('rec.scheduleInterview')}
-                                  </button>
-                                </form>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="pipeline-section-head">
-                  <div>
-                    <h3 className="section-title" style={{ margin: 0 }}>
-                      {t('rec.recommendedCandidates')}
-                    </h3>
-                    <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-                      {t('rec.recommendedSubtitle')}
-                    </p>
-                  </div>
-                  <span className="muted" style={{ fontSize: '0.85rem' }}>
-                    {t('rec.suggestedCount').replace('{n}', String(recommended.length))}
-                  </span>
-                </div>
-                {recommended.length === 0 ? (
-                  <div className="card">
-                    <p className="muted" style={{ margin: 0 }}>
-                      {t('rec.recommendedEmpty')}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="pipeline-reco">
-                    {recommended.map((r) => {
-                      const name = r.profile.user.fullName;
-                      const avatar =
-                        r.profile.user.avatarUrl ||
-                        `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}`;
-                      return (
-                        <div key={r.profile.id} className="card pipeline-reco-card">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img className="avatar" src={avatar} alt="" style={{ width: 44, height: 44 }} />
-                          <div className="card-body">
-                            <strong
-                              style={{
-                                display: 'block',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {name}
-                            </strong>
-                            <p
-                              className="muted"
-                              style={{
-                                margin: '0.2rem 0 0.45rem',
-                                fontSize: '0.85rem',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {r.profile.headline || '-'}
-                            </p>
-                            <div className="chips">
-                              {(r.profile.skills || []).slice(0, 4).map((s: any) => (
-                                <span key={s.slug || s.name} className="badge skill">
-                                  {s.name}
-                                </span>
-                              ))}
-                            </div>
-                              <div className="chips" style={{ marginTop: '0.55rem' }}>
-                                <Link
-                                  href={`/candidates/${r.profile.id}?matchJobId=${selectedJob}`}
-                                  className="chip"
-                                  style={{ fontSize: '0.75rem' }}
-                                >
-                                  {t('viewProfile')}
-                                </Link>
-                              {canColdChat ? (
-                                <Link
-                                  href={`/messages?peer=${r.profile.user.id}&job=${selectedJob}`}
-                                  className="chip"
-                                  style={{ fontSize: '0.75rem' }}
-                                >
-                                  {t('rec.chat')}
-                                </Link>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="chip muted"
-                                  title={t('rec.coldChatLocked')}
-                                  style={{ fontSize: '0.75rem' }}
-                                  onClick={() => setTab('billing')}
-                                >
-                                  {t('rec.chatPremium')}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <MatchRing score={r.matchScore} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+    <div className={rw.root} aria-label={t('employers.badge')}>
+      {memberships.length > 0 && <div className={rw.context}><strong>{company?.name || t('company')}</strong>{memberships.length > 1 && <WorkspaceSelect value={companyId} label={t('company')} options={memberships.map((membership) => ({ value: membership.companyId, label: membership.company.name }))} onChange={(id) => void chooseCompany(id)} />}{tab === 'pipeline' || tab === 'bulk' ? <nav className={rw.actions} aria-label={t('jobs')}><button className={rw.textButton} onClick={() => void selectTab('jobs')}>{t('rw.backJobs')}</button><button className={tab === 'pipeline' ? rw.secondary : rw.textButton} onClick={() => void selectTab('pipeline')}>{t('applications')}</button><button className={tab === 'bulk' ? rw.secondary : rw.textButton} onClick={() => void selectTab('bulk')}>{t('rec.templatesHistory')}</button></nav> : null}{tab === 'billing' && <Link className={rw.textButton} href="/dashboard/recruiter?tab=company">{t('company')}</Link>}</div>}
 
 
-        {tab === 'bulk' && companyId && (
-          <BulkCommsPanel companyId={companyId} jobPostId={selectedJob || undefined} />
-        )}
+      <section className={rw.body}>
+        {bootLoading && <WorkspaceLoading />}
+        {!bootLoading && !companyId && !error && <WorkspaceEmpty title={t('rw.noCompany')} hint={t('rw.noCompanyHint')} />}
+        {error && <div className={rw.notice} role="alert"><span>{error}</span><button className={rw.textButton} onClick={() => { setError(''); setBootLoading(true); void bootstrap().catch((reason) => setError(reason.message)).finally(() => setBootLoading(false)); }}>{t('workspace.retry')}</button></div>}
+        {msg && <div className={rw.notice} data-tone={msgTone} role="status"><span>{msg}</span><button className={rw.icon} aria-label={t('close')} onClick={() => setMsg('')}>×</button></div>}
 
-        {tab === 'analytics' && (
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            <RecruiterAnalytics
-              companyId={companyId}
-              jobs={jobs}
-              selectedJob={selectedJob}
-              onSelectJob={setSelectedJob}
-              jobLabel={(j) => jobSelectLabel(j as any, enumLabel, t)}
-            />
-            <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('rec.plan')}</h3>
-              <p>
-                {t('rec.currentPlan')}: <strong>{enumLabel('plan', planCode)}</strong>
-              </p>
-              <p className="muted" style={{ marginBottom: '0.75rem' }}>
-                {t('rec.publishedJobs')}: {activePublishedJobs} / {activeJobLimit}
-              </p>
-              <button type="button" className="chip active" onClick={() => setTab('billing')}>
-                {t('rec.managePlanBilling')}
-              </button>
-            </div>
-          </div>
-        )}
+        {!bootLoading && emailVerified !== null && !accountEmail && <div className={rw.accountNotice}><span>{t('addEmailDashboardHint')}</span><Link className={rw.textButton} href="/settings">{t('addEmailGoToSettings')}</Link></div>}
+        {!bootLoading && accountEmail && emailVerified === false && <div className={rw.accountNotice}><span>{accountEmail} | {t('emailUnverifiedBadge')}</span><button className={rw.textButton} disabled={verifyBusy} onClick={() => void requestEmailVerification()}>{t(verifyBusy ? 'verifyEmailSending' : 'verifyEmailCta')}</button><Link className={rw.textButton} href="/settings">{t('settings')}</Link></div>}
 
-        {tab === 'billing' && (
-          <div>
-            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-              {t('rec.tabBilling')}
-              <span className="badge" style={{ fontSize: '0.7rem' }}>{t('rec.demoModeBadge')}</span>
-            </h2>
-            <p className="muted" style={{ marginTop: 0 }}>
-              {t('rec.currentPlan')}: <strong>{enumLabel('plan', planCode)}</strong>
-              {subscription?.endsAt
-                ? ` | ${t('rec.renewsEnds').replace(
-                    '{date}',
-                    new Date(subscription.endsAt).toLocaleDateString(),
-                  )}`
-                : ''}
-              {' | '}
-              {t('rec.publishedJobs')}: {activePublishedJobs} / {activeJobLimit}
-            </p>
-            <p className="muted" style={{ fontSize: '0.85rem' }}>
-              {t('rec.demoCheckoutNote')}
-            </p>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '1rem',
-                marginTop: '1.25rem',
-              }}
-            >
-              {PLAN_ORDER.map((plan) => {
-                const price = PLAN_PRICES_UZS[plan];
-                const current = planCode === plan;
-                const canUpgrade =
-                  plan !== 'FREE' && planRank(plan) > planRank(planCode) && !billingBusy;
-                return (
-                  <div
-                    key={plan}
-                    className="card"
-                    style={{
-                      borderColor: current ? 'var(--accent, #0f766e)' : undefined,
-                      outline: current ? '2px solid var(--accent, #0f766e)' : undefined,
-                    }}
-                  >
-                    <h3 style={{ marginTop: 0 }}>{enumLabel('plan', plan)}</h3>
-                    <p style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0.35rem 0' }}>
-                      {price === 0 ? t('rec.free') : `${formatUzs(price)}${t('rec.perMonth')}`}
-                    </p>
-                    <ul style={{ margin: '0.75rem 0 1rem', paddingLeft: '1.1rem' }}>
-                      {PLAN_FEATURES[plan].map((f) => (
-                        <li key={f} style={{ marginBottom: '0.25rem' }}>
-                          {t(f)}
-                        </li>
-                      ))}
-                    </ul>
-                    {current ? (
-                      <span className="chip muted">{t('rec.currentPlan')}</span>
-                    ) : canUpgrade ? (
-                      <button
-                        type="button"
-                        disabled={billingBusy}
-                        onClick={() => upgradePlan(plan as 'STANDARD' | 'PREMIUM' | 'VIP')}
-                      >
-                        {t('rec.upgradeTo').replace('{plan}', enumLabel('plan', plan))}
-                      </button>
-                    ) : (
-                      <span className="chip muted">
-                        {plan === 'FREE' ? t('rec.included') : t('rec.alreadyHigherPlan')}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="card" style={{ marginTop: '1.25rem' }}>
-              <h3 style={{ marginTop: 0 }}>{t('rec.hotJobBoosts')}</h3>
-              <p className="muted" style={{ marginBottom: '0.75rem' }}>
-                {t('rec.hotBoostHint')}
-              </p>
-              {!jobs.filter((j) => j.status === 'PUBLISHED').length && (
-                <p className="muted">{t('rec.noPublishedJobs')}</p>
-              )}
-              {jobs
-                .filter((j) => j.status === 'PUBLISHED')
-                .map((j) => (
-                  <div
-                    key={j.id}
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.5rem',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '0.65rem 0',
-                      borderBottom: '1px solid var(--border)',
-                    }}
-                  >
-                    <div>
-                      <strong>{j.title}</strong>
-                      <div className="muted" style={{ fontSize: '0.85rem' }}>
-                        {localizedJobLocation(j, t)}
-                        {j.boostUntil && new Date(j.boostUntil) > new Date()
-                          ? ` | ${t('rec.hotUntil').replace(
-                              '{date}',
-                              new Date(j.boostUntil).toLocaleDateString(),
-                            )}`
-                          : ''}
-                      </div>
-                    </div>
-                    <div className="chips">
-                      {HOT_JOB_DAYS.map((days) => (
-                        <button
-                          key={days}
-                          type="button"
-                          className="chip"
-                          disabled={billingBusy}
-                          onClick={() => buyHotBoost(j.id, days)}
-                        >
-                          {t('rec.daysShort').replace('{n}', String(days))} |{' '}
-                          {formatUzs(PLAN_PRICES_UZS[`HOT_JOB_${days}D`])}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
+        {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={() => loadJobs(companyId)} onApplicants={(id) => { setSelectedJob(id); setTab('pipeline'); }} onStatus={changeJobStatus} onFlash={flash} />}
+        {tab === 'pipeline' && !bootLoading && companyId && <RecruiterPipeline companyId={companyId} jobs={jobs} selectedJob={selectedJob} onJobChange={setSelectedJob} applicants={applicants.filter((item) => item.jobPostId === selectedJob)} companyName={company?.name || ''} loading={applicantsLoading} applicationId={searchParams.get('application') || undefined} templates={bulkTemplates} onReload={() => loadJobData(selectedJob)} onTemplates={() => setTab('bulk')} onFlash={flash} />}
 
-        {tab === 'company' && company && (
-          <div className="grid-2">
-            <CompanyVerificationCard
-              companyId={companyId}
-              canSubmit={canManageTeam}
-              onFlash={flash}
-              onChanged={() => loadCompanyDetail(companyId).catch(() => undefined)}
-            />
-            <div className="card">
-              <h3 style={{ marginTop: 0 }}>
-                {accountEmail ? t('verifyEmailTitle') : t('addEmailTitle')}
-              </h3>
-              {accountEmail ? (
-                <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                  {accountEmail} -{' '}
-                  {emailVerified ? (
-                    <span style={{ color: '#047857', fontWeight: 600 }}>{t('emailVerifiedBadge')}</span>
-                  ) : (
-                    <span style={{ color: '#b45309', fontWeight: 600 }}>{t('emailUnverifiedBadge')}</span>
-                  )}
-                </p>
-              ) : (
-                <p className="muted" style={{ marginTop: 0, fontSize: '0.9rem' }}>
-                  {t('addEmailDashboardHint')}
-                </p>
-              )}
-              {!accountEmail ? (
-                <Link href="/settings" style={{ color: 'var(--accent)' }}>
-                  {t('addEmailGoToSettings')}
-                </Link>
-              ) : !emailVerified ? (
-                <>
-                  <p className="muted" style={{ fontSize: '0.9rem' }}>
-                    {t('verifyEmailProfileHint')}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={verifyBusy}
-                    onClick={() => requestEmailVerification()}
-                  >
-                    {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
-                  </button>
-                </>
-              ) : null}
-            </div>
-            <div className="card">
-              <h2 className="section-title">{sanitizeMojibake(company.name)}</h2>
-              <p className="muted">{sanitizeMojibake(company.description)}</p>
-              <p>
-                {t('rec.members')}: {company.members?.length ?? company._count?.members} |{' '}
-                {t('jobs')}: {company._count?.jobPosts} | {t('rec.followers')}:{' '}
-                {company._count?.followers}
-              </p>
-              <p className="muted" style={{ fontSize: '0.85rem' }}>
-                {t('rec.publicPage')}:{' '}
-                <a href={`/companies/${company.slug}`}>/companies/{company.slug}</a>
-              </p>
-              <div style={{ marginTop: '1rem' }}>
-                <ImageCropUpload
-                  mode="logo"
-                  label={t('rec.companyLogo')}
-                  value={company.logoUrl}
-                  uploadPath={`/companies/${companyId}/logo`}
-                  clearPath={`/companies/${companyId}/logo`}
-                  onUploaded={async () => {
-                    await refreshMemberships();
-                    await loadCompanyDetail(companyId);
-                    flash(t('rec.logoUpdated'));
-                  }}
-                />
-              </div>
-            </div>
-            <div className="card">
-              <h3>{t('rec.editCompanyProfile')}</h3>
-              <p className="required-note">{t('requiredFieldsNote')}</p>
-              <form className="form-stack" onSubmit={updateCompany} key={company.id}>
-                <label>
-                  <LabelText required>{t('companyName')}</LabelText>
-                  <input name="name" defaultValue={company.name} required minLength={2} />
-                </label>
-                <label>
-                  <LabelText>{t('rec.description')}</LabelText>
-                  <textarea name="description" rows={4} defaultValue={company.description || ''} />
-                </label>
-                <label>
-                  <LabelText>{t('trustItemWebsite')}</LabelText>
-                  <input name="website" type="url" defaultValue={company.website || ''} placeholder="https://..." />
-                </label>
-                <label>
-                  <LabelText>{t('city')}</LabelText>
-                  <select name="citySlug" defaultValue={company.city?.slug || ''}>
-                    <option value="">-</option>
-                    {meta.cities.map((c) => (
-                      <option key={c.slug} value={c.slug}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <LabelText>{t('trustItemIndustry')}</LabelText>
-                  <select name="industrySlug" defaultValue={company.industry?.slug || ''}>
-                    <option value="">-</option>
-                    {industryGroups.map((g) => (
-                      <optgroup key={g.slug} label={g.name}>
-                        {g.industries.map((i) => (
-                          <option key={i.slug} value={i.slug}>
-                            {i.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <LabelText>{t('trustItemSize')}</LabelText>
-                  <select name="size" defaultValue={company.size || ''}>
-                    <option value="">-</option>
-                    <option value="SIZE_1_10">1-10</option>
-                    <option value="SIZE_11_50">11-50</option>
-                    <option value="SIZE_51_200">51-200</option>
-                    <option value="SIZE_201_1000">201-1000</option>
-                    <option value="SIZE_1000_PLUS">1000+</option>
-                  </select>
-                </label>
-                <button type="submit">{t('rec.saveCompany')}</button>
-              </form>
-            </div>
-            <CompanyLanguageVersions companyId={companyId} onFlash={flash} />
-            <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <h3>{t('rec.team')}</h3>
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1rem' }}>
-                {(company.members || []).map((m: any) => (
-                  <li
-                    key={m.userId || m.user?.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: '0.75rem',
-                      padding: '0.45rem 0',
-                      borderBottom: '1px solid var(--border, #e5e7eb)',
-                    }}
-                  >
-                    <span>
-                      {m.user?.fullName || m.user?.email}{' '}
-                      <span className="muted">({m.role})</span>
-                    </span>
-                    {m.role !== 'OWNER' && (
-                      <span style={{ display: 'flex', gap: '0.35rem', flexShrink: 0 }}>
-                        {isOwner && !company.anonymizedAt ? (
-                          <button
-                            type="button"
-                            className="ghost"
-                            onClick={() => setConfirmTransferId(m.userId || m.user?.id)}
-                          >
-                            {t('rec.transferOwnership')}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="ghost"
-                          onClick={() => removeMember(m.userId || m.user?.id)}
-                        >
-                          {t('rec.remove')}
-                        </button>
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {canManageTeam ? (
-              <>
-              <form className="form-stack" onSubmit={inviteMember}>
-                <label>
-                  <LabelText required>{t('rec.inviteByEmail')}</LabelText>
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="recruiter@company.uz"
-                    required
-                  />
-                </label>
-                <label>
-                  <LabelText required>{t('rec.inviteRole')}</LabelText>
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as 'RECRUITER' | 'ADMIN')}
-                    required
-                  >
-                    <option value="RECRUITER">{t('rec.roleRecruiter')}</option>
-                    <option value="ADMIN">{t('rec.roleAdmin')}</option>
-                  </select>
-                </label>
-                <label>
-                  <LabelText required>{t('rec.inviteEmailLanguage')}</LabelText>
-                  <select
-                    value={inviteLocale}
-                    onChange={(e) => setInviteLocale(e.target.value as 'uz' | 'ru' | 'en')}
-                    required
-                  >
-                    <option value="uz">{t('rec.localeNameUz')}</option>
-                    <option value="ru">{t('rec.localeNameRu')}</option>
-                    <option value="en">{t('rec.localeNameEn')}</option>
-                  </select>
-                </label>
-                <button type="submit" disabled={inviteBusy}>
-                  {inviteBusy ? t('rec.inviting') : t('rec.inviteMember')}
-                </button>
-              </form>
-              <div style={{ marginTop: '1.25rem' }}>
-                <h4 style={{ margin: '0 0 0.5rem' }}>{t('rec.pendingInvites')}</h4>
-                {pendingInvites.length === 0 ? (
-                  <p className="muted">{t('rec.noPendingInvites')}</p>
-                ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {pendingInvites.map((row) => (
-                      <li
-                        key={row.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: '0.75rem',
-                          padding: '0.45rem 0',
-                          borderBottom: '1px solid var(--border, #e5e7eb)',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <span>
-                          {row.email}{' '}
-                          <span className="muted">
-                            ({row.role}
-                            {row.locale
-                              ? `, ${
-                                  row.locale === 'ru'
-                                    ? t('rec.localeNameRu')
-                                    : row.locale === 'en'
-                                      ? t('rec.localeNameEn')
-                                      : t('rec.localeNameUz')
-                                }`
-                              : ''}
-                            )
-                          </span>
-                        </span>
-                        <span className="btn-row">
-                          <button
-                            type="button"
-                            className="ghost"
-                            onClick={async () => {
-                              try {
-                                await api(`/companies/${companyId}/invite`, {
-                                  method: 'POST',
-                                  body: JSON.stringify({
-                                    email: row.email,
-                                    role: row.role,
-                                    locale: row.locale || inviteLocale,
-                                  }),
-                                });
-                                flash(t('rec.memberInvited'));
-                                await loadPendingInvites(companyId);
-                              } catch (err) {
-                                flash(
-                                  err instanceof Error ? err.message : t('rec.inviteFailed'),
-                                  'error',
-                                );
-                              }
-                            }}
-                          >
-                            {t('rec.resendInvite')}
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost"
-                            onClick={async () => {
-                              try {
-                                await api(`/companies/${companyId}/invites/${row.id}`, {
-                                  method: 'DELETE',
-                                });
-                                flash(t('rec.inviteCancelled'));
-                                await loadPendingInvites(companyId);
-                              } catch (err) {
-                                flash(
-                                  err instanceof Error ? err.message : t('rec.inviteFailed'),
-                                  'error',
-                                );
-                              }
-                            }}
-                          >
-                            {t('rec.cancelInvite')}
-                          </button>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              </>
-              ) : null}
-            </div>
-            {isOwner ? (
-              <div className="card" style={{ gridColumn: '1 / -1' }}>
-                <h3>{t('rec.closeCompany')}</h3>
-                {company.anonymizedAt ? (
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('rec.companyAlreadyClosed')}{' '}
-                    <a href={localeHref('/settings#security')}>{t('ui.deleteAccount')}</a>
-                  </p>
-                ) : (company.members?.length ?? 0) > 1 ? (
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('rec.closeCompanyNeedTransfer')}
-                  </p>
-                ) : (
-                  <>
-                    <p className="muted" style={{ marginTop: 0 }}>
-                      {t('rec.closeCompanyHint')}
-                    </p>
-                    <button type="button" className="danger" onClick={() => setConfirmClose(true)}>
-                      {t('rec.closeCompany')}
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : null}
-          </div>
-        )}
+        {tab === 'bulk' && companyId && <RecruiterTemplates key={companyId} companyId={companyId} jobPostId={selectedJob || undefined} />}
+        {tab === 'analytics' && companyId && <RecruiterAnalyticsView key={companyId} companyId={companyId} jobs={jobs} selectedJob={selectedJob} onSelectJob={setSelectedJob} />}
+        {tab === 'billing' && companyId && <RecruiterBilling plan={planCode} subscription={subscription} jobs={jobs} busy={billingBusy} onUpgrade={upgradePlan} onBoost={buyHotBoost} />}
+
+        {tab === 'company' && company && <RecruiterCompany key={companyId} company={company} companyId={companyId} meta={meta} industryGroups={industryGroups} canManage={canManageTeam} isOwner={isOwner} onReload={async () => { await refreshMemberships(); await loadCompanyDetail(companyId); }} onFlash={flash} />}
+
       </section>
     </div>
   );
@@ -2602,7 +473,7 @@ export default function RecruiterDashboardPage() {
     <Suspense
       fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>{t('rec.loading')}</div>}
     >
-      <RecruiterDashboard />
+      <RoleGate role="RECRUITER"><RecruiterDashboard /></RoleGate>
     </Suspense>
   );
 }

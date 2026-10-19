@@ -31,6 +31,11 @@ import {
   storeDashboardTab,
 } from '@/lib/dashboardTab';
 import { MAX_RESUMES_PER_PROFILE, scoreProfileCompleteness } from '@job-talentio/shared';
+import { ProfileCvWorkspace } from '@/components/profile/ProfileCvWorkspace';
+import { ApplicationsWorkspace } from '@/components/employee/ApplicationsWorkspace';
+import { SavedJobsWorkspace } from '@/components/employee/SavedJobsWorkspace';
+import { AlertsWorkspace } from '@/components/employee/AlertsWorkspace';
+import { RoleGate } from '@/components/auth/RoleGate';
 
 type Tab = 'overview' | 'recommended' | 'applications' | 'saved' | 'alerts' | 'profile';
 const EMPLOYEE_TABS: Tab[] = [
@@ -156,8 +161,12 @@ function EmployeeDashboardInner() {
 
   async function load() {
     const session = getSession();
-    if (!session || session.user.role !== 'EMPLOYEE') {
-      window.location.href = localeHref('/login');
+    if (!session) {
+      window.location.href = localeHref('/login?role=EMPLOYEE');
+      return;
+    }
+    if (session.user.role !== 'EMPLOYEE') {
+      window.location.href = localeHref(session.user.role === 'RECRUITER' ? '/dashboard/recruiter?tab=jobs' : '/');
       return;
     }
     const [p, a, r, al, c, sk, langs, sv] = await Promise.all([
@@ -1886,10 +1895,18 @@ function EmployeeDashboardInner() {
   );
 }
 
+function EmployeeDashboardRoute() {
+  const params = useSearchParams();
+  if (params.get('tab') === 'applications') return <ApplicationsWorkspace />;
+  if (params.get('tab') === 'saved') return <SavedJobsWorkspace />;
+  if (params.get('tab') === 'alerts') return <AlertsWorkspace />;
+  return params.get('tab') === 'profile' ? <ProfileCvWorkspace /> : <EmployeeDashboardInner />;
+}
+
 export default function EmployeeDashboard() {
   return (
     <Suspense fallback={<DashboardSkeleton />}>
-      <EmployeeDashboardInner />
+      <RoleGate role="EMPLOYEE"><EmployeeDashboardRoute /></RoleGate>
     </Suspense>
   );
 }

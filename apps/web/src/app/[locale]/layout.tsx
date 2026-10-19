@@ -7,11 +7,12 @@ import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { PresenceConnection } from '@/lib/presence';
 import { PwaRegister } from '@/components/pwa/PwaRegister';
 import { InstallPrompt } from '@/components/pwa/InstallPrompt';
+import { PublicShell } from '@/components/public/PublicShell';
 import { DEFAULT_LOCALE, LOCALES, isLocale } from '@/lib/locale';
 
 export const metadata: Metadata = {
   title: 'Job Talentio',
-  description: 'Job portal for Uzbekistan - find work and hire talent',
+  description: 'Find your next opportunity and connect with companies hiring across locations and ways of working.',
   applicationName: 'Job Talentio',
   manifest: '/manifest.webmanifest',
   icons: {
@@ -64,7 +65,7 @@ export default async function RootLayout({
             <PresenceConnection />
             <PwaRegister />
             <SiteNav />
-            <main>{children}</main>
+            <PublicShell>{children}</PublicShell>
             <SiteFooter />
             <InstallPrompt />
           </ConfirmProvider>

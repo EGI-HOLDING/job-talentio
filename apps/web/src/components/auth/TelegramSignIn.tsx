@@ -1,4 +1,5 @@
 'use client';
+import { authDestination, authRoleErrorKey, roleMismatchKey, type AuthRole } from '@/lib/authReturn';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ADMIN_URL, api, saveSession } from '@/lib/api';
@@ -71,7 +72,7 @@ function loadTelegramSdk(): Promise<void> {
 }
 
 function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/';
+  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
   return '/dashboard/employee';
 }
@@ -90,10 +91,16 @@ function widgetFields(user: TelegramUser) {
 
 export function TelegramSignIn({
   inviteToken,
+  accountRole,
+  showWhenUnavailable = false,
+  autoCreateEmployeeOnFirstSignIn = false,
   mode = 'login',
   onConnected,
 }: {
   inviteToken?: string;
+  accountRole?: AuthRole;
+  showWhenUnavailable?: boolean;
+  autoCreateEmployeeOnFirstSignIn?: boolean;
   mode?: 'login' | 'connect';
   onConnected?: () => void;
 } = {}) {
@@ -104,7 +111,7 @@ export function TelegramSignIn({
   const [needsRole, setNeedsRole] = useState<{ fullName: string; username: string | null } | null>(
     null,
   );
-  const [role, setRole] = useState<'EMPLOYEE' | 'RECRUITER'>('EMPLOYEE');
+  const [role, setRole] = useState<AuthRole>(accountRole || 'EMPLOYEE');
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -148,6 +155,7 @@ export function TelegramSignIn({
           body: JSON.stringify({
             ...widgetFields(user),
             role: extras?.role,
+            expectedRole: accountRole,
             companyName:
               extras?.role === 'RECRUITER' && !inviteToken ? extras.company : undefined,
             email: extras?.email?.trim() || undefined,
@@ -159,21 +167,23 @@ export function TelegramSignIn({
           setNeedsRole({ fullName: res.fullName, username: res.username });
           return;
         }
+        const mismatch = accountRole && roleMismatchKey(res.user.role, accountRole);
+        if (mismatch && !inviteToken) { setError(t(mismatch)); return; }
         saveSession(res as Parameters<typeof saveSession>[0]);
-        window.location.href = localeHref(redirectAfterLogin(res.user.role));
+        window.location.href = localeHref(authDestination(redirectAfterLogin(res.user.role)));
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         setError(
           aborted
             ? 'Sign-in timed out. Please try again.'
-            : (err as Error).message || t('telegramSignInFailed'),
+            : (authRoleErrorKey((err as Error).message) ? t(authRoleErrorKey((err as Error).message)!) : (err as Error).message) || t('telegramSignInFailed'),
         );
       } finally {
         window.clearTimeout(timer);
         setBusy(false);
       }
     },
-    [locale, inviteToken, mode, onConnected, t],
+    [locale, inviteToken, mode, onConnected, accountRole, t],
   );
 
   const submitRef = useRef(submitTelegram);
@@ -220,7 +230,10 @@ export function TelegramSignIn({
         if (!aliveRef.current) return;
         if (user && typeof user === 'object' && user.hash) {
           setWidgetUser(user);
-          void submitRef.current(user);
+          const defaultRole = autoCreateEmployeeOnFirstSignIn && accountRole === 'EMPLOYEE'
+            ? { role: 'EMPLOYEE' as const }
+            : undefined;
+          void submitRef.current(user, defaultRole);
         }
       });
     } finally {
@@ -229,15 +242,15 @@ export function TelegramSignIn({
     if (!popup) {
       setError(t('telegramPopupBlocked'));
     }
-  }, [botId, busy, locale, t]);
+  }, [botId, busy, locale, t, autoCreateEmployeeOnFirstSignIn, accountRole]);
 
-  if (!TELEGRAM_BOT) return null;
+  if (!TELEGRAM_BOT && !showWhenUnavailable) return null;
 
   if (needsRole && widgetUser && mode === 'login') {
     return (
       <div className="google-signin">
         <div className="google-verify-card">
-          <strong>{t('googleChooseRole')}</strong>
+          <strong>{t(accountRole ? accountRole === 'RECRUITER' ? 'authRole.employerRegister' : 'authRole.employeeRegister' : 'googleChooseRole')}</strong>
           <p className="muted" style={{ margin: '0.4rem 0 0.75rem', fontSize: '0.9rem' }}>
             {needsRole.fullName}
             {needsRole.username ? ` (@${needsRole.username})` : ''}
@@ -257,7 +270,7 @@ export function TelegramSignIn({
               {t('telegramEmailLaterHint')}
             </p>
           )}
-          {inviteToken ? null : (
+          {inviteToken || accountRole ? null : (
             <div className="chips" role="radiogroup" style={{ margin: '0.75rem 0' }}>
               <button
                 type="button"
@@ -313,7 +326,7 @@ export function TelegramSignIn({
     );
   }
 
-  const showDivider = mode === 'login' && !GOOGLE_CLIENT_ID;
+  const showDivider = mode === 'login' && !GOOGLE_CLIENT_ID && !showWhenUnavailable;
   const ready = Boolean(botId) && sdkReady;
 
   return (

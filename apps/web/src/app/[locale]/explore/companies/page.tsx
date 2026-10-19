@@ -1,289 +1,187 @@
 'use client';
 
-import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from '@/lib/navigation';
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useRouter } from '@/lib/navigation';
 import { useSearchParams } from 'next/navigation';
-import { useRouter } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { ExploreCompanyCard } from '@/components/explore/ExploreCompanyCard';
 import { Pagination } from '@/components/ui/Pagination';
+import { ExpandableList } from '@/components/ui/ExpandableList';
+import { JobsIcon } from '@/components/jobs/JobsIcon';
+import s from '@/components/explore/CompanyDirectory.module.css';
 
-type Tab = 'industry' | 'vip' | 'all';
-
-type CompanyRow = {
-  slug: string;
-  name: string;
-  logoUrl?: string | null;
-  plan?: string;
-  openJobsCount: number;
-  industry?: { slug: string; name: string } | null;
-};
-
-type BrowseResponse = {
-  items: CompanyRow[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-};
-
-type IndustryGroup = {
-  slug: string;
-  name: string;
-  industries: Array<{ slug: string; name: string; companyCount?: number }>;
-};
-
+type CompanyRow = { slug: string; name: string; logoUrl?: string | null; plan?: string; openJobsCount: number };
+type BrowseResponse = { items: CompanyRow[]; total: number; page: number; limit: number; totalPages: number };
+type Industry = { slug: string; name: string; companyCount?: number };
+type IndustryGroup = { slug: string; name: string; industries: Industry[] };
 const PAGE_LIMIT = 24;
 
 function ExploreCompaniesPageInner() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  const tab = (searchParams.get('tab') as Tab) || 'all';
+  // Preserve existing links with tab=vip / tab=industry and industrySlug.
+  const vipOnly = searchParams.get('tab') === 'vip';
   const industrySlug = searchParams.get('industrySlug') || '';
   const qParam = searchParams.get('q') || '';
-  const page = Math.max(1, Number(searchParams.get('page') || 1));
-
+  const rawPage = Number(searchParams.get('page') || 1);
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
   const [qInput, setQInput] = useState(qParam);
+  const [industryQuery, setIndustryQuery] = useState('');
   const [groups, setGroups] = useState<IndustryGroup[]>([]);
+  const [metadataError, setMetadataError] = useState(false);
+  const [metadataLoading, setMetadataLoading] = useState(true);
   const [data, setData] = useState<BrowseResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [metadataRetry, setMetadataRetry] = useState(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLElement>(null);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const activeTab: Tab =
-    tab === 'industry' || tab === 'vip' || tab === 'all' ? tab : 'all';
+  const setParams = useCallback((patch: Record<string, string | null>, replace = false) => {
+    const next = new URLSearchParams(searchParams.toString());
+    Object.entries(patch).forEach(([key, value]) => {
+      if (!value) next.delete(key);
+      else next.set(key, value);
+    });
+    if (!('page' in patch)) next.delete('page');
+    const query = next.toString();
+    router[replace ? 'replace' : 'push'](query ? `/explore/companies?${query}` : '/explore/companies', { scroll: false });
+  }, [router, searchParams]);
 
-  const setParams = useCallback(
-    (patch: Record<string, string | null | undefined>, replace = false) => {
-      const next = new URLSearchParams(searchParams.toString());
-      for (const [k, v] of Object.entries(patch)) {
-        if (v === null || v === undefined || v === '') next.delete(k);
-        else next.set(k, v);
-      }
-      const qs = next.toString();
-      router[replace ? 'replace' : 'push'](qs ? `/explore/companies?${qs}` : '/explore/companies');
-    },
-    [router, searchParams],
-  );
-
+  useEffect(() => { setQInput(qParam); }, [qParam]);
   useEffect(() => {
-    setQInput(qParam);
-  }, [qParam]);
-
+    const controller = new AbortController();
+    setMetadataLoading(true);
+    setMetadataError(false);
+    api<{ groups?: IndustryGroup[] }>('/meta/industries?group=1', { auth: false, signal: controller.signal })
+      .then((response) => { if (!controller.signal.aborted) setGroups(response.groups || []); })
+      .catch(() => { if (!controller.signal.aborted) setMetadataError(true); })
+      .finally(() => { if (!controller.signal.aborted) setMetadataLoading(false); });
+    return () => controller.abort();
+  }, [locale, metadataRetry]);
   useEffect(() => {
-    if (activeTab !== 'industry') return;
-    api<{ groups?: IndustryGroup[] }>('/meta/industries?group=1', { auth: false })
-      .then((r) => setGroups(r.groups || []))
-      .catch(() => setGroups([]));
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab === 'industry' && !industrySlug) {
-      setData(null);
-      return;
-    }
+    const controller = new AbortController();
     setLoading(true);
-    const params = new URLSearchParams();
-    params.set('page', String(page));
-    params.set('limit', String(PAGE_LIMIT));
-    params.set('sort', 'jobs');
-    if (activeTab === 'vip') params.set('plan', 'VIP');
+    setError(false);
+    const params = new URLSearchParams({ page: String(page), limit: String(PAGE_LIMIT), sort: 'jobs' });
+    if (vipOnly) params.set('plan', 'VIP');
     if (industrySlug) params.set('industrySlug', industrySlug);
-    if (activeTab === 'all' && qParam.trim()) params.set('q', qParam.trim());
-
-    api<BrowseResponse>(`/companies?${params.toString()}`, { auth: false })
-      .then(setData)
-      .catch(() => setData({ items: [], total: 0, page: 1, limit: PAGE_LIMIT, totalPages: 1 }))
-      .finally(() => setLoading(false));
-  }, [activeTab, industrySlug, page, qParam]);
-
-  const industryName = useMemo(() => {
-    if (!industrySlug) return '';
-    for (const g of groups) {
-      const hit = g.industries.find((i) => i.slug === industrySlug);
-      if (hit) return hit.name;
+    if (qParam.trim()) params.set('q', qParam.trim());
+    api<BrowseResponse>(`/companies?${params}`, { auth: false, signal: controller.signal })
+      .then((response) => { if (!controller.signal.aborted) setData(response); })
+      .catch(() => { if (!controller.signal.aborted) setError(true); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [vipOnly, industrySlug, page, qParam, locale, retry]);
+  useEffect(() => { if (resultsRef.current) resultsRef.current.scrollTop = 0; }, [vipOnly, industrySlug, page, qParam]);
+  useEffect(() => {
+    const nav = document.querySelector('.nav-wrap');
+    if (!nav) return;
+    const measure = () => rootRef.current?.style.setProperty('--directory-nav-height', `${nav.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const frame = requestAnimationFrame(() => filterRef.current?.querySelector<HTMLButtonElement>('button')?.focus());
+    function keydown(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); setFiltersOpen(false); }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(filterRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]') || []).filter((element) => element.getClientRects().length > 0);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
-    return industrySlug;
-  }, [groups, industrySlug]);
+    function resize() { if (window.innerWidth > 1100) setFiltersOpen(false); }
+    document.addEventListener('keydown', keydown);
+    window.addEventListener('resize', resize);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', keydown);
+      window.removeEventListener('resize', resize);
+      filterButtonRef.current?.focus();
+    };
+  }, [filtersOpen]);
 
-  function rolesLabel(n: number) {
-    return t('openRolesCount').replace('{n}', String(n));
+  const industries = useMemo(() => groups.flatMap((group) => group.industries)
+    .filter((industry) => !industryQuery || industry.name.toLocaleLowerCase().includes(industryQuery.trim().toLocaleLowerCase()))
+    .sort((a, b) => Number(b.slug === industrySlug) - Number(a.slug === industrySlug) || (b.companyCount || 0) - (a.companyCount || 0) || a.name.localeCompare(b.name)), [groups, industryQuery, industrySlug]);
+  const activeIndustry = groups.flatMap((group) => group.industries).find((industry) => industry.slug === industrySlug);
+  function reset() {
+    setQInput('');
+    setIndustryQuery('');
+    setParams({ q: null, industrySlug: null, tab: null, page: null });
+  }
+  function onSearch(event: FormEvent) {
+    event.preventDefault();
+    setParams({ q: qInput.trim() || null });
   }
 
-  function companiesLabel(n: number) {
-    return t('companiesCount').replace('{n}', String(n));
-  }
-
-  function onSearch(e: FormEvent) {
-    e.preventDefault();
-    setParams({ tab: 'all', q: qInput.trim() || null, page: '1', industrySlug: industrySlug || null });
-  }
-
-  function switchTab(next: Tab) {
-    if (next === 'industry') {
-      setParams({ tab: 'industry', q: null, page: null, industrySlug: null });
-      return;
-    }
-    if (next === 'vip') {
-      setParams({ tab: 'vip', q: null, page: '1', industrySlug: null });
-      return;
-    }
-    setParams({ tab: 'all', page: '1' });
-  }
-
-  return (
-    <div className="shell">
-      <section className="section" style={{ paddingTop: '2rem' }}>
-        <p className="muted" style={{ marginBottom: '0.35rem' }}>
-          <Link href="/">{t('home')}</Link>
-          {' / '}
-          <span>{t('exploreCompaniesTitle')}</span>
-        </p>
-        <h1 className="section-title" style={{ fontSize: '1.75rem' }}>
-          {t('exploreCompaniesTitle')}
-        </h1>
-        <p className="muted">{t('exploreCompaniesSubtitle')}</p>
-
-        <div
-          className="explore-group-toggle"
-          role="tablist"
-          aria-label={t('exploreCompaniesTabs')}
-          style={{ marginTop: '1.25rem' }}
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'industry'}
-            className={activeTab === 'industry' ? 'active' : ''}
-            onClick={() => switchTab('industry')}
-          >
-            {t('exploreCompaniesTabIndustry')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'vip'}
-            className={activeTab === 'vip' ? 'active' : ''}
-            onClick={() => switchTab('vip')}
-          >
-            {t('exploreCompaniesTabVip')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'all'}
-            className={activeTab === 'all' ? 'active' : ''}
-            onClick={() => switchTab('all')}
-          >
-            {t('exploreCompaniesTabAll')}
-          </button>
+  return <div ref={rootRef} className={s.page}>
+    <header className={s.header} inert={filtersOpen ? true : undefined}>
+      <h1 className="sr-only">{t('companiesStat')}</h1>
+      <form className={s.search} role="search" aria-label={t('workspace.searchCompany')} onSubmit={onSearch}>
+        <label className={s.searchField}><JobsIcon kind="search" /><input value={qInput} onChange={(event) => setQInput(event.target.value)} placeholder={t('exploreCompaniesSearch')} aria-label={t('exploreCompaniesSearch')} /></label>
+        <button className={s.searchButton} type="submit">{t('search')}</button>
+      </form>
+    </header>
+    <div className={s.workspace}>
+      {filtersOpen && <div className={s.backdrop} onClick={() => setFiltersOpen(false)} aria-hidden="true" />}
+      <aside ref={filterRef} id="company-industries" className={`${s.sidebar} ${filtersOpen ? s.sidebarOpen : ''}`} role={filtersOpen ? 'dialog' : 'complementary'} aria-modal={filtersOpen ? true : undefined} aria-label={t('discovery.industries')}>
+        <div className={s.sidebarHeading}>
+          <h2>{t('discovery.industries')}</h2>
+          <button type="button" className={s.reset} onClick={reset}>{t('workspace.reset')}</button>
+          <button type="button" className={s.closeFilters} onClick={() => setFiltersOpen(false)} aria-label={t('workspace.closeFilters')}><JobsIcon kind="close" /></button>
         </div>
-
-        {activeTab === 'all' && (
-          <form className="hero-search explore-company-search" onSubmit={onSearch} style={{ marginTop: '1.25rem' }}>
-            <input
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              placeholder={t('exploreCompaniesSearch')}
-              aria-label={t('exploreCompaniesSearch')}
-            />
-            <button type="submit" className="cta">
-              {t('search')}
-            </button>
-          </form>
-        )}
-
-        {industrySlug && activeTab !== 'industry' && (
-          <div className="company-filter-banner" style={{ marginTop: '1rem' }}>
-            <div>
-              <strong>
-                {t('industryFilter')}: {industryName || industrySlug}
-              </strong>
-            </div>
-            <div className="company-filter-actions">
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setParams({ industrySlug: null, page: '1' })}
-              >
-                {t('clearIndustryFilter')}
-              </button>
-            </div>
+        <div className={s.sidebarScroll}>
+          <label className={s.industrySearch}><JobsIcon kind="search" /><input value={industryQuery} onChange={(event) => setIndustryQuery(event.target.value)} placeholder={t('discovery.searchIndustries')} aria-label={t('discovery.searchIndustries')} /></label>
+          <div role="radiogroup" aria-label={t('discovery.industries')}>
+            <label className={s.industryChoice}><input type="radio" name="company-industry" checked={!industrySlug} onChange={() => setParams({ industrySlug: null })} /><span>{t('discovery.allIndustries')}</span></label>
+            {!!industrySlug && !activeIndustry && !metadataLoading && <label className={s.industryChoice}><input type="radio" name="company-industry" checked readOnly /><span>{industrySlug}</span></label>}
+            <ExpandableList items={industries} initialCount={8} step={12} getKey={(industry) => industry.slug} renderItem={(industry) => <label key={industry.slug} className={s.industryChoice}><input type="radio" name="company-industry" checked={industrySlug === industry.slug} onChange={() => setParams({ industrySlug: industry.slug })} /><span>{industry.name}</span></label>} />
           </div>
-        )}
-
-        {activeTab === 'industry' && !industrySlug && (
-          <div style={{ marginTop: '1.5rem' }}>
-            {groups.map((g) => (
-              <div key={g.slug} className="explore-city-section">
-                <h2 className="explore-city-section__title">{g.name}</h2>
-                <div className="explore-grid">
-                  {g.industries.map((ind) => (
-                    <button
-                      key={ind.slug}
-                      type="button"
-                      className="explore-card explore-card--category"
-                      style={{ textAlign: 'left', cursor: 'pointer', border: 'none', width: '100%' }}
-                      onClick={() =>
-                        setParams({ tab: 'all', industrySlug: ind.slug, page: '1', q: null })
-                      }
-                    >
-                      <strong>{ind.name}</strong>
-                      <span>{companiesLabel(ind.companyCount ?? 0)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {!groups.length && <p className="muted">{t('exploreEmpty')}</p>}
-          </div>
-        )}
-
-        {(activeTab !== 'industry' || industrySlug) && (
-          <>
-            <div className="explore-grid explore-grid--company" style={{ marginTop: '1.5rem' }}>
-              {(data?.items || []).map((c) => (
-                <ExploreCompanyCard
-                  key={c.slug}
-                  name={c.name}
-                  slug={c.slug}
-                  logoUrl={c.logoUrl}
-                  plan={c.plan}
-                  vipLabel={t('vipBadge')}
-                  count={c.openJobsCount}
-                  countLabel={rolesLabel(c.openJobsCount)}
-                />
-              ))}
-              {!loading && !(data?.items || []).length && (
-                <p className="muted">
-                  {activeTab === 'vip' ? t('exploreCompaniesVipEmpty') : t('exploreEmpty')}
-                </p>
-              )}
-            </div>
-            {data && data.total > 0 && (
-              <div className="pagination-wrap">
-                <Pagination
-                  page={data.page}
-                  totalPages={data.totalPages}
-                  total={data.total}
-                  limit={data.limit}
-                  onPageChange={(p) => setParams({ page: String(p) })}
-                  disabled={loading}
-                />
-              </div>
-            )}
-          </>
-        )}
+          {metadataLoading && <p className={s.metadataError} role="status">{t('ui.loading')}</p>}
+          {metadataError && <p className={s.metadataError} role="alert">{t('discovery.industryError')} <button type="button" onClick={() => setMetadataRetry((value) => value + 1)}>{t('workspace.retry')}</button></p>}
+          {!metadataLoading && !metadataError && !industries.length && <p className={s.metadataError}>{t('discovery.noIndustries')}</p>}
+        </div>
+        <div className={s.legal}><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></div>
+        <button type="button" className={s.showResults} onClick={() => setFiltersOpen(false)}>{t('workspace.showResults')}{!loading && data ? ` (${data.total})` : ''}</button>
+      </aside>
+      <section className={s.results} aria-label={t('companiesStat')} inert={filtersOpen ? true : undefined}>
+        <div className={s.toolbar}>
+          <button ref={filterButtonRef} type="button" className={s.filterButton} onClick={() => setFiltersOpen(true)} aria-controls="company-industries" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{industrySlug ? ' (1)' : ''}</button>
+          <h2 aria-live="polite">{loading ? t('ui.loading') : !error && data ? t('companiesCount').replace('{n}', String(data.total)) : t('companiesStat')}</h2>
+          <label className={s.vipToggle}><input type="checkbox" checked={vipOnly} onChange={(event) => setParams({ tab: event.target.checked ? 'vip' : null })} /><span>{t('discovery.vipOnly')}</span></label>
+        </div>
+        {(qParam || industrySlug) && <div className={s.activeFilters}>
+          {qParam && <button type="button" onClick={() => setParams({ q: null })}>{qParam}<JobsIcon kind="close" /></button>}
+          {industrySlug && <button type="button" onClick={() => setParams({ industrySlug: null })}>{activeIndustry?.name || industrySlug}<JobsIcon kind="close" /></button>}
+        </div>}
+        <div ref={resultsRef} className={s.resultsScroll} aria-busy={loading}>
+          {loading ? <div className={s.grid} role="status" aria-label={t('ui.loading')}>{Array.from({ length: 12 }, (_, index) => <div className={s.skeletonCard} key={index} aria-hidden="true"><i /><span /></div>)}</div> : error ? <div className={s.message} role="alert"><p>{t('discovery.companyError')}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button></div> : data?.items.length ? <div className={s.grid}>
+            {data.items.map((company) => <Link key={company.slug} href={`/jobs?companySlug=${encodeURIComponent(company.slug)}`} className={`${s.company} ${company.plan === 'VIP' ? s.vipCompany : ''}`}>
+              <span className={s.logo} aria-hidden="true">{company.logoUrl ? <img src={company.logoUrl} alt="" /> : company.name.charAt(0)}</span>
+              <span className={s.companyCopy}><span className={s.companyName}>{company.name}{company.plan === 'VIP' && <span className={s.vipBadge}>{t('vipBadge')}</span>}</span><span className={s.roles}>{t('openRolesCount').replace('{n}', String(company.openJobsCount))}</span></span>
+            </Link>)}
+          </div> : <div className={s.message}><p>{t('discovery.companyEmpty')}</p><button type="button" onClick={reset}>{t('workspace.reset')}</button></div>}
+        </div>
+        {!error && data && data.total > 0 && <div className={`${s.pagination} ${data.totalPages <= 1 ? s.singlePage : ''}`}><Pagination page={data.page} totalPages={data.totalPages} total={data.total} limit={data.limit} disabled={loading} onPageChange={(nextPage) => setParams({ page: String(nextPage) })} /></div>}
       </section>
     </div>
-  );
+  </div>;
 }
 
 export default function ExploreCompaniesPage() {
-  return (
-    <Suspense fallback={<div className="shell" style={{ padding: '2rem 1.5rem' }}>Loading...</div>}>
-      <ExploreCompaniesPageInner />
-    </Suspense>
-  );
+  const { t } = useI18n();
+  return <Suspense fallback={<div className={s.message} role="status">{t('ui.loading')}</div>}><ExploreCompaniesPageInner /></Suspense>;
 }

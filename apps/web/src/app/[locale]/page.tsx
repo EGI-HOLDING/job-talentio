@@ -1,23 +1,17 @@
-'use client';
+import type { Metadata } from 'next';
+import { HomePageContent } from '@/components/home/HomePageContent';
+import { DEFAULT_LOCALE, isLocale } from '@/lib/locale';
+import { landing } from '@/lib/i18n/dict/landing';
 
-import { useEffect, useState } from 'react';
-import { getSession } from '@/lib/api';
-import { SeekerHome } from '@/components/home/SeekerHome';
-import { RecruiterHome } from '@/components/home/RecruiterHome';
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale: raw } = await params;
+  const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
+  return {
+    title: `Job Talentio - ${landing['landing.title1'][locale]} ${landing['landing.title2'][locale]}`,
+    description: `${landing['landing.subtitle1'][locale]} ${landing['landing.subtitle2'][locale]}`,
+  };
+}
 
 export default function HomePage() {
-  const [role, setRole] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setRole(getSession()?.user.role ?? null);
-    setReady(true);
-  }, []);
-
-  if (!ready) {
-    return <div className="shell muted" style={{ padding: '2rem 0' }} />;
-  }
-
-  if (role === 'RECRUITER') return <RecruiterHome />;
-  return <SeekerHome isEmployee={role === 'EMPLOYEE'} />;
+  return <HomePageContent />;
 }

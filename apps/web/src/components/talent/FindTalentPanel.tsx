@@ -12,7 +12,11 @@ import { ExpandableList } from '@/components/ui/ExpandableList';
 import { AdvancedFiltersPanel } from '@/components/ui/AdvancedFiltersPanel';
 import { CandidateListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
-import { MatchRing } from '@/components/ui/MatchRing';
+import { RecruiterAvatar, JobContextSelect, preferredCompany } from '@/components/recruiter/RecruiterPrimitives';
+import { SearchField, ResourceError, WorkspaceEmpty } from '@/components/employee/WorkspacePrimitives';
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
+import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
+import rw from '@/components/recruiter/RecruiterWorkspace.module.css';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import { usePresence, seedPresence } from '@/lib/presence';
 import {
@@ -110,7 +114,7 @@ function filtersFromSearchParams(sp: URLSearchParams): CandFilters {
     matchJobId: sp.get('matchJobId') || '',
     sort: (['relevance', 'newest', 'match'].includes(sp.get('sort') || '')
       ? sp.get('sort')
-      : 'relevance') as CandFilters['sort'],
+      : sp.get('matchJobId') ? 'match' : 'relevance') as CandFilters['sort'],
     page: Math.max(1, Number(sp.get('page') || 1) || 1),
     limit: CAND_PAGE_SIZES.includes(Number(sp.get('limit')) as (typeof CAND_PAGE_SIZES)[number])
       ? Number(sp.get('limit'))
@@ -138,7 +142,7 @@ function filtersToSearchParams(f: CandFilters): URLSearchParams {
 }
 
 export function FindTalentPanel() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const router = useRouter();
   const pathname = usePathname();
@@ -150,6 +154,11 @@ export function FindTalentPanel() {
   const [candLoading, setCandLoading] = useState(false);
   const [error, setError] = useState('');
   const [skillQ, setSkillQ] = useState('');
+  const [cityQ, setCityQ] = useState('');
+  const [query, setQuery] = useState(searchParams.get('q') || '');
+  const [ready, setReady] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [companyId, setCompanyId] = useState(searchParams.get('company') || '');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
   const [planCode, setPlanCode] = useState<PlanCode>('FREE');
@@ -163,31 +172,37 @@ export function FindTalentPanel() {
 
   const syncUrl = useCallback(
     (f: CandFilters) => {
-      const qs = filtersToSearchParams(f).toString();
+      const params = filtersToSearchParams(f);
+      if (companyId) params.set('company', companyId);
+      const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [pathname, router],
+    [pathname, router, companyId],
   );
 
   function applyCand(patch: Partial<CandFilters>) {
-    setCandFilters((prev) => {
-      const next = { ...prev, ...patch };
-      if (!('page' in patch)) next.page = 1;
-      if (next.matchJobId && next.sort !== 'match' && patch.matchJobId !== undefined) {
-        next.sort = 'match';
-      }
-      if (!next.matchJobId && next.sort === 'match') next.sort = 'relevance';
-      syncUrl(next);
-      return next;
-    });
+    const next = { ...candFilters, ...patch, page: patch.page || 1 };
+    if (patch.matchJobId !== undefined) { next.sort = patch.matchJobId ? 'match' : 'relevance'; setCandidates(null); }
+    if (!next.matchJobId && next.sort === 'match') next.sort = 'relevance';
+    setCandFilters(next); syncUrl(next);
+  }
+  function resetFilters() {
+    const next = { ...DEFAULT_CAND_FILTERS, matchJobId: candFilters.matchJobId, sort: candFilters.matchJobId ? 'match' as const : 'relevance' as const };
+    setCandFilters(next); setQuery(''); syncUrl(next);
   }
 
   useEffect(() => {
     const session = getSession();
-    if (!session || (session.user.role !== 'RECRUITER' && session.user.role !== 'SUPER_ADMIN')) {
-      window.location.href = localeHref(`/login?next=${encodeURIComponent('/talent')}`);
+    if (!session) {
+      window.location.href = localeHref('/login?role=RECRUITER&next=' + encodeURIComponent('/talent?' + searchParams.toString()));
       return;
     }
+    if (session.user.role !== 'RECRUITER' && session.user.role !== 'SUPER_ADMIN') {
+      window.location.href = localeHref(session.user.role === 'EMPLOYEE' ? '/jobs' : '/');
+      return;
+    }
+    let active = true;
+    setReady(false);
     (async () => {
       try {
         const [mine, cities, skills, langs] = await Promise.all([
@@ -196,35 +211,41 @@ export function FindTalentPanel() {
           api('/meta/skills?sort=popular&take=120', { auth: false }),
           api('/meta/languages', { auth: false }).catch(() => []),
         ]);
+        if (!active) return;
         setMeta({
           cities: cities as any[],
           skills: skills as any[],
           languages: langs as any[],
         });
-        const cid = mine[0]?.companyId;
-        if (cid) {
-          const [list, sub] = await Promise.all([
-            api<any[]>(`/jobs/company/${cid}`),
-            api<{ plan: PlanCode }>(`/billing/companies/${cid}/subscription`).catch(() => null),
-          ]);
-          setJobs(list);
-          setPlanCode(
-            (sub?.plan || mine[0]?.company?.subscription?.plan || 'FREE') as PlanCode,
-          );
-        }
+        const preferred = mine.find((item) => item.companyId === companyId) || preferredCompany(mine);
+        const lists = await Promise.all(mine.map(async (membership) => {
+          const items = await api<any[]>('/jobs/company/' + membership.companyId);
+          return items.map((job) => ({ ...job, companyId: membership.companyId, company: membership.company }));
+        }));
+        if (!active) return;
+        const allJobs = lists.flat();
+        setJobs(allJobs);
+        setCompanyId(preferred?.companyId || '');
+        setPlanCode((preferred?.company?.subscription?.plan || 'FREE') as PlanCode);
+        setReady(true);
+
       } catch (e) {
-        setError(e instanceof Error ? e.message : t('talent.loadFailed'));
+        if (active) setError(e instanceof Error ? e.message : t('talent.loadFailed'));
       }
     })();
-  }, []);
+    return () => { active = false; };
+  }, [locale, retry]);
 
   useEffect(() => {
+    if (!ready) return;
+    if (candFilters.matchJobId && !jobs.some((job) => job.id === candFilters.matchJobId)) { setCandidates(null); setCandLoading(false); setError(t('rw.unavailableJob')); return; }
     let cancelled = false;
     (async () => {
+      setError('');
       setCandLoading(true);
       try {
         const params = filtersToSearchParams(candFilters);
-        params.set('sort', candFilters.matchJobId ? 'match' : candFilters.sort);
+        params.set('sort', candFilters.sort);
         params.set('page', String(candFilters.page));
         params.set('limit', String(candFilters.limit));
         const data = await api<any>(`/profiles/candidates?${params.toString()}`);
@@ -232,7 +253,7 @@ export function FindTalentPanel() {
         for (const item of data?.items || []) {
           if (item.user?.id) seedPresence(item.user.id, item.presence);
         }
-        setCandidates(data);
+        setCandidates({ ...data, requestMatchJobId: candFilters.matchJobId });
         if (data?.page != null && data.page !== candFilters.page) {
           setCandFilters((prev) => ({ ...prev, page: data.page as number }));
         }
@@ -245,8 +266,21 @@ export function FindTalentPanel() {
     return () => {
       cancelled = true;
     };
-  }, [candFilters]);
+  }, [candFilters, ready, locale]);
 
+  useEffect(() => {
+    const next = filtersFromSearchParams(new URLSearchParams(searchParams.toString()));
+    setCandFilters((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+    setQuery(next.q);
+  }, [searchParams]);
+  useEffect(() => {
+    if (!ready) return;
+    const selectedCompany = jobs.find((job) => job.id === candFilters.matchJobId)?.companyId || companyId;
+    if (!selectedCompany) return;
+    let active = true; setPlanCode('FREE');
+    api<{ plan: PlanCode }>('/billing/companies/' + selectedCompany + '/subscription').then((data) => { if (active) setPlanCode(data.plan); }).catch(() => { /* The API still enforces contact and chat access. */ });
+    return () => { active = false; };
+  }, [ready, candFilters.matchJobId, companyId, jobs]);
   const selectedCandCities = candFilters.city.split(',').filter(Boolean);
   const selectedCandSkills = candFilters.skills.split(',').filter(Boolean);
   const selectedCandLangs = parseLanguagesCsv(candFilters.languages);
@@ -301,140 +335,18 @@ export function FindTalentPanel() {
     ((candidates?.items || []) as Array<{ user?: { id?: string } }>).map((p) => p.user?.id),
   );
 
+  const selectedJob = jobs.find((job) => job.id === candFilters.matchJobId);
   return (
-    <div>
-      {error && (
-        <p className="muted" style={{ color: 'var(--danger)', marginBottom: '1rem' }}>
-          {error}
-        </p>
-      )}
-      <div className="jobs-toolbar" style={{ marginBottom: '1rem' }}>
-        <div>
-          <h1 className="section-title" style={{ margin: 0, fontSize: '1.75rem' }}>
-            {t('findTalent')}
-          </h1>
-          <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
-            {candLoading && !candidates
-              ? t('findTalentSearching')
-              : t('findTalentCount').replace('{n}', String(candidates?.total ?? 0))}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select
-            value={candFilters.sort}
-            onChange={(e) => applyCand({ sort: e.target.value as CandFilters['sort'] })}
-            aria-label={t('sortBy')}
-          >
-            <option value="relevance">{t('talent.sortRelevance')}</option>
-            <option value="newest">{t('talent.sortNewest')}</option>
-            <option value="match" disabled={!candFilters.matchJobId}>
-              {t('talent.sortMatch')}
-            </option>
-          </select>
-          <select
-            value={candFilters.limit}
-            onChange={(e) => applyCand({ limit: Number(e.target.value) })}
-            aria-label={t('resultsPerPage')}
-          >
-            {CAND_PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {t('talent.perPage').replace('{n}', String(n))}
-              </option>
-            ))}
-          </select>
-          {hasActiveCandFilters && (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setCandFilters(DEFAULT_CAND_FILTERS);
-                syncUrl(DEFAULT_CAND_FILTERS);
-              }}
-            >
-              {t('clearFilters')}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {selectedJobTitles.length > 0 && (
-        <div className="chips" style={{ marginBottom: '0.85rem' }}>
-          {selectedTitleLabels.map((label, i) => (
-            <button
-              key={selectedJobTitles[i]}
-              type="button"
-              className="chip"
-              onClick={() =>
-                applyCand({ jobTitle: toggleCsv(candFilters.jobTitle, selectedJobTitles[i]) })
-              }
-              title={t('clearJobTitleFilter')}
-            >
-              {label} ×
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="jobs-layout" style={{ padding: 0 }}>
-        <button
-          type="button"
-          className="filters-toggle"
-          aria-expanded={filtersOpen}
-          aria-controls="talent-filters"
-          onClick={() => setFiltersOpen((v) => !v)}
-        >
-          <span>{filtersOpen ? t('filtersHide') : t('filters')}</span>
-          <span aria-hidden>{filtersOpen ? '-' : '+'}</span>
-        </button>
-        <aside id="talent-filters" className={`filters${filtersOpen ? ' filters--open' : ''}`}>
-          <h3>{t('filters')}</h3>
-          <form
-            className="filter-group"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              applyCand({ q: String(fd.get('q') || '') });
-            }}
-          >
-            <label>
-              <LabelText>{t('keyword')}</LabelText>
-              <input
-                name="q"
-                defaultValue={candFilters.q}
-                key={candFilters.q}
-                placeholder={t('findTalentSearchPlaceholder')}
-              />
-            </label>
-            <button type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
-              {t('search')}
-            </button>
-          </form>
-
-          <div className="filter-group">
-            <label>
-              <LabelText>{t('talent.matchToJob')}</LabelText>
-              <select
-                value={candFilters.matchJobId}
-                onChange={(e) =>
-                  applyCand({
-                    matchJobId: e.target.value,
-                    sort: e.target.value ? 'match' : 'relevance',
-                  })
-                }
-              >
-                <option value="">{t('talent.matchToJobAny')}</option>
-                {jobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {jobSelectLabel(j, (status) => enumLabel('jobStatus', status), t)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <FilterFieldset legend={t('city')} className="filter-group">
+    <section className={rw.root} aria-label={t('findTalent')}>
+      <div className={rw.context}><strong>{t('rw.rankFor')}</strong><JobContextSelect jobs={jobs} value={candFilters.matchJobId} onChange={(id) => applyCand({ matchJobId: id })} />{selectedJob && <span className={rw.status} data-status={selectedJob.status}>{enumLabel('jobStatus', selectedJob.status)}</span>}{selectedJob && <Link className={rw.textButton} href={'/jobs/' + selectedJob.id}>{t('ew.viewJob')}<WorkspaceIcon kind="external" /></Link>}</div>
+      <div className={rw.toolbar}><form role="search" onSubmit={(event) => { event.preventDefault(); applyCand({ q: query }); }} style={{ display:'flex', gap:10, flex:1 }}><SearchField value={query} onChange={setQuery} placeholder={t('findTalentSearchPlaceholder')} /><button type="submit" className={rw.primary}>{t('search')}</button></form><span className={rw.emptyNote}>{candFilters.matchJobId ? t('rw.rankedHint') : t('rw.browseWithout')}</span><button className={rw.textButton} onClick={() => applyCand({ matchJobId: '' })}>{candFilters.matchJobId ? t('rw.browseWithout') : ''}</button><button className={rw.secondary + ' ' + rw.filterToggle} onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="talent-filters">{t('filters')}</button></div>
+      {error && <ResourceError message={error} onRetry={() => { setError(''); setRetry((value) => value + 1); }} />}
+      <div className={rw.talentLayout}>
+        <aside id="talent-filters" className={rw.filterPanel} data-open={filtersOpen}>
+          <header><strong>{t('filters')}</strong><button type="button" className={rw.textButton} onClick={resetFilters}>{t('clearFilters')}</button><button className={rw.icon + ' ' + rw.filterToggle} aria-label={t('close')} onClick={() => setFiltersOpen(false)}>×</button></header>
+          <FilterFieldset legend={t('city')} className="filter-group"><input type="search" value={cityQ} onChange={(event) => setCityQ(event.target.value)} aria-label={t('city')} placeholder={t('city')} />
             <ExpandableList
-              items={meta.cities}
+              items={meta.cities.filter((city) => city.name.toLocaleLowerCase().includes(cityQ.toLocaleLowerCase()))}
               initialCount={10}
               step={10}
               getKey={(c) => c.slug}
@@ -601,124 +513,23 @@ export function FindTalentPanel() {
           </AdvancedFiltersPanel>
         </aside>
 
-        <div>
-          {candLoading && !candidates && <CandidateListSkeleton count={6} />}
-          {!candLoading && (candidates?.items || []).length === 0 && (
-            <div className="card">
-              <p className="muted" style={{ marginTop: 0 }}>
-                {selectedTitleLabels.length
-                  ? t('talent.noMatchesForTitles').replace(
-                      '{titles}',
-                      selectedTitleLabels.join(', '),
-                    )
-                  : t('talent.noMatches')}{' '}
-                {t('talent.noMatchesHint')}
-              </p>
-              <div className="chips">
-                {hasActiveCandFilters && (
-                  <button
-                    type="button"
-                    className="chip"
-                    onClick={() => {
-                      setCandFilters(DEFAULT_CAND_FILTERS);
-                      syncUrl(DEFAULT_CAND_FILTERS);
-                    }}
-                  >
-                    {t('clearFilters')}
-                  </button>
-                )}
-                <Link href="/talent" className="chip">
-                  {t('browseTalent')}
-                </Link>
-              </div>
-            </div>
-          )}
-          {(candidates?.items || []).map((p: any) => (
-            <div key={p.id} className="job-card" style={{ marginBottom: '0.75rem' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="company-logo"
-                src={
-                  p.user?.avatarUrl ||
-                  `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.user?.fullName || 'C')}`
-                }
-                alt=""
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  {p.user?.fullName}
-                  <PresenceDot status={presenceMap[p.user?.id] ?? p.presence} />
-                </h3>
-                <div className="job-meta">
-                  <span>{p.headline || '-'}</span>
-                  {p.city?.name && <span>{p.city.name}</span>}
-                  <span>{t('talent.expYears').replace('{n}', String(p.experienceYears ?? 0))}</span>
-                  {p.contactsBlurred && <span>{t('talent.contactsLimited')}</span>}
-                </div>
-                <div className="chips" style={{ marginTop: '0.45rem' }}>
-                  {(p.skills || []).slice(0, 6).map((s: any) => (
-                    <span key={s.id} className="badge skill">
-                      {s.skill?.name}
-                      {s.level ? ` | ${enumLabel('skillLevel', s.level)}` : ''}
-                    </span>
-                  ))}
-                </div>
-                <div className="chips" style={{ marginTop: '0.5rem' }}>
-                  <Link
-                    href={`/candidates/${p.id}${candFilters.matchJobId ? `?matchJobId=${candFilters.matchJobId}` : ''}`}
-                    className="chip"
-                    style={{ fontSize: '0.75rem' }}
-                  >
-                    {t('viewProfile')}
-                  </Link>
-                  {canColdChat ? (
-                    <Link
-                      href={`/messages?peer=${p.user?.id}${candFilters.matchJobId ? `&job=${candFilters.matchJobId}` : ''}`}
-                      className="chip"
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      {t('talent.chat')}
-                    </Link>
-                  ) : (
-                    <Link
-                      href="/dashboard/recruiter?tab=billing"
-                      className="chip muted"
-                      title={t('talent.coldChatRequiresPremium')}
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      {t('talent.chatPremium')}
-                    </Link>
-                  )}
-                </div>
-              </div>
-              {p.matchScore != null && <MatchRing score={p.matchScore} />}
-            </div>
-          ))}
-
-          {(candidates?.total || 0) > 0 && candTotalPages > 1 && (
-            <div className="pagination-wrap" style={{ marginTop: '1.25rem' }}>
-              <Pagination
-                page={candidates?.page ?? candFilters.page}
-                totalPages={candTotalPages}
-                total={candidates?.total || 0}
-                limit={candidates?.limit ?? candFilters.limit}
-                disabled={candLoading}
-                onPageChange={(p) => applyCand({ page: p })}
-                truncatedNote={
-                  candidates?.truncated
-                    ? t('talent.truncatedNote')
-                        .replace('{n}', Number(candidates.total).toLocaleString())
-                        .replace(
-                          '{m}',
-                          Number(candidates.matchedTotal ?? candidates.total).toLocaleString(),
-                        )
-                    : null
-                }
-              />
-            </div>
-          )}
+        <div className={rw.results} aria-busy={candLoading}>
+          <div className={rw.resultTools}><strong>{t('rw.candidateCount').replace('{n}', String(candidates?.total || 0))}</strong><WorkspaceSelect value={candFilters.sort} options={[{value:'relevance', label:t('talent.sortRelevance')}, {value:'newest', label:t('talent.sortNewest')}, ...(candFilters.matchJobId ? [{value:'match',label:t('talent.sortMatch')}] : [])]} label={t('sortBy')} onChange={(value) => applyCand({ sort:value as CandFilters['sort'] })} /><WorkspaceSelect value={String(candFilters.limit)} options={CAND_PAGE_SIZES.map((value) => ({value:String(value),label:t('talent.perPage').replace('{n}',String(value))}))} label={t('resultsPerPage')} onChange={(value) => applyCand({limit:Number(value)})} /></div>
+          {(selectedTitleLabels.length > 0 || selectedCandSkills.length > 0 || candFilters.city) && <div className={rw.tags} style={{padding:'6px 24px'}}>{selectedTitleLabels.map((label,index) => <button className={rw.tag} key={label} onClick={() => applyCand({jobTitle:toggleCsv(candFilters.jobTitle,selectedJobTitles[index])})}>{label} ×</button>)}{selectedCandSkills.map((slug) => <button className={rw.tag} key={slug} onClick={() => applyCand({skills:toggleCsv(candFilters.skills,slug)})}>{meta.skills.find((skill) => skill.slug === slug)?.name || slug} ×</button>)}<button className={rw.textButton} onClick={resetFilters}>{t('clearFilters')}</button></div>}
+          <div className={rw.candidateList}>
+            {(candLoading && !candidates || !ready && !error) && <CandidateListSkeleton count={6} />}
+            {ready && !candLoading && !error && !(candidates?.items || []).length && <WorkspaceEmpty icon="search" title={t('talent.noMatches')} hint={t('talent.noMatchesHint')}><button className={rw.secondary} onClick={resetFilters}>{t('clearFilters')}</button></WorkspaceEmpty>}
+            {(candidates?.requestMatchJobId === candFilters.matchJobId ? candidates?.items || [] : []).map((candidate:any) => <article key={candidate.id} className={rw.candidateRow}>
+              <RecruiterAvatar name={candidate.user?.fullName || ''} src={candidate.user?.avatarUrl} />
+              <div><Link className={rw.candidateName} href={'/candidates/' + candidate.id + (candFilters.matchJobId ? '?matchJobId=' + candFilters.matchJobId : '')}>{candidate.user?.fullName}<PresenceDot status={presenceMap[candidate.user?.id] ?? candidate.presence} /></Link><span className={rw.sub}>{candidate.headline || '-'}</span><span className={rw.sub}>{[candidate.city?.name,t('talent.expYears').replace('{n}',String(candidate.experienceYears || 0))].filter(Boolean).join(' | ')}</span></div>
+              <div className={rw.candidateSkills}><div className={rw.tags}>{(candidate.skills || []).slice(0,4).map((item:any) => <span key={item.id || item.skill?.slug} className={rw.tag}>{item.skill?.name || item.name}</span>)}</div></div>
+              <div className={rw.score}>{candFilters.matchJobId && candidate.matchScore != null && <><span>{t('rw.matchForJob')}</span><strong>{Math.round(candidate.matchScore)}%</strong><Link className={rw.textButton} style={{fontSize:'.68rem'}} href={'/candidates/' + candidate.id + '?matchJobId=' + candFilters.matchJobId + '&section=match'}>{t('rw.matchDetails')}</Link></>}</div>
+              <div className={rw.rowActions}><Link className={rw.secondary} href={'/candidates/' + candidate.id + (candFilters.matchJobId ? '?matchJobId=' + candFilters.matchJobId : '')}>{t('viewProfile')}</Link>{canColdChat ? <Link className={rw.textButton} href={'/messages?peer=' + candidate.user?.id + (candFilters.matchJobId ? '&job=' + candFilters.matchJobId : '') + '&role=RECRUITER'}>{t('talent.chat')}</Link> : <Link className={rw.textButton} style={{fontSize:'.7rem'}} href="/dashboard/recruiter?tab=billing">{t('talent.chatPremium')}</Link>}</div>
+            </article>)}
+          </div>
+          {(candidates?.total || 0) > 0 && candTotalPages > 1 && <div className={rw.candidatePagination}><Pagination page={candidates?.page ?? candFilters.page} totalPages={candTotalPages} total={candidates?.total || 0} limit={candidates?.limit ?? candFilters.limit} disabled={candLoading} onPageChange={(page) => applyCand({page})} truncatedNote={candidates?.truncated ? t('talent.truncatedNote').replace('{n}',String(candidates.total)).replace('{m}',String(candidates.matchedTotal ?? candidates.total)) : null} /></div>}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

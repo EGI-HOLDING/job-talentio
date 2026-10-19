@@ -9,6 +9,8 @@ import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { FormAlert } from '@/components/ui/Field';
 import { DetailPageSkeleton } from '@/components/ui/Skeleton';
 import { formatUzs } from '@/lib/numberFormat';
+import rw from '@/components/recruiter/RecruiterWorkspace.module.css';
+import { RoleGate } from '@/components/auth/RoleGate';
 
 type Payment = {
   id: string;
@@ -43,11 +45,11 @@ function MockCheckoutInner() {
   useEffect(() => {
     const s = getSession();
     if (!s) {
-      router.replace(`/login?next=${encodeURIComponent(`/billing/mock-checkout?paymentId=${paymentId}`)}`);
+      router.replace(`/login?role=RECRUITER&next=${encodeURIComponent(`/billing/mock-checkout?paymentId=${paymentId}`)}`);
       return;
     }
     if (s.user.role !== 'RECRUITER' && s.user.role !== 'SUPER_ADMIN') {
-      router.replace('/');
+      router.replace(s.user.role === 'EMPLOYEE' ? '/jobs' : '/');
       return;
     }
     if (!paymentId) {
@@ -102,9 +104,9 @@ function MockCheckoutInner() {
 
   if (!paymentId) {
     return (
-      <div className="shell" style={{ padding: '3rem 1.5rem', maxWidth: 520 }}>
+      <div className={rw.checkout} style={{ padding: '3rem 1.5rem', maxWidth: 520 }}>
         <FormAlert>{t('ui.missingPaymentId')}</FormAlert>
-        <Link href="/dashboard/recruiter?tab=billing" className="chip" style={{ marginTop: '1rem' }}>
+        <Link href="/dashboard/recruiter?tab=billing" className={rw.secondary} style={{ marginTop: '1rem' }}>
           {t('ui.backToBilling')}
         </Link>
       </div>
@@ -114,8 +116,8 @@ function MockCheckoutInner() {
   if (!payment && !error) return <DetailPageSkeleton />;
 
   return (
-    <div className="shell" style={{ padding: '3rem 1.5rem', maxWidth: 520 }}>
-      <div className="card">
+    <div className={rw.checkout} style={{ padding: '3rem 1.5rem', maxWidth: 520 }}>
+      <div className={rw.checkoutCard}>
         <h1 style={{ marginTop: 0, fontSize: '1.35rem' }}>{t('ui.demoCheckout')}</h1>
         <p className="muted" style={{ fontSize: '0.9rem' }}>
           {t('ui.demoCheckoutHint')}
@@ -137,7 +139,7 @@ function MockCheckoutInner() {
                 <FormAlert tone="success">{t('ui.paymentConfirmed')}</FormAlert>
                 <Link
                   href="/dashboard/recruiter?tab=billing"
-                  className="chip active"
+                  className={rw.primary}
                   style={{ marginTop: '1rem', display: 'inline-block' }}
                 >
                   {t('ui.backToPlanBilling')}
@@ -163,7 +165,7 @@ function MockCheckoutInner() {
 export default function MockCheckoutPage() {
   return (
     <Suspense fallback={<DetailPageSkeleton />}>
-      <MockCheckoutInner />
+      <RoleGate role="RECRUITER"><MockCheckoutInner /></RoleGate>
     </Suspense>
   );
 }

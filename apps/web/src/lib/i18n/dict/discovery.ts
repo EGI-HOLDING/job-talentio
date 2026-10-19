@@ -1,0 +1,21 @@
+/** Shared public discovery pages. Company/article content comes from the API. */
+export const discovery = {
+  'discovery.companySubtitle': { en: 'Discover your next team', ru: 'Найдите свою будущую команду', uz: 'Kelajakdagi jamoangizni toping' },
+  'discovery.industries': { en: 'Industries', ru: 'Отрасли', uz: 'Tarmoqlar' },
+  'discovery.allIndustries': { en: 'All industries', ru: 'Все отрасли', uz: 'Barcha tarmoqlar' },
+  'discovery.searchIndustries': { en: 'Search industries...', ru: 'Поиск отраслей...', uz: 'Tarmoqlarni qidirish...' },
+  'discovery.vipOnly': { en: 'VIP only', ru: 'Только VIP', uz: 'Faqat VIP' },
+  'discovery.noIndustries': { en: 'No matching industries', ru: 'Отрасли не найдены', uz: 'Mos tarmoq topilmadi' },
+  'discovery.companyEmpty': { en: 'No companies match your filters.', ru: 'Нет компаний с такими фильтрами.', uz: 'Filtrlarga mos kompaniya topilmadi.' },
+  'discovery.companyError': { en: 'Companies could not be loaded.', ru: 'Не удалось загрузить компании.', uz: 'Kompaniyalarni yuklab bo‘lmadi.' },
+  'discovery.industryError': { en: 'Industries could not be loaded.', ru: 'Не удалось загрузить отрасли.', uz: 'Tarmoqlarni yuklab bo‘lmadi.' },
+  'discovery.insightsSubtitle': { en: 'Ideas and guidance for your next career move.', ru: 'Идеи и советы для следующего шага в карьере.', uz: 'Karyerangizning keyingi qadami uchun g‘oya va maslahatlar.' },
+  'discovery.allArticles': { en: 'All articles', ru: 'Все статьи', uz: 'Barcha maqolalar' },
+  'discovery.insightsTab': { en: 'Insights', ru: 'Аналитика', uz: 'Tahlillar' },
+  'discovery.eventsTab': { en: 'Events', ru: 'События', uz: 'Tadbirlar' },
+  'discovery.latest': { en: 'Latest articles', ru: 'Свежие статьи', uz: 'So‘nggi maqolalar' },
+  'discovery.exploreMore': { en: 'Explore more', ru: 'Читайте также', uz: 'Yana o‘qing' },
+  'discovery.readArticle': { en: 'Read article', ru: 'Читать статью', uz: 'Maqolani o‘qish' },
+  'discovery.loadMore': { en: 'Load more articles', ru: 'Загрузить ещё статьи', uz: 'Yana maqolalarni yuklash' },
+  'discovery.newsError': { en: 'Articles could not be loaded.', ru: 'Не удалось загрузить статьи.', uz: 'Maqolalarni yuklab bo‘lmadi.' },
+} as const;
