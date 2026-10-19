@@ -170,8 +170,9 @@ const CONFLICT_SKILL_FACTOR = 0.5;
 const REQUIRED_SKILLS_MISS_CAP = 12;
 const RECOMMEND_QUERY_CAP = 200;
 const RECOMMEND_FALLBACK_SCAN = 120;
-const RECOMMEND_THIN_JOBS = 24;
 const RECOMMEND_THIN_CANDIDATES = 40;
+const FOR_YOU_JOBS_LIMIT = 300;
+const FOR_YOU_SCAN_BATCH = 100;
 
 const VISIBLE_PROFILE = {
   in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] as ['PUBLIC', 'TO_REGISTERED_RECRUITERS'],
@@ -322,16 +323,6 @@ function mergeById<T extends { id: string }>(primary: T[], extra: T[], cap = REC
     if (out.length >= cap) break;
   }
   return out;
-}
-
-function profileTitleKeys(profile: MatchProfile): string[] {
-  const keys = new Set<string>();
-  for (const text of profileRoleTexts(profile)) {
-    const key = normalizeJobTitleKey(text);
-    if (!key) continue;
-    for (const item of titleSynonymCluster(key)) keys.add(item);
-  }
-  return [...keys];
 }
 
 @Injectable()
@@ -672,7 +663,7 @@ export class MatchingService {
       .slice(0, limit);
   }
 
-  async recommendJobsForProfile(profileId: string, limit = 20) {
+  async recommendJobsForProfile(profileId: string, limit = FOR_YOU_JOBS_LIMIT) {
     const profile = await this.prisma.employeeProfile.findUniqueOrThrow({
       where: { id: profileId },
       include: {
@@ -682,18 +673,10 @@ export class MatchingService {
         languages: { include: { language: true } },
         certifications: true,
         city: true,
-        applications: { select: { jobPostId: true } },
       },
     });
 
-    if (!this.profileHasMatchSignal(profile)) return [];
-
-    const appliedJobIds = new Set(profile.applications.map((a) => a.jobPostId));
-    const skillIds = profile.skills.map((s) => s.skillId);
-    const skillKeys = [
-      ...new Set(profile.skills.map((s) => skillIdentityKey(s.skill)).filter(Boolean)),
-    ];
-    const titleKeys = profileTitleKeys(profile);
+    const resultLimit = Math.max(1, Math.min(FOR_YOU_JOBS_LIMIT, Math.floor(limit)));
 
     const jobInclude = {
       company: {
@@ -705,54 +688,45 @@ export class MatchingService {
       jobSkills: { include: { skill: true } },
       jobLanguages: { include: { language: true } },
     } as const;
+    type ForYouRow = {
+      job: Prisma.JobPostGetPayload<{ include: typeof jobInclude }>;
+      matchScore: number;
+      matchBreakdown: MatchBreakdown;
+    };
 
-    const jobOr: Prisma.JobPostWhereInput[] = [];
-    if (skillIds.length) {
-      jobOr.push({ jobSkills: { some: { skillId: { in: skillIds } } } });
-    }
-    if (skillKeys.length) {
-      jobOr.push({ jobSkills: { some: { skill: { normalizedKey: { in: skillKeys } } } } });
-    }
-    if (titleKeys.length) {
-      jobOr.push({ jobTitle: { normalizedKey: { in: titleKeys } } });
-    }
+    // For you is the published jobs catalog sorted by the existing match score.
+    // Scan the full catalog in batches so older high-match jobs can rank above newer ones,
+    // while retaining only the best 300 rows in memory and in the API response.
+    let cursorId: string | undefined;
+    let ranked: ForYouRow[] = [];
 
-    let jobs =
-      jobOr.length > 0
-        ? await this.prisma.jobPost.findMany({
-            where: { status: 'PUBLISHED', OR: jobOr },
-            include: jobInclude,
-            take: RECOMMEND_QUERY_CAP,
-            orderBy: { publishedAt: 'desc' },
-          })
-        : [];
-
-    if (jobs.length < RECOMMEND_THIN_JOBS) {
-      const extra = await this.prisma.jobPost.findMany({
-        where: {
-          status: 'PUBLISHED',
-          ...(jobs.length ? { id: { notIn: jobs.map((j) => j.id) } } : {}),
-        },
+    while (true) {
+      const jobs = await this.prisma.jobPost.findMany({
+        where: { status: 'PUBLISHED' },
+        ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
         include: jobInclude,
-        take: RECOMMEND_FALLBACK_SCAN,
-        orderBy: { publishedAt: 'desc' },
+        take: FOR_YOU_SCAN_BATCH,
+        orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
       });
-      const keep = extra.filter((j) => this.passesRecommendationGate(this.compute(profile, j)));
-      jobs = mergeById(jobs, keep);
+      if (!jobs.length) break;
+
+      const scored = jobs.map((job) => {
+        const matchBreakdown = this.compute(profile, job);
+        return { job, matchScore: matchBreakdown.total, matchBreakdown };
+      });
+      ranked = [...ranked, ...scored]
+        .sort(
+          (a, b) =>
+            b.matchScore - a.matchScore ||
+            (b.job.publishedAt?.getTime() ?? 0) - (a.job.publishedAt?.getTime() ?? 0) ||
+            a.job.id.localeCompare(b.job.id),
+        )
+        .slice(0, resultLimit);
+
+      if (jobs.length < FOR_YOU_SCAN_BATCH) break;
+      cursorId = jobs[jobs.length - 1].id;
     }
 
-    return jobs
-      .filter((j) => !appliedJobIds.has(j.id))
-      .map((j) => {
-        const breakdown = this.compute(profile, j);
-        return {
-          job: j,
-          matchScore: breakdown.total,
-          matchBreakdown: breakdown,
-        };
-      })
-      .filter((row) => this.passesRecommendationGate(row.matchBreakdown))
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, limit);
+    return ranked;
   }
 }
