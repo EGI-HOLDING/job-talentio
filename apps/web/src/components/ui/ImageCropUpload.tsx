@@ -20,6 +20,7 @@ type Props = {
   clearPath?: string;
   onUploaded: (url: string | null) => void;
   label?: string;
+  fallbackText?: string;
 };
 
 async function cropToBlob(
@@ -76,6 +77,7 @@ export function ImageCropUpload({
   clearPath,
   onUploaded,
   label,
+  fallbackText,
 }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -220,7 +222,7 @@ export function ImageCropUpload({
             />
           ) : (
             <span className="muted" style={{ fontSize: '0.75rem' }}>
-              {t('ui.noImage')}
+              {fallbackText || t('ui.noImage')}
             </span>
           )}
         </div>

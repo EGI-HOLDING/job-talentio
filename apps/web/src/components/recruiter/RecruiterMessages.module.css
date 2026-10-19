@@ -1,0 +1,11 @@
+.context { border-left:1px solid #e7ebf3; padding:26px; overflow:auto; overscroll-behavior:contain; min-height:0; background:#fcfcff; font-size:.78rem; color:#40506d; scrollbar-width:thin; }
+.identity { display:flex; align-items:center; flex-direction:column; gap:9px; padding-bottom:24px; text-align:center; }
+.identity > strong { margin-top:6px; color:#24314b; font-size:.91rem; }
+.identity > span { color:#8793a7; line-height:1.6; }
+.context section { border-top:1px solid #e7ebf3; padding:22px 0; }
+.context h2 { font-size:.73rem; font-weight:500; color:#8793a7; margin:0 0 12px; }
+.context section > a { margin-top:15px; }
+.context section > strong { display:block; }
+.score { color:#6641dc; font-size:1.9rem; letter-spacing:-.055em; }
+.links { display:grid; gap:15px; padding-top:10px; }
+@media(max-width:1250px) { .context { display:none; } }

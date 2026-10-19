@@ -1,11 +1,12 @@
 import type { Locale } from '@/lib/locale';
 import { LEGAL_DOCS, LEGAL_UPDATED_LABEL, type LegalDocKey } from '@/lib/i18n/legal';
+import s from '@/components/public/PublicPages.module.css';
 
 /** Server-rendered legal text; content comes from the locale dictionary. */
 export function LegalDocument({ kind, locale }: { kind: LegalDocKey; locale: Locale }) {
   const doc = LEGAL_DOCS[kind][locale];
   return (
-    <article className="shell legal-doc">
+    <article className={s.legal}>
       <h1>{doc.title}</h1>
       <p className="legal-meta">
         {LEGAL_UPDATED_LABEL[locale]}: {doc.updated}

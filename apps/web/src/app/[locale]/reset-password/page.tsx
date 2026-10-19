@@ -1,6 +1,7 @@
 'use client';
 
-import { Link } from '@/lib/navigation';
+import { AuthLink } from '@/components/auth/AuthLink';
+import auth from '@/components/recruiter/EmployerAuth.module.css';
 import { FormEvent, Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -36,30 +37,30 @@ function ResetPasswordInner() {
   }
 
   return (
-    <div className="auth-wrap">
+    <div className={'auth-wrap' + (params.get('role') === 'RECRUITER' ? ' ' + auth.page : '')}>
       <div className="auth-card">
         <h1>{t('ui.chooseNewPassword')}</h1>
-        {!token && <FormAlert>{t('ui.missingResetToken')}</FormAlert>}
+        {!token && <><FormAlert>{t('ui.missingResetToken')}</FormAlert><p><AuthLink href="/forgot-password">{t('public.requestLink')}</AuthLink></p></>}
         {done ? (
           <>
             <FormAlert tone="success">{t('ui.passwordUpdatedSignIn')}</FormAlert>
             <p className="muted">
-              <Link href="/login" style={{ color: 'var(--accent)' }}>
+              <AuthLink href="/login" style={{ color: 'var(--accent)' }}>
                 {t('signIn')}
-              </Link>
+              </AuthLink>
             </p>
           </>
-        ) : (
+        ) : token ? (
           <form className="form-stack" onSubmit={onSubmit}>
             <FormField label={t('newPassword')} required>
               <PasswordInput name="newPassword" required minLength={8} autoComplete="new-password" />
             </FormField>
-            {error && <FormAlert>{error}</FormAlert>}
+            {error && <><FormAlert>{error}</FormAlert><p><AuthLink href="/forgot-password">{t('public.requestLink')}</AuthLink></p></>}
             <button type="submit" disabled={loading || !token}>
               {loading ? t('saving') : t('ui.updatePassword')}
             </button>
           </form>
-        )}
+        ) : null}
       </div>
     </div>
   );

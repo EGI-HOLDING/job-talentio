@@ -22,6 +22,8 @@ type Props = {
   /** Offered only when the server says machine translation is available. */
   onTranslate?: () => void;
   translating?: boolean;
+  /** Reading layout; keeps all original words and punctuation. */
+  paragraphs?: boolean;
 };
 
 /**
@@ -37,10 +39,18 @@ export function UgcText({
   className,
   onTranslate,
   translating = false,
+  paragraphs = false,
 }: Props) {
   const { t, locale } = useI18n();
   const clean = sanitizeMojibake(text);
   const showNotice = Boolean(contentLocale) && contentLocale !== locale;
+  const blocks = paragraphs ? clean.split(/\n+/).flatMap((block) => {
+    if (block.length < 650) return block.trim() ? [block] : [];
+    const sentences = block.split(/(?<=[.!?])\s+(?=[A-ZА-ЯЁ])/u);
+    const chunks: string[] = [];
+    for (let index = 0; index < sentences.length; index += 3) chunks.push(sentences.slice(index, index + 3).join(' '));
+    return chunks;
+  }) : [];
 
   return (
     <BusyOverlay active={translating} label={t('ui.translating')} className={className}>
@@ -64,7 +74,7 @@ export function UgcText({
           )}
         </p>
       )}
-      <div style={preserveLineBreaks ? { whiteSpace: 'pre-wrap' } : undefined}>{clean}</div>
+      <div style={preserveLineBreaks && !paragraphs ? { whiteSpace: 'pre-wrap' } : undefined}>{paragraphs ? blocks.map((block, index) => <p key={index}>{block}</p>) : clean}</div>
     </BusyOverlay>
   );
 }

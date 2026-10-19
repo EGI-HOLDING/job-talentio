@@ -1,4 +1,6 @@
 'use client';
+import { AuthLink } from '@/components/auth/AuthLink';
+import { authDestination } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
 import { FormEvent, Suspense, useEffect, useId, useState, type ReactNode } from 'react';
@@ -9,6 +11,8 @@ import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
 import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 import { PhoneSignIn } from '@/components/auth/PhoneSignIn';
 import { useI18n } from '@/lib/i18n';
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
+import s from '@/components/auth/Register.module.css';
 
 type InvitePreview = { companyName: string; email: string; role: string };
 
@@ -25,18 +29,21 @@ function RegisterForm() {
   const { t, locale } = useI18n();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('invite')?.trim() ?? '';
+  const roleParam = searchParams.get('role');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<'EMPLOYEE' | 'RECRUITER'>('EMPLOYEE');
+  const role = inviteToken || roleParam === 'RECRUITER' ? 'RECRUITER' : 'EMPLOYEE';
+  const employer = role === 'RECRUITER';
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [inviteInvalid, setInviteInvalid] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const formHintId = useId();
-  const roleGroupId = useId();
   const termsId = useId();
   const joining = Boolean(invite);
   const useInvite = Boolean(inviteToken) && !inviteInvalid;
+
+  useEffect(() => { setError(''); setAcceptTerms(false); }, [role]);
 
   useEffect(() => {
     if (!inviteToken) {
@@ -49,7 +56,6 @@ function RegisterForm() {
       .then((preview) => {
         if (cancelled) return;
         setInvite(preview);
-        setRole('RECRUITER');
         setInviteInvalid(false);
       })
       .catch(() => {
@@ -115,7 +121,7 @@ function RegisterForm() {
       });
       saveSession(session as Parameters<typeof saveSession>[0]);
       window.location.href = localeHref(
-        session.user.role === 'RECRUITER' ? '/' : '/dashboard/employee',
+        authDestination(session.user.role === 'RECRUITER' ? '/dashboard/recruiter?tab=jobs' : '/dashboard/employee'),
       );
     } catch (err) {
       setError((err as Error).message || t('authRegisterFailed'));
@@ -125,51 +131,42 @@ function RegisterForm() {
   }
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>{useInvite ? t('inviteJoinTitle') : t('createAccount')}</h1>
-        <p className="muted">
+    <div className={s.page + (employer ? ' ' + s.employerPage : '')}>
+      <div className={s.layout}>
+      <aside className={`${s.story} ${employer ? s.employer : s.seeker}`}>
+        <div className={s.storyTop}>
+          <span className={s.eyebrow}>{t(employer ? 'registerUi.employerLabel' : 'registerUi.seekerLabel')}</span>
+          <h2>{t(employer ? 'registerUi.employerHeadline' : 'registerUi.seekerHeadline')}</h2>
+          <p>{t(employer ? 'registerUi.employerStory' : 'registerUi.seekerStory')}</p>
+        </div>
+        <ol className={s.benefits}>
+          {(employer ? ['briefcase', 'document', 'message'] : ['user', 'document', 'search']).map((icon, index) =>
+            <li key={icon}><span className={s.benefitIcon}><WorkspaceIcon kind={icon} /></span><span>{t(`registerUi.${employer ? 'employer' : 'seeker'}Benefit${index + 1}`)}</span></li>)}
+        </ol>
+      </aside>
+      <section className={s.formPanel} aria-labelledby="register-title">
+        <div className={s.formInner}>
+        <span className={s.roleBadge}><WorkspaceIcon kind={employer ? 'briefcase' : 'user'} />{t(employer ? 'registerUi.employerLabel' : 'registerUi.seekerLabel')}</span>
+        <h1 id="register-title">{useInvite ? t('inviteJoinTitle') : t(employer ? 'authRole.employerRegister' : 'authRole.employeeRegister')}</h1>
+        <p className={s.subtitle}>
           {inviteLoading
             ? t('inviteChecking')
             : joining
               ? t('inviteJoinSubtitle').replace('{company}', invite?.companyName ?? '')
-              : t('joinTalentio')}
+              : t(employer ? 'authRole.employerRegisterSub' : 'authRole.employeeRegisterSub')}
         </p>
         {inviteInvalid ? <FormAlert>{t('inviteInvalid')}</FormAlert> : null}
-        {!useInvite ? (
-          <div
-            className="chips"
-            style={{ marginTop: '1rem' }}
-            role="radiogroup"
-            aria-labelledby={roleGroupId}
-          >
-            <p id={roleGroupId} className="sr-only">
-              {t('accountType')}
-            </p>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={role === 'EMPLOYEE'}
-              className={`chip ${role === 'EMPLOYEE' ? 'active' : ''}`}
-              onClick={() => setRole('EMPLOYEE')}
-            >
-              {t('imCandidate')}
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={role === 'RECRUITER'}
-              className={`chip ${role === 'RECRUITER' ? 'active' : ''}`}
-              onClick={() => setRole('RECRUITER')}
-            >
-              {t('imHiring')}
-            </button>
-          </div>
-        ) : null}
-        <p id={formHintId} className="required-note">
+        <div className={s.social}>
+          <GoogleSignIn key={`google-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable autoCreateEmployeeOnFirstSignIn={!employer} />
+          <TelegramSignIn key={`telegram-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable autoCreateEmployeeOnFirstSignIn={!employer} />
+          {/* New phone accounts use the existing job seeker registration flow. */}
+          {!useInvite && !employer && <PhoneSignIn accountRole="EMPLOYEE" showWhenUnavailable />}
+        </div>
+        <div className={s.divider}><span>{t('registerUi.withEmail')}</span></div>
+        <p id={formHintId} className="sr-only">
           {t('requiredFieldsNote')}
         </p>
-        <form className="form-stack" onSubmit={onSubmit} aria-describedby={formHintId} noValidate>
+        <form key={`${role}-${inviteToken}`} className={s.form} onSubmit={onSubmit} aria-describedby={formHintId}>
           <FormField label={t('fullName')} required>
             <input name="fullName" autoComplete="name" minLength={2} required />
           </FormField>
@@ -187,6 +184,7 @@ function RegisterForm() {
               disabled={inviteLoading}
             />
           </FormField>
+          <div className={s.passwords}>
           <FormField label={t('password')} required hint={t('passwordHint')}>
             <PasswordInput name="password" autoComplete="new-password" minLength={8} required />
           </FormField>
@@ -198,15 +196,17 @@ function RegisterForm() {
               required
             />
           </FormField>
+          </div>
           {role === 'RECRUITER' && !useInvite && (
             <FormField label={t('companyName')} required>
               <input name="companyName" autoComplete="organization" minLength={2} required />
             </FormField>
           )}
-          <label className="auth-terms" htmlFor={termsId}>
+          <label className={s.terms} htmlFor={termsId}>
             <input
               id={termsId}
               type="checkbox"
+              required
               checked={acceptTerms}
               onChange={(e) => setAcceptTerms(e.target.checked)}
               aria-required="true"
@@ -232,23 +232,22 @@ function RegisterForm() {
           <FormAlert>{error}</FormAlert>
           <button
             type="submit"
-            className="cta"
+            className={s.submit}
             disabled={loading || inviteLoading}
             aria-busy={loading || inviteLoading}
           >
-            {loading ? t('creatingAccount') : t('createAccount')}
+            {loading ? t('creatingAccount') : t('createAccount')}{!loading && <WorkspaceIcon kind="arrow" />}
           </button>
         </form>
-        <GoogleSignIn inviteToken={useInvite ? inviteToken : undefined} />
-        <TelegramSignIn inviteToken={useInvite ? inviteToken : undefined} />
-        {/* Phone accounts are job-seeker accounts; invited recruiters keep the email route. */}
-        {!useInvite && <PhoneSignIn />}
-        <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>
+        <p className={s.login}>
           {t('alreadyRegistered')}{' '}
-          <Link href="/login" style={{ color: 'var(--accent)' }}>
+          <AuthLink href="/login" accountRole={role}>
             {t('login')}
-          </Link>
+          </AuthLink>
         </p>
+        {!useInvite && <div className={s.switchRole}><span>{t(employer ? 'registerUi.seekerSwitchPrompt' : 'registerUi.employerSwitchPrompt')}</span><AuthLink href="/register" accountRole={employer ? 'EMPLOYEE' : 'RECRUITER'} next={null}>{t(employer ? 'registerUi.seekerSwitch' : 'registerUi.employerSwitch')}<WorkspaceIcon kind="right" /></AuthLink></div>}
+        </div>
+      </section>
       </div>
     </div>
   );

@@ -1,0 +1,14 @@
+.page.page { padding:32px 20px 42px !important; background:#f8f9fc; min-height:calc(100dvh - var(--app-nav-height,76px) - 74px); display:flex; justify-content:center; align-items:flex-start; }
+.page.page :global(.auth-card) { width:100%; max-width:490px; padding:34px 38px; border:1px solid #e4e8f1; border-radius:14px; box-shadow:0 6px 25px #26345c06; background:#fff; }
+.page.page :global(.auth-card) h1 { font-size:1.65rem; letter-spacing:-.045em; margin:0 0 10px; }
+.page.page :global(.auth-card) > p { font-size:.82rem; line-height:1.7; }
+.page.page :global(.required-note) { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); }
+.page.page :global(.form-stack) { gap:18px; margin-top:25px; }
+.page.page :global(.label-text) { font-size:.78rem; }
+.page.page input { min-height:44px; border-radius:7px; font-size:.82rem; }
+.page.page button[type=submit] { border-radius:7px; min-height:44px; font-size:.81rem; }
+.page.page :global(.auth-social-btn) { border:1px solid #dfe4ee; background:#fff; color:#293653; min-height:44px; border-radius:7px; font-size:.8rem; }
+.page.page :global(.auth-social-btn--telegram) svg { color:#289bd3; }
+.page.page :global(.auth-divider) { margin-block:22px; font-size:.74rem; }
+.page.page :global(.google-signin) { margin-top:14px; }
+@media(max-width:600px) { .page.page { padding:20px 16px 32px !important; background:#fff; }.page.page :global(.auth-card) { border:0; padding:20px 6px; box-shadow:none; }.page.page :global(.auth-card) h1 { font-size:1.5rem; } }

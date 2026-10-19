@@ -1,4 +1,5 @@
 'use client';
+import { authDestination, roleMismatchKey, type AuthRole } from '@/lib/authReturn';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { ADMIN_URL, api, saveSession } from '@/lib/api';
@@ -16,7 +17,7 @@ type StatusResponse =
 const POLL_MS = 2500;
 
 function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/';
+  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
   return '/dashboard/employee';
 }
@@ -26,7 +27,7 @@ function redirectAfterLogin(role: string) {
  * user's contact (verified by Telegram, no SMS cost); the SMS route appears
  * only when the API has an operator account configured.
  */
-export function PhoneSignIn() {
+export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { accountRole?: AuthRole; showWhenUnavailable?: boolean } = {}) {
   const { t, locale } = useI18n();
   const [providers, setProviders] = useState<Providers | null>(null);
   const [mode, setMode] = useState<'idle' | 'telegram' | 'sms'>('idle');
@@ -60,8 +61,10 @@ export function PhoneSignIn() {
 
   function finish(session: Session) {
     stopPolling();
+    const mismatch = accountRole && roleMismatchKey(session.user.role, accountRole);
+    if (mismatch) { setError(t(mismatch)); setWaiting(null); return; }
     saveSession(session);
-    window.location.href = localeHref(redirectAfterLogin(session.user.role));
+    window.location.href = localeHref(authDestination(redirectAfterLogin(session.user.role)));
   }
 
   async function startTelegram() {
@@ -137,16 +140,16 @@ export function PhoneSignIn() {
     }
   }
 
-  if (!providers || (!providers.telegram && !providers.sms)) return null;
+  if ((!providers || (!providers.telegram && !providers.sms)) && !showWhenUnavailable) return null;
 
   return (
     <div className="google-signin">
-      {providers.telegram && mode !== 'sms' && (
+      {(providers?.telegram || showWhenUnavailable) && mode !== 'sms' && (
         <div className="telegram-btn-slot">
           <button
             type="button"
             className="auth-social-btn auth-social-btn--phone"
-            disabled={busy}
+            disabled={busy || !providers?.telegram}
             onClick={() => void startTelegram()}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -190,7 +193,7 @@ export function PhoneSignIn() {
         </div>
       )}
 
-      {providers.sms && mode !== 'telegram' && (
+      {providers?.sms && mode !== 'telegram' && (
         <div style={{ marginTop: '0.6rem' }}>
           {mode !== 'sms' ? (
             <button type="button" className="ghost" onClick={() => setMode('sms')}>

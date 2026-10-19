@@ -1,15 +1,18 @@
 'use client';
+import { loginForCurrentPage } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { api, getSession } from '@/lib/api';
-import { DetailPageSkeleton } from '@/components/ui/Skeleton';
+import { DirectoryStatus } from '@/components/public/BrowsePage';
 import { ShareButton } from '@/components/ui/ShareButton';
 import { UgcText } from '@/components/ui/UgcText';
 import { PreviewableImage } from '@/components/ui/ImagePreview';
 import { isPreviewableImageUrl } from '@/lib/image-preview';
 import { useI18n } from '@/lib/i18n';
+import s from '@/components/public/PublicPages.module.css';
+import { JobsIcon } from '@/components/jobs/JobsIcon';
 
 type Company = {
   id: string;
@@ -46,27 +49,34 @@ export default function CompanyPage() {
   const [following, setFollowing] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [followBusy, setFollowBusy] = useState(false);
   const session = typeof window !== 'undefined' ? getSession() : null;
 
   useEffect(() => {
+    let active = true;
+    setError('');
+    setCompany(null);
     api<Company>(`/companies/slug/${slug}`, { auth: false })
       .then(async (c) => {
+        if (!active) return;
         setCompany(c);
         if (session) {
           try {
             const f = await api<{ following: boolean }>(`/companies/${c.id}/following`);
-            setFollowing(f.following);
+            if (active) setFollowing(f.following);
           } catch {
             /* ignore */
           }
         }
       })
-      .catch((e) => setError(e.message));
-  }, [slug]);
+      .catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [slug, locale, retry]);
 
   async function toggleFollow() {
     if (!session || !company) {
-      window.location.href = localeHref('/login');
+      window.location.href = localeHref(loginForCurrentPage());
       return;
     }
     const method = following ? 'DELETE' : 'POST';
@@ -97,88 +107,29 @@ export default function CompanyPage() {
     }
   }
 
-  if (error) return <div className="shell"><div className="error">{error}</div></div>;
-  if (!company) return <DetailPageSkeleton />;
-
-  return (
-    <div className="shell" style={{ padding: '1.5rem 0 3rem' }}>
-      <div className="job-detail-header">
-        <span
-          className="company-logo-tile"
-          aria-hidden={isPreviewableImageUrl(company.logoUrl) ? undefined : true}
-        >
-          <PreviewableImage
-            className="company-logo"
-            fill
-            src={company.logoUrl}
-            fallbackSrc={`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(company.name)}`}
-          />
-        </span>
-        <div>
-          <h1 style={{ margin: 0, fontFamily: 'var(--font-display)' }}>
-            {company.name} {company.isVerified ? '✓' : ''}
-          </h1>
-          <div className="job-meta">
-            {company.industry && (
-              <Link href={`/jobs?industrySlug=${encodeURIComponent(company.industry.slug)}`}>
-                {company.industry.name}
-              </Link>
-            )}
-            {company.city && <span>{company.city.name}</span>}
-            {company.size && <span>{company.size.replace('SIZE_', '').replace(/_/g, '-')}</span>}
-            <span>{t('followersCount').replace('{n}', String(company._count?.followers ?? 0))}</span>
-          </div>
-          {company.website && (
-            <a href={company.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
-              {company.website}
-            </a>
-          )}
-          {company.description && (
-            <UgcText
-              text={company.description}
-              contentLocale={company.contentLocale}
-              isMachineTranslated={company.isMachineTranslated}
-              preserveLineBreaks
-              className="company-about"
-              translating={translating}
-              onTranslate={
-                company.canMachineTranslate ? () => void machineTranslate() : undefined
-              }
-            />
-          )}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <button type="button" className={following ? 'secondary' : 'cta'} onClick={toggleFollow}>
-            {following ? t('following') : t('followCompany')}
-          </button>
-          <ShareButton path={`/companies/${company.slug}`} title={company.name} />
-        </div>
-      </div>
-
-      <h2 className="section-title" style={{ marginTop: '2rem' }}>
-        Open positions ({company.jobPosts.length})
-      </h2>
-      {company.jobPosts.map((job) => (
-        <Link key={job.id} href={`/jobs/${job.id}`} className="job-card">
-          <div />
-          <div>
-            <h3>{job.title}</h3>
-            <div className="job-meta">
-              {job.city && <span>{job.city.name}</span>}
-              {job.category && <span>{job.category.name}</span>}
-            </div>
-            <div className="chips">
-              {(job.jobSkills || []).map((js, i) => (
-                <span key={i} className="badge skill">
-                  {js.skill.name}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div />
-        </Link>
-      ))}
-      {!company.jobPosts.length && <p className="muted">No open jobs right now.</p>}
+  if (!company && error) return <div className={s.page}><div className={s.status}><p role="alert">{t('public.loadError')}</p><button className={s.primary} onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button><p><Link href="/explore/companies">{t('public.backCompanies')}</Link></p></div></div>;
+  if (!company) return <div className={s.page}><div className={s.container}><DirectoryStatus loading onRetry={() => setRetry((value) => value + 1)} /></div></div>;
+  return <div className={s.page}><div className={s.container}>
+    <Link href="/explore/companies" className={s.back}><JobsIcon kind="back" />{t('public.backCompanies')}</Link>
+    <header className={s.companyHeader}>
+      <span className={s.companyLogo} aria-hidden={isPreviewableImageUrl(company.logoUrl) ? undefined : true}><PreviewableImage className="company-logo" fill src={company.logoUrl} fallbackSrc={'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(company.name)} /></span>
+      <div><h1>{company.name}{company.isVerified && <span aria-label={t('trustVerifiedChip')}> {'\u2713'}</span>}</h1><div className={s.meta}>
+        {company.industry && <Link href={'/jobs?industrySlug=' + encodeURIComponent(company.industry.slug)}>{company.industry.name}</Link>}
+        {company.city && <span>{company.city.name}</span>}{company.size && <span>{company.size.replace('SIZE_', '').replace(/_/g, '-')}</span>}
+        <span>{t('followersCount').replace('{n}', String(company._count?.followers ?? 0))}</span>
+      </div></div>
+      <div className={s.companyActions}><button type="button" className={following ? s.secondary : s.primary} disabled={followBusy} onClick={async () => { if (followBusy) return; setFollowBusy(true); try { await toggleFollow(); } catch (err) { setError((err as Error).message); } finally { setFollowBusy(false); } }}>{following ? t('following') : t('followCompany')}</button><ShareButton path={'/companies/' + company.slug} title={company.name} className={s.secondary} /></div>
+    </header>
+    {error && <p className={s.notice} role="alert">{error}</p>}
+    <div className={s.companyBody}>
+      <section><h2>{t('public.openPositions').replace('{n}', String(company.jobPosts.length))}</h2>
+        {company.jobPosts.map((job) => <Link key={job.id} href={'/jobs/' + job.id} className={s.job}><h3>{job.title}</h3><div className={s.meta}>{job.city && <span>{job.city.name}</span>}{job.category && <span>{job.category.name}</span>}<span>{t('landing.viewJob')} {'\u2192'}</span></div><div className={s.skills}>{job.jobSkills?.map((item, index) => <span key={index}>{item.skill.name}</span>)}</div></Link>)}
+        {!company.jobPosts.length && <p className={s.notice}>{t('public.noPositions')}</p>}
+      </section>
+      <aside className={s.companyAbout}><h2>{t('public.aboutCompany')}</h2>
+        {company.description && <UgcText text={company.description} contentLocale={company.contentLocale} isMachineTranslated={company.isMachineTranslated} paragraphs translating={translating} onTranslate={company.canMachineTranslate ? () => void machineTranslate() : undefined} />}
+        {company.website && <p><a href={company.website} target="_blank" rel="noreferrer">{t('public.website')} {'\u2197'}</a></p>}
+      </aside>
     </div>
-  );
+  </div></div>;
 }

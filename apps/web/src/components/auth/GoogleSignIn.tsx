@@ -1,4 +1,5 @@
 'use client';
+import { authDestination, authRoleErrorKey, roleMismatchKey, type AuthRole } from '@/lib/authReturn';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ADMIN_URL, api, saveSession } from '@/lib/api';
@@ -32,7 +33,7 @@ declare global {
 }
 
 function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/';
+  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
   return '/dashboard/employee';
 }
@@ -40,14 +41,24 @@ function redirectAfterLogin(role: string) {
 /**
  * "Continue with Google" flow (GIS ID token):
  * button → /auth/oauth/google → role picker for new users → session issued immediately.
- * Renders nothing when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured.
+ * Keep this entry point visible, including when a local provider is not configured.
  */
-export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
+export function GoogleSignIn({
+  inviteToken,
+  accountRole,
+  showWhenUnavailable = false,
+  autoCreateEmployeeOnFirstSignIn = false,
+}: {
+  inviteToken?: string;
+  accountRole?: AuthRole;
+  showWhenUnavailable?: boolean;
+  autoCreateEmployeeOnFirstSignIn?: boolean;
+} = {}) {
   const { t, locale } = useI18n();
   const buttonRef = useRef<HTMLDivElement>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [needsRole, setNeedsRole] = useState<{ email: string; fullName: string } | null>(null);
-  const [role, setRole] = useState<'EMPLOYEE' | 'RECRUITER'>('EMPLOYEE');
+  const [role, setRole] = useState<AuthRole>(accountRole || 'EMPLOYEE');
   const [companyName, setCompanyName] = useState('');
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
@@ -68,6 +79,7 @@ export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
           body: JSON.stringify({
             idToken: token,
             role: chosenRole,
+            expectedRole: accountRole,
             companyName: chosenRole === 'RECRUITER' && !inviteToken ? company : undefined,
             locale,
             inviteToken: inviteToken || undefined,
@@ -82,21 +94,23 @@ export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
           setNeedsRole({ email: res.email, fullName: res.fullName });
           return;
         }
+        const mismatch = accountRole && roleMismatchKey(res.user.role, accountRole);
+        if (mismatch && !inviteToken) { setError(t(mismatch)); return; }
         saveSession(res as Parameters<typeof saveSession>[0]);
-        window.location.href = localeHref(redirectAfterLogin(res.user.role));
+        window.location.href = localeHref(authDestination(redirectAfterLogin(res.user.role)));
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         setError(
           aborted
             ? 'Sign-in timed out. Please try again.'
-            : (err as Error).message || 'Google sign-in failed',
+            : (authRoleErrorKey((err as Error).message) ? t(authRoleErrorKey((err as Error).message)!) : (err as Error).message) || 'Google sign-in failed',
         );
       } finally {
         window.clearTimeout(timer);
         setBusy(false);
       }
     },
-    [locale, inviteToken],
+    [locale, inviteToken, accountRole, t],
   );
 
   // GIS callback must always see the latest submitGoogle without re-initializing GIS
@@ -118,7 +132,10 @@ export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
         client_id: GOOGLE_CLIENT_ID,
         callback: (res) => {
           setIdToken(res.credential);
-          submitRef.current(res.credential);
+          const defaultRole = autoCreateEmployeeOnFirstSignIn && accountRole === 'EMPLOYEE'
+            ? 'EMPLOYEE'
+            : undefined;
+          submitRef.current(res.credential, defaultRole);
         },
       });
       buttonRef.current.innerHTML = '';
@@ -150,7 +167,7 @@ export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!GOOGLE_CLIENT_ID) return null;
+  if (!GOOGLE_CLIENT_ID && !showWhenUnavailable) return null;
 
   async function resend() {
     if (!pendingEmail) return;
@@ -187,11 +204,11 @@ export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
     return (
       <div className="google-signin">
         <div className="google-verify-card">
-          <strong>{t('googleChooseRole')}</strong>
+          <strong>{t(accountRole ? accountRole === 'RECRUITER' ? 'authRole.employerRegister' : 'authRole.employeeRegister' : 'googleChooseRole')}</strong>
           <p className="muted" style={{ margin: '0.4rem 0 0.75rem', fontSize: '0.9rem' }}>
             {needsRole.fullName} | {needsRole.email}
           </p>
-          {inviteToken ? null : (
+          {inviteToken || accountRole ? null : (
           <div className="chips" role="radiogroup" style={{ marginBottom: '0.75rem' }}>
             <button
               type="button"
@@ -261,7 +278,7 @@ export function GoogleSignIn({ inviteToken }: { inviteToken?: string } = {}) {
         <button
           type="button"
           className="auth-social-btn auth-social-btn--google"
-          disabled={busy}
+          disabled={busy || !GOOGLE_CLIENT_ID}
           onClick={startGoogle}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">

@@ -1,0 +1,11 @@
+.trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 112px; min-height: 35px; padding: 7px 10px; border: 1px solid #dfe5ef; border-radius: 7px; background: #fff; color: #66748e; font-size: .74rem; font-weight: 400; }
+.trigger:hover { color: #5635e8; background: #faf8ff; }
+.trigger[aria-expanded=true] { border-color: #af9bec; }
+.trigger > span { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.trigger svg { width: 13px; height: 13px; flex-shrink: 0; }
+.trigger:focus-visible { outline: 2px solid #b7a7f5; outline-offset: 2px; }
+.panel { position: fixed; z-index: 100; padding: 6px; overflow-y: auto; border: 1px solid #e6e1f4; border-radius: 10px; background: #fff; box-shadow: 0 12px 40px #18233c26; scrollbar-width: thin; color: #3f4c66; }
+.option { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 8px 10px; border-radius: 6px; font-size: .78rem; line-height: 1.4; cursor: pointer; }
+.option svg { flex-shrink: 0; width: 15px; height: 15px; color: #5635e8; }
+.option[aria-selected=true] { color: #5635e8; }
+.active { background: #f4f0ff; }

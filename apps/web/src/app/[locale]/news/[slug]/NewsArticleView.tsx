@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { UgcText } from '@/components/ui/UgcText';
 import { NEWS_CATEGORY_LABEL_KEY, formatNewsDate } from '@/components/news/NewsCard';
 import type { NewsArticleDetail } from '@/lib/newsSeo';
+import s from '@/components/public/PublicPages.module.css';
 
 export function NewsArticleView({ article: initial }: { article: NewsArticleDetail }) {
   const { t, locale } = useI18n();
@@ -34,10 +35,10 @@ export function NewsArticleView({ article: initial }: { article: NewsArticleDeta
   }
 
   return (
-    <div className="shell">
-      <article className="news-article section">
-        <Link href="/news" className="muted" style={{ fontSize: '0.9rem' }}>
-          ← {t('backToNews')}
+    <div className={s.page}><div className={s.container}>
+      <article className={s.article}>
+        <Link href="/news" className={s.back}>
+          {'\u2190'} {t('public.backInsights')}
         </Link>
 
         <div className="news-card-meta" style={{ margin: '1rem 0 0.6rem' }}>
@@ -45,12 +46,13 @@ export function NewsArticleView({ article: initial }: { article: NewsArticleDeta
           <span className="muted">{formatNewsDate(article.publishedAt, locale)}</span>
         </div>
 
-        <h1 style={{ margin: '0 0 1rem', lineHeight: 1.25 }}>{article.title}</h1>
+        <h1>{article.title}</h1>
+        <p className={s.articleLead}>{article.excerpt}</p>
 
         {article.coverUrl && (
           <figure style={{ margin: '0 0 1.4rem' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="news-article-cover" src={article.coverUrl} alt={article.title} />
+            <img src={article.coverUrl} alt="" />
             {article.coverCredit && (
               <figcaption className="news-cover-credit">{article.coverCredit}</figcaption>
             )}
@@ -68,7 +70,8 @@ export function NewsArticleView({ article: initial }: { article: NewsArticleDeta
           contentLocale={article.contentLocale}
           isMachineTranslated={article.isMachineTranslated}
           preserveLineBreaks
-          className="news-article-body"
+          className={s.articleBody}
+          paragraphs
           translating={translating}
           onTranslate={
             article.canMachineTranslate ? () => void machineTranslate() : undefined
@@ -84,6 +87,6 @@ export function NewsArticleView({ article: initial }: { article: NewsArticleDeta
           </p>
         )}
       </article>
-    </div>
+    </div></div>
   );
 }

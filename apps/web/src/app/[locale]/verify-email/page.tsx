@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ADMIN_URL, api, saveSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { authDestination } from '@/lib/authReturn';
 
 function redirectAfterLogin(role: string) {
   if (role === 'RECRUITER') return '/';
@@ -43,7 +44,7 @@ function VerifyEmailInner() {
         saveSession(session as Parameters<typeof saveSession>[0]);
         setState('success');
         setTimeout(() => {
-          window.location.href = localeHref(redirectAfterLogin(session.user.role));
+          window.location.href = localeHref(authDestination(redirectAfterLogin(session.user.role)));
         }, 1200);
       } catch (err) {
         setState('error');
@@ -65,10 +66,7 @@ function VerifyEmailInner() {
           <>
             <p style={{ color: '#be123c' }}>{message || t('verifyEmailFailed')}</p>
             <p className="muted" style={{ fontSize: '0.9rem' }}>
-              <Link href="/settings" style={{ color: 'var(--accent)' }}>
-                {t('settings')}
-              </Link>{' '}
-              - {t('ui.requestNewVerificationEmail')}
+              {t('public.verificationHelp')}{' '}<Link href="/login?next=%2Fsettings">{t('signIn')}</Link>
             </p>
           </>
         )}

@@ -1,14 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, localeHref } from '@/lib/navigation';
+import { useRouter, localeHref, Link } from '@/lib/navigation';
 import { api, getSession, saveSession, logout, AuthSession } from '@/lib/api';
-import { useEnumLabel, useI18n, Locale } from '@/lib/i18n';
-import { FormAlert, FormField, LabelText, PasswordInput } from '@/components/ui/Field';
+import { useI18n, Locale } from '@/lib/i18n';
+import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
 import { ImageCropUpload } from '@/components/ui/ImageCropUpload';
-import { PreviewableImage } from '@/components/ui/ImagePreview';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
+import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
+import ws from '@/components/employee/Workspace.module.css';
+import st from '@/components/employee/SettingsWorkspace.module.css';
 
 type Section = 'account' | 'preferences' | 'privacy' | 'security';
 
@@ -35,8 +39,8 @@ function passwordStrength(pw: string): { score: number; labelKey: string; color:
 
 export default function SettingsPage() {
   const router = useRouter();
+  const confirm = useConfirm();
   const { t, locale, setLocale } = useI18n();
-  const enumLabel = useEnumLabel();
   const [section, setSection] = useState<Section>('account');
   const [session, setSession] = useState<AuthSession | null>(null);
   const [fullName, setFullName] = useState('');
@@ -60,6 +64,12 @@ export default function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [ownerBlock, setOwnerBlock] = useState(false);
+  const [operationBusy, setOperationBusy] = useState<'password' | 'email' | null>(null);
+  const [savedBulkOptOut, setSavedBulkOptOut] = useState(false);
+  const accountDirty = Boolean(session && (fullName !== session.user.fullName || avatarUrl !== (session.user.avatarUrl || '')));
+  const preferencesDirty = Boolean(session && prefLocale !== (session.user.locale || locale));
+  const privacyDirty = bulkOptedOut !== savedBulkOptOut;
+  const securityDirty = Boolean(currentPassword || newPassword || newEmail || emailChangePassword || deletePassword);
 
   const strength = useMemo(() => passwordStrength(newPassword), [newPassword]);
   const isEmployee = session?.user.role === 'EMPLOYEE';
@@ -67,6 +77,17 @@ export default function SettingsPage() {
   const canVerifyEmail = (isEmployee || isRecruiter) && Boolean(session?.user.email);
   const hasPassword = session?.user.hasPassword !== false;
   const hasEmail = Boolean(session?.user.email);
+
+  useEffect(() => {
+    if (session) window.dispatchEvent(new Event('jt-session-updated'));
+  }, [session]);
+
+  useEffect(() => {
+    if (!accountDirty && !preferencesDirty && !privacyDirty && !securityDirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [accountDirty, preferencesDirty, privacyDirty, securityDirty]);
 
   useEffect(() => {
     const s = getSession();
@@ -78,6 +99,7 @@ export default function SettingsPage() {
     setFullName(s.user.fullName);
     setAvatarUrl(s.user.avatarUrl || '');
     setPrefLocale((s.user.locale as Locale) || locale);
+    setTelegramLinked(Boolean(s.user.telegramLinked));
     api<AuthSession>('/auth/me')
       .then((fresh) => {
         saveSession(fresh);
@@ -89,7 +111,7 @@ export default function SettingsPage() {
       .catch(() => undefined);
     if (s.user.role === 'EMPLOYEE') {
       api<{ optedOut: boolean }>('/bulk-comms/opt-out')
-        .then((r) => setBulkOptedOut(r.optedOut))
+        .then((r) => { setBulkOptedOut(r.optedOut); setSavedBulkOptOut(r.optedOut); })
         .catch(() => undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,7 +129,17 @@ export default function SettingsPage() {
     return () => window.removeEventListener('hashchange', applyHash);
   }, []);
 
-  function goToSection(next: Section) {
+  function resetChanges() {
+    if (session) { setFullName(session.user.fullName); setAvatarUrl(session.user.avatarUrl || ''); setPrefLocale((session.user.locale as Locale) || locale); }
+    setBulkOptedOut(savedBulkOptOut);
+    setCurrentPassword(''); setNewPassword(''); setNewEmail(''); setEmailChangePassword(''); setDeletePassword('');
+  }
+
+  async function goToSection(next: Section) {
+    if (next === section || saving || privacyLoading || operationBusy || telegramBusy || deleteBusy) return;
+    const dirty = section === 'account' ? accountDirty : section === 'preferences' ? preferencesDirty : section === 'privacy' ? privacyDirty : securityDirty;
+    if (dirty && !(await confirm({ title: t('pc.unsaved'), confirmLabel: t('pc.discard'), cancelLabel: t('pc.keepEditing'), tone: 'danger' }))) return;
+    if (dirty) resetChanges();
     setSection(next);
     setMsg(null);
     setErr(null);
@@ -126,6 +158,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ optedOut: bulkOptedOut }),
       });
       setBulkOptedOut(r.optedOut);
+      setSavedBulkOptOut(r.optedOut);
       setMsg(r.optedOut ? t('ui.bulkOptedOutMsg') : t('ui.bulkOptedInMsg'));
     } catch (error) {
       setErr(error instanceof Error ? error.message : t('ui.privacyUpdateFailed'));
@@ -146,6 +179,8 @@ export default function SettingsPage() {
       });
       saveSession(updated);
       setSession(updated);
+      setFullName(updated.user.fullName);
+      setAvatarUrl(updated.user.avatarUrl || '');
       setLocale(prefLocale);
       setMsg(t('ui.profileSaved'));
     } catch (error) {
@@ -157,6 +192,8 @@ export default function SettingsPage() {
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
+    if (operationBusy) return;
+    setOperationBusy('password');
     setPwMsg(null);
     setErr(null);
     try {
@@ -164,17 +201,21 @@ export default function SettingsPage() {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-      if (session.accessToken) saveSession(session);
+      if (session.accessToken) { saveSession(session); setSession(session); }
       setPwMsg(t('ui.passwordUpdated'));
       setCurrentPassword('');
       setNewPassword('');
     } catch (error) {
       setErr(error instanceof Error ? error.message : t('ui.passwordChangeFailed'));
+    } finally {
+      setOperationBusy(null);
     }
   }
 
   async function requestEmailChange(e: React.FormEvent) {
     e.preventDefault();
+    if (operationBusy) return;
+    setOperationBusy('email');
     setPwMsg(null);
     setErr(null);
     try {
@@ -190,6 +231,8 @@ export default function SettingsPage() {
       setEmailChangePassword('');
     } catch (error) {
       setErr(error instanceof Error ? error.message : t('ui.emailChangeFailed'));
+    } finally {
+      setOperationBusy(null);
     }
   }
 
@@ -283,475 +326,37 @@ export default function SettingsPage() {
     }
   }
 
-  if (!session) return null;
+  if (!session) return <section className={ws.root}><WorkspaceLoading /></section>;
 
-  const openBotChip = TELEGRAM_BOT_URL ? (
-    <a className="chip" href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">
-      {t('telegramOpenBot')}
-    </a>
-  ) : null;
+  const openBotChip = TELEGRAM_BOT_URL ? <a className={ws.secondary} href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">{t('telegramOpenBot')}</a> : null;
+  const sectionIcons: Record<Section, string> = { account: 'user', preferences: 'globe', privacy: 'shield', security: 'lock' };
+  const sections: Array<[Section, string]> = [['account', t('account')], ['preferences', t('language')], ...(isEmployee ? [['privacy', t('ui.privacy')] as [Section, string]] : []), ['security', t('security')]];
 
-  return (
-    <div className="shell">
-      {confirmUnlink ? (
-        <ConfirmModal
-          title={t('telegramUnlinkTitle')}
-          message={t('telegramUnlinkMessage')}
-          confirmLabel={t('ui.telegramUnlink')}
-          danger
-          busy={telegramBusy}
-          onCancel={() => {
-            if (!telegramBusy) setConfirmUnlink(false);
-          }}
-          onConfirm={() => void unlinkTelegram()}
-        />
-      ) : null}
-      {confirmDelete ? (
-        <ConfirmModal
-          title={t('ui.deleteAccountTitle')}
-          message={t('ui.deleteAccountHint')}
-          confirmLabel={t('ui.deleteAccount')}
-          danger
-          busy={deleteBusy}
-          requireTypedValue={session.user.email || session.user.fullName}
-          typedLabel={
-            session.user.email ? t('ui.deleteAccountConfirmEmail') : t('ui.deleteAccountConfirmName')
-          }
-          onCancel={() => {
-            if (!deleteBusy) setConfirmDelete(false);
-          }}
-          onConfirm={() => void deleteAccount()}
-        />
-      ) : null}
-      <div className="settings-layout">
-        <aside className="settings-nav">
-          {(
-            [
-              ['account', t('account')],
-              ['preferences', t('language')],
-              ...(isEmployee ? [['privacy', t('ui.privacy')] as [Section, string]] : []),
-              ['security', t('security')],
-            ] as Array<[Section, string]>
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              className={section === k ? 'active' : ''}
-              onClick={() => goToSection(k)}
-            >
-              {label}
-            </button>
-          ))}
-        </aside>
-
-        <section>
-          <div className="settings-hero card">
-            <PreviewableImage
-              src={avatarUrl || null}
-              fallbackSrc={
-                session.user.fullName
-                  ? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(session.user.fullName)}`
-                  : undefined
-              }
-            />
-            <div>
-              <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.5rem' }}>
-                {fullName || session.user.fullName}
-              </h1>
-              <p className="muted" style={{ margin: '0.35rem 0' }}>
-                {session.user.email || t('addEmailTitle')}
-              </p>
-              <span className="badge skill">{enumLabel('role', session.user.role)}</span>
-            </div>
-          </div>
-
-          {err && (
-            <div style={{ marginBottom: '1rem' }}>
-              <FormAlert>{err}</FormAlert>
-            </div>
-          )}
-          {msg && (
-            <div style={{ marginBottom: '1rem' }}>
-              <FormAlert tone="success">{msg}</FormAlert>
-            </div>
-          )}
-          {pwMsg && (
-            <div style={{ marginBottom: '1rem' }}>
-              <FormAlert tone="success">{pwMsg}</FormAlert>
-            </div>
-          )}
-
-          {section === 'account' && (
-            <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('account')}</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
-                {t('updateProfileHint')}
-              </p>
-              {(isEmployee || isRecruiter) && !hasEmail && (
-                <div
-                  style={{
-                    marginBottom: '1.25rem',
-                    padding: '0.85rem 1rem',
-                    borderRadius: 12,
-                    background: 'rgba(245, 158, 11, 0.12)',
-                  }}
-                >
-                  <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>{t('addEmailTitle')}</p>
-                  <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
-                    {t('addEmailHint')}
-                  </p>
-                  <button type="button" onClick={() => setSection('security')}>
-                    {t('addEmailCta')}
-                  </button>
-                </div>
-              )}
-              {canVerifyEmail && (
-                <div
-                  style={{
-                    marginBottom: '1.25rem',
-                    padding: '0.85rem 1rem',
-                    borderRadius: 12,
-                    background: session.user.emailVerified
-                      ? 'rgba(16, 185, 129, 0.08)'
-                      : 'rgba(245, 158, 11, 0.12)',
-                  }}
-                >
-                  <p style={{ margin: '0 0 0.35rem', fontWeight: 600 }}>
-                    {session.user.email} -{' '}
-                    {session.user.emailVerified
-                      ? t('emailVerifiedBadge')
-                      : t('emailUnverifiedBadge')}
-                  </p>
-                  {!session.user.emailVerified && (
-                    <>
-                      <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.9rem' }}>
-                        {t('verifyEmailProfileHint')}
-                      </p>
-                      <button
-                        type="button"
-                        disabled={verifyBusy}
-                        onClick={() => requestEmailVerification()}
-                      >
-                        {verifyBusy ? t('verifyEmailSending') : t('verifyEmailCta')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-              <p className="required-note">{t('requiredFieldsNote')}</p>
-              <form onSubmit={saveAccount} className="form-stack">
-                <FormField label={t('fullName')} required>
-                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} minLength={2} />
-                </FormField>
-                <ImageCropUpload
-                  mode="avatar"
-                  label={t('ui.profilePhoto')}
-                  value={avatarUrl}
-                  uploadPath="/auth/me/avatar"
-                  clearPath="/auth/me/avatar"
-                  onUploaded={(url) => {
-                    setAvatarUrl(url || '');
-                    const s = getSession();
-                    if (s) {
-                      const next = {
-                        ...s,
-                        user: { ...s.user, avatarUrl: url || null },
-                      };
-                      saveSession(next);
-                      setSession(next);
-                    }
-                    setMsg(t('ui.photoUpdated'));
-                  }}
-                />
-                <FormField label={t('avatarUrl')} hint={t('ui.avatarUrlHint')}>
-                  <input
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://..."
-                    type="url"
-                  />
-                </FormField>
-                <button type="submit" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {section === 'preferences' && (
-            <>
-            <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('language')}</h3>
-              <p className="muted" style={{ marginTop: 0 }}>
-                {t('languagePreference')}
-              </p>
-              <p className="required-note">{t('languageApplied')}</p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  saveAccount(e);
-                }}
-                className="form-stack"
-              >
-                <FormField label={t('language')} required>
-                  <select
-                    value={prefLocale}
-                    onChange={(e) => {
-                      const next = e.target.value as Locale;
-                      setPrefLocale(next);
-                      setLocale(next);
-                    }}
-                  >
-                    <option value="uz">O&apos;zbekcha</option>
-                    <option value="ru">Русский</option>
-                    <option value="en">English</option>
-                  </select>
-                </FormField>
-                <button type="submit" disabled={saving}>
-                  {saving ? t('saving') : t('save')}
-                </button>
-              </form>
-            </div>
-            {isEmployee && (
-              <div className="card" style={{ marginTop: '1rem' }}>
-                <h3 style={{ marginTop: 0 }}>{t('ui.telegramAlerts')}</h3>
-                <p className="muted" style={{ marginTop: 0 }}>
-                  {t('ui.telegramAlertsHint')}
-                </p>
-                <p>
-                  <strong>{telegramLinked ? t('ui.telegramLinked') : t('ui.telegramNotLinked')}</strong>
-                </p>
-                <div className="chips">
-                  {!telegramLinked ? (
-                    <button type="button" className="chip" onClick={() => goToSection('security')}>
-                      {t('ui.telegramConnectInSecurity')}
-                    </button>
-                  ) : (
-                    openBotChip
-                  )}
-                  <button
-                    type="button"
-                    className="chip"
-                    disabled={telegramBusy}
-                    onClick={() => void refreshTelegramStatus().catch(() => undefined)}
-                  >
-                    {t('ui.telegramRefresh')}
-                  </button>
-                </div>
-              </div>
-            )}
-            </>
-          )}
-
-          {section === 'privacy' && isEmployee && (
-            <div className="card">
-              <h3 style={{ marginTop: 0 }}>{t('ui.privacy')}</h3>
-              <p className="muted" style={{ marginTop: 0, marginBottom: 0 }}>
-                {t('ui.privacyBulkIntro')}
-              </p>
-              <form onSubmit={savePrivacy} className="form-stack">
-                <label className="settings-choice">
-                  <input
-                    type="checkbox"
-                    checked={bulkOptedOut}
-                    onChange={(e) => setBulkOptedOut(e.target.checked)}
-                  />
-                  <span className="settings-choice-copy">
-                    <strong>{t('ui.optOutBulkTitle')}</strong>
-                    <span className="muted">{t('ui.optOutBulkHint')}</span>
-                  </span>
-                </label>
-                <div className="settings-form-actions">
-                  <button type="submit" disabled={privacyLoading}>
-                    {privacyLoading ? t('saving') : t('save')}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {section === 'security' && (
-            <div className="card">
-              {hasPassword ? (
-                <>
-                  <h3 style={{ marginTop: 0 }}>{t('changePassword')}</h3>
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('ui.passwordRuleHint')}
-                  </p>
-                  <p className="required-note">{t('requiredFieldsNote')}</p>
-                  <form onSubmit={changePassword} className="form-stack">
-                    <label>
-                      <LabelText required>{t('currentPassword')}</LabelText>
-                      <PasswordInput
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        required
-                        aria-required="true"
-                        autoComplete="current-password"
-                      />
-                    </label>
-                    <label>
-                      <LabelText required>{t('newPassword')}</LabelText>
-                      <PasswordInput
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        required
-                        aria-required="true"
-                        minLength={8}
-                        autoComplete="new-password"
-                        aria-describedby={newPassword ? 'pw-strength' : undefined}
-                      />
-                      {newPassword && (
-                        <>
-                          <div className="pw-strength" aria-hidden="true">
-                            <span style={{ width: `${strength.score}%`, background: strength.color }} />
-                          </div>
-                          <span id="pw-strength" className="muted" style={{ fontSize: '0.8rem' }}>
-                            {t('ui.passwordStrength')}: {t(strength.labelKey)}
-                          </span>
-                        </>
-                      )}
-                    </label>
-                    <button type="submit">{t('changePassword')}</button>
-                  </form>
-                </>
-              ) : (
-                <>
-                  <h3 style={{ marginTop: 0 }}>{t('changePassword')}</h3>
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('passwordlessHint')}
-                  </p>
-                </>
-              )}
-
-              <h3 style={{ marginTop: '2rem' }}>{t('telegramConnectTitle')}</h3>
-              {telegramLinked ? (
-                <>
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('telegramConnected')}
-                  </p>
-                  <p className="muted">{t('telegramOpenBotHint')}</p>
-                  <div className="chips">
-                    {openBotChip}
-                    <button
-                      type="button"
-                      className="chip"
-                      disabled={telegramBusy}
-                      onClick={() => setConfirmUnlink(true)}
-                    >
-                      {t('ui.telegramUnlink')}
-                    </button>
-                    <button
-                      type="button"
-                      className="chip"
-                      disabled={telegramBusy}
-                      onClick={() => void refreshTelegramStatus().catch(() => undefined)}
-                    >
-                      {t('ui.telegramRefresh')}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('telegramConnectHint')}
-                  </p>
-                  <TelegramSignIn
-                    mode="connect"
-                    onConnected={() => {
-                      const s = getSession();
-                      if (s) {
-                        setSession(s);
-                        setTelegramLinked(Boolean(s.user.telegramLinked));
-                      }
-                      setMsg(t('telegramConnected'));
-                    }}
-                  />
-                  {!TELEGRAM_BOT ? (
-                    <div className="chips" style={{ marginTop: '0.75rem' }}>
-                      <button
-                        type="button"
-                        className="chip"
-                        disabled={telegramBusy}
-                        onClick={() => void linkTelegram()}
-                      >
-                        {t('ui.telegramLink')}
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              )}
-
-              <h3 style={{ marginTop: '2rem' }}>
-                {hasEmail ? t('ui.changeEmail') : t('addEmailTitle')}
-              </h3>
-              <p className="muted" style={{ marginTop: 0 }}>
-                {hasEmail ? t('ui.changeEmailHint') : t('addEmailHint')}
-              </p>
-              <form onSubmit={requestEmailChange} className="form-stack">
-                <FormField label={hasEmail ? t('ui.newEmail') : t('email')} required>
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-                </FormField>
-                {hasPassword ? (
-                  <label>
-                    <LabelText required>{t('currentPassword')}</LabelText>
-                    <PasswordInput
-                      value={emailChangePassword}
-                      onChange={(e) => setEmailChangePassword(e.target.value)}
-                      required
-                      autoComplete="current-password"
-                    />
-                  </label>
-                ) : null}
-                <button type="submit">
-                  {hasEmail ? t('ui.sendConfirmation') : t('addEmailCta')}
-                </button>
-              </form>
-
-              {session.user.role !== 'SUPER_ADMIN' ? (
-                <>
-                  <h3 style={{ marginTop: '2rem' }}>{t('ui.deleteAccountTitle')}</h3>
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t('ui.deleteAccountHint')}
-                  </p>
-                  {ownerBlock ? (
-                    <p className="muted">
-                      {t('ui.deleteAccountOwnerHint')}{' '}
-                      {isRecruiter ? (
-                        <a href={localeHref('/dashboard/recruiter')}>{t('ui.goToCompanySettings')}</a>
-                      ) : null}
-                    </p>
-                  ) : null}
-                  {hasPassword ? (
-                    <label className="form-stack" style={{ display: 'block', marginBottom: '0.75rem' }}>
-                      <LabelText required>{t('ui.deleteAccountPassword')}</LabelText>
-                      <PasswordInput
-                        value={deletePassword}
-                        onChange={(e) => setDeletePassword(e.target.value)}
-                        autoComplete="current-password"
-                      />
-                    </label>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={deleteBusy || (hasPassword && !deletePassword)}
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    {t('ui.deleteAccount')}
-                  </button>
-                </>
-              ) : null}
-            </div>
-          )}
-        </section>
+  return <section className={ws.root} aria-label={t('settings')}>
+    {confirmUnlink && <ConfirmModal title={t('telegramUnlinkTitle')} message={t('telegramUnlinkMessage')} confirmLabel={t('ui.telegramUnlink')} danger busy={telegramBusy} onCancel={() => { if (!telegramBusy) setConfirmUnlink(false); }} onConfirm={() => void unlinkTelegram()} />}
+    {confirmDelete && <ConfirmModal title={t('ui.deleteAccountTitle')} message={t('ui.deleteAccountHint')} confirmLabel={t('ui.deleteAccount')} danger busy={deleteBusy} requireTypedValue={session.user.email || session.user.fullName} typedLabel={session.user.email ? t('ui.deleteAccountConfirmEmail') : t('ui.deleteAccountConfirmName')} onCancel={() => { if (!deleteBusy) setConfirmDelete(false); }} onConfirm={() => void deleteAccount()} />}
+    <div className={st.layout + (isRecruiter ? ' ' + st.employer : '')}>
+      <nav className={st.nav} aria-label={t('settings')}>{sections.map(([key, label]) => <button type="button" key={key} aria-current={section === key ? 'page' : undefined} onClick={() => void goToSection(key)}><WorkspaceIcon kind={sectionIcons[key]} />{label}</button>)}</nav>
+      <div className={st.content}>
+        {(err || msg || pwMsg) && <div className={st.alerts}>{err && <FormAlert>{err}</FormAlert>}{msg && <FormAlert tone="success">{msg}</FormAlert>}{pwMsg && <FormAlert tone="success">{pwMsg}</FormAlert>}</div>}
+        <div className={st.scroll} key={section}>
+          {section === 'account' && <form id="account-settings-form" className={st.form} onSubmit={saveAccount}><fieldset className={st.fieldset} disabled={saving}>
+            <section className={st.row}><div className={st.label}><h2>{t('ui.profilePhoto')}</h2><p>{t('ew.photoHint')}</p></div><div className={st.control + ' ' + st.photo}><ImageCropUpload mode="avatar" value={avatarUrl} fallbackText={session.user.fullName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('')} uploadPath="/auth/me/avatar" clearPath="/auth/me/avatar" onUploaded={(url) => { setAvatarUrl(url || ''); const current = getSession(); if (current) { const next = { ...current, user: { ...current.user, avatarUrl: url || null } }; saveSession(next); setSession(next); } setMsg(t('ui.photoUpdated')); }} /><details className={st.advancedPhoto}><summary>{t('ew.imageLink')}</summary><input aria-label={t('avatarUrl')} type="url" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} placeholder="https://..." /></details></div></section>
+            <section className={st.row}><div className={st.label}><label htmlFor="settings-full-name">{t('fullName')}</label><p>{t('ew.nameHint')}</p></div><div className={st.control}><input id="settings-full-name" value={fullName} onChange={(event) => setFullName(event.target.value)} minLength={2} maxLength={160} required autoComplete="name" /></div></section>
+            <section className={st.row}><div className={st.label}><h2>{t('ew.signInEmail')}</h2><p>{t('ew.signInEmailHint')}</p></div><div className={st.control}><div className={st.email}><span>{session.user.email || t('addEmailTitle')}</span>{canVerifyEmail && (session.user.emailVerified ? <span className={st.verified}><WorkspaceIcon kind="check" />{t('emailVerifiedBadge')}</span> : <span className={st.unverified}>{t('emailUnverifiedBadge')}</span>)}</div>{canVerifyEmail && !session.user.emailVerified && <button type="button" className={st.link} disabled={verifyBusy} onClick={() => void requestEmailVerification()}>{t(verifyBusy ? 'verifyEmailSending' : 'verifyEmailCta')}</button>}<div><button type="button" className={st.link} onClick={() => void goToSection('security')}>{t('ew.manageSecurity')}<WorkspaceIcon kind="arrow" /></button></div></div></section>
+            {isEmployee && <section className={st.row}><div className={st.label}><h2>{t('ew.careerProfile')}</h2><p>{t('ew.careerProfileHint')}</p></div><div className={st.control}><Link className={ws.secondary} href="/dashboard/employee?tab=profile">{t('ew.openProfile')}<WorkspaceIcon kind="arrow" /></Link></div></section>}
+          </fieldset></form>}
+          {section === 'preferences' && <><form id="language-settings-form" className={st.form} onSubmit={saveAccount}><section className={st.row}><div className={st.label}><label htmlFor="settings-language">{t('language')}</label><p>{t('languagePreference')}</p></div><div className={st.control}><select id="settings-language" value={prefLocale} onChange={(event) => setPrefLocale(event.target.value as Locale)} disabled={saving}><option value="en">English</option><option value="ru">Русский</option><option value="uz">O'zbekcha</option></select></div></section></form>{isEmployee && <section className={st.row}><div className={st.label}><h2>{t('ui.telegramAlerts')}</h2><p>{t('ui.telegramAlertsHint')}</p></div><div className={st.control}><span className={st.status} data-connected={telegramLinked}><WorkspaceIcon kind="telegram" />{t(telegramLinked ? 'ui.telegramLinked' : 'ui.telegramNotLinked')}</span><div className={st.inlineActions}>{telegramLinked ? openBotChip : <button type="button" className={ws.secondary} onClick={() => void goToSection('security')}>{t('ui.telegramConnectInSecurity')}</button>}<button type="button" className={ws.textButton} disabled={telegramBusy} onClick={() => void refreshTelegramStatus().catch((error: Error) => setErr(error.message))}>{t('ui.telegramRefresh')}</button><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')} →</Link></div></div></section>}</>}
+          {section === 'privacy' && isEmployee && <form id="privacy-settings-form" className={st.form} onSubmit={savePrivacy}><section className={st.row}><div className={st.label}><h2>{t('ui.privacy')}</h2><p>{t('ui.privacyBulkIntro')}</p></div><div className={st.control}><label className={st.choice}><input type="checkbox" checked={bulkOptedOut} onChange={(event) => setBulkOptedOut(event.target.checked)} disabled={privacyLoading} /><span><strong>{t('ui.optOutBulkTitle')}</strong><small>{t('ui.optOutBulkHint')}</small></span></label></div></section></form>}
+          {section === 'security' && <>
+            <section className={st.row}><div className={st.label}><h2>{t('changePassword')}</h2><p>{t(hasPassword ? 'ui.passwordRuleHint' : 'passwordlessHint')}</p></div><div className={st.control}>{hasPassword && <form className={st.stack} onSubmit={changePassword}><FormField label={t('currentPassword')} required><PasswordInput value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required autoComplete="current-password" /></FormField><div><FormField label={t('newPassword')} required><PasswordInput value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength={8} maxLength={128} autoComplete="new-password" /></FormField>{newPassword && <><div className={st.strength} aria-hidden="true"><i style={{ width: strength.score + '%', background: strength.color }} /></div><span id="workspace-password-strength" className={st.hint} role="status">{t('ui.passwordStrength')}: {t(strength.labelKey)}</span></>}</div><button type="submit" className={ws.primary} disabled={operationBusy !== null || !currentPassword || newPassword.length < 8}>{t(operationBusy === 'password' ? 'saving' : 'changePassword')}</button></form>}</div></section>
+            <section className={st.row}><div className={st.label}><h2>{t('telegramConnectTitle')}</h2><p>{t(telegramLinked ? 'telegramOpenBotHint' : 'telegramConnectHint')}</p></div><div className={st.control}>{telegramLinked ? <><span className={st.status} data-connected="true"><WorkspaceIcon kind="check" />{t('telegramConnected')}</span><div className={st.inlineActions}>{openBotChip}<button type="button" className={ws.secondary} disabled={telegramBusy} onClick={() => setConfirmUnlink(true)}>{t('ui.telegramUnlink')}</button><button type="button" className={ws.textButton} disabled={telegramBusy} onClick={() => void refreshTelegramStatus().catch((error: Error) => setErr(error.message))}>{t('ui.telegramRefresh')}</button></div></> : <><TelegramSignIn mode="connect" onConnected={() => { const fresh = getSession(); if (fresh) { setSession(fresh); setTelegramLinked(Boolean(fresh.user.telegramLinked)); } setMsg(t('telegramConnected')); }} />{!TELEGRAM_BOT && <button type="button" className={ws.secondary} disabled={telegramBusy} onClick={() => void linkTelegram()}>{t('ui.telegramLink')}</button>}</>}</div></section>
+            <section className={st.row}><div className={st.label}><h2>{t(hasEmail ? 'ui.changeEmail' : 'addEmailTitle')}</h2><p>{t(hasEmail ? 'ui.changeEmailHint' : 'addEmailHint')}</p></div><div className={st.control}><form className={st.stack} onSubmit={requestEmailChange}><FormField label={t(hasEmail ? 'ui.newEmail' : 'email')} required><input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} required autoComplete="email" /></FormField>{hasPassword && <FormField label={t('currentPassword')} required><PasswordInput value={emailChangePassword} onChange={(event) => setEmailChangePassword(event.target.value)} required autoComplete="current-password" /></FormField>}<button type="submit" className={ws.primary} disabled={operationBusy !== null || !newEmail}>{t(operationBusy === 'email' ? 'saving' : hasEmail ? 'ui.sendConfirmation' : 'addEmailCta')}</button></form></div></section>
+            {session.user.role !== 'SUPER_ADMIN' && <section className={st.row + ' ' + st.danger}><div className={st.label}><h2>{t('ui.deleteAccountTitle')}</h2><p>{t('ui.deleteAccountHint')}</p></div><div className={st.control}>{ownerBlock && <p className={st.hint}>{t('ui.deleteAccountOwnerHint')}{isRecruiter && <Link href="/dashboard/recruiter"> {t('ui.goToCompanySettings')}</Link>}</p>}<div className={st.stack}>{hasPassword && <FormField label={t('ui.deleteAccountPassword')} required><PasswordInput value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" /></FormField>}<div><button type="button" className={ws.danger} disabled={deleteBusy || (hasPassword && !deletePassword)} onClick={() => setConfirmDelete(true)}>{t('ui.deleteAccount')}</button></div></div></div></section>}
+          </>}
+        </div>
+        {(section === 'account' || section === 'preferences' || section === 'privacy') && <footer className={st.actions}><button type="button" className={ws.secondary} disabled={saving || privacyLoading} onClick={resetChanges}>{t('cancel')}</button><button type="submit" form={section === 'account' ? 'account-settings-form' : section === 'privacy' ? 'privacy-settings-form' : 'language-settings-form'} className={ws.primary} disabled={saving || privacyLoading || !(section === 'account' ? accountDirty : section === 'privacy' ? privacyDirty : preferencesDirty)}>{t(saving || privacyLoading ? 'saving' : 'ew.saveChanges')}</button></footer>}
       </div>
     </div>
-  );
+  </section>;
 }

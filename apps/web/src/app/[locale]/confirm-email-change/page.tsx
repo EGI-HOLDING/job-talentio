@@ -52,8 +52,8 @@ function ConfirmEmailChangeInner() {
         {state === 'error' && (
           <>
             <p style={{ color: '#be123c' }}>{message}</p>
-            <Link href="/settings" style={{ color: 'var(--accent)' }}>
-              {t('ui.backToSettings')}
+            <Link href="/login?next=%2Fsettings" style={{ color: 'var(--accent)' }}>
+              {t('signIn')}
             </Link>
           </>
         )}

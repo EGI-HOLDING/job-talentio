@@ -95,7 +95,7 @@ export class AuthController {
   @Post('login')
   login(@Body() body: unknown) {
     const data = parseDto(loginSchema, body);
-    return this.auth.login(data.email, data.password);
+    return this.auth.login(data.email, data.password, data.expectedRole);
   }
 
   @Post('dev-login')
