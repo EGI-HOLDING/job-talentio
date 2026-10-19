@@ -79,7 +79,7 @@ export function ForYouJobsSection() {
     <ExploreSection
       title={t('home.forYou')}
       subtitle={t('home.forYouSubtitle')}
-      viewAllHref="/jobs?sort=match"
+      viewAllHref="/jobs?mode=for-you&sort=match"
       viewAllLabel={t('viewAll')}
       bare
     >
