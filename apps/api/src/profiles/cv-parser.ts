@@ -156,17 +156,81 @@ export function extractPhone(text: string): string | undefined {
   }
 }
 
-function extractSkills(text: string, knownSkills: Array<{ name: string; slug: string }>): string[] {
-  const lower = text.toLowerCase();
+type CvSection = 'experience' | 'education' | 'skills' | 'summary' | 'languages';
+
+/** Heading at the start of a line. The rest of the line, after a colon, is section content. */
+const SECTION_RES: Array<{ kind: CvSection; re: RegExp }> = [
+  {
+    kind: 'experience',
+    re: /^(?:work\s+experience|professional\s+experience|employment(?:\s+history)?|work\s+history|experience|опыт(?:\s+работы)?|ish\s+tajriba(?:si)?|mehnat\s+faoliyati)\b/iu,
+  },
+  {
+    kind: 'education',
+    re: /^(?:academic(?:\s+background)?|education|образование|ta['’ʻ`]?lim)\b/iu,
+  },
+  {
+    kind: 'skills',
+    re: /^(?:technical\s+skills|key\s+skills|skills|навыки|ko['’ʻ`]?nikmalar?)\b/iu,
+  },
+  {
+    kind: 'languages',
+    re: /^(?:languages|языки|tillar)\b/iu,
+  },
+  {
+    kind: 'summary',
+    re: /^(?:professional\s+summary|summary|about\s+me|objective|о\s+себе|обо\s+мне|men\s+haqimda|maqsad)\b/iu,
+  },
+];
+
+function matchSectionHeading(line: string): { kind: CvSection; rest: string } | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length > 80) return null;
+  for (const { kind, re } of SECTION_RES) {
+    if (!re.test(trimmed)) continue;
+    const rest = trimmed.replace(re, '').replace(/^[\s:–—-]+/, '').trim();
+    return { kind, rest };
+  }
+  return null;
+}
+
+function splitCvSections(text: string): Partial<Record<CvSection, string>> {
+  const buckets: Partial<Record<CvSection, string[]>> = {};
+  let current: CvSection | null = null;
+  for (const raw of text.split(/\n/)) {
+    const heading = matchSectionHeading(raw);
+    if (heading) {
+      current = heading.kind;
+      if (heading.rest) (buckets[current] ??= []).push(heading.rest);
+      continue;
+    }
+    if (current) (buckets[current] ??= []).push(raw);
+  }
+  const out: Partial<Record<CvSection, string>> = {};
+  for (const kind of Object.keys(buckets) as CvSection[]) {
+    const body = (buckets[kind] || []).join('\n').trim();
+    if (body) out[kind] = body;
+  }
+  return out;
+}
+
+function skillMentioned(haystack: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`${BOUND_L}${escaped}${BOUND_R}`, 'iu');
+  return re.test(haystack);
+}
+
+function extractSkills(
+  text: string,
+  knownSkills: Array<{ name: string; slug: string }>,
+  allowShort: boolean,
+): string[] {
   const found: string[] = [];
   for (const s of knownSkills) {
-    const name = s.name.toLowerCase();
+    const name = s.name.trim();
     if (name.length < 2) continue;
-    // word-ish boundary: avoid matching short substrings inside other words when name is short
-    const re = new RegExp(`(?:^|[^a-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[^a-z0-9]|$)`, 'i');
-    if (re.test(lower) || lower.includes(name)) {
-      found.push(s.name);
-    }
+    // Short tokens (Go, R, SQL) are only trusted inside a skills section.
+    if (!allowShort && name.length < 4) continue;
+    if (skillMentioned(text, name)) found.push(s.name);
   }
   return Array.from(new Set(found)).slice(0, 40);
 }
@@ -241,7 +305,7 @@ function extractExperiences(text: string): ParsedExperience[] {
 
   const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
   const chunks =
-    lines.length > 3
+    lines.length > 1
       ? lines
       : text.split(/(?<=[.!?])\s+|\s{2,}|[•●▪]/).map((l) => l.trim()).filter((l) => l.length > 3);
 
@@ -261,30 +325,49 @@ function extractExperiences(text: string): ParsedExperience[] {
     const isCurrent = isCurrentEnd(endRaw);
     const endDate = isCurrent ? null : toIsoDate(endRaw, dm[3]?.trim());
 
-    let title = prev;
+    let title = '';
     let companyName = '';
 
+    const beforeDate = line
+      .slice(0, dm.index)
+      .replace(/[|,\-–—]\s*$/u, '')
+      .trim();
     const atMatch = prev.match(
       /^(.{3,80}?)\s+(?:at|@|\||–|-|,|в|в\s+компании)\s+(.{2,80})$/iu,
     );
-    if (atMatch) {
+    const usable = (value: string) =>
+      value.length >= 2 &&
+      !isCvBulletLine(value) &&
+      !matchSectionHeading(value) &&
+      !eduHint.test(value);
+
+    if (atMatch && usable(atMatch[1]) && usable(atMatch[2])) {
       title = atMatch[1].trim();
       companyName = atMatch[2].trim();
-    } else if (
-      next &&
-      !isCvBulletLine(next) &&
-      isCvTitleLikeHeading(next) &&
-      !eduHint.test(next)
-    ) {
-      companyName = next;
+    } else if (beforeDate && usable(beforeDate)) {
+      companyName = beforeDate;
+      if (usable(prev) && isCvTitleLikeHeading(prev)) title = prev;
+      else if (usable(next) && isCvTitleLikeHeading(next)) title = next;
+    } else {
+      if (usable(prev) && isCvTitleLikeHeading(prev)) title = prev;
+      if (
+        next &&
+        usable(next) &&
+        isCvTitleLikeHeading(next) &&
+        next !== title
+      ) {
+        companyName = next;
+      }
     }
 
-    if (!title || title.length < 2) title = 'Role';
-    if (!companyName) companyName = 'Company';
+    title = title.trim();
+    companyName = companyName.trim();
+    if (!title && !companyName) continue;
 
     const descParts: string[] = [];
     let j = i + 1;
     if (companyName && chunks[j] === companyName) j += 1;
+    if (title && chunks[j] === title) j += 1;
     while (j < chunks.length) {
       const block = chunks[j];
       dateRe.lastIndex = 0;
@@ -314,7 +397,7 @@ function extractEducations(text: string): ParsedEducation[] {
   );
   const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
   const chunks =
-    lines.length > 3
+    lines.length > 1
       ? lines
       : text.split(/(?<=[.!?])\s+|\s{2,}|[•●▪]/).map((l) => l.trim()).filter((l) => l.length > 3);
 
@@ -404,16 +487,18 @@ export function parseCvText(
 ): ParsedCvData {
   const text = stripNullBytes(rawText).replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').trim();
   const collapsed = rejoinWrappedCvLines(text).replace(/\n{3,}/g, '\n\n');
+  const sections = splitCvSections(collapsed);
+  const skillText = sections.skills ?? collapsed;
 
   return stripNullBytesDeep({
     email: extractEmail(collapsed),
     phone: extractPhone(collapsed),
     headline: extractHeadline(collapsed),
-    summary: extractSummary(collapsed),
-    skillNames: extractSkills(collapsed, knownSkills),
-    experiences: extractExperiences(collapsed),
-    educations: extractEducations(collapsed),
-    languages: extractLanguages(collapsed),
+    summary: extractSummary(sections.summary ?? collapsed),
+    skillNames: extractSkills(skillText, knownSkills, Boolean(sections.skills)),
+    experiences: extractExperiences(sections.experience ?? collapsed),
+    educations: extractEducations(sections.education ?? collapsed),
+    languages: extractLanguages(sections.languages ?? collapsed),
     textPreview: collapsed.replace(/\s+/g, ' ').trim().slice(0, 2000),
   });
 }
