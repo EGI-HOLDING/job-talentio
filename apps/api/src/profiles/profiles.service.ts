@@ -21,6 +21,12 @@ import {
   type ResumeImportInput,
 } from '@job-talentio/shared';
 import { LanguageLevel, Prisma } from '@prisma/client';
+import {
+  educationImportKey,
+  experienceImportKey,
+  pickFilledProfileFields,
+  resumeStartDate,
+} from './cv-import-merge';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CompaniesService } from '../companies/companies.service';
@@ -48,12 +54,6 @@ import { PresenceService } from '../presence/presence.service';
 const resumeTargetTitleInclude = {
   targetJobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, slug: true } },
 } as const;
-
-function parseResumeDate(value?: string | null): Date | null {
-  if (!value?.trim()) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
 
 /** Contact reveals allowed per recruiter per hour (anti bulk harvesting). */
 const REVEAL_LIMIT_PER_HOUR = 30;
@@ -1286,12 +1286,23 @@ export class ProfilesService {
     const headline = draft.headline?.trim();
     const summary = draft.summary?.trim();
     const rawPhone = draft.phone?.trim();
+    const replaceExisting = Boolean(draft.replaceExisting);
+
+    const kept = pickFilledProfileFields(
+      {
+        headline: profile.headline ?? '',
+        summary: profile.summary ?? '',
+        phone: profile.phone ?? '',
+      },
+      { headline, summary, phone: rawPhone },
+      replaceExisting,
+    );
 
     const profilePatch: Record<string, unknown> = {};
-    if (headline) profilePatch.headline = headline;
-    if (summary) profilePatch.summary = summary;
-    if (rawPhone) {
-      const phone = normalizePhone(rawPhone);
+    if (kept.headline) profilePatch.headline = kept.headline;
+    if (kept.summary) profilePatch.summary = kept.summary;
+    if (kept.phone) {
+      const phone = normalizePhone(kept.phone);
       const taken = await this.prisma.employeeProfile.findFirst({
         where: { phone, NOT: { id: profile.id } },
         select: { id: true },
@@ -1317,8 +1328,19 @@ export class ProfilesService {
       educations: 0,
       languages: 0,
       skippedSkills: 0,
-      skippedPhoneTaken: Boolean(rawPhone && !profilePatch.phone),
+      skippedPhoneTaken: Boolean(kept.phone && !profilePatch.phone),
     };
+
+    const seenExperiences = new Set(
+      (profile.experiences || []).map((row) =>
+        experienceImportKey(row.title, row.companyName, row.startDate),
+      ),
+    );
+    const seenEducations = new Set(
+      (profile.educations || []).map((row) =>
+        educationImportKey(row.school, row.degree, row.startDate),
+      ),
+    );
 
     for (const name of draft.skills || []) {
       const trimmed = name.trim();
@@ -1343,14 +1365,19 @@ export class ProfilesService {
 
     for (const exp of draft.experiences || []) {
       if (!exp.title.trim() || !exp.companyName.trim()) continue;
+      const startDate = resumeStartDate(exp.startDate);
+      if (!startDate) continue;
+      const key = experienceImportKey(exp.title, exp.companyName, exp.startDate);
+      if (seenExperiences.has(key)) continue;
+      seenExperiences.add(key);
       await this.prisma.workExperience.create({
         data: {
           profileId: profile.id,
           title: exp.title.trim(),
           companyName: exp.companyName.trim(),
           description: exp.description?.trim() || undefined,
-          startDate: parseResumeDate(exp.startDate) ?? new Date(),
-          endDate: parseResumeDate(exp.endDate),
+          startDate,
+          endDate: resumeStartDate(exp.endDate),
           isCurrent: Boolean(exp.isCurrent),
         },
       });
@@ -1359,14 +1386,17 @@ export class ProfilesService {
 
     for (const edu of draft.educations || []) {
       if (!edu.school.trim()) continue;
+      const key = educationImportKey(edu.school, edu.degree, edu.startDate);
+      if (seenEducations.has(key)) continue;
+      seenEducations.add(key);
       await this.prisma.education.create({
         data: {
           profileId: profile.id,
           school: edu.school.trim(),
           degree: edu.degree,
           field: edu.field?.trim() || undefined,
-          startDate: parseResumeDate(edu.startDate),
-          endDate: parseResumeDate(edu.endDate),
+          startDate: resumeStartDate(edu.startDate),
+          endDate: resumeStartDate(edu.endDate),
         },
       });
       imported.educations += 1;

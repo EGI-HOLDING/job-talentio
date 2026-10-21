@@ -502,6 +502,8 @@ export const resumeImportLanguageSchema = z.object({
 
 /** Reviewed CV draft. Omitted headline / summary / phone are not imported. */
 export const resumeImportSchema = z.object({
+  /** When true, a non-empty draft may replace headline, summary, and phone. */
+  replaceExisting: z.boolean().optional().default(false),
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),
   phone: z.string().max(40).optional(),

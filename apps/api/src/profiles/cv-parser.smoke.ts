@@ -128,5 +128,27 @@ assert(
 );
 const second = wrapped.experiences[1];
 assert(/IT Support Engineer/i.test(second.title), `WRAP: second title got ${second.title}`);
+assert(second.companyName !== 'Company', 'WRAP: missing company must stay empty');
+assert(!wrapped.experiences.some((e) => e.title === 'Role' || e.companyName === 'Company'), 'WRAP: no invented role labels');
+
+const shortSkill = parseCvText(
+  `Jane Doe\nExperience\nEngineer at Google\nJan 2020 - Present\nSkills: Python`,
+  [
+    { name: 'Go', slug: 'go' },
+    { name: 'Python', slug: 'python' },
+  ],
+);
+assert(!shortSkill.skillNames.includes('Go'), `Go must not match inside Google: ${shortSkill.skillNames.join(',')}`);
+assert(shortSkill.skillNames.includes('Python'), 'Python in the skills section should match');
+
+const companyFirst = parseCvText(
+  `Experience\nPT Contoh Teknologi | Jan 2022 - Present\nSoftware Engineer\n- Built internal APIs`,
+  skills,
+);
+assert(companyFirst.experiences.length === 1, `company-first: expected 1 role, got ${companyFirst.experiences.length}`);
+assert(/Software Engineer/i.test(companyFirst.experiences[0].title), `company-first title: ${companyFirst.experiences[0].title}`);
+assert(/PT Contoh/i.test(companyFirst.experiences[0].companyName), `company-first company: ${companyFirst.experiences[0].companyName}`);
+assert(companyFirst.experiences[0].isCurrent === true, 'company-first should be current');
+assert(companyFirst.experiences[0].startDate === '2022-01-01', `company-first start: ${companyFirst.experiences[0].startDate}`);
 
 console.log('api: cv-parser RU/UZ/EN smoke ok');
