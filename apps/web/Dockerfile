@@ -28,9 +28,10 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
-COPY --from=build /app/apps/web/public ./apps/web/public
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
+# After standalone so the image copy cannot replace this directory.
+COPY --from=build /app/apps/web/public ./apps/web/public
 
 WORKDIR /app/apps/web
 EXPOSE 3000
