@@ -1,7 +1,7 @@
 /* Job Talentio service worker: app shell offline fallback + static asset cache.
  * Pages and API responses are never cached; only Next static chunks, icons and
  * the offline page are. Bump CACHE when the offline page or icons change. */
-const CACHE = 'jt-static-v1';
+const CACHE = 'jt-static-v2';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest'];
 
@@ -36,6 +36,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Optimized and public images must hit the network. A cached HTML 404
+  // would be refused by Chrome as an image.
+  if (url.pathname.startsWith('/images/') || url.pathname.startsWith('/_next/image')) {
+    return;
+  }
 
   if (request.mode === 'navigate') {
     // Network first; the offline page only when the network is unreachable.
