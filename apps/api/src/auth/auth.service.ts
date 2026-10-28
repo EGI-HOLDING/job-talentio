@@ -16,7 +16,7 @@ import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
 import { StorageService } from '../storage/storage.service';
 import { escapeHtml, slugify } from '../common/utils';
-import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
+import { normalizeEmail, sha256 } from '../common/dedupe';
 import { Prisma, UserRole } from '@prisma/client';
 import { CompaniesService } from '../companies/companies.service';
 import { UserErasureService } from '../users/user-erasure.service';
@@ -108,24 +108,6 @@ export class AuthService {
           'An account with this email (or a Gmail alias of it) already exists',
         );
       }
-    }
-  }
-
-  private async assertCompanyNameAvailable(name: string) {
-    const normalized = normalizeCompanyName(name);
-    if (!normalized || normalized.length < 2) {
-      throw new BadRequestException('Company name is too short');
-    }
-    const companies = await this.prisma.company.findMany({
-      where: { isBanned: false },
-      select: { id: true, name: true },
-      take: 5000,
-    });
-    const dupe = companies.find((c) => normalizeCompanyName(c.name) === normalized);
-    if (dupe) {
-      throw new ConflictException(
-        `Company name is already taken ("${dupe.name}"). Join that company or choose a distinct name.`,
-      );
     }
   }
 
@@ -347,7 +329,6 @@ export class AuthService {
     fullName: string;
     role: 'EMPLOYEE' | 'RECRUITER';
     locale?: string;
-    companyName?: string;
     inviteToken?: string;
   }) {
     const email = input.email.trim().toLowerCase();
@@ -358,11 +339,6 @@ export class AuthService {
 
     const inviteToken = input.inviteToken?.trim();
     const role: UserRole = inviteToken ? 'RECRUITER' : input.role;
-
-    if (role === 'RECRUITER' && !inviteToken) {
-      const name = input.companyName?.trim() || `${fullName}'s Company`;
-      await this.assertCompanyNameAvailable(name);
-    }
 
     const passwordHash = await bcrypt.hash(input.password, 10);
 
@@ -385,18 +361,6 @@ export class AuthService {
 
       if (role === 'RECRUITER' && inviteToken) {
         await this.companies.consumeInvite(tx, inviteToken, email, created.id);
-      } else if (role === 'RECRUITER') {
-        const name = input.companyName?.trim() || `${fullName}'s Company`;
-        let slug = slugify(name) || `company-${Date.now()}`;
-        const slugExists = await tx.company.findUnique({ where: { slug } });
-        if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
-
-        const company = await tx.company.create({
-          data: { name, slug },
-        });
-        await tx.companyMember.create({
-          data: { companyId: company.id, userId: created.id, role: 'OWNER' },
-        });
       }
 
       return created;
@@ -695,7 +659,6 @@ export class AuthService {
     idToken: string;
     role?: 'EMPLOYEE' | 'RECRUITER';
     expectedRole?: 'EMPLOYEE' | 'RECRUITER';
-    companyName?: string;
     locale?: string;
     inviteToken?: string;
   }) {
@@ -764,23 +727,9 @@ export class AuthService {
       return this.tokenFor(created.id);
     }
 
-    // First Google sign-in: the frontend must supply a role (and company for recruiters)
-    if (input.role) this.assertLoginRole(input.role, input.expectedRole);
-    if (!input.role) {
-      return {
-        requiresRegistration: true as const,
-        email: google.email,
-        fullName: google.fullName,
-      };
-    }
-
-    if (input.role === 'RECRUITER') {
-      const name = input.companyName?.trim() ?? '';
-      if (name.length < 2) {
-        throw new BadRequestException('Company name is required for recruiter accounts');
-      }
-      await this.assertCompanyNameAvailable(name);
-    }
+    // New accounts collect company details in onboarding after authentication.
+    const role = input.role ?? input.expectedRole ?? 'EMPLOYEE';
+    this.assertLoginRole(role, input.expectedRole);
 
     const avatarUrl = await this.googleAvatarForNewUser(google.avatarUrl);
     const created = await this.prisma.$transaction(async (tx) => {
@@ -790,25 +739,14 @@ export class AuthService {
           googleId: google.googleId,
           fullName: google.fullName,
           avatarUrl,
-          role: input.role as UserRole,
+          role: role as UserRole,
           locale: input.locale ?? 'uz',
           emailVerified: googleMailboxVerified,
         },
       });
 
-      if (input.role === 'EMPLOYEE') {
+      if (role === 'EMPLOYEE') {
         await tx.employeeProfile.create({ data: { userId: newUser.id } });
-      }
-
-      if (input.role === 'RECRUITER') {
-        const name = input.companyName!.trim();
-        let slug = slugify(name) || `company-${Date.now()}`;
-        const slugExists = await tx.company.findUnique({ where: { slug } });
-        if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
-        const company = await tx.company.create({ data: { name, slug } });
-        await tx.companyMember.create({
-          data: { companyId: company.id, userId: newUser.id, role: 'OWNER' },
-        });
       }
 
       return newUser;
@@ -1005,7 +943,6 @@ export class AuthService {
     email?: string;
     role?: 'EMPLOYEE' | 'RECRUITER';
     expectedRole?: 'EMPLOYEE' | 'RECRUITER';
-    companyName?: string;
     locale?: string;
     inviteToken?: string;
   }) {
@@ -1029,14 +966,8 @@ export class AuthService {
       return this.tokenFor(user.id, true, joinedCompanyId);
     }
 
-    if (input.role && !inviteToken) this.assertLoginRole(input.role, input.expectedRole);
-    if (!input.role) {
-      return {
-        requiresRegistration: true as const,
-        fullName: tg.fullName,
-        username: tg.username ?? null,
-      };
-    }
+    const role = input.role ?? input.expectedRole ?? 'EMPLOYEE';
+    if (!inviteToken) this.assertLoginRole(role, input.expectedRole);
 
     const email = input.email?.trim().toLowerCase() || null;
     if (inviteToken && !email) {
@@ -1071,14 +1002,6 @@ export class AuthService {
       return this.tokenFor(created.id);
     }
 
-    if (input.role === 'RECRUITER') {
-      const name = input.companyName?.trim() ?? '';
-      if (name.length < 2) {
-        throw new BadRequestException('Company name is required for recruiter accounts');
-      }
-      await this.assertCompanyNameAvailable(name);
-    }
-
     if (email) await this.assertEmailAvailable(email);
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -1088,25 +1011,14 @@ export class AuthService {
           telegramId: tg.telegramId,
           fullName: tg.fullName,
           avatarUrl: tg.avatarUrl,
-          role: input.role as UserRole,
+          role: role as UserRole,
           locale: input.locale ?? 'uz',
           emailVerified: telegramTypedEmailVerified(),
         },
       });
 
-      if (input.role === 'EMPLOYEE') {
+      if (role === 'EMPLOYEE') {
         await tx.employeeProfile.create({ data: { userId: newUser.id } });
-      }
-
-      if (input.role === 'RECRUITER') {
-        const name = input.companyName!.trim();
-        let slug = slugify(name) || `company-${Date.now()}`;
-        const slugExists = await tx.company.findUnique({ where: { slug } });
-        if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
-        const company = await tx.company.create({ data: { name, slug } });
-        await tx.companyMember.create({
-          data: { companyId: company.id, userId: newUser.id, role: 'OWNER' },
-        });
       }
 
       return newUser;

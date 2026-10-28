@@ -643,8 +643,6 @@ export const core = {
     ru: 'Ссылка приглашения недействительна или устарела. Зарегистрируйтесь обычным способом.',
     en: 'This invitation link is invalid or expired. You can still register as usual.',
   },
-  imCandidate: { uz: 'Men nomzodman', ru: 'Я кандидат', en: "I'm a candidate" },
-  imHiring: { uz: 'Men yollayman', ru: 'Я нанимаю', en: "I'm hiring" },
   companyName: { uz: 'Kompaniya nomi', ru: 'Название компании', en: 'Company name' },
   orContinueWith: { uz: 'yoki davom eting', ru: 'или продолжить с', en: 'or continue with' },
   googleContinue: {
@@ -653,11 +651,6 @@ export const core = {
     en: 'Continue with Google',
   },
   continueLabel: { uz: 'Davom etish', ru: 'Продолжить', en: 'Continue' },
-  googleChooseRole: {
-    uz: 'Hisob turini tanlang',
-    ru: 'Выберите тип аккаунта',
-    en: 'Choose your account type',
-  },
   telegramSignInFailed: {
     uz: 'Telegram orqali kirib bo‘lmadi',
     ru: 'Не удалось войти через Telegram',
@@ -1033,11 +1026,7 @@ export const core = {
     ru: 'Создание аккаунта...',
     en: 'Creating account...',
   },
-  companyNameRequired: {
-    uz: 'Rekruter uchun kompaniya nomi majburiy',
-    ru: 'Название компании обязательно для рекрутера',
-    en: 'Company name is required for recruiter accounts',
-  },
+
   authFillRequired: {
     uz: 'Barcha majburiy maydonlarni to‘ldiring',
     ru: 'Заполните все обязательные поля',

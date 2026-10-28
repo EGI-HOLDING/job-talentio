@@ -11,7 +11,8 @@ export class RecruiterOnboardingController {
   constructor(private onboarding: RecruiterOnboardingService) {}
   @Get() state(@CurrentUser() user: AuthUser) { return this.onboarding.state(user); }
   @Patch() save(@CurrentUser() user: AuthUser, @Body() body: unknown) {
-    return this.onboarding.save(user, parseDto(z.object({companyId: z.string().min(1).max(100),
+    return this.onboarding.save(user, parseDto(z.object({companyId: z.string().min(1).max(100).nullable().optional(),
+      locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
       jobId: z.string().min(1).max(100).nullable().optional(), step: z.number().int().min(1).max(3),
       preferredPackage: z.enum(['FREE', 'STANDARD', 'PREMIUM']).optional(),
       companyDraft: z.object({name: z.string().max(160), description: z.string().max(5000), website: z.string().max(500),

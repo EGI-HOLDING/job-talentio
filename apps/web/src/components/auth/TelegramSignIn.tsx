@@ -56,16 +56,14 @@ function widgetFields(user: TelegramUser) {
 
 export function TelegramSignIn({
   inviteToken,
-  accountRole,
+  accountRole = 'EMPLOYEE',
   showWhenUnavailable = false,
-  autoCreateEmployeeOnFirstSignIn = false,
   mode = 'login',
   onConnected,
 }: {
   inviteToken?: string;
   accountRole?: AuthRole;
   showWhenUnavailable?: boolean;
-  autoCreateEmployeeOnFirstSignIn?: boolean;
   mode?: 'login' | 'connect';
   onConnected?: () => void;
 } = {}) {
@@ -75,11 +73,9 @@ export function TelegramSignIn({
   const [provider, setProvider] = useState<'loading' | 'ready' | 'unavailable' | 'failed'>('loading');
   const [providerRetry, setProviderRetry] = useState(0);
   const [widgetUser, setWidgetUser] = useState<TelegramUser | null>(null);
-  const [needsRole, setNeedsRole] = useState<{ fullName: string; username: string | null } | null>(
+  const [inviteIdentity, setInviteIdentity] = useState<{ fullName: string; username: string | null } | null>(
     null,
   );
-  const [role, setRole] = useState<AuthRole>(accountRole || 'EMPLOYEE');
-  const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -95,7 +91,7 @@ export function TelegramSignIn({
   const submitTelegram = useCallback(
     async (
       user: TelegramUser,
-      extras?: { role?: 'EMPLOYEE' | 'RECRUITER'; company?: string; email?: string },
+      extras?: { role?: 'EMPLOYEE' | 'RECRUITER'; email?: string },
     ) => {
       setBusy(true);
       setError('');
@@ -123,15 +119,13 @@ export function TelegramSignIn({
             ...widgetFields(user),
             role: extras?.role,
             expectedRole: accountRole,
-            companyName:
-              extras?.role === 'RECRUITER' && !inviteToken ? extras.company : undefined,
             email: extras?.email?.trim() || undefined,
             locale,
             inviteToken: inviteToken || undefined,
           }),
         });
         if ('requiresRegistration' in res) {
-          setNeedsRole({ fullName: res.fullName, username: res.username });
+          setInviteIdentity({ fullName: res.fullName, username: res.username });
           return;
         }
         const mismatch = accountRole && roleMismatchKey(res.user.role, accountRole);
@@ -183,7 +177,7 @@ export function TelegramSignIn({
   const startTelegramAuth = useCallback(() => {
     if (!botId || busy) return;
     setError('');
-    setNeedsRole(null);
+    setInviteIdentity(null);
     const auth = window.Telegram?.Login?.auth;
     if (!auth) {
       setError(t('telegramSignInFailed'));
@@ -201,9 +195,7 @@ export function TelegramSignIn({
         if (!aliveRef.current) return;
         if (user && typeof user === 'object' && user.hash) {
           setWidgetUser(user);
-          const defaultRole = autoCreateEmployeeOnFirstSignIn && accountRole === 'EMPLOYEE'
-            ? { role: 'EMPLOYEE' as const }
-            : undefined;
+          const defaultRole = accountRole ? { role: accountRole } : undefined;
           void submitRef.current(user, defaultRole);
         }
       });
@@ -213,18 +205,18 @@ export function TelegramSignIn({
     if (!popup) {
       setError(t('telegramPopupBlocked'));
     }
-  }, [botId, busy, locale, t, autoCreateEmployeeOnFirstSignIn, accountRole]);
+  }, [botId, busy, locale, t, accountRole]);
 
   if (provider === 'unavailable' && !showWhenUnavailable) return null;
 
-  if (needsRole && widgetUser && mode === 'login') {
+  if (inviteIdentity && widgetUser && inviteToken && mode === 'login') {
     return (
       <div className="google-signin">
         <div className="google-verify-card">
-          <strong>{t(accountRole ? accountRole === 'RECRUITER' ? 'authRole.employerRegister' : 'authRole.employeeRegister' : 'googleChooseRole')}</strong>
+          <strong>{t('inviteJoinTitle')}</strong>
           <p className="muted" style={{ margin: '0.4rem 0 0.75rem', fontSize: '0.9rem' }}>
-            {needsRole.fullName}
-            {needsRole.username ? ` (@${needsRole.username})` : ''}
+            {inviteIdentity.fullName}
+            {inviteIdentity.username ? ` (@${inviteIdentity.username})` : ''}
           </p>
           {inviteToken ? (
             <FormField label={t('email')} required>
@@ -241,50 +233,16 @@ export function TelegramSignIn({
               {t('telegramEmailLaterHint')}
             </p>
           )}
-          {inviteToken || accountRole ? null : (
-            <div className="chips" role="radiogroup" style={{ margin: '0.75rem 0' }}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={role === 'EMPLOYEE'}
-                className={`chip ${role === 'EMPLOYEE' ? 'active' : ''}`}
-                onClick={() => setRole('EMPLOYEE')}
-              >
-                {t('imCandidate')}
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={role === 'RECRUITER'}
-                className={`chip ${role === 'RECRUITER' ? 'active' : ''}`}
-                onClick={() => setRole('RECRUITER')}
-              >
-                {t('imHiring')}
-              </button>
-            </div>
-          )}
-          {role === 'RECRUITER' && !inviteToken && (
-            <FormField label={t('companyName')} required>
-              <input
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                minLength={2}
-                required
-              />
-            </FormField>
-          )}
           <FormAlert>{error}</FormAlert>
           <button
             type="button"
             disabled={
               busy ||
-              (Boolean(inviteToken) && !email.trim()) ||
-              (!inviteToken && role === 'RECRUITER' && companyName.trim().length < 2)
+              (Boolean(inviteToken) && !email.trim())
             }
             onClick={() =>
               submitTelegram(widgetUser, {
-                role: inviteToken ? 'RECRUITER' : role,
-                company: companyName.trim(),
+                role: accountRole,
                 email: email.trim() || undefined,
               })
             }

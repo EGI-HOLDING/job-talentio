@@ -430,13 +430,13 @@ export class TelegramService implements OnModuleInit {
       const created = await this.prisma.user.create({
         data: {
           fullName,
-          role: 'EMPLOYEE',
+          role: pending?.role === 'RECRUITER' ? 'RECRUITER' : 'EMPLOYEE',
           locale: pending?.locale ?? (from.language_code && ['uz', 'ru', 'en', 'id'].includes(from.language_code) ? from.language_code : 'uz'),
           phone,
           phoneVerifiedAt: new Date(),
           telegramId: chat,
           // EmployeeProfile.phone is unique too; leave it for the profile form.
-          employeeProfile: { create: {} },
+          ...(pending?.role === 'RECRUITER' ? {} : {employeeProfile: {create: {}}}),
         },
         select: { id: true },
       });

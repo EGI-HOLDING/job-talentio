@@ -1,0 +1,1 @@
+ALTER TABLE "PhoneLoginToken" ADD COLUMN "role" "UserRole" NOT NULL DEFAULT 'EMPLOYEE';

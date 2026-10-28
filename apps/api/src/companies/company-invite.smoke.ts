@@ -27,8 +27,8 @@ const ownerMissingCompany = registerSchema.safeParse({
   role: 'RECRUITER',
   acceptTerms: true,
 });
-if (ownerMissingCompany.success) {
-  throw new Error('recruiter register without companyName or inviteToken must fail');
+if (!ownerMissingCompany.success) {
+  throw new Error('new recruiters collect company details in onboarding after authentication');
 }
 
 const owner = registerSchema.safeParse({
@@ -39,7 +39,7 @@ const owner = registerSchema.safeParse({
   acceptTerms: true,
   companyName: 'Apex Soft',
 });
-if (!owner.success) throw new Error('owner register with companyName must pass');
+if (!owner.success || 'companyName' in owner.data) throw new Error('legacy company details must not enter the authentication payload');
 
 const googleJoin = googleOAuthSchema.safeParse({
   idToken: 'g'.repeat(40),
