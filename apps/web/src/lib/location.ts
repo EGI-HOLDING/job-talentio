@@ -4,6 +4,7 @@ export { formatJobLocation };
 
 type JobLocationInput = {
   workMode?: string | null;
+  country?: { name: string } | null;
   city?: { name: string } | string | null;
 };
 
@@ -14,7 +15,7 @@ function cityName(job: JobLocationInput): string | null {
 
 /** Convenience wrapper when city is a plain string from older payloads */
 export function jobLocationLabel(job: JobLocationInput): string {
-  const city = cityName(job);
+  const city = cityName(job) || job.country?.name?.trim() || null;
   return formatJobLocation({ workMode: job.workMode, city: city ? { name: city } : null });
 }
 
@@ -27,7 +28,7 @@ export function localizedJobLocation(
   job: JobLocationInput,
   t: (key: string) => string,
 ): string {
-  const city = cityName(job);
+  const city = cityName(job) || job.country?.name?.trim() || null;
   switch (job.workMode) {
     case 'REMOTE': {
       const remote = t('enum.workMode.location.REMOTE');

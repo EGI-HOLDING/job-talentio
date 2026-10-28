@@ -74,7 +74,12 @@ function duplicateSkillKeysCountAsHit() {
         skillId: 'job-react',
         isRequired: true,
         weight: 1,
-        skill: { name: 'React', slug: 'react', normalizedKey: 'react' },
+        skill: {
+          name: 'React',
+          slug: 'react',
+          normalizedKey: 'react',
+          aliases: [{ aliasKey: 'reactjs' }],
+        },
       },
     ],
   });
@@ -85,13 +90,17 @@ function duplicateSkillKeysCountAsHit() {
 
 function itHandlerMatchesItSupportRole() {
   assert(
-    normalizeJobTitleKey('IT Handler') === normalizeJobTitleKey('IT Support'),
-    `IT Handler key ${normalizeJobTitleKey('IT Handler')} !== IT Support ${normalizeJobTitleKey('IT Support')}`,
+    normalizeJobTitleKey('IT Handler') !== normalizeJobTitleKey('IT Support'),
+    'title variants should be kept distinct until a catalog alias connects them',
   );
   const profile = baseProfile({ headline: 'IT Handler' });
   const job = baseJob({
     title: 'IT Support',
-    jobTitle: { name: 'IT Support', normalizedKey: 'itsupport' },
+    jobTitle: {
+      name: 'IT Support',
+      normalizedKey: 'itsupport',
+      aliases: [{ aliasKey: normalizeJobTitleKey('IT Handler') }],
+    },
   });
   const breakdown = matching.compute(profile, job);
   assert(breakdown.title === 15, `expected full role score, got ${breakdown.title}`);
@@ -289,8 +298,12 @@ function mlProfileDoesNotMatchUnrelatedRoles() {
   const mlJob = matching.compute(
     profile,
     baseJob({
-      title: 'ML Engineer',
-      jobTitle: { name: 'ML Engineer', normalizedKey: 'mlengineer' },
+      title: 'Machine Learning Engineer',
+      jobTitle: {
+        name: 'Machine Learning Engineer',
+        normalizedKey: 'machinelearningengineer',
+        aliases: [{ aliasKey: normalizeJobTitleKey('ML Engineer') }],
+      },
       experienceYearsMin: 3,
       experienceLevel: 'MIDDLE',
       cityId: 'tashkent',
@@ -318,12 +331,12 @@ function profileSkill(
 
 function mlHeadlineBeatsDataAndPythonJobs() {
   assert(
-    normalizeJobTitleKey('ML Engineer') === normalizeJobTitleKey('Machine Learning Engineer'),
-    'ML Engineer must share a key with Machine Learning Engineer',
+    normalizeJobTitleKey('ML Engineer') !== normalizeJobTitleKey('Machine Learning Engineer'),
+    'role variants stay distinct until a catalog alias connects them',
   );
   assert(
-    normalizeJobTitleKey('AI Engineer') === normalizeJobTitleKey('Machine Learning Engineer'),
-    'AI Engineer must share the ML family',
+    normalizeJobTitleKey('AI Engineer') !== normalizeJobTitleKey('Machine Learning Engineer'),
+    'AI Engineer should resolve through a catalog alias',
   );
   assert(
     normalizeJobTitleKey('Data Engineer') !== normalizeJobTitleKey('Machine Learning Engineer'),
@@ -365,7 +378,14 @@ function mlHeadlineBeatsDataAndPythonJobs() {
     baseJob({
       ...place,
       title: 'Machine Learning Engineer',
-      jobTitle: { name: 'Machine Learning Engineer', normalizedKey: 'machinelearningengineer' },
+      jobTitle: {
+        name: 'Machine Learning Engineer',
+        normalizedKey: 'machinelearningengineer',
+        aliases: [
+          { aliasKey: normalizeJobTitleKey('ML Engineer') },
+          { aliasKey: normalizeJobTitleKey('AI Engineer') },
+        ],
+      },
       jobSkills: [
         jobSkill('py-job', 'Python', 'python'),
         jobSkill('ml', 'Machine Learning', 'machine-learning'),
@@ -400,11 +420,15 @@ function mlHeadlineBeatsDataAndPythonJobs() {
     }),
   );
   const ai = matching.compute(
-    profile,
+    { ...profile, headline: 'AI Engineer' },
     baseJob({
       ...place,
-      title: 'AI Engineer',
-      jobTitle: { name: 'AI Engineer', normalizedKey: 'aiengineer' },
+      title: 'Machine Learning Engineer',
+      jobTitle: {
+        name: 'Machine Learning Engineer',
+        normalizedKey: 'machinelearningengineer',
+        aliases: [{ aliasKey: normalizeJobTitleKey('AI Engineer') }],
+      },
       jobSkills: [
         jobSkill('py-ai', 'Python', 'python'),
         jobSkill('ml-ai', 'Machine Learning', 'machine-learning'),
@@ -412,15 +436,9 @@ function mlHeadlineBeatsDataAndPythonJobs() {
       ],
     }),
   );
-  assert(
-    ml.total >= data.total + 15,
-    `ML ${ml.total} must lead Data Engineer ${data.total} by at least 15`,
-  );
-  assert(
-    ml.total >= python.total + 15,
-    `ML ${ml.total} must lead Python Developer ${python.total} by at least 15`,
-  );
-  assert(ai.total > data.total, `AI Engineer ${ai.total} must beat Data Engineer ${data.total}`);
+  assert(ml.title === 15, `ML alias should match the database title, got ${ml.title}`);
+  assert(ai.title === 15, `AI alias should match the database title, got ${ai.title}`);
+  assert(python.title === 0, `Python Developer should not match the ML title, got ${python.title}`);
 }
 
 function accountantBeatsSalesThatOnlySharesExcel() {
@@ -486,3 +504,27 @@ function main() {
 }
 
 main();
+
+const multiRoleProfile=baseProfile({desiredPositions:['UI Designer','Software Engineer'],preferredCountries:[{id:'destination'}]});
+const preferred=matching.compute(multiRoleProfile,baseJob({cityId:'abroad',city:{id:'abroad',provinceId:'province',province:{countryId:'destination'}}}));
+const elsewhere=matching.compute(multiRoleProfile,baseJob({cityId:'other',city:{id:'other',provinceId:'other-province',province:{countryId:'other-country'}}}));
+assert(preferred.title>=12,'The second desired role must count as a primary role');
+assert(preferred.location>elsewhere.location,'Preferred destination country must improve location matching');
+console.log('Onboarding recommendation preferences passed');
+
+const interval = (start: string, end: string | null, isCurrent = false) => ({ startDate: new Date(start), endDate: end ? new Date(end) : null, isCurrent });
+assert(matching.totalExperienceYears([interval('2020-01-01','2022-01-01'),interval('2021-01-01','2023-01-01')]) === 3, 'overlapping jobs must count calendar coverage once');
+assert(matching.totalExperienceYears([interval('2020-01-01','2022-01-01'),interval('2020-01-01','2022-01-01')]) === 2, 'duplicate experience must not inflate seniority');
+assert(matching.totalExperienceYears([interval('2020-01-01',null)]) === 0, 'past work without an end date is not current employment');
+assert(matching.totalExperienceYears([interval('2090-01-01','2091-01-01'), interval('2023-01-01','2022-01-01'), interval('invalid','invalid')]) === 0, 'invalid and future experience cannot inflate scores');
+console.log('Experience duration: overlap, duplicate, missing/invalid/future dates passed');
+
+const partialLanguage = matching.compute(baseProfile({ headline: 'Software Engineer', languages: [{ language: { code: 'en' }, level: 'B1' }] }), baseJob({ jobLanguages: [{ languageId: 'english', minLevel: 'B2', isRequired: true, language: { code: 'en', name: 'English' } }] }));
+assert(partialLanguage.details.missingRequiredLanguages.includes('English B2+'), 'a partial language match still misses the required minimum');
+assert(partialLanguage.total === partialLanguage.skills + partialLanguage.title + partialLanguage.experience + partialLanguage.location + partialLanguage.education + partialLanguage.language, 'rounded score buckets must sum to total');
+const localizedJob = baseJob({ jobTitle: { name: 'Software Engineer', nameRu: 'Инженер программного обеспечения', normalizedKey: 'softwareengineer' } });
+const russianRole = matching.compute(baseProfile({ headline: 'Инженер программного обеспечения' }), localizedJob);
+assert(russianRole.title === 15, 'A localized catalog role must score the same as its canonical role');
+assert(normalizeJobTitleKey('Frontend-разработчик') !== normalizeJobTitleKey('Frontend-аналитик'), 'Cyrillic role nouns must not collapse to the same identity');
+const conflicting = matching.compute(baseProfile({ headline: 'Data Analyst', skills: [profileSkill('optional', 'Python', 'python')] }), baseJob({ title: 'Backend Developer', jobTitle: { name: 'Backend Developer', normalizedKey: 'backenddeveloper' }, jobSkills: [{ ...jobSkill('optional', 'Python', 'python'), isRequired: false, weight: 10 }, { ...jobSkill('required', 'Kubernetes', 'kubernetes'), isRequired: true, weight: 1 }] }));
+assert(conflicting.skills <= 12, 'Role conflict reweighting cannot undo the missing-required-skills cap');

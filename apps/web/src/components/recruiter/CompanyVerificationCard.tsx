@@ -30,7 +30,7 @@ type Props = {
 
 /** Verified-employer badge: current state plus the request form when nothing is pending. */
 export function CompanyVerificationCard({ companyId, canSubmit, onFlash, onChanged }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [state, setState] = useState<VerificationState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -97,7 +97,7 @@ export function CompanyVerificationCard({ companyId, canSubmit, onFlash, onChang
         <p className="muted" style={{ margin: 0, fontSize: '0.9rem' }}>
           {t('rec.verification.pendingBody')
             .replace('{legalName}', request.legalName)
-            .replace('{date}', new Date(request.createdAt).toLocaleDateString())}
+            .replace('{date}', new Date(request.createdAt).toLocaleDateString(locale))}
         </p>
       ) : (
         <>

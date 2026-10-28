@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Optional,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -7,6 +8,7 @@ import {
 import { ApplicationStatus, BulkDeliveryStatus } from '@prisma/client';
 import { translateMessage } from '@job-talentio/shared';
 import type { MessageLocale } from '@job-talentio/shared';
+import { OperationsService } from '../benefits/operations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { ApplicationsService } from '../applications/applications.service';
@@ -58,6 +60,7 @@ export class BulkCommsService {
     private chat: ChatService,
     private telegram: TelegramService,
     private mail: MailService,
+    @Optional() private operations?: OperationsService,
   ) {}
 
   private async assertCompany(user: AuthUser, companyId: string) {
@@ -176,7 +179,12 @@ export class BulkCommsService {
     return campaign;
   }
 
-  async runCampaign(user: AuthUser, input: CampaignInput) {
+  async runCampaign(user: AuthUser, input: CampaignInput, key?: string) {
+    await this.assertCompany(user, input.companyId);
+    if (!this.operations) return this.runCampaignInside(user, input);
+    return this.operations.external('campaign:' + input.companyId, key, { actorId: user.id, input }, () => this.runCampaignInside(user, input));
+  }
+  private async runCampaignInside(user: AuthUser, input: CampaignInput) {
     await this.assertCompany(user, input.companyId);
 
     const job = await this.prisma.jobPost.findUnique({

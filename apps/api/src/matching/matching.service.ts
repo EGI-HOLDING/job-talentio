@@ -1,3 +1,4 @@
+import { liveJobWhere } from '../benefits/benefit-policy';
 import { Injectable } from '@nestjs/common';
 import {
   DegreeLevel,
@@ -9,14 +10,14 @@ import {
 } from '@prisma/client';
 import { languageLevelRank } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { RecruiterMatchingService } from './recruiter-matching.service';
+import { compareRecruiterMatches, evaluateRecruiter, type RecruiterBreakdown } from './recruiter-matching';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import {
   canonicalTitleKey,
-  expandTitleAbbreviations,
   normalizeJobTitleKey,
   profileRoleTexts,
   stripSeniorityFromTitle,
-  titleSynonymCluster,
 } from '../common/title-resolve';
 
 export type MatchBreakdown = {
@@ -37,12 +38,19 @@ export type MatchBreakdown = {
   };
 };
 
-type SkillRef = { name: string; slug: string; normalizedKey?: string | null };
+type SkillRef = {
+  name: string;
+  slug: string;
+  normalizedKey?: string | null;
+  aliases?: Array<{ aliasKey: string }>;
+};
 
 type MatchProfile = {
   cityId: string | null;
   headline: string | null;
   desiredPosition?: string | null;
+  desiredPositions?: string[];
+  preferredCountries?: Array<{id:string}>;
   summary: string | null;
   skills: Array<{ skillId: string; level: SkillLevel; skill: SkillRef }>;
   experiences: Array<{
@@ -54,16 +62,24 @@ type MatchProfile = {
   educations: Array<{ degree: DegreeLevel | null }>;
   languages: Array<{ language: { code: string }; level: LanguageLevel }>;
   certifications: unknown[];
-  city?: { id?: string; provinceId?: string } | null;
+  city?: { id?: string; provinceId?: string; province?: {countryId:string} } | null;
 };
 
 type MatchJob = {
   title?: string;
+  countryId?: string | null;
   cityId: string | null;
   workMode: WorkMode;
   experienceYearsMin: number | null;
   experienceLevel: ExperienceLevel | null;
-  jobTitle?: { name: string; normalizedKey: string } | null;
+  jobTitle?: {
+    name: string;
+    nameRu?: string | null;
+    nameUz?: string | null;
+    nameId?: string | null;
+    normalizedKey: string;
+    aliases?: Array<{ aliasKey: string }>;
+  } | null;
   jobSkills: Array<{
     skillId: string;
     isRequired: boolean;
@@ -76,7 +92,7 @@ type MatchJob = {
     isRequired: boolean;
     language: { code: string; name: string };
   }>;
-  city?: { id?: string; provinceId?: string } | null;
+  city?: { id?: string; provinceId?: string; province?: {countryId:string} } | null;
 };
 
 const SKILL_LEVEL_SCORE: Record<SkillLevel, number> = {
@@ -168,9 +184,6 @@ const HISTORY_TITLE_CAP = 8;
 /** Shared generic skills must not outrank a different role family. */
 const CONFLICT_SKILL_FACTOR = 0.5;
 const REQUIRED_SKILLS_MISS_CAP = 12;
-const RECOMMEND_QUERY_CAP = 200;
-const RECOMMEND_FALLBACK_SCAN = 120;
-const RECOMMEND_THIN_CANDIDATES = 40;
 const FOR_YOU_JOBS_LIMIT = 300;
 const FOR_YOU_SCAN_BATCH = 100;
 
@@ -185,15 +198,24 @@ function skillIdentityKey(skill: SkillRef): string {
   return normalizeSkillKey(skill.name) || (skill.slug ? normalizeSkillKey(skill.slug) : '');
 }
 
+function skillIdentityKeys(skill: SkillRef): Set<string> {
+  return new Set(
+    [skillIdentityKey(skill), ...(skill.aliases ?? []).map((alias) => normalizeSkillKey(alias.aliasKey))]
+      .filter(Boolean),
+  );
+}
+
 function findProfileSkill(
   profileSkills: MatchProfile['skills'],
   jobSkill: MatchJob['jobSkills'][number],
 ) {
   const byId = profileSkills.find((s) => s.skillId === jobSkill.skillId);
   if (byId) return byId;
-  const jobKey = skillIdentityKey(jobSkill.skill);
-  if (!jobKey) return undefined;
-  const matches = profileSkills.filter((s) => skillIdentityKey(s.skill) === jobKey);
+  const jobKeys = skillIdentityKeys(jobSkill.skill);
+  if (!jobKeys.size) return undefined;
+  const matches = profileSkills.filter((s) =>
+    [...skillIdentityKeys(s.skill)].some((key) => jobKeys.has(key)),
+  );
   if (!matches.length) return undefined;
   return matches.sort((a, b) => SKILL_LEVEL_SCORE[b.level] - SKILL_LEVEL_SCORE[a.level])[0];
 }
@@ -201,7 +223,7 @@ function findProfileSkill(
 function significantTitleTokens(input: string): Set<string> {
   const { roleTitle } = stripSeniorityFromTitle(input);
   return new Set(
-    expandTitleAbbreviations(roleTitle)
+    roleTitle.toLowerCase()
       .split(/[^a-z0-9]+/)
       .filter((t) => t.length >= 4 && !TITLE_TOKEN_STOP.has(t)),
   );
@@ -213,7 +235,10 @@ function distinctiveTitleTokens(input: string): Set<string> {
 
 function isSoftSkill(skill: SkillRef): boolean {
   const keys = [skill.normalizedKey, skill.slug, skill.name].filter((v): v is string => Boolean(v));
-  return keys.some((key) => SOFT_SKILL_KEYS.has(normalizeSkillKey(key)));
+  return (
+    keys.some((key) => SOFT_SKILL_KEYS.has(normalizeSkillKey(key))) ||
+    (skill.aliases ?? []).some((alias) => SOFT_SKILL_KEYS.has(normalizeSkillKey(alias.aliasKey)))
+  );
 }
 
 function isSoftSkillLabel(name: string): boolean {
@@ -227,7 +252,11 @@ function jobTitleKeys(job: MatchJob): Set<string> {
     jobKeys.add(canonicalTitleKey(job.jobTitle.normalizedKey));
     jobKeys.add(job.jobTitle.normalizedKey.toLowerCase());
   }
+  for (const alias of job.jobTitle?.aliases ?? []) {
+    if (alias.aliasKey) jobKeys.add(alias.aliasKey.toLowerCase());
+  }
   if (jobName) jobKeys.add(normalizeJobTitleKey(jobName));
+  for (const label of [job.jobTitle?.nameRu, job.jobTitle?.nameUz, job.jobTitle?.nameId]) if (label) jobKeys.add(normalizeJobTitleKey(label));
   if (job.title) jobKeys.add(normalizeJobTitleKey(job.title));
   jobKeys.delete('');
   return jobKeys;
@@ -256,14 +285,6 @@ function scoreTitleTexts(profileTexts: string[], job: MatchJob): number {
   const jobKeys = jobTitleKeys(job);
   const profileKeys = profileTexts.map((t) => normalizeJobTitleKey(t)).filter(Boolean);
   if (profileKeys.some((k) => jobKeys.has(k))) return TITLE_BUCKET;
-
-  const jobCluster = new Set<string>();
-  for (const k of jobKeys) {
-    for (const c of titleSynonymCluster(k)) jobCluster.add(c);
-  }
-  if (profileKeys.some((k) => titleSynonymCluster(k).some((c) => jobCluster.has(c)))) {
-    return 12;
-  }
 
   const jobTokens = jobTitleTokens(job);
   if (!jobTokens.size) return 0;
@@ -300,7 +321,7 @@ function roleMatchScore(primaryTexts: string[], historyTexts: string[], job: Mat
 
 function splitRoleTexts(profile: MatchProfile): { primary: string[]; history: string[] } {
   const clean = (value: string | null | undefined) => (value || '').trim();
-  const primary = [profile.desiredPosition, profile.headline]
+  const primary = [...(profile.desiredPositions || []), profile.desiredPosition, profile.headline]
     .map(clean)
     .filter(Boolean);
   const history: string[] = [];
@@ -313,27 +334,19 @@ function splitRoleTexts(profile: MatchProfile): { primary: string[]; history: st
   return { primary, history };
 }
 
-function mergeById<T extends { id: string }>(primary: T[], extra: T[], cap = RECOMMEND_QUERY_CAP): T[] {
-  const seen = new Set(primary.map((row) => row.id));
-  const out = [...primary];
-  for (const row of extra) {
-    if (seen.has(row.id)) continue;
-    seen.add(row.id);
-    out.push(row);
-    if (out.length >= cap) break;
-  }
-  return out;
-}
-
 @Injectable()
 export class MatchingService {
-  constructor(private prisma: PrismaService) {}
+  private readonly recruiter: RecruiterMatchingService;
+  constructor(private prisma: PrismaService) { this.recruiter = new RecruiterMatchingService(prisma); }
+
+  scoreInputs(...args: Parameters<RecruiterMatchingService['scoreInputs']>) { return this.recruiter.scoreInputs(...args); }
 
   /** Profiles without skills or a role title are not matchable for discovery. */
   profileHasMatchSignal(profile: {
     skills: unknown[];
     headline?: string | null;
     desiredPosition?: string | null;
+    desiredPositions?: string[];
     experiences?: Array<{ title?: string | null }>;
   }) {
     return profile.skills.length > 0 || profileRoleTexts(profile).length > 0;
@@ -347,34 +360,31 @@ export class MatchingService {
     return distinctive.length > 0 || breakdown.title >= 6;
   }
 
-  async scoreProfileAgainstJob(
-    profileId: string,
-    jobPostId: string,
-  ): Promise<MatchBreakdown> {
-    const [profile, job] = await Promise.all([
-      this.prisma.employeeProfile.findUniqueOrThrow({
-        where: { id: profileId },
-        include: {
-          skills: { include: { skill: true } },
-          experiences: true,
-          educations: true,
-          languages: { include: { language: true } },
-          certifications: true,
-          city: true,
-        },
-      }),
-      this.prisma.jobPost.findUniqueOrThrow({
-        where: { id: jobPostId },
-        include: {
-          jobTitle: { select: { name: true, normalizedKey: true } },
-          jobSkills: { include: { skill: true } },
-          jobLanguages: { include: { language: true } },
-          city: true,
-        },
-      }),
-    ]);
+  private readonly scoringProfileInclude = {
+    skills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
+    experiences: true, educations: true, languages: { include: { language: true } },
+    certifications: true, preferredCountries: true, city: { include: { province: true } },
+  } as const;
+  private readonly scoringJobInclude = {
+    jobTitle: { select: { name: true, nameRu: true, nameUz: true, nameId: true, normalizedKey: true, aliases: { select: { aliasKey: true } } } },
+    jobSkills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
+    jobLanguages: { include: { language: true } }, city: { include: { province: true } },
+  } as const;
 
-    return this.compute(profile, job);
+  async scoreProfileAgainstJob(profileId: string, jobPostId: string) {
+    return this.recruiter.forProfile(profileId,jobPostId);
+  }
+
+  async scoreProfilesAgainstJob(profiles: Parameters<RecruiterMatchingService['forProfiles']>[0], jobPostId: string) {
+    return this.recruiter.forProfiles(profiles,jobPostId);
+  }
+
+  async scoreJobsForProfile(profileId: string, jobIds: string[]) {
+    const [profile, jobs] = await Promise.all([
+      this.prisma.employeeProfile.findUniqueOrThrow({ where: { id: profileId }, include: this.scoringProfileInclude }),
+      this.prisma.jobPost.findMany({ where: { id: { in: jobIds } }, include: this.scoringJobInclude }),
+    ]);
+    return new Map(jobs.map(job => [job.id, this.compute(profile, job)]));
   }
 
   compute(profile: MatchProfile, job: MatchJob): MatchBreakdown {
@@ -403,10 +413,6 @@ export class MatchingService {
       }
       coverage = weightedTotal ? Math.min(1, weightedHit / weightedTotal) : 0;
       skillsScore = weightedTotal ? Math.round(coverage * SKILLS_BUCKET) : 0;
-      const requiredCount = job.jobSkills.filter((js) => js.isRequired).length;
-      if (requiredCount > 0 && missingRequiredSkills.length === requiredCount) {
-        skillsScore = Math.min(skillsScore, REQUIRED_SKILLS_MISS_CAP);
-      }
     }
 
     const roles = splitRoleTexts(profile);
@@ -429,6 +435,8 @@ export class MatchingService {
         Math.sqrt(coverage * fit) * SKILLS_BUCKET * CONFLICT_SKILL_FACTOR,
       );
     }
+    const requiredCount = job.jobSkills.filter(skill => skill.isRequired).length;
+    if (requiredCount > 0 && missingRequiredSkills.length === requiredCount) skillsScore = Math.min(skillsScore, REQUIRED_SKILLS_MISS_CAP);
 
     const experienceYears = this.totalExperienceYears(profile.experiences);
     const requiredYears =
@@ -448,7 +456,9 @@ export class MatchingService {
     }
 
     let locationScore = 3;
-    if (job.workMode === 'REMOTE') {
+    const jobCountryId = job.countryId || job.city?.province?.countryId;
+    const preferredCountry = !profile.preferredCountries?.length || profile.preferredCountries.some(country => country.id === jobCountryId);
+    if (job.workMode === 'REMOTE' && (!jobCountryId || preferredCountry)) {
       locationScore = 12;
     } else if (job.cityId && profile.cityId && job.cityId === profile.cityId) {
       locationScore = 12;
@@ -458,7 +468,9 @@ export class MatchingService {
       job.city.provinceId === profile.city.provinceId
     ) {
       locationScore = 8;
-    } else if (!job.cityId) {
+    } else if (jobCountryId && profile.preferredCountries?.some(c => c.id === jobCountryId)) {
+      locationScore = 8;
+    } else if (!job.cityId && !jobCountryId) {
       locationScore = 8;
     }
 
@@ -499,6 +511,7 @@ export class MatchingService {
         } else if (profileRank >= needRank - 1) {
           earned += w * 0.55;
           matchedLanguages.push(`${jl.language.name} ${pl.level}`);
+          if (jl.isRequired) missingRequiredLanguages.push(label);
         } else if (jl.isRequired) {
           missingRequiredLanguages.push(label);
         }
@@ -534,7 +547,7 @@ export class MatchingService {
       locationOut = Math.round(locationScore * scale);
       educationOut = Math.round(educationScore * scale);
       languageOut = Math.round(languageScore * scale);
-      total = Math.min(100, Math.round(role + context * scale));
+      total = Math.min(100, role + experienceOut + locationOut + educationOut + languageOut);
     }
 
     return {
@@ -559,120 +572,54 @@ export class MatchingService {
   totalExperienceYears(
     experiences: Array<{ startDate: Date; endDate: Date | null; isCurrent: boolean }>,
   ) {
-    let months = 0;
     const now = Date.now();
+    const intervals: Array<[number, number]> = [];
     for (const exp of experiences) {
       const start = exp.startDate.getTime();
-      const end = exp.isCurrent || !exp.endDate ? now : exp.endDate.getTime();
-      months += Math.max(0, (end - start) / (1000 * 60 * 60 * 24 * 30.44));
+      // Missing end dates on past work are unknown, not "still employed".
+      const end = exp.isCurrent ? now : exp.endDate?.getTime();
+      if (!Number.isFinite(start) || end == null || !Number.isFinite(end) || start >= now || end <= start) continue;
+      intervals.push([start, Math.min(end, now)]);
     }
-    return Math.round((months / 12) * 10) / 10;
+    intervals.sort((a, b) => a[0] - b[0]);
+    let covered = 0, left = 0, right = 0;
+    for (const [start, end] of intervals) {
+      if (start > right) { covered += right - left; left = start; right = end; }
+      else right = Math.max(right, end);
+    }
+    covered += right - left;
+    return Math.round(covered / (1000 * 60 * 60 * 24 * 365.25) * 10) / 10;
   }
 
   async recommendCandidates(jobPostId: string, limit = 20) {
-    const job = await this.prisma.jobPost.findUniqueOrThrow({
-      where: { id: jobPostId },
-      include: {
-        jobTitle: { select: { name: true, normalizedKey: true } },
-        jobSkills: { include: { skill: true } },
-        jobLanguages: { include: { language: true } },
-        city: true,
-        applications: { select: { profileId: true } },
-      },
-    });
-    const appliedIds = new Set(job.applications.map((a) => a.profileId));
-    const skillIds = job.jobSkills.map((s) => s.skillId);
-    const skillKeys = [
-      ...new Set(job.jobSkills.map((s) => skillIdentityKey(s.skill)).filter(Boolean)),
-    ];
-    const jobTitleKey =
-      (job.jobTitle?.normalizedKey && canonicalTitleKey(job.jobTitle.normalizedKey)) ||
-      normalizeJobTitleKey(job.title);
-
-    if (!skillIds.length && !jobTitleKey) return [];
-
-    const profileInclude = {
-      user: { select: { id: true, fullName: true, avatarUrl: true } },
-      skills: { include: { skill: true } },
-      experiences: true,
-      educations: true,
-      languages: { include: { language: true } },
-      certifications: true,
-      city: true,
-    } as const;
-
-    const skillOr: Prisma.EmployeeProfileWhereInput[] = [];
-    if (skillIds.length) {
-      skillOr.push({ skills: { some: { skillId: { in: skillIds } } } });
+    const context = await this.recruiter.context(jobPostId);
+    // Response-size protection applies equally to every job; it is not a package quota.
+    const resultLimit = Math.max(1, Math.min(200, Math.floor(limit) || 20));
+    const include = {...this.scoringProfileInclude,user:{select:{id:true,fullName:true,avatarUrl:true}},residenceCountry:true} as const;
+    type Candidate = Prisma.EmployeeProfileGetPayload<{include:typeof include}>;
+    let cursor:string|undefined;
+    let ranked:Array<{profile:Candidate;matchScore:number;matchBreakdown:RecruiterBreakdown}>=[];
+    while(true) {
+      const batch=await this.prisma.employeeProfile.findMany({where:{visibility:VISIBLE_PROFILE,user:{isBanned:false,anonymizedAt:null},applications:{none:{jobPostId}}},include,take:100,orderBy:{id:'asc'},...(cursor?{cursor:{id:cursor},skip:1}:{})});
+      const scored=batch.map(profile=>{const matchBreakdown=evaluateRecruiter(profile,context.job,context.index,context.now);return {profile,matchScore:matchBreakdown.total,matchBreakdown};}).filter(row=>row.matchBreakdown.positiveCore);
+      ranked=[...ranked,...scored].sort((a,b)=>compareRecruiterMatches(a.matchBreakdown,b.matchBreakdown)||a.profile.id.localeCompare(b.profile.id)).slice(0,resultLimit);
+      if(batch.length<100)break;
+      cursor=batch[batch.length-1].id;
     }
-    if (skillKeys.length) {
-      skillOr.push({ skills: { some: { skill: { normalizedKey: { in: skillKeys } } } } });
-    }
-
-    let profiles =
-      skillOr.length > 0
-        ? await this.prisma.employeeProfile.findMany({
-            where: { visibility: VISIBLE_PROFILE, OR: skillOr },
-            include: profileInclude,
-            take: RECOMMEND_QUERY_CAP,
-          })
-        : [];
-
-    if (profiles.length < RECOMMEND_THIN_CANDIDATES) {
-      const extra = await this.prisma.employeeProfile.findMany({
-        where: {
-          visibility: VISIBLE_PROFILE,
-          ...(profiles.length ? { id: { notIn: profiles.map((p) => p.id) } } : {}),
-          OR: [
-            { headline: { not: null } },
-            { desiredPosition: { not: null } },
-            { experiences: { some: {} } },
-            { skills: { some: {} } },
-          ],
-        },
-        include: profileInclude,
-        take: RECOMMEND_FALLBACK_SCAN,
-        orderBy: { updatedAt: 'desc' },
-      });
-      const keep = extra.filter((p) => this.passesRecommendationGate(this.compute(p, job)));
-      profiles = mergeById(profiles, keep);
-    }
-
-    return profiles
-      .filter((p) => !appliedIds.has(p.id) && this.profileHasMatchSignal(p))
-      .map((p) => {
-        const breakdown = this.compute(p, job);
-        return {
-          profile: {
-            id: p.id,
-            headline: p.headline,
-            city: p.city,
-            user: p.user,
-            skills: p.skills.map((s) => ({
-              name: s.skill.name,
-              slug: s.skill.slug,
-              level: s.level,
-            })),
-          },
-          matchScore: breakdown.total,
-          matchBreakdown: breakdown,
-        };
-      })
-      .filter((row) => this.passesRecommendationGate(row.matchBreakdown))
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, limit);
+    return ranked.map(row=>({...row,profile:{id:row.profile.id,headline:row.profile.headline,city:row.profile.city,residenceCountry:row.profile.residenceCountry,user:row.profile.user,skills:row.profile.skills.map(skill=>({name:skill.skill.name,slug:skill.skill.slug,level:skill.level}))}}));
   }
 
   async recommendJobsForProfile(profileId: string, limit = FOR_YOU_JOBS_LIMIT) {
     const profile = await this.prisma.employeeProfile.findUniqueOrThrow({
       where: { id: profileId },
       include: {
-        skills: { include: { skill: true } },
+        skills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
         experiences: true,
         educations: true,
         languages: { include: { language: true } },
         certifications: true,
-        city: true,
+        preferredCountries: true,
+        city: { include: {province:true} },
       },
     });
 
@@ -682,10 +629,13 @@ export class MatchingService {
       company: {
         select: { id: true, name: true, slug: true, logoUrl: true },
       },
-      city: true,
+      city: { include: {province:true} },
+      country: true,
       category: true,
-      jobTitle: { select: { name: true, normalizedKey: true } },
-      jobSkills: { include: { skill: true } },
+      jobTitle: {
+        select: { name: true, nameRu: true, nameUz: true, nameId: true, normalizedKey: true, aliases: { select: { aliasKey: true } } },
+      },
+      jobSkills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
       jobLanguages: { include: { language: true } },
     } as const;
     type ForYouRow = {
@@ -702,7 +652,10 @@ export class MatchingService {
 
     while (true) {
       const jobs = await this.prisma.jobPost.findMany({
-        where: { status: 'PUBLISHED' },
+        where: {
+          ...liveJobWhere(),
+          company: { isBanned: false, anonymizedAt: null },
+        },
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
         include: jobInclude,
         take: FOR_YOU_SCAN_BATCH,

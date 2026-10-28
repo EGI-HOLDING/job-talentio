@@ -2,7 +2,12 @@
 
 function escapeCell(value: unknown): string {
   if (value === null || value === undefined) return '""';
-  const text = String(value).replace(/"/g, '""');
+  const raw = String(value);
+  // A quoted CSV cell is still evaluated by spreadsheet apps. Escape leading
+  // whitespace/control characters before formula prefixes as well as the
+  // prefixes themselves so untrusted names or notes cannot run as formulas.
+  const safe = typeof value === 'string' && /^[\u0000-\u0020]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+  const text = safe.replace(/"/g, '""');
   return `"${text}"`;
 }
 
@@ -24,7 +29,8 @@ export function downloadCsv<T>(
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Let the browser finish starting the download before releasing the blob.
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function timestampedName(prefix: string): string {

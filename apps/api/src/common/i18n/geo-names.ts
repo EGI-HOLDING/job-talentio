@@ -1,27 +1,27 @@
 /** Localized display names for the Uzbekistan geo catalog, keyed by slug. */
 
-export type LocalizedName = { uz: string; ru: string };
+export type LocalizedName = { uz: string; ru: string; id?: string };
 
 export const COUNTRY_NAMES: Record<string, LocalizedName> = {
-  uzbekistan: { uz: 'O‘zbekiston', ru: 'Узбекистан' },
+  uzbekistan: { uz: 'O‘zbekiston', ru: 'Узбекистан', id: 'Uzbekistan' },
 };
 
 export const PROVINCE_NAMES: Record<string, LocalizedName> = {
-  'tashkent-city': { uz: 'Toshkent shahri', ru: 'город Ташкент' },
-  'tashkent-region': { uz: 'Toshkent viloyati', ru: 'Ташкентская область' },
-  karakalpakstan: { uz: 'Qoraqalpog‘iston Respublikasi', ru: 'Республика Каракалпакстан' },
-  andijan: { uz: 'Andijon viloyati', ru: 'Андижанская область' },
-  bukhara: { uz: 'Buxoro viloyati', ru: 'Бухарская область' },
-  fergana: { uz: 'Farg‘ona viloyati', ru: 'Ферганская область' },
-  jizzakh: { uz: 'Jizzax viloyati', ru: 'Джизакская область' },
-  kashkadarya: { uz: 'Qashqadaryo viloyati', ru: 'Кашкадарьинская область' },
-  khorezm: { uz: 'Xorazm viloyati', ru: 'Хорезмская область' },
-  namangan: { uz: 'Namangan viloyati', ru: 'Наманганская область' },
-  navoi: { uz: 'Navoiy viloyati', ru: 'Навоийская область' },
-  samarkand: { uz: 'Samarqand viloyati', ru: 'Самаркандская область' },
-  sirdarya: { uz: 'Sirdaryo viloyati', ru: 'Сырдарьинская область' },
-  surkhandarya: { uz: 'Surxondaryo viloyati', ru: 'Сурхандарьинская область' },
-  'other-uzbekistan': { uz: 'Boshqa hududlar', ru: 'Другие регионы' },
+  'tashkent-city': { uz: 'Toshkent shahri', ru: 'город Ташкент', id: 'Kota Tashkent' },
+  'tashkent-region': { uz: 'Toshkent viloyati', ru: 'Ташкентская область', id: 'Provinsi Tashkent' },
+  karakalpakstan: { uz: 'Qoraqalpog‘iston Respublikasi', ru: 'Республика Каракалпакстан', id: 'Republik Karakalpakstan' },
+  andijan: { uz: 'Andijon viloyati', ru: 'Андижанская область', id: 'Provinsi Andijan' },
+  bukhara: { uz: 'Buxoro viloyati', ru: 'Бухарская область', id: 'Provinsi Bukhara' },
+  fergana: { uz: 'Farg‘ona viloyati', ru: 'Ферганская область', id: 'Provinsi Fergana' },
+  jizzakh: { uz: 'Jizzax viloyati', ru: 'Джизакская область', id: 'Provinsi Jizzakh' },
+  kashkadarya: { uz: 'Qashqadaryo viloyati', ru: 'Кашкадарьинская область', id: 'Provinsi Kashkadarya' },
+  khorezm: { uz: 'Xorazm viloyati', ru: 'Хорезмская область', id: 'Provinsi Khorezm' },
+  namangan: { uz: 'Namangan viloyati', ru: 'Наманганская область', id: 'Provinsi Namangan' },
+  navoi: { uz: 'Navoiy viloyati', ru: 'Навоийская область', id: 'Provinsi Navoi' },
+  samarkand: { uz: 'Samarqand viloyati', ru: 'Самаркандская область', id: 'Provinsi Samarkand' },
+  sirdarya: { uz: 'Sirdaryo viloyati', ru: 'Сырдарьинская область', id: 'Provinsi Sirdarya' },
+  surkhandarya: { uz: 'Surxondaryo viloyati', ru: 'Сурхандарьинская область', id: 'Provinsi Surkhandarya' },
+  'other-uzbekistan': { uz: 'Boshqa hududlar', ru: 'Другие регионы', id: 'Wilayah lain di Uzbekistan' },
 };
 
 export const CITY_NAMES: Record<string, LocalizedName> = {

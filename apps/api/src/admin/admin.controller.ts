@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -9,24 +10,27 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CatalogI18nStatus, JobStatus, PlanCode } from '@prisma/client';
+import { CatalogI18nStatus } from '@prisma/client';
 import {
   adminAuditListSchema,
+  adminBanSchema,
   adminBulkBanSchema,
   adminBulkCatalogStatusSchema,
-  adminBulkHotSchema,
   adminBulkIdsSchema,
   adminBulkJobStatusSchema,
-  adminBulkPlanSchema,
   adminBulkResolveSchema,
   adminCatalogBrowseSchema,
+  adminCatalogAliasSchema,
   adminCatalogCreateSchema,
   adminCatalogListSchema,
   adminCatalogUpdateSchema,
   adminCompanyListSchema,
+  adminFeatureFlagSchema,
   adminInviteOperatorSchema,
   adminJobListSchema,
   adminReportListSchema,
+  jobStatusSchema,
+  reportResolutionSchema,
   adminUserAnonymizeSchema,
   adminUserListSchema,
   adminVerificationDecisionSchema,
@@ -109,6 +113,12 @@ export class AdminController {
     return this.bulk.banUsers(user.id, data.ids, data.banned);
   }
 
+  @Post('users/selected')
+  selectedUsers(@Body() body: unknown) {
+    const data = parseDto(adminBulkIdsSchema, body);
+    return this.lists.selectedUsers(data.ids);
+  }
+
   @Post('users')
   inviteOperator(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(adminInviteOperatorSchema, body);
@@ -140,9 +150,10 @@ export class AdminController {
   banUser(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: { banned: boolean },
+    @Body() body: unknown,
   ) {
-    return this.accounts.banUser(user.id, id, body.banned);
+    const data = parseDto(adminBanSchema, body);
+    return this.accounts.banUser(user.id, id, data.banned);
   }
 
   // ─── Companies ────────────────────────────────────────────
@@ -157,34 +168,26 @@ export class AdminController {
     return this.lists.companyIds(parseDto(adminCompanyListSchema, query));
   }
 
+  @Post('companies/selected')
+  selectedCompanies(@Body() body: unknown) {
+    const data = parseDto(adminBulkIdsSchema, body);
+    return this.lists.selectedCompanies(data.ids);
+  }
+
   @Post('companies/bulk/ban')
   bulkBanCompanies(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(adminBulkBanSchema, body);
     return this.bulk.banCompanies(user.id, data.ids, data.banned);
   }
 
-  @Post('companies/bulk/plan')
-  bulkSetPlan(@CurrentUser() user: AuthUser, @Body() body: unknown) {
-    const data = parseDto(adminBulkPlanSchema, body);
-    return this.bulk.setCompanyPlans(user.id, data.ids, data.plan);
-  }
-
   @Post('companies/:id/ban')
   banCompany(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: { banned: boolean },
+    @Body() body: unknown,
   ) {
-    return this.admin.banCompany(user.id, id, body.banned);
-  }
-
-  @Post('companies/:id/plan')
-  setPlan(
-    @CurrentUser() user: AuthUser,
-    @Param('id') id: string,
-    @Body() body: { plan: PlanCode },
-  ) {
-    return this.admin.setPlan(user.id, id, body.plan);
+    const data = parseDto(adminBanSchema, body);
+    return this.admin.banCompany(user.id, id, data.banned);
   }
 
   // ─── Jobs ─────────────────────────────────────────────────
@@ -199,34 +202,26 @@ export class AdminController {
     return this.lists.jobIds(parseDto(adminJobListSchema, query));
   }
 
+  @Post('jobs/selected')
+  selectedJobs(@Body() body: unknown) {
+    const data = parseDto(adminBulkIdsSchema, body);
+    return this.lists.selectedJobs(data.ids);
+  }
+
   @Post('jobs/bulk/status')
   bulkJobStatus(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(adminBulkJobStatusSchema, body);
-    return this.bulk.setJobStatuses(user.id, data.ids, data.status);
-  }
-
-  @Post('jobs/bulk/hot')
-  bulkHotJobs(@CurrentUser() user: AuthUser, @Body() body: unknown) {
-    const data = parseDto(adminBulkHotSchema, body);
-    return this.bulk.boostJobs(user.id, data.ids, data.days);
+    return this.bulk.setJobStatuses(user, data.ids, data.status);
   }
 
   @Post('jobs/:id/status')
   jobStatus(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: { status: JobStatus },
+    @Body() body: unknown,
   ) {
-    return this.admin.forceJobStatus(user.id, id, body.status);
-  }
-
-  @Post('jobs/:id/hot')
-  hotJob(
-    @CurrentUser() user: AuthUser,
-    @Param('id') id: string,
-    @Body() body: { days: number },
-  ) {
-    return this.admin.setHotJob(user.id, id, body.days ?? 7);
+    const data = parseDto(jobStatusSchema, body);
+    return this.admin.forceJobStatus(user, id, data.status);
   }
 
   // ─── Reports ──────────────────────────────────────────────
@@ -241,6 +236,12 @@ export class AdminController {
     return this.lists.reportIds(parseDto(adminReportListSchema, query));
   }
 
+  @Post('reports/selected')
+  selectedReports(@Body() body: unknown) {
+    const data = parseDto(adminBulkIdsSchema, body);
+    return this.lists.selectedReports(data.ids);
+  }
+
   @Post('reports/bulk/resolve')
   bulkResolveReports(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(adminBulkResolveSchema, body);
@@ -251,9 +252,10 @@ export class AdminController {
   resolveReport(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: { status: 'RESOLVED' | 'DISMISSED'; resolution?: string },
+    @Body() body: unknown,
   ) {
-    return this.admin.resolveReport(user.id, id, body.status, body.resolution);
+    const data = parseDto(reportResolutionSchema, body);
+    return this.admin.resolveReport(user.id, id, data.status, data.resolution);
   }
 
   // ─── Company verification queue ───────────────────────────
@@ -278,9 +280,10 @@ export class AdminController {
   @Post('flags')
   upsertFlag(
     @CurrentUser() user: AuthUser,
-    @Body() body: { key: string; enabled: boolean; payload?: unknown },
+    @Body() body: unknown,
   ) {
-    return this.admin.upsertFlag(user.id, body.key, body.enabled, body.payload);
+    const data = parseDto(adminFeatureFlagSchema, body);
+    return this.admin.upsertFlag(user.id, data.key, data.enabled, data.payload);
   }
 
   @Get('audit-logs')
@@ -308,6 +311,12 @@ export class AdminController {
   @Get('catalog/i18n/ids')
   catalogIds(@Query() query: unknown) {
     return this.admin.catalogI18nIds(parseDto(adminCatalogListSchema, query));
+  }
+
+  @Post('catalog/i18n/:kind/selected')
+  selectedCatalogI18n(@Param('kind') kind: string, @Body() body: unknown) {
+    const data = parseDto(adminBulkIdsSchema, body);
+    return this.admin.selectedCatalogI18n(assertCatalogKind(kind), data.ids);
   }
 
   @Get('catalog/i18n/summary')
@@ -363,6 +372,40 @@ export class AdminController {
     const data = parseDto(adminCatalogCreateSchema, body);
     return this.admin.auditCatalogWrite(user.id, catalogType, 'CREATE_CATALOG_ENTRY', () =>
       this.catalog.create(catalogType, data),
+    );
+  }
+
+  @Get('catalog/type/:type/:id/aliases')
+  listCatalogAliases(@Param('type') type: string, @Param('id') id: string) {
+    return this.catalog.listAliases(type === 'city' ? 'city' : assertCatalogKind(type), id);
+  }
+
+  @Post('catalog/type/:type/:id/aliases')
+  createCatalogAlias(
+    @CurrentUser() user: AuthUser,
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const kind = type === 'city' ? 'city' : assertCatalogKind(type);
+    const data = parseDto(adminCatalogAliasSchema, body);
+    return this.admin.auditCatalogWrite(user.id, kind, 'CREATE_CATALOG_ALIAS', () =>
+      this.catalog.addAlias(kind, id, data.alias),
+      id,
+    );
+  }
+
+  @Delete('catalog/type/:type/:id/aliases/:aliasId')
+  deleteCatalogAlias(
+    @CurrentUser() user: AuthUser,
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @Param('aliasId') aliasId: string,
+  ) {
+    const kind = type === 'city' ? 'city' : assertCatalogKind(type);
+    return this.admin.auditCatalogWrite(user.id, kind, 'DELETE_CATALOG_ALIAS', () =>
+      this.catalog.removeAlias(kind, id, aliasId),
+      id,
     );
   }
 
@@ -426,7 +469,7 @@ export class AdminController {
     @CurrentUser() user: AuthUser,
     @Param('kind') kind: string,
     @Param('id') id: string,
-    @Body() body: { name?: string; nameUz?: string | null; nameRu?: string | null },
+    @Body() body: { name?: string; nameUz?: string | null; nameRu?: string | null; nameId?: string | null },
   ) {
     return this.admin.updateCatalogEntry(user.id, assertCatalogKind(kind), id, body);
   }

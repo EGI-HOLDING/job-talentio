@@ -1,0 +1,22 @@
+ALTER TABLE "Skill"
+  ADD COLUMN "nameId" TEXT,
+  ADD COLUMN "nameIdIsMachine" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "Country" ADD COLUMN "nameId" TEXT;
+ALTER TABLE "Province" ADD COLUMN "nameId" TEXT;
+ALTER TABLE "City" ADD COLUMN "nameId" TEXT;
+ALTER TABLE "JobCategory" ADD COLUMN "nameId" TEXT;
+ALTER TABLE "IndustryGroup" ADD COLUMN "nameId" TEXT;
+ALTER TABLE "Industry" ADD COLUMN "nameId" TEXT;
+
+ALTER TABLE "Language"
+  ADD COLUMN "nameId" TEXT,
+  ADD COLUMN "nameIdIsMachine" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "Benefit"
+  ADD COLUMN "nameId" TEXT,
+  ADD COLUMN "nameIdIsMachine" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "JobTitle"
+  ADD COLUMN "nameId" TEXT,
+  ADD COLUMN "nameIdIsMachine" BOOLEAN NOT NULL DEFAULT false;

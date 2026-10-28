@@ -1251,44 +1251,9 @@ a.card.job-card--hot {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.badge.hot {
-  color: var(--hot-deep);
-  background: var(--hot-soft);
-  border: 1px solid color-mix(in srgb, var(--hot) 22%, var(--border));
-  box-shadow: none;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-}
-/* VIP employer mark - light, elegant, no flash */
-.vip-badge,
-.badge.vip-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.4rem;
-  vertical-align: middle;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: #7a5c2e;
-  background: #faf6ef;
-  border: 1px solid #e8dfcc;
-  box-shadow: none;
-  white-space: nowrap;
-}
-.explore-card--vip {
-  border-color: color-mix(in srgb, #c4a574 28%, var(--border));
-  background: #fff;
-  box-shadow: var(--shadow);
-}
-.explore-card--vip:hover {
-  border-color: color-mix(in srgb, #c4a574 48%, var(--border));
-  box-shadow: var(--shadow-lg);
-}
+
+
+
 .explore-company-search {
   max-width: 36rem;
 }
@@ -2251,12 +2216,12 @@ button.previewable-image--fill {
   width: 100%;
 }
 .auth-social-gis {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
 }
+.auth-provider-feedback { color: var(--muted); font-size: .85rem; line-height: 1.55; margin: .5rem 0; }
 .auth-social-btn {
   display: flex;
   align-items: center;

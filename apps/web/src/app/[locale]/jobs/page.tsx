@@ -13,12 +13,13 @@ import { Pagination } from '@/components/ui/Pagination';
 import { api, getSession, type AuthSession } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
+import { CatalogRoleFilter } from '@/components/ui/CatalogRoleFilter';
+import { useRoleCatalog } from '@/lib/roleCatalog';
 import { HeroLocationPicker } from '@/components/home/HeroLocationPicker';
 import { JobDetailClient } from './[id]/JobDetailClient';
 import { JobsIcon } from '@/components/jobs/JobsIcon';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { formatJobSalary } from '@/components/jobs/formatJobSalary';
-import { MatchBreakdownPanel, type MatchBreakdownData } from '@/components/ui/MatchBreakdownPanel';
 import s from '@/components/jobs/JobsWorkspace.module.css';
 import {
   csvHasLanguageCode,
@@ -39,9 +40,7 @@ type Job = {
   workMode?: string;
   employmentType?: string;
   experienceLevel?: string | null;
-  isHot?: boolean;
-  boostUntil?: string | null;
-  matchScore?: number | null;
+
   company: { name: string; logoUrl?: string | null; slug: string };
   city?: { name: string; slug: string } | null;
   category?: { name: string; slug: string } | null;
@@ -81,7 +80,8 @@ type EmployeeProfile = {
   languages?: unknown[];
   resumes?: unknown[];
 };
-type RecommendedItem = { job: Job; matchScore: number; matchBreakdown: MatchBreakdownData };
+type RecommendedItem = { job: Job };
+type RecommendationPage = {items:RecommendedItem[];total:number;totalPages:number;page:number;mode:string};
 
 function hasCareerSignal(profile: EmployeeProfile | null) {
   return Boolean(profile && (profile.skills?.length || profile.headline?.trim() || profile.desiredPosition?.trim() || profile.experiences?.some((item) => item.title?.trim())));
@@ -90,6 +90,7 @@ function hasCareerSignal(profile: EmployeeProfile | null) {
 type Filters = {
   q: string;
   city: string;
+  country: string;
   category: string;
   companySlug: string;
   industrySlug: string;
@@ -104,7 +105,6 @@ type Filters = {
   salaryMin: string;
   salaryMax: string;
   postedWithin: string;
-  hotOnly: boolean;
   sort: string;
   page: number;
   limit: number;
@@ -128,6 +128,7 @@ const DEFAULT_LIMIT = 12;
 const EMPTY: Filters = {
   q: '',
   city: '',
+  country: '',
   category: '',
   companySlug: '',
   industrySlug: '',
@@ -142,7 +143,6 @@ const EMPTY: Filters = {
   salaryMin: '',
   salaryMax: '',
   postedWithin: '',
-  hotOnly: false,
   sort: 'relevance',
   page: 1,
   limit: DEFAULT_LIMIT,
@@ -160,6 +160,7 @@ function filtersFromParams(sp: URLSearchParams, implicitSort: string): Filters {
   return {
     q: sp.get('q') ?? '',
     city: sp.get('city') ?? '',
+    country: sp.get('country') ?? '',
     category: sp.get('category') ?? '',
     companySlug: sp.get('companySlug') ?? '',
     industrySlug: sp.get('industrySlug') ?? '',
@@ -174,7 +175,6 @@ function filtersFromParams(sp: URLSearchParams, implicitSort: string): Filters {
     salaryMin: sp.get('salaryMin') ?? '',
     salaryMax: sp.get('salaryMax') ?? '',
     postedWithin: sp.get('postedWithin') ?? '',
-    hotOnly: sp.get('hotOnly') === 'true',
     sort: sp.get('sort') ?? implicitSort,
     page: Math.max(1, Number(sp.get('page') || 1)),
     limit,
@@ -202,10 +202,7 @@ function toParams(f: Filters, view?: string | null, implicitSort = 'relevance'):
       if (value !== 'OR') p.set('skillMode', String(value));
       return;
     }
-    if (key === 'hotOnly') {
-      if (value) p.set('hotOnly', 'true');
-      return;
-    }
+
     if (value) p.set(key, String(value));
   });
   if (view === 'companies') p.set('view', 'companies');
@@ -241,6 +238,7 @@ function JobsInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cities, setCities] = useState<MetaItem[]>([]);
+  const [countries, setCountries] = useState<MetaItem[]>([]);
   const [categories, setCategories] = useState<MetaItem[]>([]);
   const [skills, setSkills] = useState<MetaItem[]>([]);
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
@@ -249,8 +247,9 @@ function JobsInner() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [retry, setRetry] = useState(0);
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
+  const [recommendationPage,setRecommendationPage]=useState(1);
+  const [recommendationMeta,setRecommendationMeta]=useState({total:0,totalPages:1,mode:"LATEST"});
   const [discovery, setDiscovery] = useState<{ status: 'loading' | 'ready' | 'error'; profile: EmployeeProfile | null; rows: RecommendedItem[] }>({ status: 'loading', profile: null, rows: [] });
-  const [breakdownId, setBreakdownId] = useState<string | null>(null);
   const requestedMode = searchParams.get('mode');
   const hasSearchIntent = Object.keys(EMPTY).some((key) => !['limit', 'skillMode'].includes(key) && filterParams.has(key)) || browseCompanies;
   const personalized = Boolean(isEmployee && (requestedMode === 'for-you' || (requestedMode !== 'all' && !hasSearchIntent && hasCareerSignal(discovery.profile) && discovery.rows.length > 0)));
@@ -260,11 +259,11 @@ function JobsInner() {
     if (!isEmployee) return;
     let active = true;
     setDiscovery((current) => ({ ...current, status: 'loading' }));
-    Promise.all([api<EmployeeProfile>('/profiles/me'), api<RecommendedItem[]>('/jobs/recommended')])
-      .then(([profile, rows]) => { if (active) setDiscovery({ status: 'ready', profile, rows }); })
+    Promise.all([api<EmployeeProfile>('/profiles/me'), api<RecommendationPage>(`/jobs/recommended?page=${recommendationPage}&limit=24`)])
+      .then(([profile, result]) => { if (active) { setDiscovery({ status: 'ready', profile, rows:result.items }); setRecommendationMeta(result); setRecommendationPage(result.page); } })
       .catch(() => { if (active) setDiscovery((current) => ({ ...current, status: 'error' })); });
     return () => { active = false; };
-  }, [isEmployee, locale, discoveryRetry]);
+  }, [isEmployee, locale, discoveryRetry,recommendationPage]);
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
@@ -277,10 +276,12 @@ function JobsInner() {
       api<MetaItem[]>('/meta/skills?sort=popular&take=120', { auth: false }),
       api<MetaItem[]>('/meta/benefits', { auth: false }),
       api<LangMeta[]>('/meta/languages', { auth: false }),
+      api<MetaItem[]>('/meta/countries', { auth: false }),
     ])
-      .then(([c, cat, sk, b, langs]) => {
+      .then(([c, cat, sk, b, langs, countryRows]) => {
         if (!active) return;
         setCities(c);
+        setCountries(countryRows);
         setCategories(cat);
         setSkills(sk);
         setBenefits(b);
@@ -288,7 +289,7 @@ function JobsInner() {
       })
       .catch(() => undefined);
     api<SearchResponse>('/jobs?limit=1&sort=newest', { auth: false })
-      .then((r) => { if (active) { setHiringCompanies(r.facets?.companies || []); setCatalogCitySlugs((r.facets?.cities || []).map((city) => city.slug)); } })
+      .then((r) => { if (active) { setHiringCompanies(r.facets?.companies || []); } })
       .catch(() => undefined);
     return () => { active = false; };
   }, [locale]);
@@ -364,7 +365,8 @@ function JobsInner() {
     : data?.facets?.companies || [];
   const expFacet = data?.facets?.experienceLevels || {};
 
-  const titleFacetList = data?.facets?.jobTitles || [];
+  const { roles: titleCatalog } = useRoleCatalog();
+  const titleFacetList = titleCatalog;
   const singleJobTitleSlug =
     filters.jobTitle && !filters.jobTitle.includes(',') ? filters.jobTitle : '';
   const activeJobTitle =
@@ -393,21 +395,21 @@ function JobsInner() {
     filters.skillMode !== 'OR' ? filters.skillMode : '',
   ].filter(Boolean).length;
   const activeFilterCount =
-    advancedActiveCount + [filters.q, filters.city, filters.category, filters.companySlug, filters.experienceLevel, filters.workMode, filters.salaryMin, filters.salaryMax, filters.hotOnly].filter(Boolean).length;
+    advancedActiveCount + [filters.q, filters.city, filters.country, filters.category, filters.companySlug, filters.experienceLevel, filters.workMode, filters.salaryMin, filters.salaryMax].filter(Boolean).length;
   const forceAdvancedOpen = advancedActiveCount > 0;
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     const location = String(fd.get('location') || '');
-    const city = location.startsWith('country:') ? searchCities.filter((item) => item.province?.country?.slug === location.slice(8)).map((item) => item.slug).join(',') : location;
-    apply({ q: String(fd.get('q') || '').trim(), city });
+    const city = location.startsWith('country:') ? '' : location;
+    const country = location.startsWith('country:') ? location.slice(8) : '';
+    apply({ q: String(fd.get('q') || '').trim(), city, country });
   }
 
 
   const [companyQ, setCompanyQ] = useState('');
-  const [locationDraft, setLocationDraft] = useState(filters.city);
-  const [catalogCitySlugs, setCatalogCitySlugs] = useState<string[]>([]);
+  const [locationDraft, setLocationDraft] = useState(filters.country ? `country:${filters.country}` : filters.city);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState('');
@@ -421,10 +423,10 @@ function JobsInner() {
   const requestedJob = searchParams.get('job');
   const selectedId = requestedJob;
   const selectedJob = data?.items.find((job) => job.id === selectedId) || discovery.rows.find((item) => item.job.id === selectedId)?.job;
-  const searchCities = cities.filter((city) => catalogCitySlugs.includes(city.slug) || selectedCities.includes(city.slug));
+  const searchCities = cities;
   const countryForCity = (slug?: string, name?: string) => cities.find((city) => city.slug === slug || (!slug && city.name === name))?.province?.country?.name;
 
-  useEffect(() => { setLocationDraft(filters.city); }, [filters.city]);
+  useEffect(() => { setLocationDraft(filters.country ? `country:${filters.country}` : filters.city); }, [filters.city, filters.country]);
   useEffect(() => {
     if (!isEmployee) return;
     let active = true;
@@ -516,26 +518,26 @@ function JobsInner() {
     params.delete('job');
     openedLocally.current = false;
     setFiltersOpen(false);
-    setBreakdownId(null);
     router.push(`/jobs?${params}`, { scroll: false });
     if (listRef.current) listRef.current.scrollTop = 0;
   }
 
   const profile = discovery.profile;
   const completeness = profile ? scoreProfileCompleteness({ ...profile, email: session?.user.email, emailVerified: session?.user.emailVerified, telegramLinked: session?.user.telegramLinked, avatarUrl: session?.user.avatarUrl }).percent : 0;
-  const recommendations = discovery.rows.map((item) => ({ ...item.job, matchScore: item.matchScore }));
+  const recommendations = discovery.rows.map((item) => item.job);
   const visibleJobs = personalized ? recommendations : data?.items || [];
   const resultsLoading = decidingMode || (personalized ? discovery.status === 'loading' : loading);
   const resultsError = personalized ? discovery.status === 'error' ? t('workspace.recommendationError') : '' : error;
 
   const activeChips: Array<{ key: string; label: string; remove: () => void }> = [];
   if (filters.q) activeChips.push({ key: 'q', label: filters.q, remove: () => apply({ q: '' }) });
+  filters.country.split(',').filter(Boolean).forEach(slug => activeChips.push({ key: `country-${slug}`, label: countries.find(country => country.slug === slug)?.name || slug, remove: () => apply({ country: toggleCsv(filters.country, slug) }) }));
   if (selectedCities.length > 2) activeChips.push({ key: 'cities', label: t('workspace.locationCount').replace('{n}', String(selectedCities.length)), remove: () => apply({ city: '' }) });
   else selectedCities.forEach((slug) => activeChips.push({ key: `city-${slug}`, label: cities.find((city) => city.slug === slug)?.name || slug, remove: () => apply({ city: toggleCsv(filters.city, slug) }) }));
   selectedCats.forEach((slug) => activeChips.push({ key: `category-${slug}`, label: categories.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ category: toggleCsv(filters.category, slug) }) }));
   selectedCompanies.forEach((slug) => activeChips.push({ key: `company-${slug}`, label: companyFacetList.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ companySlug: toggleCsv(filters.companySlug, slug) }) }));
   selectedSkills.forEach((slug) => activeChips.push({ key: `skill-${slug}`, label: skills.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ skills: toggleCsv(filters.skills, slug) }) }));
-  if (activeJobTitle) activeChips.push({ key: 'title', label: activeJobTitle.name, remove: () => apply({ jobTitle: '' }) });
+  filters.jobTitle.split(',').filter(Boolean).forEach(slug => activeChips.push({ key: `title-${slug}`, label: titleCatalog.find(role => role.slug === slug)?.name || slug, remove: () => apply({ jobTitle: toggleCsv(filters.jobTitle, slug) }) }));
   if (activeIndustry) activeChips.push({ key: 'industry', label: activeIndustry.name, remove: () => apply({ industrySlug: '' }) });
 
   return (
@@ -549,7 +551,7 @@ function JobsInner() {
         </form>
       </header>
       {isEmployee && <nav className={s.modeBar} aria-label={t('home.findJobs')} inert={filtersOpen ? true : undefined}>
-        <Link href="/jobs?mode=for-you" aria-current={personalized ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('for-you'); }}>{t('home.forYou')}{discovery.status === 'ready' && discovery.rows.length > 0 && <span>{discovery.rows.length}</span>}</Link>
+        <Link href="/jobs?mode=for-you" aria-current={personalized ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('for-you'); }}>{t('home.forYou')}{discovery.status === 'ready' && discovery.rows.length > 0 && <span>{recommendationMeta.total}</span>}</Link>
         <Link href="/jobs?mode=all" aria-current={!personalized && !decidingMode ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('all'); }}>{t('workspace.allJobs')}</Link>
         <Link className={s.profileShortcut} href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}<JobsIcon kind="external" /></Link>
       </nav>}
@@ -580,6 +582,7 @@ function JobsInner() {
             <details className={s.moreFilters} open={forceAdvancedOpen || undefined}><summary><JobsIcon kind="filter" />{t('workspace.moreFilters')}{advancedActiveCount > 0 && <span>{advancedActiveCount}</span>}<JobsIcon kind="chevron" /></summary>
 
 
+          <CatalogRoleFilter value={filters.jobTitle} onChange={jobTitle => apply({ jobTitle })} />
           <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
             <FormField label={t('matchMode')} optional>
               <select
@@ -697,23 +700,23 @@ function JobsInner() {
           <button className={s.showResults} type="button" onClick={() => setFiltersOpen(false)}>{t('workspace.showResults')} {data ? `(${data.total})` : ''}</button>
         </aside>}
         <section className={s.results} aria-label={t('jobs')} inert={filtersOpen ? true : undefined}>
-          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}><strong>{t('workspace.personalized')}</strong><p>{t('workspace.recommendationHint')}</p></div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><label className={s.featuredToggle}><input type="checkbox" aria-label={t('workspace.featuredOnly')} checked={filters.hotOnly} onChange={(event) => apply({ hotOnly: event.target.checked })} /><span>{t('workspace.featuredOnly')}</span></label><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
+          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}><strong>{t('workspace.personalized')}</strong><p>{recommendationMeta.mode === 'LATEST' ? t('workspace.latestOpeningsHint') : t('workspace.recommendationHint')}</p></div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
           {!personalized && !!activeChips.length && <div className={s.activeChips}>{activeChips.map((chip) => <button key={chip.key} type="button" onClick={chip.remove}>{chip.label}<JobsIcon kind="close" /></button>)}</div>}
           <div ref={listRef} className={s.resultsScroll} aria-busy={resultsLoading}>
             {saveError && <div className={s.error} role="alert">{saveError}</div>}
             {isEmployee && !personalized && !decidingMode && discovery.status !== 'loading' && (discovery.status === 'error' || !hasCareerSignal(profile) || !discovery.rows.length) && <div className={s.personalizeBanner}><JobsIcon kind="sparkles" /><div><strong>{t(discovery.status === 'error' ? 'workspace.recommendationError' : !hasCareerSignal(profile) ? 'workspace.unlockTitle' : 'workspace.noMatchesTitle')}</strong>{discovery.status !== 'error' && <p>{t(!hasCareerSignal(profile) ? 'workspace.unlockCopy' : 'workspace.noMatchesCopy')}</p>}</div>{discovery.status === 'error' ? <button type="button" className={s.textButton} onClick={() => setDiscoveryRetry((value) => value + 1)}>{t('workspace.retry')}</button> : <Link href="/dashboard/employee?tab=profile">{t('workspace.editProfile')}<JobsIcon kind="external" /></Link>}</div>}
             {resultsError && <div className={s.message} role="alert"><p>{resultsError}</p><button type="button" className={s.outlineButton} onClick={() => personalized ? setDiscoveryRetry((value) => value + 1) : setRetry((value) => value + 1)}>{t('workspace.retry')}</button></div>}
-            {resultsLoading ? <div className={s.listSkeleton} role="status" aria-label={t('ui.loading')}>{Array.from({ length: 6 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div> : !resultsError && visibleJobs.map((job) => <article key={job.id} className={`${s.jobRow} ${selectedId === job.id ? s.selectedRow : ''}`}>
+            {resultsLoading ? <div className={s.listSkeleton} role="status" aria-label={t('ui.loading')}>{Array.from({ length: 6 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div> : !resultsError && visibleJobs.map((job) => <article key={job.id} data-job-impression={job.id} className={`${s.jobRow} ${selectedId === job.id ? s.selectedRow : ''}`}>
               <Link href={`/jobs/${job.id}`} className={s.jobLink} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>
                 <span className={s.jobLogo}>{job.company.logoUrl ? <img src={job.company.logoUrl} alt="" loading="lazy" /> : job.company.name.charAt(0)}</span>
-                <div className={s.jobCopy}><div className={s.rowHeading}><h2>{sanitizeMojibake(job.title)}</h2>{job.isHot && <span className={s.featuredBadge}>{t('landing.badge')}</span>}</div><p>{job.company.name}</p><div className={s.jobMeta}>{job.city?.name && <span><JobsIcon kind="pin" />{[job.city.name, countryForCity(job.city.slug)].filter(Boolean).join(', ')}</span>}{job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}{job.employmentType && <span><JobsIcon kind="document" />{enumLabel('employmentType', job.employmentType)}</span>}</div><strong className={s.jobSalary}>{formatJobSalary(job, locale, t)}</strong></div>
+                <div className={s.jobCopy}><div className={s.rowHeading}><h2>{sanitizeMojibake(job.title)}</h2></div><p>{job.company.name}</p><div className={s.jobMeta}>{job.city?.name && <span><JobsIcon kind="pin" />{[job.city.name, countryForCity(job.city.slug)].filter(Boolean).join(', ')}</span>}{job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}{job.employmentType && <span><JobsIcon kind="document" />{enumLabel('employmentType', job.employmentType)}</span>}</div><strong className={s.jobSalary}>{formatJobSalary(job, locale, t)}</strong></div>
               </Link>
               {(!session || isEmployee) && <button className={s.saveButton} type="button" aria-label={`${t('saveJob')}: ${job.title}`} aria-pressed={savedIds.has(job.id)} disabled={savingIds.has(job.id)} onClick={() => void toggleSaved(job.id)}><JobsIcon kind={savedIds.has(job.id) ? 'check' : 'bookmark'} /></button>}
-              {personalized ? <div className={s.matchReason}><button type="button" aria-expanded={breakdownId === job.id} aria-controls={`match-${job.id}`} onClick={() => setBreakdownId((current) => current === job.id ? null : job.id)}><JobsIcon kind="sparkles" />{t('workspace.whyMatch').replace('{n}', String(job.matchScore))}<JobsIcon kind="chevron" /></button>{breakdownId === job.id && <div id={`match-${job.id}`}><MatchBreakdownPanel breakdown={discovery.rows.find((item) => item.job.id === job.id)?.matchBreakdown || {}} /></div>}</div> : job.matchScore != null && <span className={s.matchScore} title={t('job.yourMatch')}>{job.matchScore}%</span>}
             </article>)}
             {!resultsLoading && !resultsError && visibleJobs.length === 0 && (personalized ? <div className={s.discoveryEmpty}><JobsIcon kind="sparkles" /><h2>{t(hasCareerSignal(profile) ? 'workspace.noMatchesTitle' : 'workspace.unlockTitle')}</h2><p>{t(hasCareerSignal(profile) ? 'workspace.noMatchesCopy' : 'workspace.unlockCopy')}</p><div><button type="button" className={s.primaryButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')}</button><Link href="/dashboard/employee?tab=profile" className={s.outlineButton}>{t('workspace.editProfile')}</Link></div></div> : <div className={s.message}><JobsIcon kind="search" /><h2>{t('job.noResults')}</h2><button className={s.primaryButton} type="button" onClick={() => apply({ ...EMPTY, sort: implicitSort })}>{t('clearFilters')}</button></div>)}
-            {personalized && !resultsLoading && !resultsError && visibleJobs.length > 0 && <div className={s.recommendationEnd}><span>{t('workspace.recommendationCount').replace('{n}', String(visibleJobs.length))}</span><button type="button" className={s.textButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')} →</button></div>}
+            {personalized && !resultsLoading && !resultsError && visibleJobs.length > 0 && <div className={s.recommendationEnd}><span>{t('workspace.recommendationCount').replace('{n}', String(recommendationMeta.total))}</span><button type="button" className={s.textButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')} →</button></div>}
           </div>
+          {personalized && recommendationMeta.total > 0 && <div className={s.pagination}><Pagination page={recommendationPage} totalPages={recommendationMeta.totalPages} total={recommendationMeta.total} limit={24} onPageChange={setRecommendationPage} disabled={resultsLoading} /></div>}
           {!personalized && !decidingMode && data && data.total > 0 && <div className={s.pagination}><WorkspaceSelect className={s.perPage} value={String(filters.limit)} label={t('resultsPerPage')} onChange={(limit) => apply({ limit: Number(limit) })} options={PAGE_SIZE_OPTIONS.map((count) => ({ value: String(count), label: t('job.perPage').replace('{n}', String(count)) }))} /><Pagination page={data.page} totalPages={data.totalPages} total={data.total} limit={data.limit} onPageChange={(page) => { listScroll.current = 0; if (listRef.current) listRef.current.scrollTop = 0; apply({ page }); }} disabled={loading} jumpWhenAbove={1000} truncatedNote={data.truncated ? t('job.truncatedNote').replace('{n}', String(data.total)).replace('{m}', String(data.matchedTotal ?? data.total)) : null} /></div>}
         </section>
         <aside className={s.previewPane} aria-label={t('workspace.details')} inert={filtersOpen ? true : undefined}>

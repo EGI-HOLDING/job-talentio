@@ -12,6 +12,7 @@ export const enums = {
   'enum.jobStatus.PUBLISHED': { uz: 'Chop etilgan', ru: 'Опубликовано', en: 'Published' },
   'enum.jobStatus.PAUSED': { uz: 'To‘xtatilgan', ru: 'Приостановлено', en: 'Paused' },
   'enum.jobStatus.CLOSED': { uz: 'Yopilgan', ru: 'Закрыто', en: 'Closed' },
+  'enum.jobStatus.EXPIRED': { uz: 'Muddati tugagan', ru: 'Срок истек', en: 'Expired' },
   'enum.jobStatus.ARCHIVED': { uz: 'Arxivlangan', ru: 'В архиве', en: 'Archived' },
 
   'enum.employmentType.FULL_TIME': {
@@ -58,11 +59,6 @@ export const enums = {
   'enum.experienceLevel.LEAD': { uz: 'Lead', ru: 'Lead', en: 'Lead' },
   'enum.experienceLevel.EXECUTIVE': { uz: 'Rahbar', ru: 'Руководитель', en: 'Executive' },
 
-  'enum.plan.FREE': { uz: 'Bepul', ru: 'Бесплатный', en: 'Free' },
-  'enum.plan.STANDARD': { uz: 'Standart', ru: 'Стандарт', en: 'Standard' },
-  'enum.plan.PREMIUM': { uz: 'Premium', ru: 'Премиум', en: 'Premium' },
-  'enum.plan.VIP': { uz: 'VIP', ru: 'VIP', en: 'VIP' },
-
   'enum.role.EMPLOYEE': { uz: 'Nomzod', ru: 'Соискатель', en: 'Job seeker' },
   'enum.role.RECRUITER': { uz: 'Rekruter', ru: 'Рекрутер', en: 'Recruiter' },
   'enum.role.SUPER_ADMIN': { uz: 'Administrator', ru: 'Администратор', en: 'Administrator' },
@@ -71,12 +67,6 @@ export const enums = {
 
   'enum.frequency.DAILY': { uz: 'Har kuni', ru: 'Ежедневно', en: 'Daily' },
   'enum.frequency.WEEKLY': { uz: 'Har hafta', ru: 'Еженедельно', en: 'Weekly' },
-
-  'enum.paymentStatus.PENDING': { uz: 'Kutilmoqda', ru: 'В ожидании', en: 'Pending' },
-  'enum.paymentStatus.PAID': { uz: 'To‘langan', ru: 'Оплачено', en: 'Paid' },
-  'enum.paymentStatus.FAILED': { uz: 'Muvaffaqiyatsiz', ru: 'Ошибка', en: 'Failed' },
-  'enum.paymentStatus.REFUNDED': { uz: 'Qaytarilgan', ru: 'Возвращено', en: 'Refunded' },
-  'enum.paymentStatus.MOCKED': { uz: 'Sinov to‘lovi', ru: 'Тестовый платёж', en: 'Mock payment' },
 
   'enum.workMode.location.REMOTE': { uz: 'Masofaviy', ru: 'Удалённо', en: 'Remote' },
   'enum.workMode.location.HYBRID': { uz: 'Gibrid', ru: 'Гибрид', en: 'Hybrid' },

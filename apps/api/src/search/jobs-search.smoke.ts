@@ -18,6 +18,9 @@ function keywordSearchIncludesCatalogTitle() {
   const clause = JSON.stringify(jobKeywordOr('Sales'));
   assert(clause.includes('jobTitle'), 'keyword search must look at the catalog title');
   assert(clause.includes('nameUz'), 'keyword search must look at translated catalog names');
+  assert(clause.includes('aliases'), 'keyword search must include role/city aliases');
+  assert(clause.includes('country'), 'keyword search must include country-only remote jobs');
+  assert(clause.includes('"isAnonymous":false'), 'company keyword matching must exclude confidential postings');
   assert(
     (JOBS_INDEX_SETTINGS.searchableAttributes as readonly string[]).includes('jobTitle'),
     'Meili must index the catalog title',
@@ -27,21 +30,30 @@ function keywordSearchIncludesCatalogTitle() {
 function documentCarriesCatalogTitle() {
   const doc = toJobSearchDocument({
     id: 'job-1',
+    isAnonymous: false,
     title: 'Sales Manager',
     description: 'B2B sales',
     publishedAt: null,
     company: { name: 'UzPay' },
     city: null,
     category: null,
-    jobTitle: { name: 'Sales Manager', nameUz: 'Savdo menejeri', nameRu: null },
+    country: { name: 'Indonesia', nameId: 'Indonesia' },
+    jobTitle: { name: 'Sales Manager', nameUz: 'Savdo menejeri', nameRu: null, aliases: [{ alias: 'Sales Lead' }] },
     jobSkills: [],
     translations: [],
   });
   assert(doc.title === 'Sales Manager', 'posting title stays searchable');
+  const confidential = toJobSearchDocument({
+    id: 'private-job', isAnonymous: true, title: 'Engineer', description: 'Private employer',
+    publishedAt: null, company: { name: 'Secret Employer' }, city: null, category: null,
+    jobTitle: null, jobSkills: [], translations: [],
+  });
+  assert(confidential.companyName === '', 'confidential employer must not enter the search index');
   assert(
-    doc.jobTitle === 'Sales Manager Savdo menejeri',
+    doc.jobTitle === 'Sales Manager Savdo menejeri Sales Lead',
     `catalog title missing from the index document: ${doc.jobTitle}`,
   );
+  assert(doc.countryName === 'Indonesia Indonesia', 'country must be indexed even without a city');
 }
 
 deadOrEmptyMeiliIdsAreNotAFilter();

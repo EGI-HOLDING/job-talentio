@@ -8,7 +8,6 @@ async function bootstrap() {
   // Fail fast before Nest wires JWT if staging/prod secrets are weak
   resolveJwtSecret();
 
-  // rawBody is required to verify payment webhook HMAC signatures.
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.setGlobalPrefix('api');
 
@@ -67,7 +66,8 @@ async function bootstrap() {
     }),
   );
   const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
-  await app.listen(port);
+  if (process.env.HR_DEMO_MODE === 'true') await app.listen(port, '127.0.0.1');
+  else await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Job Talentio API listening on port ${port}`);
 }

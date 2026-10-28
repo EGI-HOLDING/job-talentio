@@ -142,11 +142,12 @@ export default function VerificationsPage() {
   async function submitDecision() {
     if (!decision) return;
     const { row, status } = decision;
-    setDecision(null);
-    await table.runAction(
+    const saved = await table.runAction(
       apiPost(`/admin/verifications/${row.id}/decide`, { status, reviewNote: note.trim() || undefined }),
       status === 'APPROVED' ? `${row.company.name} verified` : `Request for ${row.company.name} declined`,
     );
+    if (!saved) return;
+    setDecision(null);
     setNote('');
   }
 

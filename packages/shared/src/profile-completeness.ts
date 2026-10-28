@@ -9,6 +9,8 @@ export type ProfileCompletenessCheck = {
 export type ProfileCompletenessInput = {
   headline?: string | null;
   city?: unknown;
+  residenceCountryId?: string | null;
+  noExperience?: boolean;
   skills?: unknown[] | null;
   experiences?: unknown[] | null;
   educations?: unknown[] | null;
@@ -42,8 +44,8 @@ export function scoreProfileCompleteness(input: ProfileCompletenessInput): {
     },
     {
       id: 'city',
-      ok: Boolean(input.city),
-      labelKey: 'emp.checkSetCity',
+      ok: Boolean(input.residenceCountryId || input.city),
+      labelKey: 'emp.checkSetCountry',
       weight: 10,
     },
     {
@@ -54,7 +56,7 @@ export function scoreProfileCompleteness(input: ProfileCompletenessInput): {
     },
     {
       id: 'experience',
-      ok: (input.experiences ?? []).length >= 1,
+      ok: Boolean(input.noExperience) || (input.experiences ?? []).length >= 1,
       labelKey: 'emp.checkAddExperience',
       weight: 20,
     },

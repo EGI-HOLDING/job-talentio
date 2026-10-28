@@ -7,8 +7,6 @@ import { sanitizeMojibake } from '@/lib/text';
 import { localizedJobLocation } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 import { ExploreSection } from '@/components/explore/ExploreSection';
-import { MatchRing } from '@/components/ui/MatchRing';
-import { MatchBreakdownPanel, type MatchBreakdownData } from '@/components/ui/MatchBreakdownPanel';
 
 type RecommendedJob = {
   id: string;
@@ -20,8 +18,6 @@ type RecommendedJob = {
 
 type RecommendedItem = {
   job: RecommendedJob;
-  matchScore?: number | null;
-  matchBreakdown?: MatchBreakdownData | null;
 };
 
 type ProfileSignal = {
@@ -45,12 +41,11 @@ export function ForYouJobsSection() {
   const [items, setItems] = useState<RecommendedItem[]>([]);
   const [profile, setProfile] = useState<ProfileSignal | null>(null);
   const [ready, setReady] = useState(false);
-  const [breakdownId, setBreakdownId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      api<RecommendedItem[]>('/jobs/recommended').catch(() => [] as RecommendedItem[]),
+      api<RecommendedItem[]>('/jobs/recommended?limit=6').catch(() => [] as RecommendedItem[]),
       api<ProfileSignal>('/profiles/me').catch(() => null),
     ]).then(([rows, me]) => {
       if (cancelled) return;
@@ -90,11 +85,9 @@ export function ForYouJobsSection() {
       ) : (
         <div className="grid-2">
           {items.map((item) => {
-            const rowId = `home-rec-${item.job.id}`;
-            const open = breakdownId === rowId;
             return (
               <div
-                key={item.job.id}
+                key={item.job.id} data-job-impression={item.job.id}
                 className="card job-card"
                 style={{ margin: 0, gridTemplateColumns: '56px 1fr auto' }}
               >
@@ -117,26 +110,8 @@ export function ForYouJobsSection() {
                     <span>{item.job.company.name}</span>
                     <span>{localizedJobLocation(item.job, t)}</span>
                   </div>
-                  {item.matchScore != null && item.matchBreakdown && (
-                    <>
-                      <button
-                        type="button"
-                        className="badge match"
-                        style={{ marginTop: '0.55rem', border: 0, cursor: 'pointer' }}
-                        onClick={() => setBreakdownId(open ? null : rowId)}
-                      >
-                        {t('match')} {item.matchScore}% | {t('emp.details')}
-                      </button>
-                      {open && (
-                        <MatchBreakdownPanel
-                          breakdown={item.matchBreakdown}
-                          style={{ marginTop: '0.5rem' }}
-                        />
-                      )}
-                    </>
-                  )}
                 </div>
-                {item.matchScore != null ? <MatchRing score={item.matchScore} size="sm" /> : <div />}
+
               </div>
             );
           })}

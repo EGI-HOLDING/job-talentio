@@ -4,7 +4,6 @@ export const discovery = {
   'discovery.industries': { en: 'Industries', ru: 'Отрасли', uz: 'Tarmoqlar' },
   'discovery.allIndustries': { en: 'All industries', ru: 'Все отрасли', uz: 'Barcha tarmoqlar' },
   'discovery.searchIndustries': { en: 'Search industries...', ru: 'Поиск отраслей...', uz: 'Tarmoqlarni qidirish...' },
-  'discovery.vipOnly': { en: 'VIP only', ru: 'Только VIP', uz: 'Faqat VIP' },
   'discovery.noIndustries': { en: 'No matching industries', ru: 'Отрасли не найдены', uz: 'Mos tarmoq topilmadi' },
   'discovery.companyEmpty': { en: 'No companies match your filters.', ru: 'Нет компаний с такими фильтрами.', uz: 'Filtrlarga mos kompaniya topilmadi.' },
   'discovery.companyError': { en: 'Companies could not be loaded.', ru: 'Не удалось загрузить компании.', uz: 'Kompaniyalarni yuklab bo‘lmadi.' },

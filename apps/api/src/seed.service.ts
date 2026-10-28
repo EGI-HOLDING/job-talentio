@@ -24,10 +24,7 @@ export class SeedService implements OnModuleInit {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       if (existing.role !== 'SUPER_ADMIN') {
-        await this.prisma.user.update({
-          where: { id: existing.id },
-          data: { role: 'SUPER_ADMIN' },
-        });
+        this.logger.warn('Super Admin bootstrap skipped: the configured email belongs to an existing non-admin account.');
       }
       return;
     }

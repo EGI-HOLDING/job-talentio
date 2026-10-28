@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, localeHref, Link } from '@/lib/navigation';
+import { loginForCurrentPage } from '@/lib/authReturn';
 import { api, getSession, saveSession, logout, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
 import { FormAlert, FormField, PasswordInput } from '@/components/ui/Field';
@@ -11,12 +12,13 @@ import { TelegramSignIn } from '@/components/auth/TelegramSignIn';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
+import { LinkedInIntegrationPanel } from '@/components/recruiter/LinkedInIntegrationPanel';
 import ws from '@/components/employee/Workspace.module.css';
 import st from '@/components/employee/SettingsWorkspace.module.css';
 
-type Section = 'account' | 'preferences' | 'privacy' | 'security';
+type Section = 'account' | 'preferences' | 'privacy' | 'integrations' | 'security';
 
-const SETTINGS_SECTIONS: Section[] = ['account', 'preferences', 'privacy', 'security'];
+const SETTINGS_SECTIONS: Section[] = ['account', 'preferences', 'privacy', 'integrations', 'security'];
 const TELEGRAM_BOT = (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '').replace(/^@/, '');
 const TELEGRAM_BOT_URL = TELEGRAM_BOT ? `https://t.me/${TELEGRAM_BOT}` : '';
 
@@ -92,7 +94,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const s = getSession();
     if (!s) {
-      router.replace('/login');
+      router.replace(loginForCurrentPage());
       return;
     }
     setSession(s);
@@ -122,6 +124,7 @@ export default function SettingsPage() {
       const hash = window.location.hash.replace(/^#/, '');
       if (!isSettingsSection(hash)) return;
       if (hash === 'privacy' && getSession()?.user.role !== 'EMPLOYEE') return;
+      if (hash === 'integrations' && getSession()?.user.role !== 'RECRUITER') return;
       setSection(hash);
     }
     applyHash();
@@ -137,7 +140,15 @@ export default function SettingsPage() {
 
   async function goToSection(next: Section) {
     if (next === section || saving || privacyLoading || operationBusy || telegramBusy || deleteBusy) return;
-    const dirty = section === 'account' ? accountDirty : section === 'preferences' ? preferencesDirty : section === 'privacy' ? privacyDirty : securityDirty;
+    const dirty = section === 'account'
+      ? accountDirty
+      : section === 'preferences'
+        ? preferencesDirty
+        : section === 'privacy'
+          ? privacyDirty
+          : section === 'security'
+            ? securityDirty
+            : false;
     if (dirty && !(await confirm({ title: t('pc.unsaved'), confirmLabel: t('pc.discard'), cancelLabel: t('pc.keepEditing'), tone: 'danger' }))) return;
     if (dirty) resetChanges();
     setSection(next);
@@ -329,8 +340,8 @@ export default function SettingsPage() {
   if (!session) return <section className={ws.root}><WorkspaceLoading /></section>;
 
   const openBotChip = TELEGRAM_BOT_URL ? <a className={ws.secondary} href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">{t('telegramOpenBot')}</a> : null;
-  const sectionIcons: Record<Section, string> = { account: 'user', preferences: 'globe', privacy: 'shield', security: 'lock' };
-  const sections: Array<[Section, string]> = [['account', t('account')], ['preferences', t('language')], ...(isEmployee ? [['privacy', t('ui.privacy')] as [Section, string]] : []), ['security', t('security')]];
+  const sectionIcons: Record<Section, string> = { account: 'user', preferences: 'globe', privacy: 'shield', integrations: 'send', security: 'lock' };
+  const sections: Array<[Section, string]> = [['account', t('account')], ['preferences', t('language')], ...(isEmployee ? [['privacy', t('ui.privacy')] as [Section, string]] : []), ...(isRecruiter ? [['integrations', t('li.integrations')] as [Section, string]] : []), ['security', t('security')]];
 
   return <section className={ws.root} aria-label={t('settings')}>
     {confirmUnlink && <ConfirmModal title={t('telegramUnlinkTitle')} message={t('telegramUnlinkMessage')} confirmLabel={t('ui.telegramUnlink')} danger busy={telegramBusy} onCancel={() => { if (!telegramBusy) setConfirmUnlink(false); }} onConfirm={() => void unlinkTelegram()} />}
@@ -346,13 +357,14 @@ export default function SettingsPage() {
             <section className={st.row}><div className={st.label}><h2>{t('ew.signInEmail')}</h2><p>{t('ew.signInEmailHint')}</p></div><div className={st.control}><div className={st.email}><span>{session.user.email || t('addEmailTitle')}</span>{canVerifyEmail && (session.user.emailVerified ? <span className={st.verified}><WorkspaceIcon kind="check" />{t('emailVerifiedBadge')}</span> : <span className={st.unverified}>{t('emailUnverifiedBadge')}</span>)}</div>{canVerifyEmail && !session.user.emailVerified && <button type="button" className={st.link} disabled={verifyBusy} onClick={() => void requestEmailVerification()}>{t(verifyBusy ? 'verifyEmailSending' : 'verifyEmailCta')}</button>}<div><button type="button" className={st.link} onClick={() => void goToSection('security')}>{t('ew.manageSecurity')}<WorkspaceIcon kind="arrow" /></button></div></div></section>
             {isEmployee && <section className={st.row}><div className={st.label}><h2>{t('ew.careerProfile')}</h2><p>{t('ew.careerProfileHint')}</p></div><div className={st.control}><Link className={ws.secondary} href="/dashboard/employee?tab=profile">{t('ew.openProfile')}<WorkspaceIcon kind="arrow" /></Link></div></section>}
           </fieldset></form>}
-          {section === 'preferences' && <><form id="language-settings-form" className={st.form} onSubmit={saveAccount}><section className={st.row}><div className={st.label}><label htmlFor="settings-language">{t('language')}</label><p>{t('languagePreference')}</p></div><div className={st.control}><select id="settings-language" value={prefLocale} onChange={(event) => setPrefLocale(event.target.value as Locale)} disabled={saving}><option value="en">English</option><option value="ru">Русский</option><option value="uz">O'zbekcha</option></select></div></section></form>{isEmployee && <section className={st.row}><div className={st.label}><h2>{t('ui.telegramAlerts')}</h2><p>{t('ui.telegramAlertsHint')}</p></div><div className={st.control}><span className={st.status} data-connected={telegramLinked}><WorkspaceIcon kind="telegram" />{t(telegramLinked ? 'ui.telegramLinked' : 'ui.telegramNotLinked')}</span><div className={st.inlineActions}>{telegramLinked ? openBotChip : <button type="button" className={ws.secondary} onClick={() => void goToSection('security')}>{t('ui.telegramConnectInSecurity')}</button>}<button type="button" className={ws.textButton} disabled={telegramBusy} onClick={() => void refreshTelegramStatus().catch((error: Error) => setErr(error.message))}>{t('ui.telegramRefresh')}</button><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')} →</Link></div></div></section>}</>}
+          {section === 'preferences' && <><form id="language-settings-form" className={st.form} onSubmit={saveAccount}><section className={st.row}><div className={st.label}><label htmlFor="settings-language">{t('language')}</label><p>{t('languagePreference')}</p></div><div className={st.control}><select id="settings-language" value={prefLocale} onChange={(event) => setPrefLocale(event.target.value as Locale)} disabled={saving}><option value="en">English</option><option value="ru">Русский</option><option value="uz">O'zbekcha</option><option value="id">Indonesia</option></select></div></section></form>{isEmployee && <section className={st.row}><div className={st.label}><h2>{t('ui.telegramAlerts')}</h2><p>{t('ui.telegramAlertsHint')}</p></div><div className={st.control}><span className={st.status} data-connected={telegramLinked}><WorkspaceIcon kind="telegram" />{t(telegramLinked ? 'ui.telegramLinked' : 'ui.telegramNotLinked')}</span><div className={st.inlineActions}>{telegramLinked ? openBotChip : <button type="button" className={ws.secondary} onClick={() => void goToSection('security')}>{t('ui.telegramConnectInSecurity')}</button>}<button type="button" className={ws.textButton} disabled={telegramBusy} onClick={() => void refreshTelegramStatus().catch((error: Error) => setErr(error.message))}>{t('ui.telegramRefresh')}</button><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')} →</Link></div></div></section>}</>}
           {section === 'privacy' && isEmployee && <form id="privacy-settings-form" className={st.form} onSubmit={savePrivacy}><section className={st.row}><div className={st.label}><h2>{t('ui.privacy')}</h2><p>{t('ui.privacyBulkIntro')}</p></div><div className={st.control}><label className={st.choice}><input type="checkbox" checked={bulkOptedOut} onChange={(event) => setBulkOptedOut(event.target.checked)} disabled={privacyLoading} /><span><strong>{t('ui.optOutBulkTitle')}</strong><small>{t('ui.optOutBulkHint')}</small></span></label></div></section></form>}
+          {section === 'integrations' && isRecruiter && <LinkedInIntegrationPanel />}
           {section === 'security' && <>
             <section className={st.row}><div className={st.label}><h2>{t('changePassword')}</h2><p>{t(hasPassword ? 'ui.passwordRuleHint' : 'passwordlessHint')}</p></div><div className={st.control}>{hasPassword && <form className={st.stack} onSubmit={changePassword}><FormField label={t('currentPassword')} required><PasswordInput value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required autoComplete="current-password" /></FormField><div><FormField label={t('newPassword')} required><PasswordInput value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength={8} maxLength={128} autoComplete="new-password" /></FormField>{newPassword && <><div className={st.strength} aria-hidden="true"><i style={{ width: strength.score + '%', background: strength.color }} /></div><span id="workspace-password-strength" className={st.hint} role="status">{t('ui.passwordStrength')}: {t(strength.labelKey)}</span></>}</div><button type="submit" className={ws.primary} disabled={operationBusy !== null || !currentPassword || newPassword.length < 8}>{t(operationBusy === 'password' ? 'saving' : 'changePassword')}</button></form>}</div></section>
             <section className={st.row}><div className={st.label}><h2>{t('telegramConnectTitle')}</h2><p>{t(telegramLinked ? 'telegramOpenBotHint' : 'telegramConnectHint')}</p></div><div className={st.control}>{telegramLinked ? <><span className={st.status} data-connected="true"><WorkspaceIcon kind="check" />{t('telegramConnected')}</span><div className={st.inlineActions}>{openBotChip}<button type="button" className={ws.secondary} disabled={telegramBusy} onClick={() => setConfirmUnlink(true)}>{t('ui.telegramUnlink')}</button><button type="button" className={ws.textButton} disabled={telegramBusy} onClick={() => void refreshTelegramStatus().catch((error: Error) => setErr(error.message))}>{t('ui.telegramRefresh')}</button></div></> : <><TelegramSignIn mode="connect" onConnected={() => { const fresh = getSession(); if (fresh) { setSession(fresh); setTelegramLinked(Boolean(fresh.user.telegramLinked)); } setMsg(t('telegramConnected')); }} />{!TELEGRAM_BOT && <button type="button" className={ws.secondary} disabled={telegramBusy} onClick={() => void linkTelegram()}>{t('ui.telegramLink')}</button>}</>}</div></section>
             <section className={st.row}><div className={st.label}><h2>{t(hasEmail ? 'ui.changeEmail' : 'addEmailTitle')}</h2><p>{t(hasEmail ? 'ui.changeEmailHint' : 'addEmailHint')}</p></div><div className={st.control}><form className={st.stack} onSubmit={requestEmailChange}><FormField label={t(hasEmail ? 'ui.newEmail' : 'email')} required><input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} required autoComplete="email" /></FormField>{hasPassword && <FormField label={t('currentPassword')} required><PasswordInput value={emailChangePassword} onChange={(event) => setEmailChangePassword(event.target.value)} required autoComplete="current-password" /></FormField>}<button type="submit" className={ws.primary} disabled={operationBusy !== null || !newEmail}>{t(operationBusy === 'email' ? 'saving' : hasEmail ? 'ui.sendConfirmation' : 'addEmailCta')}</button></form></div></section>
-            {session.user.role !== 'SUPER_ADMIN' && <section className={st.row + ' ' + st.danger}><div className={st.label}><h2>{t('ui.deleteAccountTitle')}</h2><p>{t('ui.deleteAccountHint')}</p></div><div className={st.control}>{ownerBlock && <p className={st.hint}>{t('ui.deleteAccountOwnerHint')}{isRecruiter && <Link href="/dashboard/recruiter"> {t('ui.goToCompanySettings')}</Link>}</p>}<div className={st.stack}>{hasPassword && <FormField label={t('ui.deleteAccountPassword')} required><PasswordInput value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" /></FormField>}<div><button type="button" className={ws.danger} disabled={deleteBusy || (hasPassword && !deletePassword)} onClick={() => setConfirmDelete(true)}>{t('ui.deleteAccount')}</button></div></div></div></section>}
+            {session.user.role !== 'SUPER_ADMIN' && <section className={st.row + ' ' + st.danger}><div className={st.label}><h2>{t('ui.deleteAccountTitle')}</h2><p>{t('ui.deleteAccountHint')}</p></div><div className={st.control}>{ownerBlock && <p className={st.hint}>{t('ui.deleteAccountOwnerHint')}{isRecruiter && <Link href="/dashboard/recruiter?tab=company"> {t('ui.goToCompanySettings')}</Link>}</p>}<div className={st.stack}>{hasPassword && <FormField label={t('ui.deleteAccountPassword')} required><PasswordInput value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" /></FormField>}<div><button type="button" className={ws.danger} disabled={deleteBusy || (hasPassword && !deletePassword)} onClick={() => setConfirmDelete(true)}>{t('ui.deleteAccount')}</button></div></div></div></section>}
           </>}
         </div>
         {(section === 'account' || section === 'preferences' || section === 'privacy') && <footer className={st.actions}><button type="button" className={ws.secondary} disabled={saving || privacyLoading} onClick={resetChanges}>{t('cancel')}</button><button type="submit" form={section === 'account' ? 'account-settings-form' : section === 'privacy' ? 'privacy-settings-form' : 'language-settings-form'} className={ws.primary} disabled={saving || privacyLoading || !(section === 'account' ? accountDirty : section === 'privacy' ? privacyDirty : preferencesDirty)}>{t(saving || privacyLoading ? 'saving' : 'ew.saveChanges')}</button></footer>}

@@ -7,17 +7,18 @@ export function jobKeywordOr(term: string): Prisma.JobPostWhereInput {
     OR: [
       { title: like },
       { description: like },
-      { translations: { some: { title: like } } },
-      { translations: { some: { description: like } } },
-      { jobTitle: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
-      { company: { name: like } },
+      { translations: { some: { isMachine: false, title: like } } },
+      { translations: { some: { isMachine: false, description: like } } },
+      { jobTitle: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }, { nameId: like }, { aliases: { some: { alias: like } } }] } },
+      { isAnonymous: false, company: { name: like } },
       {
         jobSkills: {
-          some: { skill: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
+          some: { skill: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }, { nameId: like }] } },
         },
       },
-      { city: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
-      { category: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }] } },
+      { city: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }, { nameId: like }, { aliases: { some: { alias: like } } }] } },
+      { country: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }, { nameId: like }] } },
+      { category: { OR: [{ name: like }, { nameUz: like }, { nameRu: like }, { nameId: like }] } },
     ],
   };
 }

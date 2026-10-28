@@ -24,6 +24,7 @@ import {
 } from '@/components/data/TableChrome';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { Badge, DateField, MultiSelect, SelectField } from '@/components/ui/primitives';
+import { useToast } from '@/components/ui/Toaster';
 
 const DEFAULTS = { page: '1', limit: '25', sort: 'createdAt', dir: 'desc' };
 const FILTER_KEYS = [
@@ -44,6 +45,7 @@ const FILTER_KEYS = [
 type RowAction = 'ban' | 'reset' | 'verify' | 'revoke';
 
 export default function UsersPage() {
+  const { notify } = useToast();
   const table = useAdminTable<AdminUser>({
     path: '/admin/users',
     defaults: DEFAULTS,
@@ -131,22 +133,30 @@ export default function UsersPage() {
   if (query.createdFrom) activeFilters.push({ key: 'createdFrom', label: `From ${query.createdFrom}` });
   if (query.createdTo) activeFilters.push({ key: 'createdTo', label: `To ${query.createdTo}` });
 
-  function exportCsv() {
-    const rows = table.selected.size
-      ? table.rows.filter((row) => table.selected.has(row.id))
-      : table.rows;
-    downloadCsv(timestampedName('users'), rows, [
-      { header: 'id', value: (r) => r.id },
-      { header: 'fullName', value: (r) => r.fullName },
-      { header: 'email', value: (r) => r.email ?? '' },
-      { header: 'role', value: (r) => r.role },
-      { header: 'locale', value: (r) => r.locale },
-      { header: 'banned', value: (r) => r.isBanned },
-      { header: 'emailVerified', value: (r) => r.emailVerified },
-      { header: 'anonymized', value: (r) => r.anonymized },
-      { header: 'lastSeenAt', value: (r) => r.lastSeenAt ?? '' },
-      { header: 'createdAt', value: (r) => r.createdAt },
-    ]);
+  async function exportCsv(selectedOnly = false) {
+    try {
+      const rows = selectedOnly
+        ? await apiPost<AdminUser[]>('/admin/users/selected', { ids: [...table.selected] })
+        : table.rows;
+      if (!rows.length) {
+        notify('No users to export', 'error');
+        return;
+      }
+      downloadCsv(timestampedName('users'), rows, [
+        { header: 'id', value: (r) => r.id },
+        { header: 'fullName', value: (r) => r.fullName },
+        { header: 'email', value: (r) => r.email ?? '' },
+        { header: 'role', value: (r) => r.role },
+        { header: 'locale', value: (r) => r.locale },
+        { header: 'banned', value: (r) => r.isBanned },
+        { header: 'emailVerified', value: (r) => r.emailVerified },
+        { header: 'anonymized', value: (r) => r.anonymized },
+        { header: 'lastSeenAt', value: (r) => r.lastSeenAt ?? '' },
+        { header: 'createdAt', value: (r) => r.createdAt },
+      ]);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not export users', 'error');
+    }
   }
 
   const pendingCopy: Record<RowAction, { title: string; description: string; confirm: string; ok: string; path: string }> =
@@ -201,10 +211,11 @@ export default function UsersPage() {
 
   async function submitInvite(e: FormEvent) {
     e.preventDefault();
-    await table.runAction(
+    const saved = await table.runAction(
       apiPost('/admin/users', { email: inviteEmail.trim(), fullName: inviteName.trim() }),
       'Operator invited. They will get a set-password email.',
     );
+    if (!saved) return;
     setInviteOpen(false);
     setInviteEmail('');
     setInviteName('');
@@ -213,13 +224,14 @@ export default function UsersPage() {
   async function submitAnonymize() {
     if (!anonymizeRow) return;
     const row = anonymizeRow;
-    setAnonymizeRow(null);
-    setAnonymizeReason('');
-    setAnonymizeTyped('');
-    await table.runAction(
+    const saved = await table.runAction(
       apiPost(`/admin/users/${row.id}/anonymize`, { reason: anonymizeReason.trim() }),
       'Account anonymized',
     );
+    if (!saved) return;
+    setAnonymizeRow(null);
+    setAnonymizeReason('');
+    setAnonymizeTyped('');
   }
 
   const anonymizeEmail = (anonymizeRow?.email || '').trim().toLowerCase();
@@ -238,7 +250,7 @@ export default function UsersPage() {
             <button type="button" className="secondary" onClick={() => setInviteOpen(true)}>
               Invite operator
             </button>
-            <button type="button" className="secondary" onClick={exportCsv} disabled={!table.rows.length}>
+            <button type="button" className="secondary" onClick={() => void exportCsv()} disabled={!table.rows.length}>
               Export CSV
             </button>
           </>
@@ -317,6 +329,8 @@ export default function UsersPage() {
 
         <SelectAllNotice
           pageCount={table.rows.length}
+          selectedOnPage={table.rows.filter((row) => table.selected.has(row.id)).length}
+          selectedCount={table.selected.size}
           total={table.total}
           allMatchingSelected={table.allMatching.active}
           capped={table.allMatching.capped}
@@ -432,7 +446,7 @@ export default function UsersPage() {
           >
             Unban selected
           </button>
-          <button type="button" className="secondary sm" onClick={exportCsv}>
+          <button type="button" className="secondary sm" onClick={() => void exportCsv(true)}>
             Export selected
           </button>
         </BulkBar>

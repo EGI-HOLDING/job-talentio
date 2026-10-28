@@ -10,19 +10,9 @@ export class LocalCvParseProvider implements CvParseProvider {
   constructor(private config?: ConfigService) {}
 
   async parse(input: CvParseProviderInput): Promise<ParsedCvData> {
-    const { kind, text, ocrUsed } = await extractCvText(input, this.config);
+    const { text, ocrUsed } = await extractCvText(input, this.config);
 
-    if (kind === 'other') {
-      const parsed = stripNullBytesDeep(parseCvText('', input.knownSkills));
-      return {
-        ...parsed,
-        textPreview:
-          'Structured parse supports PDF and DOCX; file is stored for download.',
-        meta: { provider: this.name, ocrUsed: false, llmUsed: false },
-      };
-    }
-
-    const parsed = stripNullBytesDeep(parseCvText(text, input.knownSkills));
+    const parsed = stripNullBytesDeep(parseCvText(text, input.knownSkills, input.knownLanguages));
     return {
       ...parsed,
       meta: { provider: this.name, ocrUsed, llmUsed: false },

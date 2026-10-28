@@ -3,7 +3,9 @@ import { authLink } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
 import { FormEvent, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { jobBackHref, jobDetailHref } from '@/lib/accountNavigation';
+import { trackJobEvent,jobAttribution } from '@/lib/hr-events';
 import { api, getSession } from '@/lib/api';
 import { readSource, rememberSource } from '@/lib/acquisition';
 
@@ -11,7 +13,6 @@ import { sanitizeMojibake } from '@/lib/text';
 
 import { FormField, LabelText } from '@/components/ui/Field';
 import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
-import { MatchBreakdownPanel } from '@/components/ui/MatchBreakdownPanel';
 import { useI18n } from '@/lib/i18n';
 
 import { JobPreview } from '@/components/jobs/JobPreview';
@@ -32,8 +33,6 @@ type Job = {
   description: string;
   /** Language the title and description are served in (may differ from the UI). */
   contentLocale?: string | null;
-  isMachineTranslated?: boolean;
-  canMachineTranslate?: boolean;
   salaryMin?: number | null;
   salaryMax?: number | null;
   currency?: string;
@@ -42,8 +41,7 @@ type Job = {
   employmentType?: string;
   experienceLevel?: string | null;
   experienceYearsMin?: number | null;
-  isHot?: boolean;
-  boostUntil?: string | null;
+
   chatPeerUserId?: string | null;
   jobTitleId?: string | null;
   jobTitle?: { id: string; name: string; slug: string } | null;
@@ -102,6 +100,7 @@ type DetailProps = { jobId?: string; embedded?: boolean; country?: string; onBac
 
 export function JobDetailClient({ jobId, embedded = false, country, onBack, saveState }: DetailProps = {}) {
   const params = useParams<{ id?: string }>();
+  const searchParams = useSearchParams();
   const id = jobId || params.id || '';
   const { t, locale } = useI18n();
   const [job, setJob] = useState<Job | null>(null);
@@ -112,7 +111,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [translating, setTranslating] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -124,10 +122,9 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);
   const jobTitleId = job?.jobTitleId || job?.jobTitle?.id || null;
   const defaultApplyRole = job?.jobTitle?.name || job?.title || '';
-  const viewerMatchBreakdown = myApplication?.matchBreakdown || job?.matchBreakdown || null;
-  const viewerMatchScore =
-    myApplication?.matchScore != null ? myApplication.matchScore : job?.matchScore ?? null;
   const isEmployee = session?.user.role === 'EMPLOYEE';
+  const ownsCompany = session?.user.memberships?.some((membership) => membership.companyId === job?.company.id);
+  const backHref = jobBackHref(session?.user.role, searchParams.get('returnTo'), ownsCompany ? job?.company.id : undefined);
   useEffect(() => {
     if (embedded || !isEmployee) return;
     let active = true;
@@ -155,11 +152,11 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     api<Job>(`/jobs/${id}`)
       .then(async (j) => {
         if (!active) return;
+        void trackJobEvent(id,'DETAIL_VIEW');
         setJob({
           ...j,
-          isHot: !!(j.boostUntil && new Date(j.boostUntil).getTime() > Date.now()),
         });
-        if (session) {
+        if (isEmployee) {
           try {
             const f = await api<{ following: boolean }>(`/companies/${j.company.id}/following`);
             if (active) setFollowing(f.following);
@@ -183,7 +180,10 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     return () => { active = false; };
   }, [id, locale, retry]);
 
+  useEffect(()=>{if(showApply)void trackJobEvent(id,'APPLY_START');},[showApply,id]);
+
   async function toggleFollow() {
+    if (session && !isEmployee) return;
     if (!session || !job) {
       window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
       return;
@@ -226,6 +226,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
       const created = await api<MyApplicationState>(`/applications/jobs/${id}`, {
         method: 'POST',
         body: JSON.stringify({
+          funnelSession: await jobAttribution(id),
           coverLetter: String(fd.get('coverLetter') || '').trim() || undefined,
           answers,
           resumeId: selectedResumeId || undefined,
@@ -295,27 +296,8 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     } finally { setSaving(false); }
   }
 
-  /** Machine translation is cached server-side, so this costs at most once. */
-  async function machineTranslate() {
-    setTranslating(true);
-    setError('');
-    try {
-      const res = await api<{ status: string; job: Job }>(`/jobs/${id}/translate/${locale}`, {
-        method: 'POST',
-      });
-      if (res.job) setJob(res.job);
-      if (res.status === 'disabled' || res.status === 'budget-exceeded') {
-        setError(t('ui.translateFailed'));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('ui.translateFailed'));
-    } finally {
-      setTranslating(false);
-    }
-  }
-
   if (!job && !error) return <div className={`${workspaceStyles.previewLoading} ${embedded ? '' : workspaceStyles.standalone}`} role="status" aria-label={t('ui.loading')}><span /><span /><span /><span /></div>;
-  if (error && !job) return <div className={workspaceStyles.previewLoading}><p className="error" role="alert">{t('public.loadError')}</p><button type="button" className={workspaceStyles.primaryButton} onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button><p>{onBack ? <button type="button" className={workspaceStyles.textAction} onClick={onBack}>{t('workspace.back')}</button> : <Link href="/jobs">{t('workspace.back')}</Link>}</p></div>;
+  if (error && !job) return <div className={workspaceStyles.previewLoading}><p className="error" role="alert">{t('public.loadError')}</p><button type="button" className={workspaceStyles.primaryButton} onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button><p>{onBack ? <button type="button" className={workspaceStyles.textAction} onClick={onBack}>{t('workspace.back')}</button> : <Link href={backHref}>{t('workspace.back')}</Link>}</p></div>;
   if (!job) return null;
 
   const applicationDialogs = <>
@@ -438,16 +420,16 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   </>;
 
   return <JobPreview standalone={!embedded}
+    backHref={backHref}
+    companyHref={'/companies/' + job.company.slug + '?returnTo=' + encodeURIComponent(jobDetailHref(id, backHref))}
     chatHref={isEmployee && job.chatPeerUserId ? `/messages?peer=${job.chatPeerUserId}&job=${id}` : undefined}
     job={job} country={country} onBack={onBack}
-    onApply={!alreadyApplied && (!session || session.user.role === 'EMPLOYEE') ? () => void beginApply() : undefined}
+    onApply={!alreadyApplied && (!session || session.user.role === 'EMPLOYEE') ? () => {void trackJobEvent(id,'APPLY_CLICK');void beginApply();} : undefined}
     onSave={() => { if (saveState) void saveState.onToggle(); else void saveJob().catch((error) => setError(error.message)); }}
     saved={saveState?.saved ?? saved} saving={saveState?.pending ?? saving}
     canSave={!session || session.user.role === 'EMPLOYEE'}
-    onFollow={() => void toggleFollow().catch((error) => setError(error.message))} following={following}
+    onFollow={!session || isEmployee ? () => void toggleFollow().catch((error) => setError(error.message)) : undefined} following={following}
     appliedStatus={myApplication?.status} guest={!session} busy={submitting}
-    success={success} error={error} translating={translating}
-    onTranslate={job.canMachineTranslate ? () => void machineTranslate() : undefined}
-    matchContent={session?.user.role === 'EMPLOYEE' && viewerMatchBreakdown ? <section><h3>{t('job.yourMatch')}{viewerMatchScore != null ? ' ' + viewerMatchScore + '%' : ''}</h3><MatchBreakdownPanel breakdown={viewerMatchBreakdown} /></section> : null}
+    success={success} error={error}
   >{applicationDialogs}</JobPreview>;
 }

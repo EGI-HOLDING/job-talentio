@@ -1,41 +1,16 @@
-import { PrismaClient, PlanCode, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
-import { BENEFIT_ICONS, CATEGORY_ICONS } from '@job-talentio/shared';
+import { PrismaClient, DegreeLevel, SkillLevel, CompanySize } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { normalizeJobTitleKey, resolveJobTitle } from '../src/common/title-resolve';
-import { upsertUzbekistanGeo } from '../src/common/geo-catalog';
-import { backfillIndustries } from '../src/common/industry-backfill';
-import { backfillJobLanguages } from '../src/common/job-language-backfill';
-import { COMPANY_INDUSTRY_OVERRIDES } from '../src/common/industry-catalog';
+
+import { DEMO_COMPANY_INDUSTRY_SLUGS as COMPANY_INDUSTRY_OVERRIDES } from '../src/common/demo-company-industries';
 import { demoCompanyLogoKey, isDemoCompanyLogoSlug } from '../src/common/company-logo-map';
 import { backfillCompanyLogos } from '../src/common/company-logo-backfill';
 import { createDemoLogoUploaderFromEnv } from '../src/common/demo-logo-storage';
 import { backfillNews } from '../src/common/news-backfill';
-import { backfillCatalogI18n } from '../src/common/i18n/catalog-i18n-backfill';
+
 import { backfillJobLocale } from '../src/common/i18n/job-locale-backfill';
 import { EGI_HOSPITALITY_DEMO_COMPANIES } from '../src/common/egi-hospitality-demo';
-import {
-  DEMO_CITY_SLUGS,
-  DEMO_JOB_TEMPLATES,
-  seedDemoApplications,
-  seedDemoJobs,
-} from '../src/common/demo-jobs';
-
-/** Orthographic aliases → canonical title name (seeded after jobs resolve). */
-const JOB_TITLE_ALIASES: Array<{ alias: string; canonical: string }> = [
-  { alias: 'Front End Developer', canonical: 'Frontend Developer' },
-  { alias: 'Front-End Developer', canonical: 'Frontend Developer' },
-  { alias: 'Frontend Dev', canonical: 'Frontend Developer' },
-  { alias: 'CPP Developer', canonical: 'C++ Developer' },
-  { alias: 'C Plus Plus Developer', canonical: 'C++ Developer' },
-  { alias: 'Full Stack Developer', canonical: 'Full-stack Developer' },
-  { alias: 'Fullstack Developer', canonical: 'Full-stack Developer' },
-];
 
 const prisma = new PrismaClient();
-
-function slugify(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60);
-}
 
 function avatar(n: number) {
   return `https://i.pravatar.cc/300?img=${n}`;
@@ -50,189 +25,10 @@ function logo(slug: string, name: string, color: string) {
   return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=${color}`;
 }
 
-/** Primary hubs used for round-robin seed of jobs/companies/profiles */
-const SEED_CITY_SLUGS = DEMO_CITY_SLUGS;
-
-const CATEGORIES = [
-  { name: 'IT & Software', slug: 'it-software', icon: CATEGORY_ICONS['it-software'] },
-  { name: 'Finance & Banking', slug: 'finance', icon: CATEGORY_ICONS.finance },
-  { name: 'Sales & Marketing', slug: 'sales-marketing', icon: CATEGORY_ICONS['sales-marketing'] },
-  { name: 'Design & Creative', slug: 'design', icon: CATEGORY_ICONS.design },
-  { name: 'HR & Recruiting', slug: 'hr', icon: CATEGORY_ICONS.hr },
-  { name: 'Education', slug: 'education', icon: CATEGORY_ICONS.education },
-  { name: 'Healthcare', slug: 'healthcare', icon: CATEGORY_ICONS.healthcare },
-  { name: 'Engineering', slug: 'engineering', icon: CATEGORY_ICONS.engineering },
-  { name: 'Customer Support', slug: 'customer-support', icon: CATEGORY_ICONS['customer-support'] },
-  { name: 'Logistics', slug: 'logistics', icon: CATEGORY_ICONS.logistics },
-  { name: 'Legal', slug: 'legal', icon: CATEGORY_ICONS.legal },
-  { name: 'Hospitality', slug: 'hospitality', icon: CATEGORY_ICONS.hospitality },
-];
-
-const SKILLS: Array<{ name: string; category: string }> = [
-  { name: 'TypeScript', category: 'Programming' },
-  { name: 'JavaScript', category: 'Programming' },
-  { name: 'Python', category: 'Programming' },
-  { name: 'Java', category: 'Programming' },
-  { name: 'Go', category: 'Programming' },
-  { name: 'PHP', category: 'Programming' },
-  { name: 'C#', category: 'Programming' },
-  { name: 'C++', category: 'Programming' },
-  { name: 'Kotlin', category: 'Programming' },
-  { name: 'Swift', category: 'Programming' },
-  { name: 'React', category: 'Frontend' },
-  { name: 'Next.js', category: 'Frontend' },
-  { name: 'Vue.js', category: 'Frontend' },
-  { name: 'Angular', category: 'Frontend' },
-  { name: 'NestJS', category: 'Backend' },
-  { name: 'Node.js', category: 'Backend' },
-  { name: 'Django', category: 'Backend' },
-  { name: 'Spring Boot', category: 'Backend' },
-  { name: 'Laravel', category: 'Backend' },
-  { name: 'PostgreSQL', category: 'Database' },
-  { name: 'MongoDB', category: 'Database' },
-  { name: 'Redis', category: 'Database' },
-  { name: 'MySQL', category: 'Database' },
-  { name: 'Docker', category: 'DevOps' },
-  { name: 'Kubernetes', category: 'DevOps' },
-  { name: 'AWS', category: 'DevOps' },
-  { name: 'CI/CD', category: 'DevOps' },
-  { name: 'Linux', category: 'DevOps' },
-  { name: 'GraphQL', category: 'API' },
-  { name: 'REST API', category: 'API' },
-  { name: 'Figma', category: 'Design' },
-  { name: 'UI/UX', category: 'Design' },
-  { name: 'Adobe Photoshop', category: 'Design' },
-  { name: 'Product Management', category: 'Business' },
-  { name: 'Agile', category: 'Business' },
-  { name: 'Scrum', category: 'Business' },
-  { name: 'Project Management', category: 'Business' },
-  { name: 'Sales', category: 'Business' },
-  { name: 'Digital Marketing', category: 'Marketing' },
-  { name: 'SEO', category: 'Marketing' },
-  { name: 'Content Writing', category: 'Marketing' },
-  { name: 'SMM', category: 'Marketing' },
-  { name: 'Google Analytics', category: 'Marketing' },
-  { name: 'Accounting', category: 'Finance' },
-  { name: 'Financial Analysis', category: 'Finance' },
-  { name: 'Excel', category: 'Finance' },
-  { name: '1C', category: 'Finance' },
-  { name: 'Customer Support', category: 'Support' },
-  { name: 'English', category: 'Language' },
-  { name: 'Russian', category: 'Language' },
-  { name: 'Uzbek', category: 'Language' },
-  { name: 'Communication', category: 'Soft' },
-  { name: 'Leadership', category: 'Soft' },
-  { name: 'Problem Solving', category: 'Soft' },
-  { name: 'Teamwork', category: 'Soft' },
-  { name: 'Machine Learning', category: 'Data' },
-  { name: 'Data Analysis', category: 'Data' },
-  { name: 'SQL', category: 'Data' },
-  { name: 'Tableau', category: 'Data' },
-  { name: 'Power BI', category: 'Data' },
-  { name: 'QA Testing', category: 'QA' },
-  { name: 'Selenium', category: 'QA' },
-  { name: 'Cypress', category: 'QA' },
-  { name: 'Mobile Development', category: 'Mobile' },
-  { name: 'Flutter', category: 'Mobile' },
-  { name: 'React Native', category: 'Mobile' },
-  { name: 'HR Management', category: 'HR' },
-  { name: 'Recruiting', category: 'HR' },
-  { name: 'Legal Research', category: 'Legal' },
-  { name: 'Contract Law', category: 'Legal' },
-  { name: 'Supply Chain', category: 'Logistics' },
-  { name: 'Nursing', category: 'Healthcare' },
-  { name: 'Patient Care', category: 'Healthcare' },
-  { name: 'Clinical Research', category: 'Healthcare' },
-  { name: 'Pharmacy', category: 'Healthcare' },
-  { name: 'Teaching', category: 'Education' },
-  { name: 'Curriculum Design', category: 'Education' },
-  { name: 'Hospitality Management', category: 'Hospitality' },
-  { name: 'Food Safety', category: 'Hospitality' },
-  { name: 'AutoCAD', category: 'Engineering' },
-  { name: 'Mechanical Design', category: 'Engineering' },
-  { name: 'Electrical Engineering', category: 'Engineering' },
-];
-
-/** alias string → skill slug */
-const SKILL_ALIASES: Array<{ alias: string; skillSlug: string }> = [
-  { alias: 'React.JS', skillSlug: 'react' },
-  { alias: 'ReactJS', skillSlug: 'react' },
-  { alias: 'CPP', skillSlug: 'cplusplus' },
-  { alias: 'C plus plus', skillSlug: 'cplusplus' },
-  { alias: 'NodeJS', skillSlug: 'node-js' },
-  { alias: 'Node', skillSlug: 'node-js' },
-  { alias: 'NextJS', skillSlug: 'next-js' },
-  { alias: 'VueJS', skillSlug: 'vue-js' },
-  { alias: 'k8s', skillSlug: 'kubernetes' },
-  { alias: 'Postgres', skillSlug: 'postgresql' },
-  { alias: 'JS', skillSlug: 'javascript' },
-  { alias: 'TS', skillSlug: 'typescript' },
-];
-
-function skillSlugifySeed(name: string) {
-  let s = name.trim().toLowerCase();
-  s = s.replace(/c\+\+/gi, 'cplusplus').replace(/c#/gi, 'csharp');
-  return slugify(s);
-}
-
-function normalizeSkillKeySeed(input: string): string {
-  let s = input
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '');
-  s = s
-    .replace(/c\+\+/g, 'cplusplus')
-    .replace(/c#/g, 'csharp')
-    .replace(/\.js\b/g, 'js')
-    .replace(/\.ts\b/g, 'ts');
-  s = s.replace(/[^a-z0-9]+/g, '');
-  const synonyms: Record<string, string> = {
-    reactjs: 'react',
-    cpp: 'cplusplus',
-    cplusplus: 'cplusplus',
-    nodejs: 'nodejs',
-    nextjs: 'nextjs',
-    vuejs: 'vuejs',
-    js: 'javascript',
-    ts: 'typescript',
-  };
-  return synonyms[s] ?? s;
-}
-
-const LANGUAGES = [
-  { name: 'Uzbek', code: 'uz' },
-  { name: 'Russian', code: 'ru' },
-  { name: 'English', code: 'en' },
-  { name: 'Kazakh', code: 'kk' },
-  { name: 'Turkish', code: 'tr' },
-  { name: 'German', code: 'de' },
-  { name: 'French', code: 'fr' },
-  { name: 'Korean', code: 'ko' },
-  { name: 'Chinese', code: 'zh' },
-  { name: 'Arabic', code: 'ar' },
-];
-
-const BENEFITS = [
-  { name: 'Health Insurance', slug: 'health-insurance', icon: BENEFIT_ICONS['health-insurance'] },
-  { name: 'Remote Work', slug: 'remote-work', icon: BENEFIT_ICONS['remote-work'] },
-  { name: 'Flexible Hours', slug: 'flexible-hours', icon: BENEFIT_ICONS['flexible-hours'] },
-  { name: 'Meal Allowance', slug: 'meal-allowance', icon: BENEFIT_ICONS['meal-allowance'] },
-  { name: 'Learning Budget', slug: 'learning-budget', icon: BENEFIT_ICONS['learning-budget'] },
-  { name: 'Gym Membership', slug: 'gym', icon: BENEFIT_ICONS.gym },
-  { name: 'Paid Vacation', slug: 'paid-vacation', icon: BENEFIT_ICONS['paid-vacation'] },
-  { name: 'Stock Options', slug: 'stock-options', icon: BENEFIT_ICONS['stock-options'] },
-  { name: 'Relocation Support', slug: 'relocation', icon: BENEFIT_ICONS.relocation },
-  { name: 'Equipment Budget', slug: 'equipment', icon: BENEFIT_ICONS.equipment },
-  { name: 'Parental Leave', slug: 'parental-leave', icon: BENEFIT_ICONS['parental-leave'] },
-  { name: 'Performance Bonus', slug: 'bonus', icon: BENEFIT_ICONS.bonus },
-];
-
 type SeedCompany = {
   name: string;
   slug: string;
   industry: string;
-  plan: PlanCode;
   city: string;
   color: string;
   size: CompanySize;
@@ -242,31 +38,31 @@ type SeedCompany = {
 };
 
 const COMPANIES: SeedCompany[] = [
-  { name: 'Apex Soft Tashkent', slug: 'demo-tech-tashkent', industry: COMPANY_INDUSTRY_OVERRIDES['demo-tech-tashkent'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize, mailDomain: 'apexsoft.uz' },
-  { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: COMPANY_INDUSTRY_OVERRIDES['uzpay-fintech'], plan: 'VIP' as PlanCode, city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize, mailDomain: 'uzpay.uz' },
-  { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: COMPANY_INDUSTRY_OVERRIDES['silk-road-commerce'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'silkroad.uz' },
-  { name: 'Tashkent Soft Labs', slug: 'tashkent-soft-labs', industry: COMPANY_INDUSTRY_OVERRIDES['tashkent-soft-labs'], plan: 'PREMIUM' as PlanCode, city: 'tashkent', color: '2563eb', size: 'SIZE_11_50' as CompanySize, mailDomain: 'softlabs.uz' },
-  { name: 'Samarkand Digital', slug: 'samarkand-digital', industry: COMPANY_INDUSTRY_OVERRIDES['samarkand-digital'], plan: 'FREE' as PlanCode, city: 'samarkand', color: 'db2777', size: 'SIZE_11_50' as CompanySize, mailDomain: 'samdigital.uz' },
-  { name: 'Orient Bank Digital', slug: 'orient-bank', industry: COMPANY_INDUSTRY_OVERRIDES['orient-bank'], plan: 'VIP' as PlanCode, city: 'tashkent', color: '0f766e', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'orientbank.uz' },
-  { name: 'Fergana Logistics', slug: 'fergana-logistics', industry: COMPANY_INDUSTRY_OVERRIDES['fergana-logistics'], plan: 'STANDARD' as PlanCode, city: 'fergana', color: '7c3aed', size: 'SIZE_51_200' as CompanySize, mailDomain: 'ferganalogistics.uz' },
-  { name: 'EduNest Uzbekistan', slug: 'edunest-uz', industry: COMPANY_INDUSTRY_OVERRIDES['edunest-uz'], plan: 'FREE' as PlanCode, city: 'tashkent', color: 'ea580c', size: 'SIZE_11_50' as CompanySize, mailDomain: 'edunest.uz' },
-  { name: 'MediCare IT', slug: 'medicare-it', industry: COMPANY_INDUSTRY_OVERRIDES['medicare-it'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '0891b2', size: 'SIZE_51_200' as CompanySize, mailDomain: 'medicare-it.uz' },
-  { name: 'Navoi Engineering', slug: 'navoi-engineering', industry: COMPANY_INDUSTRY_OVERRIDES['navoi-engineering'], plan: 'FREE' as PlanCode, city: 'navoi', color: '64748b', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'navoieng.uz' },
-  { name: 'Andijan AgroTech', slug: 'andijan-agrotech', industry: COMPANY_INDUSTRY_OVERRIDES['andijan-agrotech'], plan: 'STANDARD' as PlanCode, city: 'andijan', color: '65a30d', size: 'SIZE_51_200' as CompanySize, mailDomain: 'agrotech.uz' },
-  { name: 'Bukhara Heritage Hotels', slug: 'bukhara-heritage', industry: COMPANY_INDUSTRY_OVERRIDES['bukhara-heritage'], plan: 'FREE' as PlanCode, city: 'bukhara', color: 'b45309', size: 'SIZE_11_50' as CompanySize, mailDomain: 'bukhotels.uz' },
-  { name: 'ClickPay Solutions', slug: 'clickpay-solutions', industry: COMPANY_INDUSTRY_OVERRIDES['clickpay-solutions'], plan: 'VIP' as PlanCode, city: 'tashkent', color: '0ea5e9', size: 'SIZE_51_200' as CompanySize, mailDomain: 'clickpay.uz' },
-  { name: 'Namangan Textile Group', slug: 'namangan-textile', industry: COMPANY_INDUSTRY_OVERRIDES['namangan-textile'], plan: 'STANDARD' as PlanCode, city: 'namangan', color: 'be185d', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'namtextile.uz' },
-  { name: 'UzTelecom Digital', slug: 'uztelecom-digital', industry: COMPANY_INDUSTRY_OVERRIDES['uztelecom-digital'], plan: 'VIP' as PlanCode, city: 'tashkent', color: '1d4ed8', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'uztelecom.uz' },
-  { name: 'Khorezm Green Energy', slug: 'khorezm-green', industry: COMPANY_INDUSTRY_OVERRIDES['khorezm-green'], plan: 'FREE' as PlanCode, city: 'urgench', color: '15803d', size: 'SIZE_11_50' as CompanySize, mailDomain: 'khorezmgreen.uz' },
-  { name: 'Tashkent Legal Partners', slug: 'tashkent-legal', industry: COMPANY_INDUSTRY_OVERRIDES['tashkent-legal'], plan: 'STANDARD' as PlanCode, city: 'tashkent', color: '334155', size: 'SIZE_11_50' as CompanySize, mailDomain: 'tlpartners.uz' },
-  { name: 'Caravan Marketplace', slug: 'caravan-marketplace', industry: COMPANY_INDUSTRY_OVERRIDES['caravan-marketplace'], plan: 'VIP' as PlanCode, city: 'tashkent', color: 'c2410c', size: 'SIZE_51_200' as CompanySize, mailDomain: 'caravan.uz' },
-  { name: 'Nukus Smart City', slug: 'nukus-smart-city', industry: COMPANY_INDUSTRY_OVERRIDES['nukus-smart-city'], plan: 'FREE' as PlanCode, city: 'nukus', color: '0369a1', size: 'SIZE_11_50' as CompanySize, mailDomain: 'nukussmart.uz' },
-  { name: 'Chirchiq Pharma Lab', slug: 'chirchiq-pharma', industry: COMPANY_INDUSTRY_OVERRIDES['chirchiq-pharma'], plan: 'STANDARD' as PlanCode, city: 'chirchiq', color: '0f766e', size: 'SIZE_51_200' as CompanySize, mailDomain: 'chirchiqpharma.uz' },
+  { name: 'Apex Soft Tashkent', slug: 'demo-tech-tashkent', industry: COMPANY_INDUSTRY_OVERRIDES['demo-tech-tashkent'], city: 'tashkent', color: '4f46e5', size: 'SIZE_51_200' as CompanySize, mailDomain: 'apexsoft.uz' },
+  { name: 'UzPay Fintech', slug: 'uzpay-fintech', industry: COMPANY_INDUSTRY_OVERRIDES['uzpay-fintech'], city: 'tashkent', color: '059669', size: 'SIZE_51_200' as CompanySize, mailDomain: 'uzpay.uz' },
+  { name: 'Silk Road Commerce', slug: 'silk-road-commerce', industry: COMPANY_INDUSTRY_OVERRIDES['silk-road-commerce'], city: 'tashkent', color: 'd97706', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'silkroad.uz' },
+  { name: 'Tashkent Soft Labs', slug: 'tashkent-soft-labs', industry: COMPANY_INDUSTRY_OVERRIDES['tashkent-soft-labs'], city: 'tashkent', color: '2563eb', size: 'SIZE_11_50' as CompanySize, mailDomain: 'softlabs.uz' },
+  { name: 'Samarkand Digital', slug: 'samarkand-digital', industry: COMPANY_INDUSTRY_OVERRIDES['samarkand-digital'], city: 'samarkand', color: 'db2777', size: 'SIZE_11_50' as CompanySize, mailDomain: 'samdigital.uz' },
+  { name: 'Orient Bank Digital', slug: 'orient-bank', industry: COMPANY_INDUSTRY_OVERRIDES['orient-bank'], city: 'tashkent', color: '0f766e', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'orientbank.uz' },
+  { name: 'Fergana Logistics', slug: 'fergana-logistics', industry: COMPANY_INDUSTRY_OVERRIDES['fergana-logistics'], city: 'fergana', color: '7c3aed', size: 'SIZE_51_200' as CompanySize, mailDomain: 'ferganalogistics.uz' },
+  { name: 'EduNest Uzbekistan', slug: 'edunest-uz', industry: COMPANY_INDUSTRY_OVERRIDES['edunest-uz'], city: 'tashkent', color: 'ea580c', size: 'SIZE_11_50' as CompanySize, mailDomain: 'edunest.uz' },
+  { name: 'MediCare IT', slug: 'medicare-it', industry: COMPANY_INDUSTRY_OVERRIDES['medicare-it'], city: 'tashkent', color: '0891b2', size: 'SIZE_51_200' as CompanySize, mailDomain: 'medicare-it.uz' },
+  { name: 'Navoi Engineering', slug: 'navoi-engineering', industry: COMPANY_INDUSTRY_OVERRIDES['navoi-engineering'], city: 'navoi', color: '64748b', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'navoieng.uz' },
+  { name: 'Andijan AgroTech', slug: 'andijan-agrotech', industry: COMPANY_INDUSTRY_OVERRIDES['andijan-agrotech'], city: 'andijan', color: '65a30d', size: 'SIZE_51_200' as CompanySize, mailDomain: 'agrotech.uz' },
+  { name: 'Bukhara Heritage Hotels', slug: 'bukhara-heritage', industry: COMPANY_INDUSTRY_OVERRIDES['bukhara-heritage'], city: 'bukhara', color: 'b45309', size: 'SIZE_11_50' as CompanySize, mailDomain: 'bukhotels.uz' },
+  { name: 'ClickPay Solutions', slug: 'clickpay-solutions', industry: COMPANY_INDUSTRY_OVERRIDES['clickpay-solutions'], city: 'tashkent', color: '0ea5e9', size: 'SIZE_51_200' as CompanySize, mailDomain: 'clickpay.uz' },
+  { name: 'Namangan Textile Group', slug: 'namangan-textile', industry: COMPANY_INDUSTRY_OVERRIDES['namangan-textile'], city: 'namangan', color: 'be185d', size: 'SIZE_201_1000' as CompanySize, mailDomain: 'namtextile.uz' },
+  { name: 'UzTelecom Digital', slug: 'uztelecom-digital', industry: COMPANY_INDUSTRY_OVERRIDES['uztelecom-digital'], city: 'tashkent', color: '1d4ed8', size: 'SIZE_1000_PLUS' as CompanySize, mailDomain: 'uztelecom.uz' },
+  { name: 'Khorezm Green Energy', slug: 'khorezm-green', industry: COMPANY_INDUSTRY_OVERRIDES['khorezm-green'], city: 'urgench', color: '15803d', size: 'SIZE_11_50' as CompanySize, mailDomain: 'khorezmgreen.uz' },
+  { name: 'Tashkent Legal Partners', slug: 'tashkent-legal', industry: COMPANY_INDUSTRY_OVERRIDES['tashkent-legal'], city: 'tashkent', color: '334155', size: 'SIZE_11_50' as CompanySize, mailDomain: 'tlpartners.uz' },
+  { name: 'Caravan Marketplace', slug: 'caravan-marketplace', industry: COMPANY_INDUSTRY_OVERRIDES['caravan-marketplace'], city: 'tashkent', color: 'c2410c', size: 'SIZE_51_200' as CompanySize, mailDomain: 'caravan.uz' },
+  { name: 'Nukus Smart City', slug: 'nukus-smart-city', industry: COMPANY_INDUSTRY_OVERRIDES['nukus-smart-city'], city: 'nukus', color: '0369a1', size: 'SIZE_11_50' as CompanySize, mailDomain: 'nukussmart.uz' },
+  { name: 'Chirchiq Pharma Lab', slug: 'chirchiq-pharma', industry: COMPANY_INDUSTRY_OVERRIDES['chirchiq-pharma'], city: 'chirchiq', color: '0f766e', size: 'SIZE_51_200' as CompanySize, mailDomain: 'chirchiqpharma.uz' },
   ...EGI_HOSPITALITY_DEMO_COMPANIES.map((c) => ({
     name: c.name,
     slug: c.slug,
     industry: COMPANY_INDUSTRY_OVERRIDES[c.slug],
-    plan: 'VIP' as PlanCode,
+
     city: c.city,
     color: c.color,
     size: c.size,
@@ -428,44 +224,38 @@ const EDUCATION_FIELDS = [
   'Communications',
 ];
 
-/** Role-only templates shared with the demo-reset script (seniority lives on experienceLevel). */
-const JOB_TITLES = DEMO_JOB_TEMPLATES;
-
 const SCHOOLS = ['TUIT', 'NUUz', 'Westminster International University in Tashkent', 'INHA University in Tashkent', 'Amity University Tashkent', 'Turin Polytechnic University in Tashkent'];
 const LEVELS: SkillLevel[] = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
+const DEMO_PROFILE_TITLES = [
+  'Software Engineer',
+  'Accountant',
+  'Sales Manager',
+  'Product Designer',
+  'HR Recruiter',
+  'English Teacher',
+  'Data Analyst',
+  'Customer Support Specialist',
+];
 
 async function main() {
   console.log('Seeding Job Talentio...');
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
   // Geo hierarchy (Country → Province → City)
-  const geo = await upsertUzbekistanGeo(prisma);
-  console.log(
-    `Geo: country=${geo.countryId} provinces=${geo.provincesUpserted} cities=${geo.citiesUpserted}`,
-  );
-  const cityMapRows = await prisma.city.findMany({
-    where: { slug: { in: SEED_CITY_SLUGS } },
-  });
+  // Import a reviewed geographic dataset separately before seeding demo profiles.
+  const cityMapRows = await prisma.city.findMany({ where: { archivedAt: null, kind: { in: ['CITY', 'REGENCY'] }, province: { archivedAt: null, country: { isActive: true, archivedAt: null } } }, orderBy: { name: 'asc' } });
+  if (!cityMapRows.length) throw new Error('Import the reviewed geographic catalog before seeding demo profiles.');
   const cityMap = Object.fromEntries(cityMapRows.map((c) => [c.slug, c]));
-  const cities = SEED_CITY_SLUGS.map((slug) => {
-    const row = cityMap[slug];
-    if (!row) throw new Error(`Missing seed city slug: ${slug}`);
-    return row;
+  const cities = cityMapRows;
+
+  // Product catalogs are managed by Admin. Seed may reuse existing rows for
+  // demo profile relations, but it never creates or aliases catalog entries.
+  const categories = await prisma.jobCategory.findMany({
+    where: { archivedAt: null },
+    orderBy: { name: 'asc' },
   });
 
-  const categories = await Promise.all(
-    CATEGORIES.map((c) =>
-      prisma.jobCategory.upsert({
-        where: { slug: c.slug },
-        update: c,
-        create: c,
-      }),
-    ),
-  );
-  const catMap = Object.fromEntries(categories.map((c) => [c.slug, c]));
-
-  await backfillIndustries(prisma, { log: (msg) => console.warn(msg) });
-  const industries = await prisma.industry.findMany();
+  const industries = await prisma.industry.findMany({ where: { archivedAt: null } });
   const indMap = Object.fromEntries(industries.map((i) => [i.slug, i]));
 
   // Push bundled demo logos to MinIO/S3 before company.logoUrl is set.
@@ -474,85 +264,15 @@ async function main() {
   });
   console.log(`Demo logos: uploaded=${logoSeed.uploaded} dbUpdated=${logoSeed.updated}`);
 
-  const skills = await Promise.all(
-    SKILLS.map((s) => {
-      const slug = skillSlugifySeed(s.name);
-      const normalizedKey = normalizeSkillKeySeed(s.name);
-      return prisma.skill.upsert({
-        where: { slug },
-        update: { name: s.name, category: s.category, normalizedKey },
-        create: { name: s.name, slug, category: s.category, normalizedKey },
-      });
-    }),
-  );
-  const skillMap = Object.fromEntries(skills.map((s) => [s.slug, s]));
-
-  for (const a of SKILL_ALIASES) {
-    const skill = skillMap[a.skillSlug];
-    if (!skill) continue;
-    const aliasKey = normalizeSkillKeySeed(a.alias);
-    if (!aliasKey || aliasKey === skill.normalizedKey) continue;
-    await prisma.skillAlias.upsert({
-      where: { aliasKey },
-      update: { alias: a.alias, skillId: skill.id },
-      create: { alias: a.alias, aliasKey, skillId: skill.id },
-    });
-  }
-
-  const languages = await Promise.all(
-    LANGUAGES.map((l) =>
-      prisma.language.upsert({
-        where: { code: l.code },
-        update: { name: l.name, normalizedKey: l.code },
-        create: { ...l, normalizedKey: l.code },
-      }),
-    ),
-  );
+  const skills = await prisma.skill.findMany({
+    where: { archivedAt: null },
+    orderBy: { name: 'asc' },
+  });
+  const languages = await prisma.language.findMany({
+    where: { archivedAt: null },
+    orderBy: { name: 'asc' },
+  });
   const langMap = Object.fromEntries(languages.map((l) => [l.code, l]));
-  for (const [alias, code] of [
-    ['Uzbekcha', 'uz'],
-    ['O\'zbek', 'uz'],
-    ['Русский', 'ru'],
-    ['English language', 'en'],
-  ] as const) {
-    const lang = langMap[code];
-    if (!lang) continue;
-    const aliasKey = alias.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, '');
-    if (!aliasKey) continue;
-    await prisma.languageAlias.upsert({
-      where: { aliasKey },
-      update: { alias, languageId: lang.id },
-      create: { alias, aliasKey, languageId: lang.id },
-    });
-  }
-
-  const benefits = await Promise.all(
-    BENEFITS.map((b) => {
-      const normalizedKey = b.slug.replace(/-/g, '');
-      return prisma.benefit.upsert({
-        where: { slug: b.slug },
-        update: { ...b, normalizedKey },
-        create: { ...b, normalizedKey },
-      });
-    }),
-  );
-  const benefitMap = Object.fromEntries(benefits.map((b) => [b.slug, b]));
-  for (const [alias, slug] of [
-    ['WFH', 'remote-work'],
-    ['Work from home', 'remote-work'],
-    ['Medical insurance', 'health-insurance'],
-    ['Healthcare', 'health-insurance'],
-    ['Annual leave', 'paid-vacation'],
-  ] as const) {
-    const benefit = benefitMap[slug];
-    if (!benefit) continue;
-    const aliasKey = alias.toLowerCase().replace(/[^a-z0-9]+/g, '');
-    await prisma.benefitAlias.upsert({
-      where: { aliasKey },
-      update: { alias, benefitId: benefit.id },
-      create: { alias, aliasKey, benefitId: benefit.id },
-    });
-  }
 
   // Remove legacy sequential demo emails from earlier seeds
   await prisma.user.deleteMany({
@@ -634,6 +354,7 @@ async function main() {
       });
     }
 
+    const companyIndustry = indMap[c.industry];
     const company = await prisma.company.upsert({
       where: { slug: c.slug },
       update: {
@@ -645,10 +366,9 @@ async function main() {
         locale: 'en',
         website: c.website ?? `https://${c.slug}.uz`,
         cityId: cityMap[c.city].id,
-        industryId: indMap[c.industry].id,
+        ...(companyIndustry ? { industryId: companyIndustry.id } : {}),
         size: c.size,
         logoUrl: logo(c.slug, c.name, c.color),
-        isVerified: c.plan !== 'FREE',
       },
       create: {
         name: c.name,
@@ -659,11 +379,10 @@ async function main() {
         locale: 'en',
         website: c.website ?? `https://${c.slug}.uz`,
         cityId: cityMap[c.city].id,
-        industryId: indMap[c.industry].id,
+        ...(companyIndustry ? { industryId: companyIndustry.id } : {}),
         size: c.size,
         logoUrl: logo(c.slug, c.name, c.color),
-        isVerified: c.plan !== 'FREE',
-        subscription: { create: { plan: c.plan, status: 'ACTIVE' } },
+        isVerified: false,
         members: {
           create: [
             { userId: recruiter.id, role: 'OWNER' },
@@ -673,12 +392,7 @@ async function main() {
       },
     });
 
-    // Ensure subscription & membership
-    await prisma.subscription.upsert({
-      where: { companyId: company.id },
-      update: { plan: c.plan, status: 'ACTIVE' },
-      create: { companyId: company.id, plan: c.plan, status: 'ACTIVE' },
-    });
+    // Ensure membership without changing historical subscriptions.
     await prisma.companyMember.upsert({
       where: { companyId_userId: { companyId: company.id, userId: recruiter.id } },
       update: { role: 'OWNER' },
@@ -692,18 +406,6 @@ async function main() {
       });
     }
 
-    if (c.plan !== 'FREE') {
-      await prisma.payment.create({
-        data: {
-          companyId: company.id,
-          purpose: `Plan ${c.plan}`,
-          amountUzs:
-            c.plan === 'VIP' ? 1_999_000 : c.plan === 'PREMIUM' ? 799_000 : 299_000,
-          status: 'MOCKED',
-          provider: 'mock',
-        },
-      });
-    }
 
     companyRecords.push(company);
   }
@@ -737,15 +439,14 @@ async function main() {
     });
     employeeUsers.push(user);
 
-    const tpl = JOB_TITLES[i % JOB_TITLES.length];
-    const resolvedRole = await resolveJobTitle(prisma, { name: tpl.title });
-    const headline = resolvedRole.jobTitle.name;
-    const yearsExp = tpl.years + (i % 3);
+    const headline = DEMO_PROFILE_TITLES[i % DEMO_PROFILE_TITLES.length];
+    const yearsExp = 1 + (i % 8);
+    const skillFocus = skillPick.slice(0, 2).map((skill) => skill.name).join(' & ') || 'team delivery';
     const summaryVariants = [
       `${headline} with ${yearsExp}+ years of experience, currently based in ${city.name}. Open to hybrid and remote roles across Uzbekistan.`,
-      `Results-driven ${headline.toLowerCase()} focused on ${tpl.skills.slice(0, 2).join(' & ')}. Previously delivered projects for fintech and e-commerce teams.`,
+      `Results-driven ${headline.toLowerCase()} focused on ${skillFocus}. Previously delivered projects for local product teams.`,
       `Bilingual professional (${i % 2 ? 'Uzbek/Russian' : 'Uzbek/English'}) seeking ${headline} opportunities in ${city.name} and beyond.`,
-      `Career switcher into ${tpl.cat.replace('-', ' ')} - strong foundation in ${tpl.skills[0]} and eager to grow inside a product team.`,
+      `Career-focused professional with a foundation in ${skillFocus}, ready to grow inside a product team.`,
     ];
     const summary = summaryVariants[i % summaryVariants.length];
     const visibility = (['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'] as const)[i % 4];
@@ -796,7 +497,7 @@ async function main() {
         profileId: profile.id,
         companyName: COMPANIES[i % COMPANIES.length].name,
         title: headline,
-        description: `Owned delivery for ${tpl.skills.slice(0, 2).join(' / ')} initiatives and collaborated with cross-functional teams.`,
+        description: `Owned delivery for ${skillFocus} initiatives and collaborated with cross-functional teams.`,
         cityId: city.id,
         startDate: new Date(2021 - (i % 4), i % 12, 1),
         isCurrent: true,
@@ -808,7 +509,7 @@ async function main() {
           profileId: profile.id,
           companyName: PREVIOUS_EMPLOYERS[i % PREVIOUS_EMPLOYERS.length],
           title: i % 3 === 0 ? 'Specialist' : `Associate ${headline}`,
-          cityId: cityMap.tashkent.id,
+          cityId: cityMap['tashkent']?.id ?? city.id,
           startDate: new Date(2017 + (i % 3), 0, 1),
           endDate: new Date(2020, 11, 1),
           isCurrent: false,
@@ -844,15 +545,18 @@ async function main() {
 
     // Languages
     await prisma.profileLanguage.deleteMany({ where: { profileId: profile.id } });
-    await prisma.profileLanguage.create({
-      data: { profileId: profile.id, languageId: langMap.uz.id, level: 'NATIVE' },
-    });
-    await prisma.profileLanguage.create({
-      data: { profileId: profile.id, languageId: langMap.ru.id, level: i % 2 ? 'C1' : 'B2' },
-    });
-    await prisma.profileLanguage.create({
-      data: { profileId: profile.id, languageId: langMap.en.id, level: i % 3 ? 'B2' : 'B1' },
-    });
+    const profileLanguages = [
+      ['uz', 'NATIVE'],
+      ['ru', i % 2 ? 'C1' : 'B2'],
+      ['en', i % 3 ? 'B2' : 'B1'],
+    ] as const;
+    for (const [code, level] of profileLanguages) {
+      const language = langMap[code];
+      if (!language) continue;
+      await prisma.profileLanguage.create({
+        data: { profileId: profile.id, languageId: language.id, level },
+      });
+    }
 
     // Cert + resume
     if (i % 3 === 0) {
@@ -880,90 +584,8 @@ async function main() {
     employeeProfiles.push(profile);
   }
 
-  // Starter JobTitle catalog (role-only) — populated even before job posts exist
-  const uniqueSeedTitles = [
-    ...new Set([
-      ...JOB_TITLES.map((t) => t.title),
-      'Frontend Developer',
-      'C++ Developer',
-      'Backend Developer',
-      'React Developer',
-    ]),
-  ];
-  for (const name of uniqueSeedTitles) {
-    await resolveJobTitle(prisma, { name });
-  }
-
-  // Jobs — refresh listings on each seed so counts stay predictable
-  await prisma.jobPost.deleteMany({});
-  // Applications cascade with jobs; hard-purge soft-deleted resumes that lost all refs
-  {
-    const soft = await prisma.resume.findMany({
-      where: { deletedAt: { not: null } },
-      include: { _count: { select: { applications: true } } },
-    });
-    for (const r of soft) {
-      if (r._count.applications === 0) {
-        await prisma.resume.delete({ where: { id: r.id } });
-      }
-    }
-  }
-  // Jobs — generic postings in uz/ru/en plus hand-written hero vacancies (shared with demo-reset)
-  const demoJobs = await seedDemoJobs(prisma, {
-    companies: companyRecords.map((c) => ({ id: c.id, name: c.name, slug: c.slug, cityId: c.cityId })),
-    cities: cities.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
-    catMap,
-    skillMap,
-    benefits,
-    log: (msg) => console.warn(msg),
-  });
-  const heroIds = new Set(demoJobs.heroJobs.map((j) => j.id));
-  // Hero jobs first so the demo recruiter's pipeline is full.
-  const jobRecords = [...demoJobs.heroJobs, ...demoJobs.jobs.filter((j) => !heroIds.has(j.id))];
-
-
-  await backfillJobLanguages(prisma, { log: (msg) => console.warn(msg) });
-
-  // Job title aliases (Front End ≡ Frontend, CPP ≡ C++, …)
-  for (const row of JOB_TITLE_ALIASES) {
-    const resolved = await resolveJobTitle(prisma, { name: row.canonical });
-    const aliasKey = normalizeJobTitleKey(row.alias);
-    if (!aliasKey || aliasKey === resolved.jobTitle.normalizedKey) continue;
-    await prisma.jobTitleAlias.upsert({
-      where: { aliasKey },
-      update: { alias: row.alias, jobTitleId: resolved.jobTitle.id },
-      create: {
-        alias: row.alias,
-        aliasKey,
-        jobTitleId: resolved.jobTitle.id,
-      },
-    });
-  }
-
-  // Applications with localized cover letters, screening answers and interviews
-  const publishedJobs = jobRecords.filter((j) => j.status === 'PUBLISHED');
-  const appCount = await seedDemoApplications(prisma, {
-    jobs: jobRecords,
-    profiles: employeeProfiles,
-    log: (msg) => console.warn(msg),
-  });
-
-  // Saved jobs, alerts, follows, views, notifications, chats, reports
-  for (let i = 0; i < 35; i++) {
-    await prisma.savedJob.upsert({
-      where: {
-        profileId_jobPostId: {
-          profileId: employeeProfiles[i].id,
-          jobPostId: publishedJobs[i % publishedJobs.length].id,
-        },
-      },
-      create: {
-        profileId: employeeProfiles[i].id,
-        jobPostId: publishedJobs[i % publishedJobs.length].id,
-      },
-      update: {},
-    });
-  }
+  // Keep the legacy language requirement backfill, which only links existing
+  // language rows to existing job posts. It never creates catalog entries.
 
   for (let i = 0; i < 20; i++) {
     const user = employeeUsers[i];
@@ -972,16 +594,16 @@ async function main() {
       data: {
         userId: user.id,
         name: `Alert ${i + 1}`,
-        query: JOB_TITLES[i % JOB_TITLES.length].title.split(' ')[0],
+        query: 'Open roles',
         cityId: cities[i % cities.length].id,
-        categoryId: categories[i % categories.length].id,
+        ...(categories.length ? { categoryId: categories[i % categories.length].id } : {}),
         frequency: i % 2 ? 'WEEKLY' : 'DAILY',
       },
     });
-    const skillSlug = JOB_TITLES[i % JOB_TITLES.length].skills[0];
-    if (skillMap[skillSlug]) {
+    const skill = skills.length ? skills[i % skills.length] : null;
+    if (skill) {
       await prisma.jobAlertSkill.create({
-        data: { alertId: alert.id, skillId: skillMap[skillSlug].id },
+        data: { alertId: alert.id, skillId: skill.id },
       });
     }
   }
@@ -1004,35 +626,27 @@ async function main() {
     });
   }
 
-  // Job views
-  for (let i = 0; i < 400; i++) {
-    await prisma.jobView.create({
-      data: {
-        jobPostId: publishedJobs[i % publishedJobs.length].id,
-        viewerId: null,
-        createdAt: new Date(Date.now() - i * 3_600_000),
-      },
-    });
-  }
-
-  // Notifications for primary demo employee & recruiter
+  // Welcome notifications only; application and interview events require real jobs.
   const emp = employeeUsers[0];
   const rec = recruiterUsers[0];
   if (emp) {
-    await prisma.notification.createMany({
-      data: [
-        { userId: emp.id, type: 'APPLICATION_STATUS', title: 'Application in review', body: 'Your application is being reviewed', linkUrl: '/dashboard/employee' },
-        { userId: emp.id, type: 'NEW_JOB_MATCH', title: 'New matching jobs', body: '3 jobs match your skills', linkUrl: '/jobs' },
-        { userId: emp.id, type: 'INTERVIEW_SCHEDULED', title: 'Interview scheduled', body: 'Tomorrow at 10:00', linkUrl: '/dashboard/employee' },
-      ],
+    await prisma.notification.create({
+      data: {
+        userId: emp.id,
+        type: 'SYSTEM',
+        title: 'Welcome to Job Talentio',
+        body: 'Your candidate profile is ready.',
+      },
     });
   }
   if (rec) {
-    await prisma.notification.createMany({
-      data: [
-        { userId: rec.id, type: 'NEW_APPLICANT', title: 'New applicant', body: 'Someone applied to your job', linkUrl: '/dashboard/recruiter' },
-        { userId: rec.id, type: 'SYSTEM', title: 'Welcome to Job Talentio', body: 'Your recruiter dashboard is ready' },
-      ],
+    await prisma.notification.create({
+      data: {
+        userId: rec.id,
+        type: 'SYSTEM',
+        title: 'Welcome to Job Talentio',
+        body: 'Your recruiter dashboard is ready.',
+      },
     });
   }
 
@@ -1043,16 +657,15 @@ async function main() {
         userAId: emp.id,
         userBId: rec.id,
         companyId: companyRecords[0].id,
-        jobPostId: publishedJobs[0]?.id,
         initiatedBy: emp.id,
         isColdOutreach: false,
         messages: {
           create: [
             {
               senderId: emp.id,
-              body: `Hello! I applied to your ${publishedJobs[0]?.title ?? 'open'} role and would love to discuss.`,
+              body: 'Hello! I would like to learn more about your company and future opportunities.',
             },
-            { senderId: rec.id, body: 'Hi! Thanks for applying. Your profile looks promising. Are you available for a call this week?' },
+            { senderId: rec.id, body: 'Hi! Thanks for reaching out. Please share the kind of role you are looking for.' },
           ],
         },
       },
@@ -1061,18 +674,7 @@ async function main() {
   }
 
   // Reports
-  if (emp) {
-    await prisma.report.create({
-      data: {
-        reporterId: emp.id,
-        entityType: 'JOB_POST',
-        entityId: publishedJobs[5]?.id ?? publishedJobs[0].id,
-        reason: 'Suspected spam / unrealistic salary claim',
-        status: 'OPEN',
-      },
-    });
-  }
-  if (rec) {
+  if (rec && emp) {
     await prisma.report.create({
       data: {
         reporterId: rec.id,
@@ -1086,14 +688,12 @@ async function main() {
 
   const news = await backfillNews(prisma);
   const jobLocales = await backfillJobLocale(prisma);
-  const catalogI18n = await backfillCatalogI18n(prisma);
-  const catalogI18nRows = Object.values(catalogI18n).reduce((sum, c) => sum + c.updated, 0);
+  const catalogI18nRows = 0; // Geographic names are managed in the database.
+  const [jobsKept, applicationsKept] = await Promise.all([
+    prisma.jobPost.count(),
+    prisma.application.count(),
+  ]);
 
-  await prisma.featureFlag.upsert({
-    where: { key: 'hot_jobs' },
-    update: { enabled: true },
-    create: { key: 'hot_jobs', enabled: true },
-  });
   await prisma.featureFlag.upsert({
     where: { key: 'candidate_matching' },
     update: { enabled: true },
@@ -1101,9 +701,9 @@ async function main() {
   });
 
   console.log(`Seed complete:
-  - ${cities.length} cities, ${categories.length} categories, ${skills.length} skills
-  - ${companyRecords.length} companies, ${employeeUsers.length} employees, ${jobRecords.length} jobs
-  - ~${appCount} applications
+  - ${cities.length} cities; existing catalogs reused: ${categories.length} categories, ${skills.length} skills, ${languages.length} languages
+  - ${companyRecords.length} companies, ${employeeUsers.length} employees; demo job/app creation disabled
+  - Existing jobs retained: ${jobsKept}; existing applications retained: ${applicationsKept}
   - ${news.upserted} news articles (+ ${news.translations} uz/ru versions)
   - ${catalogI18nRows} catalog rows with uz/ru display names
   - ${jobLocales.corrected} job posts relabelled to their actual language

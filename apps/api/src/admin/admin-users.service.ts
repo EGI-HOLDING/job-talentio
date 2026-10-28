@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -61,21 +62,47 @@ export class AdminUsersService {
     if (target.isBanned === banned) {
       throw new BadRequestException(banned ? 'Already banned' : 'Not banned');
     }
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { isBanned: banned },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isBanned: true,
-        createdAt: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const changed = await tx.user.updateMany({
+        where: { id: userId, isBanned: !banned },
+        data: {
+          isBanned: banned,
+          ...(banned ? { tokenVersion: { increment: 1 } } : {}),
+        },
+      });
+      if (!changed.count) {
+        const current = await tx.user.findUnique({ where: { id: userId }, select: { isBanned: true } });
+        if (!current) throw new NotFoundException('User not found');
+        if (current.isBanned === banned) throw new BadRequestException(banned ? 'Already banned' : 'Not banned');
+        throw new ConflictException('Account changed. Refresh and try again.');
+      }
+      if (banned) {
+        await tx.refreshToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          isBanned: true,
+          createdAt: true,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: banned ? 'BAN_USER' : 'UNBAN_USER',
+          entityType: 'User',
+          entityId: userId,
+        },
+      });
+      return user;
     });
-    if (banned) await this.auth.revokeAllSessions(userId);
-    await this.audit(actorId, banned ? 'BAN_USER' : 'UNBAN_USER', userId);
-    return user;
   }
 
   async sendPasswordReset(actorId: string, userId: string) {

@@ -1,4 +1,6 @@
 export const employeeWorkspace = {
+  'ew.joinInterview': { en: 'Join interview', ru: 'Присоединиться к собеседованию', uz: 'Suhbatga qo‘shilish' },
+  'ew.interviewMinutes': { en: '{n} minutes', ru: '{n} мин.', uz: '{n} daqiqa' },
   'ew.interview.SCHEDULED': { en: 'Scheduled', ru: 'Запланировано', uz: 'Rejalashtirilgan' },
   'ew.interview.COMPLETED': { en: 'Completed', ru: 'Завершено', uz: 'Yakunlangan' },
   'ew.interview.CANCELLED': { en: 'Cancelled', ru: 'Отменено', uz: 'Bekor qilingan' },

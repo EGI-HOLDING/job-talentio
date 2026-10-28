@@ -20,13 +20,8 @@ type Props = {
   stats: PlatformStats | null;
   cities: Array<{ slug: string; name: string; country?: string; countrySlug?: string }>;
   companies: TopCompany[];
+  popularRoles: Array<{ slug: string; name: string }>;
 };
-
-const POPULAR_ROLES = [
-  { key: 'home.popularFrontend', slug: 'frontend-developer' },
-  { key: 'home.popularAccountant', slug: 'accountant' },
-  { key: 'home.popularSales', slug: 'sales-manager' },
-];
 
 function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   return (
@@ -39,7 +34,7 @@ function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   );
 }
 
-export function SeekerHero({ stats, cities, companies }: Props) {
+export function SeekerHero({ stats, cities, companies, popularRoles }: Props) {
   const { t } = useI18n();
   const router = useRouter();
 
@@ -49,9 +44,8 @@ export function SeekerHero({ stats, cities, companies }: Props) {
     const params = new URLSearchParams();
     const query = String(data.get('q') || '').trim();
     const location = String(data.get('location') || '');
-    const city = location.startsWith('country:')
-      ? cities.filter((item) => item.countrySlug === location.slice(8)).map((item) => item.slug).join(',')
-      : location;
+    const city = location.startsWith('country:') ? '' : location;
+    if (location.startsWith('country:')) params.set('country', location.slice(8));
     if (query) params.set('q', query);
     if (city) params.set('city', city);
     router.push(params.size ? `/jobs?${params}` : '/jobs');
@@ -103,8 +97,8 @@ export function SeekerHero({ stats, cities, companies }: Props) {
 
         <div className={styles.popular}>
           <span>{t('home.popular')}</span>
-          {POPULAR_ROLES.map((role) => (
-            <Link key={role.slug} href={`/jobs?jobTitle=${role.slug}`}>{t(role.key)}</Link>
+          {popularRoles.slice(0, 3).map((role) => (
+            <Link key={role.slug} href={`/jobs?jobTitle=${encodeURIComponent(role.slug)}`}>{role.name}</Link>
           ))}
           <Link className={styles.remoteLink} href="/jobs?workMode=REMOTE">{t('landing.remoteJobs')}</Link>
         </div>

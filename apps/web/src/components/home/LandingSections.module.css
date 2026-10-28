@@ -31,7 +31,8 @@
 .viewJob svg, .readMore svg { width: 16px; height: 16px; }
 .categories { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }
 .category { display: flex; align-items: center; gap: 1.1rem; padding: 1.2rem; border: 1px solid #e6e7f1; border-radius: 10px; background: #fff; }
-.category > svg { flex-shrink: 0; width: 38px; height: 38px; color: #5935ff; }
+.category > svg, .category > span:first-child { flex-shrink: 0; width: 38px; height: 38px; color: #5935ff; }
+.category > span:first-child { display: grid; place-items: center; margin-top: 0; font-size: 1.8rem; line-height: 1; }
 .category h3 { font-size: .93rem; }
 .category span { display: block; margin-top: .3rem; color: var(--muted); font-size: .81rem; }
 .locations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }
@@ -99,7 +100,7 @@
   .logo { width: 34px; height: 34px; }
   .job h3 { font-size: 1rem; }
   .category { padding: 1rem .7rem; gap: .7rem; }
-  .category > svg { width: 30px; height: 30px; }
+  .category > svg, .category > span:first-child { width: 30px; height: 30px; }
   .category h3 { font-size: .8rem; }
   .candidate { gap: 1rem; grid-template-columns: 1.4fr 1fr .55fr; padding: 1.5rem; }
   .steps { padding-left: .9rem; }
@@ -129,7 +130,7 @@
   .category:nth-child(n+7) { display: none; }
   .category h3 { font-size: .8rem; }
   .category span { font-size: .75rem; }
-  .category > svg { width: 28px; height: 28px; }
+  .category > svg, .category > span:first-child { width: 28px; height: 28px; }
   .locations { grid-template-columns: 1fr 1fr; gap: .7rem; }
   .cityPhoto, .cityFallback { aspect-ratio: 1.25; }
   .locationBody { padding: .75rem; }

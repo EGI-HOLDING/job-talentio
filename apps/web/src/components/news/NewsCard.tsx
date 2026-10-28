@@ -13,13 +13,13 @@ export const NEWS_CATEGORY_LABEL_KEY: Record<NewsCategoryKey, string> = {
 
 export function formatNewsDate(iso: string, locale: string) {
   try {
-    return new Date(iso).toLocaleDateString(locale === 'uz' ? 'uz' : locale === 'ru' ? 'ru-RU' : 'en-US', {
+    return new Date(iso).toLocaleDateString(locale === 'uz' ? 'uz' : locale === 'ru' ? 'ru-RU' : locale === 'id' ? 'id-ID' : 'en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
   } catch {
-    return new Date(iso).toLocaleDateString();
+    return new Date(iso).toLocaleDateString(locale);
   }
 }
 

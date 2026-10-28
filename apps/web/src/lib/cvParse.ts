@@ -4,6 +4,7 @@ export type ResumeParseStatus = 'NONE' | 'PENDING' | 'PROCESSING' | 'READY' | 'F
 
 export type ResumeParseStatusResponse = {
   id: string;
+  parseGeneration?: number;
   parseStatus: ResumeParseStatus;
   parseError?: string | null;
   parsedAt?: string | null;

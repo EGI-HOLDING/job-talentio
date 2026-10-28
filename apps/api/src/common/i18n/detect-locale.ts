@@ -2,8 +2,8 @@ import { isLocale, type Locale } from './locale';
 
 /**
  * Cheap language guess for free text we already store, used to repair rows whose
- * `locale` was never set and silently fell back to the schema default. It only
- * has to separate Uzbek, Russian and English, so word lists beat a dependency.
+ * `locale` was never set and silently fell back to the schema default. Small
+ * word lists separate Uzbek, Russian, English, and Indonesian without a dependency.
  */
 
 /** Cyrillic decides Russian outright; Uzbek here is written in Latin script. */
@@ -71,6 +71,39 @@ const ENGLISH_WORDS = [
   'join',
 ];
 
+const INDONESIAN_WORDS = [
+  'yang',
+  'dan',
+  'untuk',
+  'dengan',
+  'kerja',
+  'lowongan',
+  'perusahaan',
+  'pengalaman',
+  'kandidat',
+  'pelamar',
+  'keahlian',
+  'persyaratan',
+  'tanggung',
+  'jawab',
+  'kami',
+  'anda',
+  'dari',
+  'pada',
+  'ini',
+  'dalam',
+  'memiliki',
+  'serta',
+  'dapat',
+  'silakan',
+  'lamaran',
+  'gaji',
+  'pendidikan',
+  'pengaturan',
+  'bahasa',
+  'disimpan',
+];
+
 /** Uzbek-specific letter pairs that English text effectively never contains. */
 const UZBEK_MARKERS = /(o['\u2018\u2019]|g['\u2018\u2019])/;
 
@@ -100,7 +133,9 @@ export function detectLocale(text: string): Locale | null {
   const uzbekWords = countWords(UZBEK_WORDS, tokens);
   const uzbek = uzbekWords + (hasUzbekMarker ? 3 : 0);
   const english = countWords(ENGLISH_WORDS, tokens);
+  const indonesian = countWords(INDONESIAN_WORDS, tokens);
 
+  if (indonesian >= 2 && indonesian >= Math.max(uzbek, english)) return 'id';
   if (english > 0 && uzbekWords === 0 && !hasUzbekMarker) return 'en';
   if (english >= uzbek + 2) return 'en';
   if (uzbek >= english + 2) return 'uz';

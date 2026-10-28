@@ -8,6 +8,7 @@ import { useI18n, Locale } from '@/lib/i18n';
 import styles from './SiteNav.module.css';
 import { AuthLink } from './auth/AuthLink';
 import { authRoleFrom } from '@/lib/authReturn';
+import { allowEmployerContextChange } from './recruiter/useEmployerUnsaved';
 
 type Notif = {
   id: string;
@@ -18,7 +19,7 @@ type Notif = {
   createdAt: string;
 };
 
-const LOCALE_LABELS: Record<Locale, string> = { uz: "O'z", ru: 'Ру', en: 'En' };
+const LOCALE_LABELS: Record<Locale, string> = { uz: "O'z", ru: 'Ру', en: 'En', id: 'ID' };
 
 function SiteNavContent() {
   const { locale, setLocale, t } = useI18n();
@@ -104,7 +105,8 @@ function SiteNavContent() {
     setNotifs((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
   }
 
-  function chooseLocale(l: Locale) {
+  async function chooseLocale(l: Locale) {
+    if (!await allowEmployerContextChange()) return;
     setLocale(l);
     setLangOpen(false);
     if (session) {
@@ -112,6 +114,7 @@ function SiteNavContent() {
     }
   }
 
+  const isOnboarding = pathname.startsWith('/onboarding/');
   const isRecruiter = session?.user.role === 'RECRUITER';
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const isJobs = pathname === '/jobs' || pathname.startsWith('/jobs/');
@@ -124,17 +127,19 @@ function SiteNavContent() {
   const isDiscovery = isEmployee || isRecruiter || (isLanding && pathname !== '/' && pathname !== '/employers');
   const employeeTab = searchParams.get('tab');
   const recruiterTab = searchParams.get('tab') || 'jobs';
-  const recruiterActive = [pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab), pathname === '/talent' || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
-  const browseLinks = isRecruiter
-    ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/talent', 'findTalent'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]
+  const recruiterActive = [(pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab)) || pathname.startsWith('/dashboard/recruiter/jobs/') || pathname.startsWith('/jobs/') || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
+  const browseLinks = isOnboarding
+    ? [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']]
+    : isRecruiter
+    ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]
     : isEmployee
     ? [['/jobs', 'home.findJobs'], ['/dashboard/employee?tab=applications', 'applications'], ['/dashboard/employee?tab=saved', 'savedJobs'], ['/messages', 'messages']]
     : isEmployerContext
-    ? [['/employers#find-talent', 'employers.search'], ['/employers#how-it-works', 'employers.how'], ['/employers#hiring-insights', 'employers.insights']]
+    ? [['/employers#how-it-works', 'employers.how'], ['/employers#hiring-insights', 'employers.insights']]
     : [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']];
   const dash =
     session?.user.role === 'EMPLOYEE'
-      ? '/dashboard/employee'
+      ? '/jobs?mode=for-you'
       : isRecruiter
         ? '/dashboard/recruiter'
         : null;
@@ -175,7 +180,7 @@ function SiteNavContent() {
                 setLangOpen((v) => !v);
               }}
             >
-              {LOCALE_LABELS[locale]}
+              {isOnboarding && locale === 'id' ? 'Indonesia' : LOCALE_LABELS[locale]}
             </button>
             {langOpen && (
               <div
@@ -185,7 +190,7 @@ function SiteNavContent() {
                 style={{ minWidth: 160, right: 0 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {(['uz', 'ru', 'en'] as Locale[]).map((l) => (
+                {(['uz', 'ru', 'en', 'id'] as Locale[]).map((l) => (
                   <button
                     key={l}
                     type="button"
@@ -205,7 +210,13 @@ function SiteNavContent() {
                     }}
                   >
                     <strong>
-                      {l === 'uz' ? "O'zbekcha" : l === 'ru' ? 'Русский' : 'English'}
+                      {l === 'uz'
+                        ? "O'zbekcha"
+                        : l === 'ru'
+                          ? 'Русский'
+                          : l === 'id'
+                            ? 'Indonesia'
+                            : 'English'}
                     </strong>
                   </button>
                 ))}
@@ -221,7 +232,7 @@ function SiteNavContent() {
             </>
           ) : (
             <div className="nav-user" ref={ref}>
-              <div style={{ position: 'relative' }}>
+              {!isOnboarding && <div style={{ position: 'relative' }}>
                 <button type="button" className="notif-btn" onClick={toggleNotifs} aria-label={t('notifications')}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
                     <path
@@ -268,7 +279,7 @@ function SiteNavContent() {
                     })}
                   </div>
                 )}
-              </div>
+              </div>}
               {isEmployee || isRecruiter ? <div className={styles.account} ref={accountRef}>
                 <button ref={accountButtonRef} type="button" className={styles.accountButton} aria-label={t('workspace.accountMenu')} aria-expanded={accountOpen} aria-controls="workspace-account-menu" onClick={() => { setAccountOpen((value) => !value); setOpen(false); setLangOpen(false); }}>
                   {session.user.avatarUrl ? <img className="avatar" src={session.user.avatarUrl} alt="" /> : <span className={styles.initial}>{session.user.fullName.charAt(0)}</span>}
@@ -276,10 +287,11 @@ function SiteNavContent() {
                 </button>
                 {accountOpen && <div id="workspace-account-menu" className={styles.accountMenu}>
                   <div className={styles.accountIdentity}><strong>{session.user.fullName}</strong><span>{session.user.email}</span></div>
-                  {isRecruiter ? <><Link href="/dashboard/recruiter?tab=company">{t('company')}</Link><Link href="/dashboard/recruiter?tab=billing">{t('rw.billing')}</Link></> : <><Link href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}</Link><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')}</Link></>}
-                  <Link href="/settings">{t('settings')}</Link>
+                  {isRecruiter ? <><Link href="/dashboard/recruiter?tab=company">{t('company')}</Link></> : <><Link href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}</Link><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')}</Link></>}
+                  <Link href={isRecruiter ? '/settings?role=RECRUITER' : '/settings?role=EMPLOYEE'}>{t('settings')}</Link>
+                  {isRecruiter && <Link href="/dashboard/recruiter/orders">{t('commerce.orders')}</Link>}
                   <div className={styles.accountResources}>{!isRecruiter && <Link href="/explore/companies">{t('companiesStat')}</Link>}<Link href="/news">{t('landing.insights')}</Link>{isRecruiter && <Link href="/employers">{t('employers.badge')}</Link>}</div>
-                  <button type="button" onClick={async () => { await logout(); window.location.href = localeHref('/'); }}>{t('logout')}</button>
+                  <button type="button" onClick={async () => { if (!await allowEmployerContextChange()) return; await logout(); window.location.href = localeHref('/'); }}>{t('logout')}</button>
                 </div>}
               </div> : <><Link href="/settings" className="nav-user" title={t('settings')}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -305,7 +317,7 @@ function SiteNavContent() {
               </button></>}
             </div>
           )}
-          {isLanding && <button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label={t('landing.menu')} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen((value) => !value)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'm6 6 12 12M6 18 18 6' : 'M3 5h18M3 12h18M3 19h18'} /></svg></button>}
+          {isLanding && !isOnboarding && <button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label={t('landing.menu')} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen((value) => !value)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'm6 6 12 12M6 18 18 6' : 'M3 5h18M3 12h18M3 19h18'} /></svg></button>}
         </div>
         {isLanding && menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} onClick={() => setMenuOpen(false)}>{browseLinks.map(([href, key]) => <Link href={href} key={href}>{t(key)}</Link>)}{!session && <><Link href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')}</Link><AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink><AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined}>{t(isEmployerContext ? 'postAJob' : 'home.createProfile')}</AuthLink></>}</div>}
       </nav>

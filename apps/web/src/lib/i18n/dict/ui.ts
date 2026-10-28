@@ -4,6 +4,7 @@ export const ui = {
   'ui.localeUz': { uz: 'o‘zbekcha', ru: 'узбекском', en: 'Uzbek' },
   'ui.localeRu': { uz: 'ruscha', ru: 'русском', en: 'Russian' },
   'ui.localeEn': { uz: 'inglizcha', ru: 'английском', en: 'English' },
+  'ui.localeId': { uz: 'indonezcha', ru: 'индонезийском', en: 'Indonesian' },
   'ui.writtenInLanguage': {
     uz: 'Ushbu matn {language} yozilgan',
     ru: 'Этот текст написан на {language} языке',
@@ -351,53 +352,6 @@ export const ui = {
     ru: 'запросите новое письмо для подтверждения в аккаунте.',
     en: 'request a new verification email from your account.',
   },
-
-  'ui.demoCheckout': { uz: 'Demo to‘lov', ru: 'Демо-оплата', en: 'Demo checkout' },
-  'ui.demoCheckoutHint': {
-    uz: 'Test to‘lovi - haqiqiy pul yechilmaydi. Tarif yoki boostni faollashtirish uchun tasdiqlang.',
-    ru: 'Тестовый платёж - реальных списаний нет. Подтвердите, чтобы активировать тариф или продвижение.',
-    en: 'Mock payment - no real charge. Confirm to activate the plan or boost.',
-  },
-  'ui.planUpgradeLabel': {
-    uz: 'Tarifni yangilash: {plan}',
-    ru: 'Смена тарифа: {plan}',
-    en: 'Plan upgrade: {plan}',
-  },
-  'ui.hotJobBoostLabel': {
-    uz: 'Dolzarb e’lon: {n} kun',
-    ru: 'Продвижение вакансии: {n} дней',
-    en: 'Hot job boost: {n} days',
-  },
-  'ui.missingPaymentId': {
-    uz: 'To‘lov identifikatori yo‘q.',
-    ru: 'Отсутствует идентификатор платежа.',
-    en: 'Missing payment id.',
-  },
-  'ui.backToBilling': {
-    uz: 'To‘lovlarga qaytish',
-    ru: 'Вернуться к оплате',
-    en: 'Back to billing',
-  },
-  'ui.backToPlanBilling': {
-    uz: 'Tarif va to‘lovlarga qaytish',
-    ru: 'Вернуться к тарифу и оплате',
-    en: 'Back to Plan & billing',
-  },
-  'ui.loadPaymentFailed': {
-    uz: 'To‘lovni yuklab bo‘lmadi',
-    ru: 'Не удалось загрузить платёж',
-    en: 'Failed to load payment',
-  },
-  'ui.paymentFailed': {
-    uz: 'To‘lov amalga oshmadi',
-    ru: 'Платёж не прошёл',
-    en: 'Payment failed',
-  },
-  'ui.paymentConfirmed': {
-    uz: 'To‘lov tasdiqlandi.',
-    ru: 'Платёж подтверждён.',
-    en: 'Payment confirmed.',
-  },
   'ui.processing': { uz: 'Amalga oshirilmoqda...', ru: 'Обработка...', en: 'Processing...' },
   'ui.payDemo': { uz: 'To‘lash (demo)', ru: 'Оплатить (демо)', en: 'Pay (demo)' },
   'ui.status': { uz: 'Holat', ru: 'Статус', en: 'Status' },
@@ -501,12 +455,6 @@ export const ui = {
     uz: 'ATS tekshiruv ro‘yxati',
     ru: 'ATS-чеклист',
     en: 'ATS checklist',
-  },
-
-  'ui.hotBoostLimited': {
-    uz: 'Cheklangan muddatli boost',
-    ru: 'Продвижение на ограниченный срок',
-    en: 'Limited-time boost',
   },
   'ui.hotEndsToday': {
     uz: 'Bugun tugaydi - tezroq ariza bering',

@@ -1,5 +1,6 @@
 'use client';
 
+import { FeaturedCompanies } from './FeaturedCompanies';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -24,19 +25,20 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   useEffect(() => {
     let active = true;
     api<PlatformStats>('/meta/platform-stats', { auth: false }).then((data) => { if (active) setPlatformStats(data); }).catch(() => undefined);
-    api<{ items: LandingJob[] }>('/jobs?hotOnly=true&limit=6&sort=relevance', { auth: false }).then((data) => { if (active) setFeaturedJobs(data.items); }).catch(() => undefined);
-    api<{ items: TopCompany[] }>('/companies?plan=VIP&limit=36&sort=jobs', { auth: false }).then((data) => { if (active) setTopCompanies(data.items || []); }).catch(() => undefined);
+    api<{ items: LandingJob[] }>('/jobs?limit=6&sort=newest', { auth: false }).then((data) => { if (active) setFeaturedJobs(data.items); }).catch(() => undefined);
+    api<{ items: TopCompany[] }>('/companies?limit=36&sort=jobs', { auth: false }).then((data) => { if (active) setTopCompanies(data.items || []); }).catch(() => undefined);
     api<{ items: NewsListItem[] }>('/news?category=CAREER&limit=3', { auth: false }).then((data) => { if (active) setLatestNews(data.items); }).catch(() => undefined);
     Promise.all([
-      api<Array<{ slug: string; name: string }>>('/meta/categories', { auth: false }),
+      api<Array<{ slug: string; name: string; icon?: string | null }>>('/meta/categories', { auth: false }),
       api<CityMetadata[]>('/meta/cities', { auth: false }).catch(() => [] as CityMetadata[]),
       api<{ facets?: { cities?: LandingFacet[]; categories?: LandingFacet[]; jobTitles?: LandingFacet[] } }>('/jobs?limit=1&sort=newest', { auth: false }),
     ]).then(([categories, metadata, result]) => {
       if (!active) return;
       const counts = new Map((result.facets?.categories || []).map((item) => [item.slug, item.count]));
       const cityLookup = new Map(metadata.map((item) => [item.slug, item]));
-      const cities = (result.facets?.cities || []).map((item) => ({
-        ...item,
+      const cityCounts = new Map((result.facets?.cities || []).map(item => [item.slug, item.count]));
+      const cities = metadata.map((item) => ({
+        ...item, count: cityCounts.get(item.slug) || 0,
         country: cityLookup.get(item.slug)?.province?.country?.name,
         countrySlug: cityLookup.get(item.slug)?.province?.country?.slug,
       })).sort((a, b) => b.count - a.count);
@@ -52,9 +54,9 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   return (
     <div className={styles.page}>
       <div className={styles.shell}>
-        <SeekerHero stats={platformStats} cities={catalog.cities} companies={topCompanies} />
+        <SeekerHero stats={platformStats} cities={catalog.cities} companies={topCompanies} popularRoles={catalog.titles} />
         {isEmployee && <ForYouJobsSection />}
-        <LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} news={latestNews} />
+        <FeaturedCompanies/><LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} news={latestNews} />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import { JobPackageGrant } from '@/components/benefits/JobPackageGrant';
 import { useState } from 'react';
 import { apiPost } from '@/lib/api';
 import { downloadCsv, timestampedName } from '@/lib/csv';
@@ -14,7 +15,6 @@ import {
   type JobStatus,
   formatDate,
   humanize,
-  isHot,
   soleFilterValue,
 } from '@/lib/types';
 import { PageHeader } from '@/components/shell/PageHeader';
@@ -28,6 +28,7 @@ import {
 } from '@/components/data/TableChrome';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { Badge, DateField, MultiSelect, SelectField } from '@/components/ui/primitives';
+import { useToast } from '@/components/ui/Toaster';
 
 const DEFAULTS = { page: '1', limit: '25', sort: 'updatedAt', dir: 'desc' };
 const FILTER_KEYS = [
@@ -36,7 +37,6 @@ const FILTER_KEYS = [
   'employmentType',
   'workMode',
   'experienceLevel',
-  'hotOnly',
   'companyId',
   'locale',
   'createdFrom',
@@ -55,7 +55,7 @@ const STATUS_TONE: Record<JobStatus, 'default' | 'ok' | 'warn' | 'danger'> = {
   EXPIRED: 'danger',
 };
 
-type Pending = { kind: 'status'; status: JobStatus } | { kind: 'hot'; days: 7 | 14 | 30 };
+type Pending = { kind: 'status'; status: JobStatus };
 
 export default function JobsPage() {
   const table = useAdminTable<AdminJob>({
@@ -65,6 +65,7 @@ export default function JobsPage() {
   });
   const { query, setFilter } = table;
   const [pending, setPending] = useState<Pending | null>(null);
+  const { notify } = useToast();
 
   const columns: Array<Column<AdminJob>> = [
     {
@@ -83,8 +84,7 @@ export default function JobsPage() {
       label: 'Status',
       render: (row) => (
         <div className="btn-row">
-          <Badge tone={STATUS_TONE[row.status]}>{humanize(row.status)}</Badge>
-          {isHot(row) && <Badge tone="warn">Hot</Badge>}
+          <Badge tone={STATUS_TONE[row.status]}>{humanize(row.status)}</Badge><JobPackageGrant jobId={row.id}/>
         </div>
       ),
     },
@@ -118,18 +118,22 @@ export default function JobsPage() {
   if (query.workMode) activeFilters.push({ key: 'workMode', label: `Mode: ${query.workMode}` });
   if (query.experienceLevel)
     activeFilters.push({ key: 'experienceLevel', label: `Level: ${query.experienceLevel}` });
-  if (query.hotOnly === 'true') activeFilters.push({ key: 'hotOnly', label: 'Boosted only' });
   if (query.locale) activeFilters.push({ key: 'locale', label: `Lang: ${query.locale}` });
   if (query.companyId) activeFilters.push({ key: 'companyId', label: 'Single company' });
   if (query.createdFrom)
     activeFilters.push({ key: 'createdFrom', label: `From ${query.createdFrom}` });
   if (query.createdTo) activeFilters.push({ key: 'createdTo', label: `To ${query.createdTo}` });
 
-  function exportCsv() {
-    const rows = table.selected.size
-      ? table.rows.filter((row) => table.selected.has(row.id))
-      : table.rows;
-    downloadCsv(timestampedName('jobs'), rows, [
+  async function exportCsv() {
+    try {
+      const rows = table.selected.size
+        ? await apiPost<AdminJob[]>('/admin/jobs/selected', { ids: [...table.selected] })
+        : table.rows;
+      if (!rows.length) {
+        notify('No jobs to export', 'error');
+        return;
+      }
+      downloadCsv(timestampedName('jobs'), rows, [
       { header: 'id', value: (r) => r.id },
       { header: 'title', value: (r) => r.title },
       { header: 'company', value: (r) => r.company.name },
@@ -139,9 +143,11 @@ export default function JobsPage() {
       { header: 'employmentType', value: (r) => r.employmentType },
       { header: 'applications', value: (r) => r._count.applications },
       { header: 'views', value: (r) => r._count.views },
-      { header: 'boosted', value: (r) => isHot(r) },
       { header: 'publishedAt', value: (r) => r.publishedAt ?? '' },
-    ]);
+      ]);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not export jobs', 'error');
+    }
   }
 
   return (
@@ -153,10 +159,10 @@ export default function JobsPage() {
           <button
             type="button"
             className="secondary"
-            onClick={exportCsv}
-            disabled={!table.rows.length}
+            onClick={() => void exportCsv()}
+            disabled={!table.rows.length && !table.selected.size}
           >
-            Export CSV
+            {table.selected.size ? `Export selected (${table.selected.size})` : 'Export CSV'}
           </button>
         }
       />
@@ -215,13 +221,6 @@ export default function JobsPage() {
                 onChange={(next) => setFilter('locale', next)}
                 format={(v) => v.toUpperCase()}
               />
-              <SelectField
-                label="Boost"
-                value={query.hotOnly ?? ''}
-                onChange={(next) => setFilter('hotOnly', next)}
-                allLabel="All postings"
-                options={[{ value: 'true', label: 'Boosted right now' }]}
-              />
               <DateField
                 label="Created from"
                 value={query.createdFrom ?? ''}
@@ -238,6 +237,8 @@ export default function JobsPage() {
 
         <SelectAllNotice
           pageCount={table.rows.length}
+          selectedOnPage={table.rows.filter((row) => table.selected.has(row.id)).length}
+          selectedCount={table.selected.size}
           total={table.total}
           allMatchingSelected={table.allMatching.active}
           capped={table.allMatching.capped}
@@ -290,16 +291,6 @@ export default function JobsPage() {
                   Publish
                 </button>
               )}
-              <button
-                type="button"
-                className="secondary sm"
-                disabled={table.busy}
-                onClick={() =>
-                  table.runAction(apiPost(`/admin/jobs/${row.id}/hot`, { days: 7 }), 'Boosted for 7 days')
-                }
-              >
-                Boost 7d
-              </button>
             </>
           )}
         />
@@ -335,41 +326,26 @@ export default function JobsPage() {
           >
             Close
           </button>
-          <button
-            type="button"
-            className="secondary sm"
-            onClick={() => setPending({ kind: 'hot', days: 7 })}
-          >
-            Boost 7d
-          </button>
         </BulkBar>
       </div>
 
       <ConfirmDialog
         open={pending !== null}
         title={
-          pending?.kind === 'hot'
-            ? `Boost selected postings for ${pending.days} days`
-            : `Move selected postings to ${pending?.status ?? ''}`
+          `Move selected postings to ${pending?.status ?? ''}`
         }
         description={
-          pending?.kind === 'hot'
-            ? `${table.selected.size} postings will be promoted in search for ${pending.days} days.`
-            : `${table.selected.size} postings will change status. Postings whose current status cannot legally become ${pending?.status} are skipped.`
+          `${table.selected.size} postings will change status. Postings whose current status cannot legally become ${pending?.status} are skipped.`
         }
-        confirmLabel={pending?.kind === 'hot' ? 'Boost them' : 'Change status'}
+        confirmLabel="Change status"
         destructive={pending?.kind === 'status' && pending.status === 'CLOSED'}
         busy={table.busy}
         onCancel={() => setPending(null)}
         onConfirm={async () => {
           const action = pending;
-          setPending(null);
           if (!action) return;
-          if (action.kind === 'hot') {
-            await table.runBulk('/admin/jobs/bulk/hot', { days: action.days }, 'boosted');
-          } else {
-            await table.runBulk('/admin/jobs/bulk/status', { status: action.status }, 'updated');
-          }
+          const saved = await table.runBulk('/admin/jobs/bulk/status', { status: action.status }, 'updated');
+          if (saved) setPending(null);
         }}
       />
     </>

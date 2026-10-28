@@ -14,6 +14,7 @@
     "test": "pnpm -r run test",
     "check:ascii-ui": "node scripts/check-ascii-ui.mjs",
     "check:i18n-ui": "node scripts/check-i18n-ui.mjs",
+    "check:i18n-keys": "node scripts/check-i18n-keys.cjs",
     "purge:mojibake": "node scripts/purge-mojibake.mjs",
     "db:generate": "pnpm --filter @job-talentio/api prisma:generate",
     "db:migrate": "pnpm --filter @job-talentio/api prisma:migrate",
@@ -22,7 +23,16 @@
     "db:studio": "pnpm --filter @job-talentio/api prisma:studio",
     "docker:up": "docker compose -f docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f docker/docker-compose.yml down",
-    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f"
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "test:hr:local": "node scripts/hr-benefits-local.smoke.cjs",
+    "demo:prepare": "node scripts/hr-demo.cjs prepare",
+    "demo:build": "node scripts/hr-demo.cjs build",
+    "demo:start": "node scripts/hr-demo.cjs start",
+    "demo:stop": "node scripts/hr-demo.cjs stop",
+    "demo:status": "node scripts/hr-demo.cjs status",
+    "demo:verify": "node scripts/hr-demo.cjs verify",
+    "demo:restore": "node scripts/hr-demo.cjs restore",
+    "demo:accounts": "node scripts/hr-demo.cjs accounts"
   },
   "engines": {
     "node": ">=20"

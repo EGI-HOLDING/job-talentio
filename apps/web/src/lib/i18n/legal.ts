@@ -47,10 +47,8 @@ const termsEn: LegalDoc = {
       ],
     },
     {
-      heading: '5. Plans and payments',
-      paragraphs: [
-        'Some employer features depend on a plan. Prices are shown in Uzbek soum in the employer account. During the pilot period paid features may run in demo mode without an actual charge. When payments are enabled, the conditions shown at checkout apply.',
-      ],
+      heading: '5. Feature access',
+      paragraphs: ['Employer features are available without a paid subscription. Company membership, candidate privacy, moderation and anti-abuse protections still apply.'],
     },
     {
       heading: '6. Machine translation and matching',
@@ -123,10 +121,8 @@ const termsRu: LegalDoc = {
       ],
     },
     {
-      heading: '5. Тарифы и оплата',
-      paragraphs: [
-        'Часть функций для работодателей зависит от тарифа. Цены указаны в узбекских сумах в кабинете работодателя. В пилотный период платные функции могут работать в демо-режиме без фактического списания. После включения оплаты действуют условия, показанные при оформлении.',
-      ],
+      heading: '5. Доступ к функциям',
+      paragraphs: ['Функции работодателя доступны без платной подписки. Правила членства в компании, конфиденциальности кандидатов, модерации и защиты от злоупотреблений сохраняются.'],
     },
     {
       heading: '6. Машинный перевод и подбор',
@@ -199,10 +195,8 @@ const termsUz: LegalDoc = {
       ],
     },
     {
-      heading: '5. Tariflar va to‘lov',
-      paragraphs: [
-        'Ish beruvchilar uchun ayrim funksiyalar tarifga bog‘liq. Narxlar ish beruvchi kabinetida o‘zbek so‘mida ko‘rsatiladi. Sinov davrida pullik funksiyalar haqiqiy to‘lovsiz demo rejimida ishlashi mumkin. To‘lov yoqilgandan so‘ng rasmiylashtirish paytida ko‘rsatilgan shartlar amal qiladi.',
-      ],
+      heading: '5. Funksiyalardan foydalanish',
+      paragraphs: ['Ish beruvchi funksiyalari pullik obunasiz mavjud. Kompaniyaga a’zolik, nomzodlar maxfiyligi, moderatsiya va suiiste’moldan himoya qoidalari amal qiladi.'],
     },
     {
       heading: '6. Mashina tarjimasi va moslik',
@@ -269,7 +263,7 @@ const privacyEn: LegalDoc = {
     {
       heading: '3. Who can see your data',
       paragraphs: [
-        'Employers see your profile according to your visibility setting and always when you apply to their vacancy; their invited team members see the same. We rely on service providers that act on our instructions: cloud hosting and file storage, email delivery, Telegram (if you link it), Google sign-in (if you use it), search infrastructure, and AI providers that structure the text of your CV or translate postings and profiles. Only the text needed for the task is sent to AI providers and it is not used to train their models. We do not sell personal data.',
+        'Employers see your profile according to your visibility setting and always when you apply to their vacancy; their invited team members see the same. We rely on service providers that act on our instructions: cloud hosting and file storage, email delivery, Telegram (if you link it), Google sign-in (if you use it), search infrastructure, and AI providers that structure CV text or translate company descriptions, profile text, news articles, and catalog labels. Only the text needed for the task is sent to AI providers and it is not used to train their models. We do not sell personal data.',
       ],
     },
     {
@@ -475,9 +469,161 @@ const privacyUz: LegalDoc = {
   ],
 };
 
+const termsId: LegalDoc = {
+  title: 'Ketentuan Layanan',
+  updated: '18 September 2026',
+  intro:
+    'Job Talentio adalah portal lowongan kerja daring untuk Uzbekistan yang dioperasikan oleh Job Talentio (EGI Holding), selanjutnya disebut “kami”. Ketentuan ini mengatur penggunaan jobtalent.io, subdomainnya, bot Telegram Job Talentio, dan layanan terkait (“Layanan”). Dengan membuat akun atau menggunakan Layanan, Anda menyetujui Ketentuan ini.',
+  sections: [
+    {
+      heading: '1. Akun dan persyaratan',
+      paragraphs: [
+        'Anda harus berusia minimal 16 tahun, yaitu usia minimum untuk bekerja di Republik Uzbekistan. Setiap orang hanya boleh memiliki satu akun, wajib memberikan informasi yang akurat, dan menjaga keamanan kredensial. Anda dapat masuk dengan alamat email dan kata sandi, akun Google, atau akun Telegram; Anda bertanggung jawab atas aktivitas di akun Anda.',
+      ],
+    },
+    {
+      heading: '2. Pencari kerja',
+      paragraphs: [
+        'Profil, CV, dan pesan Anda tetap menjadi milik Anda. Anda menentukan siapa yang dapat melihat profil: semua orang, hanya perekrut terdaftar, atau tidak seorang pun. Anda memberi kami hak untuk menyimpan, menampilkan, dan menerjemahkan konten tersebut kepada perusahaan sesuai pengaturan visibilitas dan kepada perusahaan yang menerima lamaran Anda. Jangan unggah data pribadi orang lain tanpa izin mereka.',
+      ],
+    },
+    {
+      heading: '3. Perusahaan',
+      items: [
+        'Pasang hanya lowongan yang benar dari organisasi yang Anda wakili dan pastikan informasinya tetap terbaru.',
+        'Patuhi peraturan ketenagakerjaan Republik Uzbekistan, termasuk aturan nondiskriminasi. Jangan menetapkan persyaratan berdasarkan jenis kelamin, usia, kebangsaan, agama, status perkawinan, atau alasan lain yang tidak berkaitan dengan pekerjaan.',
+        'Gunakan data kandidat hanya untuk mengisi lowongan yang menjadi tujuan pengumpulan data tersebut dan jangan pernah memungut biaya lamaran dari kandidat.',
+        'Anggota tim yang Anda undang bertindak atas nama perusahaan Anda; Anda bertanggung jawab atas penggunaan Layanan oleh mereka.',
+      ],
+    },
+    {
+      heading: '4. Perilaku yang dilarang',
+      paragraphs: [
+        'Penipuan, spam, pengambilan data otomatis, malware, penyamaran identitas, pelecehan, lowongan duplikat, serta konten yang melanggar hukum atau menyesatkan dilarang. Kami dapat memoderasi, menjeda, atau menghapus konten serta menangguhkan atau menutup akun yang melanggar aturan ini.',
+      ],
+    },
+    {
+      heading: '5. Akses fitur',
+      paragraphs: ['Fitur perusahaan tersedia tanpa langganan berbayar. Aturan keanggotaan perusahaan, privasi kandidat, moderasi, dan perlindungan dari penyalahgunaan tetap berlaku.'],
+    },
+    {
+      heading: '6. Terjemahan mesin dan pencocokan',
+      paragraphs: [
+        'Konten dapat ditampilkan dalam bentuk terjemahan mesin dan akan diberi label demikian. Skor kecocokan dan rekomendasi hanya sebagai panduan, bukan keputusan perekrutan; setiap keputusan tetap berada pada perusahaan dan kandidat.',
+      ],
+    },
+    {
+      heading: '7. Kekayaan intelektual',
+      paragraphs: [
+        'Layanan, desain, perangkat lunak, dan basis datanya adalah milik kami. Konten yang dibuat pengguna tetap menjadi milik mereka.',
+      ],
+    },
+    {
+      heading: '8. Tanggung jawab',
+      paragraphs: [
+        'Kami adalah perantara antara pencari kerja dan perusahaan. Kami tidak menjamin pekerjaan, hasil perekrutan, atau keakuratan konten pengguna, dan tidak bertanggung jawab atas tindakan perusahaan atau kandidat di luar Layanan. Sejauh diizinkan oleh hukum, Layanan disediakan apa adanya.',
+      ],
+    },
+    {
+      heading: '9. Pengakhiran',
+      paragraphs: [
+        'Anda dapat menghapus akun kapan saja melalui Pengaturan. Kami dapat menangguhkan atau menutup akun yang melanggar Ketentuan ini.',
+      ],
+    },
+    {
+      heading: '10. Perubahan dan hukum yang berlaku',
+      paragraphs: [
+        'Kami dapat memperbarui Ketentuan ini; perubahan penting akan diumumkan di Layanan sebelum berlaku. Ketentuan ini diatur oleh hukum Republik Uzbekistan. Sengketa diselesaikan oleh pengadilan di Tashkent, kecuali hukum yang wajib berlaku menentukan lain.',
+      ],
+    },
+    {
+      heading: '11. Kontak',
+      paragraphs: ['Pertanyaan tentang Ketentuan ini: ' + CONTACT + '.'],
+    },
+  ],
+};
+
+const privacyId: LegalDoc = {
+  title: 'Kebijakan Privasi',
+  updated: '18 September 2026',
+  intro:
+    'Kebijakan ini menjelaskan data pribadi yang dikumpulkan Job Talentio (EGI Holding), selaku pengendali data (“kami”), saat Anda menggunakan jobtalent.io, subdomainnya, dan bot Telegram Job Talentio; alasan kami memprosesnya; serta hak Anda. Data pribadi diproses sesuai dengan Undang-Undang Republik Uzbekistan tentang Data Pribadi.',
+  sections: [
+    {
+      heading: '1. Data yang kami kumpulkan',
+      items: [
+        'Data akun: nama, alamat email, nomor telepon, hash kata sandi, pengenal Google atau Telegram, foto profil, dan bahasa antarmuka.',
+        'Data profil dan CV: ringkasan singkat, ringkasan profil, pengalaman kerja, pendidikan, keahlian, bahasa, sertifikat, file CV yang diunggah beserta teks yang diekstrak darinya, dan CV PDF yang Anda buat.',
+        'Data perusahaan: detail perusahaan, logo, anggota tim, lowongan, pertanyaan penyaringan, dan templat pesan.',
+        'Data penggunaan: lamaran, jawaban, pesan, lowongan tersimpan, pemberitahuan, notifikasi, tampilan halaman, alamat IP, informasi perangkat dan browser, serta cookie yang diperlukan untuk masuk dan memilih bahasa.',
+      ],
+    },
+    {
+      heading: '2. Alasan kami memproses data',
+      items: [
+        'Untuk menyediakan Layanan yang Anda minta: akun, profil, lowongan, lamaran, obrolan, dan notifikasi.',
+        'Untuk mencocokkan kandidat dan lowongan serta mengirim pemberitahuan lowongan dan rekomendasi.',
+        'Untuk menjaga keamanan Layanan: moderasi, pencegahan penyalahgunaan, pendeteksian duplikat, dan catatan audit.',
+        'Untuk memenuhi kewajiban hukum dan menanggapi permintaan yang sah.',
+        'Dengan persetujuan Anda, untuk saluran opsional seperti pesan Telegram dan pemberitahuan email; Anda dapat menarik persetujuan kapan saja melalui Pengaturan.',
+      ],
+    },
+    {
+      heading: '3. Pihak yang dapat melihat data Anda',
+      paragraphs: [
+        'Perusahaan melihat profil Anda sesuai pengaturan visibilitas dan selalu dapat melihatnya saat Anda melamar lowongan mereka; anggota tim yang mereka undang juga dapat melihatnya. Kami menggunakan penyedia layanan yang bekerja sesuai instruksi kami: hosting cloud dan penyimpanan file, pengiriman email, Telegram (jika Anda menghubungkannya), masuk dengan Google (jika digunakan), infrastruktur pencarian, dan penyedia AI yang menyusun teks CV atau menerjemahkan deskripsi perusahaan, teks profil, artikel berita, dan label katalog. Hanya teks yang diperlukan untuk tugas tersebut yang dikirim ke penyedia AI dan teks itu tidak digunakan untuk melatih model mereka. Kami tidak menjual data pribadi.',
+      ],
+    },
+    {
+      heading: '4. Penyimpanan dan transfer',
+      paragraphs: [
+        'Data disimpan di infrastruktur penyedia hosting kami, yang mungkin berada di luar Uzbekistan. Jika diwajibkan oleh hukum, data pribadi warga Uzbekistan diproses sesuai aturan lokalisasi dan transfer lintas batas dalam Undang-Undang tentang Data Pribadi.',
+      ],
+    },
+    {
+      heading: '5. Masa penyimpanan',
+      paragraphs: [
+        'Kami menyimpan data selama akun Anda aktif. Setelah Anda menghapus akun melalui Pengaturan, data pribadi akan dihapus atau dianonimkan dalam 30 hari, kecuali catatan yang wajib kami simpan berdasarkan hukum. Cadangan data diperbarui secara berkala.',
+      ],
+    },
+    {
+      heading: '6. Hak Anda',
+      items: [
+        'Mengakses, memperbaiki, atau menghapus data melalui profil dan Pengaturan.',
+        'Membatasi siapa yang dapat melihat profil melalui pengaturan visibilitas.',
+        'Memutuskan koneksi Google atau Telegram dan menonaktifkan saluran notifikasi.',
+        'Mengekspor CV sebagai PDF dari pembuat CV.',
+        'Menghubungi kami di ' + CONTACT + ' untuk permintaan apa pun, atau mengajukan pengaduan kepada badan berwenang yang menangani perlindungan data pribadi.',
+      ],
+    },
+    {
+      heading: '7. Cookie',
+      paragraphs: [
+        'Kami hanya menggunakan cookie penting dan penyimpanan lokal untuk sesi masuk, bahasa pilihan, dan preferensi dasbor. Kami tidak menggunakan cookie iklan pihak ketiga.',
+      ],
+    },
+    {
+      heading: '8. Keamanan',
+      paragraphs: [
+        'Data dienkripsi saat dikirim, kata sandi disimpan dalam bentuk hash, akses dibatasi kepada staf yang membutuhkannya, dan tindakan administratif dicatat.',
+      ],
+    },
+    {
+      heading: '9. Anak-anak',
+      paragraphs: ['Layanan ini tidak ditujukan bagi orang yang berusia di bawah 16 tahun.'],
+    },
+    {
+      heading: '10. Perubahan dan kontak',
+      paragraphs: [
+        'Kami dapat memperbarui Kebijakan ini; perubahan penting akan diumumkan di Layanan. Pertanyaan tentang data pribadi: ' + CONTACT + '.',
+      ],
+    },
+  ],
+};
+
 export const LEGAL_DOCS: Record<LegalDocKey, Record<Locale, LegalDoc>> = {
-  terms: { uz: termsUz, ru: termsRu, en: termsEn },
-  privacy: { uz: privacyUz, ru: privacyRu, en: privacyEn },
+  terms: { uz: termsUz, ru: termsRu, en: termsEn, id: termsId },
+  privacy: { uz: privacyUz, ru: privacyRu, en: privacyEn, id: privacyId },
 };
 
 /** Label shown above the revision date, per locale. */
@@ -485,4 +631,5 @@ export const LEGAL_UPDATED_LABEL: Record<Locale, string> = {
   uz: 'Yangilangan',
   ru: 'Обновлено',
   en: 'Last updated',
+  id: 'Terakhir diperbarui',
 };

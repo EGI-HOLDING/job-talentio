@@ -12,7 +12,8 @@ export type OpenAiChatJsonInput = {
 };
 
 /**
- * Minimal Chat Completions client (JSON mode). Shared by CV parse and MT.
+ * Minimal Chat Completions client (JSON mode), used by optional machine
+ * translation only. CV parsing does not integrate with external API providers.
  * Uses fetch — no SDK dependency.
  */
 export class OpenAiClient {

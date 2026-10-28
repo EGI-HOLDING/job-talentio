@@ -1,0 +1,57 @@
+'use client';
+
+import {useEffect,useRef,useState} from 'react';
+import {api} from '@/lib/api';
+import {Link} from '@/lib/navigation';
+import {postOnce} from '@/lib/hr-benefits';
+import {useI18n,useEnumLabel} from '@/lib/i18n';
+import {useConfirm} from '@/components/ui/ConfirmProvider';
+import {ProfileDialog} from '@/components/profile/ProfileDialog';
+import {ResourceError,WorkspaceLoading,dateLabel} from '@/components/employee/WorkspacePrimitives';
+import {DEFAULT_PIPELINE} from '@job-talentio/shared';
+import {Applicant,ApplicationCvAction,KanbanAction} from './ApplicationActions';
+import {RecruiterAvatar} from './RecruiterPrimitives';
+import s from './JobWorkspace.module.css';
+
+export function ApplicationDetail({applicationId,jobId,companyId,from='applicants',onClose,onChanged}: {applicationId:string;jobId:string;companyId:string;from?:'applicants'|'kanban';onClose:()=>void;onChanged:()=>void}) {
+  const {t,locale}=useI18n(),label=useEnumLabel(),confirm=useConfirm();
+  const [data,setData]=useState<Applicant|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[retry,setRetry]=useState(0);
+  const context=useRef(''); context.current=jobId+':'+applicationId;
+  useEffect(()=>{let alive=true;setData(null);setError('');api<Applicant>('/applications/jobs/'+encodeURIComponent(jobId)+'/applicants/'+encodeURIComponent(applicationId)).then(value=>{if(alive)setData(value);}).catch(reason=>{if(alive)setError(reason.message);});return()=>{alive=false;};},[applicationId,jobId,locale,retry]);
+  const changed=(value:Partial<Applicant>)=>{setData(current=>current?{...current,...value}:null);onChanged();};
+  async function move(status:string) {
+    if(!data||busy)return;
+    if(['REJECTED','HIRED'].includes(status)&&!await confirm({title:label('applicationStatus',status),message:data.profile.user.fullName,confirmLabel:t('rec.saveChanges')}))return;
+    const version=context.current;setBusy(true);setError('');
+    try {const value=await api<Partial<Applicant>>('/applications/'+data.id+'/status',{method:'POST',body:JSON.stringify({status})});if(version===context.current)changed(value);}
+    catch(reason){if(version===context.current)setError(reason instanceof Error?reason.message:t('ew.loadFailed'));}
+    finally{if(version===context.current)setBusy(false);}
+  }
+  async function schedule(event:React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();if(!data||busy)return;
+    const form=new FormData(event.currentTarget),node=event.currentTarget,version=context.current;setBusy(true);setError('');
+    try {
+      await postOnce('/applications/'+data.id+'/interviews',{scheduledAt:new Date(String(form.get('scheduledAt'))).toISOString(),durationMins:Number(form.get('durationMins')||60),meetingUrl:String(form.get('meetingUrl')||''),location:String(form.get('location')||''),note:String(form.get('note')||'')});
+      if(version===context.current){node.reset();setRetry(n=>n+1);onChanged();}
+    }catch(reason){if(version===context.current)setError(reason instanceof Error?reason.message:t('ew.loadFailed'));}
+    finally{if(version===context.current)setBusy(false);}
+  }
+  useEffect(()=>()=>{context.current='';},[]);
+  return <ProfileDialog title={data?.profile.user.fullName||t('applicants.details')} wide onClose={onClose} busy={busy}>
+    <div className={s.applicationDetail}>
+      {error&&<ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/>}
+      {!data&&!error?<WorkspaceLoading/>:data&&<>
+        <div className={s.detailIdentity}><RecruiterAvatar name={data.profile.user.fullName} src={data.profile.user.avatarUrl} className={s.avatar}/><div><h2>{data.profile.user.fullName}</h2><p>{data.profile.headline||t('ranking.noHeadline')}</p><small>{t('rw.applied')}: {dateLabel(data.createdAt,locale,true)}</small></div></div>
+        <div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('viewProfile')}</Link><Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link></div>
+        {data.kanbanEnteredAt&&<label className={s.stageField}>{t('status')}<select value={data.status} disabled={busy||data.status==='WITHDRAWN'} onChange={event=>void move(event.target.value)}>{DEFAULT_PIPELINE.map(status=><option key={status} value={status}>{label('applicationStatus',status)}</option>)}</select></label>}
+        {data.coverLetter&&<section><h3>{t('coverLetter')}</h3><p className={s.description}>{data.coverLetter}</p></section>}
+        <section><h3>{t('rw.screening')}</h3>{data.answers?.length?data.answers.map(answer=><div key={answer.id}><h4>{answer.question?.question}</h4><p className={s.description}>{answer.answer==='Yes'?t('job.yes'):answer.answer==='No'?t('job.no'):answer.answer}</p></div>):<p>{t('rec.answersNone')}</p>}</section>
+        <section><h3>{t('rw.interviews')}</h3>{data.interviews?.map(item=><p key={item.id}>{dateLabel(item.scheduledAt,locale,true)} | {t('ew.interview.'+item.status)}</p>)}
+          {data.kanbanEnteredAt&&!['WITHDRAWN','HIRED','REJECTED'].includes(data.status)&&<form className={s.interviewForm} onSubmit={event=>void schedule(event)}>
+            <label>{t('rec.interviewTime')}<input name="scheduledAt" type="datetime-local" required min={(()=>{const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());return now.toISOString().slice(0,16);})()}/></label><label>{t('duration')}<select name="durationMins" defaultValue="60">{[15,30,45,60,90,120].map(value=><option key={value} value={value}>{value} {t('minutes')}</option>)}</select></label><label>{t('rec.meetingUrl')}<input name="meetingUrl" type="url"/></label><label>{t('rec.interviewVenue')}<input name="location" maxLength={300}/></label><label>{t('note')}<textarea name="note" maxLength={2000}/></label><small>{t('rw.timezone')}: {Intl.DateTimeFormat().resolvedOptions().timeZone}</small><button className={s.primary} disabled={busy}>{t('rec.scheduleInterview')}</button>
+          </form>}
+        </section>
+      </>}
+    </div>
+  </ProfileDialog>;
+}

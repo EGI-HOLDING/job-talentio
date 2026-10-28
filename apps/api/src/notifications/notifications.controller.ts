@@ -3,6 +3,8 @@ import type { Request } from 'express';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { requestLocale } from '../common/i18n/request-locale';
+import { notificationListSchema } from '@job-talentio/shared';
+import { parseDto } from '../common/utils';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -10,8 +12,9 @@ export class NotificationsController {
   constructor(private notifications: NotificationsService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string) {
-    return this.notifications.list(user.id, page ? Number(page) : 1, 30, requestLocale(req));
+  list(@CurrentUser() user: AuthUser, @Req() req: Request, @Query() query: unknown) {
+    const data = parseDto(notificationListSchema, query);
+    return this.notifications.list(user.id, data.page, 30, requestLocale(req));
   }
 
   @Get('unread-count')

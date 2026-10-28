@@ -104,6 +104,7 @@ export type AlertJobsListInput = {
   query?: string | null;
   frequency?: string | null;
   city?: { slug: string } | null;
+  country?: { slug: string } | null;
   category?: { slug: string } | null;
   skills: Array<{ skill?: { slug: string } | null }>;
 };
@@ -114,6 +115,7 @@ export function buildAlertJobsListPath(alert: AlertJobsListInput): string {
   const q = alert.query?.trim();
   if (q) params.set('q', q);
   if (alert.city?.slug) params.set('city', alert.city.slug);
+  if (alert.country?.slug) params.set('country', alert.country.slug);
   if (alert.category?.slug) params.set('category', alert.category.slug);
   const skillSlugs = [
     ...new Set(alert.skills.map((row) => row.skill?.slug?.trim()).filter(Boolean) as string[]),

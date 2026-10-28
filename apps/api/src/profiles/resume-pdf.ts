@@ -2,8 +2,42 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import PDFDocument from 'pdfkit';
 import { stripNullBytes } from './cv-parser';
+import type { Locale } from '../common/i18n/locale';
+
+const RESUME_LABELS: Record<Locale, {
+  candidate: string;
+  summary: string;
+  skills: string;
+  experience: string;
+  education: string;
+  languages: string;
+  certifications: string;
+  present: string;
+}> = {
+  uz: {
+    candidate: 'Nomzod', summary: 'Qisqacha ma’lumot', skills: 'Ko‘nikmalar',
+    experience: 'Tajriba', education: 'Ta’lim', languages: 'Tillar',
+    certifications: 'Sertifikatlar', present: 'Hozirgacha',
+  },
+  ru: {
+    candidate: 'Кандидат', summary: 'О себе', skills: 'Навыки',
+    experience: 'Опыт работы', education: 'Образование', languages: 'Языки',
+    certifications: 'Сертификаты', present: 'По настоящее время',
+  },
+  en: {
+    candidate: 'Candidate', summary: 'Summary', skills: 'Skills',
+    experience: 'Experience', education: 'Education', languages: 'Languages',
+    certifications: 'Certifications', present: 'Present',
+  },
+  id: {
+    candidate: 'Kandidat', summary: 'Ringkasan', skills: 'Keahlian',
+    experience: 'Pengalaman kerja', education: 'Pendidikan', languages: 'Bahasa',
+    certifications: 'Sertifikasi', present: 'Sekarang',
+  },
+};
 
 export type PdfResumeDoc = {
+  locale?: Locale;
   fullName: string;
   headline?: string | null;
   email?: string | null;
@@ -38,16 +72,17 @@ function txt(value: unknown): string {
   return stripNullBytes(String(value));
 }
 
-function fmtDate(d?: string | null) {
+function fmtDate(d: string | null | undefined, locale: Locale) {
   if (!d) return '';
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return '';
-  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  const language = locale === 'uz' ? 'uz-UZ' : locale === 'ru' ? 'ru-RU' : locale === 'id' ? 'id-ID' : 'en-US';
+  return dt.toLocaleDateString(language, { year: 'numeric', month: 'short' });
 }
 
-function dateRange(start?: string | null, end?: string | null, isCurrent?: boolean) {
-  const a = fmtDate(start);
-  const b = isCurrent ? 'Present' : fmtDate(end) || '';
+function dateRange(start: string | null | undefined, end: string | null | undefined, isCurrent: boolean | undefined, locale: Locale) {
+  const a = fmtDate(start, locale);
+  const b = isCurrent ? RESUME_LABELS[locale].present : fmtDate(end, locale) || '';
   if (!a && !b) return '';
   return [a, b].filter(Boolean).join(' - ');
 }
@@ -71,6 +106,8 @@ function resolveFontPaths(): { regular: string | null; bold: string | null } {
 }
 
 export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffer> {
+  const locale = docData.locale ?? 'en';
+  const labels = RESUME_LABELS[locale];
   const accent = docData.themeAccent || '#0f766e';
   const template = docData.templateKey || 'classic';
   const fonts = resolveFontPaths();
@@ -93,7 +130,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
     }
 
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const fullName = txt(docData.fullName) || 'Candidate';
+    const fullName = txt(docData.fullName) || labels.candidate;
     const headline = txt(docData.headline);
 
     if (template === 'modern') {
@@ -142,22 +179,22 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
 
     const summary = txt(docData.summary);
     if (summary) {
-      section('Summary');
+      section(labels.summary);
       doc.text(summary, { width: pageWidth, align: 'left' });
     }
 
     const skills = (docData.skills || []).map(txt).filter(Boolean);
     if (skills.length) {
-      section('Skills');
+      section(labels.skills);
       doc.text(skills.join(' | '), { width: pageWidth });
     }
 
     if (docData.experiences?.length) {
-      section('Experience');
+      section(labels.experience);
       for (const e of docData.experiences) {
         const line = [txt(e.title), txt(e.companyName)].filter(Boolean).join(' | ');
         if (line) doc.font(fontBold).text(line, { width: pageWidth });
-        const meta = [dateRange(e.startDate, e.endDate, e.isCurrent), txt(e.location)]
+        const meta = [dateRange(e.startDate, e.endDate, e.isCurrent, locale), txt(e.location)]
           .filter(Boolean)
           .join(' | ');
         if (meta) doc.font(fontRegular).fillColor('#555555').fontSize(9).text(meta);
@@ -171,11 +208,11 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
     }
 
     if (docData.educations?.length) {
-      section('Education');
+      section(labels.education);
       for (const e of docData.educations) {
         const school = txt(e.school);
         if (school) doc.font(fontBold).text(school, { width: pageWidth });
-        const bits = [txt(e.degree), txt(e.field), dateRange(e.startDate, e.endDate)]
+        const bits = [txt(e.degree), txt(e.field), dateRange(e.startDate, e.endDate, false, locale)]
           .filter(Boolean)
           .join(' | ');
         if (bits) doc.font(fontRegular).fillColor('#555555').fontSize(9).text(bits);
@@ -185,7 +222,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
     }
 
     if (docData.languages?.length) {
-      section('Languages');
+      section(labels.languages);
       doc.font(fontRegular).text(
         docData.languages
           .map((l) => {
@@ -200,7 +237,7 @@ export async function buildResumePdfBuffer(docData: PdfResumeDoc): Promise<Buffe
     }
 
     if (docData.certifications?.length) {
-      section('Certifications');
+      section(labels.certifications);
       for (const c of docData.certifications) {
         const name = txt(c.name);
         const issuer = txt(c.issuer);

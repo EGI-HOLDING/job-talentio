@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
+const calendarDateSchema = z.union([
+  z.string().date(),
+  z.string().datetime({ offset: true }),
+]);
+
 export const registerSchema = z
   .object({
     email: z.string().trim().email(),
     password: z.string().min(8).max(128),
     fullName: z.string().trim().min(2).max(120),
     role: z.enum(['EMPLOYEE', 'RECRUITER']),
-    locale: z.enum(['uz', 'ru', 'en']).default('uz'),
+    locale: z.enum(['uz', 'ru', 'en', 'id']).default('uz'),
     acceptTerms: z
       .boolean()
       .refine((v) => v === true, { message: 'You must accept the terms to create an account' }),
@@ -30,6 +35,7 @@ export const loginSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(1, 'Password is required'),
   expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
+  inviteToken: z.string().trim().min(20).max(200).optional(),
 });
 
 /** Google Identity Services ID-token sign-in. role/companyName only needed for first sign-in. */
@@ -39,7 +45,7 @@ export const googleOAuthSchema = z
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     companyName: z.string().trim().min(2).max(160).optional(),
-    locale: z.enum(['uz', 'ru', 'en']).optional(),
+    locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),
   })
   .superRefine((data, ctx) => {
@@ -69,16 +75,14 @@ export const telegramOAuthSchema = z
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     companyName: z.string().trim().min(2).max(160).optional(),
-    locale: z.enum(['uz', 'ru', 'en']).optional(),
+    locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.inviteToken && !data.email) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['email'],
-        message: 'Email is required to accept a company invitation',
-      });
+    // The first provider callback can identify an existing account using its
+    // stored email. A completed signup still needs the invitation recipient.
+    if (data.inviteToken && data.role && !data.email) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'Email is required to accept a company invitation' });
     }
     if (data.role === 'RECRUITER' && !data.inviteToken && (data.companyName?.trim() ?? '').length < 2) {
       ctx.addIssue({
@@ -114,7 +118,7 @@ export const logoutSchema = z.object({
 
 /** Phone sign-in: Telegram contact share (polling token) and SMS codes. */
 export const phoneLoginStartSchema = z.object({
-  locale: z.enum(['uz', 'ru', 'en']).optional(),
+  locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
 });
 
 export const phoneLoginStatusSchema = z.object({
@@ -128,15 +132,16 @@ export const phoneOtpRequestSchema = z.object({
 export const phoneOtpVerifySchema = z.object({
   phone: z.string().trim().min(7).max(24),
   code: z.string().trim().regex(/^\d{4,8}$/),
-  locale: z.enum(['uz', 'ru', 'en']).optional(),
+  locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
 });
 
 export const companySchema = z.object({
   name: z.string().min(2).max(160),
   description: z.string().max(5000).optional(),
   /** Language the description is written in; detected from the text when omitted. */
-  locale: z.enum(['uz', 'ru', 'en']).optional(),
+  locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
   website: z.string().url().optional().or(z.literal('')),
+  countryId: z.string().max(100).nullable().optional(),
   citySlug: z.string().max(120).optional(),
   industrySlug: z.string().max(120).optional(),
   size: z
@@ -151,14 +156,25 @@ export const companyTranslationSchema = z.object({
 export const companyInviteSchema = z.object({
   email: z.string().trim().email(),
   role: z.enum(['ADMIN', 'RECRUITER']).default('RECRUITER'),
-  locale: z.enum(['uz', 'ru', 'en']).optional(),
+  locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
+});
+
+export const jobScreeningQuestionSchema = z.object({
+  id: z.string().min(1).max(100).optional(),
+  question: z.string().trim().min(3).max(500),
+  type: z.enum(['TEXT', 'YES_NO', 'NUMBER']).default('TEXT'),
+  isRequired: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).default(0),
 });
 
 export const jobPostSchema = z.object({
-  title: z.string().min(3).max(200),
+  title: z.string().trim().min(3).max(200),
   jobTitleSlug: z.string().max(120).optional(),
-  description: z.string().min(20).max(20000),
+  description: z.string().trim().min(20).max(20000),
+  screeningQuestions: z.array(jobScreeningQuestionSchema).max(20).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
   citySlug: z.string().max(120).optional(),
+  countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional(),
   employmentType: z
     .enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY'])
@@ -183,6 +199,7 @@ export const jobPostSchema = z.object({
           name: z.string().min(1).max(80).optional(),
           isRequired: z.boolean().optional().default(true),
           weight: z.number().min(0.1).max(5).optional().default(1),
+          minLevel: z.enum(['BEGINNER','INTERMEDIATE','ADVANCED','EXPERT']).nullable().optional(),
         })
         .refine((s) => Boolean(s.slug || s.name), { message: 'slug or name required' }),
     )
@@ -206,6 +223,7 @@ export const jobPostSchema = z.object({
         .object({
           code: z.string().min(2).max(8).optional(),
           name: z.string().min(1).max(80).optional(),
+          confirmed: z.boolean().optional(),
           minLevel: z
             .enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'])
             .optional()
@@ -216,11 +234,12 @@ export const jobPostSchema = z.object({
     )
     .max(4)
     .default([]),
-  locale: z.enum(['uz', 'ru', 'en']).default('uz'),
+  locale: z.enum(['uz', 'ru', 'en', 'id']).default('uz'),
 });
 
 export const jobSearchSchema = z.object({
   q: z.string().optional(),
+  country: z.string().optional(),
   city: z.string().optional(), // slug or comma-separated slugs
   category: z.string().optional(),
   company: z.string().optional(),
@@ -229,9 +248,9 @@ export const jobSearchSchema = z.object({
   industrySlug: z.string().optional(),
   /** Canonical JobTitle slug (comma-separated ok) */
   jobTitle: z.string().optional(),
-  employmentType: z.string().optional(),
-  workMode: z.string().optional(),
-  experienceLevel: z.string().optional(),
+  employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY']).optional(),
+  workMode: z.enum(['ONSITE', 'REMOTE', 'HYBRID']).optional(),
+  experienceLevel: z.string().refine((value) => value.split(',').every((item) => ['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].includes(item.trim())), 'Invalid experience level').optional(),
   skills: z.string().optional(), // comma-separated slugs
   skillMode: z.enum(['AND', 'OR']).default('OR'),
   benefits: z.string().optional(), // comma-separated slugs
@@ -254,13 +273,16 @@ export const jobSearchSchema = z.object({
 });
 
 export const candidateSearchSchema = z.object({
+  excludeApplied: z.string().optional().transform(value=>value==='true'),
+  companyId: z.string().max(100).optional(),
   q: z.string().optional(),
+  country: z.string().optional(),
   city: z.string().optional(),
   skills: z.string().optional(), // comma-separated slugs
   skillMode: z.enum(['AND', 'OR']).default('OR'),
   /** Comma-separated JobTitle slugs (desired role / experience titles). */
   jobTitle: z.string().optional(),
-  degree: z.string().optional(),
+  degree: z.enum(['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD']).optional(),
   languages: z.string().optional(),
   experienceYearsMin: z.coerce.number().optional(),
   experienceYearsMax: z.coerce.number().optional(),
@@ -288,7 +310,34 @@ export const applicationStatusSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
+export const applicationListSchema = z.object({
+  status: applicationStatusSchema.shape.status.optional(),
+  sort: z.enum(['match', 'newest']).default('match'),
+  minMatch: z.coerce.number().min(0).max(100).optional(),
+});
+
+export const applicantSearchSchema = candidateSearchSchema.omit({ matchJobId: true, jobTitle: true, sort: true }).merge(applicationListSchema).extend({
+  experienceYearsMin: z.coerce.number().min(0).max(100).optional(),
+  experienceYearsMax: z.coerce.number().min(0).max(100).optional(),
+});
+
+export const notificationListSchema = z.object({
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+});
+
+export const jobStatusSchema = z.object({
+  status: z.enum(['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED', 'EXPIRED']),
+  linkedinPreviewId: z.string().min(1).max(100).optional(),
+});
+
+export const linkedinConnectSchema = z.object({ returnTo:z.string().max(2000).optional() }).strict();
+export const linkedinPreferencesSchema = z.object({ autoShareEnabled:z.boolean() }).strict();
+export const linkedinPreviewSchema = z.object({ locale:z.enum(['id','en','ru','uz']).optional() }).strict();
+export const linkedinApprovalSchema = z.object({ previewId:z.string().min(1).max(100) }).strict();
+export const linkedinReconcileSchema = z.object({ outcome:z.enum(['PUBLISHED','NOT_PUBLISHED']), feedChecked:z.literal(true), postUrn:z.string().max(100).optional() }).strict();
+
 export const applySchema = z.object({
+  funnelSession: z.string().max(200).optional(),
   coverLetter: z.string().max(5000).optional(),
   resumeId: z.string().min(1).optional(),
   /** Acquisition source captured from utm params, e.g. `telegram:channel`. */
@@ -316,34 +365,33 @@ export const applySchema = z.object({
 });
 
 export const chatMessageSchema = z.object({
-  body: z.string().min(1).max(5000),
+  body: z.string().trim().min(1).max(5000),
 });
 
-export const planUpgradeSchema = z.object({
-  plan: z.enum(['STANDARD', 'PREMIUM', 'VIP']),
+export const chatConversationSchema = z.object({
+  peerUserId: z.string().min(1).max(128),
+  jobPostId: z.string().min(1).max(128).optional(),
+  companyId: z.string().min(1).max(128).optional(),
 });
 
 /** Public hiring-company directory (explore / Top Companies). */
 export const companyBrowseSchema = z.object({
   q: z.string().optional(),
   industrySlug: z.string().optional(),
+  /** Deprecated; accepted and ignored for saved URLs. */
   plan: z.enum(['VIP', 'PREMIUM', 'STANDARD', 'FREE']).optional(),
   sort: z.enum(['jobs', 'name']).default('jobs'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(48).default(24),
 });
 
-export const hotJobSchema = z.object({
-  days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
-});
-
 /** Recruiter-authored translation of a posting (one row per extra language). */
 export const jobTranslationSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().min(20).max(20000),
+  title: z.string().trim().min(3).max(200),
+  description: z.string().trim().min(20).max(20000),
   /** Screening questions in the same language, matched by question id. */
   questions: z
-    .array(z.object({ id: z.string().min(1), question: z.string().min(3).max(500) }))
+    .array(z.object({ id: z.string().trim().min(1), question: z.string().trim().min(3).max(500) }))
     .max(20)
     .optional(),
 });
@@ -367,7 +415,14 @@ export const profileUpdateSchema = z.object({
   visibility: z
     .enum(['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'])
     .optional(),
-  desiredSalaryMin: z.number().int().nonnegative().optional().nullable(),
+  desiredSalaryMin: z.number().finite().nonnegative().max(1_000_000_000_000).refine(n => /^\d+(?:\.\d{1,2})?$/.test(String(n)), 'Use at most two decimal places').optional().nullable(),
+  desiredSalaryCurrency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  desiredSalaryPeriod: z.enum(['MONTHLY','YEARLY','HOURLY']).optional(),
+  salaryNegotiable: z.boolean().optional(),
+  desiredPositions: z.array(z.string().trim().min(1).max(160)).max(10).optional(),
+  preferredCountryIds: z.array(z.string().min(1).max(100)).max(10).optional(),
+  residenceCountryId: z.string().min(1).max(100).nullable().optional(),
+  noExperience: z.boolean().optional(),
   desiredPosition: z.string().max(160).optional(),
 });
 
@@ -382,13 +437,14 @@ export const skillLevelUpdateSchema = z.object({
 });
 
 export const experienceSchema = z.object({
+  countryId: z.string().max(100).nullable().optional(),
   companyName: z.string().min(1).max(160),
   title: z.string().min(1).max(160),
   description: z.string().max(5000).optional(),
   citySlug: z.string().max(120).optional(),
   locationNote: z.string().max(160).optional(),
-  startDate: z.string(),
-  endDate: z.string().optional().nullable(),
+  startDate: calendarDateSchema,
+  endDate: calendarDateSchema.optional().nullable(),
   isCurrent: z.boolean().default(false),
 });
 
@@ -396,15 +452,15 @@ export const educationSchema = z.object({
   school: z.string().min(1).max(200),
   degree: z.enum(['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD']).optional(),
   field: z.string().max(160).optional(),
-  startDate: z.string().optional().nullable(),
-  endDate: z.string().optional().nullable(),
+  startDate: calendarDateSchema.optional().nullable(),
+  endDate: calendarDateSchema.optional().nullable(),
 });
 
 export const certificationSchema = z.object({
   name: z.string().min(1).max(200),
   issuer: z.string().max(160).optional(),
-  issuedAt: z.string().optional().nullable(),
-  expiresAt: z.string().optional().nullable(),
+  issuedAt: calendarDateSchema.optional().nullable(),
+  expiresAt: calendarDateSchema.optional().nullable(),
   credentialUrl: z.string().url().optional().or(z.literal('')),
 });
 
@@ -422,6 +478,7 @@ export const jobAlertSchema = z.object({
   name: z.string().min(1).max(120),
   query: z.string().max(200).optional(),
   citySlug: z.string().max(120).optional(),
+  countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional(),
   skillSlugs: z.array(z.string()).max(20).default([]),
   frequency: z.enum(['DAILY', 'WEEKLY']).default('DAILY'),
@@ -434,6 +491,7 @@ export const jobAlertUpdateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   query: z.string().max(200).optional().nullable(),
   citySlug: z.string().max(120).optional().nullable(),
+  countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional().nullable(),
   skillSlugs: z.array(z.string()).max(20).optional(),
   frequency: z.enum(['DAILY', 'WEEKLY']).optional(),
@@ -478,24 +536,25 @@ export const resumeSchema = z.object({
 export const MAX_RESUMES_PER_PROFILE = 10;
 
 export const resumeImportExperienceSchema = z.object({
-  title: z.string().min(1).max(160),
-  companyName: z.string().min(1).max(160),
+  title: z.string().trim().min(1).max(160),
+  countryId: z.string().max(100).optional(),
+  companyName: z.string().trim().min(1).max(160),
   description: z.string().max(5000).optional(),
-  startDate: z.string().max(40).optional().nullable(),
-  endDate: z.string().max(40).optional().nullable(),
+  startDate: calendarDateSchema.or(z.literal('')).optional().nullable(),
+  endDate: calendarDateSchema.or(z.literal('')).optional().nullable(),
   isCurrent: z.boolean().optional(),
 });
 
 export const resumeImportEducationSchema = z.object({
-  school: z.string().min(1).max(200),
+  school: z.string().trim().min(1).max(200),
   degree: z.enum(['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD']).optional(),
   field: z.string().max(160).optional(),
-  startDate: z.string().max(40).optional().nullable(),
-  endDate: z.string().max(40).optional().nullable(),
+  startDate: calendarDateSchema.or(z.literal('')).optional().nullable(),
+  endDate: calendarDateSchema.or(z.literal('')).optional().nullable(),
 });
 
 export const resumeImportLanguageSchema = z.object({
-  name: z.string().min(1).max(80),
+  name: z.string().trim().min(1).max(80),
   code: z.string().max(16).optional(),
   level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']).optional(),
 });
@@ -507,13 +566,18 @@ export const resumeImportSchema = z.object({
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),
   phone: z.string().max(40).optional(),
-  skills: z.array(z.string().min(1).max(80)).max(50).default([]),
+  skills: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
   experiences: z.array(resumeImportExperienceSchema).max(20).default([]),
   educations: z.array(resumeImportEducationSchema).max(10).default([]),
   languages: z.array(resumeImportLanguageSchema).max(15).default([]),
 });
 
 export type ResumeImportInput = z.infer<typeof resumeImportSchema>;
+
+/** Bind an import to the exact parse the employee reviewed. */
+export const resumeImportRequestSchema = resumeImportSchema.extend({
+  resumeGeneration: z.number().int().nonnegative(),
+});
 
 export const resumeTemplateKeys = ['classic', 'modern', 'compact'] as const;
 export type ResumeTemplateKey = (typeof resumeTemplateKeys)[number];
@@ -569,7 +633,7 @@ export const DEFAULT_RESUME_INCLUSION = {
 export type ResumeInclusion = z.infer<typeof resumeInclusionSchema>;
 
 export const jobQuestionSchema = z.object({
-  question: z.string().min(3).max(500),
+  question: z.string().trim().min(3).max(500),
   type: z.enum(['TEXT', 'YES_NO', 'NUMBER']).default('TEXT'),
   isRequired: z.boolean().default(true),
   sortOrder: z.number().int().min(0).default(0),
@@ -578,7 +642,7 @@ export const jobQuestionSchema = z.object({
 /** Edit an existing screening question in place so submitted answers survive. */
 export const jobQuestionUpdateSchema = z
   .object({
-    question: z.string().min(3).max(500).optional(),
+    question: z.string().trim().min(3).max(500).optional(),
     type: z.enum(['TEXT', 'YES_NO', 'NUMBER']).optional(),
     isRequired: z.boolean().optional(),
     sortOrder: z.number().int().min(0).optional(),
@@ -588,16 +652,16 @@ export const jobQuestionUpdateSchema = z
   });
 
 export const interviewSchema = z.object({
-  scheduledAt: z.string(),
+  scheduledAt: z.string().datetime({ offset: true }),
   durationMins: z.number().int().min(15).max(480).default(60),
   location: z.string().max(300).optional(),
-  meetingUrl: z.string().url().optional().or(z.literal('')),
+  meetingUrl: z.string().url().refine((value) => /^https?:\/\//i.test(value), 'Use an HTTP or HTTPS meeting URL').optional().or(z.literal('')),
   note: z.string().max(2000).optional(),
 });
 
 export const accountUpdateSchema = z.object({
   fullName: z.string().min(2).max(120).optional(),
-  locale: z.enum(['uz', 'ru', 'en']).optional(),
+  locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
 });
 
@@ -610,6 +674,11 @@ export const reportSchema = z.object({
   entityType: z.enum(['JOB_POST', 'USER', 'COMPANY', 'CHAT_MESSAGE']),
   entityId: z.string().min(1),
   reason: z.string().min(5).max(2000),
+});
+
+export const reportResolutionSchema = z.object({
+  status: z.enum(['RESOLVED', 'DISMISSED']).default('RESOLVED'),
+  resolution: z.string().max(2000).optional(),
 });
 
 const applicationStatusEnum = z.enum([
@@ -679,7 +748,15 @@ const boolParam = z
   .transform((v) => (v === undefined ? undefined : v === 'true'));
 
 /** Accepts `2026-08-12` as well as a full ISO timestamp. */
-const dateParam = z.string().max(40).optional();
+const dateParam = calendarDateSchema.optional();
+
+export const adminBanSchema = z.object({ banned: z.boolean() });
+
+export const adminFeatureFlagSchema = z.object({
+  key: z.string().trim().min(1).max(120),
+  enabled: z.boolean(),
+  payload: z.unknown().optional(),
+});
 
 const adminListBase = {
   q: z.string().max(200).optional(),
@@ -717,7 +794,7 @@ export const adminJobListSchema = z.object({
   employmentType: z.string().max(120).optional(),
   workMode: z.string().max(60).optional(),
   experienceLevel: z.string().max(120).optional(),
-  /** Boosted right now, i.e. `boostUntil` still in the future. */
+  /** Deprecated; accepted and ignored for saved URLs. */
   hotOnly: boolParam,
   companyId: z.string().max(40).optional(),
   locale: z.string().max(40).optional(),
@@ -806,19 +883,9 @@ export const adminVerificationDecisionSchema = z.object({
   reviewNote: z.string().trim().max(1000).optional(),
 });
 
-export const adminBulkPlanSchema = z.object({
-  ids: bulkIds,
-  plan: z.enum(['FREE', 'STANDARD', 'PREMIUM', 'VIP']),
-});
-
 export const adminBulkJobStatusSchema = z.object({
   ids: bulkIds,
   status: z.enum(['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED', 'EXPIRED']),
-});
-
-export const adminBulkHotSchema = z.object({
-  ids: bulkIds,
-  days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
 });
 
 export const adminBulkResolveSchema = z.object({
@@ -848,22 +915,55 @@ export const adminCatalogBrowseSchema = z.object({
   createdTo: dateParam,
 });
 
+export const occupationMatchingMetadataSchema = z.object({
+  sources:z.array(z.object({provider:z.string().trim().min(1).max(200),uri:z.string().url().max(1000).optional(),
+    code:z.string().trim().max(80).optional(),version:z.string().trim().min(1).max(80)}).strict()).max(10),
+  isco08:z.string().regex(/^\d{4}$/).optional(),
+  labelReview:z.object({id:z.enum(['UNREVIEWED','LOCAL_STANDARD','NATIVE_REVIEWED']).optional(),
+    uz:z.enum(['UNREVIEWED','LOCAL_STANDARD','NATIVE_REVIEWED']).optional()}).optional(),
+  relatedRoles:z.array(z.object({id:z.string().min(1).max(100),kind:z.literal('RELATED'),reference:z.string().trim().min(3).max(1000),approved:z.boolean()}).strict()).max(100),
+}).strict();
+
 export const adminCatalogCreateSchema = z.object({
+  matchingMetadata:occupationMatchingMetadataSchema.optional(),
+  iso2: z.string().trim().regex(/^[A-Z]{2}$/).optional(),
+  iso3: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  phoneCode: z.string().trim().regex(/^\+[0-9]{1,4}$/).optional(),
+  currencyCode: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  isActive: z.boolean().optional(),
+  kind: z.enum(['CITY','REGENCY','DISTRICT','SETTLEMENT','LEGACY']).optional(),
   name: z.string().trim().min(1).max(120),
   /** Slug or ISO code; derived from the name when omitted. */
   key: z.string().trim().max(120).optional(),
+  nameUz: z.string().trim().max(120).optional(),
+  nameRu: z.string().trim().max(120).optional(),
+  nameId: z.string().trim().max(120).optional(),
   parentSlug: z.string().trim().max(120).optional(),
+  parentId: z.string().max(100).optional(),
   sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
   icon: z.string().trim().max(120).optional(),
 });
 
 export const adminCatalogUpdateSchema = z.object({
+  matchingMetadata:occupationMatchingMetadataSchema.nullable().optional(),
+  iso2: z.string().trim().regex(/^[A-Z]{2}$/).optional(),
+  iso3: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  phoneCode: z.string().trim().regex(/^\+[0-9]{1,4}$/).optional(),
+  currencyCode: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  isActive: z.boolean().optional(),
+  kind: z.enum(['CITY','REGENCY','DISTRICT','SETTLEMENT','LEGACY']).optional(),
   name: z.string().trim().min(1).max(120).optional(),
   /** Slug or ISO code; omit to leave the identity key unchanged. */
   key: z.string().trim().min(1).max(120).optional(),
   nameUz: z.string().trim().max(120).nullable().optional(),
   nameRu: z.string().trim().max(120).nullable().optional(),
+  nameId: z.string().trim().max(120).nullable().optional(),
   parentSlug: z.string().trim().max(120).optional(),
+  parentId: z.string().max(100).optional(),
   sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
   icon: z.string().trim().max(120).nullable().optional(),
+});
+
+export const adminCatalogAliasSchema = z.object({
+  alias: z.string().trim().min(1).max(120),
 });

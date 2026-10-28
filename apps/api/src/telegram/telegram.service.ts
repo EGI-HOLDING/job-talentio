@@ -23,7 +23,7 @@ import {
 import { isSecureRuntime } from '../common/jwt-secret';
 import { telegramWebhookSecretRequired } from '../auth/session-policy';
 import { NotificationsService } from '../notifications/notifications.service';
-import { MatchingService } from '../matching/matching.service';
+import { EmployeeMatchingService } from '../matching/employee-matching.service';
 import { displayCompanyName } from '../common/anonymous-job';
 import { maskPhone, normalizePhone, parsePhoneStartPayload } from '../auth/phone.util';
 
@@ -60,7 +60,7 @@ export class TelegramService implements OnModuleInit {
     private prisma: PrismaService,
     private config: ConfigService,
     private notifications: NotificationsService,
-    private matching: MatchingService,
+    private matching: EmployeeMatchingService,
   ) {}
 
   isConfigured(): boolean {
@@ -98,6 +98,8 @@ export class TelegramService implements OnModuleInit {
     const apiUrl = (this.config.get<string>('API_URL', '') || '').replace(/\/$/, '');
     const secret = this.webhookSecret();
     if (!token || !apiUrl) return;
+    // A local receiver must never replace the bot's public webhook.
+    try { if (new URL(apiUrl).protocol !== 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(new URL(apiUrl).hostname)) return; } catch { return; }
     try {
       await this.telegramCall('setWebhook', {
         url: `${apiUrl}/api/telegram/webhook`,
@@ -194,14 +196,14 @@ export class TelegramService implements OnModuleInit {
       });
       if (profile) {
         try {
-          const rows = await this.matching.recommendJobsForProfile(profile.id, BOT_JOBS_LIMIT);
-          jobs = rows.map((row) => ({
+          const result = await this.matching.recommend(profile.id, 1, BOT_JOBS_LIMIT);
+          jobs = result.items.map((row) => ({
             id: row.job.id,
             title: row.job.title,
             companyName: displayCompanyName(row.job, row.job.company.name, locale),
-            cityName: row.job.city?.name ?? null,
+            cityName: row.job.city?.name ?? row.job.country?.name ?? null,
           }));
-          personalised = jobs.length > 0;
+          personalised = result.mode === 'PERSONALIZED';
         } catch (err) {
           this.logger.warn(`Telegram /jobs recommendation failed: ${(err as Error).message}`);
         }
@@ -209,7 +211,7 @@ export class TelegramService implements OnModuleInit {
     }
     if (jobs.length === 0) {
       const latest = await this.prisma.jobPost.findMany({
-        where: { status: 'PUBLISHED' },
+        where: { status: 'PUBLISHED', company:{isBanned:false,anonymizedAt:null} },
         orderBy: { publishedAt: 'desc' },
         take: BOT_JOBS_LIMIT,
         select: {
@@ -218,13 +220,14 @@ export class TelegramService implements OnModuleInit {
           isAnonymous: true,
           company: { select: { name: true } },
           city: { select: { name: true } },
+          country: { select: { name: true } },
         },
       });
       jobs = latest.map((j) => ({
         id: j.id,
         title: j.title,
         companyName: displayCompanyName(j, j.company.name, locale),
-        cityName: j.city?.name ?? null,
+        cityName: j.city?.name ?? j.country?.name ?? null,
       }));
     }
     await this.sendMessage(
@@ -428,7 +431,7 @@ export class TelegramService implements OnModuleInit {
         data: {
           fullName,
           role: 'EMPLOYEE',
-          locale: pending?.locale ?? (from.language_code && ['uz', 'ru', 'en'].includes(from.language_code) ? from.language_code : 'uz'),
+          locale: pending?.locale ?? (from.language_code && ['uz', 'ru', 'en', 'id'].includes(from.language_code) ? from.language_code : 'uz'),
           phone,
           phoneVerifiedAt: new Date(),
           telegramId: chat,

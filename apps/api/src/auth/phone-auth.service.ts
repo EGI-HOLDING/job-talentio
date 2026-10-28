@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { isSecureRuntime } from '../common/jwt-secret';
 import { createSmsProviderFromEnv, type SmsProvider } from './sms.provider';
+import { TelegramLocalPollingService } from '../telegram/telegram-local-polling.service';
 import {
   PHONE_LOGIN_TTL_MS,
   PHONE_OTP_MAX_ATTEMPTS,
@@ -48,6 +49,7 @@ export class PhoneAuthService {
     private prisma: PrismaService,
     private config: ConfigService,
     private auth: AuthService,
+    private localPolling: TelegramLocalPollingService,
   ) {
     this.sms = createSmsProviderFromEnv(process.env, isSecureRuntime());
     if (this.sms) this.logger.log(`SMS OTP enabled via ${this.sms.name}`);
@@ -58,7 +60,9 @@ export class PhoneAuthService {
   }
 
   private telegramAvailable(): boolean {
-    return Boolean(this.config.get<string>('TELEGRAM_BOT_TOKEN', '').trim() && this.botUsername());
+    if (!this.config.get<string>('TELEGRAM_BOT_TOKEN', '').trim() || !this.botUsername()) return false;
+    if (this.config.get('TELEGRAM_DEV_POLLING') === 'true') return this.localPolling.ready;
+    try { const url = new URL(this.config.get('API_URL', '')); return url.protocol === 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname); } catch { return false; }
   }
 
   providers() {
@@ -76,7 +80,7 @@ export class PhoneAuthService {
     await this.prisma.phoneLoginToken.create({
       data: {
         tokenHash: sha256(raw),
-        locale: locale && ['uz', 'ru', 'en'].includes(locale) ? locale : 'uz',
+        locale: locale && ['uz', 'ru', 'en', 'id'].includes(locale) ? locale : 'uz',
         expiresAt,
       },
     });
@@ -154,7 +158,7 @@ export class PhoneAuthService {
         data: {
           fullName: phone,
           role: 'EMPLOYEE',
-          locale: locale && ['uz', 'ru', 'en'].includes(locale) ? locale : 'uz',
+        locale: locale && ['uz', 'ru', 'en', 'id'].includes(locale) ? locale : 'uz',
           phone,
           phoneVerifiedAt: new Date(),
           employeeProfile: { create: {} },

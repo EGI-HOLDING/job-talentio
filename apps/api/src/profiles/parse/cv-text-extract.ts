@@ -1,146 +1,188 @@
-import { Logger } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
-import mammoth from 'mammoth';
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
-
-const THIN_TEXT_CHARS = 80;
-const OCR_TIMEOUT_MS = 30_000;
-
-export type CvFileKind = 'pdf' | 'docx' | 'other';
-
+import type { ConfigService } from "@nestjs/config";
+import mammoth from "mammoth";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import WordExtractor from "word-extractor";
+import { validateCvDocxArchive } from './cv-archive-limit';
+const nativeImport = new Function("specifier", "return import(specifier)") as (
+  s: string,
+) => Promise<any>;
+export type CvFileKind = "pdf" | "docx" | "doc" | "other";
 export type CvTextExtractResult = {
   kind: CvFileKind;
   text: string;
   ocrUsed: boolean;
 };
-
-const logger = new Logger('CvTextExtract');
-
-export function detectCvFileKind(filename: string, mimeType: string): CvFileKind {
-  const name = (filename || '').toLowerCase();
-  const mime = (mimeType || '').toLowerCase();
-  if (mime.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
-  if (
-    mime.includes('wordprocessingml') ||
-    mime === 'application/msword' ||
-    name.endsWith('.docx') ||
-    name.endsWith('.doc')
-  ) {
-    return 'docx';
-  }
-  return 'other';
+async function bounded<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]); }
+  finally { if (timer) clearTimeout(timer); }
 }
-
-function ocrEnabled(config?: ConfigService) {
-  const raw = config?.get<string>('CV_PARSE_OCR');
-  if (raw === undefined || raw === null || raw === '') return true;
-  return !['0', 'false', 'no', 'off'].includes(String(raw).trim().toLowerCase());
+export function detectCvFileKind(
+  filename: string,
+  mimeType: string,
+): CvFileKind {
+  const name = filename.toLowerCase();
+  if (name.endsWith(".pdf") || mimeType === "application/pdf") return "pdf";
+  if (name.endsWith(".docx") || mimeType.includes("wordprocessingml"))
+    return "docx";
+  if (name.endsWith(".doc") || mimeType === "application/msword") return "doc";
+  return "other";
 }
-
-/** Tesseract lang string, e.g. eng+rus. Safe subset only. */
-function ocrLangs(config?: ConfigService) {
-  const raw = (config?.get<string>('CV_PARSE_OCR_LANGS') || 'eng+rus').trim().toLowerCase();
-  if (/^[a-z]{3}(?:\+[a-z]{3})*$/.test(raw)) return raw;
-  return 'eng+rus';
-}
-
-async function extractPdfText(buffer: Buffer): Promise<string> {
+type PdfPageText = { text: string; needsOcr: boolean };
+async function readPdfPages(buffer: Buffer): Promise<PdfPageText[]> {
+  const pdfjs = await nativeImport("pdfjs-dist/legacy/build/pdf.mjs");
+  const loading = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    isEvalSupported: false,
+    maxImageSize: 12_000_000,
+  });
   try {
-    const result = await pdfParse(buffer);
-    return result.text || '';
-  } catch (err) {
-    logger.warn(`pdf-parse failed: ${(err as Error).message}`);
-    return '';
+    const document = await bounded<any>(loading.promise, 30_000, 'CV PDF loading timed out');
+    if (document.numPages > 20)
+      throw new Error("CV exceeds the 20-page parsing limit");
+    const pages: PdfPageText[] = [];
+    for (let n = 1; n <= document.numPages; n++) {
+      const page = await document.getPage(n),
+        content = await bounded<any>(page.getTextContent(), 30_000, 'CV PDF text extraction timed out');
+      let lastY: number | undefined, lastRight: number | undefined, text = "";
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        const sameLine = lastY !== undefined && Math.abs(lastY - item.transform[5]) <= Math.max(2, Math.abs(item.transform[3]) * 0.2);
+        const gap = lastRight !== undefined ? item.transform[4] - lastRight : 0;
+        text += (lastY === undefined ? '' : !sameLine ? '\n' : gap > Math.max(1, Math.abs(item.transform[0]) * 0.12) && !/\s$/.test(text) && !/^\s/.test(item.str) ? ' ' : '') + item.str;
+        lastY = item.transform[5];
+        lastRight = item.transform[4] + (item.width || 0);
+        if (text.length > 500_000) throw new Error('CV contains too much text');
+      }
+      let needsOcr = text.trim().length < 20;
+      // Scanned PDFs often have a native header/footer over an image. The
+      // presence of that small text layer must not suppress OCR of the CV.
+      if (!needsOcr && text.trim().length < 250) {
+        const operators = await bounded<any>(page.getOperatorList(), 30_000, 'CV PDF inspection timed out');
+        needsOcr = operators.fnArray.some((op: number) => [pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintImageXObjectRepeat].includes(op));
+      }
+      pages.push({ text, needsOcr });
+      page.cleanup();
+    }
+    return pages;
+  } finally {
+    await loading.destroy();
   }
 }
-
-async function extractDocxText(buffer: Buffer): Promise<string> {
+async function ocrPdf(
+  buffer: Buffer,
+  config?: ConfigService,
+  nativePages: PdfPageText[] = [],
+): Promise<string> {
+  const pdfjs = await nativeImport("pdfjs-dist/legacy/build/pdf.mjs");
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const { createWorker } = await import("tesseract.js");
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    isEvalSupported: false,
+    maxImageSize: 12_000_000,
+  });
+  let worker: Awaited<ReturnType<typeof createWorker>> | undefined;
+  let abandonedWorker = false;
   try {
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value || '';
-  } catch (err) {
-    logger.warn(`mammoth DOCX extract failed: ${(err as Error).message}`);
-    return '';
-  }
-}
-
-/**
- * OCR fallback for scanned/thin PDFs. Rasterizes page 1 when canvas is available;
- * soft-fails otherwise so parse still completes.
- */
-async function ocrThinPdf(buffer: Buffer, config?: ConfigService): Promise<string | null> {
-  try {
-    const png = await rasterizePdfFirstPage(buffer);
-    if (!png) return null;
-
-    const Tesseract = await import('tesseract.js');
-    const langs = ocrLangs(config);
-    const recognize = Tesseract.recognize(png, langs, {
-      logger: () => undefined,
+    const deadline = Date.now() + 120_000;
+    const doc = await bounded<any>(loadingTask.promise, 30_000, 'CV PDF loading timed out');
+    if (doc.numPages > 20)
+      throw new Error("Scanned CV exceeds the 20-page parsing limit");
+    const configured = config?.get<string>("CV_PARSE_OCR_LANGS") || "eng+rus";
+    const langs = /^[a-z]{3}(?:\+[a-z]{3})*$/.test(configured)
+      ? configured
+      : "eng+rus";
+    const cachePath = join(tmpdir(), "talentio-ocr");
+    mkdirSync(cachePath, { recursive: true });
+    const initializing = createWorker(langs, 1, { cachePath }).then(async created => {
+      if (abandonedWorker) await created.terminate();
+      return created;
     });
-    const result = await Promise.race([
-      recognize,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('OCR timeout')), OCR_TIMEOUT_MS),
-      ),
-    ]);
-    return result.data?.text || null;
-  } catch (err) {
-    logger.warn(`OCR fallback skipped: ${(err as Error).message}`);
-    return null;
+    worker = await bounded(initializing, Math.min(60_000, deadline - Date.now()), 'CV OCR initialization timed out');
+    const pages: string[] = [];
+    for (let n = 1; n <= doc.numPages; n++) {
+      if (Date.now() >= deadline) throw new Error('CV OCR timed out');
+      if (nativePages[n - 1] && !nativePages[n - 1].needsOcr) {
+        pages.push(nativePages[n - 1].text);
+        continue;
+      }
+      const page = await doc.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      if (!Number.isFinite(base.width * base.height) || base.width <= 0 || base.height <= 0 || base.width > 14400 || base.height > 14400) throw new Error('CV page dimensions exceed the parsing limit');
+      const scale = Math.min(2.5, Math.sqrt(12_000_000 / (base.width * base.height)), 6000 / Math.max(base.width, base.height));
+      const viewport = page.getViewport({ scale });
+      const canvas = createCanvas(
+        Math.ceil(viewport.width),
+        Math.ceil(viewport.height),
+      );
+      const render = page.render({
+        canvas,
+        canvasContext: canvas.getContext("2d"),
+        viewport,
+      });
+      try { await bounded(render.promise, Math.max(1, Math.min(30_000, deadline - Date.now())), 'CV PDF rendering timed out'); }
+      catch (error) { render.cancel(); throw error; }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const result = await Promise.race([
+          worker.recognize(canvas.toBuffer("image/png")),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error("CV OCR timed out")),
+              Math.max(1, Math.min(30_000, deadline - Date.now())),
+            );
+          }),
+        ]);
+        pages.push(result.data.text);
+      } finally {
+        if (timer) clearTimeout(timer);
+        page.cleanup();
+      }
+    }
+    return pages.join("\n\n");
+  } finally {
+    abandonedWorker = true;
+    if (worker) await worker.terminate();
+    await loadingTask.destroy();
   }
 }
-
-async function rasterizePdfFirstPage(buffer: Buffer): Promise<Buffer | null> {
-  try {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const canvasMod = await import('@napi-rs/canvas');
-    const data = new Uint8Array(buffer);
-    const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
-    if (doc.numPages < 1) return null;
-    const page = await doc.getPage(1);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = canvasMod.createCanvas(
-      Math.ceil(viewport.width),
-      Math.ceil(viewport.height),
-    );
-    const ctx = canvas.getContext('2d');
-    await page.render({
-      canvas: canvas as unknown as HTMLCanvasElement,
-      canvasContext: ctx as unknown as CanvasRenderingContext2D,
-      viewport,
-    }).promise;
-    return canvas.toBuffer('image/png');
-  } catch {
-    return null;
-  }
-}
-
-/** Extract plain text from a CV buffer (PDF/DOCX + optional OCR). */
 export async function extractCvText(
   input: { buffer: Buffer; filename: string; mimeType: string },
   config?: ConfigService,
 ): Promise<CvTextExtractResult> {
   const kind = detectCvFileKind(input.filename, input.mimeType);
-  if (kind === 'other') {
-    return { kind, text: '', ocrUsed: false };
-  }
-
-  if (kind === 'docx') {
-    return { kind, text: await extractDocxText(input.buffer), ocrUsed: false };
-  }
-
-  const extracted = await extractPdfText(input.buffer);
-  let text = extracted;
+  let text = "";
   let ocrUsed = false;
-  if (extracted.trim().length < THIN_TEXT_CHARS && ocrEnabled(config)) {
-    const ocrText = await ocrThinPdf(input.buffer, config);
-    if (ocrText && ocrText.trim().length > extracted.trim().length) {
-      text = ocrText;
+  if (kind === "other")
+    throw new Error("CV parsing supports PDF, DOCX and DOC files");
+  if (kind === "docx") {
+    validateCvDocxArchive(input.buffer);
+    text = (await mammoth.extractRawText({ buffer: input.buffer })).value;
+  }
+  if (kind === "doc")
+    text = (await new WordExtractor().extract(input.buffer)).getBody();
+  if (kind === "pdf") {
+    // One reader enforces the page limit for both native and scanned PDFs.
+    const pageTexts = await readPdfPages(input.buffer);
+    text = pageTexts.map(page => page.text).join("\n\n");
+    const enabled = !["false", "0", "no", "off"].includes(
+      String(config?.get("CV_PARSE_OCR") ?? "true").toLowerCase(),
+    );
+    if (enabled && pageTexts.some((page) => page.needsOcr)) {
+      text = await ocrPdf(input.buffer, config, pageTexts);
       ocrUsed = true;
     }
   }
+  text = text.replace(/\x00/g, "").trim();
+  if (text.length > 500_000) throw new Error('CV contains too much text');
+  if (text.length < 20)
+    throw new Error(
+      "No readable CV text found. Try another file or enter your experience manually.",
+    );
   return { kind, text, ocrUsed };
 }

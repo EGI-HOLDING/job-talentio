@@ -1,3 +1,4 @@
+import { liveJobWhere } from '../benefits/benefit-policy';
 import {
   Injectable,
   NotFoundException,
@@ -13,8 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { MailService } from '../mail/mail.service';
 import { AuthUser } from '../common/auth.decorators';
-import { effectivePlan, subscriptionPlanSelect } from '../common/effective-plan';
-import { slugify } from '../common/utils';
+import { escapeHtml, slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { sanitizeStoredText } from '../common/text-sanitize';
 import { contentHash as translationSourceHash, resolveUgcContent } from '../common/i18n/content-locale';
@@ -25,6 +25,7 @@ import { emailLocale } from '../common/i18n/email-locale';
 import { TranslationService } from '../translation/translation.service';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
+import { resolveJobLocation } from '../common/geo-selection';
 import { closeCompanyBlocked, transferOwnershipBlocked } from '../users/erasure-guards';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -42,9 +43,12 @@ export class CompaniesService {
     private jobsSearch: JobsSearchService,
   ) {}
 
-  assertOpen(company: { anonymizedAt?: Date | null }) {
+  assertOpen(company: { anonymizedAt?: Date | null; isBanned?: boolean }) {
     if (company.anonymizedAt) {
       throw new BadRequestException('This company is closed');
+    }
+    if (company.isBanned) {
+      throw new ForbiddenException('This company is suspended');
     }
   }
 
@@ -71,6 +75,7 @@ export class CompaniesService {
     user: AuthUser,
     companyId: string,
     roles?: CompanyMemberRole[],
+    opts?: { allowBanned?: boolean },
   ) {
     if (user.role === 'SUPER_ADMIN') {
       const company = await this.prisma.company.findUnique({ where: { id: companyId } });
@@ -82,6 +87,9 @@ export class CompaniesService {
       include: { company: true },
     });
     if (!membership) throw new ForbiddenException('Not a company member');
+    if (membership.company.isBanned && !opts?.allowBanned) {
+      throw new ForbiddenException('This company is suspended');
+    }
     if (roles && !roles.includes(membership.role)) {
       throw new ForbiddenException('Insufficient company role');
     }
@@ -104,8 +112,7 @@ export class CompaniesService {
       include: {
         company: {
           include: {
-            subscription: true,
-            city: true,
+            city: { include: { province: { include: { country: true } } } },
             industry: true,
             _count: { select: { jobPosts: true, members: true, followers: true } },
           },
@@ -129,20 +136,11 @@ export class CompaniesService {
 
     const where: Prisma.CompanyWhereInput = {
       isBanned: false,
-      jobPosts: { some: { status: 'PUBLISHED' } },
-      ...(query.plan
-        ? {
-            subscription: {
-              plan: query.plan,
-              ...(query.plan !== 'FREE'
-                ? {
-                    status: 'ACTIVE' as const,
-                    OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
-                  }
-                : {}),
-            },
-          }
-        : {}),
+      anonymizedAt: null,
+      // A company with only confidential listings should not appear to have
+      // public openings in the company directory.
+      jobPosts: { some: { ...liveJobWhere(), isAnonymous: false } },
+      // Legacy plan filters no longer restrict directory membership.
       ...(query.industrySlug ? { industry: { slug: query.industrySlug } } : {}),
       ...(q
         ? {
@@ -164,10 +162,9 @@ export class CompaniesService {
         slug: true,
         name: true,
         logoUrl: true,
-        industry: { select: { slug: true, name: true, nameUz: true, nameRu: true } },
-        subscription: { select: subscriptionPlanSelect },
+        industry: { select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true } },
         _count: {
-          select: { jobPosts: { where: { status: 'PUBLISHED' } } },
+          select: { jobPosts: { where: { ...liveJobWhere(), isAnonymous: false } } },
         },
       },
       orderBy:
@@ -184,7 +181,6 @@ export class CompaniesService {
         name: c.name,
         logoUrl: c.logoUrl,
         industry: c.industry,
-        plan: effectivePlan(c.subscription),
         openJobsCount: c._count.jobPosts,
       })),
       total,
@@ -198,8 +194,7 @@ export class CompaniesService {
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
       include: {
-        subscription: true,
-        city: true,
+        city: { include: { province: { include: { country: true } } } },
         industry: true,
         members: {
           include: {
@@ -217,15 +212,14 @@ export class CompaniesService {
     const company = await this.prisma.company.findUnique({
       where: { slug },
       include: {
-        city: true,
+        city: { include: { province: { include: { country: true } } } },
         industry: true,
-        subscription: { select: { plan: true } },
         translations: { select: { locale: true, description: true, isMachine: true } },
         jobPosts: {
           // Confidential postings never appear on the company's own public page.
-          where: { status: 'PUBLISHED', isAnonymous: false },
+          where: { ...liveJobWhere(), isAnonymous: false },
           include: {
-            city: true,
+            city: { include: { province: { include: { country: true } } } },
             category: true,
             jobSkills: { include: { skill: true }, take: 6 },
             translations: {
@@ -235,10 +229,17 @@ export class CompaniesService {
           orderBy: { publishedAt: 'desc' },
           take: 20,
         },
-        _count: { select: { followers: true, jobPosts: true } },
+        _count: {
+          select: {
+            followers: true,
+            jobPosts: { where: { ...liveJobWhere(), isAnonymous: false } },
+          },
+        },
       },
     });
-    if (!company || company.isBanned) throw new NotFoundException('Company not found');
+    if (!company || company.isBanned || company.anonymizedAt) {
+      throw new NotFoundException('Company not found');
+    }
 
     const { translations, ...rest } = company;
     const described = this.withDescriptionLocale(rest, translations, locale);
@@ -256,6 +257,9 @@ export class CompaniesService {
         );
         return {
           ...job,
+          isHot: false,
+          boostWeight: 0,
+          boostUntil: null,
           ...resolved.content,
           contentLocale: resolved.contentLocale,
           isMachineTranslated: resolved.isMachineTranslated,
@@ -387,6 +391,7 @@ export class CompaniesService {
       description?: string;
       website?: string;
       citySlug?: string;
+      countryId?: string | null;
       industrySlug?: string;
       size?: string;
       locale?: string;
@@ -398,14 +403,12 @@ export class CompaniesService {
     }
     let cityId: string | undefined | null = undefined;
     let industryId: string | undefined | null = undefined;
-    if (data.citySlug !== undefined) {
-      if (!data.citySlug) cityId = null;
-      else {
-        const city = await this.prisma.city.findFirst({
-          where: { slug: data.citySlug, ...ACTIVE_CATALOG },
-        });
-        cityId = city?.id ?? null;
+    if (data.citySlug !== undefined || data.countryId !== undefined) {
+      const location = await resolveJobLocation(this.prisma, data);
+      if (data.countryId && !location.cityId) {
+        throw new BadRequestException('Choose a city to save the company location');
       }
+      cityId = location.cityId;
     }
     if (data.industrySlug !== undefined) {
       if (!data.industrySlug) industryId = null;
@@ -437,7 +440,7 @@ export class CompaniesService {
         industryId,
         size: data.size as never,
       },
-      include: { subscription: true, city: true, industry: true },
+      include: { city: { include: { province: { include: { country: true } } } }, industry: true },
     });
   }
 
@@ -455,7 +458,7 @@ export class CompaniesService {
     const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: { logoUrl: uploaded.url },
-      include: { subscription: true, city: true, industry: true },
+      include: { city: { include: { province: { include: { country: true } } } }, industry: true },
     });
     if (oldKey) await this.storage.delete(oldKey);
     return updated;
@@ -534,7 +537,7 @@ export class CompaniesService {
     const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: { logoUrl: null },
-      include: { subscription: true, city: true, industry: true },
+      include: { city: { include: { province: { include: { country: true } } } }, industry: true },
     });
     if (oldKey) await this.storage.delete(oldKey);
     return updated;
@@ -595,7 +598,7 @@ export class CompaniesService {
   }
 
   async closeCompany(user: AuthUser, companyId: string, typedName: string) {
-    const { company } = await this.assertMember(user, companyId, ['OWNER']);
+    const { company } = await this.assertMember(user, companyId, ['OWNER'], { allowBanned: true });
     const memberCount = await this.prisma.companyMember.count({ where: { companyId } });
     const blocked = closeCompanyBlocked({
       alreadyClosed: Boolean(company.anonymizedAt),
@@ -623,10 +626,6 @@ export class CompaniesService {
       });
       await tx.companyTranslation.deleteMany({ where: { companyId } });
       await tx.companyInvite.deleteMany({ where: { companyId, acceptedAt: null } });
-      await tx.subscription.updateMany({
-        where: { companyId },
-        data: { status: 'CANCELLED' },
-      });
       await tx.jobPost.updateMany({
         where: { companyId, NOT: { status: 'CLOSED' } },
         data: { status: 'CLOSED', closedAt: now },
@@ -672,12 +671,29 @@ export class CompaniesService {
           'User is registered as an employee. They must create a recruiter account before joining a company.',
         );
       }
-      try {
-        const member = await this.prisma.companyMember.create({
-          data: { companyId, userId: invitee.id, role },
-          include: { user: { select: { id: true, email: true, fullName: true } } },
-        });
-        await this.closePendingInvites(companyId, storedEmail);
+      // Do not grant access to an unverified account based only on its
+      // self-asserted email. It must accept the emailed token first.
+      if (invitee.emailVerified) {
+        let member;
+        try {
+          member = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.companyMember.create({
+              data: { companyId, userId: invitee.id, role },
+              include: { user: { select: { id: true, email: true, fullName: true } } },
+            });
+            await tx.companyInvite.updateMany({
+              where: { companyId, email: storedEmail, acceptedAt: null },
+              data: { acceptedAt: new Date() },
+            });
+            return created;
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            await this.closePendingInvites(companyId, storedEmail);
+            throw new ConflictException('User already a member');
+          }
+          throw err;
+        }
         if (invitee.email) {
           await this.sendAddedEmail(
             { email: invitee.email, fullName: invitee.fullName, locale: invitee.locale },
@@ -686,9 +702,6 @@ export class CompaniesService {
           );
         }
         return { status: 'added' as const, member };
-      } catch {
-        await this.closePendingInvites(companyId, storedEmail);
-        throw new ConflictException('User already a member');
       }
     }
 
@@ -767,6 +780,13 @@ export class CompaniesService {
     if (normalizeEmail(invite.email) !== normalizeEmail(email)) {
       throw new BadRequestException('This invitation was sent to a different email address');
     }
+    const company = await db.company.findUnique({
+      where: { id: invite.companyId },
+      select: { isBanned: true, anonymizedAt: true },
+    });
+    if (!company || company.isBanned || company.anonymizedAt) {
+      throw new BadRequestException('This company is not accepting invitations');
+    }
     const claimed = await db.companyInvite.updateMany({
       where: { id: invite.id, acceptedAt: null, expiresAt: { gt: new Date() } },
       data: { acceptedAt: new Date() },
@@ -774,20 +794,18 @@ export class CompaniesService {
     if (claimed.count !== 1) {
       throw new BadRequestException('This invitation is invalid or has expired');
     }
-    try {
-      await db.companyMember.create({
-        data: { companyId: invite.companyId, userId, role: invite.role },
-      });
-    } catch {
-      throw new ConflictException('User already a member');
-    }
+    await db.companyMember.upsert({
+      where: { companyId_userId: { companyId: invite.companyId, userId } },
+      create: { companyId: invite.companyId, userId, role: invite.role },
+      update: {},
+    });
     return invite;
   }
 
   /** Existing recruiter who later opens the invite link still gets membership. */
   async consumeInviteForExistingUser(rawToken: string, email: string, userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new BadRequestException('This invitation is invalid or has expired');
+    if (!user || user.isBanned || user.anonymizedAt) throw new BadRequestException('This invitation is invalid or has expired');
     if (user.role === 'SUPER_ADMIN') {
       throw new BadRequestException('Cannot invite a super admin as a company member');
     }
@@ -796,7 +814,17 @@ export class CompaniesService {
         'User is registered as an employee. They must create a recruiter account before joining a company.',
       );
     }
-    return this.consumeInvite(this.prisma, rawToken, email, userId);
+    return this.prisma.$transaction(async (tx) => {
+      const invite = await this.consumeInvite(tx, rawToken, email, userId);
+      // A valid emailed invitation proves possession of its recipient mailbox.
+      // Never transfer that proof to a different address saved in Settings.
+      if (!user.email) {
+        await tx.user.update({ where: { id: userId }, data: { email: email.trim().toLowerCase(), emailVerified: true } });
+      } else if (!user.emailVerified && normalizeEmail(user.email) === normalizeEmail(email)) {
+        await tx.user.update({ where: { id: userId }, data: { emailVerified: true } });
+      }
+      return invite;
+    });
   }
 
   private async findUserByInviteEmail(email: string) {
@@ -845,13 +873,14 @@ export class CompaniesService {
     locale = emailLocale(null),
   ) {
     const link = `${this.webUrl()}/register?invite=${rawToken}`;
+    const safeLink = escapeHtml(link);
     const sent = await this.mail.send(
       email,
       translateMessage('email.invite.subject', locale, { company: companyName }),
       `<p>${translateMessage('email.greetingShort', locale)}</p>
-       <p>${translateMessage('email.invite.intro', locale, { company: companyName })}</p>
-       <p><a href="${link}">${translateMessage('email.invite.cta', locale)}</a></p>
-       <p>${translateMessage('email.linkFallback', locale, { link })}</p>
+       <p>${translateMessage('email.invite.intro', locale, { company: escapeHtml(companyName) })}</p>
+       <p><a href="${safeLink}">${translateMessage('email.invite.cta', locale)}</a></p>
+       <p>${translateMessage('email.linkFallback', locale, { link: safeLink })}</p>
        <p>${translateMessage('email.expires7d', locale)} ${translateMessage('email.invite.ignore', locale)}</p>`,
     );
     if (!sent) {
@@ -867,14 +896,15 @@ export class CompaniesService {
     chosenLocale?: string,
   ) {
     const link = `${this.webUrl()}/login`;
+    const safeLink = escapeHtml(link);
     const locale = emailLocale(chosenLocale || user.locale);
     await this.mail.send(
       user.email,
       translateMessage('email.inviteAdded.subject', locale, { company: companyName }),
-      `<p>${translateMessage('email.greeting', locale, { name: user.fullName })}</p>
-       <p>${translateMessage('email.inviteAdded.intro', locale, { company: companyName })}</p>
-       <p><a href="${link}">${translateMessage('email.inviteAdded.cta', locale)}</a></p>
-       <p>${translateMessage('email.linkFallback', locale, { link })}</p>`,
+      `<p>${translateMessage('email.greeting', locale, { name: escapeHtml(user.fullName) })}</p>
+       <p>${translateMessage('email.inviteAdded.intro', locale, { company: escapeHtml(companyName) })}</p>
+       <p><a href="${safeLink}">${translateMessage('email.inviteAdded.cta', locale)}</a></p>
+       <p>${translateMessage('email.linkFallback', locale, { link: safeLink })}</p>`,
     );
   }
 

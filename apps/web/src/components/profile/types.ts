@@ -1,6 +1,6 @@
-export type City = { id: string; name: string; slug: string };
+export type City = { id: string; name: string; slug: string; province?: { name: string; country?: { id?: string; iso2?: string } } };
 export type Skill = { id: string; level: string; skill: { name: string; slug: string } };
-export type Experience = { id: string; title: string; companyName: string; description?: string | null; startDate: string; endDate?: string | null; isCurrent: boolean; city?: City | null };
+export type Experience = { id: string; title: string; companyName: string; description?: string | null; startDate: string; endDate?: string | null; isCurrent: boolean; city?: City | null; country?: import('../onboarding/PreferenceFields').Country | null };
 export type Education = { id: string; school: string; degree?: string | null; field?: string | null; startDate?: string | null; endDate?: string | null };
 export type Certification = { id: string; name: string; issuer?: string | null; issuedAt?: string | null; expiresAt?: string | null; credentialUrl?: string | null };
 export type ProfileLanguage = { id: string; level: string; language: { name: string; code: string } };
@@ -12,6 +12,14 @@ export type CareerProfile = {
   phone?: string | null;
   desiredPosition?: string | null;
   desiredSalaryMin?: number | null;
+  desiredPositions?: string[];
+  preferredCountries?: import('../onboarding/PreferenceFields').Country[];
+  residenceCountry?: import('../onboarding/PreferenceFields').Country | null;
+  residenceCountryId?: string | null;
+  desiredSalaryCurrency?: string;
+  desiredSalaryPeriod?: 'MONTHLY'|'YEARLY'|'HOURLY';
+  salaryNegotiable?: boolean;
+  noExperience?: boolean;
   city?: City | null;
   visibility: 'PUBLIC' | 'TO_REGISTERED_RECRUITERS' | 'PRIVATE';
   user: { fullName: string; email?: string | null; avatarUrl?: string | null; emailVerified?: boolean };

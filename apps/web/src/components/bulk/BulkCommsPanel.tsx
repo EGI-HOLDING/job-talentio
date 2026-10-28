@@ -49,7 +49,7 @@ export function BulkCommsPanel({
   companyId: string;
   jobPostId?: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const confirm = useConfirm();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -265,7 +265,7 @@ export function BulkCommsPanel({
                           {c.toStatus ? ` → ${c.toStatus}` : ''}
                         </strong>
                         <div className="muted" style={{ fontSize: '0.8rem' }}>
-                          {new Date(c.createdAt).toLocaleString()} | {c.createdBy?.fullName || '-'} | {' '}
+                          {new Date(c.createdAt).toLocaleString(locale)} | {c.createdBy?.fullName || '-'} | {' '}
                           {t('ui.recipientsCount').replace('{n}', String(c.recipients.length))}
                           {c.template ? ` | ${c.template.name}` : ''}
                         </div>
@@ -313,7 +313,7 @@ export function BulkCommsPanel({
                                 </td>
                                 <td>{r.statusMoved ? t('ui.yes') : '-'}</td>
                                 <td>
-                                  {r.sentAt ? new Date(r.sentAt).toLocaleString() : '-'}
+                                  {r.sentAt ? new Date(r.sentAt).toLocaleString(locale) : '-'}
                                 </td>
                               </tr>
                             ))}

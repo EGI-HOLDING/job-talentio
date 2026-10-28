@@ -167,9 +167,6 @@ export const core = {
     en: 'WORK. GROW. BELONG.',
   },
   'home.popular': { uz: 'Ommabop:', ru: 'Популярное:', en: 'Popular:' },
-  'home.popularFrontend': { uz: 'Frontend dasturchi', ru: 'Frontend-разработчик', en: 'Frontend developer' },
-  'home.popularAccountant': { uz: 'Buxgalter', ru: 'Бухгалтер', en: 'Accountant' },
-  'home.popularSales': { uz: 'Savdo menejeri', ru: 'Менеджер по продажам', en: 'Sales manager' },
   'home.platformStats': { uz: 'Platforma statistikasi', ru: 'Статистика платформы', en: 'Platform statistics' },
   'home.hiringCompanies': {
     uz: 'Ishga olayotgan kompaniyalar bilan tanishing',
@@ -188,12 +185,12 @@ export const core = {
     ru: 'Открытые вакансии под ваши навыки и должность',
     en: 'Open roles that match your skills and headline',
   },
-  hotJobs: { uz: 'Dolzarb vakansiyalar', ru: 'Горячие вакансии', en: 'Hot jobs' },
+  hotJobs: { uz: 'Dolzarb vakansiyalar', ru: 'Горячие вакансии', en: 'Latest jobs' },
   hot: { uz: 'Dolzarb', ru: 'Горячее', en: 'Hot' },
   hotJobsEmpty: {
-    uz: 'Dolzarb vakansiyalar seed’dan keyin paydo bo‘ladi.',
-    ru: 'Горячие вакансии появятся после загрузки сидов.',
-    en: 'Hot jobs will appear after seed data loads.',
+    uz: 'Hozircha dolzarb vakansiyalar yo‘q.',
+    ru: 'Сейчас нет избранных вакансий.',
+    en: 'No jobs are available right now.',
   },
   viewAll: { uz: 'Barchasini ko‘rish', ru: 'Смотреть все', en: 'View all' },
   home: { uz: 'Bosh sahifa', ru: 'Главная', en: 'Home' },
@@ -269,9 +266,9 @@ export const core = {
     en: 'Top Companies',
   },
   topCompaniesSubtitle: {
-    uz: 'VIP ish beruvchilar - eng faol yollovchilar',
-    ru: 'VIP работодатели - самые активные наниматели',
-    en: 'VIP employers featured for hiring',
+    uz: 'Hozir xodim izlayotgan kompaniyalar',
+    ru: 'Компании, которые сейчас нанимают',
+    en: 'Companies hiring now',
   },
   topCompaniesCarousel: {
     uz: 'Top kompaniyalar karuseli',
@@ -283,11 +280,6 @@ export const core = {
     ru: 'Показать группу {n}',
     en: 'Show group {n}',
   },
-  vipBadge: {
-    uz: 'VIP',
-    ru: 'VIP',
-    en: 'VIP',
-  },
   exploreCompaniesTabs: {
     uz: 'Kompaniyalar bo‘yicha ko‘rish',
     ru: 'Просмотр компаний',
@@ -298,11 +290,6 @@ export const core = {
     ru: 'По отраслям',
     en: 'By industry',
   },
-  exploreCompaniesTabVip: {
-    uz: 'VIP',
-    ru: 'VIP',
-    en: 'VIP',
-  },
   exploreCompaniesTabAll: {
     uz: 'Barchasi',
     ru: 'Все',
@@ -312,11 +299,6 @@ export const core = {
     uz: 'Kompaniya qidirish...',
     ru: 'Поиск компании...',
     en: 'Search companies...',
-  },
-  exploreCompaniesVipEmpty: {
-    uz: 'Hozircha VIP ish beruvchi yo‘q',
-    ru: 'Пока нет VIP работодателей',
-    en: 'No VIP employers yet',
   },
   exploreByTitle: {
     uz: 'Lavozim bo‘yicha ishlar',
@@ -641,15 +623,20 @@ export const core = {
     ru: 'Проверяем приглашение...',
     en: 'Checking invitation...',
   },
+  inviteExistingLogin: {
+    en: 'Sign in with the employer account that received this invitation to join the company.',
+    ru: 'Войдите в аккаунт работодателя, на который пришло приглашение, чтобы присоединиться к компании.',
+    uz: 'Kompaniyaga qo‘shilish uchun taklif yuborilgan ish beruvchi hisobiga kiring.',
+  },
   inviteJoinTitle: {
     uz: 'Jamoaga qo‘shilish',
     ru: 'Присоединиться к команде',
     en: 'Join the team',
   },
   inviteJoinSubtitle: {
-    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Hisob oching (parol, Google yoki Telegram).',
-    ru: '{company} приглашает вас в команду найма. Создайте аккаунт (пароль, Google или Telegram).',
-    en: '{company} invited you to their hiring team. Create an account with a password, Google, or Telegram.',
+    uz: '{company} kompaniyasi sizni yollash jamoasiga taklif qildi. Mavjud ish beruvchi hisobingizga kiring yoki yangi hisob yarating.',
+    ru: '{company} приглашает вас в команду найма. Войдите в существующий аккаунт работодателя или создайте новый.',
+    en: '{company} invited you to their hiring team. Sign in with an existing employer account or create a new one.',
   },
   inviteInvalid: {
     uz: 'Taklif havolasi eskirgan yoki noto‘g‘ri. Oddiy ro‘yxatdan o‘tishdan foydalaning.',
@@ -1082,12 +1069,6 @@ export const core = {
   onsite: { uz: 'Ofisda', ru: 'В офисе', en: 'On-site' },
   hybrid: { uz: 'Gibrid', ru: 'Гибрид', en: 'Hybrid' },
   remote: { uz: 'Masofaviy', ru: 'Удалённо', en: 'Remote' },
-  hotJobsOnly: { uz: 'Faqat dolzarb ishlar', ru: 'Только горячие вакансии', en: 'Hot jobs only' },
-  clearHotJobsFilter: {
-    uz: 'Dolzarb filtrni olib tashlash',
-    ru: 'Сбросить фильтр горячих вакансий',
-    en: 'Clear hot jobs filter',
-  },
   matchAny: { uz: 'Kamida bittasi (OR)', ru: 'Любой навык (OR)', en: 'Match any (OR)' },
   matchAll: { uz: 'Barchasi (AND)', ru: 'Все навыки (AND)', en: 'Match all (AND)' },
   viewMore: { uz: 'Yana ko‘rish', ru: 'Показать ещё', en: 'View more' },

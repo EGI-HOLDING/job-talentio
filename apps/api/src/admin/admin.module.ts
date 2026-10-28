@@ -6,13 +6,13 @@ import { AdminBulkService } from './admin-bulk.service';
 import { AdminCatalogService } from './admin-catalog.service';
 import { AdminUsersService } from './admin-users.service';
 import { AdminVerificationService } from './admin-verification.service';
-import { BillingModule } from '../billing/billing.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { JobsModule } from '../jobs/jobs.module';
 
 @Module({
-  imports: [BillingModule, AuthModule, UsersModule, NotificationsModule],
+  imports: [AuthModule, UsersModule, NotificationsModule, JobsModule],
   controllers: [AdminController],
   providers: [
     AdminService,

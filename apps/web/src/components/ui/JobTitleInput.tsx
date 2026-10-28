@@ -1,18 +1,22 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import s from './JobTitleInput.module.css';
 
-type Suggestion = { id: string; name: string; slug: string; usageCount?: number };
+type Suggestion = { id: string; name: string; label: string; slug: string; usageCount?: number };
 type JobTitleCatalog = {
-  items: Array<{ id: string; name: string; slug: string; count?: number }>;
+  items: Array<{ id: string; name: string; canonicalName?: string; slug: string; count?: number }>;
   totalPages: number;
 };
 
 const PAGE_SIZE = 24;
 
 type JobTitleInputProps = {
+  'aria-invalid'?: boolean;
+  'aria-describedby'?: string;
   id?: string;
   focusSuggestions?: boolean;
   name?: string;
@@ -25,6 +29,11 @@ type JobTitleInputProps = {
   placeholder?: string;
   /** Prefill experience level when seniority words are typed and level is empty */
   onInferredLevel?: (level: string) => void;
+  onPick?: (value: string) => void;
+  normalizeSeniority?: boolean;
+  autoFocus?: boolean;
+  disabled?: boolean;
+  onSubmitValue?: (value: string) => void;
 };
 
 const SENIORITY_TOKEN_RE =
@@ -89,8 +98,10 @@ export function softNormalizeJobTitle(raw: string): { roleTitle: string; inferre
 }
 
 export function JobTitleInput({
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
   id,
-  focusSuggestions = false,
+  focusSuggestions = true,
   name = 'title',
   required,
   minLength = 3,
@@ -99,9 +110,16 @@ export function JobTitleInput({
   onValueChange,
   placeholder,
   onInferredLevel,
+  onPick,
+  normalizeSeniority = true,
+  autoFocus,
+  disabled,
+  onSubmitValue,
 }: JobTitleInputProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [position, setPosition] = useState<{left:number;top?:number;bottom?:number;width:number;maxHeight:number} | null>(null);
   const [inner, setInner] = useState(defaultValue);
   const value = controlledValue !== undefined ? controlledValue : inner;
   const setValue = (next: string) => {
@@ -119,11 +137,23 @@ export function JobTitleInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!suggestions.length || (focusSuggestions && !isOpen)) { setPosition(null); return; }
+    const place = () => {
+      const rect = inputRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const below = window.innerHeight - rect.bottom, flip = below < 220 && rect.top > below;
+      setPosition({left:Math.max(8,rect.left),width:Math.min(rect.width,window.innerWidth-16),maxHeight:Math.max(120,Math.min(300,(flip?rect.top:below)-16)),...(flip?{bottom:window.innerHeight-rect.top+6}:{top:rect.bottom+6})});
+    };
+    place(); window.addEventListener('scroll',place,true); window.addEventListener('resize',place);
+    return () => {window.removeEventListener('scroll',place,true);window.removeEventListener('resize',place);};
+  }, [suggestions.length, isOpen, focusSuggestions]);
+  useEffect(() => { if (highlight >= 0) document.getElementById(`${listId}-${highlight}`)?.scrollIntoView({block:'nearest'}); }, [highlight,listId]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (focusSuggestions && !isOpen) {
+    if (disabled || (focusSuggestions && !isOpen)) {
       setSuggestions([]);
       setLoading(false);
       setLoadingMore(false);
@@ -148,7 +178,8 @@ export function JobTitleInput({
           if (requestId !== requestIdRef.current) return;
           setSuggestions((result?.items || []).map((item) => ({
             id: item.id,
-            name: item.name,
+            name: item.canonicalName || item.name,
+            label: item.name,
             slug: item.slug,
             usageCount: item.count,
           })));
@@ -169,7 +200,7 @@ export function JobTitleInput({
       requestIdRef.current += 1;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [value, focusSuggestions, isOpen]);
+  }, [value, focusSuggestions, isOpen, locale, disabled]);
 
   async function loadNextPage() {
     if (loadingMoreRef.current || loading || page >= totalPages) return;
@@ -188,7 +219,8 @@ export function JobTitleInput({
         ...current,
         ...(result?.items || []).map((item) => ({
           id: item.id,
-          name: item.name,
+          name: item.canonicalName || item.name,
+          label: item.name,
           slug: item.slug,
           usageCount: item.count,
         })),
@@ -207,6 +239,7 @@ export function JobTitleInput({
 
   function pick(s: Suggestion) {
     setValue(s.name);
+    onPick?.(s.name);
     setSuggestions([]);
     if (focusSuggestions) setIsOpen(false);
   }
@@ -218,7 +251,7 @@ export function JobTitleInput({
     setLoadingMore(false);
     if (focusSuggestions) setIsOpen(true);
     setValue(next);
-    const { inferredLevel } = softNormalizeJobTitle(next);
+    const { inferredLevel } = normalizeSeniority ? softNormalizeJobTitle(next) : { inferredLevel: null };
     if (inferredLevel) onInferredLevel?.(inferredLevel);
   }
 
@@ -231,7 +264,7 @@ export function JobTitleInput({
       setLoading(false);
       setLoadingMore(false);
     }
-    const { roleTitle, inferredLevel } = softNormalizeJobTitle(value);
+    const { roleTitle, inferredLevel } = normalizeSeniority ? softNormalizeJobTitle(value) : { roleTitle: value, inferredLevel: null };
     if (roleTitle !== value.trim()) setValue(roleTitle);
     if (inferredLevel) onInferredLevel?.(inferredLevel);
   }
@@ -239,7 +272,12 @@ export function JobTitleInput({
   return (
     <div className="job-title-input">
       <input
+        ref={inputRef}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         id={id}
+        autoFocus={autoFocus}
+        disabled={disabled}
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -254,6 +292,7 @@ export function JobTitleInput({
         aria-autocomplete="list"
         aria-expanded={(suggestions.length > 0 || loading) && (!focusSuggestions || isOpen)}
         aria-controls={listId}
+        aria-activedescendant={suggestions[highlight] ? `${listId}-${highlight}` : undefined}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             if (focusSuggestions) setIsOpen(true);
@@ -267,6 +306,9 @@ export function JobTitleInput({
           } else if (e.key === 'Enter' && highlight >= 0 && suggestions[highlight]) {
             e.preventDefault();
             pick(suggestions[highlight]);
+          } else if (e.key === 'Enter' && !e.nativeEvent.isComposing && onSubmitValue) {
+            e.preventDefault();
+            onSubmitValue(value);
           } else if (e.key === 'Escape') {
             if (focusSuggestions) { e.preventDefault(); e.stopPropagation(); setIsOpen(false); }
             setSuggestions([]);
@@ -284,32 +326,33 @@ export function JobTitleInput({
       {!loading && !loadFailed && value.trim() && suggestions.length === 0 && (!focusSuggestions || isOpen) && (
         <div className="lookup-suggest-skel" role="status">{t('jobTitleNoMatches')}</div>
       )}
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && position && createPortal(
         <ul
           id={listId}
           role="listbox"
-          className="skill-suggest-list"
+          className={s.panel}
+          style={{...position,position:'fixed',zIndex:10050,margin:0,overflowY:'auto'}}
           onScroll={(event) => {
             const list = event.currentTarget;
             if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) void loadNextPage();
           }}
         >
-          {suggestions.map((s, i) => (
-            <li key={s.id}>
+          {suggestions.map((suggestion, i) => (
+            <li key={suggestion.id}>
               <button
                 type="button"
+                id={`${listId}-${i}`}
                 role="option"
                 aria-selected={highlight === i}
-                className={`skill-suggest-item ${highlight === i ? 'active' : ''}`}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pick(s);
-                }}
+                className={s.option}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(suggestion)}
               >
-                {s.name}
-                {typeof s.usageCount === 'number' ? (
-                  <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>
-                    {s.usageCount}
+                <span className={s.label}>{suggestion.label}
+                {suggestion.label !== suggestion.name && <small className={s.canonical}>{suggestion.name}</small>}</span>
+                {typeof suggestion.usageCount === 'number' ? (
+                  <span className={s.count}>
+                    {suggestion.usageCount}
                   </span>
                 ) : null}
               </button>
@@ -320,7 +363,7 @@ export function JobTitleInput({
               {t('jobTitleLoadingMore')}
             </li>
           )}
-        </ul>
+        </ul>, inputRef.current?.closest('dialog') || document.body
       )}
     </div>
   );

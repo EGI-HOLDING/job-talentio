@@ -17,6 +17,10 @@ const DIRECTORY: NavEntry[] = [
 ];
 
 const OPERATIONS: NavEntry[] = [
+  { href: '/linkedin', label: 'LinkedIn sharing' },
+  { href: '/benefits', label: 'HR benefits' },
+  { href: '/job-orders', label: 'Job orders' },
+  { href: '/support', label: 'HR support' },
   { href: '/reports', label: 'Reports', countKey: 'reports' },
   { href: '/verifications', label: 'Verification', countKey: 'verifications' },
   { href: '/catalog', label: 'Catalog' },

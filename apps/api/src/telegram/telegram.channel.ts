@@ -16,7 +16,7 @@ export type ChannelJobInput = {
   skills?: string[];
 };
 
-const LOCALES: MessageLocale[] = ['uz', 'ru', 'en'];
+const LOCALES: MessageLocale[] = ['uz', 'ru', 'en', 'id'];
 
 export function channelLocale(raw: string | null | undefined): MessageLocale {
   return LOCALES.includes(raw as MessageLocale) ? (raw as MessageLocale) : 'uz';

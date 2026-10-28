@@ -3,7 +3,7 @@ import { TelegramService } from './telegram.service';
 
 /**
  * Public Telegram Bot API webhook. Authenticity is the secret token header,
- * not a JWT - same idea as billing webhooks.
+ * not a JWT.
  *
  * Telegram delivers updates with POST. GET is a probe so opening the URL
  * in a browser is not a 404.

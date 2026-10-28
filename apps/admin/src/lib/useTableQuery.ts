@@ -48,7 +48,7 @@ export function useTableQuery(defaults: TableQuery) {
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(next)) {
         // A value equal to the default is implied, so it stays out of the URL.
-        if (!value || value === defaults[key]) continue;
+        if (value === defaults[key] || (!value && !defaults[key])) continue;
         params.set(key, value);
       }
       const qs = params.toString();
@@ -61,42 +61,43 @@ export function useTableQuery(defaults: TableQuery) {
   /** Any filter change resets paging, otherwise page 7 of a new filter is empty. */
   const setFilter = useCallback(
     (key: string, value: QueryValue) => {
-      const next = { ...query, [key]: value === undefined || value === null ? '' : String(value) };
+      const next = { ...(pending.current ?? fromUrl), [key]: value === undefined || value === null ? '' : String(value) };
       if (key !== 'page') next.page = '1';
       write(next);
     },
-    [query, write],
+    [fromUrl, write],
   );
 
   const setMany = useCallback(
     (patch: Record<string, QueryValue>) => {
-      const next = { ...query };
+      const next = { ...(pending.current ?? fromUrl) };
       for (const [key, value] of Object.entries(patch)) {
         next[key] = value === undefined || value === null ? '' : String(value);
       }
       next.page = '1';
       write(next);
     },
-    [query, write],
+    [fromUrl, write],
   );
 
   const reset = useCallback(() => {
-    pending.current = null;
-    router.replace(pathname, { scroll: false });
-  }, [pathname, router]);
+    write({ ...defaults });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [write]);
 
   /** Clicking the active column flips direction, a new column starts descending. */
   const toggleSort = useCallback(
     (column: string) => {
-      const isActive = query.sort === column;
+      const base = pending.current ?? fromUrl;
+      const isActive = base.sort === column;
       write({
-        ...query,
+        ...base,
         sort: column,
-        dir: isActive && query.dir === 'desc' ? 'asc' : isActive ? 'desc' : 'desc',
+        dir: isActive && base.dir === 'desc' ? 'asc' : 'desc',
         page: '1',
       });
     },
-    [query, write],
+    [fromUrl, write],
   );
 
   return { query, setFilter, setMany, reset, toggleSort };

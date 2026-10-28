@@ -39,4 +39,5 @@ export function useEmployerUnsaved(dirty:boolean, busy=false) {
     window.addEventListener('beforeunload',unload);document.addEventListener('click',navigate,true);document.addEventListener('talentio:employer-context', context);
     return()=>{window.removeEventListener('beforeunload',unload);document.removeEventListener('click',navigate,true);document.removeEventListener('talentio:employer-context', context);};
   },[dirty,busy,t,confirm,router]);
+  return () => { allowed.current = true; };
 }

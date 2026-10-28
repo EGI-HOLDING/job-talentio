@@ -1,5 +1,6 @@
 import {
   Body,
+  Headers,
   Controller,
   Delete,
   Get,
@@ -86,12 +87,12 @@ export class BulkCommsController {
 
   @Post('campaigns')
   @Roles('RECRUITER', 'SUPER_ADMIN')
-  runCampaign(@CurrentUser() user: AuthUser, @Body() body: unknown) {
+  runCampaign(@CurrentUser() user: AuthUser, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
     const data = parseDto(bulkCampaignSchema, body);
     return this.bulk.runCampaign(user, {
       ...data,
       fromStatus: data.fromStatus as ApplicationStatus | undefined,
       toStatus: data.toStatus as ApplicationStatus | undefined,
-    });
+    }, key);
   }
 }

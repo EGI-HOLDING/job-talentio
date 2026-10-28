@@ -2,13 +2,17 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CatalogParentSelect } from '@/components/ui/CatalogParentSelect';
+import { OccupationMatchingEditor } from '@/components/ui/OccupationMatchingEditor';
+import type { OccupationMatchingMetadata } from '@job-talentio/shared';
 import { api, apiPatch, apiPost } from '@/lib/api';
 import { downloadCsv, timestampedName } from '@/lib/csv';
 import { useAdminTable } from '@/lib/useAdminTable';
 import {
   ArchiveResult,
   CatalogKindSpec,
+  CatalogAlias,
   CatalogRow,
   CatalogType,
   CatalogUsage,
@@ -33,20 +37,25 @@ function rowIdentityKey(row: CatalogRow): string {
 }
 
 type FormState = {
+  matchingMetadata: OccupationMatchingMetadata;
   name: string;
   key: string;
   nameUz: string;
   nameRu: string;
+  nameId: string;
+  iso2: string; iso3: string; phoneCode: string; currencyCode: string; isActive: boolean; kind: string;
   parentSlug: string;
   sortOrder: string;
   icon: string;
 };
 
 const EMPTY_FORM: FormState = {
+  matchingMetadata:{sources:[],relatedRoles:[]},
   name: '',
   key: '',
   nameUz: '',
   nameRu: '',
+  nameId: '', iso2: '', iso3: '', phoneCode: '', currencyCode: '', isActive: false, kind: 'CITY',
   parentSlug: '',
   sortOrder: '0',
   icon: '',
@@ -75,7 +84,12 @@ export default function CatalogPage() {
   const [editUsage, setEditUsage] = useState<CatalogUsage | null>(null);
   const [pendingKeyConfirm, setPendingKeyConfirm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [aliases, setAliases] = useState<CatalogAlias[]>([]);
+  const [aliasDraft, setAliasDraft] = useState('');
+  const [aliasBusy, setAliasBusy] = useState(false);
   const [archiving, setArchiving] = useState<{ row: CatalogRow; usage: CatalogUsage } | null>(null);
+  const editLoadVersion = useRef(0);
+  const archiveLoadVersion = useRef(0);
 
   const spec = kinds.find((k) => k.type === type);
 
@@ -87,36 +101,53 @@ export default function CatalogPage() {
 
   const openArchive = useCallback(
     async (row: CatalogRow) => {
+      const version = ++archiveLoadVersion.current;
       try {
         const usage = await api<CatalogUsage>(`/admin/catalog/type/${type}/${row.id}/usage`);
-        setArchiving({ row, usage });
+        if (archiveLoadVersion.current === version) setArchiving({ row, usage });
       } catch (e) {
-        notify(e instanceof Error ? e.message : 'Could not read usage', 'error');
+        if (archiveLoadVersion.current === version) {
+          notify(e instanceof Error ? e.message : 'Could not read usage', 'error');
+        }
       }
     },
     [type, notify],
   );
 
   async function startEdit(row: CatalogRow) {
+    const version = ++editLoadVersion.current;
+    const isCurrent = () => editLoadVersion.current === version;
     setEditing(row);
     setEditUsage(null);
     setPendingKeyConfirm(false);
+    setAliases([]);
+    setAliasDraft('');
     setForm({
+      matchingMetadata:row.matchingMetadata ?? {sources:[],relatedRoles:[]},
       name: row.name,
       key: rowIdentityKey(row),
       nameUz: row.nameUz ?? '',
       nameRu: row.nameRu ?? '',
+      nameId: row.nameId ?? '', iso2: row.iso2 || '', iso3: row.iso3 || '', phoneCode: row.phoneCode || '', currencyCode: row.currencyCode || '', isActive: row.isActive ?? false, kind: row.kind || 'CITY',
       parentSlug:
-        row.province?.slug ?? row.country?.slug ?? row.industryGroup?.slug ?? '',
+        row.province?.id ?? row.country?.id ?? row.industryGroup?.id ?? '',
       sortOrder: String(row.sortOrder ?? 0),
       icon: row.icon ?? '',
     });
     try {
       const usage = await api<CatalogUsage>(`/admin/catalog/type/${type}/${row.id}/usage`);
-      setEditUsage(usage);
+      if (isCurrent()) setEditUsage(usage);
     } catch {
       // Confirm dialog treats missing usage as zero; save still works.
-      setEditUsage({ total: 0, byRelation: [] });
+      if (isCurrent()) setEditUsage({ total: 0, byRelation: [] });
+    }
+    if (spec?.hasAliases && isCurrent()) {
+      try {
+        const loadedAliases = await api<CatalogAlias[]>(`/admin/catalog/type/${type}/${row.id}/aliases`);
+        if (isCurrent()) setAliases(loadedAliases);
+      } catch (e) {
+        if (isCurrent()) notify(e instanceof Error ? e.message : 'Could not load aliases', 'error');
+      }
     }
   }
 
@@ -124,10 +155,12 @@ export default function CatalogPage() {
     const original = rowIdentityKey(row);
     const nextKey = form.key.trim();
     return {
+      ...(type === 'jobTitle' ? {matchingMetadata:form.matchingMetadata} : {}),
       name: form.name.trim(),
+      ...(type === 'country' ? { iso2: form.iso2.trim().toUpperCase(), iso3: form.iso3.trim().toUpperCase(), phoneCode: form.phoneCode.trim(), ...(form.currencyCode.trim() ? { currencyCode: form.currencyCode.trim().toUpperCase() } : {}), isActive: form.isActive } : {}), ...(type === 'city' ? { kind: form.kind } : {}),
       ...(nextKey && nextKey !== original ? { key: nextKey } : {}),
-      ...(spec?.hasLocaleNames ? { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim() } : {}),
-      ...(spec?.parent && form.parentSlug.trim() ? { parentSlug: form.parentSlug.trim() } : {}),
+      ...(spec?.hasLocaleNames ? { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim(), nameId: form.nameId.trim() } : {}),
+      ...(spec?.parent && form.parentSlug.trim() ? { parentId: form.parentSlug.trim() } : {}),
       ...(spec?.hasSortOrder ? { sortOrder: Number(form.sortOrder) || 0 } : {}),
       ...(spec?.hasIcon ? { icon: form.icon.trim() || null } : {}),
     };
@@ -156,6 +189,11 @@ export default function CatalogPage() {
             key: 'nameRu',
             label: 'Russian',
             render: (row: CatalogRow) => row.nameRu || <span className="muted">Missing</span>,
+          },
+          {
+            key: 'nameId',
+            label: 'Indonesian',
+            render: (row: CatalogRow) => row.nameId || <span className="muted">Missing</span>,
           },
         ]
       : []),
@@ -209,6 +247,7 @@ export default function CatalogPage() {
       { header: 'key', value: (r) => r.slug ?? r.code ?? '' },
       { header: 'nameUz', value: (r) => r.nameUz ?? '' },
       { header: 'nameRu', value: (r) => r.nameRu ?? '' },
+      { header: 'nameId', value: (r) => r.nameId ?? '' },
       { header: 'archivedAt', value: (r) => r.archivedAt ?? '' },
       { header: 'curatedAt', value: (r) => r.curatedAt ?? '' },
     ]);
@@ -216,14 +255,67 @@ export default function CatalogPage() {
 
   async function submitCreate() {
     const payload = {
+      ...(type === 'jobTitle' ? {matchingMetadata:form.matchingMetadata} : {}),
       name: form.name.trim(),
+      ...(type === 'country' ? { iso2: form.iso2.trim().toUpperCase(), iso3: form.iso3.trim().toUpperCase(), phoneCode: form.phoneCode.trim(), ...(form.currencyCode.trim() ? { currencyCode: form.currencyCode.trim().toUpperCase() } : {}), isActive: form.isActive } : {}), ...(type === 'city' ? { kind: form.kind } : {}),
       ...(form.key.trim() ? { key: form.key.trim() } : {}),
-      ...(spec?.parent ? { parentSlug: form.parentSlug.trim() } : {}),
+      ...(spec?.hasLocaleNames
+        ? { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim(), nameId: form.nameId.trim() }
+        : {}),
+      ...(spec?.parent ? { parentId: form.parentSlug.trim() } : {}),
       ...(spec?.hasSortOrder ? { sortOrder: Number(form.sortOrder) || 0 } : {}),
       ...(spec?.hasIcon && form.icon.trim() ? { icon: form.icon.trim() } : {}),
     };
-    setCreating(false);
-    await table.runAction(apiPost(`/admin/catalog/type/${type}`, payload), 'Entry created');
+    const saved = await table.runAction(apiPost(`/admin/catalog/type/${type}`, payload), 'Entry created');
+    if (saved) {
+      setCreating(false);
+      setForm(EMPTY_FORM);
+    }
+  }
+
+  async function addAlias() {
+    const row = editing;
+    const alias = aliasDraft.trim();
+    if (!row || !alias) return;
+    const version = editLoadVersion.current;
+    setAliasBusy(true);
+    try {
+      const created = await api<CatalogAlias>(`/admin/catalog/type/${type}/${row.id}/aliases`, {
+        method: 'POST',
+        body: JSON.stringify({ alias }),
+      });
+      if (editLoadVersion.current === version) {
+        setAliases((current) => [...current, created].sort((a, b) => a.alias.localeCompare(b.alias)));
+        setAliasDraft('');
+      }
+      notify('Alias added');
+    } catch (e) {
+      if (editLoadVersion.current === version) {
+        notify(e instanceof Error ? e.message : 'Could not add alias', 'error');
+      }
+    } finally {
+      setAliasBusy(false);
+    }
+  }
+
+  async function deleteAlias(aliasId: string) {
+    const row = editing;
+    if (!row) return;
+    const version = editLoadVersion.current;
+    setAliasBusy(true);
+    try {
+      await api(`/admin/catalog/type/${type}/${row.id}/aliases/${aliasId}`, { method: 'DELETE' });
+      if (editLoadVersion.current === version) {
+        setAliases((current) => current.filter((alias) => alias.id !== aliasId));
+      }
+      notify('Alias removed');
+    } catch (e) {
+      if (editLoadVersion.current === version) {
+        notify(e instanceof Error ? e.message : 'Could not remove alias', 'error');
+      }
+    } finally {
+      setAliasBusy(false);
+    }
   }
 
   async function submitEdit() {
@@ -241,14 +333,17 @@ export default function CatalogPage() {
 
   async function commitEdit() {
     const row = editing;
+    const version = editLoadVersion.current;
     setPendingKeyConfirm(false);
-    setEditing(null);
-    setEditUsage(null);
     if (!row) return;
-    await table.runAction(
+    const saved = await table.runAction(
       apiPatch(`/admin/catalog/type/${type}/${row.id}`, buildEditPayload(row)),
       'Entry saved',
     );
+    if (saved && editLoadVersion.current === version) {
+      setEditing(null);
+      setEditUsage(null);
+    }
   }
 
   return (
@@ -314,14 +409,7 @@ export default function CatalogPage() {
           }
           advanced={
             spec?.parent ? (
-              <label>
-                {spec.parent.label} slug
-                <input
-                  value={query.parentSlug ?? ''}
-                  onChange={(e) => setFilter('parentSlug', e.target.value)}
-                  placeholder="tashkent"
-                />
-              </label>
+              <CatalogParentSelect type={spec.parent.type} label={spec.parent.label} value={query.parentSlug ?? ''} onChange={next=>setFilter('parentSlug',next)} />
             ) : undefined
           }
         />
@@ -394,7 +482,7 @@ export default function CatalogPage() {
       <Modal
         open={creating}
         title={`New ${spec?.label ?? 'entry'}`}
-        description="Created through the same rules as user input, so matching and aliases stay consistent."
+        description="Create the catalog entry and add its reviewed translations."
         onClose={() => setCreating(false)}
         footer={
           <>
@@ -428,14 +516,35 @@ export default function CatalogPage() {
               }
             />
           </label>
+          {spec?.hasLocaleNames ? (
+            <>
+              <label>
+                Uzbek
+                <input
+                  value={form.nameUz}
+                  onChange={(e) => setForm((f) => ({ ...f, nameUz: e.target.value }))}
+                />
+              </label>
+              <label>
+                Russian
+                <input
+                  value={form.nameRu}
+                  onChange={(e) => setForm((f) => ({ ...f, nameRu: e.target.value }))}
+                />
+              </label>
+              <label>
+                Indonesian
+                <input
+                  value={form.nameId}
+                  onChange={(e) => setForm((f) => ({ ...f, nameId: e.target.value }))}
+                />
+              </label>
+            </>
+          ) : null}
+          {type === 'country' && <><div className="form-grid">{(['iso2','iso3','phoneCode','currencyCode'] as const).map(field => <label key={field}>{({ iso2:'ISO2 country code', iso3:'ISO3 country code', phoneCode:'Phone code', currencyCode:'Currency code' })[field]}<input value={form[field]} required={field !== 'currencyCode'} onChange={event => setForm(previous => ({ ...previous, [field]: event.target.value }))} /></label>)}</div><label><input type="checkbox" checked={form.isActive} onChange={event => setForm(previous => ({ ...previous, isActive: event.target.checked }))} />Market active (enable after its city catalog is ready)</label></>}
+          {type === 'city' && <label>Location type<select value={form.kind} onChange={event => setForm(previous => ({ ...previous, kind: event.target.value }))}>{['CITY','REGENCY','DISTRICT','SETTLEMENT','LEGACY'].map(kind => <option key={kind}>{kind}</option>)}</select></label>}
           {spec?.parent ? (
-            <label>
-              {spec.parent.label} slug
-              <input
-                value={form.parentSlug}
-                onChange={(e) => setForm((f) => ({ ...f, parentSlug: e.target.value }))}
-              />
-            </label>
+            <CatalogParentSelect type={spec.parent.type} label={spec.parent.label} value={form.parentSlug} required={spec.parent.required} onChange={next=>setForm(previous=>({...previous,parentSlug:next}))} />
           ) : null}
           {spec?.hasSortOrder ? (
             <label>
@@ -524,16 +633,65 @@ export default function CatalogPage() {
                   onChange={(e) => setForm((f) => ({ ...f, nameRu: e.target.value }))}
                 />
               </label>
+              <label>
+                Indonesian
+                <input
+                  value={form.nameId}
+                  onChange={(e) => setForm((f) => ({ ...f, nameId: e.target.value }))}
+                />
+              </label>
             </>
           ) : null}
+          {type === 'jobTitle' && <OccupationMatchingEditor value={form.matchingMetadata} onChange={matchingMetadata=>setForm(f=>({...f,matchingMetadata}))}/>}
+          {spec?.hasAliases ? (
+            <section style={{ display: 'grid', gap: '0.65rem' }}>
+              <strong>Aliases</strong>
+              <span className="muted" style={{ fontSize: '0.85rem' }}>
+                Alternative spellings that should resolve to this catalog entry.
+              </span>
+              <div className="btn-row">
+                <input
+                  value={aliasDraft}
+                  onChange={(e) => setAliasDraft(e.target.value)}
+                  placeholder="Add an alias"
+                  disabled={aliasBusy}
+                />
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void addAlias()}
+                  disabled={!aliasDraft.trim() || aliasBusy}
+                >
+                  Add
+                </button>
+              </div>
+              {aliases.length ? (
+                <ul style={{ display: 'grid', gap: '0.35rem', margin: 0, paddingLeft: '1.1rem' }}>
+                  {aliases.map((alias) => (
+                    <li key={alias.id} className="btn-row" style={{ justifyContent: 'space-between' }}>
+                      <span>
+                        {alias.alias} <span className="cell-sub mono">{alias.aliasKey}</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="danger sm"
+                        onClick={() => void deleteAlias(alias.id)}
+                        disabled={aliasBusy}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="muted">No aliases yet.</span>
+              )}
+            </section>
+          ) : null}
+          {type === 'country' && <><div className="form-grid">{(['iso2','iso3','phoneCode','currencyCode'] as const).map(field => <label key={field}>{({ iso2:'ISO2 country code', iso3:'ISO3 country code', phoneCode:'Phone code', currencyCode:'Currency code' })[field]}<input value={form[field]} required={field !== 'currencyCode'} onChange={event => setForm(previous => ({ ...previous, [field]: event.target.value }))} /></label>)}</div><label><input type="checkbox" checked={form.isActive} onChange={event => setForm(previous => ({ ...previous, isActive: event.target.checked }))} />Market active (enable after its city catalog is ready)</label></>}
+          {type === 'city' && <label>Location type<select value={form.kind} onChange={event => setForm(previous => ({ ...previous, kind: event.target.value }))}>{['CITY','REGENCY','DISTRICT','SETTLEMENT','LEGACY'].map(kind => <option key={kind}>{kind}</option>)}</select></label>}
           {spec?.parent ? (
-            <label>
-              {spec.parent.label} slug
-              <input
-                value={form.parentSlug}
-                onChange={(e) => setForm((f) => ({ ...f, parentSlug: e.target.value }))}
-              />
-            </label>
+            <CatalogParentSelect type={spec.parent.type} label={spec.parent.label} value={form.parentSlug} required={spec.parent.required} onChange={next=>setForm(previous=>({...previous,parentSlug:next}))} />
           ) : null}
           {spec?.hasSortOrder ? (
             <label>

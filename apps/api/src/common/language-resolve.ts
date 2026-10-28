@@ -8,30 +8,8 @@ import {
 
 type Db = Pick<PrismaClient, 'language' | 'languageAlias'>;
 
-const LANGUAGE_SYNONYMS: Record<string, string> = {
-  uzbek: 'uz',
-  ozbek: 'uz',
-  ozbekcha: 'uz',
-  russian: 'ru',
-  russkiy: 'ru',
-  english: 'en',
-  eng: 'en',
-  kazakh: 'kk',
-  turkish: 'tr',
-  german: 'de',
-  deutsch: 'de',
-  french: 'fr',
-  korean: 'ko',
-  chinese: 'zh',
-  mandarin: 'zh',
-  arabic: 'ar',
-};
-
 export function languageKey(input: string): string {
-  const raw = input.trim().toLowerCase();
-  if (/^[a-z]{2,3}$/.test(raw)) return LANGUAGE_SYNONYMS[raw] ?? raw;
-  const key = normalizeLookupKey(input);
-  return LANGUAGE_SYNONYMS[key] ?? key;
+  return normalizeLookupKey(input);
 }
 
 function codeFromInput(input: string): string {

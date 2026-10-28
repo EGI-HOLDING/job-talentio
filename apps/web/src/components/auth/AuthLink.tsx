@@ -15,7 +15,8 @@ function AuthLinkInner({ href, accountRole, next, ...props }: Props) {
   const params = useSearchParams();
   const path = usePathname();
   const context = path === '/employers' || params.get('invite') ? 'RECRUITER' : authRoleFrom(params.get('role'));
-  return <Link {...props} href={authLink(href, next === undefined ? params.get('next') : next, accountRole || context)} />;
+  const role = accountRole || context;
+  return <Link {...props} href={authLink(href, next === undefined ? params.get('next') : next, role, role === 'RECRUITER' ? params.get('invite') : null)} />;
 }
 
 export function AuthLink(props: Props) {

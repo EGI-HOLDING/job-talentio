@@ -1,7 +1,6 @@
 /** Row shapes returned by the admin list endpoints. */
 
 export type UserRole = 'EMPLOYEE' | 'RECRUITER' | 'SUPER_ADMIN';
-export type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 export type JobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'EXPIRED';
 export type ReportStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED';
 export type ReportEntityType = 'JOB_POST' | 'USER' | 'COMPANY' | 'CHAT_MESSAGE';
@@ -32,9 +31,8 @@ export type AdminCompany = {
   isVerified: boolean;
   isBanned: boolean;
   createdAt: string;
-  city: { name: string; slug: string } | null;
-  industry: { name: string; slug: string } | null;
-  subscription: { plan: PlanCode; status: string } | null;
+  city: { id?: string; name: string; slug: string } | null;
+  industry: { id?: string; name: string; slug: string } | null;
   _count: { jobPosts: number; members: number; followers: number };
 };
 
@@ -46,8 +44,6 @@ export type AdminJob = {
   employmentType: string;
   workMode: string;
   experienceLevel: string | null;
-  boostUntil: string | null;
-  boostWeight: number;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -82,8 +78,10 @@ export type AdminCatalogEntry = {
   name: string;
   nameUz: string | null;
   nameRu: string | null;
+  nameId: string | null;
   nameUzIsMachine: boolean;
   nameRuIsMachine: boolean;
+  nameIdIsMachine: boolean;
   i18nStatus: CatalogStatus;
   createdAt: string;
 };
@@ -100,11 +98,9 @@ export type AdminMetrics = {
   companies: number;
   publishedJobs: number;
   applications: number;
-  revenueUzs: number;
 };
 
 export const USER_ROLES: UserRole[] = ['EMPLOYEE', 'RECRUITER', 'SUPER_ADMIN'];
-export const PLAN_CODES: PlanCode[] = ['FREE', 'STANDARD', 'PREMIUM', 'VIP'];
 export const JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED', 'EXPIRED'];
 export const EMPLOYMENT_TYPES = [
   'FULL_TIME',
@@ -129,7 +125,7 @@ export const REPORT_ENTITY_TYPES: ReportEntityType[] = [
   'COMPANY',
   'CHAT_MESSAGE',
 ];
-export const LOCALES = ['uz', 'ru', 'en'];
+export const LOCALES = ['uz', 'ru', 'en', 'id'];
 export const CATALOG_KINDS: Array<{ value: CatalogKind; label: string }> = [
   { value: 'skill', label: 'Skills' },
   { value: 'jobTitle', label: 'Job titles' },
@@ -176,6 +172,7 @@ export type CatalogKindSpec = {
   hasI18nStatus: boolean;
   hasSortOrder: boolean;
   hasIcon: boolean;
+  hasAliases: boolean;
   parent: { type: CatalogType; field: string; label: string; required: boolean } | null;
   seedManaged: boolean;
   supportsMerge: boolean;
@@ -183,10 +180,13 @@ export type CatalogKindSpec = {
 };
 
 export type CatalogRow = {
+  matchingMetadata?: import('@job-talentio/shared').OccupationMatchingMetadata | null;
+  iso2?: string; iso3?: string; phoneCode?: string; currencyCode?: string | null; isActive?: boolean; kind?: string;
   id: string;
   name: string;
   nameUz?: string | null;
   nameRu?: string | null;
+  nameId?: string | null;
   slug?: string;
   code?: string;
   icon?: string | null;
@@ -196,14 +196,21 @@ export type CatalogRow = {
   i18nStatus?: CatalogStatus;
   createdAt?: string;
   // Parent relation, keyed by the parent's type name.
-  province?: { name: string; slug: string } | null;
-  country?: { name: string; slug: string } | null;
-  industryGroup?: { name: string; slug: string } | null;
+  province?: { id?: string; name: string; slug: string } | null;
+  country?: { id?: string; name: string; slug: string } | null;
+  industryGroup?: { id?: string; name: string; slug: string } | null;
 };
 
 export type CatalogUsage = {
   total: number;
   byRelation: Array<{ label: string; count: number }>;
+};
+
+export type CatalogAlias = {
+  id: string;
+  alias: string;
+  aliasKey: string;
+  createdAt: string;
 };
 
 export type ArchiveResult = {
@@ -271,8 +278,4 @@ export function timeAgo(value?: string | null): string {
   const months = Math.floor(days / 30);
   if (months < 12) return `${months}mo ago`;
   return `${Math.floor(months / 12)}y ago`;
-}
-
-export function isHot(job: Pick<AdminJob, 'boostUntil'>): boolean {
-  return Boolean(job.boostUntil && new Date(job.boostUntil).getTime() > Date.now());
 }

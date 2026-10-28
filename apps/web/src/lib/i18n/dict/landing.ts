@@ -15,7 +15,7 @@ export const landing = {
   'landing.remoteJobs': { en: 'Remote jobs', ru: 'Удалённая работа', uz: 'Masofaviy ishlar' },
   'landing.locations': { en: 'Locations', ru: 'Локации', uz: 'Joylar' },
   'landing.companiesHiring': { en: 'Companies hiring', ru: 'Компании нанимают', uz: 'Ish beruvchi kompaniyalar' },
-  'landing.featured': { en: 'Featured opportunities', ru: 'Избранные вакансии', uz: 'Tavsiya etilgan ishlar' },
+  'landing.featured': { en: 'Latest jobs', ru: 'Новые вакансии', uz: 'Yangi ishlar' },
   'landing.featuredSub': { en: 'Discover roles from employers hiring now.', ru: 'Найдите работу в компаниях, которые нанимают сейчас.', uz: 'Hozir xodim izlayotgan kompaniyalardagi ishlarni toping.' },
   'landing.badge': { en: 'Featured', ru: 'Избранное', uz: 'Tavsiya' },
   'landing.viewJobs': { en: 'View all jobs', ru: 'Все вакансии', uz: 'Barcha ishlar' },

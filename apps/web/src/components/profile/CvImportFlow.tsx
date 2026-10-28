@@ -18,6 +18,7 @@ export function CvImportFlow({ existingResumeId, onClose, onProfileChanged }: { 
   const [file, setFile] = useState<File | null>(null);
   const [resumeId, setResumeId] = useState(existingResumeId || '');
   const [parsed, setParsed] = useState<ParsedCv | null>(null);
+  const [resumeGeneration, setResumeGeneration] = useState<number>();
   const [result, setResult] = useState<ImportedResult | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -37,7 +38,7 @@ export function CvImportFlow({ existingResumeId, onClose, onProfileChanged }: { 
     try {
       const status = await waitForResumeParse(id, { signal: abort.signal });
       if (abort.signal.aborted || !mounted.current) return;
-      if (status.parseStatus === 'READY' && status.parsedData) { setParsed(status.parsedData as ParsedCv); setPhase('review'); }
+      if (status.parseStatus === 'READY' && status.parsedData) { setParsed(status.parsedData as ParsedCv); setResumeGeneration(status.parseGeneration); setPhase('review'); }
       else if (status.parseStatus === 'PENDING' || status.parseStatus === 'PROCESSING') setPhase('pending');
       else { setError(status.parseError || t('cvParseFailed')); setPhase('failed'); }
     } catch (error) {
@@ -60,7 +61,7 @@ export function CvImportFlow({ existingResumeId, onClose, onProfileChanged }: { 
     finally { submitting.current = false; setBusy(false); }
   }
 
-  if (phase === 'review' && parsed) return <CvReviewModal resumeId={resumeId} parsed={parsed} presentation="workspace" onClose={onClose} onImported={async (result) => { setResult(result); setPhase('done'); await onProfileChanged(); }} />;
+  if (phase === 'review' && parsed) return <CvReviewModal resumeId={resumeId} resumeGeneration={resumeGeneration} parsed={parsed} presentation="workspace" onClose={onClose} onImported={async (result) => { setResult(result); setPhase('done'); await onProfileChanged(); }} />;
 
   return <ProfileDialog title={t(phase === 'done' ? 'pc.importDone' : 'pc.import')} subtitle={phase === 'upload' ? t('pc.importHint') : undefined} onClose={onClose} busy={busy}>
     <div className={s.dialogBody}>

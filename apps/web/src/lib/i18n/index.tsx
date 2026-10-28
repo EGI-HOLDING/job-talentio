@@ -12,6 +12,7 @@ import {
 import type { Locale } from '@/lib/locale';
 import { DICT } from './dict';
 import type { DictKey } from './dict';
+import { ID_TRANSLATIONS } from './id';
 
 export type { Locale, DictKey };
 
@@ -51,6 +52,7 @@ export function I18nProvider({
     (key: string) => {
       const entry = DICT[key as DictKey];
       if (!entry) return key;
+      if (locale === 'id') return ID_TRANSLATIONS[key as DictKey] ?? entry.en ?? key;
       return entry[locale] ?? entry.en ?? key;
     },
     [locale],

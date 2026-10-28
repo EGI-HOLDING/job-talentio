@@ -14,8 +14,8 @@ export type JobLocaleBackfillResult = {
  * `JobPost.locale` defaults to `uz`, so postings created before the field was
  * filled in claim to be Uzbek whatever language they are actually written in.
  * That mislabel is now visible ("This text is written in Uzbek" on an English
- * posting) and it also drives hreflang and machine translation, so repair the
- * rows we can read confidently and leave the rest untouched.
+ * posting) and it also drives hreflang and human-authored version selection,
+ * so repair the rows we can read confidently and leave the rest untouched.
  */
 export async function backfillJobLocale(db: Db): Promise<JobLocaleBackfillResult> {
   const jobs = await db.jobPost.findMany({

@@ -1,4 +1,12 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+export const ADMIN_SESSION_EXPIRED_EVENT = 'jt-admin-session-expired';
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 export function getToken() {
   if (typeof window === 'undefined') return null;
@@ -15,6 +23,13 @@ export function saveToken(token: string, refreshToken?: string) {
 export function clearToken() {
   localStorage.removeItem('jt_admin_token');
   localStorage.removeItem('jt_admin_refresh');
+}
+
+function expireSession() {
+  clearToken();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(ADMIN_SESSION_EXPIRED_EVENT));
+  }
 }
 
 /** Revoke the refresh family server-side (best effort), then clear local tokens. */
@@ -54,15 +69,16 @@ async function tryRefresh(): Promise<string | null> {
           body: JSON.stringify({ refreshToken }),
         });
         if (!res.ok) {
-          clearToken();
-          return null;
+          if (res.status === 401 || res.status === 403) {
+            clearToken();
+            return null;
+          }
+          const body: unknown = await res.json().catch(() => null);
+          throw new ApiError(formatApiError(body, res.statusText || 'Session refresh failed'), res.status);
         }
         const session = (await res.json()) as { accessToken: string; refreshToken?: string };
         saveToken(session.accessToken, session.refreshToken);
         return session.accessToken;
-      } catch {
-        clearToken();
-        return null;
       } finally {
         refreshPromise = null;
       }
@@ -167,25 +183,25 @@ export function apiPatch<T>(path: string, body: unknown) {
   return api<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers);
+export async function api<T>(path: string, options: RequestInit & { auth?: boolean } = {}): Promise<T> {
+  const { auth = true, ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers);
   headers.set('Content-Type', 'application/json');
-  const token = getToken();
+  const token = auth ? getToken() : null;
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  let res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+  let res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
 
   // Expired access token: silently rotate once via the refresh token, then retry.
-  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+  if (res.status === 401 && token && path !== '/auth/refresh') {
     const rotated = await tryRefresh();
     if (rotated) {
       headers.set('Authorization', `Bearer ${rotated}`);
-      res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
-    } else if (getRefreshToken()) {
-      clearToken();
+      res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
     }
   }
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(formatApiError(data, res.statusText || 'Request failed'));
+  if (res.status === 401 && token) expireSession();
+  if (!res.ok) throw new ApiError(formatApiError(data, res.statusText || 'Request failed'), res.status);
   return data as T;
 }

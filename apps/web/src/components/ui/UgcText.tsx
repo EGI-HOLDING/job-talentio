@@ -9,6 +9,7 @@ const LOCALE_LABEL_KEY: Record<Locale, string> = {
   uz: 'ui.localeUz',
   ru: 'ui.localeRu',
   en: 'ui.localeEn',
+  id: 'ui.localeId',
 };
 
 type Props = {

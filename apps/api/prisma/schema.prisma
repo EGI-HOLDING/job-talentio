@@ -7,6 +7,144 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum LinkedInConnectionStatus {
+  CONNECTED
+  EXPIRED
+  REVOKED
+  DISCONNECTED
+}
+
+enum LinkedInPostStatus {
+  PENDING
+  RENDERING
+  UPLOADING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  UNKNOWN
+  CANCELLED
+}
+
+// A personal consent belongs to its HR user, never to everyone in a company.
+model LinkedInConnection {
+  id              String @id @default(cuid())
+  userId          String @unique
+  subject         String?
+  authorUrn       String?
+  displayName     String?
+  avatarUrl       String?
+  grantedScopes   String[] @default([])
+  tokenCiphertext String?
+  tokenKeyVersion String?
+  tokenExpiresAt  DateTime?
+  status          LinkedInConnectionStatus @default(DISCONNECTED)
+  autoShareEnabled Boolean @default(false)
+  generation      Int @default(0)
+  leaseOwner      String?
+  leaseUntil      DateTime?
+  connectedAt     DateTime?
+  disconnectedAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  previews        LinkedInPreview[]
+  posts           LinkedInSocialPost[]
+}
+
+model LinkedInOAuthState {
+  stateHash      String @id
+  userId         String
+  cookieHash     String
+  sessionVersion Int
+  returnTo       String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime @default(now())
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+// Server-created preview: exactly these bytes and caption may be approved.
+model LinkedInPreview {
+  id                   String @id @default(cuid())
+  userId               String
+  companyId            String
+  jobId                String
+  connectionId         String
+  connectionGeneration Int
+  locale               String
+  fingerprint          String
+  content              Json
+  caption              String
+  jobUrl               String
+  posterKey            String
+  posterSha256         String
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  user                 User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job                  JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  connection           LinkedInConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  posts                LinkedInSocialPost[]
+  @@index([userId, jobId])
+  @@index([expiresAt])
+}
+
+model LinkedInSocialPost {
+  id                   String @id @default(cuid())
+  userId               String
+  companyId            String
+  jobId                String
+  connectionId         String
+  connectionGeneration Int
+  publicationRevision  Int @default(1)
+  previewId            String?
+  authorUrnSnapshot    String
+  content              Json
+  captionSnapshot      String
+  jobUrlSnapshot       String
+  posterKey            String
+  posterSha256         String
+  imageUrn             String?
+  providerPostUrn      String?
+  status               LinkedInPostStatus @default(PENDING)
+  attempts             Int @default(0)
+  attemptId            String?
+  leaseUntil           DateTime?
+  nextAttemptAt        DateTime @default(now())
+  retrySafe            Boolean @default(true)
+  errorCode            String?
+  errorSummary         String?
+  publishedAt          DateTime?
+  reconciledAt         DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company              Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  job                  JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  connection           LinkedInConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  preview              LinkedInPreview? @relation(fields: [previewId], references: [id], onDelete: SetNull)
+  outbox               LinkedInOutbox?
+  @@unique([jobId, userId, publicationRevision])
+  @@index([userId, companyId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseUntil])
+  @@index([authorUrnSnapshot, status, leaseUntil])
+}
+
+// Redis delivery is acknowledged only when a worker claims the DB record.
+model LinkedInOutbox {
+  id             String @id @default(cuid())
+  socialPostId   String @unique
+  nextDispatchAt DateTime @default(now())
+  processedAt    DateTime?
+  attempts       Int @default(0)
+  createdAt      DateTime @default(now())
+  post           LinkedInSocialPost @relation(fields: [socialPostId], references: [id], onDelete: Cascade)
+  @@index([processedAt, nextDispatchAt])
+}
+
 enum UserRole {
   EMPLOYEE
   RECRUITER
@@ -31,6 +169,27 @@ enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELLED
+}
+
+enum JobPackageCode {
+  FREE
+  STANDARD
+  PREMIUM
+}
+
+enum JobEventKind {
+  IMPRESSION
+  DETAIL_VIEW
+  APPLY_CLICK
+  APPLY_START
+  APPLICATION_SUBMITTED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_HR
+  RESOLVED
 }
 
 enum JobStatus {
@@ -218,8 +377,10 @@ model Skill {
   name            String
   nameUz          String?
   nameRu          String?
+  nameId          String?
   nameUzIsMachine Boolean           @default(false)
   nameRuIsMachine Boolean           @default(false)
+  nameIdIsMachine Boolean           @default(false)
   i18nStatus      CatalogI18nStatus @default(PENDING)
   slug            String            @unique
   normalizedKey   String?           @unique
@@ -254,6 +415,7 @@ model Country {
   name         String
   nameUz       String?
   nameRu       String?
+  nameId       String?
   slug         String    @unique
   iso2         String    @unique @db.Char(2)
   iso3         String    @db.Char(3)
@@ -261,12 +423,17 @@ model Country {
   currencyCode String?
   /// Whether the market is live. Separate from archivedAt, which is catalog visibility.
   isActive     Boolean   @default(true)
+  jobAlerts    JobAlert[]
   archivedAt   DateTime?
   curatedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  residentEmployees EmployeeProfile[] @relation("EmployeeResidence")
+  preferredByEmployees EmployeeProfile[] @relation("EmployeePreferredCountries")
+  employeeExperiences WorkExperience[]
   provinces Province[]
+  jobPosts JobPost[]
 
   @@index([archivedAt])
 }
@@ -277,7 +444,9 @@ model Province {
   name       String
   nameUz     String?
   nameRu     String?
+  nameId     String?
   slug       String
+  sourceCode String?      @unique
   type       ProvinceType @default(REGION)
   archivedAt DateTime?
   curatedAt  DateTime?
@@ -297,8 +466,12 @@ model City {
   name       String
   nameUz     String?
   nameRu     String?
+  nameId     String?
   slug       String    @unique
   provinceId String
+  sourceCode String?   @unique
+  /// CITY / REGENCY are selectable; legacy districts remain linked to old data.
+  kind       String    @default("CITY")
   archivedAt DateTime?
   curatedAt  DateTime?
 
@@ -308,9 +481,21 @@ model City {
   companies       Company[]
   jobAlerts       JobAlert[]
   workExperiences WorkExperience[]
+  aliases         CityAlias[]
 
   @@index([provinceId])
   @@index([archivedAt])
+}
+
+model CityAlias {
+  id        String @id @default(cuid())
+  cityId    String
+  alias     String
+  aliasKey  String
+  city      City   @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@unique([cityId, aliasKey])
+  @@index([aliasKey])
 }
 
 model JobCategory {
@@ -318,6 +503,7 @@ model JobCategory {
   name       String
   nameUz     String?
   nameRu     String?
+  nameId     String?
   slug       String    @unique
   icon       String?
   archivedAt DateTime?
@@ -334,6 +520,7 @@ model IndustryGroup {
   name       String
   nameUz     String?
   nameRu     String?
+  nameId     String?
   slug       String    @unique
   sortOrder  Int       @default(0)
   archivedAt DateTime?
@@ -349,6 +536,7 @@ model Industry {
   name       String
   nameUz     String?
   nameRu     String?
+  nameId     String?
   slug       String    @unique
   sortOrder  Int       @default(0)
   groupId    String
@@ -367,8 +555,10 @@ model Language {
   name            String
   nameUz          String?
   nameRu          String?
+  nameId          String?
   nameUzIsMachine Boolean           @default(false)
   nameRuIsMachine Boolean           @default(false)
+  nameIdIsMachine Boolean           @default(false)
   i18nStatus      CatalogI18nStatus @default(PENDING)
   code            String            @unique
   normalizedKey   String?           @unique
@@ -401,8 +591,10 @@ model Benefit {
   name            String
   nameUz          String?
   nameRu          String?
+  nameId          String?
   nameUzIsMachine Boolean           @default(false)
   nameRuIsMachine Boolean           @default(false)
+  nameIdIsMachine Boolean           @default(false)
   i18nStatus      CatalogI18nStatus @default(PENDING)
   slug            String            @unique
   normalizedKey   String?           @unique
@@ -436,11 +628,14 @@ model JobTitle {
   name            String
   nameUz          String?
   nameRu          String?
+  nameId          String?
   nameUzIsMachine Boolean           @default(false)
   nameRuIsMachine Boolean           @default(false)
+  nameIdIsMachine Boolean           @default(false)
   i18nStatus      CatalogI18nStatus @default(PENDING)
   slug            String            @unique
   normalizedKey   String            @unique
+  matchingMetadata Json?
   archivedAt      DateTime?
   curatedAt       DateTime?
   createdAt       DateTime          @default(now())
@@ -514,6 +709,11 @@ model User {
   verificationsSubmitted  CompanyVerificationRequest[] @relation("VerificationSubmitter")
   verificationsReviewed   CompanyVerificationRequest[] @relation("VerificationReviewer")
   phoneLoginTokens        PhoneLoginToken[]
+  linkedInConnection      LinkedInConnection?
+  linkedInOAuthStates     LinkedInOAuthState[]
+  linkedInPreviews        LinkedInPreview[]
+  linkedInPosts           LinkedInSocialPost[]
+  recruiterOnboarding    RecruiterOnboarding?
 }
 
 model RefreshToken {
@@ -603,6 +803,13 @@ model Company {
   translations     CompanyTranslation[]
   invites          CompanyInvite[]
   verificationRequests CompanyVerificationRequest[]
+  jobBenefits          JobBenefit[]
+  candidateCredits     CandidateCredit[]
+  candidateAccesses    CandidateAccess[]
+  promotion            CompanyPromotion?
+  supportTickets       SupportTicket[]
+  linkedInPreviews      LinkedInPreview[]
+  linkedInPosts         LinkedInSocialPost[]
 
   @@index([cityId])
   @@index([industryId])
@@ -711,6 +918,8 @@ model JobPost {
   title              String
   description        String
   cityId             String?
+  /// Independent of city so country-restricted remote jobs retain their scope.
+  countryId          String?
   categoryId         String?
   employmentType     EmploymentType   @default(FULL_TIME)
   workMode           WorkMode         @default(ONSITE)
@@ -738,6 +947,7 @@ model JobPost {
   company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   jobTitle      JobTitle?            @relation(fields: [jobTitleId], references: [id])
   city          City?                @relation(fields: [cityId], references: [id])
+  country       Country?             @relation(fields: [countryId], references: [id])
   category      JobCategory?         @relation(fields: [categoryId], references: [id])
   jobSkills     JobPostSkill[]
   jobLanguages  JobPostLanguage[]
@@ -748,8 +958,13 @@ model JobPost {
   views         JobView[]
   bulkCampaigns BulkCampaign[]
   translations  JobPostTranslation[]
+  benefit       JobBenefit?
+  funnelSessions JobFunnelSession[]
+  linkedInPreviews LinkedInPreview[]
+  linkedInPosts LinkedInSocialPost[]
 
   @@index([companyId, status])
+  @@index([countryId])
   @@index([status, publishedAt])
   @@index([cityId])
   @@index([categoryId])
@@ -759,9 +974,8 @@ model JobPost {
   @@index([companyId, contentHash])
 }
 
-/// Optional per-language version of a posting. The original language lives on
-/// JobPost itself (JobPost.locale); rows here are extra versions, either written
-/// by the recruiter or produced by machine translation (isMachine).
+/// Optional recruiter-authored language version of a posting. The original
+/// language lives on JobPost itself; `isMachine` identifies legacy AI output.
 model JobPostTranslation {
   id          String   @id @default(cuid())
   jobPostId   String
@@ -769,7 +983,7 @@ model JobPostTranslation {
   title       String
   description String
   isMachine   Boolean  @default(false)
-  /// SHA-256 of the source text: lets machine output expire when the original changes.
+  /// SHA-256 of the source text. Retained for legacy machine-generated rows.
   sourceHash  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -786,6 +1000,7 @@ model JobPostLanguage {
   languageId String
   minLevel   LanguageLevel @default(B1)
   isRequired Boolean       @default(true)
+  provenance String        @default("LEGACY_UNVERIFIED")
 
   jobPost  JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   language Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
@@ -800,6 +1015,7 @@ model JobPostSkill {
   skillId    String
   isRequired Boolean @default(true)
   weight     Float   @default(1)
+  minLevel   SkillLevel?
 
   jobPost JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
@@ -819,6 +1035,12 @@ model JobPostBenefit {
   @@unique([jobPostId, benefitId])
 }
 
+enum EmployeeOnboardingStatus {
+  NOT_REQUIRED
+  IN_PROGRESS
+  COMPLETED
+}
+
 model EmployeeProfile {
   id                String            @id @default(cuid())
   userId            String            @unique
@@ -830,7 +1052,23 @@ model EmployeeProfile {
   cityId            String?
   phone             String?           @unique
   visibility        ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
-  desiredSalaryMin  Int?
+  desiredSalaryMin  Decimal? @db.Decimal(18, 2)
+  desiredSalaryCurrency String @default("UZS")
+  desiredSalaryPeriod SalaryPeriod @default(MONTHLY)
+  salaryNegotiable Boolean @default(false)
+  desiredPositions String[] @default([])
+  residenceCountryId String?
+  residenceCountry Country? @relation("EmployeeResidence", fields: [residenceCountryId], references: [id], onDelete: SetNull)
+  preferredCountries Country[] @relation("EmployeePreferredCountries")
+  noExperience Boolean @default(false)
+  onboardingStatus EmployeeOnboardingStatus @default(IN_PROGRESS)
+  onboardingStep Int @default(1)
+  onboardingCompletedAt DateTime?
+  onboardingDraft Json?
+  databaseCvEnabled Boolean @default(false)
+  databaseResumeId String?
+  databaseResume Resume? @relation("DatabaseCv", fields: [databaseResumeId], references: [id], onDelete: SetNull)
+  databaseAccesses CandidateAccess[]
   desiredPosition   String?
   /// GDPR: opt out of recruiter bulk messaging (pipeline status updates still allowed)
   bulkCommsOptOut   Boolean           @default(false)
@@ -858,6 +1096,7 @@ model ProfileSkill {
   profileId String
   skillId   String
   level     SkillLevel @default(INTERMEDIATE)
+  levelSource String   @default("LEGACY_UNKNOWN")
 
   profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   skill   Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
@@ -874,6 +1113,8 @@ model WorkExperience {
   description  String?
   cityId       String?
   locationNote String?
+  countryId String?
+  country Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
   startDate    DateTime
   endDate      DateTime?
   isCurrent    Boolean   @default(false)
@@ -988,6 +1229,8 @@ model Resume {
   isPrimary        Boolean           @default(false)
   parsedData       Json?
   parseStatus      ResumeParseStatus @default(NONE)
+  parseGeneration Int @default(0)
+  parseStartedAt DateTime?
   parseError       String?
   parsedAt         DateTime?
   templateKey      String            @default("classic")
@@ -1004,6 +1247,7 @@ model Resume {
   profile        EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   targetJobTitle JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
   applications   Application[]
+  databaseProfiles EmployeeProfile[] @relation("DatabaseCv")
 
   @@index([profileId])
   @@index([profileId, deletedAt])
@@ -1017,8 +1261,10 @@ model Application {
   profileId      String
   resumeId       String?
   status         ApplicationStatus @default(NEW)
+  kanbanEnteredAt DateTime?
   coverLetter    String?
   resumeSnapshot Json?
+  funnelSessionId String?
   matchScore     Float?
   matchBreakdown Json?
   /// Acquisition source (`utm_source[:utm_medium]`, e.g. telegram:channel, pwa); null = direct.
@@ -1039,6 +1285,7 @@ model Application {
   @@index([matchScore])
   @@index([resumeId])
   @@index([jobPostId, source])
+  @@index([jobPostId, kanbanEnteredAt, status])
 }
 
 model PipelineEvent {
@@ -1110,6 +1357,8 @@ model JobAlert {
   name            String
   query           String?
   cityId          String?
+  countryId       String?
+  country         Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
   categoryId      String?
   frequency       AlertFrequency @default(DAILY)
   isActive        Boolean        @default(true)
@@ -1126,6 +1375,7 @@ model JobAlert {
   skills   JobAlertSkill[]
 
   @@index([userId])
+  @@index([countryId])
 }
 
 model TelegramLinkToken {
@@ -1247,6 +1497,9 @@ model JobQuestion {
   jobPost      JobPost                 @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   answers      ApplicationAnswer[]
   translations JobQuestionTranslation[]
+  revision Int @default(1)
+  archivedAt DateTime?
+  versions JobQuestionVersion[]
 
   @@index([jobPostId])
 }
@@ -1274,11 +1527,268 @@ model ApplicationAnswer {
   applicationId String
   questionId    String
   answer        String
+  questionRevision Int?
+  questionSnapshot Json?
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   question    JobQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([applicationId, questionId])
+}
+
+model JobQuestionVersion {
+  id String @id @default(cuid())
+  questionId String
+  revision Int
+  snapshot Json
+  createdAt DateTime @default(now())
+  question JobQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  @@unique([questionId, revision])
+}
+
+model PackagePolicy {
+  id String @id @default(cuid())
+  code JobPackageCode
+  version Int
+  settings Json
+  createdById String?
+  createdAt DateTime @default(now())
+  @@unique([code, version])
+}
+
+model JobBenefit {
+  id String @id @default(cuid())
+  jobId String @unique
+  companyId String
+  code JobPackageCode @default(FREE)
+  highestCode JobPackageCode @default(FREE)
+  policyVersion Int @default(1)
+  policySnapshot Json
+  selectionConfirmedAt DateTime?
+  publicationCycle Int @default(1)
+  startsAt DateTime?
+  expiresAt DateTime?
+  candidateGranted Int @default(0)
+  boostGrantedSeconds Int @default(0)
+  boostAllowanceOffset Int @default(0)
+  featuredGrantedSeconds Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  grants JobPackageGrant[]
+  boosts BoostEpisode[]
+  @@index([expiresAt])
+  @@index([companyId, code, expiresAt])
+}
+
+/// Each order buys one publication period for one job. No company subscription.
+model JobPurchaseOrder {
+  id String @id @default(cuid())
+  companyId String
+  jobId String
+  createdById String
+  code JobPackageCode
+  intent String
+  status String @default("PENDING")
+  currency String @default("IDR")
+  amount Int
+  catalogVersion Int
+  policyVersion Int
+  policySnapshot Json
+  expectedBenefitVersion String?
+  jobTitle String
+  companyName String
+  expiresAt DateTime
+  paidAt DateTime?
+  fulfilledAt DateTime?
+  provider String?
+  providerReference String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events JobPaymentEvent[]
+  @@index([companyId, createdAt])
+  @@index([jobId, status])
+  @@index([status, expiresAt])
+}
+
+/// Only verified provider adapters may settle an order. Raw payment credentials
+/// and client-supplied "paid" statuses never enter this table.
+model JobPaymentEvent {
+  id String @id @default(cuid())
+  orderId String
+  provider String
+  eventId String
+  amount Int
+  currency String
+  createdAt DateTime @default(now())
+  order JobPurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  @@unique([provider, eventId])
+}
+
+model RecruiterOnboarding {
+  userId String @id
+  status String @default("IN_PROGRESS")
+  step Int @default(1)
+  companyId String?
+  jobId String?
+  companyDraft Json?
+  preferredPackage JobPackageCode?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model JobPackageGrant {
+  id String @id @default(cuid())
+  benefitId String
+  actorId String
+  code JobPackageCode
+  policyVersion Int
+  reason String
+  candidateDelta Int @default(0)
+  boostDeltaSeconds Int @default(0)
+  featuredDeltaSeconds Int @default(0)
+  createdAt DateTime @default(now())
+  benefit JobBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+  @@index([benefitId, createdAt])
+}
+
+/// Historical entitlements are scoped to each publication period. A later Free
+/// renewal must not unlock paid reports for that new period or erase old reports.
+model JobPublicationPeriod {
+  id String @id @default(cuid())
+  jobId String
+  companyId String
+  cycle Int
+  code JobPackageCode
+  startsAt DateTime
+  expiresAt DateTime
+  policySnapshot Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([jobId, cycle])
+  @@index([companyId, code, startsAt])
+}
+
+model CandidateCredit {
+  id String @id @default(cuid())
+  companyId String
+  sourceKey String @unique
+  jobId String?
+  capacity Int
+  used Int @default(0)
+  startsAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accesses CandidateAccess[]
+  @@index([companyId, expiresAt])
+}
+
+model CandidateAccess {
+  id String @id @default(cuid())
+  companyId String
+  profileId String
+  creditId String
+  openedById String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  credit CandidateCredit @relation(fields: [creditId], references: [id], onDelete: Restrict)
+  @@unique([companyId, profileId, creditId])
+  @@index([companyId, profileId, expiresAt])
+}
+
+model BoostEpisode {
+  id String @id @default(cuid())
+  benefitId String
+  startsAt DateTime
+  endsAt DateTime
+  createdById String
+  benefit JobBenefit @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+  @@index([benefitId, endsAt])
+}
+
+model CompanyPromotion {
+  companyId String @id
+  endsAt DateTime
+  grantedSeconds Int @default(0)
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model OperationKey {
+  id String @id @default(cuid())
+  scope String
+  key String
+  payloadHash String
+  state String @default("RUNNING")
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([scope, key])
+}
+
+model ContactRevealCounter {
+  actorId String
+  windowStart DateTime
+  count Int @default(0)
+  @@id([actorId, windowStart])
+}
+
+model JobFunnelSession {
+  id String @id @default(cuid())
+  jobId String
+  sessionKey String @unique
+  visitorHash String
+  source String @default("direct")
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  events JobEvent[]
+  @@index([jobId, startedAt])
+}
+
+model JobEvent {
+  id String @id @default(cuid())
+  sessionId String
+  kind JobEventKind
+  applicationId String? @unique
+  createdAt DateTime @default(now())
+  session JobFunnelSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@unique([sessionId, kind])
+  @@index([createdAt])
+}
+
+model SupportTicket {
+  id String @id @default(cuid())
+  companyId String
+  jobId String?
+  createdById String
+  assignedToId String?
+  title String
+  priority Boolean @default(false)
+  status SupportTicketStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  replies SupportReply[]
+  @@index([companyId, createdAt])
+  @@index([status, priority, createdAt])
+}
+
+model SupportReply {
+  id String @id @default(cuid())
+  ticketId String
+  authorId String
+  authorRole UserRole
+  body String
+  createdAt DateTime @default(now())
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@index([ticketId, createdAt])
 }
 
 model Interview {

@@ -64,110 +64,7 @@ export class TranslationService {
     return this.provider.name;
   }
 
-  async translateJob(jobId: string, target: Locale): Promise<MachineTranslationResult> {
-    if (!this.provider.enabled) return { status: 'disabled' };
-
-    const job = await this.prisma.jobPost.findUnique({
-      where: { id: jobId },
-      include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
-    });
-    if (!job) return { status: 'failed', reason: 'Job not found' };
-    const source = effectiveSourceLocale(job.locale, `${job.title}\n${job.description}`);
-    if (!source) return { status: 'unsupported' };
-    if (target === source) return { status: 'exists', locale: target };
-
-    const hash = contentHash(job.title, job.description);
-    const existing = job.translations.find((t) => t.locale === target);
-    // A human version, or machine output still matching the source, is enough.
-    if (existing && (!existing.isMachine || existing.sourceHash === hash)) {
-      return { status: 'exists', locale: target };
-    }
-
-    const title = job.title.slice(0, MAX_CHARS_PER_FIELD);
-    const description = job.description.slice(0, MAX_CHARS_PER_FIELD);
-
-    const chars = title.length + description.length;
-    const allowed = await this.consumeBudget(chars);
-    if (!allowed) return { status: 'budget-exceeded' };
-
-    try {
-      const [translatedTitle, translatedDescription] = await this.provider.translate({
-        texts: [title, description],
-        targetLocale: target,
-        sourceLocale: source,
-      });
-      if (!translatedTitle || !translatedDescription) {
-        await this.refundBudget(chars);
-        return { status: 'unsupported' };
-      }
-
-      const value = {
-        title: translatedTitle,
-        description: translatedDescription,
-        isMachine: true,
-        sourceHash: hash,
-      };
-      await this.prisma.jobPostTranslation.upsert({
-        where: { jobPostId_locale: { jobPostId: jobId, locale: target } },
-        update: value,
-        create: { jobPostId: jobId, locale: target, ...value },
-      });
-      // Applicants answer in the language they read the posting in.
-      await this.translateJobQuestions(jobId, source, target);
-      return { status: 'ready', locale: target };
-    } catch (err) {
-      await this.refundBudget(chars);
-      this.logger.warn(`Machine translation failed for job ${jobId}: ${(err as Error).message}`);
-      return { status: 'failed', reason: 'Translation service unavailable' };
-    }
-  }
-
-  /**
-   * Screening questions ride along with the posting they belong to. Failures are
-   * swallowed: a translated posting with original questions still works.
-   */
-  private async translateJobQuestions(jobId: string, source: Locale, target: Locale) {
-    const questions = await this.prisma.jobQuestion.findMany({
-      where: { jobPostId: jobId },
-      include: { translations: { select: { locale: true, isMachine: true, sourceHash: true } } },
-    });
-
-    for (const question of questions) {
-      const hash = contentHash(question.question);
-      const existing = question.translations.find((t) => t.locale === target);
-      if (existing && (!existing.isMachine || existing.sourceHash === hash)) continue;
-
-      const text = question.question.slice(0, MAX_LABEL_CHARS * 4);
-      const qChars = text.length;
-      if (!(await this.consumeBudget(qChars))) return;
-
-      try {
-        const [translated] = await this.provider.translate({
-          texts: [text],
-          targetLocale: target,
-          sourceLocale: source,
-        });
-        if (!translated) {
-          await this.refundBudget(qChars);
-          continue;
-        }
-        const value = { question: translated, isMachine: true, sourceHash: hash };
-        await this.prisma.jobQuestionTranslation.upsert({
-          where: { questionId_locale: { questionId: question.id, locale: target } },
-          update: value,
-          create: { questionId: question.id, locale: target, ...value },
-        });
-      } catch (err) {
-        await this.refundBudget(qChars);
-        this.logger.warn(
-          `Question translation failed for job ${jobId}: ${(err as Error).message}`,
-        );
-        return;
-      }
-    }
-  }
-
-  /** Same contract as `translateJob`, for the company blurb (never the name). */
+  /** Machine translation for a company blurb (never the company name). */
   async translateCompany(companyId: string, target: Locale): Promise<MachineTranslationResult> {
     if (!this.provider.enabled) return { status: 'disabled' };
 
@@ -219,7 +116,7 @@ export class TranslationService {
     }
   }
 
-  /** Same contract as `translateJob`, for an article title, excerpt, and body. */
+  /** Machine translation for an article title, excerpt, and body. */
   async translateNews(slug: string, target: Locale): Promise<MachineTranslationResult> {
     if (!this.provider.enabled) return { status: 'disabled' };
 
@@ -462,10 +359,11 @@ export class TranslationService {
     if (!row) return { status: 'failed', reason: 'Catalog entry not found' };
 
     const source = detectLocale(row.name) ?? 'en';
-    const targets = (['uz', 'ru'] as const).filter((locale) => {
+    const targets = (['uz', 'ru', 'id'] as const).filter((locale) => {
       if (locale === source) return false;
-      const value = locale === 'uz' ? row.nameUz : row.nameRu;
-      const isMachine = locale === 'uz' ? row.nameUzIsMachine : row.nameRuIsMachine;
+      const field = `name${locale[0].toUpperCase()}${locale.slice(1)}`;
+      const value = row[field as keyof typeof row];
+      const isMachine = row[`${field}IsMachine` as keyof typeof row];
       // A human value is final; machine output may be refreshed.
       return !value || isMachine;
     });
@@ -491,8 +389,9 @@ export class TranslationService {
         });
         // Providers return nothing for a language they do not support.
         if (!translated || translated === text) continue;
-        data[target === 'uz' ? 'nameUz' : 'nameRu'] = translated;
-        data[target === 'uz' ? 'nameUzIsMachine' : 'nameRuIsMachine'] = true;
+        const field = `name${target[0].toUpperCase()}${target.slice(1)}`;
+        data[field] = translated;
+        data[`${field}IsMachine`] = true;
         filled.push(target);
         spent += text.length;
       } catch (err) {
@@ -507,11 +406,12 @@ export class TranslationService {
     if (spent < reserved) await this.refundBudget(reserved - spent);
     if (!filled.length) return { status: 'unsupported' };
 
-    const covered = (locale: Locale) =>
-      locale === source ||
-      filled.includes(locale) ||
-      Boolean(locale === 'uz' ? row.nameUz : row.nameRu);
-    if (covered('uz') && covered('ru')) data.i18nStatus = 'COMPLETE';
+    const covered = (locale: Locale) => {
+      if (locale === source || filled.includes(locale)) return true;
+      const field = `name${locale[0].toUpperCase()}${locale.slice(1)}`;
+      return Boolean(row[field as keyof typeof row]);
+    };
+    if ((['uz', 'ru', 'en', 'id'] as const).every(covered)) data.i18nStatus = 'COMPLETE';
 
     await delegate.update({ where: { id }, data });
     return { status: 'ready', filled };

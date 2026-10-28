@@ -8,11 +8,13 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const TARGET_LANGUAGE: Partial<Record<Locale, string>> = {
   ru: 'RU',
   en: 'EN-US',
+  id: 'ID',
 };
 
 const SOURCE_LANGUAGE: Partial<Record<Locale, string>> = {
   ru: 'RU',
   en: 'EN',
+  id: 'ID',
 };
 
 @Injectable()

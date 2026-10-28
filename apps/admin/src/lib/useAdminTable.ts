@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, apiList, toQueryString } from './api';
 import type { BulkResult, ListEnvelope, MatchingIds } from './api';
 import { useTableQuery } from './useTableQuery';
@@ -45,50 +45,94 @@ export function useAdminTable<T extends { id: string }>({ path, defaults, filter
   }, [query]);
 
   const paramKey = JSON.stringify(params);
+  const scope = `${path}:${paramKey}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+
+  // Keep row selections across pagination, page-size and sort changes. They
+  // should only be discarded when the set of rows matching the filters changes.
+  const selectionFilterParams = useMemo(
+    () => Object.fromEntries(Object.entries(params).filter(([key]) =>
+      !['page', 'limit', 'sort', 'dir'].includes(key),
+    )),
+    [params],
+  );
+  const selectionRequestParams = useMemo(
+    () => Object.fromEntries(Object.entries(params).filter(([key]) => key !== 'page' && key !== 'limit')),
+    [params],
+  );
+  const selectionFilterScope = `${path}:${JSON.stringify(selectionFilterParams)}`;
+  const selectionRequestScope = `${path}:${JSON.stringify(selectionRequestParams)}`;
+  const currentSelectionRequestScope = useRef(selectionRequestScope);
+  currentSelectionRequestScope.current = selectionRequestScope;
+  const loadVersion = useRef(0);
+  const selectionVersion = useRef(0);
 
   const load = useCallback(async () => {
+    if (currentScope.current !== scope) return;
+    const version = ++loadVersion.current;
+    const isCurrent = () => currentScope.current === scope && loadVersion.current === version;
     setLoading(true);
     setError('');
     try {
       const result = await apiList<T>(path, params);
-      setData(result);
+      if (isCurrent()) setData(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Request failed');
-      setData(null);
+      if (isCurrent()) {
+        setError(e instanceof Error ? e.message : 'Request failed');
+        setData(null);
+      }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, paramKey]);
 
   useEffect(() => {
     void load();
+    return () => { ++loadVersion.current; };
   }, [load]);
 
   // A different filter means the previous selection no longer describes what is
-  // on screen, so it is dropped rather than silently carried over.
+  // on screen, so it is dropped rather than silently carried over. Paging and
+  // sorting do not change the matching set and therefore keep the selection.
   useEffect(() => {
+    ++selectionVersion.current;
     setSelected(new Set());
     setAllMatching({ active: false, capped: false });
-  }, [paramKey]);
+    return () => { ++selectionVersion.current; };
+  }, [selectionFilterScope]);
+
+  // A pending select-all request is tied to the filter and ordering used for
+  // its capped result. Changing only the page does not invalidate that request.
+  useEffect(() => {
+    ++selectionVersion.current;
+  }, [selectionRequestScope]);
 
   const selectAllMatching = useCallback(async () => {
+    const version = ++selectionVersion.current;
+    const isCurrent = () =>
+      currentSelectionRequestScope.current === selectionRequestScope &&
+      selectionVersion.current === version;
     try {
-      const result = await api<MatchingIds>(`${path}/ids${toQueryString(params)}`);
+      const result = await api<MatchingIds>(`${path}/ids${toQueryString(selectionRequestParams)}`);
+      if (!isCurrent()) return;
       setSelected(new Set(result.ids));
       setAllMatching({ active: true, capped: result.capped });
     } catch (e) {
-      notify(e instanceof Error ? e.message : 'Could not select all matching', 'error');
+      if (isCurrent()) notify(e instanceof Error ? e.message : 'Could not select all matching', 'error');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, paramKey, notify]);
+  }, [path, selectionRequestScope, notify]);
 
   const clearSelection = useCallback(() => {
+    ++selectionVersion.current;
     setSelected(new Set());
     setAllMatching({ active: false, capped: false });
   }, []);
 
   const updateSelection = useCallback((next: Set<string>) => {
+    ++selectionVersion.current;
     setSelected(next);
     setAllMatching({ active: false, capped: false });
   }, []);
@@ -98,9 +142,9 @@ export function useAdminTable<T extends { id: string }>({ path, defaults, filter
    * the normal case, so "applied" and "skipped" are both surfaced.
    */
   const runBulk = useCallback(
-    async (endpoint: string, body: Record<string, unknown>, verb: string) => {
+    async (endpoint: string, body: Record<string, unknown>, verb: string): Promise<boolean> => {
       const ids = [...selected];
-      if (!ids.length) return;
+      if (!ids.length) return false;
       setBusy(true);
       try {
         const result = await api<BulkResult>(endpoint, {
@@ -117,8 +161,10 @@ export function useAdminTable<T extends { id: string }>({ path, defaults, filter
         }
         clearSelection();
         await load();
+        return true;
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Bulk action failed', 'error');
+        return false;
       } finally {
         setBusy(false);
       }
@@ -128,14 +174,16 @@ export function useAdminTable<T extends { id: string }>({ path, defaults, filter
 
   /** Single-row actions share the reload and error reporting. */
   const runAction = useCallback(
-    async (request: Promise<unknown>, message: string) => {
+    async (request: Promise<unknown>, message: string): Promise<boolean> => {
       setBusy(true);
       try {
         await request;
         notify(message);
         await load();
+        return true;
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Action failed', 'error');
+        return false;
       } finally {
         setBusy(false);
       }

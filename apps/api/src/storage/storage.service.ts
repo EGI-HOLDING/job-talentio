@@ -8,6 +8,7 @@ import {
   CopyObjectCommand,
   CreateBucketCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -145,6 +146,10 @@ export class StorageService implements OnModuleInit {
   }
 
   /** Time-limited download URL for private objects (CVs, etc.) — browser-reachable host. */
+  async assertObjectAvailable(key: string) {
+    await this.client.send(new HeadObjectCommand({Bucket:this.bucket,Key:key}));
+  }
+
   async getPresignedGetUrl(key: string, expiresIn = 900) {
     const command = new GetObjectCommand({
       Bucket: this.bucket,

@@ -1,3 +1,5 @@
+import { EmployeeOnboardingService } from './employee-onboarding.service';
+import { employeeOnboardingSchema } from '@job-talentio/shared';
 import {
   BadRequestException,
   Body,
@@ -25,7 +27,7 @@ import {
   languageSchema,
   languageLevelUpdateSchema,
   resumeSchema,
-  resumeImportSchema,
+  resumeImportRequestSchema,
   resumeBuilderSettingsSchema,
   candidateSearchSchema,
 } from '@job-talentio/shared';
@@ -46,7 +48,23 @@ function assertLocale(value: string): Locale {
 @Controller('profiles')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProfilesController {
-  constructor(private profiles: ProfilesService) {}
+  constructor(private profiles: ProfilesService, private onboarding: EmployeeOnboardingService) {}
+
+  @Get('me/onboarding')
+  @Roles('EMPLOYEE')
+  onboardingState(@CurrentUser() user: AuthUser) { return this.onboarding.get(user); }
+
+  @Patch('me/onboarding')
+  @Roles('EMPLOYEE')
+  saveOnboarding(@CurrentUser() user: AuthUser, @Body() body: unknown) { return this.onboarding.patch(user, parseDto(employeeOnboardingSchema, body)); }
+
+  @Post('me/onboarding/complete')
+  @Roles('EMPLOYEE')
+  completeOnboarding(@CurrentUser() user: AuthUser, @Body() body: unknown) { return this.onboarding.complete(user, parseDto(employeeOnboardingSchema, body || {})); }
+
+  @Post('me/resumes/:id/parse')
+  @Roles('EMPLOYEE')
+  retryCvParse(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.profiles.retryCvParse(user,id); }
 
   @Get('me')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
@@ -238,8 +256,8 @@ export class ProfilesController {
 
   @Post('me/resumes/:id/export')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  exportResume(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.profiles.exportResumePdf(user, id);
+  exportResume(@CurrentUser() user: AuthUser, @Param('id') id: string, @Req() req: Request) {
+    return this.profiles.exportResumePdf(user, id, requestLocale(req));
   }
 
   @Delete('me/resumes/:id')
@@ -263,8 +281,8 @@ export class ProfilesController {
   /** Owner or recruiter of a company the candidate applied to. */
   @Get('resumes/:id/download')
   @Roles('EMPLOYEE', 'RECRUITER', 'SUPER_ADMIN')
-  downloadResume(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.profiles.downloadResume(user, id);
+  downloadResume(@CurrentUser() user: AuthUser, @Param('id') id: string,@Query('companyId') companyId?:string) {
+    return this.profiles.downloadResume(user, id,companyId);
   }
 
   @Get('me/resumes/:id/parse-status')
@@ -287,8 +305,8 @@ export class ProfilesController {
   @Post('me/resumes/:id/import')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   importParsed(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
-    const data = parseDto(resumeImportSchema, body);
-    return this.profiles.importParsedResume(user, id, data);
+    const data = parseDto(resumeImportRequestSchema, body);
+    return this.profiles.importParsedResume(user, id, data, data.resumeGeneration);
   }
 
   @Post('me/resumes/upload')
@@ -316,8 +334,8 @@ export class ProfilesController {
   /** Click-to-reveal contacts: audited + hourly quota; never in profile payloads. */
   @Post('candidates/:id/reveal-contact')
   @Roles('RECRUITER', 'SUPER_ADMIN')
-  revealContact(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.profiles.revealCandidateContact(user, id);
+  revealContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('companyId') companyId?: string) {
+    return this.profiles.revealCandidateContact(user, id, companyId);
   }
 
   @Get('candidates')
@@ -355,8 +373,9 @@ export class ProfilesController {
     @Param('id') id: string,
     @Req() req: Request,
     @Query('matchJobId') matchJobId?: string,
+    @Query('companyId') companyId?: string,
   ) {
-    return this.profiles.getCandidateProfile(user, id, matchJobId, requestLocale(req));
+    return this.profiles.getCandidateProfile(user, id, matchJobId, requestLocale(req),companyId);
   }
 
   @Post('me/saved-jobs/:jobId')

@@ -1,3 +1,4 @@
+import { liveJobWhere } from '../benefits/benefit-policy';
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { translateMessage } from '@job-talentio/shared';
@@ -9,6 +10,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuthUser } from '../common/auth.decorators';
 import { resolveSkill } from '../common/skill-resolve';
+import { resolveJobLocation } from '../common/geo-selection';
+import { jobKeywordOr } from '../search/job-keyword';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { isDemoMailbox } from '../common/demo-mailboxes';
 import {
@@ -67,6 +70,7 @@ export class AlertsService {
       name: string;
       query?: string;
       citySlug?: string;
+      countryId?: string | null;
       categorySlug?: string;
       skillSlugs?: string[];
       frequency?: 'DAILY' | 'WEEKLY';
@@ -75,14 +79,8 @@ export class AlertsService {
       notifyTelegram?: boolean;
     },
   ) {
-    let cityId: string | null = null;
+    const { cityId, countryId } = await resolveJobLocation(this.prisma, data);
     let categoryId: string | null = null;
-    if (data.citySlug) {
-      const city = await this.prisma.city.findFirst({
-        where: { slug: data.citySlug, ...ACTIVE_CATALOG },
-      });
-      cityId = city?.id ?? null;
-    }
     if (data.categorySlug) {
       const cat = await this.prisma.jobCategory.findFirst({
         where: { slug: data.categorySlug, ...ACTIVE_CATALOG },
@@ -97,6 +95,7 @@ export class AlertsService {
       where: {
         userId: user.id,
         cityId,
+        countryId,
         categoryId,
         query: data.query?.trim() || null,
       },
@@ -124,6 +123,7 @@ export class AlertsService {
         name: data.name.trim(),
         query: data.query?.trim() || null,
         cityId,
+        countryId,
         categoryId,
         frequency: data.frequency ?? 'DAILY',
         ...channels,
@@ -143,14 +143,14 @@ export class AlertsService {
 
     return this.prisma.jobAlert.findUnique({
       where: { id: alert.id },
-      include: { city: true, category: true, skills: { include: { skill: true } } },
+      include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
     });
   }
 
   async list(userId: string) {
     return this.prisma.jobAlert.findMany({
       where: { userId },
-      include: { city: true, category: true, skills: { include: { skill: true } } },
+      include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -169,6 +169,7 @@ export class AlertsService {
       name?: string;
       query?: string | null;
       citySlug?: string | null;
+      countryId?: string | null;
       categorySlug?: string | null;
       skillSlugs?: string[];
       frequency?: 'DAILY' | 'WEEKLY';
@@ -181,17 +182,8 @@ export class AlertsService {
     const alert = await this.prisma.jobAlert.findFirst({ where: { id, userId } });
     if (!alert) throw new NotFoundException();
 
-    let cityId: string | null | undefined = undefined;
+    const { cityId, countryId } = await resolveJobLocation(this.prisma, data, alert);
     let categoryId: string | null | undefined = undefined;
-    if (data.citySlug !== undefined) {
-      if (!data.citySlug) cityId = null;
-      else {
-        const city = await this.prisma.city.findFirst({
-          where: { slug: data.citySlug, ...ACTIVE_CATALOG },
-        });
-        cityId = city?.id ?? null;
-      }
-    }
     if (data.categorySlug !== undefined) {
       if (!data.categorySlug) categoryId = null;
       else {
@@ -218,6 +210,7 @@ export class AlertsService {
         name: data.name?.trim(),
         query: data.query === undefined ? undefined : data.query?.trim() || null,
         cityId,
+        countryId,
         categoryId,
         frequency: data.frequency,
         isActive: data.isActive,
@@ -241,7 +234,7 @@ export class AlertsService {
 
     return this.prisma.jobAlert.findUnique({
       where: { id },
-      include: { city: true, category: true, skills: { include: { skill: true } } },
+      include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
     });
   }
 
@@ -250,6 +243,7 @@ export class AlertsService {
       where: { isActive: true },
       include: {
         user: true,
+        country: true,
         city: true,
         category: true,
         skills: { include: { skill: true } },
@@ -270,18 +264,15 @@ export class AlertsService {
       }
 
       const and: Record<string, unknown>[] = [
-        { status: 'PUBLISHED' },
+        liveJobWhere(),
+        { company: { isBanned: false, anonymizedAt: null } },
         { publishedAt: { gte: since } },
       ];
       if (alert.cityId) and.push({ cityId: alert.cityId });
+      if (alert.countryId) and.push({ OR: [{ countryId: alert.countryId }, { countryId: null, city: { province: { countryId: alert.countryId } } }] });
       if (alert.categoryId) and.push({ categoryId: alert.categoryId });
       if (alert.query) {
-        and.push({
-          OR: [
-            { title: { contains: alert.query, mode: 'insensitive' } },
-            { description: { contains: alert.query, mode: 'insensitive' } },
-          ],
-        });
+        and.push(jobKeywordOr(alert.query));
       }
       if (alert.skills.length) {
         and.push({
@@ -298,6 +289,7 @@ export class AlertsService {
         include: {
           company: { select: { name: true } },
           city: true,
+          country: true,
         },
       });
 
@@ -308,7 +300,7 @@ export class AlertsService {
         id: j.id,
         title: j.title,
         companyName: displayCompanyName(j, j.company.name, locale),
-        cityName: j.city?.name ?? null,
+        cityName: j.city?.name ?? j.country?.name ?? null,
       }));
       const decisions = decideAlertChannels(
         {

@@ -3,7 +3,7 @@ type Salary = { salaryMin?: number | null; salaryMax?: number | null; currency?:
 export function formatJobSalary(job: Salary, locale: string, t: (key: string) => string) {
   const min = job.salaryMin, max = job.salaryMax;
   if (min == null && max == null) return t('job.negotiable');
-  const fmt = new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : locale === 'uz' ? 'uz-UZ' : 'en-US', { maximumFractionDigits: 1 });
+  const fmt = new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : locale === 'uz' ? 'uz-UZ' : locale === 'id' ? 'id-ID' : 'en-US', { maximumFractionDigits: 1 });
   // Compact millions without hiding the actual currency or pay period.
   const unit = (min ?? max ?? 0) >= 1_000_000 ? 1_000_000 : 1;
   const number = (value: number) => fmt.format(value / unit);

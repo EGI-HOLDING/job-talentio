@@ -101,31 +101,6 @@ export const employee = {
     en: 'Primary resume updated',
   },
 
-  // Overview
-  'emp.profileStrength': {
-    uz: 'Profil to‘liqligi',
-    ru: 'Заполненность профиля',
-    en: 'Profile strength',
-  },
-  'emp.profileStrengthHint': {
-    uz: 'Bu foiz profilingiz qanchalik to‘liq ekanini ko‘rsatadi, chop etilgan ishlarga mosligini emas.',
-    ru: 'Этот процент показывает заполненность профиля, а не совпадение с опубликованными вакансиями.',
-    en: 'This percent is how complete your profile is, not how well you match published jobs.',
-  },
-  'emp.quickStats': { uz: 'Qisqacha statistika', ru: 'Краткая статистика', en: 'Quick stats' },
-  'emp.statApplications': { uz: 'ta ariza', ru: 'откликов', en: 'applications' },
-  'emp.statRecommendedJobs': {
-    uz: 'ta tavsiya etilgan ish',
-    ru: 'рекомендованных вакансий',
-    en: 'recommended jobs',
-  },
-  'emp.statSkills': { uz: 'ta ko‘nikma', ru: 'навыков', en: 'skills' },
-  'emp.upcomingInterviews': {
-    uz: 'Yaqin suhbatlar',
-    ru: 'Ближайшие собеседования',
-    en: 'Upcoming interviews',
-  },
-
   // Profile completeness checklist
   'emp.checkAddEmail': {
     uz: 'Email qo‘shing',
@@ -147,6 +122,7 @@ export const employee = {
     ru: 'Добавьте заголовок',
     en: 'Add a headline',
   },
+  'emp.checkSetCountry': { uz: 'Yashash mamlakatingizni tanlang', ru: 'Укажите страну проживания', en: 'Set your country of residence' },
   'emp.checkSetCity': { uz: 'Shaharni tanlang', ru: 'Укажите город', en: 'Set your city' },
   'emp.checkAddSkills': {
     uz: 'Kamida 3 ta ko‘nikma qo‘shing',
@@ -292,9 +268,9 @@ export const employee = {
     en: 'Desired position',
   },
   'emp.desiredSalary': {
-    uz: 'Istalgan maosh (UZS)',
-    ru: 'Желаемая зарплата (UZS)',
-    en: 'Desired salary (UZS)',
+    uz: 'Istalgan maosh',
+    ru: 'Желаемая зарплата',
+    en: 'Desired salary',
   },
   'emp.desiredSalaryPlaceholder': {
     uz: 'masalan 12.000.000',
@@ -302,9 +278,9 @@ export const employee = {
     en: 'e.g. 12.000.000',
   },
   'emp.desiredSalaryAria': {
-    uz: 'Istalgan maosh, UZS',
-    ru: 'Желаемая зарплата в UZS',
-    en: 'Desired salary in UZS',
+    uz: 'Istalgan maosh',
+    ru: 'Желаемая зарплата',
+    en: 'Desired salary',
   },
   'emp.saveBasics': {
     uz: 'Asosiy ma’lumotlarni saqlash',

@@ -2,8 +2,9 @@
 export function formatJobLocation(job: {
   workMode?: string | null;
   city?: { name: string } | null;
+  country?: { name: string } | null;
 }): string {
-  const city = job.city?.name?.trim();
+  const city = job.city?.name?.trim() || job.country?.name?.trim();
   switch (job.workMode) {
     case 'REMOTE':
       // Optional city = hiring region / timezone hub, not an office address

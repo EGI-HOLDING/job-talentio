@@ -1,0 +1,10 @@
+const fs=require('node:fs'),path=require('node:path'),{execFileSync,spawn}=require('node:child_process');
+const h=require('./lib/hr-demo-env.cjs'),c=h.config({realAuth:true});h.assertDemoUrl(c.databaseUrl);
+const target=process.argv[3]||'web';if(!['web','admin'].includes(target))throw Error('Unknown local app');const port=target==='web'?'3000':'3001';
+const build=process.argv[2]||'.next-commerce';if(!/^\.next-[a-z0-9-]+$/.test(build)||!fs.existsSync(path.join(h.repo,'apps',target,build,'BUILD_ID')))throw Error('A completed local Next build is required');
+const file=path.join(h.directory,'processes.json'),state=JSON.parse(fs.readFileSync(file)),record=state.find(item=>item.name===target);
+if(!record||!Number.isSafeInteger(record.pid))throw Error('Missing web process record');
+const script=`$taskWeb=Get-CimInstance Win32_Process -Filter 'ProcessId=${record.pid}';if($taskWeb){if($taskWeb.CommandLine -notlike '*job-talentio*next*'){throw 'Refusing an unrelated process'};Stop-Process -Id ${record.pid}}`;
+execFileSync('powershell.exe',['-NoProfile','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{windowsHide:true,stdio:'inherit'});
+const log=fs.openSync(path.join(h.directory,target+'.log'),'a'),web=spawn(process.execPath,[require.resolve('next/dist/bin/next',{paths:[path.join(h.repo,'apps',target)]}),'start','-H','127.0.0.1','-p',port],{cwd:path.join(h.repo,'apps',target),env:{...c.env,NODE_ENV:'production',NEXT_BUILD_DIR:build},detached:true,windowsHide:true,stdio:['ignore',log,log]});web.unref();record.pid=web.pid;
+fs.writeFileSync(file,JSON.stringify(state,null,2));console.log('Local '+target+' started',web.pid);
