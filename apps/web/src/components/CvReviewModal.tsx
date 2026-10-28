@@ -626,7 +626,7 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
                             onChange={(e) => patchLang(i, { level: e.target.value })}
                             aria-label={t('emp.levelFor').replace('{name}', x.name || t('languages'))}
                           >
-                            <option value="">—</option>
+                            <option value="">-</option>
                             {LANG_LEVELS.map((l) => (
                               <option key={l} value={l}>
                                 {l}

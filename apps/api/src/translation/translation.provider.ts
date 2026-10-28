@@ -9,8 +9,7 @@ export type TranslateRequest = {
 
 /**
  * Machine translation is a fallback for content nobody has translated by hand.
- * Providers are swapped through TRANSLATION_PROVIDER without touching callers,
- * like the CV parse providers.
+ * Providers are swapped through TRANSLATION_PROVIDER without touching callers.
  */
 export interface TranslationProvider {
   /** Provider key, surfaced in logs and health output. */

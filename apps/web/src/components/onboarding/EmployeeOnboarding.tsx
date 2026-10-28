@@ -572,8 +572,8 @@ export function EmployeeOnboarding() {
                         </div>
                       </div>
                       <p>
-                        {exp.companyName} · {exp.startDate} –{" "}
-                        {exp.isCurrent ? t("current") : exp.endDate || "—"}
+                        {exp.companyName} | {exp.startDate} -{" "}
+                        {exp.isCurrent ? t("current") : exp.endDate || "-"}
                       </p>
                     </article>
                   ))}

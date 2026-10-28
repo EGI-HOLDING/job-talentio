@@ -1,5 +1,5 @@
 export const authProviders = {
-  'authProvider.loading': { en: 'Loading sign-in options…', ru: 'Загружаем способы входа…', uz: 'Kirish usullari yuklanmoqda…', id: 'Memuat pilihan login…' },
+  'authProvider.loading': { en: 'Loading sign-in options...', ru: 'Загружаем способы входа...', uz: 'Kirish usullari yuklanmoqda...', id: 'Memuat pilihan login...' },
   'authProvider.unavailable': { en: 'This sign-in method is not enabled yet. Please use email and password.', ru: 'Этот способ входа пока не включён. Используйте email и пароль.', uz: 'Bu kirish usuli hali yoqilmagan. Email va paroldan foydalaning.', id: 'Metode login ini belum diaktifkan. Gunakan email dan password.' },
   'authProvider.loadFailed': { en: 'Could not load this sign-in method. Check your connection or browser blockers, then try again.', ru: 'Не удалось загрузить способ входа. Проверьте соединение и блокировщики браузера, затем повторите.', uz: 'Kirish usulini yuklab bo‘lmadi. Internet va brauzer bloklagichlarini tekshirib, qayta urinib ko‘ring.', id: 'Metode login gagal dimuat. Periksa koneksi atau pemblokir di browser, lalu coba lagi.' },
   'authProvider.timeout': { en: 'Sign-in timed out. Please try again.', ru: 'Время ожидания входа истекло. Попробуйте ещё раз.', uz: 'Kirish vaqti tugadi. Qayta urinib ko‘ring.', id: 'Waktu login habis. Silakan coba lagi.' },

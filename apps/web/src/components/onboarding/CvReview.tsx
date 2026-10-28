@@ -117,8 +117,8 @@ export function CvReview({
             <p>{exp.companyName || t('company')}</p>
             {!completeExperience(exp) && <p className={s.muted}>{t("missingExperience")}</p>}
             <p>
-              {exp.startDate || "—"} –{" "}
-              {exp.isCurrent ? t("current") : exp.endDate || "—"}
+              {exp.startDate || "-"} -{" "}
+              {exp.isCurrent ? t("current") : exp.endDate || "-"}
             </p>
             {exp.description && <p>{exp.description}</p>}
             <label className={s.check}>
@@ -255,7 +255,7 @@ export function CvReview({
                 )
               }
             >
-              <option value="">—</option>
+              <option value="">-</option>
               {["HIGH_SCHOOL", "VOCATIONAL", "BACHELOR", "MASTER", "PHD"].map(
                 (v) => (
                   <option key={v} value={v}>
@@ -330,7 +330,7 @@ export function CvReview({
                   )
                 }
               >
-                <option value="">—</option>
+                <option value="">-</option>
                 {["A1", "A2", "B1", "B2", "C1", "C2", "NATIVE"].map((v) => (
                   <option key={v}>{v}</option>
                 ))}

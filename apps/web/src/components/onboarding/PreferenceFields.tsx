@@ -200,7 +200,7 @@ export function SalaryFields({
           >
             {currencies.map((code) => (
               <option key={code} value={code}>
-                {code} — {currencyNames.of(code)}
+                {code} - {currencyNames.of(code)}
               </option>
             ))}
           </select>

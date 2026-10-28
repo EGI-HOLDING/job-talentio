@@ -60,7 +60,7 @@ export function LinkedInPostStatus({post,onReload,onRetry}:{post:LinkedInPost;on
       <p>{t('li.unknownHint')}</p>
       {waiting && <p>{t('li.reviewAfter')}: {date(post.reviewAfter!)}</p>}
       <label className={s.checkLabel}><input type="checkbox" checked={checked} disabled={busy||waiting} onChange={event=>setChecked(event.target.checked)}/>{t('li.feedChecked')}</label>
-      <label>{t('li.postUrn')} ({t('optional')})<input value={urn} onChange={event=>setUrn(event.target.value)} placeholder="urn:li:share:…" maxLength={100} disabled={busy||waiting}/><small>{t('li.postUrnHint')}</small></label>
+      <label>{t('li.postUrn')} ({t('optional')})<input value={urn} onChange={event=>setUrn(event.target.value)} placeholder="urn:li:share:..." maxLength={100} disabled={busy||waiting}/><small>{t('li.postUrnHint')}</small></label>
       <div className={s.actionRow}><button type="button" className={s.secondaryButton} disabled={busy||waiting||!checked||Boolean(urn.trim()&&!/^urn:li:(share|ugcPost):\d{1,30}$/.test(urn.trim()))} onClick={()=>void action('reconcile','PUBLISHED')}>{t('li.confirmPublished')}</button><button type="button" className={s.secondaryButton} disabled={busy||waiting||!checked} onClick={()=>void action('reconcile','NOT_PUBLISHED')}>{t('li.confirmNotPublished')}</button></div>
     </div>}
     {error && <p role="alert" className={s.error}>{error}</p>}

@@ -132,9 +132,11 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 
 | Variable | Expected | Why |
 |----------|----------|-----|
-| `CV_PARSE_PROVIDER` | `llm` | CV upload is structured by OpenAI with local fallback; `local` only extracts contact details and one-line experiences |
-| `OPENAI_API_KEY`, `OPENAI_MODEL` | set, `gpt-4o-mini` | CV parse and machine translation |
-| `TRANSLATION_PROVIDER` | `openai` | Translate button on jobs, companies, profiles, news; `TRANSLATION_MONTHLY_CHAR_BUDGET` caps spend |
+| `CV_PARSE_OCR` | `true` | CV parsing uses local extraction and Tesseract OCR only; no GPT/API provider is used |
+| `CV_PARSE_OCR_LANGS` | `eng+rus` (adjust for installed Tesseract language data) | Languages used for scanned PDFs |
+| `CV_PARSE_PROVIDER` | unset or `local` | Legacy provider selection is ignored; it cannot enable a paid parser |
+| `TRANSLATION_PROVIDER` | `none` by default | Machine translation is separate from CV parsing; choose a paid provider only when intentionally enabling translation |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | unset unless OpenAI translation is explicitly enabled | These settings are never read by CV parsing |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | set (`JobTalentioStagingBot`) | Telegram sign-in, account link, alerts, chat relay; web needs `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` with the same username |
 | `TELEGRAM_CHANNEL_ID` | `@channel` or `-100...` id, bot is channel admin | Every first publish posts a card with a deep link (`utm_source=telegram`); `/jobs` in the bot lists matches. Unset = no channel posts |
 | `SMS_PROVIDER`, `ESKIZ_EMAIL`, `ESKIZ_PASSWORD` | optional (`eskiz`) | SMS one-time codes for phone sign-in. Without them the phone route still works through the Telegram bot's contact share (free, verified by Telegram) |
@@ -167,13 +169,11 @@ railway ssh --service api-stage-job-talentio -- node -e "require('./dist/main')"
 
 The index self-heals on boot when it is empty, so a plain redeploy is usually enough.
 
-**OpenAI (optional, costs money):** one key powers LLM CV parse and/or machine translation.
-
-- `OPENAI_API_KEY`: set in Railway only; never commit.
-- `OPENAI_MODEL`: default `gpt-4o-mini`.
-- `CV_PARSE_PROVIDER=llm`: local PDF/DOCX(/OCR) text extract → OpenAI JSON structure → local heuristic fallback on failure. Never sends PDF/image bytes to OpenAI.
+**CV parsing (free, local only):** PDF/DOCX/DOC extraction, local heuristics, and optional Tesseract.js OCR run inside the API service. CV parsing never calls GPT, OpenAI, or another paid API. `CV_PARSE_PROVIDER` is a legacy setting and cannot switch the parser; remove stale `llm` values from Railway to avoid confusion. For scanned PDFs, Tesseract.js downloads language data from the public jsDelivr CDN on first use and caches it under the service temp directory, so the API needs outbound HTTPS access. Set `CV_PARSE_OCR=true` and choose available languages with `CV_PARSE_OCR_LANGS`.
 
 **Machine translation (optional, costs money):** off by default (`TRANSLATION_PROVIDER=none`). When enabled, a signed-in reader can translate a posting that has no human version in their language; the result is cached as a machine row in `JobPostTranslation`, so each text is paid for once and later readers get it free. A human translation always wins and is never overwritten, and cached machine output expires when the source text changes (`sourceHash`).
+
+- `OPENAI_API_KEY` and `OPENAI_MODEL` are used only when OpenAI machine translation is explicitly configured; they are not part of CV parsing.
 
 - `TRANSLATION_PROVIDER`: `none` | `openai` | `google` | `deepl`. `openai` and `google` support Uzbek; `deepl` is ru/en only.
 - `TRANSLATION_API_KEY`: required for `google`/`deepl`. For `openai`, use `OPENAI_API_KEY` (`TRANSLATION_API_KEY` accepted as fallback).

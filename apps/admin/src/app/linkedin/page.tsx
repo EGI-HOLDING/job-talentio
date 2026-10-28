@@ -23,10 +23,10 @@ export default function LinkedInOperationsPage(){
   },[revision]);
   const pressure=data?.operations.endpoints.filter(row=>row.used!==null&&row.used/row.appLimit>=.75) || [];
   return <>
-    <PageHeader title="LinkedIn operations" subtitle="Personal HR sharing · aggregate health and internal daily request limits"/>
+    <PageHeader title="LinkedIn operations" subtitle="Personal HR sharing | aggregate health and internal daily request limits"/>
     <div className="content">
-      <div style={{display:'flex',gap:16,alignItems:'center',flexWrap:'wrap',marginBottom:20}}><button type="button" className="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}>Refresh</button>{data&&<span className="muted">Updated {when(data.generatedAt)} · auto refresh every 30 seconds</span>}</div>
-      {loading&&!data&&<p role="status">Loading LinkedIn metrics…</p>}
+      <div style={{display:'flex',gap:16,alignItems:'center',flexWrap:'wrap',marginBottom:20}}><button type="button" className="secondary" disabled={loading} onClick={()=>setRevision(value=>value+1)}>Refresh</button>{data&&<span className="muted">Updated {when(data.generatedAt)} | auto refresh every 30 seconds</span>}</div>
+      {loading&&!data&&<p role="status">Loading LinkedIn metrics...</p>}
       {error&&<Alert tone="error">{error}{data?' The figures below are from the last successful refresh.':''}</Alert>}
       {data&&<>
         <Card title="Release and delivery status"><div style={{display:'flex',gap:12,flexWrap:'wrap'}}><Badge tone={data.enabled?'ok':'warn'}>OAuth {data.enabled?'enabled':'disabled'}</Badge><Badge tone={data.sharingEnabled?'ok':'warn'}>Sharing {data.sharingEnabled?'enabled':'paused'}</Badge><Badge>API {data.apiVersion}</Badge><Badge tone={data.operations.available?'ok':'warn'}>Queue telemetry {data.operations.available?'available':'unavailable'}</Badge></div><p className="muted">Activation requires a verified real LinkedIn canary. This dashboard does not prove provider access. It exposes no HR credentials or personal feed contents.</p></Card>

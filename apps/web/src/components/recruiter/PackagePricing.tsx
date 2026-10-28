@@ -20,15 +20,15 @@ export function PackagePricing({catalog: supplied, onChoose, current, preferred,
   }, [supplied, retry]);
   const label = (key: string) => t('commerce.' + key);
   const check = <span className={s.check} aria-label={label('included')}>✓</span>;
-  const days = (n: number) => n ? label('days').replace('{n}', String(n)) : '—';
+  const days = (n: number) => n ? label('days').replace('{n}', String(n)) : '-';
   const recommendation = (p: JobPackage) => <>{label(p.code === 'FREE' ? 'basic' : p.code === 'STANDARD' ? 'aiRecommendations' : 'advancedAiRecommendations')}{p.code !== 'FREE' && <small className={s.planned}>{label('planned')}</small>}</>;
   const rows: Array<{key: string; value: (p: JobPackage) => React.ReactNode}> = [
     {key: 'essentials', value: () => check}, {key: 'candidateAccess', value: () => check}, {key: 'filters', value: () => check},
     {key: 'recommendations', value: recommendation}, {key: 'visibility', value: p => label(p.code === 'FREE' ? 'normal' : p.code === 'STANDARD' ? 'increased' : 'priority')},
-    {key: 'stats', value: () => check}, {key: 'conversions', value: p => p.settings.conversions ? check : '—'},
+    {key: 'stats', value: () => check}, {key: 'conversions', value: p => p.settings.conversions ? check : '-'},
     {key: 'boost', value: p => days(p.settings.boostDays)}, {key: 'featured', value: p => days(p.settings.featuredDays)},
-    {key: 'reports', value: p => p.settings.reports ? check : '—'}, {key: 'support', value: p => p.settings.prioritySupport ? check : '—'},
-    {key: 'linkedin', value: p => p.linkedin ? check : '—'}, {key: 'instagram', value: p => p.instagram === 'COMING_SOON' ? label('instagram') : '—'},
+    {key: 'reports', value: p => p.settings.reports ? check : '-'}, {key: 'support', value: p => p.settings.prioritySupport ? check : '-'},
+    {key: 'linkedin', value: p => p.linkedin ? check : '-'}, {key: 'instagram', value: p => p.instagram === 'COMING_SOON' ? label('instagram') : '-'},
   ];
   if (!catalog) return error ? <div className={s.error} role="alert">{error}<br/><button className={s.text} onClick={() => {setError(''); setRetry(n => n + 1);}}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>;
   return <>
@@ -42,10 +42,10 @@ export function PackagePricing({catalog: supplied, onChoose, current, preferred,
         href={'/register?' + new URLSearchParams({role: 'RECRUITER', next: withPackagePreference('/dashboard/recruiter?tab=jobs', p.code)})}
         onClick={event => {if (getSession()?.user.role === 'RECRUITER') {event.preventDefault(); router.push(withPackagePreference('/dashboard/recruiter?tab=jobs', p.code));}}}>{label(p.code === 'FREE' ? 'continueFree' : 'choose')} →</Link>}
       <ul className={s.features}>
-        <li>{check}<span>{label('essentials')}</span></li><li>{p.code === 'FREE' ? check : <span className={s.check} aria-hidden="true">◷</span>}<span>{label('recommendations')} · {recommendation(p)}</span></li><li>{check}<span>{label('stats')}</span></li>
+        <li>{check}<span>{label('essentials')}</span></li><li>{p.code === 'FREE' ? check : <span className={s.check} aria-hidden="true">◷</span>}<span>{label('recommendations')} | {recommendation(p)}</span></li><li>{check}<span>{label('stats')}</span></li>
         {p.settings.conversions && <li>{check}<span>{label('conversions')}</span></li>}
-        {p.settings.boostDays > 0 && <li>{check}<span>{label('boost')} · {days(p.settings.boostDays)}</span></li>}
-        {p.settings.featuredDays > 0 && <li>{check}<span>{label('featured')} · {days(p.settings.featuredDays)}</span></li>}
+        {p.settings.boostDays > 0 && <li>{check}<span>{label('boost')} | {days(p.settings.boostDays)}</span></li>}
+        {p.settings.featuredDays > 0 && <li>{check}<span>{label('featured')} | {days(p.settings.featuredDays)}</span></li>}
         {p.settings.reports && <li>{check}<span>{label('reports')}</span></li>}
         {p.settings.prioritySupport && <li>{check}<span>{label('support')}</span></li>}
         {p.linkedin && <li>{check}<span>{label('linkedin')}</span></li>}
@@ -64,5 +64,5 @@ export function PackagePricing({catalog: supplied, onChoose, current, preferred,
 
 export function PublicPricing() {
   const {t} = useI18n();
-  return <div className={s.page}><header className={s.intro}><span className={s.eyebrow}>Talentio · {t('commerce.pricing')}</span><h1>{t('commerce.title')}</h1><p>{t('commerce.subtitle')}</p></header><PackagePricing/></div>;
+  return <div className={s.page}><header className={s.intro}><span className={s.eyebrow}>Talentio | {t('commerce.pricing')}</span><h1>{t('commerce.title')}</h1><p>{t('commerce.subtitle')}</p></header><PackagePricing/></div>;
 }
