@@ -101,3 +101,24 @@ Production DB migrate: `pnpm db:migrate:deploy` (also runs on API container star
 ## Core feature access
 
 Employer features have no subscription or payment requirements. Contact privacy, company membership, moderation and anti-abuse limits remain enforced. Historical subscription/payment tables are retained for data preservation only; billing, upgrade and boost endpoints are unavailable.
+
+## Exact staging catalog synchronization
+
+`apps/api/src/scripts/catalog-sync.ts` exports the current local `talentio_hr_demo`
+catalogs, computes a read-only staging plan, and applies it atomically. It covers
+all 15 catalog/alias tables, including IDs, translations, metadata and timestamps.
+Application records remain; unmatched optional references and lookup associations
+are detached. Ambiguous mappings and conflicting association payloads block apply.
+
+- `export --file <snapshot>` requires local Postgres on port 5434.
+- `dry-run --file <snapshot> --report <plan>` requires the approved Railway staging environment.
+- `apply --file <snapshot> --expected-plan <hash> --backup-receipt <receipt> --report <result>` additionally requires a matching, restore-verified full backup and maintenance.
+- `CATALOG_SYNC_MAINTENANCE=true` starts only the health endpoint; application routes return 503 and no application providers or workers start.
+- `CATALOG_SOURCE_MODE=database` prevents automatic job-title cleanup and showcase seeding from changing imported catalogs on restart. Keep it set after synchronization.
+
+Operational SSH transport, full backup/reindex verification, and isolated PostgreSQL
+18 restore rehearsal live in `scripts/catalog-sync-{railway,ops,rehearse}.cjs`.
+Use a private run directory below `.catalog-sync-private/`; it is excluded from Git
+and Docker builds. Keep snapshots and full database backups private. CI exercises
+maintenance/target guards; `test:catalog-sync:local <snapshot>` exercises the
+transaction against a disposable copy of the local demo database.

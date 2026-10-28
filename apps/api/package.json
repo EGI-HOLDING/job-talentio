@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "test:linkedin": "tsx src/linkedin/linkedin.smoke.ts",
+    "test:catalog-sync": "tsx src/catalog-sync/runtime.smoke.ts",
+    "test:catalog-sync:local": "tsx src/catalog-sync/catalog-sync.integration.smoke.ts",
     "test:linkedin:local": "tsx src/linkedin/linkedin.integration.smoke.ts",
     "test:linkedin:http": "tsx ../../scripts/linkedin-http.smoke.ts",
     "test:auth-providers": "tsx src/telegram/telegram-local-polling.smoke.ts",
