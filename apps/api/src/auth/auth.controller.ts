@@ -57,7 +57,7 @@ export class AuthController {
   @Post('phone/telegram/start')
   phoneTelegramStart(@Body() body: unknown) {
     const data = parseDto(phoneLoginStartSchema, body ?? {});
-    return this.phoneAuth.startTelegramLogin(data.locale);
+    return this.phoneAuth.startTelegramLogin(data.locale, data.role);
   }
 
   @Get('phone/telegram/status')
@@ -75,7 +75,7 @@ export class AuthController {
   @Post('phone/verify')
   phoneVerify(@Body() body: unknown) {
     const data = parseDto(phoneOtpVerifySchema, body);
-    return this.phoneAuth.verifyOtp(data.phone, data.code, data.locale);
+    return this.phoneAuth.verifyOtp(data.phone, data.code, data.locale, data.role);
   }
 
   @Post('register')
@@ -87,7 +87,6 @@ export class AuthController {
       fullName: data.fullName,
       role: data.role,
       locale: data.locale,
-      companyName: data.companyName,
       inviteToken: data.inviteToken,
     });
   }

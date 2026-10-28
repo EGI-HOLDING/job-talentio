@@ -15,20 +15,7 @@ export const registerSchema = z
     acceptTerms: z
       .boolean()
       .refine((v) => v === true, { message: 'You must accept the terms to create an account' }),
-    companyName: z.string().trim().min(2).max(160).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.role === 'RECRUITER' && !data.inviteToken) {
-      const name = data.companyName?.trim() ?? '';
-      if (name.length < 2) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['companyName'],
-          message: 'Company name is required for recruiter accounts',
-        });
-      }
-    }
   });
 
 export const loginSchema = z.object({
@@ -38,24 +25,14 @@ export const loginSchema = z.object({
   inviteToken: z.string().trim().min(20).max(200).optional(),
 });
 
-/** Google Identity Services ID-token sign-in. role/companyName only needed for first sign-in. */
+/** Google Identity Services ID-token sign-in. role is used only when creating an account on first sign-in. */
 export const googleOAuthSchema = z
   .object({
     idToken: z.string().min(20),
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
-    companyName: z.string().trim().min(2).max(160).optional(),
     locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.role === 'RECRUITER' && !data.inviteToken && (data.companyName?.trim() ?? '').length < 2) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['companyName'],
-        message: 'Company name is required for recruiter accounts',
-      });
-    }
   });
 
 /** Telegram Login Widget payload. Email is optional except when accepting a company invite. */
@@ -74,7 +51,6 @@ export const telegramOAuthSchema = z
     ),
     role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
     expectedRole: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
-    companyName: z.string().trim().min(2).max(160).optional(),
     locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
     inviteToken: z.string().trim().min(20).max(200).optional(),
   })
@@ -83,13 +59,6 @@ export const telegramOAuthSchema = z
     // stored email. A completed signup still needs the invitation recipient.
     if (data.inviteToken && data.role && !data.email) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'Email is required to accept a company invitation' });
-    }
-    if (data.role === 'RECRUITER' && !data.inviteToken && (data.companyName?.trim() ?? '').length < 2) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['companyName'],
-        message: 'Company name is required for recruiter accounts',
-      });
     }
   });
 
@@ -118,6 +87,7 @@ export const logoutSchema = z.object({
 
 /** Phone sign-in: Telegram contact share (polling token) and SMS codes. */
 export const phoneLoginStartSchema = z.object({
+  role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
   locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),
 });
 
@@ -130,6 +100,7 @@ export const phoneOtpRequestSchema = z.object({
 });
 
 export const phoneOtpVerifySchema = z.object({
+  role: z.enum(['EMPLOYEE', 'RECRUITER']).optional(),
   phone: z.string().trim().min(7).max(24),
   code: z.string().trim().regex(/^\d{4,8}$/),
   locale: z.enum(['uz', 'ru', 'en', 'id']).optional(),

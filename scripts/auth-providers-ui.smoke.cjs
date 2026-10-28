@@ -7,7 +7,7 @@ function setup(file, name, api, extra = {}) {
   const window = { location: { href: '/id/login' }, setTimeout: () => ++sequence, clearTimeout() {}, open: () => null, ...extra.window };
   const dependencies = {
     '@/lib/api': { api, saveSession: extra.saveSession || (() => {}), ADMIN_URL: '/admin' },
-    '@/lib/authReturn': { authDestination: value => value, roleMismatchKey: (actual, expected) => actual === expected ? null : 'mismatch', authRoleErrorKey: () => null },
+    '@/lib/authReturn': { authDestination: extra.authDestination || (value => value), roleMismatchKey: (actual, expected) => actual === expected ? null : 'mismatch', authRoleErrorKey: () => null },
     '@/lib/navigation': { localeHref: value => '/id' + value },
     '@/lib/i18n': { useI18n: () => ({ t: value => value, locale: 'id' }) },
     '@/components/ui/Field': { FormAlert: 'alert', FormField: 'field' },
@@ -38,6 +38,20 @@ async function main() {
   assert.equal(initialized.client_id, 'configured-at-runtime'); assert.equal(rendered.width, 360); assert.equal(rendered.locale, 'id');
   assert.equal(nodes(googleTree, node => node.type === 'button' && /googleContinue/.test(text(node))).length, 0, 'ready Google uses its native rendered button');
   initialized.callback({ credential: 'signed-fixture' }); await tick(); await google.component.render(); assert.equal(saved.accessToken, 'fixture'); assert.equal(google.window.location.href, '/id/jobs?mode=for-you'); google.component.unmount();
+  for (const status of ['IN_PROGRESS', 'COMPLETE', 'NOT_REQUIRED']) {
+    let callback, current;
+    const hr = setup('GoogleSignIn.tsx', 'GoogleSignIn', async (route, options) => {
+      if (route === '/auth/google/config') return {available: true, clientId: 'hr-client'};
+      const payload = JSON.parse(options.body); assert.equal(payload.role, 'RECRUITER'); assert.equal(payload.companyName, undefined);
+      return {accessToken: 'hr-session', user: {role: 'RECRUITER', recruiterOnboarding: {status}}};
+    }, {window: {google: {accounts: {id: {initialize: config => {callback = config.callback;}, renderButton() {}}}}},
+      saveSession: value => {current = value;}, authDestination: value => current.user.recruiterOnboarding.status === 'IN_PROGRESS' ? '/onboarding/recruiter' : value});
+    await hr.component.render({accountRole: 'RECRUITER'}); callback({credential: 'new-or-existing-google'}); await tick();
+    const view = await hr.component.render();
+    assert.doesNotMatch(text(view), /companyName|authRole.employerRegister|googleChooseRole/);
+    assert.equal(hr.window.location.href, status === 'IN_PROGRESS' ? '/id/onboarding/recruiter' : '/id/dashboard/recruiter?tab=jobs');
+    hr.component.unmount();
+  }
   let popupOpen = false, apiStarted = false, statusResolve, savedCount = 0, statusRequests = 0;
   const popup = { opener: 'caller', closed: false, location: { replace(url) { this.url = url; } }, close() { this.closed = true; } };
   const phone = setup('PhoneSignIn.tsx', 'PhoneSignIn', async route => {

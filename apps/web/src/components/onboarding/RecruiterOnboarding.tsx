@@ -25,7 +25,7 @@ export function RecruiterOnboarding() {
   const autosave = useRef<ReturnType<typeof setTimeout>|null>(null), queue = useRef<Promise<unknown>>(Promise.resolve());
   const lastDraft = useRef(''), alive = useRef(true);
   const membership = progress?.memberships.find(row => row.companyId === companyId), company = membership?.company;
-  const canManage = ['OWNER', 'ADMIN'].includes(membership?.role);
+  const canManage = !companyId || ['OWNER', 'ADMIN'].includes(membership?.role);
   const preferredPackage = packagePreference(params.toString()) || progress?.preferredPackage || undefined;
   const returnTo = withPackagePreference(accountReturnHref('RECRUITER', params.get('next')) || employerWorkspaceHref('jobs', companyId), preferredPackage);
   useEffect(() => {alive.current = true; return () => {alive.current = false; if (autosave.current) clearTimeout(autosave.current);};}, []);
@@ -40,22 +40,21 @@ export function RecruiterOnboarding() {
       if (abort.signal.aborted) return;
       if (state.status !== 'IN_PROGRESS') {router.replace(accountReturnHref('RECRUITER', params.get('next')) || '/dashboard/recruiter?tab=jobs'); return;}
       const chosen = state.memberships.find(row => row.companyId === state.companyId) || state.memberships[0];
-      if (!chosen) throw new Error(t('rw.noCompanyHint'));
       const preference = packagePreference(params.toString());
       if (preference && preference !== state.preferredPackage) {
-        await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen.companyId, step: state.step, preferredPackage: preference})});
+        await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen?.companyId || null, step: state.step, preferredPackage: preference})});
         state.preferredPackage = preference;
       }
       if (abort.signal.aborted) return;
-      const initial = state.companyId === chosen.companyId && state.companyDraft ? state.companyDraft : draft(chosen.company);
-      setProgress(state); setCompanyId(chosen.companyId); setValues(initial); lastDraft.current = JSON.stringify([chosen.companyId, initial]);
+      const initial = state.companyId === (chosen?.companyId || null) && state.companyDraft ? state.companyDraft : draft(chosen?.company);
+      setProgress(state); setCompanyId(chosen?.companyId || ''); setValues(initial); lastDraft.current = JSON.stringify([chosen?.companyId || '', initial]);
       setIndustries(Array.isArray(groups) ? groups : groups.groups || []); setMeta({cities, skills, categories, benefits, languages});
       if (state.jobId) {
         const [storedJob, storedBenefit] = await Promise.all([api<any>('/jobs/' + state.jobId, {signal: abort.signal}), api<any>('/benefits/jobs/' + state.jobId, {signal: abort.signal})]);
         if (!abort.signal.aborted) {
           setJob(storedJob); setBenefit(storedBenefit);
           if (storedBenefit.selected && state.step === 2) {
-            await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen.companyId, jobId: state.jobId, step: 3})});
+            await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen?.companyId || null, jobId: state.jobId, step: 3})});
             if (!abort.signal.aborted) setProgress(previous => previous ? {...previous, step: 3} : previous);
           }
         }
@@ -65,7 +64,7 @@ export function RecruiterOnboarding() {
     return () => abort.abort();
   }, [locale, retry]);
   function enqueue(input: Record<string, unknown>) {
-    const run = queue.current.catch(() => undefined).then(() => api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify(input)}));
+    const run = queue.current.catch(() => undefined).then(() => api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({...input, companyId: input.companyId || null})}));
     queue.current = run;
     return run;
   }
@@ -84,7 +83,7 @@ export function RecruiterOnboarding() {
     return () => document.removeEventListener('talentio:employer-context', context);
   }, [loaded, progress?.step, canManage, busy, companyId, values]);
   useEffect(() => {
-    if (!loaded || !progress || progress.step !== 1 || !companyId || !canManage) return;
+    if (!loaded || !progress || progress.step !== 1 || !canManage) return;
     const serialized = JSON.stringify([companyId, values]);
     if (serialized === lastDraft.current) return;
     setSaved(false);
@@ -106,9 +105,12 @@ export function RecruiterOnboarding() {
   async function saveCompany(event: React.FormEvent) {
     event.preventDefault();
     await run(async () => {
-      if (canManage) await api('/companies/' + companyId, {method: 'PATCH', body: JSON.stringify({...values, locale})});
-      await enqueue({companyId, step: 2, companyDraft: values});
-      setProgress(previous => previous ? {...previous, step: 2, companyId} : previous);
+      const targetId = companyId || (await api<Progress>('/recruiter-onboarding')).companyId;
+      if (targetId && canManage) await api('/companies/' + targetId, {method: 'PATCH', body: JSON.stringify({...values, locale})});
+      await enqueue({companyId: targetId, step: 2, companyDraft: values, locale});
+      const state = await api<Progress>('/recruiter-onboarding');
+      setProgress(state); setCompanyId(state.companyId || '');
+      lastDraft.current = JSON.stringify([state.companyId || '', values]);
     });
   }
   async function rememberJob(id: string) {await enqueue({companyId, step: 2, jobId: id});}

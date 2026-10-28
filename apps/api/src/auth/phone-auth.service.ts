@@ -70,7 +70,7 @@ export class PhoneAuthService {
   }
 
   /** Web asks for a one-time deep link; the bot completes it when the contact arrives. */
-  async startTelegramLogin(locale?: string) {
+  async startTelegramLogin(locale?: string, role: 'EMPLOYEE' | 'RECRUITER' = 'EMPLOYEE') {
     if (!this.telegramAvailable()) {
       throw new ServiceUnavailableException('Telegram sign-in is not configured');
     }
@@ -80,6 +80,7 @@ export class PhoneAuthService {
     await this.prisma.phoneLoginToken.create({
       data: {
         tokenHash: sha256(raw),
+        role,
         locale: locale && ['uz', 'ru', 'en', 'id'].includes(locale) ? locale : 'uz',
         expiresAt,
       },
@@ -132,7 +133,7 @@ export class PhoneAuthService {
     return { ok: true, expiresInSeconds: PHONE_OTP_TTL_MS / 1000 };
   }
 
-  async verifyOtp(rawPhone: string, code: string, locale?: string) {
+  async verifyOtp(rawPhone: string, code: string, locale?: string, role: 'EMPLOYEE' | 'RECRUITER' = 'EMPLOYEE') {
     if (!this.sms) throw new ServiceUnavailableException('SMS sign-in is not configured');
     const phone = normalizePhone(rawPhone);
     if (!phone) throw new BadRequestException('Enter a valid phone number');
@@ -157,11 +158,11 @@ export class PhoneAuthService {
       user = await this.prisma.user.create({
         data: {
           fullName: phone,
-          role: 'EMPLOYEE',
-        locale: locale && ['uz', 'ru', 'en', 'id'].includes(locale) ? locale : 'uz',
+          role,
+          locale: locale && ['uz', 'ru', 'en', 'id'].includes(locale) ? locale : 'uz',
           phone,
           phoneVerifiedAt: new Date(),
-          employeeProfile: { create: {} },
+          ...(role === 'EMPLOYEE' ? {employeeProfile: {create: {}}} : {}),
         },
         select: { id: true, isBanned: true },
       });

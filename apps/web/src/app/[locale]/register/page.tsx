@@ -79,7 +79,6 @@ function RegisterForm() {
     const email = String(fd.get('email') ?? '').trim();
     const password = String(fd.get('password') ?? '');
     const confirmPassword = String(fd.get('confirmPassword') ?? '');
-    const companyName = String(fd.get('companyName') ?? '').trim();
 
     if (!fullName || !email || !password) {
       setError(t('authFillRequired'));
@@ -94,10 +93,6 @@ function RegisterForm() {
       return;
     }
     if (inviteLoading) return;
-    if (role === 'RECRUITER' && !useInvite && companyName.length < 2) {
-      setError(t('companyNameRequired'));
-      return;
-    }
     if (!acceptTerms) {
       setError(t('mustAcceptTerms'));
       return;
@@ -115,7 +110,6 @@ function RegisterForm() {
           role: useInvite ? 'RECRUITER' : role,
           locale,
           acceptTerms: true,
-          companyName: role === 'RECRUITER' && !useInvite ? companyName : undefined,
           inviteToken: useInvite ? inviteToken : undefined,
         }),
       });
@@ -158,10 +152,9 @@ function RegisterForm() {
         {inviteInvalid ? <FormAlert>{t('inviteInvalid')}</FormAlert> : null}
         {joining ? <p className={s.login}>{t('alreadyRegistered')}{' '}<AuthLink href="/login" accountRole="RECRUITER">{t('login')}</AuthLink></p> : null}
         <div className={s.social}>
-          <GoogleSignIn key={`google-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable autoCreateEmployeeOnFirstSignIn={!employer} />
-          <TelegramSignIn key={`telegram-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable autoCreateEmployeeOnFirstSignIn={!employer} />
-          {/* New phone accounts use the existing job seeker registration flow. */}
-          {!useInvite && !employer && <PhoneSignIn accountRole="EMPLOYEE" showWhenUnavailable />}
+          <GoogleSignIn key={`google-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable />
+          <TelegramSignIn key={`telegram-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable />
+          {!useInvite && <PhoneSignIn accountRole={role} showWhenUnavailable />}
         </div>
         <div className={s.divider}><span>{t('registerUi.withEmail')}</span></div>
         <p id={formHintId} className="sr-only">
@@ -198,11 +191,7 @@ function RegisterForm() {
             />
           </FormField>
           </div>
-          {role === 'RECRUITER' && !useInvite && (
-            <FormField label={t('companyName')} required>
-              <input name="companyName" autoComplete="organization" minLength={2} required />
-            </FormField>
-          )}
+
           <label className={s.terms} htmlFor={termsId}>
             <input
               id={termsId}

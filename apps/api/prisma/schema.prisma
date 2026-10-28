@@ -1400,6 +1400,7 @@ enum PhoneLoginStatus {
 /// One web sign-in attempt through the bot. The browser polls the token until
 /// the bot has received the contact and resolved (or created) the account.
 model PhoneLoginToken {
+  role      UserRole         @default(EMPLOYEE)
   id        String           @id @default(cuid())
   /// SHA-256 of the raw start payload — raw token is never stored
   tokenHash String           @unique

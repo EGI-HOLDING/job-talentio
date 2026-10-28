@@ -8,6 +8,7 @@
     "test:linkedin:local": "tsx src/linkedin/linkedin.integration.smoke.ts",
     "test:linkedin:http": "tsx ../../scripts/linkedin-http.smoke.ts",
     "test:auth-providers": "tsx src/telegram/telegram-local-polling.smoke.ts",
+    "test:recruiter-signin:local": "node ../../scripts/hr-benefits-local.smoke.cjs --onboarding",
     "build": "nest build",
     "start": "node dist/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",

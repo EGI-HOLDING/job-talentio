@@ -117,14 +117,12 @@ function LoginForm() {
           accountRole={role}
           inviteToken={inviteToken}
           showWhenUnavailable
-          autoCreateEmployeeOnFirstSignIn={!employer}
         />
         <TelegramSignIn
           key={`telegram-${role}`}
           accountRole={role}
           inviteToken={inviteToken}
           showWhenUnavailable
-          autoCreateEmployeeOnFirstSignIn={!employer}
         />
         <PhoneSignIn key={`phone-${role}`} accountRole={role} showWhenUnavailable />
         <p className="muted" style={{ marginTop: '1.25rem', fontSize: '0.9rem' }}>

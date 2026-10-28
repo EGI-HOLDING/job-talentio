@@ -93,7 +93,7 @@ export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { acco
       const start = await api<StartResponse>('/auth/phone/telegram/start', {
         method: 'POST',
         auth: false,
-        body: JSON.stringify({ locale }),
+        body: JSON.stringify({ locale, role: accountRole }),
       });
       if (!aliveRef.current || attempt !== attemptRef.current) { popup?.close(); return; }
       setWaiting(start);
@@ -156,7 +156,7 @@ export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { acco
       const session = await api<Session>('/auth/phone/verify', {
         method: 'POST',
         auth: false,
-        body: JSON.stringify({ phone, code: String(fd.get('code') || '').trim(), locale }),
+        body: JSON.stringify({ phone, code: String(fd.get('code') || '').trim(), locale, role: accountRole }),
       });
       finish(session);
     } catch (err) {
