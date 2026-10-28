@@ -30,7 +30,7 @@ export function JobPackageSelection() {
   const codes: PackageCode[] = ['FREE', 'STANDARD', 'PREMIUM'];
   const disabled = intent === 'UPGRADE' ? codes.filter(code => codes.indexOf(code) <= codes.indexOf(data?.benefit.code)) : [];
   async function choose(code: PackageCode) {
-    if (submitting.current || !data || data.job.id !== id) return; submitting.current = true; setBusy(true); setError('');
+    if (submitting.current || !data || data.job.id !== id || data.catalog.enabled === false) return; submitting.current = true; setBusy(true); setError('');
     const requestContext = context;
     const input = {jobId: id, code, intent}, identity = JSON.stringify(input);
     keys.current[identity] ||= crypto.randomUUID();
@@ -46,8 +46,9 @@ export function JobPackageSelection() {
     <header className={s.intro}><span className={s.eyebrow}>{t('commerce.packageFor')}</span><h1>{t('commerce.' + (highest ? 'current' : intent === 'UPGRADE' ? 'upgrade' : intent === 'RENEW' ? 'renew' : 'pricing'))}</h1><p>{t('commerce.' + (highest ? 'highest' : intent === 'UPGRADE' ? 'upgradeHint' : intent === 'RENEW' ? 'renewalHint' : 'subtitle'))}</p></header>
     <div className={s.context}><div><strong>{data.job.title}</strong><p>{data.job.company?.name}</p></div>{data.benefit.selected && <span className={s.status}>{t('commerce.current')} | {t('commerce.' + data.benefit.code)}</span>}</div>
     {error && <div className={s.error} role="alert">{error}</div>}
+    {data.catalog.enabled === false && <p className={s.notice} role="status">{t('commerce.packagesUnavailable')}</p>}
     {intent === 'UPGRADE' && !highest && <p className={s.notice}>{data.catalog.packages.filter(p => !disabled.includes(p.code)).map(p => t('commerce.' + p.code) + ': ' + money(p.amount - (data.catalog.packages.find(item => item.code === data.benefit.code)?.amount || 0), locale)).join(' | ')}</p>}
     {preferred && !disabled.includes(preferred) && <p className={s.notice}>{t('commerce.preferredHint').replace('{package}', t('commerce.' + preferred))}</p>}
-    <PackagePricing catalog={data.catalog} preferred={preferred && !disabled.includes(preferred) ? preferred : undefined} current={data.benefit.selected && !expired ? data.benefit.code : undefined} upgradeFrom={intent === 'UPGRADE' ? data.catalog.packages.find(p => p.code === data.benefit.code) : undefined} onChoose={choose} disabledCodes={disabled} busy={busy}/>
+    <PackagePricing catalog={data.catalog} preferred={preferred && !disabled.includes(preferred) ? preferred : undefined} current={data.benefit.selected && !expired ? data.benefit.code : undefined} upgradeFrom={intent === 'UPGRADE' ? data.catalog.packages.find(p => p.code === data.benefit.code) : undefined} onChoose={choose} disabledCodes={disabled} busy={busy || data.catalog.enabled === false}/>
   </div>;
 }

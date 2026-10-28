@@ -19,7 +19,7 @@ export class JobCommerceService {
       linkedin: code === 'PREMIUM',
       instagram: code === 'PREMIUM' ? 'COMING_SOON' : 'NOT_INCLUDED', candidateSearch: true, cvDatabase: true,
     })));
-    return { version: PACKAGE_CATALOG_VERSION, perJob: true, packages,
+    return { version: PACKAGE_CATALOG_VERSION, perJob: true, packages, enabled: await this.benefits.enabled(),
       testMode: localCheckoutEnabled(), paymentAvailable: this.provider.available };
   }
   private async job(actor: AuthUser, id: string, db: Prisma.TransactionClient = this.db) {

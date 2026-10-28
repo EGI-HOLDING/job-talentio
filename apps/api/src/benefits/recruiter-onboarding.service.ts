@@ -23,7 +23,9 @@ export class RecruiterOnboardingService {
   async assertCompany(user: AuthUser, companyId: string, db: Prisma.TransactionClient = this.db) {
     await this.benefits.member(user, companyId, db);
     const company = await db.company.findUniqueOrThrow({where: {id: companyId}, include: {city: {include: {province: {include: {country: true}}}}, industry: true}});
-    if (company.name.trim().length < 2 || !company.description || company.description.trim().length < 20
+    if (!company.description || company.description.trim().length < 20)
+      throw new BadRequestException('COMPANY_DESCRIPTION_TOO_SHORT: Company description must contain at least 20 characters');
+    if (company.name.trim().length < 2
       || !company.size || !company.city || !company.industry)
       throw new BadRequestException('COMPANY_PROFILE_REQUIRED: Complete company name, description, industry, size, country and city');
     return company;
@@ -43,8 +45,10 @@ export class RecruiterOnboardingService {
         const data = parseDto(companySchema, {...input.companyDraft, locale: input.locale});
         const name = sanitizeStoredText(data.name).trim();
         const description = sanitizeStoredText(data.description || '').trim();
+        if (description.length < 20)
+          throw new BadRequestException('COMPANY_DESCRIPTION_TOO_SHORT: Company description must contain at least 20 characters');
         const normalized = normalizeCompanyName(name);
-        if (!normalized || normalized.length < 2 || description.length < 20 || !data.size || !data.industrySlug || !data.citySlug || !data.countryId)
+        if (!normalized || normalized.length < 2 || !data.size || !data.industrySlug || !data.citySlug || !data.countryId)
           throw new BadRequestException('COMPANY_PROFILE_REQUIRED: Complete company details');
         await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${normalized}))::text`;
         const companies = await db.company.findMany({where: {isBanned: false}, select: {name: true}, take: 5000});
@@ -65,6 +69,11 @@ export class RecruiterOnboardingService {
       }
       if (input.jobId && (!companyId || !await db.jobPost.findFirst({where: {id: input.jobId, companyId}})))
         throw new BadRequestException('Job does not belong to the selected company');
+      if (input.step === 3) {
+        const jobId = input.jobId === undefined ? existing.jobId : input.jobId;
+        if (!companyId || !jobId || !await db.jobBenefit.findFirst({where: {jobId, companyId, selectionConfirmedAt: {not: null}}}))
+          throw new BadRequestException('PACKAGE_REQUIRED: Choose a package before reviewing publication');
+      }
       const {locale: _locale, ...progress} = input;
       return db.recruiterOnboarding.update({where: {userId: user.id}, data: {...progress, companyId,
         jobId: input.jobId === undefined && existing.companyId !== companyId ? null : input.jobId}});

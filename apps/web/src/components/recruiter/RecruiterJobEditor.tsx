@@ -38,6 +38,7 @@ export function RecruiterJobEditor({ companyId, company, job, meta, initialStep 
   const focusInvalid = useRef(false);
   const currencyEdited = useRef(false);
   const [savedJob, setSavedJob] = useState(job);
+  const [packageSelected, setPackageSelected] = useState(false);
   const [linkedinApproval,setLinkedinApproval]=useState<string|null>(null);
   const [linkedinIntent,setLinkedinIntent]=useState(false);
   const [values, setValues] = useState({ title: job?.title || '', description: job?.description || '', citySlug: job?.city?.slug || '', countryId: job?.countryId || job?.country?.id || job?.city?.province?.country?.id || (job?.workMode === 'REMOTE' && !job?.city ? '__WORLDWIDE__' : ''), categorySlug: job?.category?.slug || '', experienceLevel: job?.experienceLevel || '', experienceYearsMin: job?.experienceYearsMin == null ? '' : String(job.experienceYearsMin), salaryMin: job?.salaryMin == null ? '' : String(job.salaryMin), salaryMax: job?.salaryMax == null ? '' : String(job.salaryMax), salaryPeriod: job?.salaryPeriod || 'MONTHLY', currency: job?.currency || 'UZS', employmentType: job?.employmentType || 'FULL_TIME', workMode: job?.workMode || 'ONSITE', locale: job?.locale || locale, isAnonymous: Boolean(job?.isAnonymous) });
@@ -61,6 +62,15 @@ export function RecruiterJobEditor({ companyId, company, job, meta, initialStep 
       alert.focus({ preventScroll: true });
     });
   }
+  useEffect(() => {
+    setPackageSelected(false);
+    if (step !== 3 || !savedJob?.id) return;
+    const abort = new AbortController();
+    api<{selected: boolean}>('/benefits/jobs/' + savedJob.id, {signal: abort.signal})
+      .then(value => {if (!abort.signal.aborted) setPackageSelected(value.selected);})
+      .catch(reason => {if (!abort.signal.aborted) showError(reason.message);});
+    return () => abort.abort();
+  }, [step, savedJob?.id]);
   const update = (key: keyof typeof values, value: string | boolean) => {
     if (key === 'currency') currencyEdited.current = true;
     setValues((previous) => ({ ...previous, [key]: value, ...(key === 'workMode' && value !== 'REMOTE' && previous.countryId === '__WORLDWIDE__' ? { countryId: '', citySlug: '' } : {}) }));
@@ -142,7 +152,9 @@ export function RecruiterJobEditor({ companyId, company, job, meta, initialStep 
       lastSaved.current = JSON.stringify({ values, skills, benefits, languages, questions: next });
       if (onDraftSaved) await onDraftSaved(result.id);
       if (publish) {
-        const benefit = await api<{selected: boolean}>('/benefits/jobs/' + result.id);
+        const benefit = await api<{selected: boolean; packagesEnabled?: boolean}>('/benefits/jobs/' + result.id);
+        if (benefit.packagesEnabled === false) throw new Error(t('commerce.packagesUnavailable'));
+        setPackageSelected(benefit.selected);
         if (!benefit.selected) {
           allowSavedNavigation();
           if (onChoosePackage) await onChoosePackage(result.id);
@@ -215,14 +227,14 @@ export function RecruiterJobEditor({ companyId, company, job, meta, initialStep 
         <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}><input type="checkbox" checked={values.isAnonymous} onChange={(event) => update('isAnonymous', event.target.checked)} />{t('rec.anonymousPosting')}</label><span className={s.emptyNote}>{t('rec.anonymousPostingHint')}</span>
       </div>}
       {step === 2 && <ScreeningQuestionsEditor idPrefix="recruiter-job" value={questions} onChange={setQuestions} onRemoveSaved={removeQuestion} />}
-      {step === 3 && <div className={s.review}><section><h3>{t('rw.details')}<button type="button" className={s.textButton} style={{ float: 'right' }} onClick={() => setStep(0)}>{t('rec.edit')}</button></h3><strong>{values.title}</strong><p>{values.description}</p><p>{values.countryId === '__WORLDWIDE__' ? t('geo.worldwide') : shareLocation || job?.country?.name || ''}</p><div className={s.tags}><span className={s.tag}>{enumLabel('workMode', values.workMode)}</span><span className={s.tag}>{enumLabel('employmentType', values.employmentType)}</span></div></section><section><h3>{t('rw.requirements')}<button type="button" className={s.textButton} style={{ float: 'right' }} onClick={() => setStep(1)}>{t('rec.edit')}</button></h3><p>{enumLabel('experienceLevel', values.experienceLevel)}{values.experienceYearsMin && ' | ' + values.experienceYearsMin + ' ' + t('years')}</p><div className={s.tags}>{skills.map((skill) => <span className={s.tag} key={skill.slug || skill.name}>{skill.name}</span>)}</div><p>{languages.map((language) => language.name + ' ' + language.minLevel).join(' | ') || '-'}</p></section><section><h3>{t('rw.screening')} | {questions.length}</h3><p>{t('rw.screeningOptional')}</p>{questions.map((question, index) => <p key={index}>{index + 1}. {question.question}</p>)}</section><LinkedInSharePreview jobId={savedJob?.id} title={values.title} companyName={company?.name || ''} location={shareLocation} employmentType={values.employmentType} workMode={values.workMode} isAnonymous={Boolean(values.isAnonymous)} published={savedJob?.status==='PUBLISHED'} draftKey={shareDraftKey} onPrepare={()=>save(false)} onOpenSettings={openLinkedInSettings} onApprovalChange={setLinkedinApproval} onShareIntentChange={setLinkedinIntent} />{savedJob?.id && <section><button type="button" className={s.textButton} aria-expanded={translationOpen} onClick={() => setTranslationOpen((open) => !open)}>{t('rw.languages')}<WorkspaceIcon kind="right" /></button>{translationOpen && <JobLanguageVersions jobId={savedJob.id} onFlash={(message, tone) => tone === 'error' ? setError(message) : setNotice(message)} />}</section>}</div>}
+      {step === 3 && <div className={s.review}>{!packageSelected && savedJob?.status !== 'PUBLISHED' && <p className={s.muted}>{t('commerce.packageBeforePublish')}</p>}<section><h3>{t('rw.details')}<button type="button" className={s.textButton} style={{ float: 'right' }} onClick={() => setStep(0)}>{t('rec.edit')}</button></h3><strong>{values.title}</strong><p>{values.description}</p><p>{values.countryId === '__WORLDWIDE__' ? t('geo.worldwide') : shareLocation || job?.country?.name || ''}</p><div className={s.tags}><span className={s.tag}>{enumLabel('workMode', values.workMode)}</span><span className={s.tag}>{enumLabel('employmentType', values.employmentType)}</span></div></section><section><h3>{t('rw.requirements')}<button type="button" className={s.textButton} style={{ float: 'right' }} onClick={() => setStep(1)}>{t('rec.edit')}</button></h3><p>{enumLabel('experienceLevel', values.experienceLevel)}{values.experienceYearsMin && ' | ' + values.experienceYearsMin + ' ' + t('years')}</p><div className={s.tags}>{skills.map((skill) => <span className={s.tag} key={skill.slug || skill.name}>{skill.name}</span>)}</div><p>{languages.map((language) => language.name + ' ' + language.minLevel).join(' | ') || '-'}</p></section><section><h3>{t('rw.screening')} | {questions.length}</h3><p>{t('rw.screeningOptional')}</p>{questions.map((question, index) => <p key={index}>{index + 1}. {question.question}</p>)}</section><LinkedInSharePreview jobId={savedJob?.id} title={values.title} companyName={company?.name || ''} location={shareLocation} employmentType={values.employmentType} workMode={values.workMode} isAnonymous={Boolean(values.isAnonymous)} published={savedJob?.status==='PUBLISHED'} draftKey={shareDraftKey} onPrepare={()=>save(false)} onOpenSettings={openLinkedInSettings} onApprovalChange={setLinkedinApproval} onShareIntentChange={setLinkedinIntent} />{savedJob?.id && <section><button type="button" className={s.textButton} aria-expanded={translationOpen} onClick={() => setTranslationOpen((open) => !open)}>{t('rw.languages')}<WorkspaceIcon kind="right" /></button>{translationOpen && <JobLanguageVersions jobId={savedJob.id} onFlash={(message, tone) => tone === 'error' ? setError(message) : setNotice(message)} />}</section>}</div>}
         </fieldset></form>
       </div>
     </div>
     <footer className={e.footer}><div className={e.footerInner}>
       <button className={s.textButton} type="button" disabled={busy} onClick={() => step ? goTo(step - 1) : void close()}>{step > 0 && <WorkspaceIcon kind="left" />}{t(step ? 'back' : 'cancel')}</button>
       <button className={s.secondary} type="button" disabled={busy} onClick={() => void save(false)}>{t(busy ? 'saving' : savedJob?.status && savedJob.status !== 'DRAFT' ? 'rec.saveChanges' : 'rw.saveDraft')}</button>
-      {step < 3 ? <button className={s.primary} type="button" disabled={busy} onClick={() => goTo(step + 1)}>{t('rw.continue')}<WorkspaceIcon kind="arrow" /></button> : savedJob?.status !== 'PUBLISHED' && <button className={s.primary} type="button" disabled={busy || (linkedinIntent && !linkedinApproval)} onClick={() => void save(true)}>{t('rec.publish')}<WorkspaceIcon kind="arrow" /></button>}
+      {step < 3 ? <button className={s.primary} type="button" disabled={busy} onClick={() => goTo(step + 1)}>{t('rw.continue')}<WorkspaceIcon kind="arrow" /></button> : savedJob?.status !== 'PUBLISHED' && <button className={s.primary} type="button" disabled={busy || (linkedinIntent && !linkedinApproval)} onClick={() => void save(true)}>{t(packageSelected ? 'rec.publish' : 'commerce.choose')}<WorkspaceIcon kind="arrow" /></button>}
     </div></footer>
   </div>;
 }

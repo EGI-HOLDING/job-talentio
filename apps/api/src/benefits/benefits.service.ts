@@ -229,7 +229,9 @@ export class BenefitsService {
     };
   }
   async job(actor: AuthUser, jobId: string) {
-    await this.assertEnabled();
+    // Reading an owned draft must remain possible while packages are disabled.
+    // Purchases and grants retain their feature gate.
+    const packagesEnabled = await this.enabled();
     const job = await this.db.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException();
     await this.member(actor, job.companyId);
@@ -249,6 +251,7 @@ export class BenefitsService {
       ) ?? 0;
     const boostRemainingSeconds = Math.max(0, (benefit?.boostGrantedSeconds ?? 0) - reserved);
     return {
+      packagesEnabled,
       code: benefit?.code ?? 'FREE',
       selected: Boolean(benefit?.selectionConfirmedAt),
       startsAt: benefit?.startsAt ?? null,
