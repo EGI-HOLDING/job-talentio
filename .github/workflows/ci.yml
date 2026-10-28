@@ -49,6 +49,9 @@ jobs:
       - name: Recruiter onboarding and package selection
         run: pnpm --filter @job-talentio/web test:recruiter-packages
 
+      - name: Indonesia VPS seed manifest and target guards
+        run: node scripts/vps-it150-manifest.smoke.cjs
+
       - name: Build packages
         run: pnpm build
         env:
