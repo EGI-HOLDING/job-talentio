@@ -5,7 +5,7 @@ import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, localeFromPathname, pickLocale, s
 /**
  * Every page lives under /uz, /ru, /en or /id so search engines can index one URL
  * per language. Unprefixed requests are redirected using the saved cookie,
- * then the browser's Accept-Language, then the default locale.
+ * then browser negotiation when enabled, then the deployment's default locale.
  */
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

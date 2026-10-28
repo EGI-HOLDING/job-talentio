@@ -33,7 +33,13 @@ Never restore a whole cluster or change another application's database.
    or seed catalogs; the release step runs migrations explicitly once.
 
 The web image is built with Indonesia's API/admin/site URLs and default language
-`id`. Railway keeps its existing `uz` default when these new settings are absent.
+`id`, with `NEXT_PUBLIC_LOCALE_DETECTION=default` so a new visitor starts in
+Indonesian even when their browser prefers another language. Explicit locale URLs
+and saved language cookies still win; login retains the account's saved language.
+These public settings are build arguments: rebuild the web image when changing
+them. Railway retains browser negotiation and its `uz` fallback when the optional
+settings are absent. API registration without a locale follows `APP_DEFAULT_LOCALE`;
+explicit locale values retain normal validation.
 SMTP on port 587 uses STARTTLS (`SMTP_SECURE=false`), while port 465 uses implicit
 TLS (`SMTP_SECURE=true`). Payment provider, LinkedIn, Instagram and candidate AI
 remain subject to the previously agreed feature availability; never simulate a

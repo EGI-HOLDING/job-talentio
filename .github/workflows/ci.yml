@@ -49,6 +49,9 @@ jobs:
       - name: Recruiter onboarding and package selection
         run: pnpm --filter @job-talentio/web test:recruiter-packages
 
+      - name: Deployment-specific default language
+        run: node scripts/deployment-locale.smoke.cjs
+
       - name: Build packages
         run: pnpm build
         env:

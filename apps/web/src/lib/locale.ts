@@ -8,6 +8,8 @@ export type Locale = (typeof LOCALES)[number];
 
 const configuredLocale = typeof process === 'undefined' ? undefined : process.env.NEXT_PUBLIC_DEFAULT_LOCALE;
 export const DEFAULT_LOCALE: Locale = LOCALES.includes(configuredLocale as Locale) ? configuredLocale as Locale : 'uz';
+const configuredDetection = typeof process === 'undefined' ? undefined : process.env.NEXT_PUBLIC_LOCALE_DETECTION;
+const detectBrowserLocale = configuredDetection !== 'default';
 
 /** Read by middleware to keep unprefixed entry points on the last used language. */
 export const LOCALE_COOKIE = 'jt_locale';
@@ -50,13 +52,13 @@ export function withLocale(locale: Locale, href: string): string {
   return withoutLocale === '/' ? `/${locale}` : `/${locale}${withoutLocale}`;
 }
 
-/** Cookie wins over Accept-Language so an explicit switch is never overridden. */
+/** Saved choices always win; default-only deployments skip browser negotiation. */
 export function pickLocale(
   cookieValue?: string | null,
   acceptLanguage?: string | null,
 ): Locale {
   if (isLocale(cookieValue)) return cookieValue;
-  if (!acceptLanguage) return DEFAULT_LOCALE;
+  if (!detectBrowserLocale || !acceptLanguage) return DEFAULT_LOCALE;
 
   const ranked = acceptLanguage
     .split(',')

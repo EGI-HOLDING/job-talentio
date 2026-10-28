@@ -39,6 +39,13 @@ import { parseDto } from '../common/utils';
 import { CurrentUser, JwtAuthGuard, AuthUser } from '../common/auth.decorators';
 import { imageUploadOptions } from '../common/upload';
 import { TelegramService } from '../telegram/telegram.service';
+import { DEFAULT_LOCALE } from '../common/i18n/locale';
+
+// Preserve the shared schema's legacy default for other consumers. Only omitted
+// registration locale values inherit this API deployment's configured default.
+const deploymentRegisterSchema = registerSchema.extend({
+  locale: registerSchema.shape.locale.removeDefault().default(DEFAULT_LOCALE),
+});
 
 @Controller('auth')
 export class AuthController {
@@ -80,7 +87,7 @@ export class AuthController {
 
   @Post('register')
   register(@Body() body: unknown) {
-    const data = parseDto(registerSchema, body);
+    const data = parseDto(deploymentRegisterSchema, body);
     return this.auth.register({
       email: data.email,
       password: data.password,

@@ -32,6 +32,7 @@ services:
         NEXT_PUBLIC_ADMIN_URL: https://su-stage.cari-kerja.co.id
         NEXT_PUBLIC_SITE_URL: https://cari-kerja.co.id
         NEXT_PUBLIC_DEFAULT_LOCALE: id
+        NEXT_PUBLIC_LOCALE_DETECTION: default
     ports: ["127.0.0.1:13000:3000"]
     restart: unless-stopped
     mem_limit: 384m
