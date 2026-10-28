@@ -6,7 +6,8 @@ export const LOCALES = ['uz', 'ru', 'en', 'id'] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = 'uz';
+const configuredLocale = typeof process === 'undefined' ? undefined : process.env.NEXT_PUBLIC_DEFAULT_LOCALE;
+export const DEFAULT_LOCALE: Locale = LOCALES.includes(configuredLocale as Locale) ? configuredLocale as Locale : 'uz';
 
 /** Read by middleware to keep unprefixed entry points on the last used language. */
 export const LOCALE_COOKIE = 'jt_locale';

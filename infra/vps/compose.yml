@@ -1,0 +1,103 @@
+name: talentio
+services:
+  api:
+    image: talentio-api:${RELEASE_ID:?Set RELEASE_ID}
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    env_file: ${TALENTIO_ENV_FILE:?Set TALENTIO_ENV_FILE}
+    command: ["node", "dist/main.js"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["127.0.0.1:14000:4000"]
+    restart: unless-stopped
+    mem_limit: 896m
+    cpus: 1.5
+    depends_on:
+      redis: {condition: service_healthy}
+      meilisearch: {condition: service_started}
+      storage: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+  web:
+    image: talentio-web:${RELEASE_ID:?Set RELEASE_ID}
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.cari-kerja.co.id
+        NEXT_PUBLIC_ADMIN_URL: https://su-stage.cari-kerja.co.id
+        NEXT_PUBLIC_SITE_URL: https://cari-kerja.co.id
+        NEXT_PUBLIC_DEFAULT_LOCALE: id
+    ports: ["127.0.0.1:13000:3000"]
+    restart: unless-stopped
+    mem_limit: 384m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/id').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+  admin:
+    image: talentio-admin:${RELEASE_ID:?Set RELEASE_ID}
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.cari-kerja.co.id
+    ports: ["127.0.0.1:13001:3000"]
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes: ["redis:/data"]
+    restart: unless-stopped
+    mem_limit: 160m
+    cpus: 0.25
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY}
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MAX_INDEXING_MEMORY: 128Mb
+      MEILI_MAX_INDEXING_THREADS: 1
+    volumes: ["search:/meili_data"]
+    restart: unless-stopped
+    mem_limit: 384m
+    cpus: 0.5
+  storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?Set S3_SECRET_KEY}
+    ports: ["127.0.0.1:19000:9000"]
+    volumes: ["objects:/data"]
+    restart: unless-stopped
+    mem_limit: 384m
+    cpus: 0.5
+volumes:
+  redis:
+  search:
+  objects:
+networks:
+  default:
+    ipam:
+      config: [{subnet: 172.30.64.0/24}]

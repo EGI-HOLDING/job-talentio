@@ -2,7 +2,8 @@ export const LOCALES = ['uz', 'ru', 'en', 'id'] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = 'uz';
+const configuredLocale = process.env.APP_DEFAULT_LOCALE;
+export const DEFAULT_LOCALE: Locale = LOCALES.includes(configuredLocale as Locale) ? configuredLocale as Locale : 'uz';
 
 export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && (LOCALES as readonly string[]).includes(value);

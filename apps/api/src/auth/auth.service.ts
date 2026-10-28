@@ -14,6 +14,7 @@ import { translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
+import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import { StorageService } from '../storage/storage.service';
 import { escapeHtml, slugify } from '../common/utils';
 import { normalizeEmail, sha256 } from '../common/dedupe';
@@ -349,7 +350,7 @@ export class AuthService {
           passwordHash,
           fullName,
           role,
-          locale: input.locale ?? 'uz',
+          locale: input.locale ?? DEFAULT_LOCALE,
           // Platform email verify is opt-in from profile/settings (same as Google sign-up)
           emailVerified: false,
         },
@@ -717,7 +718,7 @@ export class AuthService {
             fullName: google.fullName,
             avatarUrl,
             role: 'RECRUITER',
-            locale: input.locale ?? 'uz',
+            locale: input.locale ?? DEFAULT_LOCALE,
             emailVerified: googleMailboxVerified,
           },
         });
@@ -740,7 +741,7 @@ export class AuthService {
           fullName: google.fullName,
           avatarUrl,
           role: role as UserRole,
-          locale: input.locale ?? 'uz',
+          locale: input.locale ?? DEFAULT_LOCALE,
           emailVerified: googleMailboxVerified,
         },
       });
@@ -992,7 +993,7 @@ export class AuthService {
             fullName: tg.fullName,
             avatarUrl: tg.avatarUrl,
             role: 'RECRUITER',
-            locale: input.locale ?? 'uz',
+            locale: input.locale ?? DEFAULT_LOCALE,
             emailVerified: telegramTypedEmailVerified(),
           },
         });
@@ -1012,7 +1013,7 @@ export class AuthService {
           fullName: tg.fullName,
           avatarUrl: tg.avatarUrl,
           role: role as UserRole,
-          locale: input.locale ?? 'uz',
+          locale: input.locale ?? DEFAULT_LOCALE,
           emailVerified: telegramTypedEmailVerified(),
         },
       });
