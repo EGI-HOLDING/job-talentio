@@ -31,7 +31,7 @@ async function main(){
     const f=await fixture(width);page=f.view;
     assert.equal((await call(f.token,'/recruiter-onboarding/complete',{skipJob:true})).status,400);
     const guarded=await call(f.token,'/jobs/company/'+f.company.id,{title:'Guarded workspace test',description:'This valid draft checks that company details cannot be skipped before publication.',workMode:'REMOTE',countryId:null});assert.equal(guarded.status,201);
-    const cannotPublish=await call(f.token,'/jobs/'+guarded.data.id+'/status',{status:'PUBLISHED'});assert.equal(cannotPublish.status,400);assert.match(cannotPublish.data.message,/COMPANY_PROFILE_REQUIRED/);
+    const cannotPublish=await call(f.token,'/jobs/'+guarded.data.id+'/status',{status:'PUBLISHED'});assert.equal(cannotPublish.status,400);assert.match(cannotPublish.data.message,/COMPANY_DESCRIPTION_TOO_SHORT/);
     let earlyJobCalls=0;page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/jobs/company/'))earlyJobCalls++;});
     await page.goto('http://localhost:3000/id/dashboard/recruiter');await page.waitForURL('**/onboarding/recruiter?**');await page.locator('textarea').waitFor();assert.equal(earlyJobCalls,0,'Dashboard data must not render before onboarding status is checked');
     await screenshot('company-empty-'+width);

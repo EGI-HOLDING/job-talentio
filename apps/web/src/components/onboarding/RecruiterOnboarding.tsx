@@ -7,6 +7,7 @@ import { accountReturnHref, employerWorkspaceHref } from '@/lib/accountNavigatio
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { PackageCode, packagePreference, packageHref, withPackagePreference } from '@/lib/jobCommerce';
 import { LocationFields } from '@/components/ui/LocationFields';
+import { FormField } from '@/components/ui/Field';
 import { RecruiterJobEditor } from '@/components/recruiter/RecruiterJobEditor';
 import { LinkedInSharePreview } from '@/components/recruiter/LinkedInSharePreview';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
@@ -22,6 +23,8 @@ export function RecruiterOnboarding() {
   const [meta, setMeta] = useState<any>(null), [industries, setIndustries] = useState<any[]>([]), [job, setJob] = useState<any>(null), [benefit, setBenefit] = useState<any>(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [editor, setEditor] = useState(false), [retry, setRetry] = useState(0), [loaded, setLoaded] = useState(false), [saved, setSaved] = useState(false);
   const [linkedinApproval, setLinkedinApproval] = useState<string|null>(null), [linkedinIntent, setLinkedinIntent] = useState(false);
+  const [descriptionInvalid, setDescriptionInvalid] = useState(false);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const autosave = useRef<ReturnType<typeof setTimeout>|null>(null), queue = useRef<Promise<unknown>>(Promise.resolve());
   const lastDraft = useRef(''), alive = useRef(true);
   const membership = progress?.memberships.find(row => row.companyId === companyId), company = membership?.company;
@@ -42,6 +45,8 @@ export function RecruiterOnboarding() {
       const chosen = state.memberships.find(row => row.companyId === state.companyId) || state.memberships[0];
       const preference = packagePreference(params.toString());
       if (preference && preference !== state.preferredPackage) {
+        // Re-check package confirmation below before restoring the final step.
+        state.step = Math.min(state.step, 2);
         await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen?.companyId || null, step: state.step, preferredPackage: preference})});
         state.preferredPackage = preference;
       }
@@ -53,9 +58,10 @@ export function RecruiterOnboarding() {
         const [storedJob, storedBenefit] = await Promise.all([api<any>('/jobs/' + state.jobId, {signal: abort.signal}), api<any>('/benefits/jobs/' + state.jobId, {signal: abort.signal})]);
         if (!abort.signal.aborted) {
           setJob(storedJob); setBenefit(storedBenefit);
-          if (storedBenefit.selected && state.step === 2) {
-            await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen?.companyId || null, jobId: state.jobId, step: 3})});
-            if (!abort.signal.aborted) setProgress(previous => previous ? {...previous, step: 3} : previous);
+          const nextStep = storedBenefit.selected ? 3 : 2;
+          if (state.step > 1 && state.step !== nextStep) {
+            await api('/recruiter-onboarding', {method: 'PATCH', body: JSON.stringify({companyId: chosen?.companyId || null, jobId: state.jobId, step: nextStep})});
+            if (!abort.signal.aborted) setProgress(previous => previous ? {...previous, step: nextStep} : previous);
           }
         }
       }
@@ -104,6 +110,11 @@ export function RecruiterOnboarding() {
   }
   async function saveCompany(event: React.FormEvent) {
     event.preventDefault();
+    if (canManage && values.description.trim().length < 20) {
+      setDescriptionInvalid(true);
+      descriptionRef.current?.focus();
+      return;
+    }
     await run(async () => {
       const targetId = companyId || (await api<Progress>('/recruiter-onboarding')).companyId;
       if (targetId && canManage) await api('/companies/' + targetId, {method: 'PATCH', body: JSON.stringify({...values, locale})});
@@ -115,10 +126,17 @@ export function RecruiterOnboarding() {
   }
   async function rememberJob(id: string) {await enqueue({companyId, step: 2, jobId: id});}
   async function choosePackage(id: string) {
-    await enqueue({companyId, step: 3, jobId: id});
+    // Step 3 means ready to publish, reached only after package confirmation.
+    await enqueue({companyId, step: 2, jobId: id});
     router.push(packageHref(id, '/onboarding/recruiter?next=' + encodeURIComponent(returnTo), preferredPackage));
   }
-  const change = (key: keyof CompanyDraft, value: string) => setValues(previous => ({...previous, [key]: value}));
+  const change = (key: keyof CompanyDraft, value: string) => {
+    setValues(previous => ({...previous, [key]: value}));
+    if (key === 'description') {
+      setDescriptionInvalid(false);
+      if (error.startsWith('COMPANY_DESCRIPTION_TOO_SHORT')) setError('');
+    }
+  };
   if (!loaded || !progress || !meta) return <div className={s.page}>{error ? <div role="alert" className={s.error}>{error}<br/><button className={s.text} onClick={() => setRetry(n => n + 1)}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>}</div>;
   if (editor) return <RecruiterJobEditor companyId={companyId} company={company} job={job} meta={meta} initialStep={job && progress.step === 3 ? 3 : 0}
     onClose={() => {setEditor(false); setRetry(n => n + 1);}} onSaved={async () => {}} onDraftSaved={rememberJob} onChoosePackage={choosePackage}
@@ -126,13 +144,16 @@ export function RecruiterOnboarding() {
   return <div className={s.page}><div className={s.onboarding}>
     <div className={s.progress}><span>{t('commerce.step').replace('{n}', String(progress.step))}</span><div className={s.segments} aria-hidden="true">{[1,2,3].map(step => <i key={step} data-active={step <= progress.step}/>)}</div></div>
     <header className={s.headline}><span className={s.stepIcon}><WorkspaceIcon kind={progress.step === 1 ? 'building' : 'briefcase'}/></span><h1>{t('commerce.' + (progress.step === 1 ? 'companyStep' : progress.step === 2 ? 'firstJob' : 'ready'))}</h1><p>{t('commerce.' + (progress.step === 1 ? 'companyHint' : progress.step === 2 ? 'firstJobHint' : 'successHint'))}</p></header>
-    {error && <div className={s.error} role="alert">{error.startsWith('COMPANY_PROFILE_REQUIRED') ? t('commerce.companyRequired') : error}</div>}
+    {error && <div className={s.error} role="alert">{error.startsWith('COMPANY_DESCRIPTION_TOO_SHORT') ? t('commerce.companyDescriptionError') : error.startsWith('COMPANY_PROFILE_REQUIRED') ? t('commerce.companyRequired') : error}</div>}
     {progress.step === 1 ? <form className={s.form} onSubmit={event => void saveCompany(event)}>
       {progress.memberships.length > 1 && <label>{t('companyName')}<select value={companyId} disabled={busy} onChange={event => {const selected = progress.memberships.find(row => row.companyId === event.target.value); setCompanyId(event.target.value); setValues(draft(selected.company));}}>{progress.memberships.map(row => <option value={row.companyId} key={row.companyId}>{row.company.name}</option>)}</select></label>}
       {!canManage && <div className={s.notice}>{t(company?.description?.trim().length >= 20 && company?.industry && company?.city && company?.size ? 'commerce.companyMemberHint' : 'commerce.contactOwner')}</div>}
       <fieldset disabled={busy || !canManage} className={s.form} style={{border: 0, margin: 0, padding: 0}}>
         <label>{t('companyName')} *<input value={values.name} required minLength={2} maxLength={160} onChange={event => change('name', event.target.value)}/></label>
-        <label>{t('rec.description')} *<textarea value={values.description} required minLength={20} maxLength={5000} onChange={event => change('description', event.target.value)}/></label>
+        <FormField label={t('rec.description')} required hint={t('commerce.companyDescriptionHint').replace('{n}', String(values.description.trim().length))}
+          error={descriptionInvalid || error.startsWith('COMPANY_DESCRIPTION_TOO_SHORT') ? t('commerce.companyDescriptionError') : undefined}>
+          <textarea ref={descriptionRef} value={values.description} minLength={20} maxLength={5000} onInvalid={() => setDescriptionInvalid(true)} onChange={event => change('description', event.target.value)}/>
+        </FormField>
         <div className={s.columns}><label>{t('trustItemIndustry')} *<select value={values.industrySlug} required onChange={event => change('industrySlug', event.target.value)}><option value="">-</option>{industries.map(group => group.industries ? <optgroup key={group.slug} label={group.name}>{group.industries.map((item: any) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</optgroup> : <option key={group.slug} value={group.slug}>{group.name}</option>)}</select></label>
           <label>{t('trustItemSize')} *<select value={values.size} required onChange={event => change('size', event.target.value)}><option value="">-</option>{['SIZE_1_10','SIZE_11_50','SIZE_51_200','SIZE_201_1000','SIZE_1000_PLUS'].map(size => <option key={size} value={size}>{({'SIZE_1_10':'1-10','SIZE_11_50':'11-50','SIZE_51_200':'51-200','SIZE_201_1000':'201-1,000','SIZE_1000_PLUS':'1,000+'} as Record<string,string>)[size]}</option>)}</select></label></div>
         <LocationFields countryId={values.countryId} citySlug={values.citySlug} initialCity={company?.city} required cityRequired onChange={next => setValues(previous => ({...previous, countryId: next.countryId, citySlug: next.citySlug}))}/>

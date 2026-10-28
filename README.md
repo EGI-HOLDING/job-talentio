@@ -100,7 +100,28 @@ Production DB migrate: `pnpm db:migrate:deploy` (also runs on API container star
 
 ## Core feature access
 
-Employer features have no subscription or payment requirements. Contact privacy, company membership, moderation and anti-abuse limits remain enforced. Historical subscription/payment tables are retained for data preservation only; billing, upgrade and boost endpoints are unavailable.
+Candidate search and CV database access are free for employers. Job publication
+requires an explicitly selected per-job package (Free, Standard or Premium).
+Paid packages activate only after verified payment; the unconfigured gateway
+does not prevent choosing Free. Contact privacy, company membership, moderation
+and anti-abuse limits remain enforced.
+
+### Staging job package activation
+
+The HR onboarding flow is company details → job draft → package selection →
+publication. `hr_packages` must be enabled for package selection; a disabled
+rollout still allows authorized draft/package reads, with an unavailable message
+instead of an opaque 404. Mutations keep their feature gate.
+
+Inside the approved Railway staging API service, run
+`node dist/scripts/enable-staging-job-packages.js --dry-run`, then `--apply`.
+The command rejects other projects/environments, checks all three package policies,
+initializes existing publication periods under the publication lock, enables
+`hr_rollout` and `hr_packages` atomically, and records a system audit event.
+Repeating it leaves existing publication end dates unchanged. It does not run on
+startup, change catalog tables, configure payments, or enable other feature flags.
+Standard/Premium orders remain pending while the gateway is unavailable; test
+payment completion remains restricted to local deployments.
 
 ## Exact staging catalog synchronization
 

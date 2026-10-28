@@ -5,7 +5,7 @@ export type PurchaseIntent = 'PURCHASE'|'UPGRADE'|'RENEW';
 export type JobPackage = {code: PackageCode; amount: number; currency: string; version: number;
   settings: {durationDays: number; boostDays: number; featuredDays: number; conversions: boolean; reports: boolean; prioritySupport: boolean};
   linkedin: boolean; instagram: string};
-export type PackageCatalog = {version: number; packages: JobPackage[]; testMode: boolean; paymentAvailable: boolean};
+export type PackageCatalog = {version: number; packages: JobPackage[]; enabled: boolean; testMode: boolean; paymentAvailable: boolean};
 export type JobOrder = {id: string; jobId: string; companyId: string; jobTitle: string; companyName: string; code: PackageCode;
   intent: PurchaseIntent; status: string; amount: number; currency: string; expiresAt: string; createdAt: string;
   fulfilledAt: string|null; provider: string|null};
