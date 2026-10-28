@@ -71,11 +71,6 @@ export default function OverviewPage() {
           <Stat label="Companies" value={metrics?.companies ?? '-'} />
           <Stat label="Published jobs" value={metrics?.publishedJobs ?? '-'} />
           <Stat label="Applications" value={metrics?.applications ?? '-'} />
-          <Stat
-            label="Revenue"
-            value={(metrics?.revenueUzs ?? 0).toLocaleString()}
-            foot="UZS, paid and mocked"
-          />
         </div>
 
         <section className="card">

@@ -98,12 +98,6 @@ Dockerfiles: `apps/api`, `apps/web`, `apps/admin`. Full checklist, env matrix, a
 
 Production DB migrate: `pnpm db:migrate:deploy` (also runs on API container start).
 
-## Plans & billing (local)
+## Core feature access
 
-- Free: 3 active published jobs
-- Standard: 5
-- Premium: 20 + cold chat
-- Hot Job: time-boxed ranking boost
-- Payments: `MockPaymentProvider` (auto-confirm) + Admin plan override
-
-Payme/Click adapters can replace the mock provider later without changing the Railway layout.
+Employer features have no subscription or payment requirements. Contact privacy, company membership, moderation and anti-abuse limits remain enforced. Historical subscription/payment tables are retained for data preservation only; billing, upgrade and boost endpoints are unavailable.

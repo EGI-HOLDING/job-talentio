@@ -6,13 +6,14 @@
 const MONTHS =
   'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|' +
   'январ[ьяе]?|феврал[ьяе]?|март[ае]?|апрел[ьяе]?|ма[йяе]|июн[ьяе]?|июл[ьяе]?|август[ае]?|сентябр[ьяе]?|октябр[ьяе]?|ноябр[ьяе]?|декабр[ьяе]?|' +
-  'yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr';
+  'yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr|' +
+  'januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember';
 
 const CURRENT_END =
-  'present|now|current|hozir|настоящее\\s*время|по\\s*н\\.?\\s*в\\.?|н\\.?\\s*в\\.?';
+  'present|now|current|hozir|saat\\s+ini|sekarang|настоящее\\s*время|по\\s*н\\.?\\s*в\\.?|н\\.?\\s*в\\.?';
 
 const DATE_RANGE_RE = new RegExp(
-  `(?:(?:${MONTHS})\\s+)?(?:20\\d{2}|19\\d{2})\\s*[-–—to]+\\s*(?:(?:${MONTHS})\\s+)?(?:20\\d{2}|19\\d{2}|${CURRENT_END})`,
+  `(?:(?:${MONTHS})\\s+)?(?:20\\d{2}|19\\d{2})\\s*(?:[-–—]|to|sampai|hingga|до)\\s*(?:(?:${MONTHS})\\s+)?(?:20\\d{2}|19\\d{2}|${CURRENT_END})`,
   'iu',
 );
 
@@ -22,7 +23,7 @@ const BULLET_RE =
 const SECTION_HEADER_RE = new RegExp(
   '^(?:' +
     'work\\s+experience|professional\\s+experience|experience|employment|work\\s+history|' +
-    'education|academic(?:\\s+background)?|skills|technical\\s+skills|languages|' +
+    'pendidikan|pengalaman(?:\\s+kerja)?|keahlian|keterampilan|bahasa|ringkasan|tentang\\s+saya|education|academic(?:\\s+background)?|skills|technical\\s+skills|languages|' +
     'summary|profile|objective|about(?:\\s+me)?|certificates?|certifications?|projects?|' +
     'опыт(?:\\s*работы)?|образование|навыки|языки|о\\s+себе|обо\\s+мне|' +
     "ish\\s+tajribasi|ta'?lim|ko'?nikmalar|tillar|men\\s+haqimda" +

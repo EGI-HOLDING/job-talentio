@@ -23,6 +23,7 @@ import {
 } from '@/components/data/TableChrome';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { Badge, DateField, MultiSelect, SelectField } from '@/components/ui/primitives';
+import { useToast } from '@/components/ui/Toaster';
 
 const DEFAULTS = { page: '1', limit: '25', sort: 'createdAt', dir: 'desc' };
 const FILTER_KEYS = [
@@ -51,6 +52,7 @@ export default function ReportsPage() {
   });
   const { query, setFilter } = table;
   const [pending, setPending] = useState<null | 'RESOLVED' | 'DISMISSED'>(null);
+  const { notify } = useToast();
 
   const columns: Array<Column<AdminReport>> = [
     {
@@ -99,11 +101,16 @@ export default function ReportsPage() {
     activeFilters.push({ key: 'createdFrom', label: `From ${query.createdFrom}` });
   if (query.createdTo) activeFilters.push({ key: 'createdTo', label: `To ${query.createdTo}` });
 
-  function exportCsv() {
-    const rows = table.selected.size
-      ? table.rows.filter((row) => table.selected.has(row.id))
-      : table.rows;
-    downloadCsv(timestampedName('reports'), rows, [
+  async function exportCsv() {
+    try {
+      const rows = table.selected.size
+        ? await apiPost<AdminReport[]>('/admin/reports/selected', { ids: [...table.selected] })
+        : table.rows;
+      if (!rows.length) {
+        notify('No reports to export', 'error');
+        return;
+      }
+      downloadCsv(timestampedName('reports'), rows, [
       { header: 'id', value: (r) => r.id },
       { header: 'entityType', value: (r) => r.entityType },
       { header: 'entityId', value: (r) => r.entityId },
@@ -111,7 +118,10 @@ export default function ReportsPage() {
       { header: 'status', value: (r) => r.status },
       { header: 'reporter', value: (r) => r.reporter?.email ?? '' },
       { header: 'createdAt', value: (r) => r.createdAt },
-    ]);
+      ]);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not export reports', 'error');
+    }
   }
 
   return (
@@ -123,10 +133,10 @@ export default function ReportsPage() {
           <button
             type="button"
             className="secondary"
-            onClick={exportCsv}
-            disabled={!table.rows.length}
+            onClick={() => void exportCsv()}
+            disabled={!table.rows.length && !table.selected.size}
           >
-            Export CSV
+            {table.selected.size ? `Export selected (${table.selected.size})` : 'Export CSV'}
           </button>
         }
       />
@@ -173,6 +183,8 @@ export default function ReportsPage() {
 
         <SelectAllNotice
           pageCount={table.rows.length}
+          selectedOnPage={table.rows.filter((row) => table.selected.has(row.id)).length}
+          selectedCount={table.selected.size}
           total={table.total}
           allMatchingSelected={table.allMatching.active}
           capped={table.allMatching.capped}
@@ -258,13 +270,13 @@ export default function ReportsPage() {
         onCancel={() => setPending(null)}
         onConfirm={async () => {
           const status = pending;
-          setPending(null);
           if (!status) return;
-          await table.runBulk(
+          const saved = await table.runBulk(
             '/admin/reports/bulk/resolve',
             { status },
             status === 'RESOLVED' ? 'resolved' : 'dismissed',
           );
+          if (saved) setPending(null);
         }}
       />
     </>

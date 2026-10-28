@@ -7,8 +7,8 @@ import { JobStatus } from '@prisma/client';
  */
 export const ALLOWED_STATUS_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
   DRAFT: ['PUBLISHED', 'CLOSED'],
-  PUBLISHED: ['PAUSED', 'CLOSED'],
-  PAUSED: ['PUBLISHED', 'CLOSED'],
+  PUBLISHED: ['PAUSED', 'CLOSED', 'EXPIRED'],
+  PAUSED: ['PUBLISHED', 'CLOSED', 'EXPIRED'],
   CLOSED: ['PUBLISHED', 'DRAFT'],
   EXPIRED: ['PUBLISHED', 'CLOSED'],
 };

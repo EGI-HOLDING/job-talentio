@@ -5,6 +5,7 @@ export const ANONYMOUS_EMPLOYER_NAME: Record<Locale, string> = {
   uz: 'Maxfiy ish beruvchi',
   ru: 'Конфиденциальный работодатель',
   en: 'Confidential employer',
+  id: 'Perusahaan dirahasiakan',
 };
 
 /** Application stages at which a confidential employer is revealed to the candidate. */
@@ -30,8 +31,8 @@ export type MaskedCompany = {
 
 /**
  * Replace the company on a confidential posting with a neutral placeholder.
- * Keeps the job's own fields intact; drops every company attribute (id, slug,
- * logo, plan, members) because any of them identifies the employer.
+ * Drops both the nested company data and the root companyId, since either one
+ * can be used to recover the employer through another endpoint.
  */
 export function maskAnonymousCompany<T extends object>(
   job: T,
@@ -48,7 +49,8 @@ export function maskAnonymousCompany<T extends object>(
     isVerified: false,
     anonymous: true,
   };
-  return { ...job, company: masked } as T;
+  const { companyId: _companyId, ...safeJob } = job as T & { companyId?: unknown };
+  return { ...safeJob, company: masked } as T;
 }
 
 /** Company name for plain-text surfaces (alerts, Telegram) that carry only the name. */

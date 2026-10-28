@@ -1,0 +1,20 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+import { PageHeader } from '@/components/shell/PageHeader';
+export default function JobOrdersPage() {
+  const [status, setStatus] = useState(''), [query, setQuery] = useState(''), [search, setSearch] = useState(''), [page, setPage] = useState(1), [retry, setRetry] = useState(0);
+  const [data, setData] = useState<any>(null), [error, setError] = useState(''), [active, setActive] = useState<any>(null), [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let alive = true; setLoading(true); setError(''); setData(null);
+    api('/admin/job-orders?' + new URLSearchParams({page: String(page), ...(status ? {status} : {}), ...(search ? {q: search} : {})})).then(value => {if (alive) setData(value);}).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
+    return () => {alive = false;};
+  }, [page, status, search, retry]);
+  return <><PageHeader title="Job orders" subtitle="One package per job. Local test activations are labelled separately from real payments. REVIEW orders require payment reconciliation; do not ask HR to pay again."/>
+    <div className="panel" style={{padding: 24}}><form onSubmit={event => {event.preventDefault(); setPage(1); setSearch(query);}} style={{display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20}}><input aria-label="Search orders" placeholder="Order, job or company" value={query} onChange={event => setQuery(event.target.value)} maxLength={160}/><select aria-label="Order status" value={status} onChange={event => {setPage(1); setStatus(event.target.value);}}><option value="">All statuses</option>{['PENDING','PAID','CANCELLED','EXPIRED','REVIEW'].map(value => <option key={value}>{value}</option>)}</select><button type="submit">Search</button><button type="button" disabled={loading} onClick={() => setRetry(n => n + 1)}>Refresh</button></form>
+      {error && <p role="alert">{error}</p>}{loading && <p role="status">Loading orders…</p>}
+      {data && <><div style={{overflowX: 'auto'}}><table className="data-table"><thead><tr>{['Job / Company','Package','Amount','Status','Provider','Created',''].map((label, i) => <th key={i}>{label}</th>)}</tr></thead><tbody>{data.items.map((order: any) => <tr key={order.id}><td><strong>{order.jobTitle}</strong><br/>{order.companyName}</td><td>{order.code}<br/>{order.intent}</td><td>{new Intl.NumberFormat('id-ID', {style: 'currency', currency: order.currency, maximumFractionDigits: 0}).format(order.amount)}</td><td>{order.status}</td><td>{order.provider === 'local-test' ? 'LOCAL TEST — no charge' : order.provider || 'Awaiting payment'}</td><td>{new Date(order.createdAt).toLocaleString()}</td><td><button onClick={async () => {setError(''); try {setActive(await api('/admin/job-orders/' + order.id));} catch (e) {setError(e instanceof Error ? e.message : String(e));}}}>Inspect</button></td></tr>)}</tbody></table></div>{!data.total && <p>No matching orders.</p>}<div style={{display: 'flex', justifyContent: 'space-between', marginTop: 20}}><button disabled={page <= 1} onClick={() => setPage(n => n - 1)}>Previous</button><span>{page} / {Math.max(1, Math.ceil(data.total / data.limit))} · {data.total} orders</span><button disabled={page * data.limit >= data.total} onClick={() => setPage(n => n + 1)}>Next</button></div></>}
+    </div>
+    {active && <section className="panel" style={{padding: 24, marginTop: 20}}><h2>Order #{active.id}</h2><p>{active.companyName} · {active.jobTitle}</p><p>{active.status} · {active.provider || 'No payment received'} · {active.fulfilledAt ? 'Package granted' : 'Package not granted'}</p><p>{active.providerReference || 'No provider reference'}</p><h3>Verified payment events</h3>{active.events.length ? <ul>{active.events.map((event: any) => <li key={event.id}>{event.provider} · {event.eventId} · {event.amount} {event.currency} · {new Date(event.createdAt).toLocaleString()}</li>)}</ul> : <p>No payment events. Free orders need no payment.</p>}<button onClick={() => setActive(null)}>Close details</button></section>}
+  </>;
+}

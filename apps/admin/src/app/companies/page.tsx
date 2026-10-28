@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { CatalogCityFilter } from '@/components/ui/CatalogCityFilter';
 import { apiPost } from '@/lib/api';
 import { downloadCsv, timestampedName } from '@/lib/csv';
 import { useAdminTable } from '@/lib/useAdminTable';
 import {
   AdminCompany,
   COMPANY_SIZES,
-  PLAN_CODES,
-  type PlanCode,
   formatDate,
 } from '@/lib/types';
 import { PageHeader } from '@/components/shell/PageHeader';
@@ -22,11 +21,11 @@ import {
 } from '@/components/data/TableChrome';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { Badge, DateField, MultiSelect, SelectField } from '@/components/ui/primitives';
+import { useToast } from '@/components/ui/Toaster';
 
 const DEFAULTS = { page: '1', limit: '25', sort: 'createdAt', dir: 'desc' };
 const FILTER_KEYS = [
   'q',
-  'plan',
   'verified',
   'banned',
   'size',
@@ -40,14 +39,10 @@ const FILTER_KEYS = [
   'limit',
 ];
 
-const PLAN_TONE: Record<PlanCode, 'default' | 'accent' | 'ok' | 'warn'> = {
-  FREE: 'default',
-  STANDARD: 'default',
-  PREMIUM: 'accent',
-  VIP: 'warn',
-};
 
-type Pending = { kind: 'ban'; banned: boolean } | { kind: 'plan'; plan: PlanCode };
+type Pending =
+  | { kind: 'single'; row: AdminCompany; banned: boolean }
+  | { kind: 'bulk'; banned: boolean };
 
 export default function CompaniesPage() {
   const table = useAdminTable<AdminCompany>({
@@ -57,6 +52,7 @@ export default function CompaniesPage() {
   });
   const { query, setFilter } = table;
   const [pending, setPending] = useState<Pending | null>(null);
+  const { notify } = useToast();
 
   const columns: Array<Column<AdminCompany>> = [
     {
@@ -80,15 +76,6 @@ export default function CompaniesPage() {
           </span>
         </div>
       ),
-    },
-    {
-      key: 'plan',
-      label: 'Plan',
-      render: (row) => {
-        const plan = row.subscription?.plan;
-        if (!plan) return <span className="muted">None</span>;
-        return <Badge tone={PLAN_TONE[plan]}>{plan}</Badge>;
-      },
     },
     {
       key: 'status',
@@ -123,7 +110,6 @@ export default function CompaniesPage() {
   ];
 
   const activeFilters: ActiveFilter[] = [];
-  if (query.plan) activeFilters.push({ key: 'plan', label: `Plan: ${query.plan}` });
   if (query.banned)
     activeFilters.push({ key: 'banned', label: query.banned === 'true' ? 'Banned' : 'Not banned' });
   if (query.verified)
@@ -139,15 +125,19 @@ export default function CompaniesPage() {
     activeFilters.push({ key: 'createdFrom', label: `From ${query.createdFrom}` });
   if (query.createdTo) activeFilters.push({ key: 'createdTo', label: `To ${query.createdTo}` });
 
-  function exportCsv() {
-    const rows = table.selected.size
-      ? table.rows.filter((row) => table.selected.has(row.id))
-      : table.rows;
-    downloadCsv(timestampedName('companies'), rows, [
+  async function exportCsv() {
+    try {
+      const rows = table.selected.size
+        ? await apiPost<AdminCompany[]>('/admin/companies/selected', { ids: [...table.selected] })
+        : table.rows;
+      if (!rows.length) {
+        notify('No companies to export', 'error');
+        return;
+      }
+      downloadCsv(timestampedName('companies'), rows, [
       { header: 'id', value: (r) => r.id },
       { header: 'name', value: (r) => r.name },
       { header: 'slug', value: (r) => r.slug },
-      { header: 'plan', value: (r) => r.subscription?.plan ?? '' },
       { header: 'verified', value: (r) => r.isVerified },
       { header: 'banned', value: (r) => r.isBanned },
       { header: 'jobs', value: (r) => r._count.jobPosts },
@@ -155,7 +145,10 @@ export default function CompaniesPage() {
       { header: 'city', value: (r) => r.city?.name ?? '' },
       { header: 'industry', value: (r) => r.industry?.name ?? '' },
       { header: 'createdAt', value: (r) => r.createdAt },
-    ]);
+      ]);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not export companies', 'error');
+    }
   }
 
   return (
@@ -167,10 +160,10 @@ export default function CompaniesPage() {
           <button
             type="button"
             className="secondary"
-            onClick={exportCsv}
-            disabled={!table.rows.length}
+            onClick={() => void exportCsv()}
+            disabled={!table.rows.length && !table.selected.size}
           >
-            Export CSV
+            {table.selected.size ? `Export selected (${table.selected.size})` : 'Export CSV'}
           </button>
         }
       />
@@ -198,12 +191,6 @@ export default function CompaniesPage() {
           advanced={
             <>
               <MultiSelect
-                label="Plan"
-                options={PLAN_CODES}
-                value={query.plan ?? ''}
-                onChange={(next) => setFilter('plan', next)}
-              />
-              <MultiSelect
                 label="Size"
                 options={COMPANY_SIZES}
                 value={query.size ?? ''}
@@ -227,14 +214,7 @@ export default function CompaniesPage() {
                   placeholder="information-technology"
                 />
               </label>
-              <label>
-                City slug
-                <input
-                  value={query.citySlug ?? ''}
-                  onChange={(e) => setFilter('citySlug', e.target.value)}
-                  placeholder="tashkent"
-                />
-              </label>
+              <CatalogCityFilter value={query.citySlug ?? ''} onChange={next => setFilter('citySlug', next)} />
               <DateField
                 label="Created from"
                 value={query.createdFrom ?? ''}
@@ -251,6 +231,8 @@ export default function CompaniesPage() {
 
         <SelectAllNotice
           pageCount={table.rows.length}
+          selectedOnPage={table.rows.filter((row) => table.selected.has(row.id)).length}
+          selectedCount={table.selected.size}
           total={table.total}
           allMatchingSelected={table.allMatching.active}
           capped={table.allMatching.capped}
@@ -276,12 +258,7 @@ export default function CompaniesPage() {
               type="button"
               className={row.isBanned ? 'secondary sm' : 'danger sm'}
               disabled={table.busy}
-              onClick={() =>
-                table.runAction(
-                  apiPost(`/admin/companies/${row.id}/ban`, { banned: !row.isBanned }),
-                  row.isBanned ? 'Company unbanned' : 'Company banned',
-                )
-              }
+              onClick={() => setPending({ kind: 'single', row, banned: !row.isBanned })}
             >
               {row.isBanned ? 'Unban' : 'Ban'}
             </button>
@@ -298,27 +275,17 @@ export default function CompaniesPage() {
         />
 
         <BulkBar count={table.selected.size} onClear={table.clearSelection}>
-          {PLAN_CODES.map((plan) => (
-            <button
-              key={plan}
-              type="button"
-              className="secondary sm"
-              onClick={() => setPending({ kind: 'plan', plan })}
-            >
-              Set {plan}
-            </button>
-          ))}
           <button
             type="button"
             className="danger sm"
-            onClick={() => setPending({ kind: 'ban', banned: true })}
+            onClick={() => setPending({ kind: 'bulk', banned: true })}
           >
             Ban
           </button>
           <button
             type="button"
             className="secondary sm"
-            onClick={() => setPending({ kind: 'ban', banned: false })}
+            onClick={() => setPending({ kind: 'bulk', banned: false })}
           >
             Unban
           </button>
@@ -328,36 +295,40 @@ export default function CompaniesPage() {
       <ConfirmDialog
         open={pending !== null}
         title={
-          pending?.kind === 'plan'
-            ? `Move selected companies to ${pending.plan}`
-            : pending?.banned
-              ? 'Ban selected companies'
-              : 'Unban selected companies'
+          pending?.kind === 'single'
+            ? pending.banned ? `Ban ${pending.row.name}?` : `Unban ${pending.row.name}?`
+            : pending?.banned ? 'Ban selected companies' : 'Unban selected companies'
         }
         description={
-          pending?.kind === 'plan'
-            ? `${table.selected.size} subscriptions will change to ${pending.plan} and be marked active.`
+          pending?.kind === 'single'
+            ? pending.banned
+              ? `${pending.row.name} will be banned and its published jobs paused.`
+              : `${pending.row.name} will be restored. Its jobs stay paused until reopened.`
             : pending?.banned
               ? `${table.selected.size} companies will be banned and their published jobs paused.`
               : `${table.selected.size} companies will be restored. Their jobs stay paused until reopened.`
         }
-        confirmLabel={pending?.kind === 'plan' ? 'Change plans' : pending?.banned ? 'Ban them' : 'Unban them'}
-        destructive={pending?.kind === 'ban' && pending.banned}
+        confirmLabel={pending?.banned ? 'Ban them' : 'Unban them'}
+        destructive={Boolean(pending?.banned)}
         busy={table.busy}
         onCancel={() => setPending(null)}
         onConfirm={async () => {
           const action = pending;
-          setPending(null);
           if (!action) return;
-          if (action.kind === 'plan') {
-            await table.runBulk('/admin/companies/bulk/plan', { plan: action.plan }, 'updated');
-          } else {
-            await table.runBulk(
+          if (action.kind === 'single') {
+            const saved = await table.runAction(
+              apiPost(`/admin/companies/${action.row.id}/ban`, { banned: action.banned }),
+              action.banned ? 'Company banned' : 'Company unbanned',
+            );
+            if (saved) setPending(null);
+            return;
+          }
+          const saved = await table.runBulk(
               '/admin/companies/bulk/ban',
               { banned: action.banned },
               action.banned ? 'banned' : 'unbanned',
             );
-          }
+          if (saved) setPending(null);
         }}
       />
     </>

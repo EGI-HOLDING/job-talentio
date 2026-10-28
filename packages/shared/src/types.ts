@@ -1,10 +1,8 @@
-export type Locale = 'uz' | 'ru' | 'en';
+export type Locale = 'uz' | 'ru' | 'en' | 'id';
 
 export type UserRole = 'EMPLOYEE' | 'RECRUITER' | 'SUPER_ADMIN';
 
 export type CompanyMemberRole = 'OWNER' | 'ADMIN' | 'RECRUITER';
-
-export type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
 
 export type JobStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED' | 'EXPIRED';
 
@@ -16,12 +14,6 @@ export type ApplicationStatus =
   | 'HIRED'
   | 'REJECTED'
   | 'WITHDRAWN';
-
-export type SubscriptionStatus =
-  | 'PENDING'
-  | 'ACTIVE'
-  | 'PAST_DUE'
-  | 'CANCELLED';
 
 export type ProfileVisibility =
   | 'PUBLIC'

@@ -142,7 +142,6 @@ The API picks the language from `?locale=`, then the `X-Locale` header sent by t
 | `RESEND_API_KEY`, `SMTP_FROM` | set, `Job Talentio <info@jobtalent.io>` | Verification, reset and alert emails to real mailboxes |
 | `MEILI_HOST`, `MEILI_MASTER_KEY` | set | Typo-tolerant search in uz/ru; falls back to Prisma when absent |
 | `DEV_AUTH_ENABLED` | `false` | Never expose dev login on a public host |
-| `PAYMENT_PROVIDER` | `mock` | Checkout runs in demo mode until Payme/Click land |
 
 Then walk through [docs/DEMO-SCRIPT.md](../docs/DEMO-SCRIPT.md) pre-flight from a phone.
 
@@ -212,13 +211,6 @@ ADMIN_URL=https://admin.jobtalent.io
 API_URL=https://api.jobtalent.io
 SUPERADMIN_EMAIL=<your-admin@jobtalent.io>
 SUPERADMIN_PASSWORD=<strong-password-min-12-chars>
-PAYMENT_PROVIDER=mock
-# Keep false on staging/prod. true only for local mock auto-confirm of plan/hot purchases.
-PAYMENTS_MOCK=false
-# HMAC-SHA256 secret verifying provider webhooks (POST /api/billing/webhooks/mock,
-# header X-Mock-Signature). Payments are confirmed via signed webhooks; card data
-# is never collected or stored by this platform.
-PAYMENTS_WEBHOOK_SECRET=<long-random-secret>
 
 # Cloudflare R2
 S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
@@ -371,7 +363,7 @@ credentials. Use one of:
 - [ ] Test verification email arrives (Resend or Pro+ Hostinger SMTP)
 - [ ] Chat WebSocket works through Cloudflare
 - [ ] `DEV_AUTH_ENABLED=false` on both envs
-- [ ] `PAYMENTS_MOCK=false` on staging/prod (set `true` only for local mock auto-confirm)
+- [ ] Retired billing, upgrade and boost endpoints return 404
 - [ ] `JWT_SECRET` is unique, ≥32 chars, and not the local-dev default
 - [ ] Spending cap set; staging limits reduced
 - [ ] Super Admin password rotated from defaults

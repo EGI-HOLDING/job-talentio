@@ -6,38 +6,30 @@ import { slugify } from './utils';
 
 type Db = Pick<PrismaClient, 'jobTitle' | 'jobTitleAlias'>;
 
-/** Map variant normalized keys → canonical key (role tokens). */
-const TITLE_SYNONYMS: Record<string, string> = {
-  frontdeveloper: 'frontenddeveloper',
-  frontenddev: 'frontenddeveloper',
-  frontdev: 'frontenddeveloper',
-  backendeveloper: 'backenddeveloper',
-  backenddev: 'backenddeveloper',
-  cppdeveloper: 'cplusplusdeveloper',
-  cppsystemsengineer: 'cplusplussystemsengineer',
-  nodedev: 'nodejsdeveloper',
-  reactjsdeveloper: 'reactdeveloper',
-  // One family. Data Engineer and Python Developer stay outside it.
-  mlengineer: 'machinelearningengineer',
-  aiengineer: 'machinelearningengineer',
-  artificialintelligenceengineer: 'machinelearningengineer',
-  ithandler: 'itsupport',
-  helpdesk: 'itsupport',
-  helpdesktechnician: 'itsupport',
-  helpdeskspecialist: 'itsupport',
-  helpdeskanalyst: 'itsupport',
-  technicalsupport: 'itsupport',
-  technicalsupportspecialist: 'itsupport',
-  desktopsupport: 'itsupport',
-  itspecialist: 'itsupport',
-  itsupportengineer: 'itsupport',
-  itsupportspecialist: 'itsupport',
-  ithandlerspecialist: 'itsupport',
-  computertechnician: 'itsupport',
-  servicedesk: 'itsupport',
-  servicedeskanalyst: 'itsupport',
-  ittechnician: 'itsupport',
-};
+/** Resolve existing catalog labels/aliases without creating or editing catalog rows. */
+export async function canonicalRoleNames(db: Pick<Db, 'jobTitle'>, values: string[]): Promise<string[]> {
+  const texts = values.map(value => value.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  if (!texts.length) return [];
+  const fields = ['name', 'nameId', 'nameUz', 'nameRu'] as const;
+  const rows = await db.jobTitle.findMany({
+    where: { archivedAt: null, OR: texts.flatMap(text => [
+      ...fields.map(field => ({ [field]: { equals: text, mode: 'insensitive' as const } })),
+      { aliases: { some: { alias: { equals: text, mode: 'insensitive' as const } } } },
+    ]) },
+    include: { aliases: true },
+  });
+  const key = (value: string) => value.normalize('NFKC').toLowerCase();
+  const names = new Map<string, string>();
+  for (const row of rows) {
+    for (const label of [...fields.map(field => row[field]), ...row.aliases.map(alias => alias.alias)]) {
+      if (label) names.set(key(label), row.name);
+    }
+  }
+  return [...new Map(texts.map(text => {
+    const canonical = names.get(key(text)) || text;
+    return [key(canonical), canonical] as const;
+  })).values()];
+}
 
 const SENIORITY_LEVEL: Record<string, ExperienceLevel> = {
   intern: 'INTERN',
@@ -126,115 +118,57 @@ export function stripSeniorityFromTitle(input: string): StripSeniorityResult {
   return { roleTitle: s, inferredLevel: inferred };
 }
 
-/**
- * Whole-word abbreviations that are shorter than a distinctive title token.
- * Applied before tokens are cut so "ML" still means machine learning.
- * Not a catalog of IT roles.
- */
-const TITLE_ABBREVIATIONS: Array<[RegExp, string]> = [
-  [/\bml\b/g, 'machine learning'],
-  [/\bai\b/g, 'artificial intelligence'],
-  [/\bhr\b/g, 'human resources'],
-  [/\bqa\b/g, 'quality assurance'],
-  [/\bui\b/g, 'user interface'],
-  [/\bux\b/g, 'user experience'],
-  [/\bpr\b/g, 'public relations'],
-];
-
-export function expandTitleAbbreviations(input: string): string {
-  let s = input.toLowerCase();
-  // Keep the existing UI/UX compound intact so it does not expand twice.
-  s = s.replace(/ui\s*\/\s*ux/g, 'uiux');
-  for (const [pattern, phrase] of TITLE_ABBREVIATIONS) {
-    pattern.lastIndex = 0;
-    s = s.replace(pattern, phrase);
-  }
-  return s;
-}
-
 export function normalizeJobTitleKey(input: string): string {
   const { roleTitle } = stripSeniorityFromTitle(input);
-  let s = roleTitle
+  return catalogTitleIdentityKey(roleTitle);
+}
+
+/** Catalog labels keep occupation words; punctuation variants share an identity. */
+export function catalogTitleIdentityKey(input: string): string {
+  const s = input
     .trim()
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-  s = s
+    .replace(/[\u0300-\u036f]/g, '')
+    // Preserve word boundaries so curated variants resolve through JobTitleAlias.
     .replace(/c\+\+/g, 'cplusplus')
-    .replace(/\bcpp\b/g, 'cplusplus')
-    .replace(/c\s*plus\s*plus/g, 'cplusplus')
     .replace(/c#/g, 'csharp')
-    .replace(/node\.?js/g, 'nodejs')
-    .replace(/react\.?js/g, 'react')
-    .replace(/front[\s-]*end/g, 'frontend')
-    .replace(/back[\s-]*end/g, 'backend')
-    .replace(/full[\s-]*stack/g, 'fullstack')
-    .replace(/ui\s*\/\s*ux/g, 'uiux')
-    .replace(/ui\/ux/g, 'uiux');
-
-  s = s.replace(/[^a-z0-9]+/g, '');
-  if (!s) return '';
-  return TITLE_SYNONYMS[s] ?? s;
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return s;
 }
 
-/** Collapse a stored or live title key through TITLE_SYNONYMS. */
+/** Normalize a stored or live title key. */
 export function canonicalTitleKey(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return '';
-  if (/^[a-z0-9]+$/i.test(trimmed)) {
-    const lower = trimmed.toLowerCase();
-    return TITLE_SYNONYMS[lower] ?? lower;
-  }
+  // Older rows have compact normalized keys; preserve them while new labels use
+  // separator-preserving keys so aliases remain data-driven.
+  if (/^[a-z0-9]+$/i.test(trimmed)) return trimmed.toLowerCase();
   return normalizeJobTitleKey(trimmed);
 }
 
-/** Canonical key plus every synonym that maps to it (for catalog queries). */
-export function titleSynonymCluster(key: string): string[] {
-  const canonical = canonicalTitleKey(key);
-  if (!canonical) return [];
-  const cluster = new Set<string>([canonical]);
-  const compact = key.toLowerCase().replace(/[^a-z0-9]+/g, '');
-  if (compact) cluster.add(compact);
-  for (const [variant, canon] of Object.entries(TITLE_SYNONYMS)) {
-    if (canon === canonical || variant === canonical) {
-      cluster.add(variant);
-      cluster.add(canon);
-    }
-  }
-  return [...cluster];
-}
-
 export function profileRoleTexts(p: {
+  desiredPositions?: string[];
   desiredPosition?: string | null;
   headline?: string | null;
   experiences?: Array<{ title?: string | null }>;
 }): string[] {
-  return [p.desiredPosition, p.headline, ...(p.experiences || []).map((e) => e.title)]
+  return [...(p.desiredPositions || []), p.desiredPosition, p.headline, ...(p.experiences || []).map((e) => e.title)]
     .map((t) => (t || '').trim())
     .filter(Boolean);
 }
 
 export function jobTitleSlugify(input: string): string {
   const { roleTitle } = stripSeniorityFromTitle(input);
-  let s = roleTitle.trim().toLowerCase();
-  s = s
-    .replace(/c\+\+/gi, 'cplusplus')
-    .replace(/\bcpp\b/gi, 'cplusplus')
-    .replace(/front[\s-]*end/gi, 'frontend')
-    .replace(/back[\s-]*end/gi, 'backend')
-    .replace(/full[\s-]*stack/gi, 'fullstack');
+  const s = roleTitle.trim().toLowerCase().replace(/c\+\+/gi, 'cplusplus');
   return slugify(s) || normalizeJobTitleKey(roleTitle).slice(0, 60);
 }
 
 export function canonicalDisplayName(roleTitle: string): string {
   let s = stripSeniorityFromTitle(roleTitle).roleTitle.trim().replace(/\s+/g, ' ');
   s = s
-    .replace(/\bcpp\b/gi, 'C++')
     .replace(/\bc\+\+\b/gi, 'C++')
-    .replace(/\bfrontend\b/gi, 'Frontend')
-    .replace(/\bbackend\b/gi, 'Backend')
-    .replace(/\bfull[\s-]*stack\b/gi, 'Full-stack')
     .replace(/\bui\s*\/\s*ux\b/gi, 'UI/UX');
   return s
     .split(' ')
@@ -317,6 +251,36 @@ export async function resolveJobTitle(
   const raw = (opts.name || opts.slug || '').trim();
   if (!raw) throw new BadRequestException('Job title is required');
 
+  // A catalog label is an occupation identity, not an experience-level hint.
+  // Probe before stripping tokens: "data entry clerk" and "middle office
+  // analyst" contain role words that must not become JUNIOR/MIDDLE levels.
+  const exact = async (text: string) => {
+    const localized = await db.jobTitle.findFirst({
+      where: { archivedAt: null, OR: (['name', 'nameId', 'nameUz', 'nameRu'] as const)
+        .map(field => ({ [field]: { equals: text, mode: 'insensitive' as const } })) },
+    });
+    if (localized) return localized;
+    const identityKey = catalogTitleIdentityKey(text);
+    const alias = await db.jobTitleAlias.findUnique({ where: { aliasKey: identityKey }, include: { jobTitle: true } });
+    return alias?.jobTitle && !alias.jobTitle.archivedAt ? alias.jobTitle : null;
+  };
+  if (opts.slug) {
+    const selected = await db.jobTitle.findUnique({ where: { slug: opts.slug.trim().toLowerCase() } });
+    if (selected && !selected.archivedAt) return { jobTitle: selected, created: false, matchedVia: 'slug', inferredLevel: null, roleTitle: selected.name };
+  }
+  const selected = await exact(raw);
+  if (selected) return { jobTitle: selected, created: false, matchedVia: 'name', inferredLevel: null, roleTitle: selected.name };
+  let remainder = raw;
+  let prefixLevel: ExperienceLevel | null = null;
+  for (let i = 0; i < 3; i++) {
+    const prefix = remainder.match(/^(junior|senior|mid(?:dle)?(?:[-\s]?level)?|entry(?:[-\s]?level)?|principal|staff|intern(?:ship)?|jr\.?|sr\.?)\s+/i);
+    if (!prefix) break;
+    prefixLevel ||= stripSeniorityFromTitle(prefix[1] + ' role').inferredLevel;
+    remainder = remainder.slice(prefix[0].length).trim();
+    const catalogRole = await exact(remainder);
+    if (catalogRole) return { jobTitle: catalogRole, created: false, matchedVia: 'name', inferredLevel: prefixLevel, roleTitle: catalogRole.name };
+  }
+
   const { roleTitle, inferredLevel } = stripSeniorityFromTitle(raw);
   if (roleTitle.length < 2) {
     throw new BadRequestException('Job title is too short after removing seniority words');
@@ -324,6 +288,11 @@ export async function resolveJobTitle(
 
   const slug = opts.slug ? jobTitleSlugify(opts.slug) : jobTitleSlugify(roleTitle);
   const key = normalizeJobTitleKey(roleTitle);
+  const localized = await db.jobTitle.findFirst({
+    where: { archivedAt: null, OR: (['name', 'nameId', 'nameUz', 'nameRu'] as const)
+      .map(field => ({ [field]: { equals: raw, mode: 'insensitive' as const } })) },
+  });
+  if (localized) return { jobTitle: localized, created: false, matchedVia: 'name', inferredLevel, roleTitle };
   if (!key || key.length < 2) {
     throw new BadRequestException('Job title is too short or invalid');
   }
@@ -333,6 +302,7 @@ export async function resolveJobTitle(
     matchedVia: ResolveJobTitleResult['matchedVia'],
     created: boolean,
   ): Promise<ResolveJobTitleResult> => {
+    if (jobTitle.archivedAt) throw new BadRequestException('Job title is not available');
     const cleaned = await ensureCleanCatalogName(db, jobTitle, roleTitle);
     await ensureAlias(db, cleaned.id, raw, key);
     return { jobTitle: cleaned, created, matchedVia, inferredLevel, roleTitle };

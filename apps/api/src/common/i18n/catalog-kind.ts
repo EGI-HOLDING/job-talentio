@@ -14,8 +14,10 @@ export type CatalogRow = {
   name: string;
   nameUz: string | null;
   nameRu: string | null;
+  nameId: string | null;
   nameUzIsMachine: boolean;
   nameRuIsMachine: boolean;
+  nameIdIsMachine: boolean;
   i18nStatus: CatalogI18nStatus;
   createdAt: Date;
 };
@@ -37,11 +39,22 @@ export type CatalogDelegate = {
 };
 
 export type AliasDelegate = {
+  findUnique(args: { where: Record<string, string> }): Promise<CatalogAliasRow | null>;
+  findMany(args: Record<string, unknown>): Promise<CatalogAliasRow[]>;
   updateMany(args: {
     where: Record<string, unknown>;
     data: Record<string, unknown>;
   }): Promise<{ count: number }>;
-  create(args: { data: Record<string, unknown> }): Promise<unknown>;
+  create(args: { data: Record<string, unknown> }): Promise<CatalogAliasRow>;
+  delete(args: { where: { id: string } }): Promise<CatalogAliasRow>;
+};
+
+export type CatalogAliasRow = {
+  [key: string]: unknown;
+  id: string;
+  alias: string;
+  aliasKey: string;
+  createdAt: Date;
 };
 
 /** Foreign key each alias table uses to point at its catalog row. */

@@ -19,7 +19,8 @@ export type JobSeoPayload = {
   closedAt?: string | null;
   createdAt: string;
   company: { name: string; slug: string; logoUrl?: string | null };
-  city?: { name: string } | null;
+  city?: { name: string; province?: { name: string; country?: { name: string; iso2: string } } } | null;
+  country?: { name: string; iso2: string } | null;
   /** Language the title and description are served in. */
   contentLocale?: string | null;
   availableLocales?: string[];
@@ -130,9 +131,10 @@ export function buildJobPostingJsonLd(
     jsonLd.validThrough = job.closedAt;
   }
 
+  const country = job.country || job.city?.province?.country;
   if (job.workMode === 'REMOTE') {
     jsonLd.jobLocationType = 'TELECOMMUTE';
-    jsonLd.applicantLocationRequirements = { '@type': 'Country', name: 'Uzbekistan' };
+    if (country) jsonLd.applicantLocationRequirements = { '@type': 'Country', name: country.name };
   }
   // Google requires jobLocation for onsite/hybrid; include for remote too when city known.
   if (job.city?.name || job.workMode !== 'REMOTE') {
@@ -141,7 +143,8 @@ export function buildJobPostingJsonLd(
       address: {
         '@type': 'PostalAddress',
         ...(job.city?.name ? { addressLocality: job.city.name } : {}),
-        addressCountry: 'UZ',
+        ...(job.city?.province?.name ? { addressRegion: job.city.province.name } : {}),
+        ...(country?.iso2 ? { addressCountry: country.iso2 } : {}),
       },
     };
   }

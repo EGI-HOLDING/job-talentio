@@ -15,7 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
 import { StorageService } from '../storage/storage.service';
-import { slugify } from '../common/utils';
+import { escapeHtml, slugify } from '../common/utils';
 import { normalizeCompanyName, normalizeEmail, sha256 } from '../common/dedupe';
 import { Prisma, UserRole } from '@prisma/client';
 import { CompaniesService } from '../companies/companies.service';
@@ -149,23 +149,27 @@ export class AuthService {
     return raw;
   }
 
-  private async tokenFor(userId: string) {
+  private async tokenFor(userId: string, issueRefresh = true, joinedCompanyId?: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       include: {
         memberships: { select: { companyId: true, role: true } },
-        employeeProfile: { select: { id: true } },
+        employeeProfile: { select: { id: true, onboardingStatus: true, onboardingStep: true } },
       },
     });
+    const recruiterOnboarding = user.role === 'RECRUITER'
+      ? await this.prisma.recruiterOnboarding.upsert({where: {userId}, create: {userId}, update: {}})
+      : null;
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
       role: user.role,
       tv: user.tokenVersion,
     });
-    const refreshToken = await this.issueRefreshToken(user.id);
+    const refreshToken = issueRefresh ? await this.issueRefreshToken(user.id) : undefined;
     return {
       accessToken,
       refreshToken,
+      ...(joinedCompanyId ? { joinedCompanyId } : {}),
       user: {
         id: user.id,
         email: user.email,
@@ -179,6 +183,8 @@ export class AuthService {
         hasPassword: Boolean(user.passwordHash),
         memberships: user.memberships,
         employeeProfileId: user.employeeProfile?.id ?? null,
+        employeeOnboarding: user.employeeProfile ? { status: user.employeeProfile.onboardingStatus, step: user.employeeProfile.onboardingStep } : null,
+        recruiterOnboarding: recruiterOnboarding ? {status: recruiterOnboarding.status, step: recruiterOnboarding.step} : null,
       },
     };
   }
@@ -206,10 +212,13 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: record.userId } });
     if (!user || user.isBanned) throw new UnauthorizedException('Account unavailable');
 
-    await this.prisma.refreshToken.update({
-      where: { id: record.id },
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { id: record.id, revokedAt: null, expiresAt: { gt: new Date() } },
       data: { revokedAt: new Date() },
     });
+    if (claimed.count !== 1) {
+      throw new UnauthorizedException('Refresh token already used or expired');
+    }
     return this.tokenFor(record.userId);
   }
 
@@ -245,6 +254,15 @@ export class AuthService {
 
   async revokeAllSessions(userId: string) {
     return this.revokeSessionsForUsers([userId]);
+  }
+
+  /** Credentials and their bearer links must change in the same transaction. */
+  private async revokeCredentialSessions(tx: Prisma.TransactionClient, userId: string) {
+    await tx.user.update({ where: { id: userId }, data: { tokenVersion: { increment: 1 } } });
+    await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await tx.emailVerificationToken.deleteMany({ where: { userId, usedAt: null } });
+    await tx.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
+    await tx.emailChangeToken.deleteMany({ where: { userId, usedAt: null } });
   }
 
   async ensureEmailAvailable(email: string) {
@@ -307,14 +325,15 @@ export class AuthService {
     });
     const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
     const link = `${webUrl}/reset-password?token=${rawToken}`;
+    const safeLink = escapeHtml(link);
     const resetLocale = emailLocale(user.locale);
     const sent = await this.mail.send(
       user.email,
       translateMessage('email.resetPassword.subject', resetLocale),
-      `<p>${translateMessage('email.greeting', resetLocale, { name: user.fullName })}</p>
+      `<p>${translateMessage('email.greeting', resetLocale, { name: escapeHtml(user.fullName) })}</p>
        <p>${translateMessage('email.resetPassword.intro', resetLocale)}</p>
-       <p><a href="${link}">${translateMessage('email.resetPassword.cta', resetLocale)}</a></p>
-       <p>${translateMessage('email.linkFallback', resetLocale, { link })}</p>
+       <p><a href="${safeLink}">${translateMessage('email.resetPassword.cta', resetLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', resetLocale, { link: safeLink })}</p>
        <p>${translateMessage('email.expires24h', resetLocale)} ${translateMessage('email.resetPassword.ignore', resetLocale)}</p>`,
     );
     if (!sent) {
@@ -375,9 +394,6 @@ export class AuthService {
         const company = await tx.company.create({
           data: { name, slug },
         });
-        await tx.subscription.create({
-          data: { companyId: company.id, plan: 'FREE', status: 'ACTIVE' },
-        });
         await tx.companyMember.create({
           data: { companyId: company.id, userId: created.id, role: 'OWNER' },
         });
@@ -391,7 +407,7 @@ export class AuthService {
       await this.mail.send(
         user.email,
         translateMessage('email.welcome.subject', welcomeLocale),
-        `<p>${translateMessage('email.greeting', welcomeLocale, { name: user.fullName })}</p>` +
+        `<p>${translateMessage('email.greeting', welcomeLocale, { name: escapeHtml(user.fullName) })}</p>` +
           `<p>${translateMessage('email.welcome.body', welcomeLocale)}</p>`,
       );
     }
@@ -405,7 +421,7 @@ export class AuthService {
     }
   }
 
-  async login(email: string, password: string, expectedRole?: 'EMPLOYEE' | 'RECRUITER') {
+  async login(email: string, password: string, expectedRole?: 'EMPLOYEE' | 'RECRUITER', inviteToken?: string) {
     const normalized = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalized } });
     if (!user?.passwordHash) throw new UnauthorizedException('Invalid email or password');
@@ -413,7 +429,8 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid email or password');
     this.assertLoginRole(user.role, expectedRole);
-    return this.tokenFor(user.id);
+    const invite = inviteToken ? await this.acceptInviteOnExistingUser(inviteToken, normalized, user.id) : null;
+    return this.tokenFor(user.id, true, invite?.companyId);
   }
 
   async devLogin(email: string, role?: UserRole) {
@@ -440,9 +457,6 @@ export class AuthService {
         const company = await this.prisma.company.create({
           data: { name: `Dev Company ${slug}`, slug },
         });
-        await this.prisma.subscription.create({
-          data: { companyId: company.id, plan: 'FREE', status: 'ACTIVE' },
-        });
         await this.prisma.companyMember.create({
           data: { companyId: company.id, userId: user.id, role: 'OWNER' },
         });
@@ -455,7 +469,7 @@ export class AuthService {
   }
 
   async me(userId: string) {
-    return this.tokenFor(userId);
+    return this.tokenFor(userId, false);
   }
 
   async updateAccount(
@@ -508,17 +522,22 @@ export class AuthService {
       const ok = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!ok) throw new UnauthorizedException('Current password is incorrect');
     }
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await this.revokeCredentialSessions(tx, userId);
     });
-    await this.revokeAllSessions(userId);
     return this.tokenFor(userId);
   }
 
   // ── Google Sign-In (GIS ID-token flow) ─────────────────────
 
   private googleClient: OAuth2Client | null = null;
+
+  googleSignInConfig() {
+    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID', '').trim();
+    return clientId ? { available: true, clientId } : { available: false };
+  }
 
   private getGoogleClient(): OAuth2Client {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
@@ -649,14 +668,15 @@ export class AuthService {
       },
     });
     const link = this.verificationLink(rawToken);
+    const safeLink = escapeHtml(link);
     const verifyLocale = emailLocale(user.locale);
     const sent = await this.mail.send(
       user.email,
       translateMessage('email.verify.subject', verifyLocale),
-      `<p>${translateMessage('email.greeting', verifyLocale, { name: user.fullName })}</p>
+      `<p>${translateMessage('email.greeting', verifyLocale, { name: escapeHtml(user.fullName) })}</p>
        <p>${translateMessage('email.verify.intro', verifyLocale)}</p>
-       <p><a href="${link}">${translateMessage('email.verify.cta', verifyLocale)}</a></p>
-       <p>${translateMessage('email.linkFallback', verifyLocale, { link })}</p>
+       <p><a href="${safeLink}">${translateMessage('email.verify.cta', verifyLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', verifyLocale, { link: safeLink })}</p>
        <p>${translateMessage('email.expires24h', verifyLocale)} ${translateMessage('email.verify.ignore', verifyLocale)}</p>`,
     );
     if (!sent) {
@@ -691,6 +711,9 @@ export class AuthService {
     if (!user) {
       const byEmail = await this.prisma.user.findUnique({ where: { email: google.email } });
       if (byEmail) {
+        if (!googleMailboxVerified) {
+          throw new UnauthorizedException('Google has not verified this email. Sign in with your password to use the existing account.');
+        }
         if (!inviteToken) this.assertLoginRole(byEmail.role, input.expectedRole);
         user = await this.prisma.user.update({
           where: { id: byEmail.id },
@@ -717,10 +740,8 @@ export class AuthService {
         }
       }
       await this.syncGoogleMailboxVerified(user, google);
-      if (inviteToken) {
-        await this.acceptInviteOnExistingUser(inviteToken, google.email, user.id);
-      }
-      return this.tokenFor(user.id);
+      const invite = inviteToken ? await this.acceptInviteOnExistingUser(inviteToken, google.email, user.id) : null;
+      return this.tokenFor(user.id, true, invite?.companyId);
     }
 
     if (inviteToken) {
@@ -785,9 +806,6 @@ export class AuthService {
         const slugExists = await tx.company.findUnique({ where: { slug } });
         if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
         const company = await tx.company.create({ data: { name, slug } });
-        await tx.subscription.create({
-          data: { companyId: company.id, plan: 'FREE', status: 'ACTIVE' },
-        });
         await tx.companyMember.create({
           data: { companyId: company.id, userId: newUser.id, role: 'OWNER' },
         });
@@ -820,21 +838,7 @@ export class AuthService {
   }
 
   private async acceptInviteOnExistingUser(rawToken: string, email: string, userId: string) {
-    try {
-      await this.companies.consumeInviteForExistingUser(rawToken, email, userId);
-    } catch (e) {
-      if (e instanceof ConflictException) return;
-      if (e instanceof BadRequestException) {
-        const message = String(e.message);
-        if (
-          message.includes('different email') ||
-          message.includes('employee') ||
-          message.includes('super admin')
-        ) {
-          throw e;
-        }
-      }
-    }
+    return this.companies.consumeInviteForExistingUser(rawToken, email, userId);
   }
 
   /** Confirm the emailed token, mark the account verified, and start a session. */
@@ -851,16 +855,17 @@ export class AuthService {
     }
     if (record.user.isBanned) throw new ForbiddenException('Account banned');
 
-    await this.prisma.$transaction([
-      this.prisma.emailVerificationToken.update({
-        where: { id: record.id },
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.emailVerificationToken.updateMany({
+        where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },
         data: { usedAt: new Date() },
-      }),
-      this.prisma.user.update({
+      });
+      if (claimed.count !== 1) throw new BadRequestException('Verification link is invalid or already used');
+      await tx.user.update({
         where: { id: record.userId },
         data: { emailVerified: true },
-      }),
-    ]);
+      });
+    });
 
     return this.tokenFor(record.userId);
   }
@@ -1011,10 +1016,17 @@ export class AuthService {
     if (user) {
       if (user.isBanned) throw new ForbiddenException('Account banned');
       if (!inviteToken) this.assertLoginRole(user.role, input.expectedRole);
-      if (inviteToken && user.email) {
-        await this.acceptInviteOnExistingUser(inviteToken, user.email, user.id);
+      let joinedCompanyId: string | undefined;
+      if (inviteToken) {
+        const email = user.email || input.email?.trim().toLowerCase();
+        if (!email) {
+          return { requiresRegistration: true as const, fullName: tg.fullName, username: tg.username ?? null };
+        }
+        if (!user.email) await this.assertEmailAvailable(email);
+        const invite = await this.acceptInviteOnExistingUser(inviteToken, email, user.id);
+        joinedCompanyId = invite.companyId;
       }
-      return this.tokenFor(user.id);
+      return this.tokenFor(user.id, true, joinedCompanyId);
     }
 
     if (input.role && !inviteToken) this.assertLoginRole(input.role, input.expectedRole);
@@ -1092,9 +1104,6 @@ export class AuthService {
         const slugExists = await tx.company.findUnique({ where: { slug } });
         if (slugExists) slug = `${slug}-${Date.now().toString(36)}`;
         const company = await tx.company.create({ data: { name, slug } });
-        await tx.subscription.create({
-          data: { companyId: company.id, plan: 'FREE', status: 'ACTIVE' },
-        });
         await tx.companyMember.create({
           data: { companyId: company.id, userId: newUser.id, role: 'OWNER' },
         });
@@ -1171,17 +1180,18 @@ export class AuthService {
     if (record.user.isBanned) throw new ForbiddenException('Account banned');
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await this.prisma.$transaction([
-      this.prisma.passwordResetToken.update({
-        where: { id: record.id },
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },
         data: { usedAt: new Date() },
-      }),
-      this.prisma.user.update({
+      });
+      if (claimed.count !== 1) throw new BadRequestException('Reset link is invalid or already used');
+      await tx.user.update({
         where: { id: record.userId },
         data: { passwordHash },
-      }),
-    ]);
-    await this.revokeAllSessions(record.userId);
+      });
+      await this.revokeCredentialSessions(tx, record.userId);
+    });
     return { ok: true };
   }
 
@@ -1213,16 +1223,18 @@ export class AuthService {
     });
     const webUrl = this.config.get('WEB_URL', 'http://localhost:3000');
     const link = `${webUrl}/confirm-email-change?token=${rawToken}`;
+    const safeLink = escapeHtml(link);
     const changeLocale = emailLocale(user.locale);
-    void this.mail.send(
+    const sent = await this.mail.send(
       email,
       translateMessage('email.changeEmail.subject', changeLocale),
-      `<p>${translateMessage('email.greeting', changeLocale, { name: user.fullName })}</p>
+      `<p>${translateMessage('email.greeting', changeLocale, { name: escapeHtml(user.fullName) })}</p>
        <p>${translateMessage('email.changeEmail.intro', changeLocale)}</p>
-       <p><a href="${link}">${translateMessage('email.changeEmail.cta', changeLocale)}</a></p>
-       <p>${translateMessage('email.linkFallback', changeLocale, { link })}</p>
+       <p><a href="${safeLink}">${translateMessage('email.changeEmail.cta', changeLocale)}</a></p>
+       <p>${translateMessage('email.linkFallback', changeLocale, { link: safeLink })}</p>
        <p>${translateMessage('email.expires24h', changeLocale)}</p>`,
     );
+    if (!sent) throw new BadRequestException('Could not send the confirmation email. Please try again.');
     return { ok: true, message: 'Check the new inbox to confirm the change' };
   }
 
@@ -1240,17 +1252,22 @@ export class AuthService {
     if (record.user.isBanned) throw new ForbiddenException('Account banned');
     await this.assertEmailAvailable(record.newEmail);
 
-    await this.prisma.$transaction([
-      this.prisma.emailChangeToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { email: record.newEmail, emailVerified: true },
-      }),
-    ]);
-    await this.revokeAllSessions(record.userId);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.emailChangeToken.updateMany({
+          where: { id: record.id, usedAt: null, expiresAt: { gt: new Date() } },
+          data: { usedAt: new Date() },
+        });
+        if (claimed.count !== 1) throw new BadRequestException('Link is invalid or already used');
+        await tx.user.update({ where: { id: record.userId }, data: { email: record.newEmail, emailVerified: true } });
+        await this.revokeCredentialSessions(tx, record.userId);
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
+    }
     return this.tokenFor(record.userId);
   }
 

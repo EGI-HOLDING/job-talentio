@@ -1,4 +1,5 @@
 'use client';
+import { JobTitleInput } from '@/components/ui/JobTitleInput';
 
 import { useMemo, useState } from 'react';
 import { catalogLabelIssue } from '@job-talentio/shared';
@@ -59,6 +60,7 @@ type LangDraft = { include: boolean; name: string; code?: string; level: string 
 
 type Props = {
   resumeId: string;
+  resumeGeneration?: number;
   parsed: ParsedCv;
   onClose: () => void;
   onImported: (result?: ImportedResult) => void | Promise<void>;
@@ -79,10 +81,10 @@ function coerceDegree(raw?: string) {
 
 function coerceLevel(raw?: string) {
   const value = (raw || '').trim().toUpperCase();
-  return LANG_LEVELS.includes(value as (typeof LANG_LEVELS)[number]) ? value : 'B1';
+  return LANG_LEVELS.includes(value as (typeof LANG_LEVELS)[number]) ? value : '';
 }
 
-export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentation = 'modal' }: Props) {
+export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onImported, presentation = 'modal' }: Props) {
   const { t } = useI18n();
   const enumLabel = useEnumLabel();
 
@@ -122,7 +124,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentat
   );
   const [languages, setLanguages] = useState<LangDraft[]>(() =>
     (parsed.languages || []).map((x) => ({
-      include: Boolean(x.name) && !catalogLabelIssue(x.name),
+      include: Boolean(x.name && coerceLevel(x.level)) && !catalogLabelIssue(x.name),
       name: x.name || '',
       code: x.code,
       level: coerceLevel(x.level),
@@ -194,6 +196,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentat
       const result = await api<ImportedResult>(`/profiles/me/resumes/${resumeId}/import`, {
         method: 'POST',
         body: JSON.stringify({
+          resumeGeneration,
           headline: includeHeadline && headline.trim() ? headline.trim() : undefined,
           summary: includeSummary && summary.trim() ? summary.trim() : undefined,
           phone: includePhone && phone.trim() ? phone.trim() : undefined,
@@ -403,14 +406,14 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentat
                     <div className="grid-2">
                       <label>
                         <strong>{t('emp.positionTitle')}</strong>
-                        <input
+                        <JobTitleInput
                           value={x.title}
-                          onChange={(e) =>
+                          onValueChange={(title) =>
                             setExperiences((prev) =>
-                              prev.map((row, idx) => (idx === i ? { ...row, title: e.target.value } : row)),
+                              prev.map((row, idx) => (idx === i ? { ...row, title } : row)),
                             )
                           }
-                          maxLength={160}
+                          normalizeSeniority={false}
                         />
                       </label>
                       <label>
@@ -612,7 +615,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentat
                           <strong>{t('emp.name')}</strong>
                           <input
                             value={x.name}
-                            onChange={(e) => patchLang(i, { name: e.target.value })}
+                            onChange={(e) => patchLang(i, { name: e.target.value, code: undefined })}
                             maxLength={80}
                           />
                         </label>
@@ -623,6 +626,7 @@ export function CvReviewModal({ resumeId, parsed, onClose, onImported, presentat
                             onChange={(e) => patchLang(i, { level: e.target.value })}
                             aria-label={t('emp.levelFor').replace('{name}', x.name || t('languages'))}
                           >
+                            <option value="">—</option>
                             {LANG_LEVELS.map((l) => (
                               <option key={l} value={l}>
                                 {l}

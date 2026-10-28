@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { safeApplication, submittedResume } from './application-payload';
+const row = { id: 'application', resumeSnapshot: { resume: { title: 'Applied PDF', fileKey: 'private-key', fileUrl: 'private-url', hasFile: true } }, resume: { id: 'resume', title: 'Current CV', fileKey: 'replacement-key', parsedData: { phone: 'unreviewed' }, content: 'secret', templateKey: 'classic' } };
+const payload = safeApplication(row);
+assert.equal(payload.id, row.id);
+assert.equal((payload.resumeSnapshot as any).resume.hasFile, true);
+assert.equal((payload.resume as any).hasFile, true);
+assert.doesNotMatch(JSON.stringify(payload), /fileKey|fileUrl|private-key|private-url|parsedData|unreviewed|secret/);
+assert.equal(row.resume.fileKey, 'replacement-key', 'Sanitizing must not mutate persisted snapshots');
+assert.deepEqual(safeApplication({ resumeSnapshot: null, resume: null }), { resumeSnapshot: null, resume: null });
+assert.equal(submittedResume({ resume: null }, row.resume).fileKey, null);
+assert.equal(submittedResume({ resume: { fileKey: null, title: 'No submitted file' } }, row.resume).fileKey, null);
+assert.equal(submittedResume({ resume: { fileKey: 'original.pdf' } }, row.resume).fileKey, 'original.pdf');
+assert.equal(submittedResume(null, row.resume).fileKey, 'replacement-key', 'Legacy applications retain their documented fallback');
+console.log('PASS: application responses omit storage URLs/keys and unreviewed CV payloads');

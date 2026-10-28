@@ -2,12 +2,12 @@ import { Logger } from '@nestjs/common';
 import type { OpenAiClient } from '../../common/openai/openai.client';
 import type { TranslationProvider, TranslateRequest } from '../translation.provider';
 
-const SYSTEM = `You are a professional translator for a job board (Uzbek, Russian, English).
+const SYSTEM = `You are a professional translator for a job board (Uzbek, Russian, English, Indonesian).
 Translate each input string into the target language. Preserve meaning, proper names, numbers, and formatting.
 Return ONLY JSON: {"translations":["..."]} with the same length and order as the inputs.`;
 
 /**
- * OpenAI Chat Completions MT. Supports uz/ru/en (unlike DeepL free for Uzbek).
+ * OpenAI Chat Completions MT. Supports uz/ru/en/id (unlike DeepL for Uzbek).
  */
 export class OpenAiTranslationProvider implements TranslationProvider {
   readonly name = 'openai';

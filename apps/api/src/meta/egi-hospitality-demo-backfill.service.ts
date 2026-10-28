@@ -16,6 +16,9 @@ export class EgiHospitalityDemoBackfillService implements OnApplicationBootstrap
   ) {}
 
   async onApplicationBootstrap() {
+    // The dedicated presentation database owns its explicit fixtures; booting
+    // it must not silently add the legacy showcase companies.
+    if (process.env.HR_DEMO_MODE === 'true') return;
     try {
       const needs = await needsEgiHospitalityDemoBackfill(this.prisma);
       if (!needs) return;

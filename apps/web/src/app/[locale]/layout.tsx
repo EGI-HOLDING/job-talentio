@@ -1,5 +1,9 @@
+import { JobImpressions } from '@/components/jobs/JobImpressions';
 import type { Metadata, Viewport } from 'next';
 import '../globals.css';
+import { EmployeeOnboardingGate } from '@/components/auth/EmployeeOnboardingGate';
+import { RecruiterOnboardingGate } from '@/components/auth/RecruiterOnboardingGate';
+import { AccountRouteGate } from '@/components/auth/AccountRouteGate';
 import { SiteNav } from '@/components/SiteNav';
 import { SiteFooter } from '@/components/SiteFooter';
 import { I18nProvider } from '@/lib/i18n';
@@ -10,21 +14,27 @@ import { InstallPrompt } from '@/components/pwa/InstallPrompt';
 import { PublicShell } from '@/components/public/PublicShell';
 import { DEFAULT_LOCALE, LOCALES, isLocale } from '@/lib/locale';
 
-export const metadata: Metadata = {
-  title: 'Job Talentio',
-  description: 'Find your next opportunity and connect with companies hiring across locations and ways of working.',
-  applicationName: 'Job Talentio',
-  manifest: '/manifest.webmanifest',
-  icons: {
-    icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
-    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-  },
-  appleWebApp: {
-    capable: true,
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale: raw } = await params;
+  const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
+  return {
     title: 'Job Talentio',
-    statusBarStyle: 'default',
-  },
-};
+    description: locale === 'id'
+      ? 'Temukan peluang kerja berikutnya dan terhubung dengan perusahaan yang membuka lowongan di berbagai lokasi dan cara kerja.'
+      : 'Find your next opportunity and connect with companies hiring across locations and ways of working.',
+    applicationName: 'Job Talentio',
+    manifest: '/manifest.webmanifest',
+    icons: {
+      icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+      apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    },
+    appleWebApp: {
+      capable: true,
+      title: 'Job Talentio',
+      statusBarStyle: 'default',
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#4f46e5',
@@ -59,13 +69,13 @@ export default async function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>
+      <body><JobImpressions/>
         <I18nProvider locale={locale}>
           <ConfirmProvider>
             <PresenceConnection />
             <PwaRegister />
             <SiteNav />
-            <PublicShell>{children}</PublicShell>
+            <AccountRouteGate><EmployeeOnboardingGate><RecruiterOnboardingGate><PublicShell>{children}</PublicShell></RecruiterOnboardingGate></EmployeeOnboardingGate></AccountRouteGate>
             <SiteFooter />
             <InstallPrompt />
           </ConfirmProvider>

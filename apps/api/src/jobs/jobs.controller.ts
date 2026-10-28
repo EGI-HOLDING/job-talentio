@@ -18,9 +18,9 @@ import {
   jobSearchSchema,
   jobQuestionSchema,
   jobQuestionUpdateSchema,
+  jobStatusSchema,
   jobTranslationSchema,
 } from '@job-talentio/shared';
-import { JobStatus } from '@prisma/client';
 import { JobsService } from './jobs.service';
 import { requestLocale } from '../common/i18n/request-locale';
 import { isLocale } from '../common/i18n/locale';
@@ -36,6 +36,7 @@ import {
 import { parseDto } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
+import { profileRoleTexts } from '../common/title-resolve';
 
 function assertLocale(value: string): Locale {
   if (!isLocale(value)) throw new BadRequestException('Unsupported locale');
@@ -63,11 +64,16 @@ export class JobsController {
         where: { userId: user.id },
         select: {
           id: true,
+          headline: true,
+          desiredPosition: true,
+          desiredPositions: true,
+          experiences: { select: { title: true } },
           _count: { select: { skills: true } },
         },
       });
-      // Empty profiles must not drive sort=match or match rings (baseline scores are misleading).
-      if (profile && profile._count.skills > 0) {
+      // A desired role is a valid matching signal even before skills are filled in.
+      // Keep genuinely empty profiles from driving match sorting or score badges.
+      if (profile && (profile._count.skills > 0 || profileRoleTexts(profile).length > 0)) {
         profileId = profile.id;
       }
     }
@@ -92,10 +98,15 @@ export class JobsController {
   }
 
   @Get('recommended')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  recommended(@CurrentUser() user: AuthUser, @Req() req: Request) {
-    return this.jobs.recommendedForUser(user, requestLocale(req));
+  recommended(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string, @Query('limit') limit?: string) {
+    const parsed = (value:string | undefined, fallback:number, max:number) => {
+      if (value === undefined) return fallback;
+      if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > max) throw new BadRequestException('Invalid recommendation pagination');
+      return Number(value);
+    };
+    return this.jobs.recommendedForUser(user, requestLocale(req), page === undefined ? undefined : parsed(page,1,1000000), parsed(limit,24,50));
   }
 
   @Get('company/:companyId')
@@ -130,24 +141,17 @@ export class JobsController {
     return this.jobs.get(id, user, requestLocale(req));
   }
 
+  @Get(':id/match-insights')
+  @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
+  @Roles('EMPLOYEE')
+  matchInsights(@Param('id') id:string,@CurrentUser() user:AuthUser) {
+    return this.jobs.employeeInsights(user,id);
+  }
+
   /** Public SEO payload for JSON-LD; unlike GET /jobs/:id it records no JobView. */
   @Get(':id/seo')
   seo(@Param('id') id: string, @Req() req: Request) {
     return this.jobs.getSeo(id, requestLocale(req));
-  }
-
-  /**
-   * Reader-triggered machine translation, including guests. Rate limited and
-   * budgeted: the first miss pays the provider, later readers hit the cache.
-   */
-  @Post(':id/translate/:locale')
-  @UseGuards(OptionalJwtAuthGuard, SearchRateLimitGuard)
-  machineTranslate(
-    @Param('id') id: string,
-    @Param('locale') locale: string,
-    @CurrentUser() user?: AuthUser,
-  ) {
-    return this.jobs.machineTranslate(id, assertLocale(locale), user);
   }
 
   @Get(':id/translations')
@@ -170,18 +174,6 @@ export class JobsController {
     return this.jobs.upsertTranslation(user, id, assertLocale(locale), data);
   }
 
-  /** Recruiter-triggered MT. Does not record a JobView. */
-  @Post(':id/translations/:locale/auto')
-  @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
-  @Roles('RECRUITER', 'SUPER_ADMIN')
-  autoTranslate(
-    @Param('id') id: string,
-    @Param('locale') locale: string,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.jobs.autoTranslate(user, id, assertLocale(locale));
-  }
-
   @Delete(':id/translations/:locale')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
@@ -199,6 +191,11 @@ export class JobsController {
   stats(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.jobs.getStats(user, id);
   }
+
+  @Post(':id/duplicate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER','SUPER_ADMIN')
+  duplicate(@Param('id') id:string,@CurrentUser() user:AuthUser) { return this.jobs.duplicate(user,id); }
 
   @Get(':id/recommended-candidates')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -263,18 +260,9 @@ export class JobsController {
   status(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
-    @Body() body: { status: JobStatus },
+    @Body() body: unknown,
   ) {
-    return this.jobs.changeStatus(user, id, body.status);
-  }
-
-  @Post(':id/hot')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('RECRUITER', 'SUPER_ADMIN')
-  hot() {
-    // Free boost via this route is disabled — purchase through billing
-    throw new BadRequestException(
-      'Hot job boosts must be purchased via POST /billing/companies/:companyId/jobs/:jobId/hot',
-    );
+    const data = parseDto(jobStatusSchema, body);
+    return this.jobs.changeStatus(user, id, data.status, undefined, data.linkedinPreviewId);
   }
 }

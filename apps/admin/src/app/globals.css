@@ -59,6 +59,9 @@ a:hover {
   text-decoration: underline;
 }
 
+.support-panel { min-width:0; overflow-wrap:anywhere; }
+.support-panel button { max-width:100%; white-space:normal; overflow-wrap:anywhere; text-align:left; }
+
 h1,
 h2,
 h3,
@@ -225,8 +228,10 @@ h4 {
 .content {
   padding: 1.25rem 1.5rem 3rem;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-content: start;
+  min-width: 0;
 }
 
 /* ---------------------------------------------------------------- Cards */
@@ -860,7 +865,7 @@ tbody tr[data-selected="true"] td {
 
 @media (max-width: 900px) {
   .app {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .sidebar {
     position: static;
@@ -868,7 +873,20 @@ tbody tr[data-selected="true"] td {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
+    overflow: visible;
+  }
+  .sidebar > nav {
+    display: flex !important;
+    flex: 1 1 100%;
+    align-items: center;
+    min-width: 0;
     overflow-x: auto;
+    padding-bottom: 0.25rem;
+    scrollbar-width: thin;
+  }
+  .sidebar > nav > .nav-item {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
   .sidebar-section,
   .sidebar-foot {

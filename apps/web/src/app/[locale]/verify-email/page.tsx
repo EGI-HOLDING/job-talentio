@@ -10,7 +10,7 @@ import { authDestination } from '@/lib/authReturn';
 function redirectAfterLogin(role: string) {
   if (role === 'RECRUITER') return '/';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
-  return '/dashboard/employee';
+  return '/jobs?mode=for-you';
 }
 
 function VerifyEmailInner() {

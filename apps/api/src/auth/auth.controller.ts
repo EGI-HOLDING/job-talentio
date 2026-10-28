@@ -95,7 +95,7 @@ export class AuthController {
   @Post('login')
   login(@Body() body: unknown) {
     const data = parseDto(loginSchema, body);
-    return this.auth.login(data.email, data.password, data.expectedRole);
+    return this.auth.login(data.email, data.password, data.expectedRole, data.inviteToken);
   }
 
   @Post('dev-login')
@@ -160,6 +160,11 @@ export class AuthController {
   google(@Body() body: unknown) {
     const data = parseDto(googleOAuthSchema, body);
     return this.auth.oauthGoogle(data);
+  }
+
+  @Get('google/config')
+  googleConfig() {
+    return this.auth.googleSignInConfig();
   }
 
   @Post('verify-email')

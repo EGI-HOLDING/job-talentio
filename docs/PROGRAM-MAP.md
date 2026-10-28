@@ -21,7 +21,7 @@ flowchart LR
 
 | Path | Isi |
 |------|-----|
-| [apps/api](../apps/api) | NestJS + Prisma — auth, jobs, profiles, ATS, billing, chat, admin |
+| [apps/api](../apps/api) | NestJS + Prisma — auth, jobs, profiles, ATS, chat, admin |
 | [apps/web](../apps/web) | Next.js portal — employee + recruiter |
 | [apps/admin](../apps/admin) | Next.js Super Admin (1 halaman utama) |
 | [packages/shared](../packages/shared) | Zod schemas & constants bersama |
@@ -37,11 +37,10 @@ Entry: [apps/api/src/app.module.ts](../apps/api/src/app.module.ts)
 | Module | Peran |
 |--------|--------|
 | Auth | Login/register JWT |
-| Jobs | Search, publish, hot boost, questions |
+| Jobs | Search, publish, questions |
 | Profiles | CV upload/parse, skills, experience |
 | Applications | Apply + pipeline ATS |
 | Companies | Company pages/members |
-| Billing | Plans + mock payment |
 | Chat | Socket.IO conversations |
 | Alerts | Job alerts (Redis worker) |
 | Matching | Job/candidate match scores |

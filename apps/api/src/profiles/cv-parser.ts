@@ -1,4 +1,4 @@
-import { normalizePhone } from '../common/dedupe';
+import { normalizeSkillKey } from '../common/skill-resolve';
 import {
   isCvBulletLine,
   isCvRoleBoundary,
@@ -26,13 +26,13 @@ export type ParsedEducation = {
 export type ParsedLanguage = {
   code?: string;
   name: string;
-  level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'NATIVE';
+  level?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'NATIVE';
 };
 
 export type ParsedCvMeta = {
   provider: string;
   ocrUsed?: boolean;
-  /** True when OpenAI structured the CV (false = local fallback / local-only). */
+  /** Always false for new parses; retained for compatibility with stored results. */
   llmUsed?: boolean;
 };
 
@@ -48,6 +48,17 @@ export type ParsedCvData = {
   textPreview: string;
   /** Parser diagnostics; UI review should ignore. */
   meta?: ParsedCvMeta;
+};
+export type CvCatalogSkill = {
+  name: string;
+  slug: string;
+  aliases?: Array<{ alias: string; aliasKey: string }>;
+};
+
+export type CvCatalogLanguage = {
+  name: string;
+  code: string;
+  aliases?: Array<{ alias: string; aliasKey: string }>;
 };
 
 /** Unicode-aware token boundary (JS \\b is weak for Cyrillic). */
@@ -83,19 +94,6 @@ const DEGREE_MAP: Array<{ re: RegExp; degree: ParsedEducation['degree'] }> = [
   },
 ];
 
-/** Alternation only (no boundaries); wrapped at match time with unicode bounds. */
-const LANG_HINTS: Array<{ pattern: string; name: string; code: string }> = [
-  { pattern: 'english|ingliz|английский', name: 'English', code: 'en' },
-  { pattern: 'russian|rus|русский|русск(?:ий|ом)?', name: 'Russian', code: 'ru' },
-  { pattern: "uzbek|o'?zbek|узбекский|ўзбек(?:ча|ский)?", name: "O'zbek", code: 'uz' },
-  { pattern: 'german|nemis|deutsch|немецкий', name: 'German', code: 'de' },
-  { pattern: 'french|fransuz|fran[cç]ais|французский', name: 'French', code: 'fr' },
-  { pattern: 'turkish|turk|турецкий', name: 'Turkish', code: 'tr' },
-  { pattern: 'chinese|kitay|mandarin|китайский', name: 'Chinese', code: 'zh' },
-  { pattern: 'korean|koreys|корейский', name: 'Korean', code: 'ko' },
-  { pattern: 'arabic|arab|арабский', name: 'Arabic', code: 'ar' },
-];
-
 const LANG_LEVEL =
   'native|mother\\s*tongue|ona\\s*tili|родн(?:ой|ая|ый)?(?:\\s*язык)?|c2|c1|b2|b1|a2|a1|fluent|advanced|intermediate|elementary|basic|beginner|свободно|родной';
 
@@ -105,10 +103,11 @@ const MONTHS_RU =
   'январ[ьяе]?|феврал[ьяе]?|март[ае]?|апрел[ьяе]?|ма[йяе]|июн[ьяе]?|июл[ьяе]?|август[ае]?|сентябр[ьяе]?|октябр[ьяе]?|ноябр[ьяе]?|декабр[ьяе]?';
 const MONTHS_UZ =
   'yanvar|fevral|mart|aprel|may|iyun|iyul|avgust|sentabr|oktabr|noyabr|dekabr';
-const MONTHS = `${MONTHS_EN}|${MONTHS_RU}|${MONTHS_UZ}`;
+const MONTHS_ID = 'januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember';
+const MONTHS = `${MONTHS_EN}|${MONTHS_RU}|${MONTHS_UZ}|${MONTHS_ID}`;
 
 const CURRENT_END =
-  'present|now|current|hozir|настоящее\\s*время|по\\s*н\\.?\\s*в\\.?|н\\.?\\s*в\\.?';
+  'present|now|current|hozir|saat\\s+ini|sekarang|по\\s*настоящее\\s*время|настоящее\\s*время|по\\s*н\\.?\\s*в\\.?|н\\.?\\s*в\\.?';
 
 function monthToNumber(monthHint?: string): string {
   if (!monthHint) return '01';
@@ -118,14 +117,14 @@ function monthToNumber(monthHint?: string): string {
     { re: /^(feb|фев|fev)/u, mm: '02' },
     { re: /^(mar|мар|mart)/u, mm: '03' },
     { re: /^(apr|апр|apr)/u, mm: '04' },
-    { re: /^(may|ма[йяе]?)/u, mm: '05' },
+    { re: /^(may|mei|ма[йяе]?)/u, mm: '05' },
     { re: /^(jun|июн|iyun)/u, mm: '06' },
     { re: /^(jul|июл|iyul)/u, mm: '07' },
-    { re: /^(aug|авг|avg)/u, mm: '08' },
+    { re: /^(aug|agu|авг|avg)/u, mm: '08' },
     { re: /^(sep|сен|sent)/u, mm: '09' },
     { re: /^(oct|окт|okt)/u, mm: '10' },
     { re: /^(nov|ноя|noy)/u, mm: '11' },
-    { re: /^(dec|дек|dek)/u, mm: '12' },
+    { re: /^(dec|des|дек|dek)/u, mm: '12' },
   ];
   for (const r of rules) {
     if (r.re.test(m)) return r.mm;
@@ -146,14 +145,21 @@ export function extractEmail(text: string): string | undefined {
   return m?.[0]?.toLowerCase();
 }
 
+export function normalizeCvPhone(raw: string): string | undefined {
+  if(!/^[+\d\s().-]+$/.test(raw.trim())) return undefined;
+  const value=raw.replace(/[^\d+]/g,'');
+  const normalized=value.startsWith('00')?'+'+value.slice(2):value;
+  if(!/^\+?\d{9,15}$/.test(normalized))return undefined;
+  return normalized;
+}
 export function extractPhone(text: string): string | undefined {
-  const m = text.match(/(?:\+?998[\s-]?)?(?:\(?\d{2}\)?[\s-]?)?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\+\d{10,15}/);
-  if (!m) return undefined;
-  try {
-    return normalizePhone(m[0]);
-  } catch {
-    return m[0].replace(/\s+/g, '');
+  const candidates=text.matchAll(/(?<![\p{L}\p{N}])\+?\d[\d ()\t.-]{6,}\d(?![\p{L}\p{N}])/gu);
+  for(const match of candidates){
+    // Dates and year ranges are never contact numbers. Do not join lines.
+    if(/(?:19|20)\d{2}\s*[-–—]\s*(?:19|20)\d{2}/.test(match[0]))continue;
+    const phone=normalizeCvPhone(match[0]);if(phone)return phone;
   }
+  return undefined;
 }
 
 type CvSection = 'experience' | 'education' | 'skills' | 'summary' | 'languages';
@@ -162,23 +168,23 @@ type CvSection = 'experience' | 'education' | 'skills' | 'summary' | 'languages'
 const SECTION_RES: Array<{ kind: CvSection; re: RegExp }> = [
   {
     kind: 'experience',
-    re: /^(?:work\s+experience|professional\s+experience|employment(?:\s+history)?|work\s+history|experience|опыт(?:\s+работы)?|ish\s+tajriba(?:si)?|mehnat\s+faoliyati)\b/iu,
+    re: /^(?:pengalaman(?:\s+kerja)?|work\s+experience|professional\s+experience|employment(?:\s+history)?|work\s+history|experience|опыт(?:\s+работы)?|ish\s+tajriba(?:si)?|mehnat\s+faoliyati)(?=\s|[:–—-]|$)/iu,
   },
   {
     kind: 'education',
-    re: /^(?:academic(?:\s+background)?|education|образование|ta['’ʻ`]?lim)\b/iu,
+    re: /^(?:pendidikan|academic(?:\s+background)?|education|образование|ta['’ʻ`]?lim)(?=\s|[:–—-]|$)/iu,
   },
   {
     kind: 'skills',
-    re: /^(?:technical\s+skills|key\s+skills|skills|навыки|ko['’ʻ`]?nikmalar?)\b/iu,
+    re: /^(?:keahlian|keterampilan|technical\s+skills|key\s+skills|skills|навыки|ko['’ʻ`]?nikmalar?)(?=\s|[:–—-]|$)/iu,
   },
   {
     kind: 'languages',
-    re: /^(?:languages|языки|tillar)\b/iu,
+    re: /^(?:bahasa|languages|языки|tillar)(?=\s|[:–—-]|$)/iu,
   },
   {
     kind: 'summary',
-    re: /^(?:professional\s+summary|summary|about\s+me|objective|о\s+себе|обо\s+мне|men\s+haqimda|maqsad)\b/iu,
+    re: /^(?:ringkasan|tentang\s+saya|professional\s+summary|summary|about\s+me|objective|о\s+себе|обо\s+мне|men\s+haqimda|maqsad)(?=\s|[:–—-]|$)/iu,
   },
 ];
 
@@ -219,29 +225,37 @@ function skillMentioned(haystack: string, name: string): boolean {
   return re.test(haystack);
 }
 
-function extractSkills(
-  text: string,
-  knownSkills: Array<{ name: string; slug: string }>,
-  allowShort: boolean,
-): string[] {
+function escapeRegexLabel(input: string): string {
+  return input.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+}
+
+function labelPattern(input: string): string {
+  return input.trim().split(/\s+/).map(escapeRegexLabel).join('\\s+');
+}
+
+function extractSkills(text: string, knownSkills: CvCatalogSkill[], allowShort: boolean): string[] {
+  const lower = text.toLowerCase();
   const found: string[] = [];
-  for (const s of knownSkills) {
-    const name = s.name.trim();
-    if (name.length < 2) continue;
-    // Short tokens (Go, R, SQL) are only trusted inside a skills section.
-    if (!allowShort && name.length < 4) continue;
-    if (skillMentioned(text, name)) found.push(s.name);
+  for (const skill of knownSkills) {
+    const labels = [skill.name, ...(skill.aliases ?? []).map((alias) => alias.alias)];
+    const matched = labels.some((label) => {
+      const pattern = labelPattern(label);
+      if (!pattern || (!allowShort && label.trim().length < 4)) return false;
+      const re = new RegExp(BOUND_L + pattern + BOUND_R, 'iu');
+      return re.test(lower);
+    });
+    if (matched) found.push(skill.name);
   }
   return Array.from(new Set(found)).slice(0, 40);
 }
 
 /**
- * Map free-text skill labels from an LLM onto catalog names when possible;
+ * Map extracted skill labels onto catalog names when possible;
  * keep unmatched labels (trimmed) so review/import can still create skills.
  */
 export function normalizeSkillNames(
   rawNames: string[],
-  knownSkills: Array<{ name: string; slug: string }> = [],
+  knownSkills: CvCatalogSkill[] = [],
 ): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -251,49 +265,63 @@ export function normalizeSkillNames(
       .trim()
       .slice(0, 80);
     if (!label) continue;
-    const lower = label.toLowerCase();
+    const key = normalizeSkillKey(label);
     const catalog = knownSkills.find(
-      (s) =>
-        s.name.toLowerCase() === lower ||
-        s.slug.toLowerCase() === lower.replace(/[^a-z0-9]+/g, '-'),
+      (skill) =>
+        skill.name.toLowerCase() === label.toLowerCase() ||
+        skill.slug.toLowerCase() === label.toLowerCase().replace(/[^a-z0-9]+/g, '-') ||
+        skill.aliases?.some((alias) => alias.aliasKey === key),
     );
     const name = catalog?.name || label;
-    const key = name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const normalizedName = name.toLowerCase();
+    if (seen.has(normalizedName)) continue;
+    seen.add(normalizedName);
     out.push(name);
     if (out.length >= 40) break;
   }
   return out;
 }
-
-function extractLanguages(text: string): ParsedLanguage[] {
+function extractLanguages(text: string, knownLanguages: CvCatalogLanguage[]): ParsedLanguage[] {
   const out: ParsedLanguage[] = [];
-  for (const hint of LANG_HINTS) {
+  const hints = knownLanguages
+    .map((language) => ({
+      ...language,
+      labels: [language.name, ...(language.aliases ?? []).map((alias) => alias.alias)]
+        .map((label) => label.trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length),
+    }))
+    .sort((a, b) => {
+      const longest = (labels: string[]) => Math.max(0, ...labels.map((label) => label.length));
+      return longest(b.labels) - longest(a.labels);
+    });
+
+  for (const hint of hints) {
+    const pattern = hint.labels.map(escapeRegexLabel).join('|');
+    if (!pattern || out.some((language) => language.code === hint.code)) continue;
     const re = new RegExp(
-      `${BOUND_L}(${hint.pattern})${BOUND_R}\\s*[:\\-–—]?\\s*(${LANG_LEVEL})?`,
+      BOUND_L + '(' + pattern + ')' + BOUND_R + '\\s*[:\\-–—]?\\s*(' + LANG_LEVEL + ')?',
       'iu',
     );
-    const m = text.match(re);
-    if (!m) continue;
-    let level: ParsedLanguage['level'] = 'B1';
-    const lvlRaw = (m[2] || '').toLowerCase();
-    if (/native|mother|ona|родн/.test(lvlRaw)) level = 'NATIVE';
-    else if (lvlRaw === 'c2' || lvlRaw === 'fluent' || /свободн/.test(lvlRaw)) level = 'C2';
-    else if (lvlRaw === 'c1' || lvlRaw === 'advanced') level = 'C1';
-    else if (lvlRaw === 'b2') level = 'B2';
-    else if (lvlRaw === 'b1' || lvlRaw === 'intermediate') level = 'B1';
-    else if (lvlRaw === 'a2' || lvlRaw === 'elementary') level = 'A2';
-    else if (lvlRaw === 'a1' || lvlRaw === 'basic' || lvlRaw === 'beginner') level = 'A1';
+    const match = text.match(re);
+    if (!match) continue;
+    let level: ParsedLanguage['level'];
+    const rawLevel = (match[2] || '').toLowerCase();
+    if (/native|mother|ona|родн/.test(rawLevel)) level = 'NATIVE';
+    else if (rawLevel === 'c2' || rawLevel === 'fluent' || /свободн/.test(rawLevel)) level = 'C2';
+    else if (rawLevel === 'c1' || rawLevel === 'advanced') level = 'C1';
+    else if (rawLevel === 'b2') level = 'B2';
+    else if (rawLevel === 'b1' || rawLevel === 'intermediate') level = 'B1';
+    else if (rawLevel === 'a2' || rawLevel === 'elementary') level = 'A2';
+    else if (rawLevel === 'a1' || rawLevel === 'basic' || rawLevel === 'beginner') level = 'A1';
     out.push({ name: hint.name, code: hint.code, level });
   }
   return out;
 }
-
-function extractExperiences(text: string): ParsedExperience[] {
+function extractExperiences(text: string, inWorkSection = false): ParsedExperience[] {
   const experiences: ParsedExperience[] = [];
   const dateRe = new RegExp(
-    `((?:${MONTHS})\\s+)?(20\\d{2}|19\\d{2})\\s*[-–—to]+\\s*((?:${MONTHS})\\s+)?(20\\d{2}|19\\d{2}|${CURRENT_END})`,
+    `((?:${MONTHS})\\s+)?(20\\d{2}|19\\d{2})\\s*(?:[-–—]|to|sampai|hingga|до)\\s*((?:${MONTHS})\\s+)?(20\\d{2}|19\\d{2}|${CURRENT_END})`,
     'giu',
   );
   // Institution/degree cues only — bare section headers like "Education" / "Образование"
@@ -318,7 +346,7 @@ function extractExperiences(text: string): ParsedExperience[] {
     const prev = chunks[i - 1] || '';
     const next = chunks[i + 1] || '';
     // Skip date ranges that belong to education blocks
-    if (eduHint.test(line) || eduHint.test(prev) || eduHint.test(next)) continue;
+    if (!inWorkSection && (eduHint.test(line) || eduHint.test(prev) || eduHint.test(next))) continue;
 
     const startDate = toIsoDate(dm[2], dm[1]?.trim());
     const endRaw = dm[4] || '';
@@ -332,14 +360,14 @@ function extractExperiences(text: string): ParsedExperience[] {
       .slice(0, dm.index)
       .replace(/[|,\-–—]\s*$/u, '')
       .trim();
-    const atMatch = prev.match(
+    const atMatch = (beforeDate || prev).match(
       /^(.{3,80}?)\s+(?:at|@|\||–|-|,|в|в\s+компании)\s+(.{2,80})$/iu,
     );
     const usable = (value: string) =>
       value.length >= 2 &&
       !isCvBulletLine(value) &&
       !matchSectionHeading(value) &&
-      !eduHint.test(value);
+      (inWorkSection || !eduHint.test(value));
 
     if (atMatch && usable(atMatch[1]) && usable(atMatch[2])) {
       title = atMatch[1].trim();
@@ -349,8 +377,16 @@ function extractExperiences(text: string): ParsedExperience[] {
       if (usable(prev) && isCvTitleLikeHeading(prev)) title = prev;
       else if (usable(next) && isCvTitleLikeHeading(next)) title = next;
     } else {
-      if (usable(prev) && isCvTitleLikeHeading(prev)) title = prev;
+      const preceding = chunks[i - 2] || '';
+      // Common vertical layouts place both role and employer before the dates.
+      if (usable(prev) && usable(preceding) && isCvTitleLikeHeading(prev) && isCvTitleLikeHeading(preceding)) {
+        const prevIsRole = Boolean(extractHeadline(prev));
+        const precedingIsRole = Boolean(extractHeadline(preceding));
+        if (prevIsRole && !precedingIsRole) { title = prev; companyName = preceding; }
+        else { title = preceding; companyName = prev; }
+      } else if (usable(prev) && isCvTitleLikeHeading(prev)) title = prev;
       if (
+        !companyName &&
         next &&
         usable(next) &&
         isCvTitleLikeHeading(next) &&
@@ -391,41 +427,19 @@ function extractExperiences(text: string): ParsedExperience[] {
 
 function extractEducations(text: string): ParsedEducation[] {
   const educations: ParsedEducation[] = [];
-  const uniRe = new RegExp(
-    `${BOUND_L}(university|universitet|университет|institute|institut|институт|college|kollej|колледж|academy|академия|akademiya)${BOUND_R}`,
-    'iu',
-  );
-  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-  const chunks =
-    lines.length > 1
-      ? lines
-      : text.split(/(?<=[.!?])\s+|\s{2,}|[•●▪]/).map((l) => l.trim()).filter((l) => l.length > 3);
-
+  const schoolRe = /university|universitet|университет|institute|institut|институт|college|kollej|колледж|academy|академия|akademiya|universitas|politeknik|sekolah/iu;
+  const chunks = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
   for (let i = 0; i < chunks.length; i++) {
-    const line = chunks[i];
-    if (!uniRe.test(line) && !DEGREE_MAP.some((d) => d.re.test(line))) continue;
-
-    let degree: ParsedEducation['degree'];
-    for (const d of DEGREE_MAP) {
-      if (d.re.test(line) || (chunks[i + 1] && d.re.test(chunks[i + 1]))) {
-        degree = d.degree;
-        break;
-      }
-    }
-
-    const yearMatch = line.match(/(20\d{2}|19\d{2})/g);
-    const startDate = yearMatch?.[0] ? `${yearMatch[0]}-01-01` : null;
-    const endDate = yearMatch?.[1] ? `${yearMatch[1]}-01-01` : null;
-
-    educations.push({
-      school: line.slice(0, 200),
-      degree,
-      field: chunks[i + 1] && !uniRe.test(chunks[i + 1]) ? chunks[i + 1].slice(0, 160) : undefined,
-      startDate,
-      endDate,
-    });
+    const school = chunks[i];
+    if (!schoolRe.test(school)) continue;
+    const details: string[] = [];
+    while (i + 1 < chunks.length && details.length < 3 && !schoolRe.test(chunks[i + 1])) details.push(chunks[++i]);
+    const block = [school, ...details].join(' ');
+    const degree = DEGREE_MAP.find(item => item.re.test(block))?.degree;
+    const years = block.match(/\b(?:19|20)\d{2}\b/g) || [];
+    educations.push({ school: school.slice(0, 200), degree, field: details.join(' ').slice(0, 160) || undefined,
+      startDate: years[0] ? years[0] + '-01-01' : null, endDate: years[1] ? years[1] + '-01-01' : null });
   }
-
   return educations.slice(0, 8);
 }
 
@@ -442,10 +456,10 @@ function extractHeadline(text: string): string | undefined {
       'iu',
     ).test(l),
   );
-  return (roleLike || candidates[1] || candidates[0])?.slice(0, 120);
+  return roleLike?.slice(0, 120);
 }
 
-function extractSummary(text: string): string | undefined {
+function extractSummary(text: string, explicitSection = false): string | undefined {
   const about = text.match(
     new RegExp(
       `(?:summary|profile|about\\s+me|objective|professional\\s+summary|о\\s+себе|обо\\s+мне|цель|резюме|men\\s+haqimda|maqsad|profil)\\s*[:\\n-]+\\s*([\\s\\S]{40,600}?)(?=\\n\\s*(?:experience|education|skills|work|employment|опыт(?:\\s*работы)?|образование|навыки|ish\\s+tajribasi|ta'?lim|ko'?nikmalar)\\b|$)`,
@@ -454,6 +468,7 @@ function extractSummary(text: string): string | undefined {
   );
   if (about?.[1]) return about[1].replace(/\s+/g, ' ').trim().slice(0, 1000);
   // Fallback: first substantial paragraph
+  if (!explicitSection) return undefined;
   const para = text.replace(/\s+/g, ' ').trim().slice(0, 400);
   return para.length > 80 ? para : undefined;
 }
@@ -478,12 +493,13 @@ export function stripNullBytesDeep<T>(value: T): T {
 
 /**
  * Local heuristic CV parser (no external ML).
- * Pass known skill names from DB so matching stays accurate.
- * Supports EN plus Russian (Cyrillic) and Uzbek Latin section/date/language cues.
+ * Pass catalog names and aliases from DB so parsing follows the admin-managed lists.
+ * Section and date heuristics support English, Russian (Cyrillic), and Uzbek Latin text.
  */
 export function parseCvText(
   rawText: string,
-  knownSkills: Array<{ name: string; slug: string }> = [],
+  knownSkills: CvCatalogSkill[] = [],
+  knownLanguages: CvCatalogLanguage[] = [],
 ): ParsedCvData {
   const text = stripNullBytes(rawText).replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').trim();
   const collapsed = rejoinWrappedCvLines(text).replace(/\n{3,}/g, '\n\n');
@@ -494,11 +510,11 @@ export function parseCvText(
     email: extractEmail(collapsed),
     phone: extractPhone(collapsed),
     headline: extractHeadline(collapsed),
-    summary: extractSummary(sections.summary ?? collapsed),
+    summary: extractSummary(sections.summary ?? collapsed, Boolean(sections.summary)),
     skillNames: extractSkills(skillText, knownSkills, Boolean(sections.skills)),
-    experiences: extractExperiences(sections.experience ?? collapsed),
+    experiences: extractExperiences(sections.experience ?? collapsed, Boolean(sections.experience)),
     educations: extractEducations(sections.education ?? collapsed),
-    languages: extractLanguages(sections.languages ?? collapsed),
+    languages: extractLanguages(sections.languages ?? collapsed, knownLanguages),
     textPreview: collapsed.replace(/\s+/g, ' ').trim().slice(0, 2000),
   });
 }

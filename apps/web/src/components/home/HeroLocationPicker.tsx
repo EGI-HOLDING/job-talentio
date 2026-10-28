@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import s from './HeroLocationPicker.module.css';
 
@@ -25,12 +26,14 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
   const [internalValue, setValue] = useState('');
   const value = controlledValue ?? internalValue;
   const [open, setOpen] = useState(false);
+  const [catalogCountries, setCatalogCountries] = useState<Array<{slug:string;name:string}>>([]);
+  useEffect(() => { const abort = new AbortController(); api<Array<{slug:string;name:string}>>('/meta/countries',{auth:false,signal:abort.signal}).then(setCatalogCountries).catch(()=>undefined); return ()=>abort.abort(); },[locale]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<Position | null>(null);
 
   const choices = useMemo<Choice[]>(() => {
-    const countries = new Map<string, string>();
+    const countries = new Map<string, string>(catalogCountries.map(country => [country.slug,country.name]));
     for (const city of cities) {
       if (city.countrySlug && city.country) countries.set(city.countrySlug, city.country);
     }
@@ -39,7 +42,7 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
       ...Array.from(countries, ([slug, name]): Choice => ({ value: `country:${slug}`, label: name, detail: t('landing.allCities'), kind: 'country' })),
       ...cities.map((city): Choice => ({ value: city.slug, label: city.name, detail: city.country, kind: 'city' })),
     ];
-  }, [cities, t]);
+  }, [cities, catalogCountries, t]);
   const filtered = choices.filter((choice) =>
     `${choice.label} ${choice.detail || ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
   );

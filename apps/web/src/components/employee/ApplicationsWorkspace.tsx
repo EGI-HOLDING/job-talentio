@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { Link } from '@/lib/navigation';
+import { jobDetailHref } from '@/lib/accountNavigation';
 import { localizedJobLocation } from '@/lib/location';
 import { useI18n, useEnumLabel } from '@/lib/i18n';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
-import { MatchBreakdownPanel, type MatchBreakdownData } from '@/components/ui/MatchBreakdownPanel';
 import { ProfileDialog } from '@/components/profile/ProfileDialog';
 import { WorkspaceIcon } from './WorkspaceIcon';
 import { CompanyMark, SearchField, Pagination, ResourceError, WorkspaceEmpty, WorkspaceLoading, FindJobsAction, useEmployeeResource, dateLabel } from './WorkspacePrimitives';
@@ -18,10 +18,10 @@ export type EmployeeJob = {
   city?: { name: string } | null; workMode?: string | null; employmentType?: string;
   salaryMin?: number | null; salaryMax?: number | null; currency?: string | null; salaryPeriod?: string | null;
 };
-type Interview = { id: string; scheduledAt: string; status?: string; location?: string | null; meetingUrl?: string | null; notes?: string | null };
+type Interview = { id: string; scheduledAt: string; status?: string; durationMins?: number; location?: string | null; meetingUrl?: string | null; note?: string | null };
 type Application = {
   id: string; status: string; createdAt: string; jobPost: EmployeeJob;
-  matchScore?: number | null; matchBreakdown?: MatchBreakdownData | null;
+  matchScore?: number | null; matchBreakdown?: unknown;
   interviews?: Interview[]; coverLetter?: string | null;
   resumeSnapshot?: { resume?: { title?: string | null } } | null;
 };
@@ -38,6 +38,24 @@ function statusClass(status: string) {
 function upcoming(app: Application) {
   if (CLOSED.has(app.status)) return undefined;
   return (app.interviews || []).filter((item) => item.status !== 'CANCELLED' && item.status !== 'COMPLETED' && new Date(item.scheduledAt).getTime() >= Date.now()).sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt))[0];
+}
+
+function InterviewSummary({ interview }: { interview: Interview }) {
+  const { t, locale } = useI18n();
+  let meetingUrl: string | null = null;
+  try {
+    const url = new URL(interview.meetingUrl || '');
+    if (url.protocol === 'https:' || url.protocol === 'http:') meetingUrl = url.href;
+  } catch { /* Legacy or empty URLs are shown without a clickable link. */ }
+  return <div className={s.interviewItem}>
+    <p><WorkspaceIcon kind="calendar" /> {dateLabel(interview.scheduledAt, locale, true)}
+      {interview.status && <span className={s.sub}>{t('ew.interview.' + interview.status)}</span>}
+      {interview.durationMins ? <span className={s.sub}>{t('ew.interviewMinutes').replace('{n}', String(interview.durationMins))}</span> : null}
+    </p>
+    {interview.location && <p>{interview.location}</p>}
+    {interview.note && <p style={{ whiteSpace: 'pre-wrap' }}>{interview.note}</p>}
+    {meetingUrl && interview.status !== 'CANCELLED' && <a className={s.secondary} href={meetingUrl} target="_blank" rel="noopener noreferrer">{t('ew.joinInterview')}<WorkspaceIcon kind="external" /></a>}
+  </div>;
 }
 
 export function ApplicationsWorkspace() {
@@ -81,6 +99,7 @@ export function ApplicationsWorkspace() {
     {resource.error && <ResourceError message={resource.error} onRetry={retry} />}
     {resource.loading ? <WorkspaceLoading /> : <div ref={scrollRef} className={s.scroll}>{!visible.length ? <WorkspaceEmpty title={t(resource.error && !resource.items.length ? 'ew.loadFailed' : resource.items.length ? 'ew.noResults' : 'ew.applicationsEmpty')} hint={resource.error && !resource.items.length ? undefined : t(resource.items.length ? 'ew.adjustSearch' : 'ew.applicationsEmptyHint')}>{!resource.error && !resource.items.length && <FindJobsAction />}</WorkspaceEmpty> : <table className={s.table}><colgroup><col style={{ width: '38%' }} /><col style={{ width: '17%' }} /><col style={{ width: '16%' }} /><col style={{ width: '23%' }} /><col style={{ width: '6%' }} /></colgroup><thead><tr><th scope="col">{t('ew.roleCompany')}</th><th scope="col">{t('ew.status')}</th><th scope="col">{t('ew.applied')}</th><th scope="col">{t('ew.nextStep')}</th><th scope="col"><span className="sr-only">{t('emp.details')}</span></th></tr></thead><tbody>{visible.slice((safePage - 1) * SIZE, safePage * SIZE).map((item) => <tr key={item.id}><td><div className={s.companyCell}><CompanyMark name={item.jobPost.company?.name || item.jobPost.title} logo={item.jobPost.company?.logoUrl} /><div className={s.companyText}><button type="button" className={s.titleButton} onClick={() => setSelectedId(item.id)}>{item.jobPost.title}</button><span className={s.sub}>{[item.jobPost.company?.name, localizedJobLocation(item.jobPost, t)].filter(Boolean).join(' \u00b7 ')}</span></div></div></td><td><span className={s.status + ' ' + statusClass(item.status)}><WorkspaceIcon kind={item.status === 'INTERVIEW' ? 'user' : item.status === 'HIRED' || item.status === 'OFFER' ? 'check' : 'clock'} />{item.status === 'NEW' ? t('ew.applied') : enumLabel('applicationStatus', item.status)}</span></td><td className={s.date} data-mobile="hide">{dateLabel(item.createdAt, locale)}</td><td className={s.nextStep}>{nextStep(item)}</td><td><button type="button" className={s.iconButton} aria-label={t('ew.applicationDetails') + ': ' + item.jobPost.title} onClick={() => setSelectedId(item.id)}><WorkspaceIcon kind="right" /></button></td></tr>)}</tbody></table>}</div>}
     {!resource.loading && <Pagination page={safePage} total={visible.length} size={SIZE} onChange={setPage} />}
-    {selected && <ProfileDialog title={t('ew.applicationDetails')} wide onClose={() => setSelectedId(null)} busy={busy}><div className={s.detailBody}><div className={s.detailIdentity}><CompanyMark name={selected.jobPost.company?.name || selected.jobPost.title} logo={selected.jobPost.company?.logoUrl} /><div><h3>{selected.jobPost.title}</h3><span className={s.sub}>{selected.jobPost.company?.name}{' \u00b7 '}{localizedJobLocation(selected.jobPost, t)}</span></div></div><div className={s.detailMeta}><span className={s.status + ' ' + statusClass(selected.status)}>{selected.status === 'NEW' ? t('ew.applied') : enumLabel('applicationStatus', selected.status)}</span><span>{t('ew.applied')}: {dateLabel(selected.createdAt, locale)}</span></div>{Boolean(selected.interviews?.length) && <div className={s.detailSection}><h3>{t('ew.interviews')}</h3>{selected.interviews!.map((interview) => <p key={interview.id}><WorkspaceIcon kind="calendar" /> {dateLabel(interview.scheduledAt, locale, true)}{interview.status && <span className={s.sub}>{t('ew.interview.' + interview.status)}</span>}{interview.location && <span className={s.sub}>{interview.location}</span>}</p>)}<span className={s.sub}>{t('ew.timezone').replace('{zone}', Intl.DateTimeFormat().resolvedOptions().timeZone)}</span></div>}{selected.resumeSnapshot?.resume?.title && <div className={s.detailSection}><h3>{t('ew.cv')}</h3><p>{selected.resumeSnapshot.resume.title}</p></div>}{selected.coverLetter && <div className={s.detailSection}><h3>{t('coverLetter')}</h3><p style={{ whiteSpace: 'pre-wrap' }}>{selected.coverLetter}</p></div>}{selected.matchBreakdown && <div className={s.detailSection}><h3>{t('match')}{selected.matchScore != null ? ' \u00b7 ' + selected.matchScore + '%' : ''}</h3><MatchBreakdownPanel breakdown={selected.matchBreakdown} /></div>}<div className={s.detailActions}>{selected.jobPost.status === 'PUBLISHED' && <Link className={s.secondary} href={'/jobs/' + selected.jobPost.id}>{t('ew.viewJob')}<WorkspaceIcon kind="external" /></Link>}{selected.jobPost.company?.chatPeerUserId && <Link className={s.primary} href={'/messages?peer=' + encodeURIComponent(selected.jobPost.company.chatPeerUserId) + '&job=' + encodeURIComponent(selected.jobPost.id)}><WorkspaceIcon kind="message" />{t('chatWithRecruiter')}</Link>}{!CLOSED.has(selected.status) && <button type="button" className={s.danger} disabled={busy} onClick={() => void withdraw(selected)}>{t('emp.withdraw')}</button>}</div></div></ProfileDialog>}
+    {selected && <ProfileDialog title={t('ew.applicationDetails')} wide onClose={() => setSelectedId(null)} busy={busy}><div className={s.detailBody}><div className={s.detailIdentity}><CompanyMark name={selected.jobPost.company?.name || selected.jobPost.title} logo={selected.jobPost.company?.logoUrl} /><div><h3>{selected.jobPost.title}</h3><span className={s.sub}>{selected.jobPost.company?.name}{' \u00b7 '}{localizedJobLocation(selected.jobPost, t)}</span></div></div><div className={s.detailMeta}><span className={s.status + ' ' + statusClass(selected.status)}>{selected.status === 'NEW' ? t('ew.applied') : enumLabel('applicationStatus', selected.status)}</span><span>{t('ew.applied')}: {dateLabel(selected.createdAt, locale)}</span></div>{Boolean(selected.interviews?.length) && <div className={s.detailSection}><h3>{t('ew.interviews')}</h3>{selected.interviews!.map((interview) => <InterviewSummary key={interview.id} interview={interview} />)}<span className={s.sub}>{t('ew.timezone').replace('{zone}', Intl.DateTimeFormat().resolvedOptions().timeZone)}</span></div>}{selected.resumeSnapshot?.resume?.title && <div className={s.detailSection}><h3>{t('ew.cv')}</h3><p>{selected.resumeSnapshot.resume.title}</p></div>}{selected.coverLetter && <div className={s.detailSection}><h3>{t('coverLetter')}</h3><p style={{ whiteSpace: 'pre-wrap' }}>{selected.coverLetter}</p></div>}<div className={s.detailActions}>{selected.jobPost.status === 'PUBLISHED' && <Link className={s.secondary} href={jobDetailHref(selected.jobPost.id, '/dashboard/employee?tab=applications')}>{t('ew.viewJob')}<WorkspaceIcon kind="external" /></Link>}{selected.jobPost.company?.chatPeerUserId && <Link className={s.primary} href={'/messages?peer=' + encodeURIComponent(selected.jobPost.company.chatPeerUserId) + '&job=' + encodeURIComponent(selected.jobPost.id)}><WorkspaceIcon kind="message" />{t('chatWithRecruiter')}</Link>}{!CLOSED.has(selected.status) && <button type="button" className={s.danger} disabled={busy} onClick={() => void withdraw(selected)}>{t('emp.withdraw')}</button>}</div></div></ProfileDialog>}
   </section>;
 }
+

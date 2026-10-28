@@ -11,7 +11,7 @@ import { formatNewsDate, NEWS_CATEGORY_LABEL_KEY } from '@/components/news/NewsC
 import s from './LandingSections.module.css';
 
 export type LandingFacet = { slug: string; name: string; count: number };
-export type LandingCategory = LandingFacet;
+export type LandingCategory = LandingFacet & { icon?: string | null };
 export type LandingLocation = LandingFacet & { country?: string; countrySlug?: string };
 export type LandingJob = {
   id: string; title: string; workMode?: string | null;
@@ -20,27 +20,18 @@ export type LandingJob = {
   city?: { slug?: string; name: string } | null;
 };
 
-export function LandingIcon({ kind = 'arrow', className }: { kind?: string; className?: string }) {
-  const iconKind = kind === 'finance' ? 'finance-banking' : kind === 'design' ? 'design-creative' : kind;
+export function LandingIcon({ kind = 'arrow', className, icon }: { kind?: string; className?: string; icon?: string | null }) {
+  if (icon) return <span className={className} aria-hidden="true">{icon}</span>;
   const paths: Record<string, ReactNode> = {
     arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
     pin: <><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2.4" /></>,
-    'it-software': <path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18" />,
-    'sales-marketing': <><rect x="3" y="14" width="4" height="7" rx="1" /><rect x="10" y="8" width="4" height="13" rx="1" /><rect x="17" y="3" width="4" height="18" rx="1" /></>,
-    'finance-banking': <path d="m2 8 10-6 10 6H2Zm1 13h18M5 11v7m5-7v7m4-7v7m5-7v7" />,
-    'design-creative': <><path d="M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 1-4c-2-1-1-3 1-3h2a3 3 0 0 0 3-3 9 9 0 0 0-9-8Z" /><circle cx="7" cy="10" r=".7" /><circle cx="10" cy="6.5" r=".7" /><circle cx="15" cy="7" r=".7" /><circle cx="18" cy="10" r=".7" /></>,
-    engineering: <><path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 4h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z" /><circle cx="12" cy="12" r="3" /></>,
-    'customer-support': <><path d="M4 14v-3a8 8 0 0 1 16 0v7a3 3 0 0 1-3 3h-4" /><rect x="2" y="11" width="5" height="7" rx="2" /><rect x="17" y="11" width="5" height="7" rx="2" /></>,
-    logistics: <><path d="M3 5h12v13H3V5Zm12 5h4l3 4v4h-7" /><circle cx="7" cy="19" r="2" /><circle cx="18" cy="19" r="2" /></>,
-    hospitality: <path d="M2 18h20M4 15a8 8 0 0 1 16 0H4Zm8-12v3M8 21h8" />,
-    education: <path d="m2 8 10-5 10 5-10 5L2 8Zm4 3v6c4 3 8 3 12 0v-6m4-3v9" />,
     person: <><circle cx="12" cy="7" r="4" /><path d="M4 21v-3a8 8 0 0 1 16 0v3H4Z" /></>,
     document: <path d="M5 2h9l5 5v15H5V2Zm9 0v6h5M8 12h8m-8 4h6" />,
     search: <><circle cx="10" cy="10" r="7" /><path d="m15 15 6 6" /></>,
     remote: <><path d="M2 8a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0m-11 4a5 5 0 0 1 8 0" /><circle cx="12" cy="20" r="1" /></>,
     briefcase: <><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M8 7V3h8v4M2 12c6 4 14 4 20 0m-10 1v4" /></>,
   };
-  return <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[iconKind] || paths.briefcase}</svg>;
+  return <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[kind] || paths.briefcase}</svg>;
 }
 
 function Heading({ title, subtitle, href, action }: { title: string; subtitle: string; href: string; action: string }) {
@@ -75,7 +66,7 @@ export function LandingSections({ jobs, categories, cities, roles, news }: {
   const salary = (job: LandingJob) => {
     const min = job.salaryMin, max = job.salaryMax;
     if (min == null && max == null) return t('landing.salaryNegotiable');
-    const fmt = new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : locale === 'uz' ? 'uz-UZ' : 'en-US', { maximumFractionDigits: 0 });
+    const fmt = new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : locale === 'uz' ? 'uz-UZ' : locale === 'id' ? 'id-ID' : 'en-US', { maximumFractionDigits: 0 });
     const modifier = t(min != null ? 'landing.from' : 'landing.upTo');
     const singleAmount = fmt.format((min ?? max)!);
     const amount = min != null && max != null
@@ -95,7 +86,7 @@ export function LandingSections({ jobs, categories, cities, roles, news }: {
     <section className={s.featured}>
       <Heading title={t('landing.featured')} subtitle={t('landing.featuredSub')} href="/jobs" action={t('landing.viewJobs')} />
       <div className={s.jobs}>
-        {jobs.map((job) => <Link className={s.job} href={`/jobs/${job.id}`} key={job.id}>
+        {jobs.map((job) => <Link data-job-impression={job.id} className={s.job} href={`/jobs/${job.id}`} key={job.id}>
           <div className={s.jobCompany}>
             <span className={s.logo}>{job.company.logoUrl ? <img src={job.company.logoUrl} alt="" loading="lazy" /> : job.company.name.slice(0, 1)}</span>
             <span>{job.company.name}</span><span className={s.badge}>{t('landing.badge')}</span>
@@ -117,7 +108,7 @@ export function LandingSections({ jobs, categories, cities, roles, news }: {
     <section>
       <Heading title={t('landing.field')} subtitle={t('landing.fieldSub')} href="/explore/categories" action={t('landing.categories')} />
       <div className={s.categories}>{categories.slice(0, 8).map((item) => <Link className={s.category} key={item.slug} href={`/jobs?category=${encodeURIComponent(item.slug)}`}>
-        <LandingIcon kind={item.slug} /><div><h3>{item.name}</h3><span>{countLabel(item.count)}</span></div>
+        {item.icon ? <LandingIcon icon={item.icon} /> : <LandingIcon kind="briefcase" />}<div><h3>{item.name}</h3><span>{countLabel(item.count)}</span></div>
       </Link>)}</div>
     </section>
 

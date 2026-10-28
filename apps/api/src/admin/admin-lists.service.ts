@@ -5,7 +5,6 @@ import type {
   EmploymentType,
   ExperienceLevel,
   JobStatus,
-  PlanCode,
   ReportEntityType,
   ReportStatus,
   UserRole,
@@ -32,7 +31,6 @@ import {
 } from './admin-query';
 
 const USER_ROLES = ['EMPLOYEE', 'RECRUITER', 'SUPER_ADMIN'] as const;
-const PLAN_CODES = ['FREE', 'STANDARD', 'PREMIUM', 'VIP'] as const;
 const COMPANY_SIZES = [
   'SIZE_1_10',
   'SIZE_11_50',
@@ -52,7 +50,7 @@ const WORK_MODES = ['ONSITE', 'REMOTE', 'HYBRID'] as const;
 const EXPERIENCE_LEVELS = ['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'] as const;
 const REPORT_STATUSES = ['OPEN', 'RESOLVED', 'DISMISSED'] as const;
 const REPORT_ENTITY_TYPES = ['JOB_POST', 'USER', 'COMPANY', 'CHAT_MESSAGE'] as const;
-const LOCALES = ['uz', 'ru', 'en'] as const;
+const LOCALES = ['uz', 'ru', 'en', 'id'] as const;
 
 type UserQuery = z.infer<typeof adminUserListSchema>;
 type CompanyQuery = z.infer<typeof adminCompanyListSchema>;
@@ -129,6 +127,34 @@ export class AdminListsService {
     );
   }
 
+  /** Returns only the explicitly selected users for the admin CSV export. */
+  async selectedUsers(ids: string[]) {
+    const items = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        locale: true,
+        avatarUrl: true,
+        isBanned: true,
+        emailVerified: true,
+        lastSeenAt: true,
+        createdAt: true,
+        passwordHash: true,
+        anonymizedAt: true,
+      },
+    });
+    const byId = new Map(items.map((user) => [user.id, user]));
+    return ids.flatMap((id) => {
+      const user = byId.get(id);
+      if (!user) return [];
+      const { passwordHash, anonymizedAt, ...row } = user;
+      return [{ ...row, hasPassword: Boolean(passwordHash), anonymized: Boolean(anonymizedAt) }];
+    });
+  }
+
   userIds(query: UserQuery) {
     return this.matchingIds(
       this.prisma.user.findMany({
@@ -145,12 +171,10 @@ export class AdminListsService {
 
   private companyWhere(query: CompanyQuery): Prisma.CompanyWhereInput {
     const term = query.q?.trim();
-    const plans = enumFilter<PlanCode>(query.plan, PLAN_CODES);
     return compact({
       isVerified: query.verified,
       isBanned: query.banned,
       size: inFilter(enumFilter<CompanySize>(query.size, COMPANY_SIZES)),
-      subscription: plans.length ? { plan: { in: plans } } : undefined,
       industry: query.industrySlug ? { slug: query.industrySlug } : undefined,
       city: query.citySlug ? { slug: query.citySlug } : undefined,
       createdAt: dateRange(query.createdFrom, query.createdTo),
@@ -187,13 +211,37 @@ export class AdminListsService {
           createdAt: true,
           city: { select: { name: true, slug: true } },
           industry: { select: { name: true, slug: true } },
-          subscription: { select: { plan: true, status: true } },
           _count: { select: { jobPosts: true, members: true, followers: true } },
         },
       }),
       this.prisma.company.count({ where }),
     ]);
     return envelope(items, total, query.page, query.limit);
+  }
+
+  /** Returns only explicitly selected companies for admin exports. */
+  async selectedCompanies(ids: string[]) {
+    const items = await this.prisma.company.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        size: true,
+        isVerified: true,
+        isBanned: true,
+        createdAt: true,
+        city: { select: { name: true, slug: true } },
+        industry: { select: { name: true, slug: true } },
+        _count: { select: { jobPosts: true, members: true, followers: true } },
+      },
+    });
+    const byId = new Map(items.map((item) => [item.id, item]));
+    return ids.flatMap((id) => {
+      const item = byId.get(id);
+      return item ? [item] : [];
+    });
   }
 
   companyIds(query: CompanyQuery) {
@@ -225,8 +273,6 @@ export class AdminListsService {
       companyId: query.companyId || undefined,
       locale: inFilter(enumFilter(query.locale, LOCALES)),
       createdAt: dateRange(query.createdFrom, query.createdTo),
-      // "Hot" is not a column: a posting is boosted while boostUntil is ahead of now.
-      boostUntil: query.hotOnly ? { gt: new Date() } : undefined,
       OR: term
         ? [
             { title: { contains: term, mode: 'insensitive' as const } },
@@ -257,8 +303,6 @@ export class AdminListsService {
           employmentType: true,
           workMode: true,
           experienceLevel: true,
-          boostUntil: true,
-          boostWeight: true,
           publishedAt: true,
           createdAt: true,
           updatedAt: true,
@@ -270,6 +314,33 @@ export class AdminListsService {
       this.prisma.jobPost.count({ where }),
     ]);
     return envelope(items, total, query.page, query.limit);
+  }
+
+  /** Returns only explicitly selected jobs for admin exports. */
+  async selectedJobs(ids: string[]) {
+    const items = await this.prisma.jobPost.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        locale: true,
+        employmentType: true,
+        workMode: true,
+        experienceLevel: true,
+        publishedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        company: { select: { id: true, name: true, slug: true } },
+        city: { select: { name: true } },
+        _count: { select: { applications: true, views: true } },
+      },
+    });
+    const byId = new Map(items.map((item) => [item.id, item]));
+    return ids.flatMap((id) => {
+      const item = byId.get(id);
+      return item ? [item] : [];
+    });
   }
 
   jobIds(query: JobQuery) {
@@ -318,6 +389,19 @@ export class AdminListsService {
       this.prisma.report.count({ where }),
     ]);
     return envelope(items, total, query.page, query.limit);
+  }
+
+  /** Returns only explicitly selected reports for admin exports. */
+  async selectedReports(ids: string[]) {
+    const items = await this.prisma.report.findMany({
+      where: { id: { in: ids } },
+      include: { reporter: { select: { id: true, email: true, fullName: true } } },
+    });
+    const byId = new Map(items.map((item) => [item.id, item]));
+    return ids.flatMap((id) => {
+      const item = byId.get(id);
+      return item ? [item] : [];
+    });
   }
 
   reportIds(query: ReportQuery) {

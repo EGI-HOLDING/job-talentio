@@ -1,0 +1,30 @@
+{
+  "version": "2026-10-23",
+  "coverage": {
+    "ID": {
+      "provinces": 38,
+      "cities": 514
+    },
+    "UZ": {
+      "provinces": 14,
+      "cities": 120
+    }
+  },
+  "sources": [
+    {
+      "country": "ID",
+      "url": "https://github.com/cahyadsn/wilayah/blob/be9d3e301c962b46e1a5ef2275424cfa0b53a7ef/db/wilayah.sql",
+      "version": "be9d3e301c962b46e1a5ef2275424cfa0b53a7ef",
+      "note": "Repository README cites Kepmendagri 300.2.2-2430/2025; SQL header cites 300.2.2-2138/2025. Import preserves that provenance discrepancy.",
+      "license": "MIT",
+      "sha256": "c4c3396d9380d4edee072af1d9dff83573b574d7cd00a6562cf82e200e954031"
+    },
+    {
+      "country": "UZ",
+      "url": "https://stat.uz/images/soato-20_04_2022.xlsx",
+      "version": "SOATO 2022-04-20",
+      "note": "Official published snapshot, not a claim of all territorial changes through 2026. Only city classifications imported; districts and settlements excluded.",
+      "sha256": "9d1b0c84fdef45f5b49f1c312037d64c7ec85a0f4bbfdc979115b1f4c6cafcc1"
+    }
+  ]
+}

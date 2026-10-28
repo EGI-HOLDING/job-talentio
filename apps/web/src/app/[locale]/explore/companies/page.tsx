@@ -2,6 +2,8 @@
 
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useRouter } from '@/lib/navigation';
+import { useAccountRole } from '@/lib/useAccountRole';
+import { isEmployerRole } from '@/lib/accountNavigation';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -10,7 +12,7 @@ import { ExpandableList } from '@/components/ui/ExpandableList';
 import { JobsIcon } from '@/components/jobs/JobsIcon';
 import s from '@/components/explore/CompanyDirectory.module.css';
 
-type CompanyRow = { slug: string; name: string; logoUrl?: string | null; plan?: string; openJobsCount: number };
+type CompanyRow = { slug: string; name: string; logoUrl?: string | null; openJobsCount: number };
 type BrowseResponse = { items: CompanyRow[]; total: number; page: number; limit: number; totalPages: number };
 type Industry = { slug: string; name: string; companyCount?: number };
 type IndustryGroup = { slug: string; name: string; industries: Industry[] };
@@ -20,8 +22,8 @@ function ExploreCompaniesPageInner() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Preserve existing links with tab=vip / tab=industry and industrySlug.
-  const vipOnly = searchParams.get('tab') === 'vip';
+  const employer = isEmployerRole(useAccountRole());
+  // Legacy VIP URLs now browse all public hiring companies.
   const industrySlug = searchParams.get('industrySlug') || '';
   const qParam = searchParams.get('q') || '';
   const rawPage = Number(searchParams.get('page') || 1);
@@ -69,7 +71,6 @@ function ExploreCompaniesPageInner() {
     setLoading(true);
     setError(false);
     const params = new URLSearchParams({ page: String(page), limit: String(PAGE_LIMIT), sort: 'jobs' });
-    if (vipOnly) params.set('plan', 'VIP');
     if (industrySlug) params.set('industrySlug', industrySlug);
     if (qParam.trim()) params.set('q', qParam.trim());
     api<BrowseResponse>(`/companies?${params}`, { auth: false, signal: controller.signal })
@@ -77,8 +78,8 @@ function ExploreCompaniesPageInner() {
       .catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [vipOnly, industrySlug, page, qParam, locale, retry]);
-  useEffect(() => { if (resultsRef.current) resultsRef.current.scrollTop = 0; }, [vipOnly, industrySlug, page, qParam]);
+  }, [industrySlug, page, qParam, locale, retry]);
+  useEffect(() => { if (resultsRef.current) resultsRef.current.scrollTop = 0; }, [industrySlug, page, qParam]);
   useEffect(() => {
     const nav = document.querySelector('.nav-wrap');
     if (!nav) return;
@@ -161,7 +162,6 @@ function ExploreCompaniesPageInner() {
         <div className={s.toolbar}>
           <button ref={filterButtonRef} type="button" className={s.filterButton} onClick={() => setFiltersOpen(true)} aria-controls="company-industries" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{industrySlug ? ' (1)' : ''}</button>
           <h2 aria-live="polite">{loading ? t('ui.loading') : !error && data ? t('companiesCount').replace('{n}', String(data.total)) : t('companiesStat')}</h2>
-          <label className={s.vipToggle}><input type="checkbox" checked={vipOnly} onChange={(event) => setParams({ tab: event.target.checked ? 'vip' : null })} /><span>{t('discovery.vipOnly')}</span></label>
         </div>
         {(qParam || industrySlug) && <div className={s.activeFilters}>
           {qParam && <button type="button" onClick={() => setParams({ q: null })}>{qParam}<JobsIcon kind="close" /></button>}
@@ -169,9 +169,9 @@ function ExploreCompaniesPageInner() {
         </div>}
         <div ref={resultsRef} className={s.resultsScroll} aria-busy={loading}>
           {loading ? <div className={s.grid} role="status" aria-label={t('ui.loading')}>{Array.from({ length: 12 }, (_, index) => <div className={s.skeletonCard} key={index} aria-hidden="true"><i /><span /></div>)}</div> : error ? <div className={s.message} role="alert"><p>{t('discovery.companyError')}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button></div> : data?.items.length ? <div className={s.grid}>
-            {data.items.map((company) => <Link key={company.slug} href={`/jobs?companySlug=${encodeURIComponent(company.slug)}`} className={`${s.company} ${company.plan === 'VIP' ? s.vipCompany : ''}`}>
+            {data.items.map((company) => <Link key={company.slug} href={employer ? `/companies/${encodeURIComponent(company.slug)}?returnTo=${encodeURIComponent('/explore/companies?' + searchParams.toString())}` : `/jobs?companySlug=${encodeURIComponent(company.slug)}`} className={s.company}>
               <span className={s.logo} aria-hidden="true">{company.logoUrl ? <img src={company.logoUrl} alt="" /> : company.name.charAt(0)}</span>
-              <span className={s.companyCopy}><span className={s.companyName}>{company.name}{company.plan === 'VIP' && <span className={s.vipBadge}>{t('vipBadge')}</span>}</span><span className={s.roles}>{t('openRolesCount').replace('{n}', String(company.openJobsCount))}</span></span>
+              <span className={s.companyCopy}><span className={s.companyName}>{company.name}</span><span className={s.roles}>{t('openRolesCount').replace('{n}', String(company.openJobsCount))}</span></span>
             </Link>)}
           </div> : <div className={s.message}><p>{t('discovery.companyEmpty')}</p><button type="button" onClick={reset}>{t('workspace.reset')}</button></div>}
         </div>

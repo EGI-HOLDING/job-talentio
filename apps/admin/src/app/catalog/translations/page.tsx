@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, apiPatch, apiPost, toQueryString } from '@/lib/api';
 import { downloadCsv, timestampedName } from '@/lib/csv';
 import { useAdminTable } from '@/lib/useAdminTable';
@@ -55,7 +55,7 @@ export default function CatalogTranslationsPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [editing, setEditing] = useState<AdminCatalogEntry | null>(null);
-  const [draft, setDraft] = useState({ nameUz: '', nameRu: '' });
+  const [draft, setDraft] = useState({ nameUz: '', nameRu: '', nameId: '' });
   const [merging, setMerging] = useState<AdminCatalogEntry | null>(null);
 
   useEffect(() => {
@@ -113,6 +113,21 @@ export default function CatalogTranslationsPage() {
       ),
     },
     {
+      key: 'nameId',
+      label: 'Indonesian',
+      render: (row) => (
+        <span>
+          {row.nameId || <span className="muted">Missing</span>}
+          {row.nameIdIsMachine && (
+            <>
+              {' '}
+              <Badge>machine</Badge>
+            </>
+          )}
+        </span>
+      ),
+    },
+    {
       key: 'status',
       label: 'State',
       render: (row) => (
@@ -138,17 +153,28 @@ export default function CatalogTranslationsPage() {
     activeFilters.push({ key: 'createdFrom', label: `From ${query.createdFrom}` });
   if (query.createdTo) activeFilters.push({ key: 'createdTo', label: `To ${query.createdTo}` });
 
-  function exportCsv() {
-    const rows = table.selected.size
-      ? table.rows.filter((row) => table.selected.has(row.id))
-      : table.rows;
-    downloadCsv(timestampedName(`translations-${catalogKind}`), rows, [
+  async function exportCsv() {
+    try {
+      const rows = table.selected.size
+        ? await apiPost<AdminCatalogEntry[]>(`/admin/catalog/i18n/${catalogKind}/selected`, {
+            ids: [...table.selected],
+          })
+        : table.rows;
+      if (!rows.length) {
+        notify('No translations to export', 'error');
+        return;
+      }
+      downloadCsv(timestampedName(`translations-${catalogKind}`), rows, [
       { header: 'id', value: (r) => r.id },
       { header: 'name', value: (r) => r.name },
       { header: 'nameUz', value: (r) => r.nameUz ?? '' },
       { header: 'nameRu', value: (r) => r.nameRu ?? '' },
+      { header: 'nameId', value: (r) => r.nameId ?? '' },
       { header: 'status', value: (r) => r.i18nStatus },
-    ]);
+      ]);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not export translations', 'error');
+    }
   }
 
   const kindSummary = summary?.[catalogKind];
@@ -181,8 +207,13 @@ export default function CatalogTranslationsPage() {
             >
               Auto-mark tech terms
             </button>
-            <button type="button" className="secondary" onClick={exportCsv} disabled={!table.rows.length}>
-              Export CSV
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void exportCsv()}
+              disabled={!table.rows.length && !table.selected.size}
+            >
+              {table.selected.size ? `Export selected (${table.selected.size})` : 'Export CSV'}
             </button>
           </>
         }
@@ -252,6 +283,8 @@ export default function CatalogTranslationsPage() {
 
         <SelectAllNotice
           pageCount={table.rows.length}
+          selectedOnPage={table.rows.filter((row) => table.selected.has(row.id)).length}
+          selectedCount={table.selected.size}
           total={table.total}
           allMatchingSelected={table.allMatching.active}
           capped={table.allMatching.capped}
@@ -280,7 +313,7 @@ export default function CatalogTranslationsPage() {
                 className="secondary sm"
                 onClick={() => {
                   setEditing(row);
-                  setDraft({ nameUz: row.nameUz ?? '', nameRu: row.nameRu ?? '' });
+                  setDraft({ nameUz: row.nameUz ?? '', nameRu: row.nameRu ?? '', nameId: row.nameId ?? '' });
                 }}
               >
                 Edit
@@ -369,12 +402,12 @@ export default function CatalogTranslationsPage() {
               disabled={table.busy}
               onClick={async () => {
                 const row = editing;
-                setEditing(null);
                 if (!row) return;
-                await table.runAction(
+                const saved = await table.runAction(
                   apiPatch(`/admin/catalog/${catalogKind}/${row.id}`, draft),
                   'Translation saved',
                 );
+                if (saved) setEditing(null);
               }}
             >
               Save
@@ -397,6 +430,13 @@ export default function CatalogTranslationsPage() {
               onChange={(e) => setDraft((d) => ({ ...d, nameRu: e.target.value }))}
             />
           </label>
+          <label>
+            Indonesian
+            <input
+              value={draft.nameId}
+              onChange={(e) => setDraft((d) => ({ ...d, nameId: e.target.value }))}
+            />
+          </label>
         </div>
       </Modal>
 
@@ -407,12 +447,12 @@ export default function CatalogTranslationsPage() {
         onClose={() => setMerging(null)}
         onMerged={async (targetId) => {
           const row = merging;
-          setMerging(null);
           if (!row) return;
-          await table.runAction(
+          const saved = await table.runAction(
             apiPost(`/admin/catalog/${catalogKind}/${row.id}/merge`, { targetId }),
             'Entry merged',
           );
+          if (saved) setMerging(null);
         }}
         onError={(message) => notify(message, 'error')}
       />
@@ -434,17 +474,18 @@ export default function CatalogTranslationsPage() {
         onCancel={() => setPending(null)}
         onConfirm={async () => {
           const action = pending;
-          setPending(null);
           if (!action) return;
+          let saved: boolean;
           if (action.kind === 'translate') {
-            await table.runBulk(`/admin/catalog/${catalogKind}/bulk/translate`, {}, 'translated');
+            saved = await table.runBulk(`/admin/catalog/${catalogKind}/bulk/translate`, {}, 'translated');
           } else {
-            await table.runBulk(
+            saved = await table.runBulk(
               `/admin/catalog/${catalogKind}/bulk/status`,
               { status: action.status },
               'updated',
             );
           }
+          if (saved) setPending(null);
         }}
       />
     </>
@@ -470,47 +511,57 @@ function MergeDialog({
   kind: CatalogKind;
   busy: boolean;
   onClose: () => void;
-  onMerged: (targetId: string) => void;
+  onMerged: (targetId: string) => void | Promise<void>;
   onError: (message: string) => void;
 }) {
   const [term, setTerm] = useState('');
   const [results, setResults] = useState<AdminCatalogEntry[]>([]);
   const [picked, setPicked] = useState<AdminCatalogEntry | null>(null);
   const [searching, setSearching] = useState(false);
+  const searchVersion = useRef(0);
 
   useEffect(() => {
     if (!source) {
+      searchVersion.current += 1;
       setTerm('');
       setResults([]);
       setPicked(null);
+      setSearching(false);
     }
   }, [source]);
 
   const search = useCallback(
-    async (value: string) => {
-      if (!value.trim()) {
-        setResults([]);
-        return;
-      }
-      setSearching(true);
+    async (value: string, version: number) => {
+      if (!value.trim() || version !== searchVersion.current) return;
       try {
         const data = await api<Envelope>(
           `/admin/catalog/i18n${toQueryString({ kind, q: value.trim(), limit: 10 })}`,
         );
-        setResults(data.items.filter((item) => item.id !== source?.id));
+        if (version === searchVersion.current) {
+          setResults(data.items.filter((item) => item.id !== source?.id));
+        }
       } catch (e) {
-        onError(e instanceof Error ? e.message : 'Search failed');
+        if (version === searchVersion.current) {
+          onError(e instanceof Error ? e.message : 'Search failed');
+        }
       } finally {
-        setSearching(false);
+        if (version === searchVersion.current) setSearching(false);
       }
     },
     [kind, source?.id, onError],
   );
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void search(term), 250);
+    const version = ++searchVersion.current;
+    if (!source || !term.trim()) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = window.setTimeout(() => void search(term, version), 250);
     return () => window.clearTimeout(timer);
-  }, [term, search]);
+  }, [term, search, source]);
 
   return (
     <Modal
@@ -527,7 +578,7 @@ function MergeDialog({
             type="button"
             className="danger"
             disabled={!picked || busy}
-            onClick={() => picked && onMerged(picked.id)}
+            onClick={() => picked && void onMerged(picked.id)}
           >
             {picked ? `Merge into ${picked.name}` : 'Pick an entry'}
           </button>

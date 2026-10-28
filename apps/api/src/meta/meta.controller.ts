@@ -31,8 +31,8 @@ export class MetaController {
   }
 
   @Get('cities/suggest')
-  suggestCities(@Query('q') q?: string, @Query('take') take?: string) {
-    return this.meta.suggestCities(q, take ? Number(take) : 10);
+  suggestCities(@Query('q') q?: string, @Query('take') take?: string, @Query('country') country?: string) {
+    return this.meta.suggestCities(q, take ? Number(take) : 10, country);
   }
 
   @Get('cities')
@@ -40,8 +40,9 @@ export class MetaController {
     @Query('q') q?: string,
     @Query('province') province?: string,
     @Query('group') group?: string,
+    @Query('country') country?: string,
   ) {
-    return this.meta.cities(q, province, group);
+    return this.meta.cities(q, province, group, country);
   }
 
   @Get('platform-stats')

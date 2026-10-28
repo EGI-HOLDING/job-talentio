@@ -2,7 +2,11 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
+  // Isolated build verification can run while the local dev server stays open.
+  distDir: process.env.NEXT_BUILD_DIR || '.next',
+  // Standalone tracing needs symlink privileges unavailable on standard Windows.
+  // Linux deployment containers still receive the standalone bundle.
+  output: process.platform === 'win32' ? undefined : 'standalone',
   images: {
     // Next 15 only serves qualities listed here. Hero images request 95.
     qualities: [75, 95],

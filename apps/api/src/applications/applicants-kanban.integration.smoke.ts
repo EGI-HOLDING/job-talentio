@@ -1,0 +1,77 @@
+import assert from 'node:assert/strict';
+import type {Application} from '@prisma/client';
+import {readFileSync} from 'node:fs';
+import {PrismaService} from '../prisma/prisma.service';
+import {MatchingService} from '../matching/matching.service';
+import {ApplicationsService} from './applications.service';
+import {BenefitsService} from '../benefits/benefits.service';
+import {AuthUser} from '../common/auth.decorators';
+
+export async function runApplicantsKanbanSuite(db:PrismaService,benefits:BenefitsService) {
+  assert.equal(process.env.DATABASE_URL,process.env.HR_TEST_DATABASE_URL);
+  assert.match(new URL(process.env.DATABASE_URL!).pathname,/^\/talentio_hr_it_\d+$/);
+  const hr=await db.user.create({data:{role:'RECRUITER',fullName:'Kanban HR'}}) as AuthUser;
+  const other=await db.user.create({data:{role:'RECRUITER',fullName:'Other Kanban HR'}}) as AuthUser;
+  const company=await db.company.create({data:{name:'Kanban fixture',slug:'kanban-fixture',members:{create:{userId:hr.id,role:'OWNER'}}}});
+  const foreign=await db.company.create({data:{name:'Foreign Kanban fixture',slug:'foreign-kanban-fixture',members:{create:{userId:other.id,role:'OWNER'}}}});
+  const companies={assertMember:async(user:AuthUser,id:string)=>({company:await benefits.member(user,id)})};
+  const skill=await db.skill.create({data:{name:'Kanban competency',slug:'kanban-competency',normalizedKey:'kanban-competency'}});
+  const job=await db.jobPost.create({data:{companyId:company.id,title:'Fixture role',description:'Synthetic job for applicant-only ranking.',publishedAt:new Date(),status:'PUBLISHED',jobSkills:{create:{skillId:skill.id,isRequired:true}}}});
+  const foreignJob=await db.jobPost.create({data:{companyId:foreign.id,title:'Other fixture role',description:'Other company fixture.'}});
+  let notifications=0,fileMissing=false;const files:string[]=[];
+  const service=new ApplicationsService(db,{assertObjectAvailable:async()=>{if(fileMissing)throw Object.assign(new Error('Missing synthetic file'),{name:'NotFound'});},getPresignedGetUrl:async(key:string)=>{files.push(key);return 'https://example.test/submitted-cv';}} as never,companies as never,new MatchingService(db),{create:async()=>{notifications++;}} as never,{send:async()=>{}} as never);
+  const apps:Application[]=[];
+  for(let n=0;n<36;n++){
+    const user=await db.user.create({data:{fullName:'Kanban applicant '+n,role:'EMPLOYEE',employeeProfile:{create:{headline:'Fixture role',visibility:n===35?'PRIVATE':'PUBLIC',...(n===35?{skills:{create:{skillId:skill.id,level:'EXPERT'}}}:{})}}},include:{employeeProfile:true}});
+    apps.push(await db.application.create({data:{jobPostId:job.id,profileId:user.employeeProfile!.id,createdAt:new Date(1700000000000+n*1000),resumeSnapshot:{resume:{title:'Submitted fixture',fileKey:n===35?'synthetic/submitted.pdf':null}}}}));
+  }
+  const stranger=await db.user.create({data:{fullName:'Not an applicant',role:'EMPLOYEE',employeeProfile:{create:{headline:'Fixture role'}}}});
+  const ranked=await service.searchForJob(hr,job.id,{sort:'match',page:1,limit:10},'en');
+  assert.equal(ranked.total,36);assert.equal(ranked.items[0].id,apps[35].id,'Private applicant ranks before pagination, unlike the generic employee search');
+  assert.ok(!ranked.items.some(row=>row.profile.user.id===stranger.id));
+  assert.equal(ranked.items[0].hasResumeFile,true,'Submitted CV is independent of database CV opt-in');
+  assert.equal((await service.kanbanForJob(hr,job.id,{page:1,limit:20},'en')).columns.reduce((sum,column)=>sum+column.total,0),0,'Applications do not enter the board automatically');
+  const beforeEvents=await db.pipelineEvent.count({where:{applicationId:apps[0].id}});
+  const [a,b]=await Promise.all([service.addToKanban(hr,apps[0].id),service.addToKanban(hr,apps[0].id)]);
+  assert.equal(String(a.kanbanEnteredAt),String(b.kanbanEnteredAt));assert.equal(a.status,'NEW');
+  assert.equal(await db.auditLog.count({where:{action:'APPLICATION_KANBAN_ADDED',entityId:apps[0].id}}),1);
+  assert.equal(await db.pipelineEvent.count({where:{applicationId:apps[0].id}}),beforeEvents);assert.equal(notifications,0);
+  for(const application of apps.slice(1,30))await service.addToKanban(hr,application.id);
+  const board=await service.kanbanForJob(hr,job.id,{page:1,limit:20},'en');
+  const first=board.columns.find(column=>column.status==='NEW')!;assert.equal(first.total,30);assert.equal(first.items.length,20);assert.equal(first.hasMore,true);
+  const next=(await service.kanbanForJob(hr,job.id,{status:'NEW',page:2,limit:20},'en')).columns[0];assert.equal(next.items.length,10);assert.equal(next.total,30);assert.ok(next.items.every(row=>!first.items.some(previous=>previous.id===row.id)));
+  await service.updateStatus(hr,apps[0].id,'IN_REVIEW',undefined,{notify:false});
+  assert.equal(String((await service.addToKanban(hr,apps[0].id)).kanbanEnteredAt),String(a.kanbanEnteredAt));
+  assert.equal((await service.addToKanban(hr,apps[0].id)).status,'IN_REVIEW','Retry cannot reset an existing stage');
+  await service.updateStatus(hr,apps[30].id,'IN_REVIEW',undefined,{notify:false});
+  assert.ok((await db.application.findUniqueOrThrow({where:{id:apps[30].id}})).kanbanEnteredAt,'Legacy status processing enrolls in the same transaction');
+  const candidate=await db.user.findFirstOrThrow({where:{employeeProfile:{id:apps[31].profileId}}}) as AuthUser;
+  await service.updateStatus(candidate,apps[31].id,'WITHDRAWN',undefined,{notify:false});
+  assert.equal((await db.application.findUniqueOrThrow({where:{id:apps[31].id}})).kanbanEnteredAt,null);
+  await assert.rejects(()=>service.addToKanban(hr,apps[31].id));
+  await db.application.update({where:{id:apps[32].id},data:{status:'REJECTED'}});await assert.rejects(()=>service.addToKanban(hr,apps[32].id));
+  await assert.rejects(()=>service.addToKanban(other,apps[0].id));await assert.rejects(()=>service.kanbanForJob(other,job.id,{page:1,limit:20},'en'));
+  await assert.rejects(()=>service.getForJob(hr,foreignJob.id,apps[0].id,'en'));
+  await service.downloadResume(hr,apps[35].id);assert.deepEqual(files,['synthetic/submitted.pdf']);
+  const legacyJob=await db.jobPost.create({data:{companyId:company.id,title:'Legacy CV fixture',description:'Historical CV must not use a current replacement.'}});
+  const replacement=await db.resume.create({data:{profileId:apps[35].profileId,title:'Current replacement',fileKey:'synthetic/current-replacement.pdf'}});
+  const legacy=await db.application.create({data:{jobPostId:legacyJob.id,profileId:apps[35].profileId,resumeId:replacement.id}});
+  await assert.rejects(()=>service.downloadResume(hr,legacy.id),/No resume file available/);
+  assert.equal((await service.getForJob(hr,legacyJob.id,legacy.id,'en')).hasResumeFile,false,'Missing historical snapshot cannot imply access to the current file');
+  fileMissing=true;await assert.rejects(()=>service.downloadResume(hr,apps[35].id),/Submitted CV file unavailable/);assert.equal(files.length,1,'A missing submitted file never signs a fallback CV');fileMissing=false;
+  await assert.rejects(()=>service.downloadResume(hr,apps[34].id));
+  const withdrawing=await db.user.findFirstOrThrow({where:{employeeProfile:{id:apps[34].profileId}}}) as AuthUser;
+  await Promise.allSettled([service.addToKanban(hr,apps[34].id),service.updateStatus(withdrawing,apps[34].id,'WITHDRAWN',undefined,{notify:false})]);
+  assert.equal((await db.application.findUniqueOrThrow({where:{id:apps[34].id}})).status,'WITHDRAWN','Concurrent admission cannot undo employee withdrawal');
+  assert.ok(await db.auditLog.count({where:{action:'APPLICATION_KANBAN_ADDED',entityId:apps[34].id}})<=1);
+  await db.company.update({where:{id:company.id},data:{isBanned:true}});await assert.rejects(()=>service.addToKanban(hr,apps[35].id));await db.company.update({where:{id:company.id},data:{isBanned:false}});
+  // Exercise the migration's data classification on fixtures created after migration.
+  const sql=readFileSync('apps/api/prisma/migrations/20261026120000_application_kanban/migration.sql','utf8');
+  const update=sql.slice(sql.indexOf('UPDATE "Application"'),sql.indexOf('CREATE INDEX')).trim().replace(/;$/,'');
+  await db.$executeRawUnsafe(update);
+  assert.equal((await db.application.findUniqueOrThrow({where:{id:apps[33].id}})).kanbanEnteredAt,null,'Untouched NEW remains outside');
+  assert.equal((await db.application.findUniqueOrThrow({where:{id:apps[31].id}})).kanbanEnteredAt,null,'Employee-only withdrawal remains outside');
+  assert.ok((await db.application.findUniqueOrThrow({where:{id:apps[32].id}})).kanbanEnteredAt,'Legacy processed terminal remains on board');
+  assert.equal((await service.searchForJob(hr,job.id,{sort:'match',page:1,limit:10},'en')).total,36,'Admission never removes applicants');
+  console.log('Applicants/Kanban regression passed: applicant-only ranking, private applicants, concurrent admission, per-column pages, snapshot CV, legacy enrollment, terminal guards and migration classification.');
+}

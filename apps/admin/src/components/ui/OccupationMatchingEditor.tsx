@@ -1,0 +1,15 @@
+'use client';
+import type { OccupationMatchingMetadata } from '@job-talentio/shared';
+import { CatalogParentSelect } from './CatalogParentSelect';
+
+export function OccupationMatchingEditor({value,onChange}:{value:OccupationMatchingMetadata;onChange:(value:OccupationMatchingMetadata)=>void}) {
+  return <section style={{display:'grid',gap:12}}><h3>Occupation matching references</h3>
+    <p className="muted">Sources describe this occupation. Related occupations remain separate identities. Only approved, referenced relations affect recommendations.</p>
+    <label>ISCO-08 unit group (4 digits)<input value={value.isco08 ?? ''} maxLength={4} pattern="[0-9]{4}" onChange={e=>onChange({...value,isco08:e.target.value || undefined})}/></label>
+    {(['id','uz'] as const).map(locale=><label key={locale}>{locale.toUpperCase()} label review<select value={value.labelReview?.[locale] ?? 'UNREVIEWED'} onChange={e=>onChange({...value,labelReview:{...value.labelReview,[locale]:e.target.value}})}><option value="UNREVIEWED">Needs local review</option><option value="LOCAL_STANDARD">Checked against local classification</option><option value="NATIVE_REVIEWED">Reviewed by a native speaker</option></select></label>)}
+    <strong>Sources</strong>{value.sources.map((source,i)=><fieldset key={i} style={{display:'grid',gap:8}}>{(['provider','version','uri','code'] as const).map(field=><label key={field}>{field}<input value={source[field] ?? ''} onChange={e=>onChange({...value,sources:value.sources.map((s,n)=>n===i?{...s,[field]:e.target.value || undefined}:s)})}/></label>)}<button type="button" className="secondary" onClick={()=>onChange({...value,sources:value.sources.filter((_,n)=>n!==i)})}>Remove source</button></fieldset>)}
+    <button type="button" className="secondary" disabled={value.sources.length>=10} onClick={()=>onChange({...value,sources:[...value.sources,{provider:'',version:''}]})}>Add source</button>
+    <strong>Related occupations</strong>{value.relatedRoles.map((relation,i)=><fieldset key={i} style={{display:'grid',gap:8}}><CatalogParentSelect type="jobTitle" label="Related occupation" value={relation.id} onChange={id=>onChange({...value,relatedRoles:value.relatedRoles.map((r,n)=>n===i?{...r,id}:r)})}/><label>Evidence / source reference<input value={relation.reference} onChange={e=>onChange({...value,relatedRoles:value.relatedRoles.map((r,n)=>n===i?{...r,reference:e.target.value}:r)})}/></label><label><input type="checkbox" checked={relation.approved} onChange={e=>onChange({...value,relatedRoles:value.relatedRoles.map((r,n)=>n===i?{...r,approved:e.target.checked}:r)})}/> Approved for matching</label><button type="button" className="secondary" onClick={()=>onChange({...value,relatedRoles:value.relatedRoles.filter((_,n)=>n!==i)})}>Remove relation</button></fieldset>)}
+    <button type="button" className="secondary" disabled={value.relatedRoles.length>=100} onClick={()=>onChange({...value,relatedRoles:[...value.relatedRoles,{id:'',kind:'RELATED',reference:'',approved:false}]})}>Add related occupation</button>
+  </section>;
+}

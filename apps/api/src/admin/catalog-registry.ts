@@ -26,7 +26,7 @@ export function isCatalogType(value: unknown): value is CatalogType {
 /** A relation that makes a row "in use" and therefore not safe to hard delete. */
 type UsageRelation = { model: string; field: string; label: string };
 
-/** The optional parent a row hangs from, edited as a slug in the admin form. */
+/** The optional parent a row hangs from, selected by stable id in admin. */
 type ParentSpec = { type: CatalogType; field: string; label: string; required: boolean };
 
 export type CatalogSpec = {
@@ -153,7 +153,7 @@ export const CATALOG_SPECS: Record<CatalogType, CatalogSpec> = {
     hasIcon: false,
     parent: { type: 'industryGroup', field: 'groupId', label: 'Industry group', required: true },
     usage: [{ model: 'company', field: 'industryId', label: 'companies' }],
-    seedManaged: true,
+    seedManaged: false,
     supportsMerge: false,
   },
   industryGroup: {
@@ -167,7 +167,7 @@ export const CATALOG_SPECS: Record<CatalogType, CatalogSpec> = {
     hasIcon: false,
     // The database restricts deleting a group that still has industries.
     usage: [{ model: 'industry', field: 'groupId', label: 'industries' }],
-    seedManaged: true,
+    seedManaged: false,
     supportsMerge: false,
   },
   country: {
@@ -179,8 +179,8 @@ export const CATALOG_SPECS: Record<CatalogType, CatalogSpec> = {
     hasI18nStatus: false,
     hasSortOrder: false,
     hasIcon: false,
-    usage: [{ model: 'province', field: 'countryId', label: 'provinces' }],
-    seedManaged: true,
+    usage: [{ model: 'province', field: 'countryId', label: 'provinces' }, { model: 'jobPost', field: 'countryId', label: 'job postings' }, { model: 'employeeProfile', field: 'residenceCountryId', label: 'residents' }, { model: 'jobAlert', field: 'countryId', label: 'job alerts' }],
+    seedManaged: false,
     supportsMerge: false,
   },
   province: {
@@ -194,12 +194,13 @@ export const CATALOG_SPECS: Record<CatalogType, CatalogSpec> = {
     hasIcon: false,
     parent: { type: 'country', field: 'countryId', label: 'Country', required: true },
     usage: [{ model: 'city', field: 'provinceId', label: 'cities' }],
-    seedManaged: true,
+    seedManaged: false,
     supportsMerge: false,
   },
   city: {
     type: 'city',
     label: 'Cities',
+    aliasModel: 'cityAlias',
     model: 'city',
     keyField: 'slug',
     hasLocaleNames: true,
@@ -214,19 +215,23 @@ export const CATALOG_SPECS: Record<CatalogType, CatalogSpec> = {
       { model: 'jobAlert', field: 'cityId', label: 'job alerts' },
       { model: 'workExperience', field: 'cityId', label: 'work experience entries' },
     ],
-    seedManaged: true,
+    seedManaged: false,
     supportsMerge: false,
   },
 };
 
 /** Shape every catalog row exposes to the admin console. */
 export type CatalogRecord = {
+  matchingMetadata?: unknown;
+  countryId?: string;
   id: string;
   name: string;
   nameUz?: string | null;
   nameRu?: string | null;
+  nameId?: string | null;
   slug?: string;
   code?: string;
+  normalizedKey?: string | null;
   icon?: string | null;
   sortOrder?: number;
   archivedAt: Date | null;
@@ -261,11 +266,14 @@ export function countingDelegate(
 export function catalogSelect(spec: CatalogSpec): Record<string, boolean> {
   return {
     id: true,
+    ...(spec.type === 'country' ? { iso2: true, iso3: true, phoneCode: true, currencyCode: true, isActive: true } : {}),
+    ...(spec.type === 'city' ? { kind: true } : {}),
+    ...(spec.type === 'jobTitle' ? { matchingMetadata:true } : {}),
     name: true,
     archivedAt: true,
     curatedAt: true,
     [spec.keyField]: true,
-    ...(spec.hasLocaleNames ? { nameUz: true, nameRu: true } : {}),
+    ...(spec.hasLocaleNames ? { nameUz: true, nameRu: true, nameId: true } : {}),
     ...(spec.hasI18nStatus ? { i18nStatus: true } : {}),
     ...(spec.hasSortOrder ? { sortOrder: true } : {}),
     ...(spec.hasIcon ? { icon: true } : {}),

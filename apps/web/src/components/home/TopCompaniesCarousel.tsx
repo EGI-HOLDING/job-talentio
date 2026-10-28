@@ -20,7 +20,6 @@ export type TopCompany = {
   slug: string;
   name: string;
   logoUrl?: string | null;
-  plan?: string;
   openJobsCount: number;
 };
 
@@ -86,7 +85,6 @@ function Chevron({ dir }: { dir: 'prev' | 'next' }) {
 
 function CompanyCards({ companies, prefix }: { companies: TopCompany[]; prefix: string }) {
   const { t } = useI18n();
-  const vipLabel = t('vipBadge');
   return (
     <>
       {companies.map((c) => (
@@ -95,8 +93,6 @@ function CompanyCards({ companies, prefix }: { companies: TopCompany[]; prefix: 
           name={c.name}
           slug={c.slug}
           logoUrl={c.logoUrl}
-          plan={c.plan || 'VIP'}
-          vipLabel={vipLabel}
           count={c.openJobsCount}
           countLabel={t('openRolesCount').replace('{n}', String(c.openJobsCount))}
         />

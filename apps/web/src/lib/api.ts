@@ -3,6 +3,13 @@ import { DEFAULT_LOCALE, localeFromPathname } from '@/lib/locale';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
 
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 /**
  * Catalog labels (cities, categories, skills) are localized server-side, so
  * every request advertises the active language. Middleware guarantees the URL
@@ -30,6 +37,8 @@ export type AuthSession = {
     hasPassword?: boolean;
     memberships?: Array<{ companyId: string; role: string }>;
     employeeProfileId?: string | null;
+    employeeOnboarding?: {status: 'NOT_REQUIRED'|'IN_PROGRESS'|'COMPLETED';step:number} | null;
+    recruiterOnboarding?: {status: 'NOT_REQUIRED'|'IN_PROGRESS'|'COMPLETE';step:number} | null;
   };
 };
 
@@ -60,12 +69,14 @@ export function saveSession(session: AuthSession) {
     localStorage.setItem('jt_refresh', session.refreshToken);
   }
   localStorage.setItem('jt_session', JSON.stringify(session));
+  window.dispatchEvent?.(new Event('jt-session-updated'));
 }
 
 export function clearSession() {
   localStorage.removeItem('jt_token');
   localStorage.removeItem('jt_refresh');
   localStorage.removeItem('jt_session');
+  window.dispatchEvent?.(new Event('jt-session-updated'));
 }
 
 /** Revoke the refresh token server-side (best effort), then clear local session. */
@@ -99,12 +110,17 @@ async function tryRefresh(): Promise<string | null> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            clearSession();
+            return null;
+          }
+          const body: unknown = await res.json().catch(() => null);
+          throw new ApiError(formatApiError(body, res.statusText || 'Session refresh failed'), res.status);
+        }
         const session = (await res.json()) as AuthSession;
         saveSession(session);
         return session.accessToken;
-      } catch {
-        return null;
       } finally {
         refreshPromise = null;
       }
@@ -170,27 +186,25 @@ export async function api<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
-  const headers = new Headers(options.headers);
+  const { auth = true, ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers);
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   if (!headers.has('X-Locale')) headers.set('X-Locale', activeLocale());
-  const useAuth = options.auth !== false;
+  const useAuth = auth;
   if (useAuth) {
     const token = getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  let res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
+  let res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
 
   // Expired access token: silently rotate once via the refresh token, then retry.
-  if (res.status === 401 && useAuth && getToken() && !path.startsWith('/auth/')) {
+  if (res.status === 401 && useAuth && getToken() && path !== '/auth/refresh') {
     const rotated = await tryRefresh();
     if (rotated) {
       headers.set('Authorization', `Bearer ${rotated}`);
-      res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
-    } else if (getRefreshToken()) {
-      // Refresh token present but rejected - session is unrecoverable.
-      clearSession();
+      res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
     }
   }
 
@@ -204,7 +218,16 @@ export async function api<T>(
     }
   }
   if (!res.ok) {
-    throw new Error(formatApiError(data, res.statusText || 'Request failed'));
+    throw new ApiError(formatApiError(data, res.statusText || 'Request failed'), res.status);
   }
   return data as T;
+}
+
+export async function apiBlob(path:string):Promise<Blob> {
+  const headers=new Headers({'X-Locale':activeLocale()});
+  if(getToken())headers.set('Authorization','Bearer '+getToken());
+  let response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});
+  if(response.status===401){const token=await tryRefresh();if(token){headers.set('Authorization','Bearer '+token);response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});}}
+  if(!response.ok){const body=await response.json().catch(()=>null);throw new ApiError(formatApiError(body,response.statusText),response.status);}
+  return response.blob();
 }

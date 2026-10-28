@@ -1,13 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CatalogI18nStatus, JobStatus, PlanCode } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { CatalogI18nStatus, JobStatus, Prisma } from '@prisma/client';
+import { HR_PUBLICATION_LOCK, initializePublicationPeriods } from '../benefits/benefit-policy';
+import type { PrismaClient } from '@prisma/client';
 import type { z } from 'zod';
 import type { adminCatalogListSchema } from '@job-talentio/shared';
 import { MAX_BULK_IDS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { dateRange, envelope, skipFor } from './admin-query';
-import { BillingService } from '../billing/billing.service';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { TranslationService } from '../translation/translation.service';
+import { JobsService } from '../jobs/jobs.service';
+import type { AuthUser } from '../common/auth.decorators';
 import {
   allowsTechIdentity,
   catalogAlias,
@@ -41,96 +44,61 @@ function catalogAliasKey(kind: CatalogKind, name: string): string {
 export class AdminService {
   constructor(
     private prisma: PrismaService,
-    private billing: BillingService,
     private jobsSearch: JobsSearchService,
     private translation: TranslationService,
+    private jobs: JobsService,
   ) {}
 
   async metrics() {
-    const [users, companies, jobs, applications, payments] = await Promise.all([
+    const [users, companies, jobs, applications] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.company.count(),
       this.prisma.jobPost.count({ where: { status: 'PUBLISHED' } }),
       this.prisma.application.count(),
-      this.prisma.payment.aggregate({
-        _sum: { amountUzs: true },
-        where: { status: { in: ['PAID', 'MOCKED'] } },
-      }),
     ]);
     return {
       users,
       companies,
       publishedJobs: jobs,
       applications,
-      revenueUzs: payments._sum.amountUzs ?? 0,
     };
   }
 
   async banCompany(actorId: string, companyId: string, banned: boolean) {
-    const company = await this.prisma.company.update({
-      where: { id: companyId },
-      data: { isBanned: banned },
-    });
-    if (banned) {
-      await this.prisma.jobPost.updateMany({
-        where: { companyId, status: 'PUBLISHED' },
-        data: { status: 'PAUSED' },
+    const result = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.company.updateMany({
+        where: { id: companyId, isBanned: !banned },
+        data: { isBanned: banned },
       });
-    }
-    void this.jobsSearch.syncCompanyJobs(companyId);
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: banned ? 'BAN_COMPANY' : 'UNBAN_COMPANY',
-        entityType: 'Company',
-        entityId: companyId,
-      },
+      if (!changed.count) {
+        const current = await tx.company.findUnique({ where: { id: companyId } });
+        if (!current) throw new NotFoundException('Company not found');
+        if (current.isBanned !== banned) throw new ConflictException('Company changed. Refresh and try again.');
+        return { company: current, changed: false };
+      }
+      if (banned) {
+        await tx.jobPost.updateMany({
+          where: { companyId, status: 'PUBLISHED' },
+          data: { status: 'PAUSED' },
+        });
+      }
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId } });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: banned ? 'BAN_COMPANY' : 'UNBAN_COMPANY',
+          entityType: 'Company',
+          entityId: companyId,
+        },
+      });
+      return { company, changed: true };
     });
-    return company;
+    if (result.changed) void this.jobsSearch.syncCompanyJobs(companyId).catch(() => undefined);
+    return result.company;
   }
 
-  async forceJobStatus(actorId: string, jobId: string, status: JobStatus) {
-    const job = await this.prisma.jobPost.update({
-      where: { id: jobId },
-      data: { status },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: 'FORCE_JOB_STATUS',
-        entityType: 'JobPost',
-        entityId: jobId,
-        metadata: { status },
-      },
-    });
-    void this.jobsSearch.syncJob(jobId);
-    return job;
-  }
-
-  setPlan(actorId: string, companyId: string, plan: PlanCode) {
-    return this.billing.adminSetPlan(actorId, companyId, plan);
-  }
-
-  async setHotJob(actorId: string, jobId: string, days: number) {
-    const job = await this.prisma.jobPost.findUnique({ where: { id: jobId } });
-    if (!job) throw new NotFoundException();
-    const updated = await this.prisma.jobPost.update({
-      where: { id: jobId },
-      data: {
-        boostWeight: 1,
-        boostUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
-      },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        actorId,
-        action: 'ADMIN_HOT_JOB',
-        entityType: 'JobPost',
-        entityId: jobId,
-        metadata: { days },
-      },
-    });
-    return updated;
+  async forceJobStatus(user: AuthUser, jobId: string, status: JobStatus) {
+    return this.jobs.changeStatus(user, jobId, status, { actorId: user.id });
   }
 
   listFlags() {
@@ -139,6 +107,16 @@ export class AdminService {
 
   upsertFlag(actorId: string, key: string, enabled: boolean, payload?: unknown) {
     return this.prisma.$transaction(async (tx) => {
+      if(['hr_rollout','hr_exposure_policy'].includes(key))throw new BadRequestException('Use the dedicated HR benefits control for this policy');
+      if (key.startsWith('hr_')) await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(${HR_PUBLICATION_LOCK}::bigint)`);
+      if (enabled && key === 'hr_packages' && !(await tx.featureFlag.findUnique({where:{key:'hr_rollout'}}))?.enabled) throw new BadRequestException('Initialize the HR rollout before enabling packages');
+      if (enabled && key === 'hr_packages') {
+        const rollout = await tx.featureFlag.findUniqueOrThrow({ where: { key: 'hr_rollout' } });
+        const startsAt = new Date((rollout.payload as { startsAt: string }).startsAt);
+        if (!Number.isFinite(startsAt.getTime())) throw new BadRequestException('Invalid HR rollout period');
+        await initializePublicationPeriods(tx, startsAt);
+      }
+      if(enabled && ['hr_promotions','hr_support'].includes(key) && !(await tx.featureFlag.findUnique({where:{key:'hr_packages'}}))?.enabled) throw new BadRequestException('Enable HR packages first');
       const flag = await tx.featureFlag.upsert({
         where: { key },
         create: { key, enabled, payload: payload as never },
@@ -176,9 +154,10 @@ export class AdminService {
           id: true,
           name: true,
           nameUz: true,
-          nameRu: true,
+          nameRu: true, nameId: true,
           nameUzIsMachine: true,
           nameRuIsMachine: true,
+          nameIdIsMachine: true,
           i18nStatus: true,
           createdAt: true,
         },
@@ -191,6 +170,31 @@ export class AdminService {
       status: query.status ?? null,
       ...envelope(items, total, query.page, query.limit),
     };
+  }
+
+  /** Returns only explicitly selected translation rows for admin exports. */
+  async selectedCatalogI18n(kind: CatalogKind, ids: string[]) {
+    const delegate = catalogDelegate(this.prisma, kind);
+    const items = await delegate.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        name: true,
+        nameUz: true,
+        nameRu: true,
+        nameId: true,
+        nameUzIsMachine: true,
+        nameRuIsMachine: true,
+        nameIdIsMachine: true,
+        i18nStatus: true,
+        createdAt: true,
+      },
+    });
+    const byId = new Map(items.map((item) => [item.id, item]));
+    return ids.flatMap((id) => {
+      const item = byId.get(id);
+      return item ? [item] : [];
+    });
   }
 
   /** Ids for "select all matching", capped like every other bulk source. */
@@ -220,6 +224,7 @@ export class AdminService {
         { name: { contains: term, mode: 'insensitive' } },
         { nameUz: { contains: term, mode: 'insensitive' } },
         { nameRu: { contains: term, mode: 'insensitive' } },
+        { nameId: { contains: term, mode: 'insensitive' } },
       ];
     }
     const created = dateRange(query.createdFrom, query.createdTo);
@@ -249,7 +254,7 @@ export class AdminService {
     actorId: string,
     kind: CatalogKind,
     id: string,
-    patch: { name?: string; nameUz?: string | null; nameRu?: string | null },
+    patch: { name?: string; nameUz?: string | null; nameRu?: string | null; nameId?: string | null },
   ) {
     const delegate = catalogDelegate(this.prisma, kind);
     const row = await delegate.findUnique({ where: { id } });
@@ -269,12 +274,17 @@ export class AdminService {
       data.nameRu = patch.nameRu?.trim() || null;
       data.nameRuIsMachine = false;
     }
+    if (patch.nameId !== undefined) {
+      data.nameId = patch.nameId?.trim() || null;
+      data.nameIdIsMachine = false;
+    }
     if (!Object.keys(data).length) return row;
 
     const nameUz = 'nameUz' in data ? (data.nameUz as string | null) : row.nameUz;
     const nameRu = 'nameRu' in data ? (data.nameRu as string | null) : row.nameRu;
+    const nameId = 'nameId' in data ? (data.nameId as string | null) : row.nameId;
     if (row.i18nStatus !== 'IGNORED') {
-      data.i18nStatus = nameUz && nameRu ? 'COMPLETE' : 'PENDING';
+      data.i18nStatus = nameUz && nameRu && nameId ? 'COMPLETE' : 'PENDING';
     }
 
     const updated = await delegate.update({ where: { id }, data });
@@ -322,43 +332,57 @@ export class AdminService {
   ) {
     if (id === targetId) throw new BadRequestException('Cannot merge an entry into itself');
 
-    const delegate = catalogDelegate(this.prisma, kind);
-    const [source, target] = await Promise.all([
-      delegate.findUnique({ where: { id } }),
-      delegate.findUnique({ where: { id: targetId } }),
-    ]);
-    if (!source || !target) throw new NotFoundException();
+    return this.prisma.$transaction(async (tx) => {
+      const client = tx as unknown as PrismaClient;
+      const delegate = catalogDelegate(client, kind);
+      const [source, target] = await Promise.all([
+        delegate.findUnique({ where: { id } }),
+        delegate.findUnique({ where: { id: targetId } }),
+      ]);
+      if (!source || !target) throw new NotFoundException();
 
-    for (const relation of CATALOG_RELATIONS[kind]) {
-      await this.repointRelation(relation, id, targetId);
-    }
+      for (const relation of CATALOG_RELATIONS[kind]) {
+        await this.repointRelation(client, relation, id, targetId);
+      }
 
-    const { delegate: alias, foreignKey } = catalogAlias(this.prisma, kind);
-    await alias.updateMany({ where: { [foreignKey]: id }, data: { [foreignKey]: targetId } });
-    // The duplicate's own spelling has to survive as an alias, otherwise the
-    // next user typing it would simply recreate the row.
-    const aliasKey = catalogAliasKey(kind, source.name);
-    if (aliasKey && aliasKey !== catalogAliasKey(kind, target.name)) {
-      await alias
-        .create({
-          data: { [foreignKey]: targetId, alias: source.name.slice(0, 80), aliasKey },
-        })
-        .catch(() => undefined);
-    }
+      const { delegate: alias, foreignKey } = catalogAlias(client, kind);
+      await alias.updateMany({ where: { [foreignKey]: id }, data: { [foreignKey]: targetId } });
+      // The duplicate's own spelling has to survive as an alias, otherwise the
+      // next user typing it would simply recreate the row. A collision with a
+      // different canonical row must abort the whole merge instead of vanishing.
+      const aliasKey = catalogAliasKey(kind, source.name);
+      if (aliasKey && aliasKey !== catalogAliasKey(kind, target.name)) {
+        const existingAlias = await alias.findUnique({ where: { aliasKey } });
+        const currentOwner = existingAlias?.[foreignKey as keyof typeof existingAlias];
+        if (existingAlias && currentOwner !== targetId) {
+          throw new BadRequestException('The duplicate name is already an alias of another catalog entry');
+        }
+        if (!existingAlias) {
+          await alias.create({
+            data: { [foreignKey]: targetId, alias: source.name.slice(0, 80), aliasKey },
+          });
+        }
+      }
 
-    await (this.prisma[kind] as { delete: (args: unknown) => Promise<unknown> }).delete({
-      where: { id },
+      await (client[kind] as { delete: (args: unknown) => Promise<unknown> }).delete({
+        where: { id },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'MERGE_CATALOG_I18N',
+          entityType: catalogEntityType(kind),
+          entityId: id,
+          metadata: { targetId, mergedName: source.name },
+        },
+      });
+      return { ok: true, mergedInto: targetId };
     });
-    await this.logCatalogAction(actorId, kind, id, 'MERGE_CATALOG_I18N', {
-      targetId,
-      mergedName: source.name,
-    });
-    return { ok: true, mergedInto: targetId };
   }
 
   /** Rows that would collide with an existing pair are dropped, not moved. */
-  private async repointRelation(relation: CatalogRelation, id: string, targetId: string) {
-    const delegate = relationDelegate(this.prisma, relation.model);
+  private async repointRelation(prisma: PrismaClient, relation: CatalogRelation, id: string, targetId: string) {
+    const delegate = relationDelegate(prisma, relation.model);
     if (!relation.owner) {
       await delegate.updateMany({
         where: { [relation.key]: id },
@@ -401,21 +425,27 @@ export class AdminService {
       select: { id: true, name: true },
     });
     const ids = pending.filter((row) => isCatalogTechIdentity(row.name)).map((row) => row.id);
-    if (ids.length) {
-      await this.prisma.auditLog.create({
-        data: {
-          actorId,
-          action: 'RECLASSIFY_CATALOG_I18N',
-          entityType: catalogEntityType(kind),
-          entityId: kind,
-          metadata: { ignored: ids.length },
-        },
+    if (!ids.length) return { kind, ignored: 0 };
+    const ignored = await this.prisma.$transaction(async (tx) => {
+      const txDelegate = catalogDelegate(tx as unknown as PrismaClient, kind);
+      const updated = await txDelegate.updateMany({
+        where: { id: { in: ids }, i18nStatus: 'PENDING' },
+        data: { i18nStatus: 'IGNORED' },
       });
-      for (const id of ids) {
-        await delegate.update({ where: { id }, data: { i18nStatus: 'IGNORED' } });
+      if (updated.count) {
+        await tx.auditLog.create({
+          data: {
+            actorId,
+            action: 'RECLASSIFY_CATALOG_I18N',
+            entityType: catalogEntityType(kind),
+            entityId: kind,
+            metadata: { ignored: updated.count },
+          },
+        });
       }
-    }
-    return { kind, ignored: ids.length };
+      return updated.count;
+    });
+    return { kind, ignored };
   }
 
   /**
@@ -470,10 +500,16 @@ export class AdminService {
     resolution?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const report = await tx.report.update({
-        where: { id: reportId },
+      const claimed = await tx.report.updateMany({
+        where: { id: reportId, status: 'OPEN' },
         data: { status, resolution },
       });
+      if (!claimed.count) {
+        const exists = await tx.report.findUnique({ where: { id: reportId }, select: { id: true } });
+        if (!exists) throw new NotFoundException('Report not found');
+        throw new BadRequestException('Report was already resolved');
+      }
+      const report = await tx.report.findUniqueOrThrow({ where: { id: reportId } });
       await tx.auditLog.create({
         data: {
           actorId,

@@ -1,10 +1,9 @@
-/** Recruiter dashboard: jobs, pipeline, bulk comms, analytics, billing, company. */
+/** Recruiter dashboard: jobs, pipeline, bulk comms, analytics, company. */
 export const recruiter = {
   // Dashboard navigation
   'rec.tabPipeline': { uz: 'Pipeline va moslik', ru: 'Пайплайн и подбор', en: 'Pipeline & match' },
   'rec.tabBulk': { uz: 'Ommaviy xabarlar', ru: 'Массовые рассылки', en: 'Bulk comms' },
   'rec.tabAnalytics': { uz: 'Analitika', ru: 'Аналитика', en: 'Analytics' },
-  'rec.tabBilling': { uz: 'Tarif va to‘lov', ru: 'Тариф и оплата', en: 'Plan & billing' },
   'rec.orOpen': { uz: 'Yoki oching:', ru: 'Или откройте', en: 'Or open' },
   'rec.loading': { uz: 'Yuklanmoqda...', ru: 'Загрузка...', en: 'Loading...' },
 
@@ -48,6 +47,16 @@ export const recruiter = {
     uz: 'Ish e’loniga ko‘nikma qo‘shish',
     ru: 'Добавить навык к вакансии',
     en: 'Add skill to job',
+  },
+  'rec.skillFreeTextPlaceholder': {
+    uz: 'Ko‘nikmani kiriting va Enter tugmasini bosing',
+    ru: 'Введите навык и нажмите Enter',
+    en: 'Type a skill and press Enter',
+  },
+  'rec.skillFreeTextHint': {
+    uz: 'Qo‘shilgan ko‘nikmalar quyida ko‘rinadi.',
+    ru: 'Добавленные навыки появятся ниже.',
+    en: 'Added skills will appear below.',
   },
   'rec.createDraft': { uz: 'Qoralama yaratish', ru: 'Создать черновик', en: 'Create draft' },
   'rec.saveChanges': {
@@ -182,9 +191,9 @@ export const recruiter = {
     en: 'Delete this question?',
   },
   'rec.screeningDeleteConfirmBody': {
-    uz: 'Nomzodlar bergan {n} ta javob ham o‘chiriladi. Savol matnini o‘zgartirish javoblarni saqlab qoladi.',
-    ru: 'Вместе с ним удалятся {n} ответов кандидатов. Изменение текста вопроса ответы сохраняет.',
-    en: '{n} candidate answers will be deleted with it. Editing the wording keeps the answers.',
+    uz: '{n} ta javob arizalar tarixida saqlanadi. Savol yangi arizalar uchun ko‘rsatilmaydi.',
+    ru: 'Ответы ({n}) сохранятся в истории откликов. Вопрос больше не будет показан новым кандидатам.',
+    en: '{n} answers will remain in application history. New applicants will no longer see this question.',
   },
   'rec.screeningSaveFailed': {
     uz: 'E’lon yaratildi, lekin saralash savollari saqlanmadi. Tahrirlashda qayta qo‘shing.',
@@ -245,21 +254,6 @@ export const recruiter = {
     ru: 'Сохранено вручную',
     en: 'Saved manually',
   },
-  'rec.langVersionMachine': {
-    uz: 'Avtomatik tarjima',
-    ru: 'Автоперевод',
-    en: 'Auto-translated',
-  },
-  'rec.langVersionMachineNote': {
-    uz: 'Mashina tarjimasi. Matnni tekshirib, saqlash bilan tasdiqlang.',
-    ru: 'Машинный перевод. Проверьте текст и подтвердите сохранением.',
-    en: 'Machine translation. Review the text and save it to confirm.',
-  },
-  'rec.langVersionAutoTranslate': {
-    uz: 'Avtomatik tarjima',
-    ru: 'Автоперевод',
-    en: 'Auto-translate',
-  },
   'rec.langVersionSave': {
     uz: 'Bu versiyani saqlash',
     ru: 'Сохранить эту версию',
@@ -307,6 +301,21 @@ export const recruiter = {
   },
 
   // Company profile blurb in extra languages (the legal name is never translated)
+  'rec.companyLangVersionAutoTranslate': {
+    uz: 'Avtomatik tarjima qilish',
+    ru: 'Перевести автоматически',
+    en: 'Translate automatically',
+  },
+  'rec.companyLangVersionMachine': {
+    uz: 'Avtomatik tarjima',
+    ru: 'Автоперевод',
+    en: 'Auto-translated',
+  },
+  'rec.companyLangVersionMachineNote': {
+    uz: 'Mashina tarjimasi. Matnni tekshirib, saqlash bilan tasdiqlang.',
+    ru: 'Машинный перевод. Проверьте текст и подтвердите сохранением.',
+    en: 'Machine translation. Review the text and save it to confirm.',
+  },
   'rec.companyLangVersionsTitle': {
     uz: 'Kompaniya tavsifi tillari',
     ru: 'Языки описания компании',
@@ -325,17 +334,13 @@ export const recruiter = {
   'rec.localeNameUz': { uz: 'O‘zbekcha', ru: 'Узбекский', en: 'Uzbek' },
   'rec.localeNameRu': { uz: 'Ruscha', ru: 'Русский', en: 'Russian' },
   'rec.localeNameEn': { uz: 'Inglizcha', ru: 'Английский', en: 'English' },
+  'rec.localeNameId': { uz: 'Indonezcha', ru: 'Индонезийский', en: 'Indonesia' },
 
   // Job list
   'rec.yourJobs': { uz: 'Sizning ish e’lonlaringiz', ru: 'Ваши вакансии', en: 'Your jobs' },
   'rec.appsWord': { uz: 'ariza', ru: 'откликов', en: 'apps' },
   'rec.viewsWord': { uz: 'ko‘rish', ru: 'просмотров', en: 'views' },
   'rec.applicationsWord': { uz: 'ariza', ru: 'откликов', en: 'applications' },
-  'rec.hotUntil': {
-    uz: 'Dolzarb: {date} gacha',
-    ru: 'Горячая до {date}',
-    en: 'Hot until {date}',
-  },
   'rec.publish': { uz: 'Chop etish', ru: 'Опубликовать', en: 'Publish' },
   'rec.reopen': { uz: 'Qayta ochish', ru: 'Открыть снова', en: 'Reopen' },
   'rec.resumeJob': { uz: 'Davom ettirish', ru: 'Возобновить', en: 'Resume' },
@@ -348,9 +353,8 @@ export const recruiter = {
     en: 'Cancel edit',
   },
   'rec.pipeline': { uz: 'Pipeline', ru: 'Пайплайн', en: 'Pipeline' },
-  'rec.boostDays': { uz: '{n} kunga ko‘tarish', ru: 'Продвинуть на {n} дн', en: 'Boost {n}d' },
 
-  // Job + billing flash messages
+  // Job flash messages
   'rec.jobCreatedDraft': {
     uz: 'Ish e’loni qoralama sifatida yaratildi',
     ru: 'Вакансия создана как черновик',
@@ -388,26 +392,6 @@ export const recruiter = {
     en: 'Job paused',
   },
   'rec.jobClosed': { uz: 'Ish e’loni yopildi', ru: 'Вакансия закрыта', en: 'Job closed' },
-  'rec.planUpgraded': {
-    uz: '{plan} tarifiga o‘tildi',
-    ru: 'Тариф изменён на {plan}',
-    en: 'Upgraded to {plan}',
-  },
-  'rec.upgradeFailed': {
-    uz: 'Tarifni oshirib bo‘lmadi',
-    ru: 'Не удалось повысить тариф',
-    en: 'Upgrade failed',
-  },
-  'rec.hotBoostActivated': {
-    uz: '{n} kunlik ko‘tarish yoqildi',
-    ru: 'Продвижение на {n} дн активировано',
-    en: 'Hot boost {n}d activated',
-  },
-  'rec.hotBoostFailed': {
-    uz: 'Ko‘tarishni yoqib bo‘lmadi',
-    ru: 'Не удалось активировать продвижение',
-    en: 'Hot boost failed',
-  },
   'rec.interviewScheduled': {
     uz: 'Suhbat rejalashtirildi',
     ru: 'Собеседование назначено',
@@ -452,6 +436,7 @@ export const recruiter = {
     en: 'Match {n}% | details',
   },
   'rec.chat': { uz: 'Chat', ru: 'Чат', en: 'Chat' },
+  'rec.interviewVenue': { uz: 'Suhbat manzili (bino yoki xona)', ru: 'Место собеседования (адрес или комната)', en: 'Interview venue (address or room)', id: 'Tempat wawancara (alamat atau ruangan)' },
   'rec.interviewTime': {
     uz: 'Suhbat vaqti',
     ru: 'Время собеседования',
@@ -480,12 +465,6 @@ export const recruiter = {
     ru: 'Пока нет рекомендаций. Добавьте требуемые навыки в вакансию, чтобы улучшить подбор.',
     en: 'No recommendations yet. Add required skills on the job post to improve matching.',
   },
-  'rec.coldChatLocked': {
-    uz: 'Sovuq murojaat uchun Premium kerak - Tarif va to‘lov bo‘limida oshiring',
-    ru: 'Холодные сообщения доступны с Premium - повысьте тариф в разделе Тариф и оплата',
-    en: 'Cold outreach requires Premium - upgrade in Plan & billing',
-  },
-  'rec.chatPremium': { uz: 'Chat (Premium)', ru: 'Чат (Premium)', en: 'Chat (Premium)' },
 
   // Bulk actions on the pipeline
   'rec.selectedCount': { uz: '{n} ta tanlandi', ru: 'Выбрано: {n}', en: '{n} selected' },
@@ -640,104 +619,20 @@ export const recruiter = {
     ru: 'Не удалось загрузить аналитику',
     en: 'Could not load analytics',
   },
-  'rec.plan': { uz: 'Tarif', ru: 'Тариф', en: 'Plan' },
-  'rec.currentPlan': { uz: 'Joriy tarif', ru: 'Текущий тариф', en: 'Current plan' },
   'rec.publishedJobs': {
     uz: 'Chop etilgan e’lonlar',
     ru: 'Опубликованные вакансии',
     en: 'Published jobs',
   },
-  'rec.managePlanBilling': {
-    uz: 'Tarif va to‘lovni boshqarish',
-    ru: 'Управлять тарифом и оплатой',
-    en: 'Manage plan & billing',
-  },
-
-  // Plan & billing
-  'rec.renewsEnds': {
-    uz: 'yangilanadi/tugaydi {date}',
-    ru: 'продление/окончание {date}',
-    en: 'renews/ends {date}',
-  },
-  'rec.demoCheckoutNote': {
-    uz: 'Demo rejimi: tarifni tanlash pul yechmaydi, Payme va Click keyinroq ulanadi.',
-    ru: 'Демо-режим: выбор тарифа не списывает деньги, Payme и Click подключим позже.',
-    en: 'Demo mode: choosing a plan does not charge anything; Payme and Click come later.',
-  },
-  'rec.demoModeBadge': { uz: 'Demo rejimi', ru: 'Демо-режим', en: 'Demo mode' },
   'rec.free': { uz: 'Bepul', ru: 'Бесплатно', en: 'Free' },
   'rec.perMonth': { uz: '/oyiga', ru: '/мес', en: '/mo' },
-  'rec.upgradeTo': {
-    uz: '{plan} tarifiga o‘tish',
-    ru: 'Перейти на {plan}',
-    en: 'Upgrade to {plan}',
-  },
   'rec.included': { uz: 'Kiritilgan', ru: 'Включено', en: 'Included' },
-  'rec.alreadyHigherPlan': {
-    uz: 'Yuqoriroq tarifdasiz',
-    ru: 'У вас более высокий тариф',
-    en: 'Already on higher plan',
-  },
-  'rec.hotJobBoosts': {
-    uz: 'E’lonni ko‘tarish',
-    ru: 'Продвижение вакансий',
-    en: 'Hot job boosts',
-  },
-  'rec.hotBoostHint': {
-    uz: 'Chop etilgan e’lonni Ish o‘rinlari bo‘limidan ko‘taring yoki quyidan tanlang.',
-    ru: 'Продвиньте опубликованную вакансию во вкладке вакансий или выберите ниже.',
-    en: 'Boost a published job from the Jobs tab, or pick one below.',
-  },
   'rec.noPublishedJobs': {
     uz: 'Hozircha chop etilgan e’lon yo‘q.',
     ru: 'Пока нет опубликованных вакансий.',
     en: 'No published jobs yet.',
   },
   'rec.daysShort': { uz: '{n} kun', ru: '{n} дн', en: '{n}d' },
-
-  // Plan feature lists
-  'rec.planFeature3Jobs': { uz: '3 ta faol e’lon', ru: '3 активные вакансии', en: '3 active jobs' },
-  'rec.planFeature5Jobs': { uz: '5 ta faol e’lon', ru: '5 активных вакансий', en: '5 active jobs' },
-  'rec.planFeature20Jobs': {
-    uz: '20 ta faol e’lon',
-    ru: '20 активных вакансий',
-    en: '20 active jobs',
-  },
-  'rec.planFeature50Jobs': {
-    uz: '50 ta faol e’lon',
-    ru: '50 активных вакансий',
-    en: '50 active jobs',
-  },
-  'rec.planFeatureContactsBlurred': {
-    uz: 'Nomzod kontaktlari yashirilgan',
-    ru: 'Контакты кандидатов скрыты',
-    en: 'Blurred candidate contacts',
-  },
-  'rec.planFeatureContactsFull': {
-    uz: 'Nomzod kontaktlari to‘liq',
-    ru: 'Полные контакты кандидатов',
-    en: 'Full candidate contacts',
-  },
-  'rec.planFeatureNoColdChat': {
-    uz: 'Sovuq chat yo‘q',
-    ru: 'Без холодных сообщений',
-    en: 'No cold chat',
-  },
-  'rec.planFeatureColdChat20': {
-    uz: 'Sovuq chat (kuniga 20 ta)',
-    ru: 'Холодные сообщения (20 в день)',
-    en: 'Cold chat (20/day)',
-  },
-  'rec.planFeatureColdChat50': {
-    uz: 'Sovuq chat (kuniga 50 ta)',
-    ru: 'Холодные сообщения (50 в день)',
-    en: 'Cold chat (50/day)',
-  },
-  'rec.planFeatureVipBadge': {
-    uz: 'VIP nishoni va Top kompaniyalar',
-    ru: 'VIP-значок и Топ компании',
-    en: 'VIP badge + Top Companies',
-  },
 
   // Company tab
   'rec.members': { uz: 'A’zolar', ru: 'Участники', en: 'Members' },

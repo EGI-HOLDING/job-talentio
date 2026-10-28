@@ -1,14 +1,16 @@
 'use client';
 
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { FormField } from '@/components/ui/Field';
-import { NumberInput } from '@/components/ui/NumberInput';
+import { LocationFields } from '@/components/ui/LocationFields';
+import { JobTitleInput } from '@/components/ui/JobTitleInput';
+import { RoleInput, CountryPicker, SalaryFields, type Country, type SalaryValue } from '@/components/onboarding/PreferenceFields';
+import { useOnboardingText } from '@/lib/i18n/onboarding';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
-import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { ProfileDialog } from './ProfileDialog';
 import { ProfileIcon } from './ProfileIcon';
@@ -19,18 +21,22 @@ const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
 const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'];
 const DEGREES = ['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'];
 
-function CityChoice({ initial }: { initial?: City | null }) {
-  const { t } = useI18n();
-  const [city, setCity] = useState<{ name: string; slug: string } | null>(initial || null);
-  return <div className={s.cityChoice}><span className={s.cityLabel}>{t('city')}</span>
-    <input type="hidden" name="citySlug" value={city?.slug || ''} />
-    {city ? <div className={s.selectedCity}><span><ProfileIcon kind="pin" />{city.name}</span><button type="button" className={s.iconButton} aria-label={t('pc.remove')} onClick={() => setCity(null)}><ProfileIcon kind="close" /></button></div> : <LookupCombobox focusSuggestions kind="cities" allowCreate={false} onPick={(item) => setCity(item)} submitLabel={t('pc.chooseCity')} />}
-  </div>;
+function CityChoice({ initial, initialCountryId = '' }: { initial?: City | null; initialCountryId?: string }) {
+  const [location, setLocation] = useState({ countryId: initial?.province?.country?.id || initialCountryId, citySlug: initial?.slug || '' });
+  return <LocationFields {...location} initialCity={initial} onChange={setLocation} />;
 }
 
 export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: ProfileEditor; profile: CareerProfile; onClose: () => void; onSaved: (message?: string) => Promise<void> }) {
   const { t } = useI18n();
   const enumLabel = useEnumLabel();
+  const onboardingText = useOnboardingText();
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [roles, setRoles] = useState(profile.desiredPositions?.length ? profile.desiredPositions : profile.desiredPosition ? [profile.desiredPosition] : []);
+  const [preferredCountries, setPreferredCountries] = useState(profile.preferredCountries?.map(c=>c.id) || []);
+  const [residence, setResidence] = useState(profile.residenceCountryId ? [profile.residenceCountryId] : profile.city?.province?.country?.id ? [profile.city.province.country.id] : []);
+  const [homeCity, setHomeCity] = useState(profile.city?.slug || '');
+  const [salary, setSalary] = useState<SalaryValue>({desiredSalaryMin:profile.desiredSalaryMin ?? null,desiredSalaryCurrency:profile.desiredSalaryCurrency || 'UZS',desiredSalaryPeriod:profile.desiredSalaryPeriod || 'MONTHLY',salaryNegotiable:Boolean(profile.salaryNegotiable)});
+  useEffect(()=>{if(editor.kind==='basics') api<Country[]>('/meta/countries').then(setCountries).catch(e=>setError(e.message));},[editor.kind]);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState('');
@@ -64,11 +70,11 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     const start = value('startDate'), end = value('endDate');
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      await mutate('/profiles/me', 'PATCH', { headline: value('headline'), summary: value('summary'), citySlug: value('citySlug') || null, phone: value('phone'), desiredPosition: value('desiredPosition'), desiredSalaryMin: value('desiredSalaryMin') ? Number(value('desiredSalaryMin')) : null }, true);
+      await mutate('/profiles/me', 'PATCH', { headline: value('headline'), summary: value('summary'), citySlug: homeCity || null, phone: value('phone'), desiredPositions: roles, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
-        ? { title: value('title'), companyName: value('companyName'), citySlug: value('citySlug'), description: value('description'), startDate: start, endDate: current ? null : end || null, isCurrent: current }
+        ? { title: value('title'), companyName: value('companyName'), citySlug: value('citySlug'), countryId: value('countryId') || null, description: value('description'), startDate: start, endDate: current ? null : end || null, isCurrent: current }
         : editor.kind === 'education'
           ? { school: value('school'), degree: value('degree') || undefined, field: value('field'), startDate: start || null, endDate: end || null }
           : { name: value('name'), issuer: value('issuer'), issuedAt: value('issuedAt') || null, expiresAt: value('expiresAt') || null, credentialUrl: value('credentialUrl') };
@@ -97,13 +103,16 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
         {editor.kind === 'basics' && <>
           <FormField label={t('emp.headline')}><input name="headline" defaultValue={profile.headline || ''} maxLength={200} /></FormField>
           <FormField label={t('emp.summary')}><textarea name="summary" rows={4} defaultValue={profile.summary || ''} maxLength={5000} /></FormField>
-          <div className={s.formGrid}><CityChoice initial={profile.city} /><FormField label={t('emp.phone')}><input type="tel" name="phone" maxLength={40} defaultValue={profile.phone || ''} autoComplete="tel" /></FormField></div>
-          <div className={s.formGrid}><FormField label={t('emp.desiredPosition')}><JobTitleInput focusSuggestions name="desiredPosition" defaultValue={profile.desiredPosition || ''} /></FormField><FormField label={t('emp.desiredSalary')}><NumberInput name="desiredSalaryMin" min={0} defaultValue={profile.desiredSalaryMin} /></FormField></div>
+          <div className={s.formGrid}><LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} /><FormField label={t('emp.phone')}><input type="tel" name="phone" maxLength={40} defaultValue={profile.phone || ''} autoComplete="tel" /></FormField></div>
+          <RoleInput value={roles} onChange={setRoles} />
+          <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
+
+          <SalaryFields countries={countries} value={salary} onChange={setSalary} />
           <p className={s.inlineNote}><ProfileIcon kind="info" />{t('pc.managedInSettings')} <Link href="/settings">{t('pc.manageAccount')}</Link></p>
         </>}
         {editor.kind === 'experience' && <>
-          <div className={s.formGrid}><FormField label={t('emp.positionTitle')} required><input name="title" defaultValue={experience?.title} required maxLength={160} /></FormField><FormField label={t('company')} required><input name="companyName" defaultValue={experience?.companyName} required maxLength={160} /></FormField></div>
-          <CityChoice initial={experience?.city} />
+          <div className={s.formGrid}><FormField label={t('emp.positionTitle')} required><JobTitleInput name="title" defaultValue={experience?.title} required minLength={2} normalizeSeniority={false} /></FormField><FormField label={t('company')} required><input name="companyName" defaultValue={experience?.companyName} required maxLength={160} /></FormField></div>
+          <CityChoice initial={experience?.city} initialCountryId={experience?.country?.id} />
           <div className={s.formGrid}><FormField label={t('emp.start')} required><input name="startDate" type="date" defaultValue={dateValue(experience?.startDate)} required /></FormField><FormField label={t('emp.end')} optional><input name="endDate" type="date" defaultValue={dateValue(experience?.endDate)} disabled={current} /></FormField></div>
           <label className={s.checkbox}><input type="checkbox" checked={current} onChange={(event) => setCurrent(event.target.checked)} />{t('emp.currentlyWorkHere')}</label>
           <FormField label={t('emp.description')} optional><textarea name="description" rows={4} defaultValue={experience?.description || ''} maxLength={5000} /></FormField>

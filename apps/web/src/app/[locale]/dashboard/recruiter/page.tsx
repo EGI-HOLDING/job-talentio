@@ -12,7 +12,6 @@ import rw from '@/components/recruiter/RecruiterWorkspace.module.css';
 import { Link, localeHref } from '@/lib/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/lib/navigation';
-import { PLAN_PRICES_UZS } from '@job-talentio/shared';
 import { api, getSession, saveSession, AuthSession } from '@/lib/api';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import {
@@ -21,12 +20,12 @@ import {
   storeDashboardTab,
 } from '@/lib/dashboardTab';
 import { RecruiterAnalyticsView } from '@/components/recruiter/RecruiterAnalyticsView';
-import { RecruiterBilling } from '@/components/recruiter/RecruiterBilling';
 import { RecruiterTemplates } from '@/components/recruiter/RecruiterTemplates';
+import { employerJobHref, employerWorkspaceHref } from '@/lib/accountNavigation';
 import { RoleGate } from '@/components/auth/RoleGate';
 
-type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'billing' | 'company';
-const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'billing', 'company'];
+type Tab = 'jobs' | 'pipeline' | 'bulk' | 'analytics' | 'company';
+const RECRUITER_TABS: Tab[] = ['jobs', 'pipeline', 'bulk', 'analytics', 'company'];
 
 function isRecruiterTab(v: string): v is Tab {
   return (RECRUITER_TABS as string[]).includes(v);
@@ -50,11 +49,6 @@ function dashboardQuery(tab: Tab, selectedJob: string, base: { toString(): strin
   else params.delete('job');
   return params;
 }
-type PlanCode = 'FREE' | 'STANDARD' | 'PREMIUM' | 'VIP';
-type CheckoutResponse = {
-  payment: { id: string; status: string; amountUzs: number; purpose: string };
-  checkoutUrl: string | null;
-};
 
 function RecruiterDashboard() {
   const { t, locale } = useI18n();
@@ -65,12 +59,12 @@ function RecruiterDashboard() {
   const tabFromUrl = searchParams.get('tab') || '';
   const focusFromUrl = searchParams.get('focus') || '';
   const [tab, setTab] = useState<Tab>(() => {
-    if (tabFromUrl === 'candidates') return 'jobs';
+    if (tabFromUrl === 'candidates' || tabFromUrl === 'billing') return 'jobs';
     // An explicit tab wins. `job` opens Pipeline only when the URL never named a tab.
     if (isRecruiterTab(tabFromUrl)) return tabFromUrl;
+    if (jobFromUrl) return 'pipeline';
     const stored = readStoredDashboardTab(RECRUITER_TAB_KEY);
     if (stored && isRecruiterTab(stored)) return stored;
-    if (jobFromUrl) return 'pipeline';
     return 'jobs';
   });
   const [selectedJob, setSelectedJob] = useState(jobFromUrl);
@@ -109,13 +103,6 @@ function RecruiterDashboard() {
   const [industryGroups, setIndustryGroups] = useState<
     Array<{ slug: string; name: string; industries: Array<{ slug: string; name: string }> }>
   >([]);
-  const [subscription, setSubscription] = useState<{
-    plan: PlanCode;
-    activePublishedJobs: number;
-    prices: typeof PLAN_PRICES_UZS;
-    endsAt?: string | null;
-  } | null>(null);
-  const [billingBusy, setBillingBusy] = useState(false);
   const [bulkTemplates, setBulkTemplates] = useState<Array<{ id: string; name: string; body: string }>>(
     [],
   );
@@ -136,7 +123,6 @@ function RecruiterDashboard() {
     () => memberships.find((m) => m.companyId === companyId)?.role === 'OWNER',
     [memberships, companyId],
   );
-  const planCode = (subscription?.plan || company?.subscription?.plan || 'FREE') as PlanCode;
 
   async function requestEmailVerification() {
     setVerifyBusy(true);
@@ -178,66 +164,8 @@ function RecruiterDashboard() {
   async function selectTab(next: Tab) { if (await allowEmployerContextChange()) setTab(next); }
   async function chooseCompany(id: string) {
     if (id === companyId || !await allowEmployerContextChange()) return;
-    setCompanyDetail(null); setSubscription(null); setApplicants([]); setSelectedJob(''); setCompanyId(id); rememberCompany(id);
+    setCompanyDetail(null); setApplicants([]); setSelectedJob(''); setCompanyId(id); rememberCompany(id);
 
-  }
-  async function loadSubscription(cid: string) {
-    if (!cid) return;
-    const sub = await api<{
-      plan: PlanCode;
-      activePublishedJobs: number;
-      prices: typeof PLAN_PRICES_UZS;
-      endsAt?: string | null;
-    }>(`/billing/companies/${cid}/subscription`);
-    if (companyIdRef.current === cid) setSubscription(sub);
-  }
-
-  async function startCheckout(res: CheckoutResponse, successMsg: string) {
-    if (res.checkoutUrl) {
-      try {
-        sessionStorage.setItem(`billing:payment:${res.payment.id}`, JSON.stringify(res.payment));
-      } catch {
-        /* ignore */
-      }
-      window.location.href = res.checkoutUrl;
-      return;
-    }
-    flash(successMsg);
-    await refreshMemberships();
-    await loadSubscription(companyId);
-    await loadJobs(companyId);
-  }
-
-  async function upgradePlan(plan: 'STANDARD' | 'PREMIUM' | 'VIP') {
-    if (!companyId || billingBusy) return;
-    setBillingBusy(true);
-    try {
-      const res = await api<CheckoutResponse>(`/billing/companies/${companyId}/upgrade`, {
-        method: 'POST',
-        body: JSON.stringify({ plan }),
-      });
-      await startCheckout(res, t('rec.planUpgraded').replace('{plan}', enumLabel('plan', plan)));
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.upgradeFailed'), 'error');
-    } finally {
-      setBillingBusy(false);
-    }
-  }
-
-  async function buyHotBoost(jobId: string, days: 7 | 14 | 30) {
-    if (!companyId || billingBusy) return;
-    setBillingBusy(true);
-    try {
-      const res = await api<CheckoutResponse>(
-        `/billing/companies/${companyId}/jobs/${jobId}/hot`,
-        { method: 'POST', body: JSON.stringify({ days }) },
-      );
-      await startCheckout(res, t('rec.hotBoostActivated').replace('{n}', String(days)));
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('rec.hotBoostFailed'), 'error');
-    } finally {
-      setBillingBusy(false);
-    }
   }
 
   async function bootstrap() {
@@ -313,7 +241,8 @@ function RecruiterDashboard() {
     const generation = ++jobGeneration.current;
     setApplicantsLoading(true);
     try {
-    const apps = await api<any[]>(`/applications/jobs/${jobId}?sort=match`);
+    const result = await api<{items:any[]}>(`/applications/jobs/${jobId}/search?sort=match&limit=24`);
+    const apps=result.items;
     if (generation !== jobGeneration.current || selectedJobRef.current !== jobId) return;
     setApplicants(apps);
     } finally { if (generation === jobGeneration.current) setApplicantsLoading(false); }
@@ -335,8 +264,7 @@ function RecruiterDashboard() {
 
   useEffect(() => {
     if (!companyId) return;
-    setCompanyDetail(null); setSubscription(null); setJobs([]); setJobsLoading(true); setSelectedJob(''); setApplicants([]); ++jobGeneration.current;
-    loadSubscription(companyId).catch((reason) => { if (companyIdRef.current === companyId) flash(reason.message, 'error'); });
+    setCompanyDetail(null); setJobs([]); setJobsLoading(true); setSelectedJob(''); setApplicants([]); ++jobGeneration.current;
     loadBulkTemplates(companyId).catch(() => { if (companyIdRef.current === companyId) setBulkTemplates([]); });
     loadCompanyDetail(companyId).catch((reason) => { if (companyIdRef.current === companyId) flash(reason.message, 'error'); });
     void loadJobs(companyId).catch((reason) => flash(reason.message, 'error'));
@@ -350,9 +278,10 @@ function RecruiterDashboard() {
 
   useEffect(() => {
     if (tabFromUrl === 'candidates') {
-      window.location.replace(localeHref('/talent'));
+      router.replace(jobFromUrl ? employerJobHref(jobFromUrl, 'applicants', searchParams.get('company')) : employerWorkspaceHref());
       return;
     }
+    if (tabFromUrl === 'billing') { setTab('jobs'); routerRef.current.replace('/dashboard/recruiter?tab=jobs'); return; }
     const seen = canonicalQuery(searchParams);
     let matchedGen: number | null = null;
     for (const [gen, qs] of urlWrites.current) {
@@ -387,7 +316,7 @@ function RecruiterDashboard() {
   useEffect(() => {
     const requested = searchParams.get('company');
     if (requested && requested !== companyId && memberships.some((membership) => membership.companyId === requested)) {
-      setCompanyDetail(null); setSubscription(null); setApplicants([]); setSelectedJob(jobFromUrl); setCompanyId(requested); rememberCompany(requested);
+      setCompanyDetail(null); setApplicants([]); setSelectedJob(jobFromUrl); setCompanyId(requested); rememberCompany(requested);
     }
   }, [searchParams, memberships]);
 
@@ -441,7 +370,7 @@ function RecruiterDashboard() {
 
   return (
     <div className={rw.root} aria-label={t('employers.badge')}>
-      {memberships.length > 0 && <div className={rw.context}><strong>{company?.name || t('company')}</strong>{memberships.length > 1 && <WorkspaceSelect value={companyId} label={t('company')} options={memberships.map((membership) => ({ value: membership.companyId, label: membership.company.name }))} onChange={(id) => void chooseCompany(id)} />}{tab === 'pipeline' || tab === 'bulk' ? <nav className={rw.actions} aria-label={t('jobs')}><button className={rw.textButton} onClick={() => void selectTab('jobs')}>{t('rw.backJobs')}</button><button className={tab === 'pipeline' ? rw.secondary : rw.textButton} onClick={() => void selectTab('pipeline')}>{t('applications')}</button><button className={tab === 'bulk' ? rw.secondary : rw.textButton} onClick={() => void selectTab('bulk')}>{t('rec.templatesHistory')}</button></nav> : null}{tab === 'billing' && <Link className={rw.textButton} href="/dashboard/recruiter?tab=company">{t('company')}</Link>}</div>}
+      {memberships.length > 0 && <div className={rw.context}><strong>{company?.name || t('company')}</strong>{memberships.length > 1 && <WorkspaceSelect value={companyId} label={t('company')} options={memberships.map((membership) => ({ value: membership.companyId, label: membership.company.name }))} onChange={(id) => void chooseCompany(id)} />}{tab === 'pipeline' || tab === 'bulk' ? <nav className={rw.actions} aria-label={t('jobs')}><button className={rw.textButton} onClick={() => void selectTab('jobs')}>{t('rw.backJobs')}</button><button className={tab === 'pipeline' ? rw.secondary : rw.textButton} onClick={() => void selectTab('pipeline')}>{t('applications')}</button><button className={tab === 'bulk' ? rw.secondary : rw.textButton} onClick={() => void selectTab('bulk')}>{t('rec.templatesHistory')}</button></nav> : null}</div>}
 
 
       <section className={rw.body}>
@@ -453,12 +382,11 @@ function RecruiterDashboard() {
         {!bootLoading && emailVerified !== null && !accountEmail && <div className={rw.accountNotice}><span>{t('addEmailDashboardHint')}</span><Link className={rw.textButton} href="/settings">{t('addEmailGoToSettings')}</Link></div>}
         {!bootLoading && accountEmail && emailVerified === false && <div className={rw.accountNotice}><span>{accountEmail} | {t('emailUnverifiedBadge')}</span><button className={rw.textButton} disabled={verifyBusy} onClick={() => void requestEmailVerification()}>{t(verifyBusy ? 'verifyEmailSending' : 'verifyEmailCta')}</button><Link className={rw.textButton} href="/settings">{t('settings')}</Link></div>}
 
-        {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={() => loadJobs(companyId)} onApplicants={(id) => { setSelectedJob(id); setTab('pipeline'); }} onStatus={changeJobStatus} onFlash={flash} />}
-        {tab === 'pipeline' && !bootLoading && companyId && <RecruiterPipeline companyId={companyId} jobs={jobs} selectedJob={selectedJob} onJobChange={setSelectedJob} applicants={applicants.filter((item) => item.jobPostId === selectedJob)} companyName={company?.name || ''} loading={applicantsLoading} applicationId={searchParams.get('application') || undefined} templates={bulkTemplates} onReload={() => loadJobData(selectedJob)} onTemplates={() => setTab('bulk')} onFlash={flash} />}
+        {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={() => loadJobs(companyId)} onApplicants={(id) => router.push(employerJobHref(id,'applicants',companyId))} onStatus={changeJobStatus} onFlash={flash} />}
+        {tab === 'pipeline' && !bootLoading && companyId && <RecruiterPipeline meta={meta} companyId={companyId} jobs={jobs} selectedJob={selectedJob} onJobChange={setSelectedJob} applicants={applicants} companyName={company?.name || ''} loading={applicantsLoading} applicationId={searchParams.get('application') || undefined} templates={bulkTemplates} onReload={() => loadJobData(selectedJob)} onTemplates={() => setTab('bulk')} onFlash={flash} />}
 
         {tab === 'bulk' && companyId && <RecruiterTemplates key={companyId} companyId={companyId} jobPostId={selectedJob || undefined} />}
         {tab === 'analytics' && companyId && <RecruiterAnalyticsView key={companyId} companyId={companyId} jobs={jobs} selectedJob={selectedJob} onSelectJob={setSelectedJob} />}
-        {tab === 'billing' && companyId && <RecruiterBilling plan={planCode} subscription={subscription} jobs={jobs} busy={billingBusy} onUpgrade={upgradePlan} onBoost={buyHotBoost} />}
 
         {tab === 'company' && company && <RecruiterCompany key={companyId} company={company} companyId={companyId} meta={meta} industryGroups={industryGroups} canManage={canManageTeam} isOwner={isOwner} onReload={async () => { await refreshMemberships(); await loadCompanyDetail(companyId); }} onFlash={flash} />}
 

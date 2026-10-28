@@ -121,7 +121,7 @@ function RegisterForm() {
       });
       saveSession(session as Parameters<typeof saveSession>[0]);
       window.location.href = localeHref(
-        authDestination(session.user.role === 'RECRUITER' ? '/dashboard/recruiter?tab=jobs' : '/dashboard/employee'),
+        authDestination(session.user.role === 'RECRUITER' ? '/dashboard/recruiter?tab=jobs' : '/jobs?mode=for-you'),
       );
     } catch (err) {
       setError((err as Error).message || t('authRegisterFailed'));
@@ -156,6 +156,7 @@ function RegisterForm() {
               : t(employer ? 'authRole.employerRegisterSub' : 'authRole.employeeRegisterSub')}
         </p>
         {inviteInvalid ? <FormAlert>{t('inviteInvalid')}</FormAlert> : null}
+        {joining ? <p className={s.login}>{t('alreadyRegistered')}{' '}<AuthLink href="/login" accountRole="RECRUITER">{t('login')}</AuthLink></p> : null}
         <div className={s.social}>
           <GoogleSignIn key={`google-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable autoCreateEmployeeOnFirstSignIn={!employer} />
           <TelegramSignIn key={`telegram-${role}`} accountRole={role} inviteToken={useInvite ? inviteToken : undefined} showWhenUnavailable autoCreateEmployeeOnFirstSignIn={!employer} />

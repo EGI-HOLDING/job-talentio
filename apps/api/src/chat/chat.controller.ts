@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { chatMessageSchema } from '@job-talentio/shared';
+import { chatConversationSchema, chatMessageSchema } from '@job-talentio/shared';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
@@ -17,9 +17,10 @@ export class ChatController {
   @Post('conversations')
   start(
     @CurrentUser() user: AuthUser,
-    @Body() body: { peerUserId: string; jobPostId?: string; companyId?: string },
+    @Body() body: unknown,
   ) {
-    return this.chat.startConversation(user, body.peerUserId, body);
+    const data = parseDto(chatConversationSchema, body);
+    return this.chat.startConversation(user, data.peerUserId, data);
   }
 
   @Get('conversations/:id/messages')

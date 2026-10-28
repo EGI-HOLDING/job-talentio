@@ -1,12 +1,13 @@
-import type { ParsedCvData } from '../cv-parser';
+import type { CvCatalogLanguage, CvCatalogSkill, ParsedCvData } from '../cv-parser';
 
-export type CvParseProviderName = 'local' | 'affinda' | 'llm';
+export type CvParseProviderName = 'local';
 
 export type CvParseProviderInput = {
   buffer: Buffer;
   filename: string;
   mimeType: string;
-  knownSkills: Array<{ name: string; slug: string }>;
+  knownSkills: CvCatalogSkill[];
+  knownLanguages: CvCatalogLanguage[];
 };
 
 export type { ParsedCvData };

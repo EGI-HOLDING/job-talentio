@@ -10,6 +10,8 @@ import {
 import { languageKey, resolveLanguage } from '../common/language-resolve';
 import { benefitKey, resolveBenefit } from '../common/benefit-resolve';
 import { catalogAlias, isCatalogKind } from '../common/i18n/catalog-kind';
+import type { CatalogKind } from '../common/i18n/catalog-kind';
+import { geoAliasKey } from '../common/geo-selection';
 import { dateRange, envelope, skipFor } from './admin-query';
 import {
   CATALOG_SPECS,
@@ -19,6 +21,7 @@ import {
   countingDelegate,
 } from './catalog-registry';
 import type { CatalogRecord, CatalogSpec, CatalogType } from './catalog-registry';
+import type { OccupationMatchingMetadata } from '@job-talentio/shared';
 
 export type CatalogListQuery = {
   q?: string;
@@ -38,6 +41,14 @@ export type UsageBreakdown = { total: number; byRelation: Array<{ label: string;
 export class AdminCatalogService {
   constructor(private prisma: PrismaService) {}
 
+  private async validateMetadata(type:CatalogType,id:string | undefined,metadata:OccupationMatchingMetadata | null | undefined) {
+    if (metadata === undefined || metadata === null) return;
+    if (type !== 'jobTitle') throw new BadRequestException('Occupation metadata belongs to job titles only');
+    const targets = metadata.relatedRoles.map(row => row.id);
+    if (new Set(targets).size !== targets.length || (id && targets.includes(id))) throw new BadRequestException('Related occupations must be distinct and cannot reference themselves');
+    if (targets.length && await this.prisma.jobTitle.count({where:{id:{in:targets},archivedAt:null}}) !== targets.length) throw new BadRequestException('Related occupation not found or archived');
+  }
+
   /** Registry the console uses to render forms and columns per catalog. */
   kinds() {
     return CATALOG_TYPES.map((type) => {
@@ -50,6 +61,7 @@ export class AdminCatalogService {
         hasI18nStatus: spec.hasI18nStatus,
         hasSortOrder: spec.hasSortOrder,
         hasIcon: spec.hasIcon,
+        hasAliases: Boolean(spec.aliasModel),
         parent: spec.parent ?? null,
         seedManaged: spec.seedManaged,
         supportsMerge: spec.supportsMerge,
@@ -79,7 +91,7 @@ export class AdminCatalogService {
         select: {
           ...catalogSelect(spec),
           ...(this.hasCreatedAt(spec) ? { createdAt: true } : {}),
-          ...(spec.parent ? { [spec.parent.type]: { select: { name: true, slug: true } } } : {}),
+          ...(spec.parent ? { [spec.parent.type]: { select: { id:true, name: true, slug: true } } } : {}),
         },
       }),
       delegate.count({ where }),
@@ -102,13 +114,14 @@ export class AdminCatalogService {
           ? [
               { nameUz: { contains: term, mode: 'insensitive' } },
               { nameRu: { contains: term, mode: 'insensitive' } },
+              { nameId: { contains: term, mode: 'insensitive' } },
             ]
           : []),
       ];
     }
 
     if (query.parentSlug && spec.parent) {
-      where[spec.parent.type] = { slug: query.parentSlug };
+      where[spec.parent.type] = { OR: [{id:query.parentSlug},{slug:query.parentSlug}] };
     }
 
     if (this.hasCreatedAt(spec)) {
@@ -160,10 +173,23 @@ export class AdminCatalogService {
    */
   async create(
     type: CatalogType,
-    input: { name: string; key?: string; parentSlug?: string; sortOrder?: number; icon?: string },
+    input: {
+      matchingMetadata?: OccupationMatchingMetadata;
+      name: string;
+      iso2?: string; iso3?: string; phoneCode?: string; currencyCode?: string; isActive?: boolean; kind?: string;
+      key?: string;
+      parentSlug?: string;
+      parentId?: string;
+      sortOrder?: number;
+      icon?: string;
+      nameUz?: string;
+      nameRu?: string;
+      nameId?: string;
+    },
   ) {
     const spec = CATALOG_SPECS[type];
     const name = input.name.trim();
+    await this.validateMetadata(type, undefined, input.matchingMetadata);
     if (!name) throw new BadRequestException('Name is required');
     try {
       assertCatalogLabel(name, { skipCharset: type === 'jobTitle' });
@@ -171,27 +197,63 @@ export class AdminCatalogService {
       throw new BadRequestException((e as Error).message);
     }
 
+    if (type === 'country' && (!input.iso2 || !input.iso3 || !input.phoneCode)) throw new BadRequestException('ISO2, ISO3 and phone code are required');
+    let created: CatalogRecord;
     if (spec.resolver) {
-      const created = await this.createViaResolver(spec, name, input.key);
-      return this.markCurated(type, created.id);
+      created = await this.createViaResolver(spec, name, input.key);
+    } else {
+      const parentId = await this.resolveParentId(spec, input.parentSlug, input.parentId);
+      const key = (input.key?.trim() || catalogSlugify(name)).toLowerCase();
+      if (!key) throw new BadRequestException('Could not derive a slug from that name');
+
+      const delegate = catalogDelegateFor(this.prisma, type);
+      const clash = await delegate.findFirst({ where: { [spec.keyField]: key, ...(type === 'province' ? { countryId: parentId } : {}) } });
+      if (clash) {
+        throw new BadRequestException(`An entry with ${spec.keyField} "${key}" already exists`);
+      }
+
+      created = await delegate.create({
+        data: {
+          name,
+          ...(type === 'country' ? { iso2: input.iso2, iso3: input.iso3, phoneCode: input.phoneCode, currencyCode: input.currencyCode || null, isActive: input.isActive ?? false } : {}),
+          ...(type === 'city' ? { kind: input.kind || 'CITY' } : {}),
+          [spec.keyField]: key,
+          ...(spec.parent && parentId ? { [spec.parent.field]: parentId } : {}),
+          ...(spec.hasSortOrder ? { sortOrder: input.sortOrder ?? 0 } : {}),
+          ...(spec.hasIcon && input.icon ? { icon: input.icon } : {}),
+          curatedAt: new Date(),
+        },
+        select: catalogSelect(spec),
+      });
     }
 
-    const parentId = await this.resolveParentId(spec, input.parentSlug);
-    const key = (input.key?.trim() || catalogSlugify(name)).toLowerCase();
-    if (!key) throw new BadRequestException('Could not derive a slug from that name');
+    if (input.matchingMetadata) await this.prisma.jobTitle.update({where:{id:created.id},data:{matchingMetadata:input.matchingMetadata as unknown as import('@prisma/client').Prisma.InputJsonValue}});
+    const curated = await this.markCurated(type, created.id);
+    if (!spec.hasLocaleNames) {
+      return curated;
+    }
 
-    const delegate = catalogDelegateFor(this.prisma, type);
-    const clash = await delegate.findFirst({ where: { [spec.keyField]: key } });
-    if (clash) throw new BadRequestException(`An entry with ${spec.keyField} "${key}" already exists`);
-
-    return delegate.create({
+    const localeNames = {
+      nameUz: input.nameUz?.trim() || null,
+      nameRu: input.nameRu?.trim() || null,
+      nameId: input.nameId?.trim() || null,
+    };
+    if (!localeNames.nameUz && !localeNames.nameRu && !localeNames.nameId) return curated;
+    const localeStatus = localeNames.nameUz && localeNames.nameRu && localeNames.nameId
+      ? 'COMPLETE'
+      : 'PENDING';
+    return catalogDelegateFor(this.prisma, type).update({
+      where: { id: created.id },
       data: {
-        name,
-        [spec.keyField]: key,
-        ...(spec.parent && parentId ? { [spec.parent.field]: parentId } : {}),
-        ...(spec.hasSortOrder ? { sortOrder: input.sortOrder ?? 0 } : {}),
-        ...(spec.hasIcon && input.icon ? { icon: input.icon } : {}),
-        curatedAt: new Date(),
+        ...localeNames,
+        ...(spec.hasI18nStatus
+          ? {
+              nameUzIsMachine: false,
+              nameRuIsMachine: false,
+              nameIdIsMachine: false,
+              i18nStatus: localeStatus,
+            }
+          : {}),
       },
       select: catalogSelect(spec),
     });
@@ -232,11 +294,15 @@ export class AdminCatalogService {
     type: CatalogType,
     id: string,
     patch: {
+      matchingMetadata?: OccupationMatchingMetadata | null;
+      iso2?: string; iso3?: string; phoneCode?: string; currencyCode?: string; isActive?: boolean; kind?: string;
       name?: string;
       key?: string;
       nameUz?: string | null;
       nameRu?: string | null;
+      nameId?: string | null;
       parentSlug?: string;
+      parentId?: string;
       sortOrder?: number;
       icon?: string | null;
     },
@@ -246,7 +312,14 @@ export class AdminCatalogService {
     const row = await delegate.findUnique({ where: { id }, select: catalogSelect(spec) });
     if (!row) throw new NotFoundException('Catalog entry not found');
 
+    await this.validateMetadata(type,id,patch.matchingMetadata);
     const data: Record<string, unknown> = { curatedAt: new Date() };
+    if (type === 'jobTitle' && patch.matchingMetadata !== undefined) {
+      if (patch.matchingMetadata === null) throw new BadRequestException('Use empty sources and relatedRoles to clear metadata');
+      data.matchingMetadata = patch.matchingMetadata;
+    }
+    if (type === 'country') for (const field of ['iso2','iso3','phoneCode','currencyCode','isActive'] as const) { if (patch[field] !== undefined) data[field] = patch[field]; }
+    if (type === 'city' && patch.kind !== undefined) data.kind = patch.kind;
     let previousKey: string | null = null;
     let nextKey: string | null = null;
 
@@ -282,18 +355,23 @@ export class AdminCatalogService {
         data.nameRu = patch.nameRu?.trim() || null;
         if (spec.hasI18nStatus) data.nameRuIsMachine = false;
       }
-    }
-
-    if (spec.hasI18nStatus && (patch.nameUz !== undefined || patch.nameRu !== undefined)) {
-      const nameUz = 'nameUz' in data ? (data.nameUz as string | null) : row.nameUz;
-      const nameRu = 'nameRu' in data ? (data.nameRu as string | null) : row.nameRu;
-      if (row.i18nStatus !== 'IGNORED') {
-        data.i18nStatus = nameUz && nameRu ? 'COMPLETE' : 'PENDING';
+      if (patch.nameId !== undefined) {
+        data.nameId = patch.nameId?.trim() || null;
+        if (spec.hasI18nStatus) data.nameIdIsMachine = false;
       }
     }
 
-    if (spec.parent && patch.parentSlug !== undefined) {
-      const parentId = await this.resolveParentId(spec, patch.parentSlug);
+    if (spec.hasI18nStatus && (patch.nameUz !== undefined || patch.nameRu !== undefined || patch.nameId !== undefined)) {
+      const nameUz = 'nameUz' in data ? (data.nameUz as string | null) : row.nameUz;
+      const nameRu = 'nameRu' in data ? (data.nameRu as string | null) : row.nameRu;
+      const nameId = 'nameId' in data ? (data.nameId as string | null) : row.nameId;
+      if (row.i18nStatus !== 'IGNORED') {
+        data.i18nStatus = nameUz && nameRu && nameId ? 'COMPLETE' : 'PENDING';
+      }
+    }
+
+    if (spec.parent && (patch.parentSlug !== undefined || patch.parentId !== undefined)) {
+      const parentId = await this.resolveParentId(spec, patch.parentSlug, patch.parentId);
       if (parentId) data[spec.parent.field] = parentId;
     }
     if (spec.hasSortOrder && patch.sortOrder !== undefined) data.sortOrder = patch.sortOrder;
@@ -343,6 +421,11 @@ export class AdminCatalogService {
 
   /** Keeps the previous identity findable so old user input still resolves. */
   private async preserveOldKeyAsAlias(type: CatalogType, id: string, oldKey: string) {
+    if (type === 'city' && oldKey) {
+      const aliasKey = geoAliasKey(oldKey);
+      await this.prisma.cityAlias.upsert({ where: { cityId_aliasKey: { cityId: id, aliasKey } }, create: { cityId: id, alias: oldKey, aliasKey }, update: {} });
+      return;
+    }
     if (!isCatalogKind(type) || !oldKey) return;
     const aliasKey = this.aliasKeyFor(type, oldKey);
     if (!aliasKey) return;
@@ -362,6 +445,115 @@ export class AdminCatalogService {
     if (type === 'jobTitle') return normalizeJobTitleKey(value);
     if (type === 'benefit') return benefitKey(value);
     return languageKey(value);
+  }
+
+  async listAliases(type: CatalogKind | 'city', id: string) {
+    if (type === 'city') {
+      if (!await this.prisma.city.findUnique({ where: { id } })) throw new NotFoundException('City not found');
+      return this.prisma.cityAlias.findMany({ where: { cityId: id }, orderBy: { alias: 'asc' } });
+    }
+    const entry = await catalogDelegateFor(this.prisma, type).findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!entry) throw new NotFoundException('Catalog entry not found');
+    const { delegate, foreignKey } = catalogAlias(this.prisma, type);
+    return delegate.findMany({ where: { [foreignKey]: id }, orderBy: { alias: 'asc' } });
+  }
+
+  async addAlias(type: CatalogKind | 'city', id: string, rawAlias: string) {
+    if (type === 'city') {
+      if (!await this.prisma.city.findUnique({ where: { id } })) throw new NotFoundException('City not found');
+      const alias = rawAlias.trim(), aliasKey = geoAliasKey(alias);
+      if (!aliasKey) throw new BadRequestException('Alias is required');
+      await this.prisma.city.update({ where: { id }, data: { curatedAt: new Date() } });
+      return this.prisma.cityAlias.upsert({ where: { cityId_aliasKey: { cityId: id, aliasKey } }, create: { cityId: id, alias, aliasKey }, update: { alias } });
+    }
+    const alias = rawAlias.trim();
+    if (!alias) throw new BadRequestException('Alias is required');
+    try {
+      assertCatalogLabel(alias, { skipCharset: type === 'jobTitle' });
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+
+    const entry = await catalogDelegateFor(this.prisma, type).findUnique({
+      where: { id },
+      select: { id: true, name: true, [CATALOG_SPECS[type].keyField]: true, normalizedKey: true },
+    });
+    if (!entry) throw new NotFoundException('Catalog entry not found');
+
+    const aliasKey = this.aliasKeyFor(type, alias);
+    if (!aliasKey) throw new BadRequestException('Alias is too short or invalid');
+    const primaryKey =
+      type === 'language'
+        ? languageKey(entry.name)
+        : type === 'jobTitle'
+          ? normalizeJobTitleKey(entry.name)
+          : type === 'skill'
+            ? normalizeSkillKey(entry.name)
+            : benefitKey(entry.name);
+    if (aliasKey === primaryKey || aliasKey === entry.code || aliasKey === entry.normalizedKey) {
+      throw new BadRequestException('Alias matches this catalog entry already');
+    }
+
+    const spec = CATALOG_SPECS[type];
+    const aliasSlug =
+      type === 'skill'
+        ? skillSlugify(alias)
+        : type === 'jobTitle'
+          ? jobTitleSlugify(alias)
+          : type === 'benefit'
+            ? catalogSlugify(alias).toLowerCase()
+            : undefined;
+    const canonicalMatch = await catalogDelegateFor(this.prisma, type).findFirst({
+      where: {
+        OR: [
+          { normalizedKey: aliasKey },
+          ...(aliasSlug
+            ? [{ [spec.keyField]: aliasSlug }]
+            : [{ [spec.keyField]: aliasKey }]),
+        ],
+      },
+      select: { id: true },
+    });
+    if (canonicalMatch) {
+      throw new BadRequestException(
+        canonicalMatch.id === id
+          ? 'Alias matches this catalog entry already'
+          : 'This alias matches another catalog entry',
+      );
+    }
+
+    const { delegate, foreignKey } = catalogAlias(this.prisma, type);
+    const existing = await delegate.findUnique({ where: { aliasKey } });
+    if (existing) {
+      if (existing[foreignKey as keyof typeof existing] === id) return existing;
+      throw new BadRequestException('This alias is already assigned to another catalog entry');
+    }
+
+    try {
+      return await delegate.create({
+        data: { [foreignKey]: id, alias, aliasKey },
+      });
+    } catch {
+      throw new BadRequestException('This alias already exists');
+    }
+  }
+
+  async removeAlias(type: CatalogKind | 'city', id: string, aliasId: string) {
+    if (type === 'city') {
+      const alias = await this.prisma.cityAlias.findFirst({ where: { id: aliasId, cityId: id } });
+      if (!alias) throw new NotFoundException('City alias not found');
+      await this.prisma.city.update({ where: { id }, data: { curatedAt: new Date() } });
+      return this.prisma.cityAlias.delete({ where: { id: aliasId } });
+    }
+    const { delegate, foreignKey } = catalogAlias(this.prisma, type);
+    const alias = await delegate.findUnique({ where: { id: aliasId } });
+    if (!alias || alias[foreignKey as keyof typeof alias] !== id) {
+      throw new NotFoundException('Catalog alias not found');
+    }
+    return delegate.delete({ where: { id: aliasId } });
   }
 
   /** Recomputes slug and normalizedKey, refusing a rename that collides. */
@@ -385,9 +577,10 @@ export class AdminCatalogService {
 
   private async assertKeyFree(spec: CatalogSpec, id: string, keys: Record<string, string>) {
     const delegate = catalogDelegateFor(this.prisma, spec.type);
+    const owner = spec.type === 'province' ? await delegate.findUnique({where:{id},select:{countryId:true}}) : null;
     for (const [field, value] of Object.entries(keys)) {
       if (!value) continue;
-      const clash = await delegate.findFirst({ where: { [field]: value, NOT: { id } } });
+      const clash = await delegate.findFirst({ where: { [field]: value, ...(owner ? {countryId:owner.countryId} : {}), NOT: { id } } });
       if (clash) {
         throw new BadRequestException(
           `Renaming would collide with "${clash.name}". Merge them instead.`,
@@ -396,19 +589,20 @@ export class AdminCatalogService {
     }
   }
 
-  private async resolveParentId(spec: CatalogSpec, parentSlug?: string): Promise<string | null> {
+  private async resolveParentId(spec: CatalogSpec, parentSlug?: string, parentId?: string): Promise<string | null> {
     if (!spec.parent) return null;
-    if (!parentSlug) {
+    if (!parentSlug && !parentId) {
       if (spec.parent.required) {
         throw new BadRequestException(`${spec.parent.label} is required`);
       }
       return null;
     }
-    const parent = await catalogDelegateFor(this.prisma, spec.parent.type).findFirst({
-      where: { slug: parentSlug },
-      select: { id: true, name: true, archivedAt: true, curatedAt: true },
+    const parents = await catalogDelegateFor(this.prisma, spec.parent.type).findMany({
+      where: { ...(parentId ? {id:parentId} : {slug:parentSlug}), archivedAt:null },
+      select: {id:true}, take:2,
     });
-    if (!parent) throw new BadRequestException(`${spec.parent.label} "${parentSlug}" not found`);
+    if (parents.length !== 1) throw new BadRequestException('Select an unambiguous '+spec.parent.label+' from the catalog');
+    const parent = parents[0];
     return parent.id;
   }
 

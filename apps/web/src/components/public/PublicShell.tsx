@@ -8,7 +8,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const auth = /^\/(login|forgot-password|reset-password|verify-email|confirm-email-change)$/.test(path);
   const publicPage = !/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(path);
-  const employeeFlowPage = path === '/dashboard/employee/resume-builder';
+  const employeeFlowPage = path === '/dashboard/employee/resume-builder' || path.startsWith('/onboarding/');
   const workspacePage = path === '/jobs'
     || path === '/explore/companies'
     || path === '/talent'

@@ -5,7 +5,6 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { PLAN_LIMITS } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -13,7 +12,8 @@ import { TelegramService } from '../telegram/telegram.service';
 import { formatTelegramChatText } from '../telegram/telegram.chat';
 import { emailLocale } from '../common/i18n/email-locale';
 import { AuthUser } from '../common/auth.decorators';
-import { effectivePlan } from '../common/effective-plan';
+import { Prisma } from '@prisma/client';
+import { revealsAnonymousEmployer } from '../common/anonymous-job';
 
 @Injectable()
 export class ChatService {
@@ -39,25 +39,68 @@ export class ChatService {
     }
   }
 
-  async canColdOutreach(recruiterUserId: string, companyId: string) {
-    const sub = await this.prisma.subscription.findUnique({ where: { companyId } });
-    const plan = effectivePlan(sub);
-    if (!PLAN_LIMITS[plan].coldChat) return false;
+  /** Keep confidential employer context behind the same stage gate as job details. */
+  private async canAccessConversationContext(
+    conversation: { jobPostId: string | null; companyId: string | null },
+    participantIds: string[],
+    viewer: AuthUser,
+  ) {
+    if (viewer.role === 'SUPER_ADMIN') return true;
+    let companyId = conversation.companyId;
+    if (conversation.jobPostId) {
+      const job = await this.prisma.jobPost.findUnique({
+        where: { id: conversation.jobPostId },
+        select: {
+          isAnonymous: true,
+          companyId: true,
+          company: { select: { isBanned: true, anonymizedAt: true } },
+        },
+      });
+      if (!job || job.company.isBanned || job.company.anonymizedAt) return false;
+      companyId = job.companyId;
+      if (viewer.role === 'RECRUITER') {
+        const membership = await this.prisma.companyMember.findUnique({
+          where: { companyId_userId: { companyId, userId: viewer.id } },
+          select: { userId: true },
+        });
+        if (!membership) return false;
+      }
+      if (!job.isAnonymous) return true;
+      const application = await this.prisma.application.findFirst({
+        where: {
+          jobPostId: conversation.jobPostId,
+          profile: { userId: { in: participantIds } },
+        },
+        select: { status: true },
+      });
+      return Boolean(application && revealsAnonymousEmployer(application.status));
+    }
 
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const used = await this.prisma.conversation.count({
-      where: {
-        companyId,
-        isColdOutreach: true,
-        initiatedBy: recruiterUserId,
-        createdAt: { gte: start },
-      },
+    if (!companyId) return true;
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { isBanned: true, anonymizedAt: true },
     });
-    const limits = PLAN_LIMITS[plan];
-    const quota =
-      ('coldChatDailyQuota' in limits ? limits.coldChatDailyQuota : undefined) ?? 20;
-    return used < quota;
+    if (!company || company.isBanned || company.anonymizedAt) return false;
+    if (viewer.role === 'RECRUITER') {
+      const membership = await this.prisma.companyMember.findUnique({
+        where: { companyId_userId: { companyId, userId: viewer.id } },
+        select: { userId: true },
+      });
+      if (!membership) return false;
+    }
+    const applications = await this.prisma.application.findMany({
+      where: {
+        profile: { userId: { in: participantIds } },
+        jobPost: { companyId },
+      },
+      select: { status: true, jobPost: { select: { isAnonymous: true } } },
+    });
+    if (!applications.length) return true;
+    return applications.some(
+      (application) =>
+        !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status),
+    );
   }
 
   async startConversation(
@@ -69,35 +112,68 @@ export class ChatService {
     const peer = await this.prisma.user.findUnique({ where: { id: peerUserId } });
     if (!peer || peer.isBanned) throw new NotFoundException('User not found');
 
+    const contextJob = opts?.jobPostId
+      ? await this.prisma.jobPost.findUnique({
+          where: { id: opts.jobPostId },
+          select: { id: true, companyId: true, isAnonymous: true },
+        })
+      : null;
+    if (opts?.jobPostId && !contextJob) throw new NotFoundException('Job not found');
+    if (opts?.companyId && contextJob && opts.companyId !== contextJob.companyId) {
+      throw new BadRequestException('The job does not belong to this company');
+    }
+
     let isColdOutreach = false;
     let companyId: string | undefined;
 
     if (user.role === 'RECRUITER') {
       const membershipIds = new Set((user.memberships ?? []).map((m) => m.companyId));
-      if (opts?.companyId) {
-        if (!membershipIds.has(opts.companyId)) {
-          throw new ForbiddenException('Not a member of this company');
-        }
-        companyId = opts.companyId;
-      } else {
-        companyId = user.memberships?.[0]?.companyId;
+      const requestedCompanyId = contextJob?.companyId ?? opts?.companyId;
+      if (requestedCompanyId && !membershipIds.has(requestedCompanyId)) {
+        throw new ForbiddenException('Not a member of this company');
       }
+      companyId = requestedCompanyId ?? user.memberships?.[0]?.companyId;
       if (!companyId) throw new ForbiddenException('No company');
 
-      const hasApplication = opts?.jobPostId
-        ? await this.prisma.application.findFirst({
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { isBanned: true, anonymizedAt: true },
+      });
+      if (!company || company.isBanned || company.anonymizedAt) {
+        throw new NotFoundException('Company not available');
+      }
+
+      const applications = contextJob
+        ? await this.prisma.application.findMany({
             where: {
-              jobPostId: opts.jobPostId,
+              jobPostId: contextJob.id,
               profile: { userId: peerUserId },
               jobPost: { companyId },
             },
+            select: { status: true, jobPost: { select: { isAnonymous: true } } },
           })
-        : await this.prisma.application.findFirst({
+        : await this.prisma.application.findMany({
             where: {
               profile: { userId: peerUserId },
               jobPost: { companyId },
             },
+            select: { status: true, jobPost: { select: { isAnonymous: true } } },
           });
+      const hasApplication = applications.some(
+        (application) =>
+          !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status),
+      );
+      const hiddenAnonymousApplication = applications.some(
+        (application) =>
+          application.jobPost.isAnonymous && !revealsAnonymousEmployer(application.status),
+      );
+
+      if (!hasApplication && hiddenAnonymousApplication) {
+        throw new ForbiddenException('The employer is hidden until the interview stage');
+      }
+      if (contextJob?.isAnonymous && applications.length && !hasApplication) {
+        throw new ForbiddenException('The employer is hidden until the interview stage');
+      }
 
       const peerInitiated = await this.prisma.conversation.findFirst({
         where: {
@@ -110,49 +186,108 @@ export class ChatService {
       });
 
       if (!hasApplication && !peerInitiated) {
-        const allowed = await this.canColdOutreach(user.id, companyId);
-        if (!allowed) {
-          throw new ForbiddenException(
-            'Cold outreach requires Premium plan (or active application / candidate-initiated chat)',
-          );
+        if (peer.role !== 'EMPLOYEE') throw new NotFoundException('User not found');
+        const candidateProfile = await this.prisma.employeeProfile.findUnique({
+          where: { userId: peerUserId },
+          select: { visibility: true },
+        });
+        if (!candidateProfile || candidateProfile.visibility === 'PRIVATE') {
+          throw new NotFoundException('User not found');
         }
         isColdOutreach = true;
+      }
+    } else if (user.role === 'EMPLOYEE' && (contextJob || opts?.companyId)) {
+      const requestedCompanyId = contextJob?.companyId ?? opts?.companyId;
+      if (!requestedCompanyId || peer.role !== 'RECRUITER') {
+        throw new NotFoundException('Recruiter not found for this company');
+      }
+      const [company, membership] = await Promise.all([
+        this.prisma.company.findUnique({
+          where: { id: requestedCompanyId },
+          select: { isBanned: true, anonymizedAt: true },
+        }),
+        this.prisma.companyMember.findUnique({
+          where: { companyId_userId: { companyId: requestedCompanyId, userId: peerUserId } },
+          select: { userId: true },
+        }),
+      ]);
+      if (!company || company.isBanned || company.anonymizedAt || !membership) {
+        throw new NotFoundException('Recruiter not found for this company');
+      }
+      companyId = requestedCompanyId;
+
+      if (contextJob?.isAnonymous) {
+        const application = await this.prisma.application.findFirst({
+          where: {
+            jobPostId: contextJob.id,
+            profile: { userId: user.id },
+          },
+          select: { status: true },
+        });
+        if (!application || !revealsAnonymousEmployer(application.status)) {
+          throw new NotFoundException('Employer not available');
+        }
       }
     }
 
     const [userAId, userBId] = this.pairIds(user.id, peerUserId);
+    const jobPostId = contextJob?.id ?? null;
     const existing = await this.prisma.conversation.findFirst({
       where: {
         userAId,
         userBId,
-        jobPostId: opts?.jobPostId ?? null,
+        jobPostId,
       },
     });
     if (existing) return existing;
 
-    return this.prisma.conversation.create({
-      data: {
-        userAId,
-        userBId,
-        companyId: companyId ?? null,
-        jobPostId: opts?.jobPostId ?? null,
-        initiatedBy: user.id,
-        isColdOutreach,
-      },
-    });
+    try {
+      return await this.prisma.conversation.create({
+        data: {
+          userAId,
+          userBId,
+          companyId: companyId ?? contextJob?.companyId ?? null,
+          jobPostId,
+          initiatedBy: user.id,
+          isColdOutreach,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const raced = await this.prisma.conversation.findFirst({
+          where: { userAId, userBId, jobPostId },
+        });
+        if (raced) return raced;
+      }
+      throw err;
+    }
   }
 
   async listConversations(user: AuthUser) {
     const userId = user.id;
-    const conversations = await this.prisma.conversation.findMany({
+    const loadedConversations = await this.prisma.conversation.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
       include: {
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-        userA: { select: { id: true, fullName: true, email: true, role: true } },
-        userB: { select: { id: true, fullName: true, email: true, role: true } },
+        userA: { select: { id: true, fullName: true, role: true } },
+        userB: { select: { id: true, fullName: true, role: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
+    const visibility = await Promise.all(
+      loadedConversations.map(async (conversation) =>
+        (await this.canAccessConversationContext(
+          conversation,
+          [conversation.userAId, conversation.userBId],
+          user,
+        ))
+          ? conversation
+          : null,
+      ),
+    );
+    const conversations = visibility.filter(
+      (conversation): conversation is (typeof loadedConversations)[number] => conversation !== null,
+    );
 
     // Inbox fetch = Delivered for peer messages (not Read until the thread is opened)
     if (conversations.length > 0) {
@@ -295,6 +430,15 @@ export class ChatService {
     });
     if (!conversation) throw new NotFoundException();
     this.assertParticipant(conversation, user);
+    if (
+      !(await this.canAccessConversationContext(
+        conversation,
+        [conversation.userAId, conversation.userBId],
+        user,
+      ))
+    ) {
+      throw new NotFoundException('Conversation not found');
+    }
 
     if (user.role !== 'SUPER_ADMIN') {
       await this.markPeerRead(conversationId, user.id);
@@ -320,6 +464,15 @@ export class ChatService {
     if (conversation.userAId !== user.id && conversation.userBId !== user.id) {
       throw new ForbiddenException();
     }
+    if (
+      !(await this.canAccessConversationContext(
+        conversation,
+        [conversation.userAId, conversation.userBId],
+        user,
+      ))
+    ) {
+      throw new NotFoundException('Conversation not found');
+    }
     const message = await this.prisma.chatMessage.create({
       data: { conversationId, senderId: user.id, body },
       include: { sender: { select: { id: true, fullName: true } } },
@@ -331,6 +484,7 @@ export class ChatService {
     const peerId = conversation.userAId === user.id ? conversation.userBId : conversation.userAId;
     await this.notifyPeer({
       peerId,
+      jobPostId: conversation.jobPostId,
       senderId: user.id,
       senderName: message.sender.fullName,
       body,
@@ -341,12 +495,19 @@ export class ChatService {
 
   async notifyPeer(opts: {
     peerId: string;
+    jobPostId?: string | null;
     senderId: string;
     senderName: string;
     body: string;
     telegram: 'offline' | 'always' | 'never';
   }) {
+    const messageHref = (role: string) => '/messages?' + new URLSearchParams({
+      peer: opts.senderId,
+      role: role === 'RECRUITER' || role === 'SUPER_ADMIN' ? 'RECRUITER' : 'EMPLOYEE',
+      ...(opts.jobPostId ? { job: opts.jobPostId } : {}),
+    });
     try {
+      const recipient = await this.prisma.user.findUnique({ where: { id: opts.peerId }, select: { role: true } });
       await this.notifications.create({
         userId: opts.peerId,
         type: 'CHAT_MESSAGE',
@@ -355,7 +516,7 @@ export class ChatService {
         titleKey: 'notify.chatMessage.title',
         bodyKey: 'notify.chatMessage.body',
         params: { name: opts.senderName },
-        linkUrl: `/messages?peer=${opts.senderId}`,
+        linkUrl: messageHref(recipient?.role || 'EMPLOYEE'),
       });
     } catch (err) {
       this.logger.warn(`Chat notification failed: ${(err as Error).message}`);
@@ -365,7 +526,7 @@ export class ChatService {
     try {
       const peer = await this.prisma.user.findUnique({
         where: { id: opts.peerId },
-        select: { telegramId: true, locale: true },
+        select: { telegramId: true, locale: true, role: true },
       });
       if (!peer?.telegramId) return;
       if (opts.telegram === 'offline') {
@@ -374,7 +535,7 @@ export class ChatService {
       }
       const locale = emailLocale(peer.locale);
       const webUrl = (process.env.WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-      const url = `${webUrl}/${locale}/messages?peer=${opts.senderId}`;
+      const url = `${webUrl}/${locale}${messageHref(peer.role)}`;
       const text = formatTelegramChatText({
         locale,
         sender: opts.senderName,

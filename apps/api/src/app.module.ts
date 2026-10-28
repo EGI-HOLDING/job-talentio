@@ -8,7 +8,6 @@ import { CompaniesModule } from './companies/companies.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { ProfilesModule } from './profiles/profiles.module';
-import { BillingModule } from './billing/billing.module';
 import { ChatModule } from './chat/chat.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { AdminModule } from './admin/admin.module';
@@ -27,6 +26,7 @@ import { TranslationModule } from './translation/translation.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
+import { BenefitsModule } from './benefits/benefits.module';
 
 @Module({
   imports: [
@@ -36,6 +36,7 @@ import { SeedService } from './seed.service';
     PresenceModule,
     TranslationModule,
     PrismaModule,
+    BenefitsModule,
     StorageModule,
     MailModule,
     MatchingModule,
@@ -47,7 +48,7 @@ import { SeedService } from './seed.service';
     JobsModule,
     ApplicationsModule,
     ProfilesModule,
-    BillingModule,
+
     ChatModule,
     BulkCommsModule,
     AlertsModule,

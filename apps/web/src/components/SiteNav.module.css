@@ -38,6 +38,9 @@
 .jobs .browse a[aria-current=page]::after { content: ''; position: absolute; bottom: -22px; left: 0; right: 0; height: 3px; border-radius: 3px; background: #5635e8; }
 .jobs .landingLinks { font-size: .8rem; }
 .jobs .landingLinks .register { min-height: 38px; padding-block: .5rem; }
+:global(body):has(:global([data-job-editor])) .recruiter .landingNav { width: min(1500px, calc(100% - 88px)); min-height:64px; padding-block:10px; }
+@media (max-width:1100px) { :global(body):has(:global([data-job-editor])) .recruiter .landingNav { width:calc(100% - 48px); } }
+@media (max-width:600px) { :global(body):has(:global([data-job-editor])) .recruiter .landingNav { width:calc(100% - 32px); } }
 
 @media (max-width: 1200px) {
   .landing .landingNav { gap: 1rem; }
@@ -100,4 +103,11 @@
   .landingLinks .register { display: none; }
   .employee .landingLinks { gap: .3rem; }
   .employee .menuButton { width: 32px; padding-inline: .2rem; }
+  .recruiter.landing .signedIn { gap:.3rem; }
+  .recruiter .menuButton { width:32px; padding-inline:.2rem; }
+  /* Keep the language, notification and account controls reachable with long
+     locale labels on narrow screens. A second row preserves their touch sizes. */
+  .employee.landing .signedIn, .recruiter.landing .signedIn { grid-column:1 / -1; grid-row:2; width:100%; justify-content:flex-end; gap:.5rem; }
+  .employee .menuButton, .recruiter .menuButton { width:44px; min-height:44px; }
+  .landing .mobileMenu { grid-row:3; }
 }

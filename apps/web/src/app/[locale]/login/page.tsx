@@ -15,16 +15,17 @@ import { useI18n } from '@/lib/i18n';
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale } from '@/lib/locale';
 import type { Locale } from '@/lib/locale';
 
-function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
+function redirectAfterLogin(role: string, companyId?: string) {
+  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs' + (companyId ? `&company=${encodeURIComponent(companyId)}` : '');
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
-  return '/dashboard/employee';
+  return '/jobs?mode=for-you';
 }
 
 function LoginForm() {
   const { t, locale } = useI18n();
   const searchParams = useSearchParams();
-  const role = authRoleFrom(searchParams.get('role'));
+  const inviteToken = searchParams.get('invite')?.trim() || undefined;
+  const role = inviteToken ? 'RECRUITER' : authRoleFrom(searchParams.get('role'));
   const employer = role === 'RECRUITER';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,12 +54,12 @@ function LoginForm() {
       return;
     }
     try {
-      const session = await api<{ accessToken: string; user: { role: string; locale?: string } }>(
+      const session = await api<{ accessToken: string; joinedCompanyId?: string; user: { role: string; locale?: string } }>(
         '/auth/login',
         {
           method: 'POST',
           auth: false,
-          body: JSON.stringify({ email, password, expectedRole: role }),
+          body: JSON.stringify({ email, password, expectedRole: role, inviteToken }),
         },
       );
       const mismatch = roleMismatchKey(session.user.role, role);
@@ -66,7 +67,7 @@ function LoginForm() {
       saveSession(session as Parameters<typeof saveSession>[0]);
       window.location.href = localeUrl(
         sessionLocale(session),
-        authDestination(redirectAfterLogin(session.user.role)),
+        authDestination(redirectAfterLogin(session.user.role, session.joinedCompanyId)),
       );
     } catch (err) {
       const message = (err as Error).message || t('authLoginFailed');
@@ -83,6 +84,7 @@ function LoginForm() {
         <h1>{t(employer ? 'employers.login' : 'authRole.employeeLogin')}</h1>
         <p className="muted">{t(employer ? 'authRole.employerSub' : 'authRole.employeeSub')}</p>
         <AuthReturnNotice />
+        {inviteToken ? <p className="muted">{t('inviteExistingLogin')}</p> : null}
         <p id={formHintId} className="required-note">
           {t('requiredFieldsNote')}
         </p>
@@ -113,12 +115,14 @@ function LoginForm() {
         <GoogleSignIn
           key={`google-${role}`}
           accountRole={role}
+          inviteToken={inviteToken}
           showWhenUnavailable
           autoCreateEmployeeOnFirstSignIn={!employer}
         />
         <TelegramSignIn
           key={`telegram-${role}`}
           accountRole={role}
+          inviteToken={inviteToken}
           showWhenUnavailable
           autoCreateEmployeeOnFirstSignIn={!employer}
         />

@@ -37,16 +37,6 @@ export const jobs = {
     ru: 'Горячая ещё {n} дн.',
     en: 'Hot for {n} more days',
   },
-  'job.hotLimitedBoost': {
-    uz: 'Cheklangan muddatga ko‘tarilgan',
-    ru: 'Продвижение на ограниченное время',
-    en: 'Limited-time boost',
-  },
-  'job.boostedUntil': {
-    uz: '{date} gacha ko‘tarilgan - muddat cheklangan',
-    ru: 'Продвигается до {date} - время ограничено',
-    en: 'Boosted until {date} - limited window',
-  },
 
   'job.noResults': {
     uz: 'Bu filtrlarga mos ish topilmadi. Ba’zilarini olib tashlab ko‘ring.',

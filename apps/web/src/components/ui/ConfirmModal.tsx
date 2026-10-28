@@ -91,6 +91,7 @@ export function ConfirmModal({
   const [typed, setTyped] = useState('');
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const onCancelRef = useRef(onCancel);
   const busyRef = useRef(busy);
   onCancelRef.current = onCancel;
@@ -102,6 +103,7 @@ export function ConfirmModal({
 
   useEffect(() => {
     const prev = document.body.style.overflow;
+    const previousFocus = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
     const focusTarget = resolvedTone === 'danger' ? cancelRef.current : confirmRef.current;
     focusTarget?.focus();
@@ -110,11 +112,21 @@ export function ConfirmModal({
         e.preventDefault();
         onCancelRef.current();
       }
+      if (e.key === 'Tab' && modalRef.current) {
+        const modal = modalRef.current;
+        const controls = Array.from(modal.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])'))
+          .filter(control => control.tabIndex >= 0 && control.getClientRects().length > 0);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (!first) { e.preventDefault(); modal.focus(); }
+        else if (!modal.contains(document.activeElement) || (e.shiftKey && (document.activeElement === first || document.activeElement === modal))) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
       document.removeEventListener('keydown', onKey);
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, [resolvedTone, title]);
 
@@ -132,6 +144,8 @@ export function ConfirmModal({
     >
       <div
         className={`modal confirm-modal confirm-modal--${resolvedTone}`}
+        ref={modalRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

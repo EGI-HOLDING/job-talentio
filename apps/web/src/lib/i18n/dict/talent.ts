@@ -58,12 +58,6 @@ export const talent = {
     en: 'Contacts limited',
   },
   'talent.chat': { uz: 'Chat', ru: 'Чат', en: 'Chat' },
-  'talent.chatPremium': { uz: 'Chat (Premium)', ru: 'Чат (Premium)', en: 'Chat (Premium)' },
-  'talent.coldChatRequiresPremium': {
-    uz: 'Sovuq murojaat uchun Premium kerak',
-    ru: 'Холодные сообщения доступны с Premium',
-    en: 'Cold outreach requires Premium',
-  },
   'talent.truncatedNote': {
     uz: 'Bu saralash bo‘yicha {m} tadan eng yaxshi {n} tasi ko‘rsatilmoqda',
     ru: 'Показаны первые {n} из {m} совпадений для этой сортировки',
@@ -91,30 +85,10 @@ export const talent = {
     ru: 'Желаемая зарплата',
     en: 'Desired salary',
   },
-  'talent.contactsHiddenPrefix': {
-    uz: 'Kontaktlar yashirin -',
-    ru: 'Контакты скрыты -',
-    en: 'Contacts hidden -',
-  },
-  'talent.contactsHiddenUpgrade': {
-    uz: 'Standard/Premium ga o‘ting',
-    ru: 'перейдите на Standard/Premium',
-    en: 'upgrade to Standard/Premium',
-  },
-  'talent.contactsHiddenSuffix': {
-    uz: ', yoki nomzod ariza topshirgach ochiladi.',
-    ru: ', либо они откроются после отклика кандидата.',
-    en: ', or unlock after the candidate applies.',
-  },
   'talent.revealContactsFailed': {
     uz: 'Kontaktlarni ko‘rsatib bo‘lmadi',
     ru: 'Не удалось показать контакты',
     en: 'Failed to reveal contacts',
-  },
-  'talent.upgradeForChat': {
-    uz: 'Chat uchun tarifni oshiring',
-    ru: 'Улучшите тариф для чата',
-    en: 'Upgrade for Chat',
   },
   'talent.cvAfterApply': {
     uz: 'Ariza topshirgach ochiladi',

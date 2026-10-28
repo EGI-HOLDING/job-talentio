@@ -2,7 +2,7 @@
  * Locale primitives shared by middleware (edge), server components, and client
  * code. Keep this file free of React and Next imports so every runtime can use it.
  */
-export const LOCALES = ['uz', 'ru', 'en'] as const;
+export const LOCALES = ['uz', 'ru', 'en', 'id'] as const;
 
 export type Locale = (typeof LOCALES)[number];
 

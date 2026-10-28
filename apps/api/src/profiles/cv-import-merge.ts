@@ -3,14 +3,14 @@
 export function resumeStartDate(value?: string | null): Date | null {
   if (!value?.trim()) return null;
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (Number.isNaN(parsed.getTime()) || !/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(value)) return null;
+  return new Date(value.slice(0, 10)).toISOString().slice(0, 10) === value.slice(0, 10) ? parsed : null;
 }
 
-function yearOf(value?: string | Date | null): string {
+function dateOf(value?: string | Date | null): string {
   if (!value) return '';
-  if (value instanceof Date) return String(value.getUTCFullYear());
-  const match = String(value).match(/(?:19|20)\d{2}/);
-  return match?.[0] ?? '';
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
+  return resumeStartDate(value)?.toISOString().slice(0, 10) ?? '';
 }
 
 function norm(value: string): string {
@@ -22,7 +22,7 @@ export function experienceImportKey(
   companyName: string,
   startDate?: string | Date | null,
 ): string {
-  return `${norm(title)}|${norm(companyName)}|${yearOf(startDate)}`;
+  return JSON.stringify([norm(title), norm(companyName), dateOf(startDate)]);
 }
 
 export function educationImportKey(
@@ -30,7 +30,7 @@ export function educationImportKey(
   degree: string | null | undefined,
   startDate?: string | Date | null,
 ): string {
-  return `${norm(school)}|${degree || ''}|${yearOf(startDate)}`;
+  return JSON.stringify([norm(school), degree || '', dateOf(startDate)]);
 }
 
 export function pickFilledProfileFields<T extends Record<string, string | undefined>>(

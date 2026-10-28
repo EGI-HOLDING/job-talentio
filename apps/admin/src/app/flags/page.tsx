@@ -33,14 +33,16 @@ export default function FlagsPage() {
     void load();
   }, [load]);
 
-  async function save(key: string, enabled: boolean, message: string) {
+  async function save(key: string, enabled: boolean, message: string): Promise<boolean> {
     setBusy(true);
     try {
       await apiPost('/admin/flags', { key, enabled });
       notify(message);
       await load();
+      return true;
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not save the flag', 'error');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -51,8 +53,8 @@ export default function FlagsPage() {
     const form = new FormData(e.currentTarget);
     const key = String(form.get('key') ?? '').trim();
     if (!key) return;
-    setCreating(false);
-    await save(key, form.get('enabled') === 'on', `Flag ${key} saved`);
+    const saved = await save(key, form.get('enabled') === 'on', `Flag ${key} saved`);
+    if (saved) setCreating(false);
   }
 
   const columns: Array<Column<AdminFlag>> = [

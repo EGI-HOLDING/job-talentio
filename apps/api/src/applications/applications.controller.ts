@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Headers, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
-import { applicationStatusSchema, applySchema, interviewSchema } from '@job-talentio/shared';
+import { applicantSearchSchema, applicationListSchema, applicationStatusSchema, applySchema, interviewSchema } from '@job-talentio/shared';
 import { ApplicationsService } from './applications.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
@@ -17,6 +17,7 @@ export class ApplicationsController {
     @Param('jobId') jobId: string,
     @CurrentUser() user: AuthUser,
     @Body() body: unknown,
+    @Req() req: Request,
   ) {
     const data = parseDto(applySchema, body ?? {});
     return this.applications.apply(
@@ -26,6 +27,8 @@ export class ApplicationsController {
       data.answers,
       data.resumeId,
       data.source,
+      requestLocale(req),
+      data.funnelSession,
     );
   }
 
@@ -41,20 +44,42 @@ export class ApplicationsController {
     return this.applications.getMyApplicationForJob(user, jobId);
   }
 
+  @Get('jobs/:jobId/search')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  searchForJob(@Param('jobId') jobId: string, @CurrentUser() user: AuthUser, @Req() req: Request, @Query() query: unknown) {
+    return this.applications.searchForJob(user, jobId, parseDto(applicantSearchSchema, query), requestLocale(req));
+  }
+
+  @Get('jobs/:jobId/applicants/:applicationId')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  getForJob(@Param('jobId') jobId: string, @Param('applicationId') applicationId: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.applications.getForJob(user, jobId, applicationId, requestLocale(req));
+  }
+
+  @Get('jobs/:jobId/kanban')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  kanban(@Param('jobId') jobId: string, @CurrentUser() user: AuthUser, @Req() req: Request, @Query() query: unknown) {
+    const data = parseDto(applicantSearchSchema.omit({sort:true,minMatch:true}).partial({limit:true}), query);
+    return this.applications.kanbanForJob(user, jobId, {...data,limit:Math.min(data.limit ?? 20,50)}, requestLocale(req));
+  }
+
+  @Post(':id/kanban')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  addToKanban(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.applications.addToKanban(user,id);
+  }
+
   @Get('jobs/:jobId')
   @Roles('RECRUITER', 'SUPER_ADMIN')
   forJob(
     @Param('jobId') jobId: string,
     @CurrentUser() user: AuthUser,
     @Req() req: Request,
-    @Query('status') status?: string,
-    @Query('sort') sort?: 'match' | 'newest',
-    @Query('minMatch') minMatch?: string,
+    @Query() query: unknown,
   ) {
+    const data = parseDto(applicationListSchema, query);
     return this.applications.listForJob(user, jobId, {
-      status,
-      sort: sort ?? 'match',
-      minMatch: minMatch ? Number(minMatch) : undefined,
+      ...data,
       locale: requestLocale(req),
     });
   }
@@ -81,9 +106,10 @@ export class ApplicationsController {
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
     @Body() body: unknown,
+    @Headers('idempotency-key') key?: string,
   ) {
     const data = parseDto(interviewSchema, body);
-    return this.applications.scheduleInterview(user, id, data);
+    return this.applications.scheduleInterview(user, id, data, key);
   }
 
   @Get(':id/interviews')

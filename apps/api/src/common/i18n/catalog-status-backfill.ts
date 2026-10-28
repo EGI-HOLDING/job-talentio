@@ -8,10 +8,10 @@ export type CatalogStatusResult = Record<
   { complete: number; ignored: number; pending: number }
 >;
 
-type Row = { id: string; name: string; nameUz: string | null; nameRu: string | null };
+type Row = { id: string; name: string; nameUz: string | null; nameRu: string | null; nameId: string | null };
 
 function classify(row: Row, allowTechIdentity: boolean) {
-  if (row.nameUz && row.nameRu) return 'COMPLETE' as const;
+  if (row.nameUz && row.nameRu && row.nameId) return 'COMPLETE' as const;
   if (allowTechIdentity && isCatalogTechIdentity(row.name)) return 'IGNORED' as const;
   return 'PENDING' as const;
 }
@@ -40,7 +40,7 @@ export async function backfillCatalogStatus(db: Db): Promise<CatalogStatusResult
     };
 
     const rows = (await (model as { findMany: (args: unknown) => Promise<Row[]> }).findMany({
-      select: { id: true, name: true, nameUz: true, nameRu: true },
+      select: { id: true, name: true, nameUz: true, nameRu: true, nameId: true },
     })) as Row[];
 
     for (const row of rows) {

@@ -7,9 +7,9 @@
  * follows the reader when they switch language instead of being frozen in
  * whatever language it was created in.
  */
-export type MessageLocale = 'uz' | 'ru' | 'en';
+export type MessageLocale = 'uz' | 'ru' | 'en' | 'id';
 
-type MessageEntry = Record<MessageLocale, string>;
+type MessageEntry = Record<Exclude<MessageLocale, 'id'>, string>;
 
 export const MESSAGES = {
   // ------------------------------------------------------------ notifications
@@ -19,9 +19,9 @@ export const MESSAGES = {
     en: 'New applicant for {job}',
   },
   'notify.newApplicant.body': {
-    uz: '{name} ariza yubordi (moslik {match}%)',
-    ru: '{name} откликнулся (совпадение {match}%)',
-    en: '{name} applied (match {match}%)',
+    uz: '{name} ariza yubordi (moslik {match}/100)',
+    ru: '{name} откликнулся (совпадение {match}/100)',
+    en: '{name} applied (match {match}/100)',
   },
   'notify.applicationStatus.title': {
     uz: 'Ariza yangilandi: {job}',
@@ -484,6 +484,115 @@ export const MESSAGES = {
 
 export type MessageKey = keyof typeof MESSAGES;
 
+/** Indonesian wording for notifications, email, and Telegram messages. */
+const ID_MESSAGES = {
+  'notify.newApplicant.title': 'Pelamar baru untuk {job}',
+  'notify.newApplicant.body': '{name} mengirim lamaran (kecocokan {match}/100)',
+  'notify.applicationStatus.title': 'Pembaruan lamaran: {job}',
+  'notify.applicationStatus.body': 'Status sekarang: {status}',
+  'notify.applicationStatus.bodyWithNote': 'Status sekarang: {status}. Catatan: {note}',
+  'notify.chatMessage.title': 'Pesan baru dari {name}',
+  'notify.chatMessage.body': 'Buka percakapan untuk membacanya',
+  'notify.interviewScheduled.title': 'Wawancara dijadwalkan: {job}',
+  'notify.interviewScheduled.body': 'Pada {date}',
+  'notify.newJobAtCompany.title': 'Lowongan baru di {company}',
+  'notify.verification.approved.title': 'Perusahaan terverifikasi',
+  'notify.verification.approved.body': '{company} kini memiliki lencana perusahaan terverifikasi.',
+  'notify.verification.rejected.title': 'Permohonan verifikasi ditolak',
+  'notify.verification.rejected.body': '{company}: {note}',
+  'notify.verification.rejected.bodyNoNote': '{company}: periksa dokumen dan kirim kembali permohonan.',
+  'notify.jobAlert.title': 'Pemberitahuan lowongan: {alert}',
+  'notify.jobAlert.body': '{count} lowongan baru yang cocok',
+  'notify.jobAlert.singleTitle': '{title}',
+  'notify.jobAlert.singleBody': '{company} | {alert}',
+  'notify.jobAlert.singleBodyCity': '{company} | {city} | {alert}',
+  'status.NEW': 'Baru',
+  'status.IN_REVIEW': 'Sedang ditinjau',
+  'status.INTERVIEW': 'Wawancara',
+  'status.OFFER': 'Penawaran',
+  'status.HIRED': 'Diterima bekerja',
+  'status.REJECTED': 'Ditolak',
+  'status.WITHDRAWN': 'Ditarik',
+  'email.greeting': 'Halo {name},',
+  'email.greetingShort': 'Halo,',
+  'email.footer': 'Job Talentio - Anda menerima email ini karena alamat email Anda telah diverifikasi.',
+  'email.linkFallback': 'Atau buka tautan ini: {link}',
+  'email.expires24h': 'Tautan ini kedaluwarsa dalam 24 jam.',
+  'email.expires7d': 'Tautan ini kedaluwarsa dalam 7 hari.',
+  'email.invite.subject': '{company} mengundang Anda bergabung dengan tim Job Talentio mereka',
+  'email.invite.intro': '{company} mengundang Anda ke tim perekrutan mereka. Buka tautan untuk membuat akun dengan kata sandi atau Google.',
+  'email.invite.cta': 'Terima undangan',
+  'email.invite.ignore': 'Jika Anda tidak mengharapkan undangan ini, abaikan email ini.',
+  'email.inviteAdded.subject': 'Anda ditambahkan ke tim {company}',
+  'email.inviteAdded.intro': '{company} menambahkan Anda ke tim perekrutan mereka. Buka tautan untuk masuk.',
+  'email.inviteAdded.cta': 'Masuk',
+  'email.welcome.subject': 'Selamat datang di Job Talentio',
+  'email.welcome.body': 'Akun Job Talentio Anda siap digunakan.',
+  'email.verify.subject': 'Verifikasi email Anda - Job Talentio',
+  'email.verify.intro': 'Konfirmasikan alamat email ini di Job Talentio:',
+  'email.verify.cta': 'Verifikasi email saya',
+  'email.verify.ignore': 'Jika Anda tidak meminta ini, abaikan email ini.',
+  'email.resetPassword.subject': 'Atur ulang kata sandi - Job Talentio',
+  'email.resetPassword.intro': 'Atur ulang kata sandi Job Talentio Anda:',
+  'email.resetPassword.cta': 'Buat kata sandi baru',
+  'email.resetPassword.ignore': 'Jika Anda tidak meminta pengaturan ulang, abaikan email ini.',
+  'email.changeEmail.subject': 'Konfirmasi email baru Anda - Job Talentio',
+  'email.changeEmail.intro': 'Konfirmasikan alamat ini sebagai email masuk baru Anda di Job Talentio:',
+  'email.changeEmail.cta': 'Konfirmasi perubahan email',
+  'email.jobAlert.subject': 'Pemberitahuan Job Talentio: {alert}',
+  'email.jobAlert.intro': 'Lowongan baru yang cocok dengan <strong>{alert}</strong>:',
+  'email.jobAlert.jobLine': '{title} - {company} ({city})',
+  'email.jobAlert.manage': 'Kelola pemberitahuan',
+  'telegram.jobAlert.intro': '{alert}: {count} lowongan baru yang cocok',
+  'telegram.jobAlert.jobLine': '{title} - {company} ({city})\n{url}',
+  'telegram.channel.salaryLabel': 'Gaji',
+  'telegram.channel.salaryFrom': 'mulai {amount}',
+  'telegram.channel.salaryUpTo': 'hingga {amount}',
+  'telegram.channel.salaryNegotiable': 'dapat dinegosiasikan',
+  'telegram.channel.open': 'Lihat dan lamar',
+  'telegram.channel.workMode.ONSITE': 'di kantor',
+  'telegram.channel.workMode.HYBRID': 'hibrida',
+  'telegram.channel.workMode.REMOTE': 'jarak jauh',
+  'telegram.channel.employment.FULL_TIME': 'Penuh waktu',
+  'telegram.channel.employment.PART_TIME': 'Paruh waktu',
+  'telegram.channel.employment.CONTRACT': 'Kontrak',
+  'telegram.channel.employment.INTERNSHIP': 'Magang',
+  'telegram.channel.employment.TEMPORARY': 'Sementara',
+  'telegram.jobs.intro': 'Lowongan terbaru untuk Anda:',
+  'telegram.jobs.introLatest': 'Lowongan terbaru:',
+  'telegram.jobs.none': 'Belum ada yang ditampilkan. Coba /jobs lagi nanti.',
+  'telegram.jobs.linkHint': 'Hubungkan akun Job Talentio (Pengaturan, Keamanan) untuk mendapatkan daftar yang dipersonalisasi.',
+  'telegram.phone.askContact': 'Untuk masuk ke Job Talentio dengan nomor telepon, ketuk tombol di bawah dan bagikan nomor Anda. Telegram akan mengonfirmasinya tanpa SMS.',
+  'telegram.phone.shareButton': 'Bagikan nomor telepon saya',
+  'telegram.phone.notOwn': 'Bagikan nomor telepon Anda sendiri, bukan kontak orang lain.',
+  'telegram.phone.loggedIn': 'Nomor {phone} dikonfirmasi. Kembali ke browser: Anda sudah masuk.',
+  'telegram.phone.created': 'Akun Job Talentio baru dibuat untuk {phone}. Kembali ke browser dan lengkapi profil Anda.',
+  'telegram.phone.saved': 'Nomor {phone} ditambahkan ke akun Anda. Mulai sekarang Anda dapat masuk dengannya.',
+  'telegram.phone.taken': 'Nomor ini milik akun Job Talentio lain. Masuk ke akun tersebut atau hubungi dukungan.',
+  'telegram.phone.expired': 'Tautan masuk kedaluwarsa. Tekan “Masuk dengan nomor telepon” di situs sekali lagi.',
+  'telegram.phone.invalid': 'Nomor gagal dibaca. Silakan coba lagi.',
+  'telegram.link.ok': 'Telegram terhubung ke Job Talentio. Aktifkan Telegram untuk pemberitahuan lowongan di dasbor. Perintah /stop juga menonaktifkan masuk melalui Telegram.',
+  'telegram.link.already': 'Telegram ini sudah terhubung ke Job Talentio. Aktifkan Telegram untuk pemberitahuan lowongan di dasbor. Kirim /stop untuk memutuskan koneksi.',
+  'telegram.link.taken': 'Telegram ini sudah digunakan akun Job Talentio lain. Putuskan koneksi di akun tersebut atau hubungkan Telegram lain.',
+  'telegram.link.expired': 'Tautan ini kedaluwarsa. Hubungkan kembali Telegram melalui Pengaturan, Keamanan.',
+  'telegram.link.help': 'Pemberitahuan Job Talentio. Hubungkan Telegram melalui Pengaturan, Keamanan, lalu tekan Mulai di sini agar kami dapat mengirim pesan.',
+  'telegram.link.stopped': 'Telegram diputuskan. Masuk melalui Telegram juga dinonaktifkan. Hubungkan kembali melalui Pengaturan, Keamanan.',
+  'telegram.chat.body': '{sender} mengirim pesan Job Talentio kepada Anda:\n\n{message}\n\nBalas: {url}',
+  'telegram.chat.helpNoThread': 'Belum ada percakapan terbuka. Kirim pesan kepada mereka di Job Talentio terlebih dahulu, lalu Anda dapat membalas di sini.',
+  'email.applicationStatus.subject': 'Pembaruan lamaran - {job}',
+  'email.applicationStatus.position': 'Posisi: <strong>{job}</strong>',
+  'email.applicationStatus.note': 'Catatan dari perekrut: {note}',
+  'email.applicationStatus.cta': 'Buka dasbor Anda',
+  'email.applicationStatus.generic': 'Status lamaran Anda sekarang {status}.',
+  'email.applicationStatus.IN_REVIEW': 'Lamaran Anda sedang ditinjau.',
+  'email.applicationStatus.INTERVIEW': 'Anda diundang untuk wawancara.',
+  'email.applicationStatus.OFFER': 'Anda menerima tawaran pekerjaan.',
+  'email.applicationStatus.HIRED': 'Selamat, Anda diterima bekerja.',
+  'email.applicationStatus.REJECTED': 'Sayangnya, tim memilih kandidat lain.',
+  'email.chatMessage.subject': '{name} mengirim pesan kepada Anda di Job Talentio',
+  'email.chatMessage.cta': 'Buka percakapan',
+} satisfies Record<MessageKey, string>;
+
 /** Renders a message in `locale`, substituting `{placeholders}` from `params`. */
 export function translateMessage(
   key: string,
@@ -493,7 +602,7 @@ export function translateMessage(
   const entry = MESSAGES[key as MessageKey] as MessageEntry | undefined;
   if (!entry) return key;
 
-  const template = entry[locale] ?? entry.en ?? key;
+  const template = (locale === 'id' ? ID_MESSAGES[key as MessageKey] : entry[locale]) ?? entry.en ?? key;
   if (!params) return template;
 
   return template.replace(/\{(\w+)\}/g, (match, name: string) => {

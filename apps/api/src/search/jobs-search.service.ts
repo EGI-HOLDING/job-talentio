@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { loadExposurePolicy } from '../benefits/benefit-policy';
 import { JOBS_INDEX_SETTINGS } from './jobs-search.settings';
 import {
   indexPublishedJobs,
@@ -9,9 +10,6 @@ import {
   toJobSearchDocument,
 } from './jobs-index.sync';
 
-const INDEX = 'jobs';
-/** Mirror of JobsService relevance scan cap so id-filtering never shrinks results. */
-const SEARCH_ID_LIMIT = 1000;
 const REQUEST_TIMEOUT_MS = 3_000;
 
 /**
@@ -25,13 +23,31 @@ const REQUEST_TIMEOUT_MS = 3_000;
 @Injectable()
 export class JobsSearchService implements OnModuleInit {
   private readonly logger = new Logger(JobsSearchService.name);
+  private readonly index: string;
   private readonly host: string | null;
   private readonly apiKey: string | undefined;
+  private syncFailures = 0;
+  private lastEnqueuedAt: Date | null = null;
+  private failedSyncs = new Set<string>();
+  private syncInFlight = new Map<string, Promise<void>>();
+  private projectionUncertain = false;
+  projectionHealth() {
+    return {
+      enabled: this.enabled,
+      syncFailures: this.syncFailures,
+      pendingJobs: this.failedSyncs.size,
+      rebuilding: this.backfillInFlight,
+      projectionUncertain: this.projectionUncertain,
+      lastEnqueuedAt: this.lastEnqueuedAt,
+    };
+  }
 
   constructor(
     private prisma: PrismaService,
     config: ConfigService,
   ) {
+    this.index = config.get<string>('MEILI_JOBS_INDEX') || 'jobs';
+    if (!/^[a-zA-Z0-9_-]+$/.test(this.index)) throw new Error('Invalid jobs index name');
     this.host = (config.get<string>('MEILI_HOST') || '').replace(/\/$/, '') || null;
     this.apiKey = config.get<string>('MEILI_MASTER_KEY') || undefined;
     if (!this.host) {
@@ -73,13 +89,13 @@ export class JobsSearchService implements OnModuleInit {
   /** Ensure index + settings exist, then backfill when the index is empty. */
   private async initIndex(): Promise<void> {
     // Both calls are async tasks in Meili; re-running them is idempotent.
-    await this.request('POST', '/indexes', { uid: INDEX, primaryKey: 'id' }).catch(
+    await this.request('POST', '/indexes', { uid: this.index, primaryKey: 'id' }).catch(
       () => undefined,
     );
-    await this.request('PATCH', `/indexes/${INDEX}/settings`, JOBS_INDEX_SETTINGS);
+    await this.request('PATCH', `/indexes/${this.index}/settings`, JOBS_INDEX_SETTINGS);
     const stats = await this.request<{ numberOfDocuments: number }>(
       'GET',
-      `/indexes/${INDEX}/stats`,
+      `/indexes/${this.index}/stats`,
     );
     if (stats.numberOfDocuments === 0) {
       await this.backfill();
@@ -106,59 +122,85 @@ export class JobsSearchService implements OnModuleInit {
     this.logger.warn(`Meilisearch ${reason}; reindexing in background`);
     void rebuildJobsIndex({
       prisma: this.prisma,
+      index: this.index,
       host: this.host,
       apiKey: this.apiKey,
       log: (message) => this.logger.log(message),
     })
-      .catch((err) => this.logger.warn(`Meilisearch reindex failed: ${(err as Error).message}`))
+      .then(() => {
+        this.projectionUncertain = false;
+      })
+      .catch((err) => {
+        this.projectionUncertain = true;
+        this.syncFailures++;
+        this.logger.warn(`Meilisearch reindex failed: ${(err as Error).message}`);
+      })
       .finally(() => {
         this.backfillInFlight = false;
       });
   }
 
-  private kickBackfill(): void {
-    this.scheduleRebuild('index empty or missing');
-  }
-
-  /** Ranked job ids for a text query, or null when Meili is unavailable. */
-  async searchJobIds(q: string): Promise<string[] | null> {
-    if (!this.host) return null;
+  /** PostgreSQL has already applied authorization and all structured filters. */
+  async rankedIds(q: string, eligibleIds: string[]): Promise<string[] | null> {
+    if (!this.host || !eligibleIds.length) return null;
+    if (this.backfillInFlight) return null;
+    if (this.projectionUncertain) {
+      this.reindexInBackground();
+      return null;
+    }
+    if (eligibleIds.some((id) => this.failedSyncs.has(id))) return null;
     try {
-      const res = await this.request<{ hits: Array<{ id: string }> }>(
+      const ids: string[] = [];
+      const promoted =
+        (await this.prisma.featureFlag.findUnique({ where: { key: 'hr_promotions' } }))?.enabled ===
+          true &&
+        (await this.prisma.featureFlag.findUnique({ where: { key: 'hr_packages' } }))?.enabled ===
+          true;
+      const policy = await loadExposurePolicy(this.prisma);
+      const filter =
+        'id IN [' +
+        eligibleIds.map((id) => JSON.stringify(id)).join(',') +
+        '] AND exposureVersion = ' +
+        policy.version +
+        ' AND promotionEnabled = ' +
+        promoted +
+        ' AND (boostProjectedActive = false OR (boostEndsAt > ' +
+        Date.now() +
+        ' AND exposureUpdatedAt >= ' +
+        (Date.now() - 60000) +
+        '))';
+      const coverage = await this.request<{ totalHits: number }>(
         'POST',
-        `/indexes/${INDEX}/search`,
-        {
-          q,
-          limit: SEARCH_ID_LIMIT,
-          attributesToRetrieve: ['id'],
-          // Default 'last' matches any query word, so multi-word queries return
-          // nearly the whole corpus. 'all' keeps typo tolerance but requires
-          // every word to match, like users expect from a job search box.
-          matchingStrategy: 'all',
-        },
+        '/indexes/' + this.index + '/search',
+        { q: '', filter, page: 1, hitsPerPage: 1, attributesToRetrieve: ['id'] },
       );
-      if (res.hits.length === 0) {
-        // 0 hits is not a trustworthy filter: an empty array is truthy and
-        // `id IN ()` hides every posting, including ones the index never saw.
-        // An empty index still needs a rebuild; a non-empty miss falls through
-        // to Postgres, which rebuilds only when it actually finds rows.
-        const stats = await this.request<{ numberOfDocuments: number }>(
-          'GET',
-          `/indexes/${INDEX}/stats`,
-        ).catch(() => null);
-        if (!stats || stats.numberOfDocuments === 0) {
-          this.kickBackfill();
-        }
+      if (coverage.totalHits < eligibleIds.length) {
+        this.logger.warn(`Meilisearch projection coverage ${coverage.totalHits}/${eligibleIds.length}; using database ranking`);
+        this.reindexInBackground();
         return null;
       }
-      return res.hits.map((h) => h.id);
-    } catch (err) {
-      const message = (err as Error).message;
-      if (/responded 404/.test(message)) {
-        // Index itself is gone (fresh Meilisearch instance).
-        this.kickBackfill();
+      for (let page = 1; ; page++) {
+        const response = await this.request<{ hits: Array<{ id: string }>; totalPages: number }>(
+          'POST',
+          '/indexes/' + this.index + '/search',
+          {
+            q,
+            filter,
+            page,
+            hitsPerPage: 500,
+            matchingStrategy: 'all',
+            attributesToRetrieve: ['id'],
+          },
+        );
+        ids.push(...response.hits.map((hit) => hit.id));
+        if (page >= response.totalPages || !response.hits.length) break;
       }
-      this.logger.warn(`Meilisearch query failed, using Prisma fallback: ${message}`);
+      return ids;
+    } catch (error) {
+      if (/responded 404/.test((error as Error).message)) this.reindexInBackground();
+      this.logger.warn(
+        'Ranked search unavailable; PostgreSQL fallback: ' + (error as Error).message,
+      );
       return null;
     }
   }
@@ -166,16 +208,69 @@ export class JobsSearchService implements OnModuleInit {
   /** Upsert (PUBLISHED) or remove (anything else) one job. Fire-and-forget safe. */
   async syncJob(jobId: string): Promise<void> {
     if (!this.host) return;
+    const previous = this.syncInFlight.get(jobId) ?? Promise.resolve();
+    const current = previous.then(() => this.syncOneJob(jobId));
+    this.syncInFlight.set(jobId, current);
+    try {
+      await current;
+    } finally {
+      if (this.syncInFlight.get(jobId) === current) this.syncInFlight.delete(jobId);
+    }
+  }
+
+  /** Reconstructible projections: failed jobs retry; process restart rebuilds the index. */
+  async retryFailedSyncs() {
+    await Promise.all(
+      [...this.failedSyncs]
+        .filter((id) => !this.syncInFlight.has(id))
+        .slice(0, 10)
+        .map((id) => this.syncJob(id)),
+    );
+  }
+
+  private async syncOneJob(jobId: string): Promise<void> {
+    if (!this.host) return;
+    this.failedSyncs.add(jobId);
     try {
       const job = await this.fetchJob(jobId);
-      if (job && job.status === 'PUBLISHED') {
-        await this.request('PUT', `/indexes/${INDEX}/documents`, [toJobSearchDocument(job)]);
+      let task: { taskUid: number } | undefined;
+      if (
+        job &&
+        job.status === 'PUBLISHED' &&
+        (!job.benefit?.expiresAt || job.benefit.expiresAt > new Date())
+      ) {
+        task = await this.request<{ taskUid: number }>('PUT', `/indexes/${this.index}/documents`, [
+          toJobSearchDocument(
+            job,
+            (await this.prisma.featureFlag.findUnique({ where: { key: 'hr_promotions' } }))
+              ?.enabled === true &&
+              (await this.prisma.featureFlag.findUnique({ where: { key: 'hr_packages' } }))
+                ?.enabled === true,
+            await loadExposurePolicy(this.prisma),
+          ),
+        ]);
+        this.lastEnqueuedAt = new Date();
       } else {
-        await this.request('DELETE', `/indexes/${INDEX}/documents/${jobId}`).catch(
-          () => undefined,
+        task = await this.request<{ taskUid: number }>(
+          'DELETE',
+          `/indexes/${this.index}/documents/${jobId}`,
         );
       }
+      const deadline = Date.now() + 15000;
+      while (task) {
+        const state = await this.request<{ status: string; error?: { message?: string } }>(
+          'GET',
+          '/tasks/' + task.taskUid,
+        );
+        if (state.status === 'succeeded') break;
+        if (['failed', 'canceled'].includes(state.status))
+          throw new Error(state.error?.message ?? 'Index task failed');
+        if (Date.now() > deadline) throw new Error('Index task timed out');
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      this.failedSyncs.delete(jobId);
     } catch (err) {
+      this.syncFailures++;
       this.logger.warn(`Meilisearch sync failed for job ${jobId}: ${(err as Error).message}`);
     }
   }
@@ -200,7 +295,7 @@ export class JobsSearchService implements OnModuleInit {
 
   private async backfill(): Promise<void> {
     if (!this.host) return;
-    const indexed = await indexPublishedJobs(this.prisma, this.host, this.apiKey);
+    const indexed = await indexPublishedJobs(this.prisma, this.host, this.apiKey, this.index);
     this.logger.log(`Meilisearch backfill indexed ${indexed} published job(s)`);
   }
 

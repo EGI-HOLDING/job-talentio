@@ -12,13 +12,12 @@ type JobTranslation = {
   locale: Locale;
   title: string;
   description: string;
-  isMachine: boolean;
 };
 
 type JobQuestion = {
   id: string;
   question: string;
-  translations: Array<{ locale: Locale; question: string; isMachine: boolean }>;
+  translations: Array<{ locale: Locale; question: string }>;
 };
 
 type JobTranslations = {
@@ -34,6 +33,7 @@ const LOCALE_NAME_KEY: Record<Locale, string> = {
   uz: 'rec.localeNameUz',
   ru: 'rec.localeNameRu',
   en: 'rec.localeNameEn',
+  id: 'rec.localeNameId',
 };
 
 const EMPTY_DRAFT: Draft = { title: '', description: '', questions: {} };
@@ -55,7 +55,6 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [drafts, setDrafts] = useState<Partial<Record<Locale, Draft>>>({});
   const [busyLocale, setBusyLocale] = useState<Locale | null>(null);
-  const [autoLocale, setAutoLocale] = useState<Locale | null>(null);
 
   // The parent rebuilds `flash` every render; keep it out of the load deps.
   const flashRef = useRef(onFlash);
@@ -107,20 +106,6 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
       ...prev,
       [locale]: { ...EMPTY_DRAFT, ...prev[locale], ...patch },
     }));
-  }
-
-  async function autoTranslate(locale: Locale) {
-    const langName = t(LOCALE_NAME_KEY[locale]);
-    setAutoLocale(locale);
-    try {
-      await api(`/jobs/${jobId}/translations/${locale}/auto`, { method: 'POST' });
-      onFlash(t('rec.langVersionSaved').replace('{lang}', langName));
-      await load();
-    } catch (err) {
-      onFlash(err instanceof Error ? err.message : t('ui.translateFailed'), 'error');
-    } finally {
-      setAutoLocale(null);
-    }
   }
 
   async function saveVersion(locale: Locale) {
@@ -208,30 +193,21 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
           {LOCALES.filter((locale) => locale !== data.sourceLocale).map((locale) => {
             const saved = data.translations.find((tr) => tr.locale === locale);
             const draft = drafts[locale] ?? EMPTY_DRAFT;
-            const busy = busyLocale === locale || autoLocale === locale;
+            const busy = busyLocale === locale;
             const langName = t(LOCALE_NAME_KEY[locale]);
             return (
               <BusyOverlay
                 key={locale}
                 active={busy}
-                label={autoLocale === locale ? t('ui.translating') : t('ui.working')}
+                label={t('ui.working')}
                 className="lang-version-block"
               >
                 <div className="chips" style={{ alignItems: 'center' }}>
                   <strong>{langName}</strong>
                   <span className="badge">
-                    {!saved
-                      ? t('rec.langVersionMissing')
-                      : saved.isMachine
-                        ? t('rec.langVersionMachine')
-                        : t('rec.langVersionHuman')}
+                    {saved ? t('rec.langVersionHuman') : t('rec.langVersionMissing')}
                   </span>
                 </div>
-                {saved?.isMachine && (
-                  <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.8rem' }}>
-                    {t('rec.langVersionMachineNote')}
-                  </p>
-                )}
                 <div style={{ display: 'grid', gap: '0.6rem', marginTop: '0.6rem' }}>
                   <label>
                     <LabelText required>{t('jobTitleFilter')}</LabelText>
@@ -274,14 +250,6 @@ export function JobLanguageVersions({ jobId, onFlash }: Props) {
                   ))}
                 </div>
                 <div className="chips" style={{ marginTop: '0.6rem' }}>
-                  <button
-                    type="button"
-                    className="chip"
-                    disabled={busy}
-                    onClick={() => autoTranslate(locale)}
-                  >
-                    {autoLocale === locale ? t('ui.translating') : t('rec.langVersionAutoTranslate')}
-                  </button>
                   <button
                     type="button"
                     className="chip active"

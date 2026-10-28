@@ -19,7 +19,7 @@ const POLL_MS = 2500;
 function redirectAfterLogin(role: string) {
   if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
-  return '/dashboard/employee';
+  return '/jobs?mode=for-you';
 }
 
 /**
@@ -30,6 +30,8 @@ function redirectAfterLogin(role: string) {
 export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { accountRole?: AuthRole; showWhenUnavailable?: boolean } = {}) {
   const { t, locale } = useI18n();
   const [providers, setProviders] = useState<Providers | null>(null);
+  const [providerError, setProviderError] = useState(false);
+  const [providerRetry, setProviderRetry] = useState(0);
   const [mode, setMode] = useState<'idle' | 'telegram' | 'sms'>('idle');
   const [waiting, setWaiting] = useState<StartResponse | null>(null);
   const [contactRequested, setContactRequested] = useState(false);
@@ -38,21 +40,33 @@ export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { acco
   const [phone, setPhone] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingRef = useRef(false);
+  const attemptRef = useRef(0);
+  const aliveRef = useRef(true);
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
 
   useEffect(() => {
     let cancelled = false;
-    api<Providers>('/auth/phone/providers', { auth: false })
+    aliveRef.current = true;
+    setProviderError(false);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12_000);
+    api<Providers>('/auth/phone/providers', { auth: false, signal: controller.signal })
       .then((p) => {
         if (!cancelled) setProviders(p);
       })
       .catch(() => {
-        if (!cancelled) setProviders({ telegram: false, sms: false });
-      });
+        if (!cancelled) { setProviders({ telegram: false, sms: false }); setProviderError(true); }
+      }).finally(() => window.clearTimeout(timer));
     return () => {
       cancelled = true;
+      aliveRef.current = false;
+      attemptRef.current += 1;
+      controller.abort(); window.clearTimeout(timer);
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, []);
+  }, [providerRetry]);
 
   function stopPolling() {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -68,42 +82,54 @@ export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { acco
   }
 
   async function startTelegram() {
+    if (busy) return;
     setError('');
     setBusy(true);
+    const attempt = ++attemptRef.current;
+    // Open synchronously from the click so browsers do not block the delayed deep link.
+    const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
     try {
       const start = await api<StartResponse>('/auth/phone/telegram/start', {
         method: 'POST',
         auth: false,
         body: JSON.stringify({ locale }),
       });
+      if (!aliveRef.current || attempt !== attemptRef.current) { popup?.close(); return; }
       setWaiting(start);
       setContactRequested(false);
       setMode('telegram');
       // Open the bot in the Telegram app (mobile) or web (desktop).
-      window.open(start.deepLink, '_blank', 'noopener');
+      if (popup && !popup.closed) popup.location.replace(start.deepLink);
       stopPolling();
       pollRef.current = setInterval(async () => {
+        if (pollingRef.current || !aliveRef.current || attempt !== attemptRef.current) return;
+        if (Date.parse(start.expiresAt) <= Date.now()) { stopPolling(); setWaiting(null); setError(t('phone.expired')); return; }
+        pollingRef.current = true;
         try {
           const res = await api<StatusResponse>(
             `/auth/phone/telegram/status?token=${encodeURIComponent(start.token)}`,
             { auth: false },
           );
-          if (res.status === 'COMPLETED') finish(res.session);
+          if (!aliveRef.current || attempt !== attemptRef.current) return;
+          if (res.status === 'COMPLETED') finishRef.current(res.session);
           else if (res.status === 'EXPIRED') {
             stopPolling();
             setWaiting(null);
             setError(t('phone.expired'));
           } else if (res.status === 'CONTACT_REQUESTED') setContactRequested(true);
         } catch (err) {
+          if (!aliveRef.current || attempt !== attemptRef.current) return;
           stopPolling();
           setWaiting(null);
           setError(err instanceof Error ? err.message : t('phone.failed'));
-        }
+        } finally { pollingRef.current = false; }
       }, POLL_MS);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('phone.failed'));
+      popup?.close();
+      if (aliveRef.current) setError(err instanceof Error ? err.message : t('phone.failed'));
     } finally {
-      setBusy(false);
+      if (aliveRef.current) setBusy(false);
     }
   }
 
@@ -162,6 +188,7 @@ export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { acco
           </button>
         </div>
       )}
+      {(!providers || (!providers.telegram && !providers.sms)) && <p className="auth-provider-feedback" role={providerError ? 'alert' : 'status'}>{t(!providers ? 'authProvider.loading' : providerError ? 'authProvider.loadFailed' : 'authProvider.unavailable')}{providerError && <button type="button" className="ghost" onClick={() => setProviderRetry(value => value + 1)}>{t('workspace.retry')}</button>}</p>}
 
       {mode === 'telegram' && waiting && (
         <div className="google-verify-card" role="status">
@@ -184,6 +211,7 @@ export function PhoneSignIn({ accountRole, showWhenUnavailable = false }: { acco
             style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}
             onClick={() => {
               stopPolling();
+              attemptRef.current += 1;
               setWaiting(null);
               setMode('idle');
             }}

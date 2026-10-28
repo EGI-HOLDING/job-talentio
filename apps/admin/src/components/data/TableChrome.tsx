@@ -193,6 +193,8 @@ export function FilterBar({
  */
 export function SelectAllNotice({
   pageCount,
+  selectedOnPage,
+  selectedCount,
   total,
   allMatchingSelected,
   capped,
@@ -200,13 +202,15 @@ export function SelectAllNotice({
   onClear,
 }: {
   pageCount: number;
+  selectedOnPage: number;
+  selectedCount: number;
   total: number;
   allMatchingSelected: boolean;
   capped: boolean;
   onSelectAllMatching: () => void;
   onClear: () => void;
 }) {
-  if (total <= pageCount) return null;
+  if (!allMatchingSelected && (!pageCount || selectedOnPage !== pageCount || total <= pageCount)) return null;
 
   return (
     <div className="select-all-note">
@@ -214,7 +218,7 @@ export function SelectAllNotice({
         <>
           <span>
             {capped
-              ? `Selected the first ${pageCount} of ${total} matching rows (server limit).`
+              ? `Selected the first ${selectedCount} of ${total} matching rows (server limit).`
               : `All ${total} matching rows are selected.`}
           </span>
           <button type="button" className="ghost sm" onClick={onClear}>

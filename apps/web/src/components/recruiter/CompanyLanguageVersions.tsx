@@ -24,6 +24,7 @@ const LOCALE_NAME_KEY: Record<Locale, string> = {
   uz: 'rec.localeNameUz',
   ru: 'rec.localeNameRu',
   en: 'rec.localeNameEn',
+  id: 'rec.localeNameId',
 };
 
 type Props = {
@@ -173,13 +174,13 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
                     {!saved
                       ? t('rec.langVersionMissing')
                       : saved.isMachine
-                        ? t('rec.langVersionMachine')
+                        ? t('rec.companyLangVersionMachine')
                         : t('rec.langVersionHuman')}
                   </span>
                 </div>
                 {saved?.isMachine && (
                   <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.8rem' }}>
-                    {t('rec.langVersionMachineNote')}
+                    {t('rec.companyLangVersionMachineNote')}
                   </p>
                 )}
                 <label style={{ display: 'block', marginTop: '0.6rem' }}>
@@ -201,7 +202,7 @@ export function CompanyLanguageVersions({ companyId, onFlash }: Props) {
                     disabled={busy || !data.source.description?.trim()}
                     onClick={() => autoTranslate(locale)}
                   >
-                    {autoLocale === locale ? t('ui.translating') : t('rec.langVersionAutoTranslate')}
+                    {autoLocale === locale ? t('ui.translating') : t('rec.companyLangVersionAutoTranslate')}
                   </button>
                   <button
                     type="button"

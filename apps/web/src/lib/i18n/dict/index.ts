@@ -1,3 +1,6 @@
+import { hrBenefits } from './hrBenefits';
+import { jobCommerce } from './jobCommerce';
+import { hrRanking } from './hrRanking';
 import { core } from './core';
 import { employee } from './employee';
 import { enums } from './enums';
@@ -14,10 +17,15 @@ import { profileCv } from './profileCv';
 import { employeeWorkspace } from './employeeWorkspace';
 import { registerUi } from './registerUi';
 import { recruiterWorkspace } from './recruiterWorkspace';
+import { linkedin } from './linkedin';
+import { authProviders } from './authProviders';
 
 /** Namespaces are merged into one flat lookup so `t('key')` stays unchanged. */
 export const DICT = {
+  ...jobCommerce,
   ...core,
+  ...hrBenefits,
+  ...hrRanking,
   ...jobs,
   ...talent,
   ...recruiter,
@@ -33,6 +41,8 @@ export const DICT = {
   ...employeeWorkspace,
   ...registerUi,
   ...recruiterWorkspace,
+  ...linkedin,
+  ...authProviders,
 } as const;
 
 export type DictKey = keyof typeof DICT;

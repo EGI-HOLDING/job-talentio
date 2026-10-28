@@ -11,6 +11,7 @@ type Row = {
   name: string;
   nameUz: string | null;
   nameRu: string | null;
+  nameId?: string | null;
   nameUzIsMachine: boolean;
   nameRuIsMachine: boolean;
   i18nStatus: string;
@@ -107,6 +108,7 @@ async function skipsWhenNothingMissing() {
     ...BASE,
     nameUz: 'Sotuv menejeri',
     nameRu: 'Менеджер по продажам',
+    nameId: 'Manajer Penjualan',
   });
   const svc = service(prisma, fakeProvider(() => 'should not be called'));
 

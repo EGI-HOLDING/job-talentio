@@ -3,6 +3,7 @@ import { ProfileIcon } from '@/components/profile/ProfileIcon';
 
 export function WorkspaceIcon({ kind }: { kind: string }) {
   const paths: Record<string, ReactNode> = {
+    building: <><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h1m4 0h1M9 11h1m4 0h1M10 21v-5h4v5"/></>,
     chevronUp: <path d="m6 15 6-6 6 6" />,
     chevronDown: <path d="m6 9 6 6 6-6" />,
     search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
@@ -19,6 +20,7 @@ export function WorkspaceIcon({ kind }: { kind: string }) {
     lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
     shield: <><path d="m12 3 8 4v6c0 5-8 8-8 8S4 18 4 13V7l8-4Z" /><path d="m8 12 3 3 5-6" /></>,
     sort: <path d="M7 3v18m-4-4 4 4 4-4M17 21V3m-4 4 4-4 4 4" />,
+    filter: <path d="M3 4h18l-7 8v7l-4 2v-9L3 4Z" />,
   };
   if (!paths[kind]) return <ProfileIcon kind={kind} />;
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[kind]}</svg>;

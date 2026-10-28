@@ -6,14 +6,16 @@ import { ADMIN_URL, api, saveSession } from '@/lib/api';
 import { FormAlert, FormField } from '@/components/ui/Field';
 import { useI18n } from '@/lib/i18n';
 import { localeHref } from '@/lib/navigation';
+import { loadAuthSdk } from '@/lib/authSdk';
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
+let initializedClientId = '';
+let credentialHandler: ((credential: string) => void) | null = null;
 
 type GoogleResponse =
  | { requiresVerification: true; email: string }
  | { requiresRegistration: true; email: string; fullName: string }
- | { accessToken: string; user: { role: string; locale?: string } };
+ | { accessToken: string; joinedCompanyId?: string; user: { role: string; locale?: string } };
 
 declare global {
   interface Window {
@@ -32,10 +34,10 @@ declare global {
   }
 }
 
-function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
+function redirectAfterLogin(role: string, companyId?: string) {
+  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs' + (companyId ? `&company=${encodeURIComponent(companyId)}` : '');
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
-  return '/dashboard/employee';
+  return '/jobs?mode=for-you';
 }
 
 /**
@@ -64,6 +66,8 @@ export function GoogleSignIn({
   const [resent, setResent] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [provider, setProvider] = useState<'loading' | 'ready' | 'unavailable' | 'failed'>('loading');
+  const [providerRetry, setProviderRetry] = useState(0);
 
   const submitGoogle = useCallback(
     async (token: string, chosenRole?: 'EMPLOYEE' | 'RECRUITER', company?: string) => {
@@ -97,12 +101,12 @@ export function GoogleSignIn({
         const mismatch = accountRole && roleMismatchKey(res.user.role, accountRole);
         if (mismatch && !inviteToken) { setError(t(mismatch)); return; }
         saveSession(res as Parameters<typeof saveSession>[0]);
-        window.location.href = localeHref(authDestination(redirectAfterLogin(res.user.role)));
+        window.location.href = localeHref(authDestination(redirectAfterLogin(res.user.role, res.joinedCompanyId)));
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         setError(
           aborted
-            ? 'Sign-in timed out. Please try again.'
+            ? t('authProvider.timeout')
             : (authRoleErrorKey((err as Error).message) ? t(authRoleErrorKey((err as Error).message)!) : (err as Error).message) || 'Google sign-in failed',
         );
       } finally {
@@ -119,55 +123,43 @@ export function GoogleSignIn({
     submitRef.current = submitGoogle;
   }, [submitGoogle]);
 
-  const initializedRef = useRef(false);
-
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || !buttonRef.current) return;
-
-    const init = () => {
-      // initialize() must run exactly once per page - repeat calls break the flow
-      if (initializedRef.current || !window.google || !buttonRef.current) return;
-      initializedRef.current = true;
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: (res) => {
-          setIdToken(res.credential);
-          const defaultRole = autoCreateEmployeeOnFirstSignIn && accountRole === 'EMPLOYEE'
-            ? 'EMPLOYEE'
-            : undefined;
-          submitRef.current(res.credential, defaultRole);
-        },
-      });
-      buttonRef.current.innerHTML = '';
-      window.google.accounts.id.renderButton(buttonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: 280,
-        text: 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-      });
+    let alive = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12_000);
+    const handle = (credential: string) => {
+      if (!alive) return;
+      setIdToken(credential);
+      void submitRef.current(credential, autoCreateEmployeeOnFirstSignIn && accountRole === 'EMPLOYEE' ? 'EMPLOYEE' : undefined);
     };
+    setProvider('loading');
+    void (async () => {
+      try {
+        const config = await api<{ available: boolean; clientId?: string }>('/auth/google/config', { auth: false, signal: controller.signal });
+        window.clearTimeout(timer);
+        if (!alive) return;
+        if (!config.available || !config.clientId) { setProvider('unavailable'); return; }
+        await loadAuthSdk(GIS_SRC, () => Boolean(window.google?.accounts.id));
+        if (!alive || !buttonRef.current || !window.google) return;
+        credentialHandler = handle;
+        if (initializedClientId !== config.clientId) {
+          window.google.accounts.id.initialize({ client_id: config.clientId, callback: (response) => credentialHandler?.(response.credential) });
+          initializedClientId = config.clientId;
+        }
+        const element = buttonRef.current;
+        element.replaceChildren();
+        window.google.accounts.id.renderButton(element, {
+          theme: 'outline', size: 'large', width: Math.min(400, Math.max(200, element.parentElement?.clientWidth || 280)),
+          text: 'continue_with', shape: 'rectangular', logo_alignment: 'left', locale,
+        });
+        setProvider('ready');
+      } catch { if (alive) setProvider('failed'); }
+      finally { window.clearTimeout(timer); }
+    })();
+    return () => { alive = false; controller.abort(); window.clearTimeout(timer); if (credentialHandler === handle) credentialHandler = null; };
+  }, [locale, providerRetry, autoCreateEmployeeOnFirstSignIn, accountRole]);
 
-    if (window.google) {
-      init();
-      return;
-    }
-    const existing = document.querySelector(`script[src="${GIS_SRC}"]`);
-    if (existing) {
-      existing.addEventListener('load', init, { once: true });
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = GIS_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = init;
-    document.head.appendChild(script);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (!GOOGLE_CLIENT_ID && !showWhenUnavailable) return null;
+  if (provider === 'unavailable' && !showWhenUnavailable) return null;
 
   async function resend() {
     if (!pendingEmail) return;
@@ -259,27 +251,18 @@ export function GoogleSignIn({
     );
   }
 
-  function startGoogle() {
-    const target = buttonRef.current?.querySelector<HTMLElement>('div[role="button"]');
-    if (target) {
-      target.click();
-      return;
-    }
-    window.google?.accounts.id.prompt();
-  }
-
   return (
     <div className="google-signin">
       <div className="auth-divider">
         <span>{t('orContinueWith')}</span>
       </div>
       <div className="google-btn-slot">
-        <div ref={buttonRef} className="auth-social-gis" />
-        <button
+        <div ref={buttonRef} className="auth-social-gis" aria-hidden={provider !== 'ready'} aria-busy={busy} inert={busy} style={{ display: provider === 'ready' ? undefined : 'none' }} />
+        {provider !== 'ready' && <button
           type="button"
           className="auth-social-btn auth-social-btn--google"
-          disabled={busy || !GOOGLE_CLIENT_ID}
-          onClick={startGoogle}
+          disabled={busy || provider !== 'failed'}
+          onClick={() => setProviderRetry(value => value + 1)}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
             <path
@@ -299,9 +282,11 @@ export function GoogleSignIn({
               d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96L3.97 7.3C4.68 5.16 6.66 3.58 9 3.58z"
             />
           </svg>
-          {busy ? t('signingIn') : t('googleContinue')}
-        </button>
+          {provider === 'failed' ? t('workspace.retry') : t('googleContinue')}
+        </button>}
       </div>
+      {busy && provider === 'ready' && <p className="auth-provider-feedback" role="status">{t('signingIn')}</p>}
+      {provider !== 'ready' && <p className="auth-provider-feedback" role={provider === 'failed' ? 'alert' : 'status'}>{t(provider === 'loading' ? 'authProvider.loading' : provider === 'failed' ? 'authProvider.loadFailed' : 'authProvider.unavailable')}</p>}
       <FormAlert>{error}</FormAlert>
     </div>
   );

@@ -77,8 +77,8 @@ export class AdminVerificationService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.companyVerificationRequest.update({
-        where: { id },
+      const claimed = await tx.companyVerificationRequest.updateMany({
+        where: { id, status: 'PENDING' },
         data: {
           status,
           reviewNote: reviewNote?.trim() || null,
@@ -86,6 +86,10 @@ export class AdminVerificationService {
           reviewedAt: new Date(),
         },
       });
+      if (!claimed.count) {
+        throw new BadRequestException('This request was already reviewed');
+      }
+      const row = await tx.companyVerificationRequest.findUniqueOrThrow({ where: { id } });
       if (status === 'APPROVED') {
         await tx.company.update({ where: { id: request.companyId }, data: { isVerified: true } });
       }

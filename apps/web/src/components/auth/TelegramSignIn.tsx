@@ -6,8 +6,8 @@ import { ADMIN_URL, api, saveSession } from '@/lib/api';
 import { FormAlert, FormField } from '@/components/ui/Field';
 import { useI18n } from '@/lib/i18n';
 import { localeHref } from '@/lib/navigation';
+import { loadAuthSdk } from '@/lib/authSdk';
 
-const TELEGRAM_BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '';
 const WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
@@ -23,7 +23,7 @@ type TelegramUser = {
 
 type TelegramResponse =
   | { requiresRegistration: true; fullName: string; username: string | null }
-  | { accessToken: string; user: { role: string; locale?: string } };
+  | { accessToken: string; joinedCompanyId?: string; user: { role: string; locale?: string } };
 
 type TelegramAuthFn = (
   options: { bot_id: string | number; request_access?: string; lang?: string },
@@ -36,45 +36,10 @@ declare global {
   }
 }
 
-let sdkPromise: Promise<void> | null = null;
-
-function loadTelegramSdk(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if (window.Telegram?.Login?.auth) return Promise.resolve();
-  if (sdkPromise) return sdkPromise;
-  sdkPromise = new Promise((resolve, reject) => {
-    const done = () => {
-      if (window.Telegram?.Login?.auth) resolve();
-      else reject(new Error('Telegram SDK failed to load'));
-    };
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${WIDGET_SRC}"]`);
-    if (existing) {
-      if (window.Telegram?.Login?.auth) {
-        resolve();
-        return;
-      }
-      existing.addEventListener('load', done, { once: true });
-      existing.addEventListener(
-        'error',
-        () => reject(new Error('Telegram SDK failed to load')),
-        { once: true },
-      );
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = WIDGET_SRC;
-    script.async = true;
-    script.onload = done;
-    script.onerror = () => reject(new Error('Telegram SDK failed to load'));
-    document.head.appendChild(script);
-  });
-  return sdkPromise;
-}
-
-function redirectAfterLogin(role: string) {
-  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs';
+function redirectAfterLogin(role: string, companyId?: string) {
+  if (role === 'RECRUITER') return '/dashboard/recruiter?tab=jobs' + (companyId ? `&company=${encodeURIComponent(companyId)}` : '');
   if (role === 'SUPER_ADMIN') return ADMIN_URL;
-  return '/dashboard/employee';
+  return '/jobs?mode=for-you';
 }
 
 function widgetFields(user: TelegramUser) {
@@ -107,6 +72,8 @@ export function TelegramSignIn({
   const { t, locale } = useI18n();
   const [botId, setBotId] = useState<string | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
+  const [provider, setProvider] = useState<'loading' | 'ready' | 'unavailable' | 'failed'>('loading');
+  const [providerRetry, setProviderRetry] = useState(0);
   const [widgetUser, setWidgetUser] = useState<TelegramUser | null>(null);
   const [needsRole, setNeedsRole] = useState<{ fullName: string; username: string | null } | null>(
     null,
@@ -170,12 +137,12 @@ export function TelegramSignIn({
         const mismatch = accountRole && roleMismatchKey(res.user.role, accountRole);
         if (mismatch && !inviteToken) { setError(t(mismatch)); return; }
         saveSession(res as Parameters<typeof saveSession>[0]);
-        window.location.href = localeHref(authDestination(redirectAfterLogin(res.user.role)));
+        window.location.href = localeHref(authDestination(redirectAfterLogin(res.user.role, res.joinedCompanyId)));
       } catch (err) {
         const aborted = err instanceof DOMException && err.name === 'AbortError';
         setError(
           aborted
-            ? 'Sign-in timed out. Please try again.'
+            ? t('authProvider.timeout')
             : (authRoleErrorKey((err as Error).message) ? t(authRoleErrorKey((err as Error).message)!) : (err as Error).message) || t('telegramSignInFailed'),
         );
       } finally {
@@ -192,22 +159,26 @@ export function TelegramSignIn({
   }, [submitTelegram]);
 
   useEffect(() => {
-    if (!TELEGRAM_BOT) return;
     let cancelled = false;
-    api<{ available?: boolean; botId?: string }>('/auth/telegram/config', { auth: false })
-      .then((r) => {
-        if (!cancelled && r.available && r.botId) setBotId(r.botId);
-      })
-      .catch(() => undefined);
-    loadTelegramSdk()
-      .then(() => {
-        if (!cancelled) setSdkReady(true);
-      })
-      .catch(() => undefined);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12_000);
+    setProvider('loading'); setSdkReady(false); setBotId(null);
+    void (async () => {
+      try {
+        const config = await api<{ available?: boolean; botId?: string }>('/auth/telegram/config', { auth: false, signal: controller.signal });
+        window.clearTimeout(timer);
+        if (cancelled) return;
+        if (!config.available || !config.botId) { setProvider('unavailable'); return; }
+        await loadAuthSdk(WIDGET_SRC, () => Boolean(window.Telegram?.Login?.auth));
+        if (!cancelled) { setBotId(config.botId); setSdkReady(true); setProvider('ready'); }
+      } catch { if (!cancelled) setProvider('failed'); }
+      finally { window.clearTimeout(timer); }
+    })();
     return () => {
       cancelled = true;
+      controller.abort(); window.clearTimeout(timer);
     };
-  }, []);
+  }, [providerRetry]);
 
   const startTelegramAuth = useCallback(() => {
     if (!botId || busy) return;
@@ -244,7 +215,7 @@ export function TelegramSignIn({
     }
   }, [botId, busy, locale, t, autoCreateEmployeeOnFirstSignIn, accountRole]);
 
-  if (!TELEGRAM_BOT && !showWhenUnavailable) return null;
+  if (provider === 'unavailable' && !showWhenUnavailable) return null;
 
   if (needsRole && widgetUser && mode === 'login') {
     return (
@@ -356,6 +327,7 @@ export function TelegramSignIn({
               : t('telegramContinue')}
         </button>
       </div>
+      {provider !== 'ready' && <p className="auth-provider-feedback" role={provider === 'failed' ? 'alert' : 'status'}>{t(provider === 'loading' ? 'authProvider.loading' : provider === 'failed' ? 'authProvider.loadFailed' : 'authProvider.unavailable')}{provider === 'failed' && <button type="button" className="ghost" onClick={() => setProviderRetry(value => value + 1)}>{t('workspace.retry')}</button>}</p>}
       <FormAlert>{error}</FormAlert>
     </div>
   );

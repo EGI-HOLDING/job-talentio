@@ -11,28 +11,8 @@ import {
 
 type Db = Pick<PrismaClient, 'benefit' | 'benefitAlias'>;
 
-const BENEFIT_SYNONYMS: Record<string, string> = {
-  healthcare: 'healthinsurance',
-  medicalinsurance: 'healthinsurance',
-  health: 'healthinsurance',
-  wfh: 'remotework',
-  remote: 'remotework',
-  workfromhome: 'remotework',
-  flexhours: 'flexiblehours',
-  flextime: 'flexiblehours',
-  gymmembership: 'gym',
-  fitness: 'gym',
-  vacation: 'paidvacation',
-  annualleave: 'paidvacation',
-  stock: 'stockoptions',
-  equity: 'stockoptions',
-  bonus: 'bonus',
-  performancebonus: 'bonus',
-};
-
 export function benefitKey(input: string): string {
-  const key = normalizeLookupKey(input);
-  return BENEFIT_SYNONYMS[key] ?? key;
+  return normalizeLookupKey(input);
 }
 
 export type ResolveBenefitResult = {

@@ -1,7 +1,15 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
-import { api, clearToken, getToken, logout, saveToken } from '@/lib/api';
+import {
+  ADMIN_SESSION_EXPIRED_EVENT,
+  ApiError,
+  api,
+  clearToken,
+  getToken,
+  logout,
+  saveToken,
+} from '@/lib/api';
 import { Alert } from '@/components/ui/primitives';
 
 type Session = {
@@ -90,10 +98,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
         } else {
           setAuthed(true);
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          clearToken();
-          localStorage.removeItem(IDENTITY_KEY);
+          if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+            clearToken();
+            localStorage.removeItem(IDENTITY_KEY);
+          }
+          setError(err instanceof Error ? err.message : 'Could not verify your session. Please try again.');
           setAuthed(false);
         }
       } finally {
@@ -105,6 +116,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      clearToken();
+      localStorage.removeItem(IDENTITY_KEY);
+      setAuthed(false);
+      setError('Your session expired. Please sign in again.');
+    };
+    window.addEventListener(ADMIN_SESSION_EXPIRED_EVENT, handleExpiredSession);
+    return () => window.removeEventListener(ADMIN_SESSION_EXPIRED_EVENT, handleExpiredSession);
+  }, []);
+
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
@@ -113,6 +135,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     try {
       const session = await api<Session>('/auth/login', {
         method: 'POST',
+        auth: false,
         body: JSON.stringify({
           email: String(form.get('email') ?? '').trim(),
           password: form.get('password'),

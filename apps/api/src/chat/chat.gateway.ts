@@ -15,6 +15,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 import { resolveJwtSecret } from '../common/jwt-secret';
 import { accessTokenIsCurrent } from '../auth/access-token';
+import { chatMessageSchema } from '@job-talentio/shared';
+import { parseDto } from '../common/utils';
+import { z } from 'zod';
 
 @WebSocketGateway({
   cors: {
@@ -54,6 +57,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
       client.data.userId = payload.sub;
+      client.data.tokenVersion = payload.tv;
       client.join(`user:${payload.sub}`);
 
       const cameOnline = await this.presence.markOnline(payload.sub, client.id);
@@ -103,6 +107,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async onPresencePing(@ConnectedSocket() client: Socket) {
     const userId = client.data.userId as string | undefined;
     if (!userId) return { ok: false };
+    const account = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isBanned: true, tokenVersion: true },
+    });
+    if (
+      !account ||
+      account.isBanned ||
+      !accessTokenIsCurrent(client.data.tokenVersion as number | undefined, account.tokenVersion)
+    ) {
+      client.disconnect();
+      return { ok: false };
+    }
     await this.presence.heartbeat(userId, client.id);
     return { ok: true };
   }
@@ -110,11 +126,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('message:send')
   async onMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { conversationId: string; body: string },
+    @MessageBody() data: unknown,
   ) {
+    const payload = parseDto(
+      z.object({
+        conversationId: z.string().min(1).max(128),
+        body: chatMessageSchema.shape.body,
+      }),
+      data,
+    );
     const userId = client.data.userId as string;
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || user.isBanned) {
+    if (
+      !user ||
+      user.isBanned ||
+      !accessTokenIsCurrent(client.data.tokenVersion as number | undefined, user.tokenVersion)
+    ) {
       client.disconnect();
       return;
     }
@@ -126,11 +153,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         fullName: user.fullName,
         isBanned: user.isBanned,
       },
-      data.conversationId,
-      data.body,
+      payload.conversationId,
+      payload.body,
     );
     const conversation = await this.prisma.conversation.findUnique({
-      where: { id: data.conversationId },
+      where: { id: payload.conversationId },
     });
     if (conversation) {
       this.server.to(`user:${conversation.userAId}`).emit('message:new', message);

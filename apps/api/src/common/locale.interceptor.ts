@@ -4,6 +4,7 @@ import {
   Injectable,
   NestInterceptor,
   SetMetadata,
+  StreamableFile,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable, map } from 'rxjs';
@@ -16,7 +17,7 @@ const MAX_DEPTH = 12;
 export const RAW_LOCALE_NAMES_KEY = 'rawLocaleNames';
 
 /**
- * Keeps `nameUz` / `nameRu` in the response instead of collapsing them into
+ * Keeps locale-specific name fields in the response instead of collapsing them into
  * `name`. Used by the admin catalog screens, which edit the columns directly.
  */
 export const RawLocaleNames = () => SetMetadata(RAW_LOCALE_NAMES_KEY, true);
@@ -25,13 +26,14 @@ type Localizable = Record<string, unknown> & {
   name: string;
   nameUz?: string | null;
   nameRu?: string | null;
+  nameId?: string | null;
 };
 
 function isLocalizable(value: unknown): value is Localizable {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
   if (typeof row.name !== 'string') return false;
-  return 'nameUz' in row || 'nameRu' in row;
+  return 'nameUz' in row || 'nameRu' in row || 'nameId' in row;
 }
 
 /**
@@ -45,18 +47,25 @@ function localizeDeep(value: unknown, locale: Locale, depth = 0): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => localizeDeep(item, locale, depth + 1));
   }
-  if (value instanceof Date) return value;
+  if (value instanceof Date || value instanceof StreamableFile || ArrayBuffer.isView(value)) return value;
 
   const row = value as Record<string, unknown>;
   const out: Record<string, unknown> = {};
 
   for (const [key, child] of Object.entries(row)) {
-    if (key === 'nameUz' || key === 'nameRu') continue;
+    if (key === 'nameUz' || key === 'nameRu' || key === 'nameId') continue;
     out[key] = localizeDeep(child, locale, depth + 1);
   }
 
   if (isLocalizable(row)) {
-    const translated = locale === 'uz' ? row.nameUz : locale === 'ru' ? row.nameRu : null;
+    const translated =
+      locale === 'uz'
+        ? row.nameUz
+        : locale === 'ru'
+          ? row.nameRu
+          : locale === 'id'
+            ? row.nameId
+            : null;
     out.name = (typeof translated === 'string' && translated) || row.name;
   }
 

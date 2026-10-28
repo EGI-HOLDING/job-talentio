@@ -1,4 +1,4 @@
-export const LOCALES = ['uz', 'ru', 'en'] as const;
+export const LOCALES = ['uz', 'ru', 'en', 'id'] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
@@ -32,6 +32,7 @@ type LocalizedRow = {
   name: string;
   nameUz?: string | null;
   nameRu?: string | null;
+  nameId?: string | null;
 };
 
 /**
@@ -41,6 +42,7 @@ type LocalizedRow = {
 export function localizedName<T extends LocalizedRow>(row: T, locale: Locale): string {
   if (locale === 'uz') return row.nameUz || row.name;
   if (locale === 'ru') return row.nameRu || row.name;
+  if (locale === 'id') return row.nameId || row.name;
   return row.name;
 }
 
@@ -51,17 +53,17 @@ export function localizedName<T extends LocalizedRow>(row: T, locale: Locale): s
 export function localizeRow<T extends LocalizedRow>(
   row: T,
   locale: Locale,
-): Omit<T, 'nameUz' | 'nameRu'> {
-  const { nameUz: _uz, nameRu: _ru, ...rest } = row;
-  return { ...rest, name: localizedName(row, locale) } as Omit<T, 'nameUz' | 'nameRu'>;
+): Omit<T, 'nameUz' | 'nameRu' | 'nameId'> {
+  const { nameUz: _uz, nameRu: _ru, nameId: _id, ...rest } = row;
+  return { ...rest, name: localizedName(row, locale) } as Omit<T, 'nameUz' | 'nameRu' | 'nameId'>;
 }
 
 export function localizeRows<T extends LocalizedRow>(
   rows: T[],
   locale: Locale,
-): Array<Omit<T, 'nameUz' | 'nameRu'>> {
+): Array<Omit<T, 'nameUz' | 'nameRu' | 'nameId'>> {
   return rows.map((row) => localizeRow(row, locale));
 }
 
 /** Prisma `select` fragment for the locale columns. */
-export const LOCALE_NAME_SELECT = { nameUz: true, nameRu: true } as const;
+export const LOCALE_NAME_SELECT = { nameUz: true, nameRu: true, nameId: true } as const;

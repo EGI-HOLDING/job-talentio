@@ -27,7 +27,7 @@ Jika salah satu gagal, lihat bagian Troubleshooting sebelum demo.
 
 | Waktu | Layar | Yang ditunjukkan | Kalimat kunci |
 |-------|-------|------------------|---------------|
-| 0:00 | HP, beranda `/uz` | Pencarian, perusahaan VIP, lowongan hot, chip kategori/kota, tiga bahasa | "Default Oʻzbek, satu ketuk ke Rusia atau Inggris. Semua konten, bukan hanya menu." |
+| 0:00 | HP, beranda `/uz` | Pencarian, perusahaan yang merekrut, lowongan terbaru, chip kategori/kota, tiga bahasa | "Default Oʻzbek, satu ketuk ke Rusia atau Inggris. Semua konten, bukan hanya menu." |
 | 1:00 | HP, masuk | Tombol Telegram / Google, atau login Madina | "Kandidat di Uzbekistan hidup di Telegram; masuk tanpa email pun bisa." |
 | 1:45 | HP, dashboard employee | Upload CV PDF -> parse -> modal review -> impor selektif | "CV dibaca AI, kandidat tetap memutuskan apa yang diimpor. Tidak ada form panjang." |
 | 3:00 | HP, tab Rekomendasi / beranda | Lowongan cocok dengan skor dan rincian (skill, pengalaman, lokasi) | "Skor bukan kotak hitam: kandidat tahu kenapa cocok." |

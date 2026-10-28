@@ -11,7 +11,7 @@ export type ScreeningQuestionDraft = {
   question: string;
   type: ScreeningQuestionType;
   isRequired: boolean;
-  /** Saved questions that applicants already answered; deleting drops their answers. */
+  /** Saved questions that applicants already answered; removing archives the question and preserves their answers. */
   answerCount?: number;
 };
 

@@ -15,7 +15,21 @@ import {
 } from './job-dedupe-repair';
 import { sanitizeStoredText } from './text-sanitize';
 
-type Db = Pick<PrismaClient, 'jobPost' | 'jobTitle' | 'jobTitleAlias'>;
+type Db = Pick<PrismaClient, 'jobPost' | 'jobTitle' | 'jobTitleAlias' | 'auditLog'>;
+
+// Imported occupation names can legitimately contain words such as Entry,
+// Middle, or Principal. Their identity comes from the catalog's provenance.
+async function importedCatalogIds(db: Db): Promise<Set<string>> {
+  const imports = await db.auditLog.findMany({
+    where: {
+      entityType: 'JobTitle',
+      action: { in: ['IMPORT_JOB_TITLE_CATALOG_DRAFT', 'AUDIT_EXPAND_JOB_TITLE_CATALOG'] },
+    },
+    select: { entityId: true },
+    distinct: ['entityId'],
+  });
+  return new Set(imports.flatMap(row => row.entityId ? [row.entityId] : []));
+}
 
 export type JobTitleBackfillResult = {
   scanned: number;
@@ -32,6 +46,8 @@ export type JobTitleBackfillResult = {
 export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
   const nullLinks = await db.jobPost.count({ where: { jobTitleId: null } });
   if (nullLinks > 0) return true;
+
+  const imported = await importedCatalogIds(db);
 
   // Substring contains('Intern') false-positives "International" — filter with whole-word helper.
   const [postSamples, titleSamples] = await Promise.all([
@@ -50,7 +66,7 @@ export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
           { title: { contains: 'Jr.', mode: 'insensitive' } },
         ],
       },
-      select: { title: true },
+      select: { title: true, jobTitle: { select: { id: true, name: true, curatedAt: true } } },
       take: 200,
     }),
     db.jobTitle.findMany({
@@ -68,7 +84,7 @@ export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
           { name: { contains: 'Jr.', mode: 'insensitive' } },
         ],
       },
-      select: { name: true },
+      select: { id: true, name: true, curatedAt: true },
       take: 200,
     }),
   ]);
@@ -78,8 +94,11 @@ export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
     /[\u2013\u2014\u2026]|\u00E2\u20AC[\u201D\u201C\u00A6]|\u00C3\u00D7/.test(s);
 
   return (
-    postSamples.some((p) => dirtyText(p.title)) ||
-    titleSamples.some((t) => dirtyText(t.name))
+    postSamples.some(p => !(
+      p.jobTitle && p.title === p.jobTitle.name &&
+      (p.jobTitle.curatedAt || imported.has(p.jobTitle.id))
+    ) && dirtyText(p.title)) ||
+    titleSamples.some(t => !t.curatedAt && !imported.has(t.id) && dirtyText(t.name))
   );
 }
 
@@ -114,15 +133,17 @@ async function cleanJobTitleCatalog(
   log: (msg: string) => void,
 ): Promise<{ cleaned: number; merged: number }> {
   const titles = await db.jobTitle.findMany({
+    where: { archivedAt: null },
     select: { id: true, name: true, slug: true, normalizedKey: true, curatedAt: true },
   });
+  const imported = await importedCatalogIds(db);
   let cleaned = 0;
   let merged = 0;
 
   for (const row of titles) {
     // An admin chose this wording on purpose; the seniority cleaner runs on
     // every deploy and would otherwise rewrite it back.
-    if (row.curatedAt) continue;
+    if (row.curatedAt || imported.has(row.id)) continue;
     const sanitizedName = sanitizeStoredText(row.name);
     if (!titleHasSeniorityToken(row.name) && sanitizedName === row.name) continue;
     try {

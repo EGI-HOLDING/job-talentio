@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('admin: no unit tests yet')\""
+    "test": "node ../../scripts/session-client.smoke.cjs admin && node ../../scripts/admin-table-query.smoke.cjs && node ../../scripts/admin-table-loading.smoke.cjs"
   },
   "dependencies": {
     "@job-talentio/shared": "workspace:*",

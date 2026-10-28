@@ -1,3 +1,5 @@
+import { useI18n } from '@/lib/i18n';
+
 type ResumePreviewSkill = { name: string; level?: string | null };
 type ResumePreviewExperience = {
   title: string;
@@ -43,21 +45,28 @@ type Props = {
   themeAccent?: string | null;
 };
 
-function fmtDate(d?: string | Date | null) {
+function fmtDate(d: string | Date | null | undefined, locale: string) {
   if (!d) return '';
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return '';
-  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  return dt.toLocaleDateString(locale, { year: 'numeric', month: 'short' });
 }
 
-function dateRange(start?: string | Date | null, end?: string | Date | null, isCurrent?: boolean) {
-  const a = fmtDate(start);
-  const b = isCurrent ? 'Present' : fmtDate(end);
+function dateRange(
+  start: string | Date | null | undefined,
+  end: string | Date | null | undefined,
+  isCurrent: boolean | undefined,
+  locale: string,
+  present: string,
+) {
+  const a = fmtDate(start, locale);
+  const b = isCurrent ? present : fmtDate(end, locale);
   if (!a && !b) return '';
   return [a, b].filter(Boolean).join(' - ');
 }
 
 export function ResumePreview({ document: doc, templateKey, themeAccent }: Props) {
+  const { t, locale } = useI18n();
   const accent = themeAccent || '#0f766e';
   const contact = [doc.email, doc.phone, doc.city].filter(Boolean).join(' | ');
 
@@ -74,14 +83,14 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
 
       {doc.summary ? (
         <section className="resume-preview__section">
-          <h2>Summary</h2>
+          <h2>{t('emp.summary')}</h2>
           <p className="resume-preview__summary">{doc.summary}</p>
         </section>
       ) : null}
 
       {doc.skills.length > 0 ? (
         <section className="resume-preview__section">
-          <h2>Skills</h2>
+          <h2>{t('skills')}</h2>
           <p className="resume-preview__skills">
             {doc.skills.map((s) => s.name).join(' | ')}
           </p>
@@ -90,7 +99,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
 
       {doc.experiences.length > 0 ? (
         <section className="resume-preview__section">
-          <h2>Experience</h2>
+          <h2>{t('experience')}</h2>
           {doc.experiences.map((e, i) => (
             <div key={i} className="resume-preview__item">
               <div className="resume-preview__item-head">
@@ -99,7 +108,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
                   {e.companyName ? ` - ${e.companyName}` : ''}
                 </strong>
                 <span className="resume-preview__dates">
-                  {dateRange(e.startDate, e.endDate, e.isCurrent)}
+                  {dateRange(e.startDate, e.endDate, e.isCurrent, locale, t('emp.present'))}
                 </span>
               </div>
               {e.location ? <div className="resume-preview__muted">{e.location}</div> : null}
@@ -113,13 +122,13 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
 
       {doc.educations.length > 0 ? (
         <section className="resume-preview__section">
-          <h2>Education</h2>
+          <h2>{t('education')}</h2>
           {doc.educations.map((e, i) => (
             <div key={i} className="resume-preview__item">
               <div className="resume-preview__item-head">
                 <strong>{e.school}</strong>
                 <span className="resume-preview__dates">
-                  {dateRange(e.startDate, e.endDate)}
+                  {dateRange(e.startDate, e.endDate, false, locale, t('emp.present'))}
                 </span>
               </div>
               <div className="resume-preview__muted">
@@ -134,7 +143,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
 
       {doc.languages.length > 0 ? (
         <section className="resume-preview__section">
-          <h2>Languages</h2>
+          <h2>{t('languages')}</h2>
           <p className="resume-preview__skills">
             {doc.languages.map((l) => `${l.name}${l.level ? ` (${l.level})` : ''}`).join(' | ')}
           </p>
@@ -143,7 +152,7 @@ export function ResumePreview({ document: doc, templateKey, themeAccent }: Props
 
       {doc.certifications.length > 0 ? (
         <section className="resume-preview__section">
-          <h2>Certifications</h2>
+          <h2>{t('certifications')}</h2>
           {doc.certifications.map((c, i) => (
             <div key={i} className="resume-preview__item">
               <strong>{c.name}</strong>

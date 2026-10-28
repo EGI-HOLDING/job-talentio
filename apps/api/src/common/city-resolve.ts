@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { City, PrismaClient } from '@prisma/client';
+import { countryFilter, geoAliasKey, SELECTABLE_CITY } from './geo-selection';
 import {
   assertCatalogLabel,
   catalogSlugify,
@@ -9,23 +10,12 @@ import {
 
 type Db = Pick<PrismaClient, 'city' | 'province'>;
 
-const CITY_SYNONYMS: Record<string, string> = {
-  tashkentcity: 'tashkent',
-  toshkent: 'tashkent',
-  samarkandcity: 'samarkand',
-  samarqand: 'samarkand',
-  bukhoro: 'bukhara',
-  buxoro: 'bukhara',
-  qarshi: 'karshi',
-};
-
 const cityInclude = {
   province: { select: { id: true, name: true, slug: true, type: true, countryId: true } },
 } as const;
 
 function cityKey(input: string): string {
-  const key = normalizeLookupKey(input);
-  return CITY_SYNONYMS[key] ?? key;
+  return geoAliasKey(input);
 }
 
 export type ResolveCityResult = {
@@ -43,6 +33,7 @@ export async function resolveCity(
     slug?: string;
     provinceSlug?: string;
     provinceId?: string;
+    country?: string;
     allowCreate?: boolean;
   },
 ): Promise<ResolveCityResult> {
@@ -53,19 +44,36 @@ export async function resolveCity(
   const slug = opts.slug ? catalogSlugify(opts.slug) : catalogSlugify(raw);
   const key = cityKey(raw);
 
-  const bySlug = await db.city.findUnique({ where: { slug }, include: cityInclude });
+  const scope = {
+    ...SELECTABLE_CITY,
+    AND: [
+      ...(opts.country ? [{ province: { country: countryFilter(opts.country) } }] : []),
+      ...(opts.provinceId ? [{ provinceId: opts.provinceId }] : []),
+      ...(opts.provinceSlug ? [{ province: { slug: opts.provinceSlug } }] : []),
+    ],
+  };
+  const bySlug = await db.city.findFirst({ where: { ...scope, slug }, include: cityInclude });
   if (bySlug) return { city: bySlug, created: false, matchedVia: 'slug' };
 
-  const byName = await db.city.findFirst({
-    where: { name: { equals: raw, mode: 'insensitive' } },
+  const matches = await db.city.findMany({
+    where: { ...scope, OR: [
+      ...(['name', 'nameUz', 'nameRu', 'nameId'] as const).map(field => ({ [field]: { equals: raw, mode: 'insensitive' as const } })),
+      { aliases: { some: { aliasKey: key } } },
+    ] },
     include: cityInclude,
+    take: 2,
   });
+  if (matches.length > 1) throw new BadRequestException('City name is ambiguous; select a country and province');
+  const byName = matches[0];
   if (byName) return { city: byName, created: false, matchedVia: 'name' };
 
   const all = await db.city.findMany({
+    where: scope,
     select: { id: true, name: true, slug: true },
   });
-  const fuzzy = all.find((c) => cityKey(c.name) === key || cityKey(c.slug) === key);
+  const fuzzyMatches = all.filter((c) => cityKey(c.name) === key || cityKey(c.slug) === key);
+  if (fuzzyMatches.length > 1) throw new BadRequestException('City name is ambiguous; select a country and province');
+  const fuzzy = fuzzyMatches[0];
   if (fuzzy) {
     const city = await db.city.findUniqueOrThrow({
       where: { id: fuzzy.id },

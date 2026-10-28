@@ -16,8 +16,8 @@ assert(resumeStartDate('2020-01-01') instanceof Date, 'a real date still parses'
 
 const key = experienceImportKey('Frontend Developer', 'UzPay', '2020-01-01');
 assert(
-  key === experienceImportKey('frontend developer', 'uzpay', new Date('2020-06-01T00:00:00Z')),
-  'same role, company, and year is one experience',
+  key === experienceImportKey('frontend developer', 'uzpay', new Date('2020-01-01T00:00:00Z')),
+  'same role, company, and date is one experience',
 );
 assert(
   experienceImportKey('Frontend Developer', 'UzPay', '2021-01-01') !== key,
@@ -25,10 +25,12 @@ assert(
 );
 
 assert(
-  educationImportKey('TUIT', 'BACHELOR', '2016-01-01') ===
+  educationImportKey('TUIT', 'BACHELOR', '2016-01-01') !==
     educationImportKey('tuit', 'BACHELOR', new Date('2016-09-01T00:00:00Z')),
-  'same school, degree, and year is one education',
+  'different start dates in one year are distinct educations',
 );
+assert(key !== experienceImportKey('Frontend Developer', 'UzPay', '2020-06-01'), 'a second stint in the same year must survive import');
+assert(resumeStartDate('2024-02-31') === null, 'invalid dates must not roll forward into March');
 
 const kept = pickFilledProfileFields(
   { headline: 'ML Engineer', summary: '', phone: '+998901112233' },

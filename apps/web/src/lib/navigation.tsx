@@ -10,6 +10,8 @@ import { forwardRef, useCallback, useMemo } from 'react';
 import type { ComponentProps } from 'react';
 import { DEFAULT_LOCALE, isLocale, localeFromPathname, stripLocale, withLocale } from '@/lib/locale';
 import type { Locale } from '@/lib/locale';
+import { accountHref } from './accountNavigation';
+import { useAccountRole } from './useAccountRole';
 
 /**
  * Locale-aware navigation wrappers. Import `Link` / `useRouter` / `usePathname`
@@ -32,7 +34,9 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   ref,
 ) {
   const locale = useCurrentLocale();
-  const localizedHref = typeof href === 'string' ? withLocale(locale, href) : href;
+  const role = useAccountRole();
+  const sourceHref = typeof href === 'string' ? href : null;
+  const localizedHref = sourceHref !== null ? withLocale(locale, accountHref(role, sourceHref)) : href;
   return <NextLink ref={ref} href={localizedHref} {...rest} />;
 });
 
@@ -40,20 +44,21 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
 export function useRouter() {
   const router = useNextRouter();
   const locale = useCurrentLocale();
+  const role = useAccountRole();
 
   const push = useCallback(
     (href: string, options?: Parameters<typeof router.push>[1]) =>
-      router.push(withLocale(locale, href), options),
-    [router, locale],
+      router.push(withLocale(locale, accountHref(role, href)), options),
+    [router, locale, role],
   );
   const replace = useCallback(
     (href: string, options?: Parameters<typeof router.replace>[1]) =>
-      router.replace(withLocale(locale, href), options),
-    [router, locale],
+      router.replace(withLocale(locale, accountHref(role, href)), options),
+    [router, locale, role],
   );
   const prefetch = useCallback(
-    (href: string) => router.prefetch(withLocale(locale, href)),
-    [router, locale],
+    (href: string) => router.prefetch(withLocale(locale, accountHref(role, href))),
+    [router, locale, role],
   );
 
   return useMemo(

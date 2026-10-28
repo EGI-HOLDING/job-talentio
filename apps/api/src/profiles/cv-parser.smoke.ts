@@ -5,9 +5,14 @@ function assert(cond: unknown, msg: string): asserts cond {
 }
 
 const skills = [
-  { name: 'React', slug: 'react' },
+  { name: 'React', slug: 'react', aliases: [{ alias: 'ReactJS', aliasKey: 'reactjs' }] },
   { name: 'Node.js', slug: 'nodejs' },
   { name: 'TypeScript', slug: 'typescript' },
+];
+const languages = [
+  { name: 'English', code: 'en', aliases: [{ alias: 'ingliz', aliasKey: 'ingliz' }] },
+  { name: 'Russian', code: 'ru', aliases: [{ alias: 'Русский', aliasKey: 'русский' }] },
+  { name: "O'zbek", code: 'uz', aliases: [{ alias: "O'zbekcha", aliasKey: 'ozbekcha' }] },
 ];
 
 const ruCv = `
@@ -67,7 +72,7 @@ Russian — B2
 Skills: React, TypeScript, Node.js
 `;
 
-const ru = parseCvText(ruCv, skills);
+const ru = parseCvText(ruCv, skills, languages);
 assert(ru.experiences.length >= 1, 'RU: expected experience');
 assert(ru.experiences[0].isCurrent === true, 'RU: experience should be current');
 assert(ru.experiences[0].startDate === '2020-01-01', `RU: startDate got ${ru.experiences[0].startDate}`);
@@ -81,7 +86,7 @@ const ruLang = ru.languages.find((l) => l.code === 'ru');
 assert(ruLang?.level === 'NATIVE', `RU: russian level got ${ruLang?.level}`);
 assert(ru.skillNames.includes('React'), 'RU: expected React skill');
 
-const uz = parseCvText(uzCv, skills);
+const uz = parseCvText(uzCv, skills, languages);
 assert(uz.experiences.length >= 1, 'UZ: expected experience');
 assert(uz.experiences[0].isCurrent === true, 'UZ: experience should be current');
 assert(uz.experiences[0].startDate === '2021-01-01', `UZ: startDate got ${uz.experiences[0].startDate}`);
@@ -90,12 +95,17 @@ const uzLang = uz.languages.find((l) => l.code === 'uz');
 assert(uzLang?.level === 'NATIVE', `UZ: uzbek level got ${uzLang?.level}`);
 assert(uz.skillNames.includes('Node.js'), 'UZ: expected Node.js skill');
 
-const en = parseCvText(enCv, skills);
+const en = parseCvText(enCv, skills, languages);
 assert(en.email === 'jane@example.com', 'EN: email');
 assert(en.experiences.length >= 1 && en.experiences[0].isCurrent, 'EN: current experience');
 assert(en.skillNames.includes('React') && en.skillNames.includes('TypeScript'), 'EN: skills');
 const enLang = en.languages.find((l) => l.code === 'en');
 assert(enLang?.level === 'NATIVE', `EN: english level got ${enLang?.level}`);
+
+const aliasSkill = parseCvText('ReactJS', skills, languages);
+assert(aliasSkill.skillNames.includes('React'), 'CV parser should use the database skill alias');
+const aliasLanguage = parseCvText('ingliz — C1', skills, languages);
+assert(aliasLanguage.languages[0]?.code === 'en', 'CV parser should use the database language alias');
 
 const wrappedCv = `
 Jane Doe
@@ -116,7 +126,7 @@ National University
 Bachelor 2015 2019
 `;
 
-const wrapped = parseCvText(wrappedCv, skills);
+const wrapped = parseCvText(wrappedCv, skills, languages);
 assert(wrapped.experiences.length >= 2, `WRAP: expected 2 roles, got ${wrapped.experiences.length}`);
 const first = wrapped.experiences[0];
 assert(first.description, 'WRAP: first role description missing');

@@ -1,7 +1,8 @@
 'use client';
 
 import { Link } from '@/lib/navigation';
-import { VipBadge } from '@/components/ui/VipBadge';
+import { useAccountRole } from '@/lib/useAccountRole';
+import { isEmployerRole } from '@/lib/accountNavigation';
 
 type ExploreCompanyCardProps = {
   name: string;
@@ -9,8 +10,6 @@ type ExploreCompanyCardProps = {
   logoUrl?: string | null;
   count?: number;
   countLabel?: string;
-  plan?: string | null;
-  vipLabel?: string;
 };
 
 export function ExploreCompanyCard({
@@ -19,14 +18,12 @@ export function ExploreCompanyCard({
   logoUrl,
   count,
   countLabel,
-  plan,
-  vipLabel = 'VIP',
 }: ExploreCompanyCardProps) {
-  const isVip = plan === 'VIP';
+  const employer = isEmployerRole(useAccountRole());
   return (
     <Link
-      href={`/jobs?companySlug=${encodeURIComponent(slug)}`}
-      className={`explore-card explore-card--company${isVip ? ' explore-card--vip' : ''}`}
+      href={employer ? `/companies/${encodeURIComponent(slug)}` : `/jobs?companySlug=${encodeURIComponent(slug)}`}
+      className="explore-card explore-card--company"
       title={name}
     >
       <span className="company-logo-tile" aria-hidden>
@@ -43,7 +40,6 @@ export function ExploreCompanyCard({
       <div className="explore-card-body">
         <strong>
           {name}
-          {isVip ? <VipBadge label={vipLabel} /> : null}
         </strong>
         {typeof count === 'number' && countLabel ? <span>{countLabel}</span> : null}
       </div>
