@@ -15,9 +15,11 @@ RUN pnpm --filter @job-talentio/api build
 RUN test -f /app/apps/api/dist/main.js
 RUN test -f /app/apps/api/dist/scripts/backfill-job-titles.js
 RUN test -f /app/apps/api/dist/scripts/backfill-geo.js
+RUN test -f /app/apps/api/dist/scripts/catalog-sync.js
 RUN test -f /app/apps/api/assets/company-logos/hadith-hotel.png
 
 FROM base AS runner
+RUN apk add --no-cache postgresql-client
 ENV NODE_ENV=production
 WORKDIR /app
 

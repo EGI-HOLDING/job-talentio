@@ -1,4 +1,5 @@
 node_modules
+.catalog-sync-private
 **/node_modules
 **/dist
 **/.next

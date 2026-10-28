@@ -14,6 +14,7 @@ import {
   repairActiveJobDuplicates,
 } from './job-dedupe-repair';
 import { sanitizeStoredText } from './text-sanitize';
+import { catalogMaintenance, databaseCatalogs } from '../catalog-sync/runtime';
 
 type Db = Pick<PrismaClient, 'jobPost' | 'jobTitle' | 'jobTitleAlias' | 'auditLog'>;
 
@@ -44,6 +45,7 @@ export type JobTitleBackfillResult = {
 
 /** True when posts/catalog still need seniority purge or missing jobTitleId. */
 export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
+  if (catalogMaintenance() || databaseCatalogs()) return false;
   const nullLinks = await db.jobPost.count({ where: { jobTitleId: null } });
   if (nullLinks > 0) return true;
 
@@ -215,6 +217,10 @@ export async function backfillJobTitles(
   db: Db,
   opts?: { log?: (msg: string) => void },
 ): Promise<JobTitleBackfillResult> {
+  if (catalogMaintenance() || databaseCatalogs()) {
+    opts?.log?.('Database-owned catalogs: automatic JobTitle backfill skipped.');
+    return { scanned: 0, updated: 0, skipped: 0, errors: 0, catalogCleaned: 0, catalogMerged: 0, dedupeClosed: 0, dedupeRemainingAbc: 0 };
+  }
   const log = opts?.log ?? (() => undefined);
 
   const { cleaned: catalogCleaned, merged: catalogMerged } = await cleanJobTitleCatalog(

@@ -43,6 +43,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Catalog maintenance and target guards
+        run: pnpm --filter @job-talentio/api test:catalog-sync
+
       - name: Build packages
         run: pnpm build
         env:

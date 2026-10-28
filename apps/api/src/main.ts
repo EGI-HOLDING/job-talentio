@@ -1,14 +1,25 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Module, ValidationPipe } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import type { Request, Response, NextFunction } from 'express';
-import { AppModule } from './app.module';
 import { resolveJwtSecret } from './common/jwt-secret';
+import { HealthController } from './health.controller';
+import { catalogMaintenance } from './catalog-sync/runtime';
+
+// No application providers are booted during maintenance: queues, timers,
+// WebSockets and bootstrap writes cannot race the catalog transaction.
+@Module({ controllers: [HealthController] })
+class CatalogMaintenanceModule {}
 
 async function bootstrap() {
+  // Resolve .env flags before importing the application graph as well.
+  await ConfigModule.forRoot({ envFilePath: ['../../.env', '.env'] });
+  const maintenance = catalogMaintenance();
+  const rootModule = maintenance ? CatalogMaintenanceModule : (await import('./app.module')).AppModule;
   // Fail fast before Nest wires JWT if staging/prod secrets are weak
   resolveJwtSecret();
 
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(rootModule, { rawBody: true });
   app.setGlobalPrefix('api');
 
   // Behind Railway (and optionally Cloudflare) the client IP arrives via
@@ -25,6 +36,12 @@ async function bootstrap() {
       process.env.ADMIN_URL ?? 'http://localhost:3001',
     ],
     credentials: true,
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!maintenance || req.path === '/api/health') return next();
+    res.setHeader('Retry-After', '60');
+    res.status(503).json({ statusCode: 503, code: 'CATALOG_MAINTENANCE', message: 'Catalog maintenance in progress' });
   });
 
   // Lightweight security headers (no extra dependency)

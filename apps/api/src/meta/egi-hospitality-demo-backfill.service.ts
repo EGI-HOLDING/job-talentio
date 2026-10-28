@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { databaseCatalogs } from '../catalog-sync/runtime';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -16,6 +17,7 @@ export class EgiHospitalityDemoBackfillService implements OnApplicationBootstrap
   ) {}
 
   async onApplicationBootstrap() {
+    if (databaseCatalogs()) return;
     // The dedicated presentation database owns its explicit fixtures; booting
     // it must not silently add the legacy showcase companies.
     if (process.env.HR_DEMO_MODE === 'true') return;
