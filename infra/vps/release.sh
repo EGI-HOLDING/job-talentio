@@ -12,12 +12,12 @@ compose=(docker compose --env-file "$TALENTIO_ENV_FILE" -f "$root/infra/vps/comp
 # Sequential builds keep the shared VPS memory usage bounded.
 for service in api web admin; do "${compose[@]}" build "$service"; done
 "${compose[@]}" up -d redis storage meilisearch
-"${compose[@]}" run --rm api sh -c 'pnpm exec prisma migrate deploy'
+"${compose[@]}" run --rm -T --interactive=false api sh -c 'pnpm exec prisma migrate deploy'
 if [ "${1:-}" = '--initialize' ]; then
     test -n "${CATALOG_SHA256:-}"
-    "${compose[@]}" run --rm -v /var/www/talentio/shared/catalog.snapshot.json:/run/catalog.snapshot.json:ro api \
+    "${compose[@]}" run --rm -T --interactive=false -v /var/www/talentio/shared/catalog.snapshot.json:/run/catalog.snapshot.json:ro api \
       node dist/scripts/initialize-vps-catalogs.js /run/catalog.snapshot.json "$CATALOG_SHA256" --dry-run
-    "${compose[@]}" run --rm -v /var/www/talentio/shared/catalog.snapshot.json:/run/catalog.snapshot.json:ro api \
+    "${compose[@]}" run --rm -T --interactive=false -v /var/www/talentio/shared/catalog.snapshot.json:/run/catalog.snapshot.json:ro api \
       node dist/scripts/initialize-vps-catalogs.js /run/catalog.snapshot.json "$CATALOG_SHA256" --apply
 fi
 "${compose[@]}" up -d --wait --wait-timeout 180 api web admin
