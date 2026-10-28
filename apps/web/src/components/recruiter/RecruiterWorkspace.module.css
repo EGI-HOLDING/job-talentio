@@ -44,6 +44,13 @@
 .secondary:hover { background:#f8f5ff; color:#4526be; }
 .textButton { min-height:30px; border:0; padding:4px 0; background:transparent; color:#6140da; font-weight:500; }
 .textButton:hover { background:transparent; color:#4225b3; }
+.jobBenefits { display:flex; flex-direction:column; align-items:flex-start; gap:4px; margin-top:7px; text-align:start; font-size:.75rem; line-height:1.5; }
+.jobPackageName { color:#34425b; font-size:.75rem; font-weight:600; }
+.jobPackageMeta { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 4px; color:#74829a; font-size:.7rem; line-height:1.5; }
+.jobPackageMeta time { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.jobPackageLink { display:inline-flex; align-items:center; justify-content:flex-start; gap:5px; max-width:100%; min-height:28px; padding:2px 0; color:#6140da; font-size:.72rem; font-weight:500; line-height:1.4; text-decoration:none; }
+.jobPackageLink:hover { color:#4225b3; text-decoration:underline; text-underline-offset:3px; }
+.jobPackageLink:focus-visible { outline:2px solid #b4a0ff; outline-offset:3px; border-radius:3px; }
 .icon { width:32px; min-height:32px; padding:5px; background:transparent; color:#7d899f; }
 .icon:hover { background:#f3efff; color:#5635e8; }
 .primary:disabled,.secondary:disabled,.icon:disabled { opacity:.5; cursor:not-allowed; }

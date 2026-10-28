@@ -92,16 +92,16 @@ export function JobBenefits({ jobId, status }: { jobId: string; status: string }
   }
   if (!data) return null;
   return (
-    <div style={{ fontSize: 13, display: 'grid', gap: 6, marginTop: 6 }}>
-      <strong>{t('hr.package.' + data.code)}</strong>
-      {(!data.selected || data.code !== 'PREMIUM' || (data.expiresAt && new Date(data.expiresAt) <= new Date())) && <Link className={s.textButton} href={packageHref(jobId)}>{t('commerce.' + (data.expiresAt && new Date(data.expiresAt) <= new Date() ? 'renew' : !data.selected ? 'choose' : 'upgrade'))} →</Link>}
-      <span>
+    <div className={s.jobBenefits}>
+      <strong className={s.jobPackageName}>{t('hr.package.' + data.code)}</strong>
+      <span className={s.jobPackageMeta}>
         {data.expiresAt
-          ? t('hr.expires') + ' ' + new Date(data.expiresAt).toLocaleDateString(locale)
+          ? <>{t('hr.expires')} <time dateTime={data.expiresAt}>{new Intl.DateTimeFormat(locale, {day: 'numeric', month: 'short', year: 'numeric'}).format(new Date(data.expiresAt))}</time></>
           : t('hr.startsOnPublish')}
       </span>
+      {(!data.selected || data.code !== 'PREMIUM' || (data.expiresAt && new Date(data.expiresAt) <= new Date())) && <Link className={s.jobPackageLink} href={packageHref(jobId)}>{t('commerce.' + (data.expiresAt && new Date(data.expiresAt) <= new Date() ? 'renew' : !data.selected ? 'choose' : 'upgrade'))}<span aria-hidden="true">→</span></Link>}
       {data.activeBoost ? (
-        <span>
+        <span className={s.jobPackageMeta}>
           {t('hr.boostUntil')} {new Date(data.activeBoost.endsAt).toLocaleString(locale)}
         </span>
       ) : (
