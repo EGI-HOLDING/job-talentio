@@ -39,7 +39,7 @@ export function RecruiterJobActions({ job, companyId, busy, policy, benefitPhase
     const maxHeight = Math.max(100, Math.min(window.innerHeight - 24, flip ? above - 8 : below - 8));
     const top = flip ? Math.max(12, anchor.top - Math.min(height, maxHeight) - 8) : Math.max(12, Math.min(anchor.bottom + 8, window.innerHeight - Math.min(height, maxHeight) - 12));
     setPosition({ top, left: Math.max(12, Math.min(anchor.right - 248, window.innerWidth - 260)), maxHeight });
-    menu.current.querySelector<HTMLElement>('[role=menuitem]:not(:disabled)')?.focus();
+    if (!menu.current.contains(document.activeElement)) menu.current.querySelector<HTMLElement>('[role=menuitem]:not(:disabled)')?.focus();
   }, [isOpen, benefitPhase, policy.packageAction, policy.boostDetails, policy.canBoost]);
   useEffect(() => {
     if (!isOpen) return;

@@ -119,12 +119,13 @@ test('menu groups valid actions, flips above bottom row, supports keyboard and p
   const doc=events(),win={...events(),innerWidth:1200,innerHeight:800};let focused='',status='',copies=0;
   const trigger={getBoundingClientRect:()=>({top:740,bottom:772,right:1180}),focus(){focused='trigger';},contains:()=>false};
   const items=[{focus(){focused='first';}},{focus(){focused='last';}}];
-  const menu={getBoundingClientRect:()=>({height:430}),querySelector:()=>items[0],querySelectorAll:()=>items,contains:()=>true};
-  doc.activeElement=items[0];doc.body={};
+  const menu={getBoundingClientRect:()=>({height:430}),querySelector:()=>items[0],querySelectorAll:()=>items,contains:target=>items.includes(target)};
+  doc.activeElement=trigger;doc.body={};
   const ui=host(base+'RecruiterJobActions.tsx','RecruiterJobActions',{'react-dom':{createPortal:tree=>tree},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerWorkspaceHref:(_,id)=>'/dashboard/recruiter?tab=jobs&companyId='+id,jobDetailHref:id=>'/jobs/'+id},'@/lib/jobCommerce':{packageHref:(id,back)=>'/package/'+id+'?returnTo='+encodeURIComponent(back)},'@/lib/i18n':i18n,'./JobRowIcon':{JobRowIcon:stub}},{document:doc,window:win,attachRefs:tree=>nodes(tree,n=>n.props?.role==='menu').forEach(n=>n.props.ref.current=menu)});
   const props={job:job(),companyId:'company-a',busy:false,policy:policyFn(job(),benefit()),benefitPhase:'ready',triggerRef:{current:trigger},onEdit(){},onReviewPublish(){},onStatus:s=>status=s,onDuplicate(){},onBoost(){},onCopy(){copies++;},onRetry(){}};
   let tree=await ui.render(props);nodes(tree,n=>n.props?.['aria-haspopup']==='menu')[0].props.onClick();tree=await ui.render();
   const popup=nodes(tree,n=>n.props?.role==='menu')[0];assert.ok(popup.props.style.top<740);assert.ok(popup.props.style.top+430<=800);assert.equal(focused,'first');
+  doc.activeElement=items[1];focused='last';tree=await ui.render({...props,benefitPhase:'loading'});assert.equal(focused,'last','A benefit refresh must not steal keyboard focus');tree=await ui.render(props);
   assert.equal(nodes(tree,n=>n.props?.role==='group').length,3);assert.doesNotMatch(text(tree),/rw.applicants/);assert.match(text(tree),/jr.copyLink/);assert.match(text(tree),/rec.pause/);assert.doesNotMatch(text(tree),/rw.reviewPublish|rec.resumeJob|rec.reopen|hr.duplicateJob/);
   const pkg=nodes(tree,n=>n.props?.href?.startsWith('/package/'))[0];assert.match(decodeURIComponent(pkg.props.href),/companyId=company-a/);
   doc.emit('keydown',{key:'End',preventDefault(){}});assert.equal(focused,'last');doc.emit('keydown',{key:'Escape',preventDefault(){}});tree=await ui.render();assert.equal(focused,'trigger');assert.equal(nodes(tree,n=>n.props?.role==='menu').length,0);
