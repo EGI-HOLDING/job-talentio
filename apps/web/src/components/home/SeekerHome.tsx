@@ -1,6 +1,5 @@
 'use client';
 
-import { FeaturedCompanies } from './FeaturedCompanies';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -56,7 +55,7 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
       <div className={styles.shell}>
         <SeekerHero stats={platformStats} cities={catalog.cities} companies={topCompanies} popularRoles={catalog.titles} />
         {isEmployee && <ForYouJobsSection />}
-        <FeaturedCompanies/><LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} news={latestNews} />
+        <LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} news={latestNews} />
       </div>
     </div>
   );
