@@ -436,6 +436,10 @@ export const recruiter = {
     en: 'Match {n}% | details',
   },
   'rec.chat': { uz: 'Chat', ru: 'Чат', en: 'Chat' },
+  'rec.whatsappChat': { uz: 'WhatsApp orqali yozish', ru: 'Написать в WhatsApp', en: 'Chat on WhatsApp' },
+  'rec.whatsappOpening': { uz: 'WhatsApp ochilmoqda…', ru: 'Открываем WhatsApp…', en: 'Opening WhatsApp…' },
+  'rec.whatsappNoPhone': { uz: 'Nomzodning WhatsApp raqami mavjud emas.', ru: 'У кандидата не указан номер телефона для WhatsApp.', en: 'This candidate has no phone number available for WhatsApp.' },
+  'rec.whatsappFailed': { uz: 'WhatsApp ochilmadi. Qayta urinib ko‘ring.', ru: 'Не удалось открыть WhatsApp. Попробуйте ещё раз.', en: 'Could not open WhatsApp. Please try again.' },
   'rec.interviewVenue': { uz: 'Suhbat manzili (bino yoki xona)', ru: 'Место собеседования (адрес или комната)', en: 'Interview venue (address or room)', id: 'Tempat wawancara (alamat atau ruangan)' },
   'rec.interviewTime': {
     uz: 'Suhbat vaqti',

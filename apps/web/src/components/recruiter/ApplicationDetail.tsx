@@ -10,7 +10,7 @@ import {useConfirm} from '@/components/ui/ConfirmProvider';
 import {ProfileDialog} from '@/components/profile/ProfileDialog';
 import {ResourceError,WorkspaceLoading,dateLabel} from '@/components/employee/WorkspacePrimitives';
 import {KANBAN_STAGES} from '@job-talentio/shared';
-import {Applicant,ApplicationCvAction,KanbanAction} from './ApplicationActions';
+import {Applicant,ApplicationCvAction,KanbanAction,WhatsAppAction} from './ApplicationActions';
 import {RecruiterAvatar} from './RecruiterPrimitives';
 import s from './JobWorkspace.module.css';
 
@@ -51,7 +51,7 @@ export function ApplicationDetail({applicationId,jobId,companyId,from='applicant
       {error&&<ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/>}
       {!data&&!error?<WorkspaceLoading/>:data&&<>
         <div className={s.detailIdentity}><RecruiterAvatar name={data.profile.user.fullName} src={data.profile.user.avatarUrl} className={s.avatar}/><div><h2>{data.profile.user.fullName}</h2><p>{data.profile.headline||t('ranking.noHeadline')}</p><small>{t('rw.applied')}: {dateLabel(data.createdAt,locale,true)}</small></div></div>
-        <div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('viewProfile')}</Link>{data.status!=='WITHDRAWN'&&<Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link>}</div>
+        <div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('viewProfile')}</Link>{data.status!=='WITHDRAWN'&&<><Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link><WhatsAppAction profileId={data.profile.id} companyId={companyId}/></>}</div>
         {data.kanbanEnteredAt&&<label className={s.stageField}>{t('status')}<select value={data.status} disabled={busy||data.status==='WITHDRAWN'} onChange={event=>void move(event.target.value)}>{KANBAN_STAGES.map(status=><option key={status} value={status}>{label('applicationStatus',status)}</option>)}</select></label>}
         {data.coverLetter&&<section><h3>{t('coverLetter')}</h3><p className={s.description}>{data.coverLetter}</p></section>}
         {data.status==='IN_REVIEW'&&<section><h3>{t('rw.screening')}</h3>{data.answers?.length?data.answers.map(answer=><div key={answer.id}><h4>{answer.question?.question}</h4><p className={s.description}>{answer.answer==='Yes'?t('job.yes'):answer.answer==='No'?t('job.no'):answer.answer}</p></div>):<p>{t('rec.answersNone')}</p>}</section>}

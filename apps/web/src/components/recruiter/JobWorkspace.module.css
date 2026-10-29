@@ -78,6 +78,13 @@
 .addKanban,.kanbanLink{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:6px 10px;border:1px solid #d9cef8;border-radius:5px;background:#f7f4ff;color:#5635e8;font-size:12px;white-space:nowrap;cursor:pointer;text-decoration:none;}
 .addKanban:hover,.kanbanLink:hover{background:#eee7ff;}.addKanban:disabled,.cvLink:disabled{opacity:.55;cursor:wait;}
 .actionMessage{display:inline-flex;flex-direction:column;align-items:flex-start;gap:5px;}.actionMessage>[role=alert]{max-width:220px;color:#b73c57;font-size:12px;}
+.whatsappAction{position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;vertical-align:middle;}
+.whatsappButton{display:inline-grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid #b7e5c8;border-radius:10px;color:#16834a;background:#f0fbf4;cursor:pointer;transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .16s ease;}
+.whatsappButton:hover:not(:disabled){color:#fff;background:#16834a;border-color:#16834a;transform:translateY(-1px);}
+.whatsappButton:focus-visible{outline:3px solid #a8e0bb;outline-offset:2px;}
+.whatsappButton:disabled{opacity:.6;cursor:wait;}
+.whatsappButton svg{width:23px;height:23px;fill:currentColor;}
+.whatsappError{position:absolute;z-index:6;top:calc(100% + 7px);right:0;width:max-content;max-width:min(300px,80vw);padding:8px 10px;border:1px solid #f3bdc2;border-radius:7px;color:#9f2636;background:#fff7f7;box-shadow:0 5px 16px rgb(26 38 66 / 10%);font-size:12px;line-height:1.4;}
 button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 .applicationDetail{padding:8px 24px 24px;color:#52617c;font-size:14px;}.applicationDetail section{border-top:1px solid #e7ebf3;padding-top:16px;margin-top:20px;}.applicationDetail h3{font-size:15px;color:#17213a;}.applicationDetail h4{font-size:13px;margin-bottom:6px;}
 .detailIdentity{display:flex;align-items:center;gap:14px;}.detailIdentity .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;}.detailIdentity h2{font-size:18px;color:#17213a;margin:0;}.detailIdentity p{margin:6px 0;}

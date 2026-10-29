@@ -196,6 +196,32 @@ test('CV action resolves the submitted application file and has no database perm
   let tree=await ui.render({application:row()});nodes(tree,n=>n.type==='button')[0].props.onClick();await ui.render();assert.deepEqual(requests,['/applications/app/resume-download']);assert.equal(tab.location.href,'https://example.test/submitted');assert.equal(tab.opener,null);
   tree=await ui.render({application:row('empty',{hasResumeFile:false})});assert.equal(nodes(tree,n=>n.type==='button').length,0);ui.unmount();
 });
+test('WhatsApp action reveals a phone only on click, uses a bare wa.me link and caches the audited reveal',async()=>{
+  const requests=[],tabs=[];
+  const windowMock={open:(url,target)=>{assert.equal(url,'about:blank');assert.equal(target,'_blank');const tab={opener:{},location:{href:''},closed:false,close(){this.closed=true;}};tabs.push(tab);return tab;},location:{assign(){assert.fail('A successful popup should be used');}}};
+  const ui=host('apps/web/src/components/recruiter/ApplicationActions.tsx','WhatsAppAction',{'@/lib/api':{api:async(route,options)=>{requests.push({route,options});return{phone:'+6281234567890'};}},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}},{window:windowMock});
+  const props={profileId:'candidate/a',companyId:'company & one'};
+  let tree=await ui.render(props),button=nodes(tree,n=>n.type==='button')[0];assert.equal(button.props['aria-label'],'rec.whatsappChat');assert.equal(button.props.title,'rec.whatsappChat');assert.equal(requests.length,0,'Contact is not revealed before an explicit click');
+  button.props.onClick();button.props.onClick();assert.equal(requests.length,1,'Repeated clicks during the request are ignored');
+  tree=await ui.render();assert.equal(requests[0].options.method,'POST');assert.equal(requests[0].route,'/profiles/candidates/candidate%2Fa/reveal-contact?companyId=company+%26+one');assert.equal(tabs[0].opener,null);assert.equal(tabs[0].location.href,'https://wa.me/6281234567890');assert.doesNotMatch(tabs[0].location.href,/[?&]text=/);
+  button=nodes(tree,n=>n.type==='button')[0];button.props.onClick();tree=await ui.render();assert.equal(requests.length,1,'A previously revealed number is reused during this component session');assert.equal(tabs[1].location.href,'https://wa.me/6281234567890');ui.unmount();
+});
+test('WhatsApp action localizes missing phone and reveal failures, and falls back when popup is blocked',async()=>{
+  const emptyTab={closed:false,location:{href:''},close(){this.closed=true;}},noPhoneWindow={open:()=>emptyTab,location:{assign(){assert.fail('No phone must not navigate to WhatsApp');}}};
+  let calls=0;const noPhone=host('apps/web/src/components/recruiter/ApplicationActions.tsx','WhatsAppAction',{'@/lib/api':{api:async()=>{calls++;throw Error('private API response');}},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}},{window:noPhoneWindow});
+  let tree=await noPhone.render({profileId:'candidate',companyId:'company',contactRevealed:true,phone:null});nodes(tree,n=>n.type==='button')[0].props.onClick();tree=await noPhone.render();assert.equal(calls,0,'A revealed missing phone does not repeat contact disclosure');assert.equal(emptyTab.closed,true,'The temporary tab closes when no phone is available');assert.match(visibleText(tree),/rec\.whatsappNoPhone/);noPhone.unmount();
+  const failedTab={closed:false,location:{href:''},close(){this.closed=true;}},fail=host('apps/web/src/components/recruiter/ApplicationActions.tsx','WhatsAppAction',{'@/lib/api':{api:async()=>{throw Error('private API response');}},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}},{window:{open:()=>failedTab,location:{assign(){}}}});
+  tree=await fail.render({profileId:'candidate',companyId:'company'});nodes(tree,n=>n.type==='button')[0].props.onClick();tree=await fail.render();assert.equal(failedTab.closed,true);assert.match(visibleText(tree),/rec\.whatsappFailed/);assert.doesNotMatch(visibleText(tree),/private API response/);fail.unmount();
+  const assigned=[],fallback=host('apps/web/src/components/recruiter/ApplicationActions.tsx','WhatsAppAction',{'@/lib/api':{api:async()=>({phone:'+998901234567'})},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}},{window:{open:()=>null,location:{assign:url=>assigned.push(url)}}});
+  tree=await fallback.render({profileId:'candidate',companyId:'company'});nodes(tree,n=>n.type==='button')[0].props.onClick();await fallback.render();assert.deepEqual(assigned,['https://wa.me/998901234567']);fallback.unmount();
+});
+test('WhatsApp URL accepts E.164 only and stale reveals close their temporary tab',async()=>{
+  const pending=deferred(),action=host('apps/web/src/components/recruiter/ApplicationActions.tsx','WhatsAppAction',{'@/lib/api':{api:()=>pending.promise},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}});
+  assert.equal(action.exports.whatsAppChatUrl('+12025550123'),'https://wa.me/12025550123');assert.equal(action.exports.whatsAppChatUrl('2025550123'),null);assert.equal(action.exports.whatsAppChatUrl('+0123456789'),null);assert.equal(action.exports.whatsAppChatUrl('+123'),null);
+  const tabs=[],windowMock={open:()=>{const tab={location:{href:''},closed:false,close(){this.closed=true;}};tabs.push(tab);return tab;},location:{assign(){assert.fail('Stale reveal must not navigate');}}};
+  const stale=host('apps/web/src/components/recruiter/ApplicationActions.tsx','WhatsAppAction',{'@/lib/api':{api:()=>pending.promise},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}},{window:windowMock});
+  let tree=await stale.render({profileId:'candidate',companyId:'company-a'});nodes(tree,n=>n.type==='button')[0].props.onClick();tree=await stale.render({profileId:'candidate',companyId:'company-b'});pending.resolve({phone:'+6281234567890'});await stale.render();assert.equal(tabs[0].closed,true);assert.equal(tabs[0].location.href,'');stale.unmount();action.unmount();
+});
 test('Kanban loads each column independently and preserves loaded pages during live refresh',async()=>{
   const stub=()=>null,requests=[];let refresh;
   const dependencies=applicantDependencies(async route=>{requests.push(route);if(route.includes('/applicants/'))return row('linked',{status:'IN_REVIEW',kanbanEnteredAt:'2026-10-26'});const q=new URL(route,'http://local').searchParams,page=Number(q.get('page'));return {columns:[{status:'IN_REVIEW',items:Array.from({length:page===1?20:5},(_,i)=>row('p'+page+'-'+i,{status:'IN_REVIEW',kanbanEnteredAt:'2026-10-26'})),total:25,totalPages:2,page,hasMore:page===1}]};},{'@/lib/useLiveRefresh':{useLiveRefresh:(_kind,fn)=>{refresh=fn;}},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,dateLabel:()=>''}});
@@ -207,17 +233,21 @@ test('Kanban loads each column independently and preserves loaded pages during l
 
 
 test('application detail keeps the application identity and exposes the same Kanban action without scores',async()=>{
-  const stub=()=>null;function Action(){} function Cv(){}
-  const ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',{'@/lib/api':{api:async()=>row('review',{matchScore:95,matchBreakdown:{total:95},answers:[],interviews:[]})},'@/lib/i18n':t,'@/lib/navigation':{Link:stub},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/profile/ProfileDialog':{ProfileDialog:stub},'@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=>''},'./ApplicationActions':{KanbanAction:Action,ApplicationCvAction:Cv},'./RecruiterPrimitives':{RecruiterAvatar:stub}});
+  const stub=()=>null;function Action(){} function Cv(){} function WhatsApp(){}
+  const dependencies={'@/lib/api':{api:async()=>row('review',{matchScore:95,matchBreakdown:{total:95},answers:[],interviews:[]})},'@/lib/i18n':t,'@/lib/navigation':{Link:stub},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/profile/ProfileDialog':{ProfileDialog:stub},'@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=>''},'./ApplicationActions':{KanbanAction:Action,ApplicationCvAction:Cv,WhatsAppAction:WhatsApp},'./RecruiterPrimitives':{RecruiterAvatar:stub}};
+  const ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',dependencies);
   const tree=await ui.render({applicationId:'review',jobId:'job',companyId:'company',onClose(){},onChanged(){}});
   const action=nodes(tree,n=>n.type===Action)[0];assert.equal(action.props.application.id,'review');assert.equal(action.props.jobId,'job');assert.equal(action.props.companyId,'company');
   assert.equal(nodes(tree,n=>n.type===Cv)[0].props.application.id,'review');
+  assert.deepEqual({profileId:nodes(tree,n=>n.type===WhatsApp)[0].props.profileId,companyId:nodes(tree,n=>n.type===WhatsApp)[0].props.companyId},{profileId:'profile-review',companyId:'company'});
   const profile=nodes(tree,n=>n.props?.href?.startsWith('/candidates/'))[0];const url=new URL(profile.props.href,'http://local');assert.equal(url.searchParams.get('application'),'review');assert.equal(url.searchParams.get('matchJobId'),'job');assert.equal(url.searchParams.get('company'),'company');
   assert.doesNotMatch(visibleText(tree),/95|matchScore|ranking.index|ranking.coverage/);ui.unmount();
+  const withdrawn=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',{...dependencies,'@/lib/api':{api:async()=>row('withdrawn',{status:'WITHDRAWN'})}});
+  const withdrawnTree=await withdrawn.render({applicationId:'withdrawn',jobId:'job',companyId:'company',onClose(){},onChanged(){}});assert.equal(nodes(withdrawnTree,n=>n.type===WhatsApp).length,0,'Withdrawn applications hide both chat actions');withdrawn.unmount();
 });
 test('application detail scopes screening to review and offers repeat interview scheduling only in the Interview stage',async()=>{
   const stub=()=>null,base={profile:{id:'profile-review',user:{id:'employee',fullName:'Fixture applicant'}},kanbanEnteredAt:'2026-10-26',answers:[{id:'answer',question:{question:'Screening fixture question'},answer:'Fixture answer'}],coverLetter:null,interviews:[]};
-  const dependencies=(getApplication,postInterview=async()=>{})=>({'@/lib/api':{api:async()=>getApplication()},'@/lib/i18n':t,'@/lib/navigation':{Link:stub},'@/lib/hr-benefits':{postOnce:postInterview},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/profile/ProfileDialog':{ProfileDialog:stub},'@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=> 'Fixture date'},'./ApplicationActions':{KanbanAction:stub,ApplicationCvAction:stub},'./RecruiterPrimitives':{RecruiterAvatar:stub}});
+  const dependencies=(getApplication,postInterview=async()=>{})=>({'@/lib/api':{api:async()=>getApplication()},'@/lib/i18n':t,'@/lib/navigation':{Link:stub},'@/lib/hr-benefits':{postOnce:postInterview},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/profile/ProfileDialog':{ProfileDialog:stub},'@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=> 'Fixture date'},'./ApplicationActions':{KanbanAction:stub,ApplicationCvAction:stub,WhatsAppAction:stub},'./RecruiterPrimitives':{RecruiterAvatar:stub}});
   const props={applicationId:'review',jobId:'job',companyId:'company',onClose(){},onChanged(){}};
   let current={...row('review',base),status:'IN_REVIEW'};
   let ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',dependencies(()=>current));
@@ -485,7 +515,7 @@ test('company benefits never render a balance or a stale previous company promot
 });
 
 test('the actual candidate CV tab mounts the direct CV component with company context', async () => {
-  function SharedCv() {}
+  function SharedCv() {} function SharedWhatsApp() {}
   const remembered=[];
   const stub = () => null;
   const profile = {
@@ -520,7 +550,7 @@ test('the actual candidate CV tab mounts the direct CV component with company co
       },
       '@/lib/presence': { seedPresence() {}, usePresence: () => ({}) },
       '@/components/presence/PresenceDot': { PresenceDot: stub },
-      './ApplicationActions': {KanbanAction:stub},
+      './ApplicationActions': {KanbanAction:stub,WhatsAppAction:SharedWhatsApp},
       '@/components/ui/UgcText': { UgcText: stub },
       '@/components/ui/ShareButton': { ShareButton: stub },
       '@/components/employee/WorkspacePrimitives': {
@@ -543,6 +573,9 @@ test('the actual candidate CV tab mounts the direct CV component with company co
   assert.equal(components.length, 1, 'An unused import cannot substitute for a mounted CV action');
   assert.equal(components[0].props.companyId, 'free-company');
   assert.equal(components[0].props.profileId, 'candidate');
+  const whatsApp = nodes(tree, (node) => node.type === SharedWhatsApp);
+  assert.equal(whatsApp.length, 1, 'The recruiter candidate profile exposes the shared WhatsApp action beside internal chat');
+  assert.deepEqual({profileId:whatsApp[0].props.profileId,companyId:whatsApp[0].props.companyId,contactRevealed:whatsApp[0].props.contactRevealed},{profileId:'candidate',companyId:'free-company',contactRevealed:false});
   assert.deepEqual(remembered,['free-company'],'An authorized profile keeps the same company when returning to reports or jobs');
   assert.doesNotMatch(JSON.stringify(tree), /hr\.oneAccess|hr\.alreadyUnlocked|hr\.accessBalance/);
   ui.unmount();
