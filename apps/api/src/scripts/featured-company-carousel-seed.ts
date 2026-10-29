@@ -33,6 +33,10 @@ import {
   type FeaturedCompany,
   type FeaturedRole,
 } from './featured-company-carousel-manifest';
+import {
+  assertFeaturedCompanySeedTarget,
+  type ResolvedFeaturedCompanySeedTarget,
+} from './featured-company-seed-target';
 
 const ORIGINAL_COMPANY_NAMES = ['Arunika Dataworks', 'Lintas Awan Teknologi', 'Nusarintis Digital'];
 const SEED_PREFIX = `featured-carousel-v${FEATURED_COMPANY_CAROUSEL_VERSION}`;
@@ -94,7 +98,7 @@ function descriptionFor(company: FeaturedCompany, role: FeaturedRole) {
   ].join('\n\n');
 }
 
-function validateManifest() {
+function validateManifest(checkLocalLogos = true) {
   if (FEATURED_COMPANIES.length !== 21) throw new Error(`Manifest must contain exactly 21 companies; found ${FEATURED_COMPANIES.length}`);
   const slugs = new Set<string>();
   const emails = new Set<string>();
@@ -106,8 +110,10 @@ function validateManifest() {
     if (emails.has(email)) throw new Error(`Duplicate recruiter email in manifest: ${email}`);
     emails.add(email);
     if (!company.description.toLowerCase().includes('fiktif')) throw new Error(`Company must be identified as fictional: ${company.slug}`);
-    const logoPath = path.resolve(__dirname, '../../../../apps/web/public/images/featured-companies', `${company.slug}.svg`);
-    if (!fs.existsSync(logoPath)) throw new Error(`Local SVG logo is missing for ${company.slug}`);
+    if (checkLocalLogos) {
+      const logoPath = path.resolve(__dirname, '../../../../apps/web/public/images/featured-companies', `${company.slug}.svg`);
+      if (!fs.existsSync(logoPath)) throw new Error(`Local SVG logo is missing for ${company.slug}`);
+    }
     if (company.roles.length !== 3) throw new Error(`Each company must have three job posts: ${company.slug}`);
     for (const role of company.roles) {
       jobs += 1;
@@ -144,13 +150,18 @@ function loadDatabaseUrl() {
   return value;
 }
 
-function assertLocalTarget(databaseUrl: string) {
-  const url = new URL(databaseUrl);
-  const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
-  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error('Seed accepts only a PostgreSQL DATABASE_URL');
-  if (url.hostname !== '127.0.0.1' || database !== 'job_talentio') {
-    throw new Error('Refusing to run: target must be 127.0.0.1 database job_talentio');
-  }
+async function verifyVpsLogoAssets() {
+  const origin = 'https://cari-kerja.co.id';
+  const results = await Promise.all(FEATURED_COMPANIES.map(async (company) => {
+    const url = `${origin}/images/featured-companies/${encodeURIComponent(company.slug)}.svg`;
+    const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+    const body = await response.text();
+    if (!response.ok || body.length > 500_000 || !/<svg\b/i.test(body)) {
+      throw new Error(`Published company logo is unavailable or invalid: ${company.slug} (HTTP ${response.status})`);
+    }
+    return company.slug;
+  }));
+  if (results.length !== 21) throw new Error('All 21 published company logos must be verified before the VPS seed');
 }
 
 function targetFingerprintCompanyIds() {
@@ -382,22 +393,23 @@ async function inspectBatch(db: PrismaClient, catalog: ResolvedCatalog) {
   return { companiesToCreate, accountsToCreate, jobsToCreate, jobsToGrantOrPublish };
 }
 
-async function makeDryRunReport(db: PrismaClient) {
-  const target = validateManifest();
+async function makeDryRunReport(db: PrismaClient, target: ResolvedFeaturedCompanySeedTarget) {
+  const manifest = validateManifest(target.target === 'local');
   const catalog = await resolveCatalog(db);
   const baseline = await baselineSnapshot(db, catalog);
   const plan = await inspectBatch(db, catalog);
   const manifestHash = hashValue({ version: FEATURED_COMPANY_CAROUSEL_VERSION, companies: FEATURED_COMPANIES });
-  const targetFingerprint = hashValue(baseline);
+  const targetFingerprint = hashValue({ target: target.target, database: target.database, baseline });
   return {
     operation: 'dry-run',
-    targetDatabase: 'job_talentio',
+    target: target.target,
+    targetDatabase: target.database,
     manifestVersion: FEATURED_COMPANY_CAROUSEL_VERSION,
     manifestHash,
     targetFingerprint,
     baselineCompanies: 3,
-    seedCompanies: target.companies,
-    seedJobs: target.jobs,
+    seedCompanies: manifest.companies,
+    seedJobs: manifest.jobs,
     packageDistribution: { FREE: 21, STANDARD: 21, PREMIUM: 21 },
     plan,
     resolvedCatalog: {
@@ -695,8 +707,10 @@ async function main() {
     throw new Error('Usage: seed:featured-companies <dry-run|apply|verify> [--manifest-hash SHA256 --expected-fingerprint SHA256]');
   }
   const databaseUrl = loadDatabaseUrl();
-  assertLocalTarget(databaseUrl);
-  validateManifest();
+  const targetValue = getArg('--target') ?? 'local';
+  const target = assertFeaturedCompanySeedTarget(databaseUrl, targetValue);
+  validateManifest(target.target === 'local');
+  if (target.target === 'indonesia-vps') await verifyVpsLogoAssets();
 
   if (command === 'dry-run' || command === 'verify') {
     const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
@@ -704,7 +718,7 @@ async function main() {
     try {
       const catalog = await resolveCatalog(db);
       if (command === 'dry-run') {
-        process.stdout.write(`${JSON.stringify(await makeDryRunReport(db), null, 2)}\n`);
+        process.stdout.write(`${JSON.stringify(await makeDryRunReport(db, target), null, 2)}\n`);
       } else {
         process.stdout.write(`${JSON.stringify(await verifySeed(db, catalog), null, 2)}\n`);
       }
@@ -724,7 +738,7 @@ async function main() {
   try {
     const db = app.get(PrismaService);
     const catalog = await resolveCatalog(db);
-    const report = await makeDryRunReport(db);
+    const report = await makeDryRunReport(db, target);
     const suppliedManifestHash = getArg('--manifest-hash');
     const expectedFingerprint = getArg('--expected-fingerprint');
     if (!suppliedManifestHash || !expectedFingerprint) throw new Error('Apply requires --manifest-hash and --expected-fingerprint from the reviewed dry-run');
