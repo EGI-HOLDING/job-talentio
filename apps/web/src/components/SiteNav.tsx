@@ -1,6 +1,6 @@
 'use client';
 
-import { Link, localeHref, usePathname } from '@/lib/navigation';
+import { Link, localeHref, usePathname, useRouter } from '@/lib/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ADMIN_URL, api, getSession, logout, AuthSession } from '@/lib/api';
@@ -8,6 +8,8 @@ import { useI18n, Locale } from '@/lib/i18n';
 import styles from './SiteNav.module.css';
 import { AuthLink } from './auth/AuthLink';
 import { authRoleFrom } from '@/lib/authReturn';
+import { preferredCompany, rememberCompany } from './recruiter/RecruiterPrimitives';
+import { WorkspaceIcon } from './employee/WorkspaceIcon';
 import { allowEmployerContextChange } from './recruiter/useEmployerUnsaved';
 
 type Notif = {
@@ -24,6 +26,9 @@ const LOCALE_LABELS: Record<Locale, string> = { uz: "O'z", ru: 'Ру', en: 'En',
 function SiteNavContent() {
   const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
+  const router = useRouter();
+  const [companies, setCompanies] = useState<Array<{companyId: string; company: {name: string}}>>([]);
+  const [rememberedCompany, setRememberedCompany] = useState('');
   const searchParams = useSearchParams();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [unread, setUnread] = useState(0);
@@ -84,6 +89,24 @@ function SiteNavContent() {
     return () => document.removeEventListener('click', onClick);
   }, []);
 
+  useEffect(() => {
+    setCompanies([]);
+    if (session?.user.role !== 'RECRUITER') return;
+    let active = true;
+    api<Array<{companyId: string; company: {name: string}}>>('/companies/mine').then(mine => {
+      if (!active) return;
+      setCompanies(mine);
+      setRememberedCompany(preferredCompany(mine)?.companyId || '');
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [session?.user.id, session?.user.role]);
+
+  useEffect(() => {
+    const update = () => setRememberedCompany(preferredCompany(companies)?.companyId || '');
+    window.addEventListener('talentio:company', update);
+    return () => window.removeEventListener('talentio:company', update);
+  }, [companies]);
+
   async function toggleNotifs() {
     if (!session) return;
     const next = !open;
@@ -113,6 +136,9 @@ function SiteNavContent() {
       api('/auth/me', { method: 'PATCH', body: JSON.stringify({ locale: l }) }).catch(() => undefined);
     }
   }
+
+  const activeCompany = companies.find(item => item.companyId === searchParams.get('company')) || companies.find(item => item.companyId === rememberedCompany) || companies[0];
+  const companyHref = '/dashboard/recruiter?tab=company' + (activeCompany ? '&company=' + encodeURIComponent(activeCompany.companyId) : '');
 
   const isOnboarding = pathname.startsWith('/onboarding/');
   const isRecruiter = session?.user.role === 'RECRUITER';
@@ -283,11 +309,12 @@ function SiteNavContent() {
               {isEmployee || isRecruiter ? <div className={styles.account} ref={accountRef}>
                 <button ref={accountButtonRef} type="button" className={styles.accountButton} aria-label={t('workspace.accountMenu')} aria-expanded={accountOpen} aria-controls="workspace-account-menu" onClick={() => { setAccountOpen((value) => !value); setOpen(false); setLangOpen(false); }}>
                   {session.user.avatarUrl ? <img className="avatar" src={session.user.avatarUrl} alt="" /> : <span className={styles.initial}>{session.user.fullName.charAt(0)}</span>}
-                  <span>{session.user.fullName.split(' ')[0]}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                  <span className={styles.accountName}>{isRecruiter && activeCompany ? activeCompany.company.name : session.user.fullName.split(' ')[0]}</span>{isRecruiter && (!session.user.email || session.user.emailVerified === false) && <i className={styles.accountAttention} title={t(session.user.email ? 'emailUnverifiedBadge' : 'addEmailTitle')} />}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                 </button>
                 {accountOpen && <div id="workspace-account-menu" className={styles.accountMenu}>
-                  <div className={styles.accountIdentity}><strong>{session.user.fullName}</strong><span>{session.user.email}</span></div>
-                  {isRecruiter ? <><Link href="/dashboard/recruiter?tab=company">{t('company')}</Link></> : <><Link href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}</Link><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')}</Link></>}
+                  <div className={styles.accountIdentity}><strong>{session.user.fullName}</strong><span>{session.user.email}</span>{isRecruiter && (!session.user.email || session.user.emailVerified === false) && <Link className={styles.verificationLink} href="/settings?role=RECRUITER"><i />{t(session.user.email ? 'emailUnverifiedBadge' : 'addEmailTitle')}<WorkspaceIcon kind="right" /></Link>}</div>
+                  {isRecruiter && companies.length > 0 && <div className={styles.companyChoices}><span>{t('company')}</span>{companies.map(item => <button key={item.companyId} type="button" aria-pressed={item.companyId === activeCompany?.companyId} onClick={async () => { if (!await allowEmployerContextChange()) return; rememberCompany(item.companyId); setRememberedCompany(item.companyId); setAccountOpen(false); router.push('/dashboard/recruiter?tab=jobs&company=' + encodeURIComponent(item.companyId)); }}><WorkspaceIcon kind="building" /><span>{item.company.name}</span>{item.companyId === activeCompany?.companyId && <WorkspaceIcon kind="check" />}</button>)}</div>}
+                  {isRecruiter ? <><Link href={companyHref}>{t('rw.companyProfile')}</Link><Link href={companyHref + '&panel=promotion'}>{t('rw.promotion')}</Link></> : <><Link href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}</Link><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')}</Link></>}
                   <Link href={isRecruiter ? '/settings?role=RECRUITER' : '/settings?role=EMPLOYEE'}>{t('settings')}</Link>
                   {isRecruiter && <Link href="/dashboard/recruiter/orders">{t('commerce.orders')}</Link>}
                   <div className={styles.accountResources}>{!isRecruiter && <Link href="/explore/companies">{t('companiesStat')}</Link>}<Link href="/news">{t('landing.insights')}</Link>{isRecruiter && <Link href="/employers">{t('employers.badge')}</Link>}</div>

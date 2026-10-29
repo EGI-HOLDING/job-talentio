@@ -5,15 +5,19 @@ import { postOnce } from '@/lib/hr-benefits';
 import { useI18n } from '@/lib/i18n';
 import s from './RecruiterWorkspace.module.css';
 import { Link } from '@/lib/navigation';
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
 import { packageHref } from '@/lib/jobCommerce';
-export function CompanyBenefits({ companyId }: { companyId: string }) {
+export function CompanyBenefits({ companyId, companySlug }: { companyId: string; companySlug: string }) {
   const { t, locale } = useI18n();
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
     setData(null);
     setError('');
+    setLoading(true);
     const load = () =>
       api('/benefits/companies/' + companyId)
         .then((value) => {
@@ -26,7 +30,7 @@ export function CompanyBenefits({ companyId }: { companyId: string }) {
           if (active && error instanceof ApiError && error.status === 404) setData(null);
           if (active && !(error instanceof ApiError && error.status === 404))
             setError(error.message);
-        });
+        }).finally(() => { if (active) setLoading(false); });
     void load();
     const timer = setInterval(() => void load(), 60000);
     window.addEventListener('hr-benefits-updated', load);
@@ -35,25 +39,20 @@ export function CompanyBenefits({ companyId }: { companyId: string }) {
       clearInterval(timer);
       window.removeEventListener('hr-benefits-updated', load);
     };
-  }, [companyId]);
-  if (error) return <p role="alert">{error}</p>;
-  if (
-    !data ||
-    data.companyId !== companyId ||
-    !data.featuredUntil ||
-    new Date(data.featuredUntil) <= new Date()
-  )
-    return null;
-  return (
-    <div className={s.summary}>
-      {data.featuredUntil && new Date(data.featuredUntil) > new Date() && (
-        <span>
-          {t('hr.featuredUntil')} {new Date(data.featuredUntil).toLocaleDateString(locale)}
-        </span>
-      )}
-    </div>
-  );
+  }, [companyId, retry]);
+  const featuredUntil = data?.companyId === companyId ? data.featuredUntil : null;
+  const active = Boolean(featuredUntil && new Date(featuredUntil) > new Date());
+  return <section className={s.promotion} aria-labelledby="company-promotion-title">
+    <header><span className={s.promotionIcon}><WorkspaceIcon kind="building" /></span><div><h2 id="company-promotion-title">{t('rw.promotionTitle')}</h2><p>{t('rw.promotionHint')}</p></div></header>
+    {loading ? <p role="status">{t('loading')}</p> : error ? <div className={s.promotionError} role="alert"><p>{t('ew.loadFailed')}</p><button type="button" className={s.secondary} onClick={() => setRetry(value => value + 1)}>{t('workspace.retry')}</button></div> : <>
+      <div className={s.promotionStatus}><div><span className={s.promotionLabel}>{t('hr.featured')}</span><strong>{t(active ? 'rw.promotionActive' : 'rw.promotionInactive')}</strong></div><span className={s.status} data-status={active ? 'PUBLISHED' : 'EXPIRED'}>{t(active ? 'rw.promotionActiveBadge' : 'rw.promotionInactiveBadge')}</span></div>
+      {active && <div className={s.promotionPeriod}><WorkspaceIcon kind="calendar" /><div><span>{t('rw.promotionEnds')}</span><time dateTime={featuredUntil}>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(featuredUntil))}</time></div></div>}
+      <p className={s.promotionNote}>{t('rw.promotionPackageHint')}</p>
+      <Link className={s.secondary} href={'/companies/' + companySlug}>{t('rec.publicPage')}<WorkspaceIcon kind="external" /></Link>
+    </>}
+  </section>;
 }
+
 export function JobBenefits({ jobId, status }: { jobId: string; status: string }) {
   const { t, locale } = useI18n();
   const [data, setData] = useState<any>(null),

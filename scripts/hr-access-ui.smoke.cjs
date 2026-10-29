@@ -226,6 +226,7 @@ test('CV download is direct, has no unlock/credit UI, and ignores a response aft
     'apps/web/src/components/recruiter/HrBenefits.tsx',
     'DatabaseCvAccess',
     {
+      '@/components/employee/WorkspaceIcon': {WorkspaceIcon:()=>null},
       '@/lib/navigation': {Link:()=>null},
       '@/lib/jobCommerce': {packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},
       '@/lib/i18n': t,
@@ -399,6 +400,7 @@ test('company benefits never render a balance or a stale previous company promot
     'apps/web/src/components/recruiter/HrBenefits.tsx',
     'CompanyBenefits',
     {
+      '@/components/employee/WorkspaceIcon': {WorkspaceIcon:()=>null},
       '@/lib/navigation': {Link:()=>null},
       '@/lib/jobCommerce': {packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},
       '@/lib/i18n': t,
@@ -418,9 +420,16 @@ test('company benefits never render a balance or a stale previous company promot
     },
     { window: { addEventListener() {}, removeEventListener() {} } },
   );
-  const first = await ui.render({ companyId: 'company-a' });
+  const first = await ui.render({ companyId: 'company-a', companySlug: 'alpha' });
+  assert.equal(nodes(first, node => node.type === 'time').length, 1);
   assert.doesNotMatch(JSON.stringify(first), /99|balance|credit/i);
-  assert.equal(await ui.render({ companyId: 'company-b' }), null);
+  const pending = await ui.render({ companyId: 'company-b', companySlug: 'beta' });
+  assert.equal(nodes(pending, node => node.type === 'time').length, 0, 'Do not show the previous company expiry while loading');
+  assert.equal(nodes(pending, node => node.props?.role === 'status').length, 1);
+  second.resolve({companyId: 'company-b', featuredUntil: null});
+  const inactive = await ui.render();
+  assert.match(JSON.stringify(inactive), /rw.promotionInactive/);
+  assert.equal(nodes(inactive, node => node.type === 'time').length, 0);
   ui.unmount();
 });
 
