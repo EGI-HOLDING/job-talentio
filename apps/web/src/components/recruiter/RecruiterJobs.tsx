@@ -99,6 +99,6 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
       <tbody>{filtered.slice((safePage - 1) * 10, safePage * 10).map(job => <RecruiterJobRow key={companyId + ':' + job.id} job={job} companyId={companyId} companyOpen={!company?.anonymizedAt && !company?.isBanned} busy={Boolean(busyId)} onEdit={() => void openEditor(job)} onReviewPublish={() => void openEditor(job, 3)} onDuplicate={() => void duplicate(job)} onStatus={next => void change(job, next)} onApplicants={() => onApplicants(job.id)} onPeriodExpired={refreshRows} onFlash={onFlash} />)}</tbody>
     </table></div>}
 
-    <Pagination page={safePage} total={filtered.length} onChange={setPage} />
+    {!loading && filtered.length > 0 && <Pagination page={safePage} total={filtered.length} onChange={setPage} />}
   </>;
 }

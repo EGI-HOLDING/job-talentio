@@ -48,7 +48,7 @@ test('one benefit hook rejects stale company/page reads, handles timeout/retry, 
   tree=await ui.render('company-b');assert.equal(pending[0].signal.aborted,true);
   pending[1].resolve(benefit({code:'STANDARD'}));tree=await ui.render();assert.equal(tree.data.code,'STANDARD');
   pending[0].resolve(benefit({code:'FREE'}));tree=await ui.render();assert.equal(tree.data.code,'STANDARD');
-  win.emit('focus');tree=await ui.render();assert.equal(tree.phase,'loading');assert.equal(tree.data,null);
+  win.emit('focus');tree=await ui.render();assert.equal(tree.phase,'loading');assert.equal(tree.data.code,'STANDARD','Same-context background reads retain the last known display');
   pending[2].reject(new ApiError(503));tree=await ui.render();assert.equal(tree.phase,'error');assert.equal(tree.data,null);
   const retry=tree.refresh();await ui.render();ui.fireTimers();await retry;tree=await ui.render();assert.equal(tree.phase,'error');assert.equal(pending[3].signal.aborted,true);
   const again=tree.refresh();pending[4].resolve(benefit());await again;tree=await ui.render();assert.equal(tree.phase,'ready');
@@ -57,13 +57,13 @@ test('one benefit hook rejects stale company/page reads, handles timeout/retry, 
   ui.unmount();assert.equal(win.listeners.get('focus').size,0);
 });
 
-function rowHarness({read,post=async()=>{},clipboard=async()=>{},data=benefit()}={}) {
+function rowHarness({read,post=async()=>{},clipboard=async()=>{},data=benefit(),locale='id'}={}) {
   function Actions(){} function Dialog(){}
   let state={phase:'ready',data,refresh:read||(async()=>data)};
   const flashes=[],statuses=[],win={...events(),location:{origin:'https://fixture.test'},dispatchEvent(){}};
   const ui=host(base+'RecruiterJobRow.tsx','RecruiterJobRow',{
     '@/lib/navigation':{Link:stub,localeUrl:(locale,path)=>'/'+locale+path},'@/lib/accountNavigation':{employerJobHref:()=>'/fixture/applicants'},
-    '@/lib/hr-benefits':{postOnce:post},'@/lib/i18n':i18n,'@/lib/location':{localizedJobLocation:()=> 'Kota Jakarta Selatan, Hybrid'},
+    '@/lib/hr-benefits':{postOnce:post},'@/lib/i18n':{...i18n,useI18n:()=>({locale,t:key=>key})},'@/lib/location':{localizedJobLocation:()=> 'Kota Jakarta Selatan, Hybrid'},
     '@/components/employee/WorkspacePrimitives':{dateLabel:v=>v||'-'},'./useJobRowBenefits':{useJobRowBenefits:()=>state},
     './jobRowPolicy':{jobRowPolicy:policyFn},'./JobRowIcon':{JobRowIcon:stub},'./JobRowDialog':{JobRowDialog:Dialog},'./RecruiterJobActions':{RecruiterJobActions:Actions},
   },{window:win,navigator:{clipboard:{writeText:clipboard}},Event:class{}});
@@ -105,6 +105,20 @@ test('clipboard denial exposes a manual localized public URL without dashboard/c
 test('unavailable benefits render retry without guessing a Free package or offering activation',async()=>{
   const h=rowHarness();h.setState({phase:'error',data:null,refresh:async()=>null});
   const tree=await h.ui.render(h.props);assert.match(text(tree),/workspace.retry/);assert.doesNotMatch(text(tree),/hr.package.FREE/);assert.equal(component(tree,h.Actions).props.policy.canBoost,false);h.ui.unmount();
+});
+
+test('background refresh keeps the row stable while blocking stale activation, publication and copy actions',async()=>{
+  const h=rowHarness();h.setState({phase:'loading',data:benefit(),refresh:async()=>benefit()});
+  let tree=await h.ui.render(h.props);assert.match(text(tree),/hr.package.PREMIUM/);
+  assert.equal(nodes(tree,n=>n.type==='button'&&n.props['aria-label']==='jr.boostDetails').length,1);
+  const actions=component(tree,h.Actions);assert.equal(actions.props.policy.canBoost,false);assert.equal(actions.props.policy.publicVisible,false);
+  actions.props.onBoost();tree=await h.ui.render();assert.ok(component(tree,h.Dialog));assert.equal(button(component(tree,h.Dialog).props.footer,'hr.activateBoost'),undefined);h.ui.unmount();
+});
+
+test('the on-site row states its work mode and Uzbek dates remain numeric without ICU placeholder months',async()=>{
+  const h=rowHarness({locale:'uz',data:benefit({expiresAt:'2026-11-27T12:00:00Z'})});
+  const tree=await h.ui.render({...h.props,job:job({workMode:'ONSITE'})});assert.match(text(tree),/ONSITE/);
+  const date=nodes(tree,n=>n.type==='button'&&n.props['aria-label']==='jr.periodDetails')[0];assert.match(text(date),/2026/);assert.doesNotMatch(text(date),/M11|[a-zA-Z]/);h.ui.unmount();
 });
 
 test('exhausted allowance has no quota button; an active boost keeps duration and finish details without activation',async()=>{

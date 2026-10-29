@@ -21,7 +21,7 @@ export function useJobRowBenefits(companyId: string, jobId: string, status: stri
     pending.current?.abort();
     const controller = new AbortController(); pending.current = controller;
     let timer: ReturnType<typeof setTimeout>;
-    setState({ context, phase: 'loading', data: null });
+    setState(previous => ({ context, phase: 'loading', data: previous.context === context ? previous.data : null }));
     try {
       const value = await Promise.race([
         api<JobBenefitSummary>('/benefits/jobs/' + encodeURIComponent(jobId), { signal: controller.signal }),
@@ -46,7 +46,7 @@ export function useJobRowBenefits(companyId: string, jobId: string, status: stri
     window.addEventListener('focus', focus);
     return () => { ++generation.current; pending.current?.abort(); window.removeEventListener('focus', focus); };
   }, [refresh]);
-  const data = state.context === context && state.phase === 'ready' ? state.data : null;
+  const data = state.context === context ? state.data : null;
   useEffect(() => {
     if (!data) return;
     const now = Date.now();

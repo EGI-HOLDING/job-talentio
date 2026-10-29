@@ -18,7 +18,9 @@ type Props = { job: any; companyId: string; companyOpen: boolean; busy: boolean;
 export function RecruiterJobRow({ job, companyId, companyOpen, busy, onEdit, onReviewPublish, onDuplicate, onStatus, onApplicants, onPeriodExpired, onFlash }: Props) {
   const { t, locale } = useI18n(), enumLabel = useEnumLabel();
   const benefit = useJobRowBenefits(companyId, job.id, job.status, locale);
-  const policy = jobRowPolicy(job, benefit.data, companyOpen);
+  const knownPolicy = jobRowPolicy(job, benefit.data, companyOpen);
+  const ready = benefit.phase === 'ready';
+  const policy = { ...knownPolicy, canBoost: ready && knownPolicy.canBoost, canResume: ready && knownPolicy.canResume, canReopen: ready && knownPolicy.canReopen, publicVisible: ready && knownPolicy.publicVisible };
   const [dialog, setDialog] = useState<'period' | 'boost' | 'link' | null>(null);
   const [boostBusy, setBoostBusy] = useState(false), [boostError, setBoostError] = useState(''), [committed, setCommitted] = useState(false);
   const [sharedLink, setSharedLink] = useState('');
@@ -69,9 +71,15 @@ export function RecruiterJobRow({ job, companyId, companyOpen, busy, onEdit, onR
     return hours >= 1 ? new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(hours) + ' ' + t('hr.hours') : new Intl.NumberFormat(locale).format(Math.ceil(seconds / 60)) + ' ' + t(compact ? 'jr.shortMinutes' : 'jr.minutes');
   }
   function counter(value: number) { return new Intl.NumberFormat(locale, value >= 10000 ? { notation: 'compact', maximumFractionDigits: 0 } : {}).format(value); }
-  const fullDate = (value: string | null | undefined) => dateLabel(value, locale, true);
-  const location = localizedJobLocation(job, t);
-  const content = benefit.phase === 'ready' && benefit.data;
+  function rowDate(value: string | null | undefined, withTime = false) {
+    if (locale !== 'uz') return dateLabel(value, locale, withTime);
+    if (!value || !Number.isFinite(Date.parse(value))) return '\u2014';
+    // Numeric months stay readable in browsers whose Uzbek ICU data falls back to M01...M12.
+    return new Intl.DateTimeFormat('uz-UZ', { year: 'numeric', month: '2-digit', day: '2-digit', ...(withTime ? { hour: '2-digit', minute: '2-digit' } as const : {}) }).format(new Date(value));
+  }
+  const fullDate = (value: string | null | undefined) => rowDate(value, true);
+  const location = localizedJobLocation(job, t) + (job.workMode === 'ONSITE' ? ', ' + enumLabel('workMode', 'ONSITE') : '');
+  const content = benefit.data;
   const placeholder = <span className={s.unavailable} aria-label={t(benefit.phase === 'loading' ? 'loading' : 'jr.notAvailable')}>{benefit.phase === 'loading' ? <span className={s.skeleton} /> : '\u2014'}</span>;
   const retry = <button type="button" className={s.retry} onClick={() => void benefit.refresh()} aria-label={t('jr.retryBenefits')}><JobRowIcon kind="info" />{t('workspace.retry')}</button>;
   const stats = [{ icon: 'user', label: t('applications'), value: job._count?.applications || 0 }, { icon: 'eye', label: t('rec.viewsWord'), value: job._count?.views || 0 }];
@@ -81,7 +89,7 @@ export function RecruiterJobRow({ job, companyId, companyOpen, busy, onEdit, onR
     <td data-label={t('jr.package')}>{content ? <span className={s.packageBadge} title={t(content.selected ? 'hr.package.' + content.code : 'jr.unselected')}>{t(content.selected ? 'hr.package.' + content.code : 'jr.unselected')}</span> : benefit.phase === 'error' ? retry : placeholder}</td>
     <td data-label={t('city')}><span className={s.location} title={location}>{location}</span></td>
     <td data-label={t('jr.performance')}><div className={s.performance}>{stats.map(item => <span key={item.label} tabIndex={0} title={item.label + ': ' + new Intl.NumberFormat(locale).format(item.value)} aria-label={item.label + ': ' + new Intl.NumberFormat(locale).format(item.value)}><JobRowIcon kind={item.icon} /><span>{counter(item.value)}</span></span>)}</div></td>
-    <td data-label={t('jr.period')}>{content ? <button type="button" className={s.periodButton} onClick={() => openDialog('period')} aria-label={t('jr.periodDetails')} title={t('jr.periodDetails')}><span>{content.expiresAt ? dateLabel(content.expiresAt, locale) : t('jr.notPublished')}</span><JobRowIcon kind="info" /></button> : placeholder}</td>
+    <td data-label={t('jr.period')}>{content ? <button type="button" className={s.periodButton} onClick={() => openDialog('period')} aria-label={t('jr.periodDetails')} title={t('jr.periodDetails')}><span>{content.expiresAt ? rowDate(content.expiresAt) : t('jr.notPublished')}</span><JobRowIcon kind="info" /></button> : placeholder}</td>
     <td data-label={t('jr.boost')}>{content && policy.boostDetails && (policy.activeBoost || content.boostRemainingSeconds > 0) ? <button type="button" className={s.boostIndicator} data-active={Boolean(policy.activeBoost)} onClick={() => openDialog('boost')} title={policy.activeBoost ? t('hr.boostUntil') + ' ' + fullDate(policy.activeBoost.endsAt) : t('jr.boostDetails')} aria-label={t('jr.boostDetails')}><JobRowIcon kind="boost" /><span>{policy.activeBoost ? t('jr.active') : duration(content.boostRemainingSeconds, true)}</span></button> : content ? <span className={s.unavailable} title={t('jr.noBoost')} aria-label={t('jr.noBoost')}>{'\u2014'}</span> : placeholder}</td>
     <td className={s.actionCell}><div className={s.rowActions}><button type="button" className={s.applicants} onClick={onApplicants}>{t('rw.applicants')}</button><RecruiterJobActions job={job} companyId={companyId} busy={rowBusy} policy={policy} benefitPhase={benefit.phase} triggerRef={menuTrigger} onEdit={onEdit} onReviewPublish={onReviewPublish} onStatus={onStatus} onDuplicate={onDuplicate} onBoost={() => openDialog('boost')} onCopy={() => void copyLink()} onRetry={() => void benefit.refresh()} /></div>
       {dialog && <JobRowDialog title={t(dialog === 'period' ? 'jr.periodDetails' : dialog === 'boost' ? 'jr.boostDetails' : 'jr.copyLink')} subtitle={job.title} busy={boostBusy} returnFocus={menuTrigger} onClose={() => setDialog(null)} footer={<><button type="button" className={s.secondary} disabled={boostBusy} onClick={() => setDialog(null)}>{t('close')}</button>{dialog === 'boost' && policy.canBoost && !committed && <button type="button" className={s.primary} disabled={boostBusy} onClick={() => void activateBoost()}><JobRowIcon kind="boost" />{t(boostBusy ? 'saving' : 'hr.activateBoost')}</button>}</>}>
