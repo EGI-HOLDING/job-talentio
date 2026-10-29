@@ -3,7 +3,7 @@ import type IORedis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
 import { AuthUser } from '../common/auth.decorators';
-import { revealsAnonymousEmployer } from '../common/anonymous-job';
+import { revealsAnonymousEmployer, anonymousRevealHistory } from '../common/anonymous-job';
 
 export type PresenceStatus = { isOnline: boolean; lastSeenAt: string | null };
 
@@ -225,11 +225,10 @@ export class PresenceService {
         where: {
           jobPostId: conversation.jobPostId,
           profile: { userId: { in: [conversation.userAId, conversation.userBId] } },
-          status: { in: ['INTERVIEW', 'OFFER', 'HIRED'] },
         },
-        select: { status: true },
+        select: { status: true, events: anonymousRevealHistory },
       });
-      return Boolean(application && revealsAnonymousEmployer(application.status));
+      return Boolean(application && revealsAnonymousEmployer(application.status, application.events));
     }
 
     if (!companyId) return true;
@@ -250,12 +249,12 @@ export class PresenceService {
         profile: { userId: { in: [conversation.userAId, conversation.userBId] } },
         jobPost: { companyId },
       },
-      select: { status: true, jobPost: { select: { isAnonymous: true } } },
+      select: { status: true, events: anonymousRevealHistory, jobPost: { select: { isAnonymous: true } } },
     });
     if (!applications.length) return true;
     return applications.some(
       (application) =>
-        !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status),
+        !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events),
     );
   }
 

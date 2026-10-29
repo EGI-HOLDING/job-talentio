@@ -2,7 +2,8 @@
 import { authLink } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState, useRef } from 'react';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { useParams, useSearchParams } from 'next/navigation';
 import { jobBackHref, jobDetailHref } from '@/lib/accountNavigation';
 import { trackJobEvent,jobAttribution } from '@/lib/hr-events';
@@ -123,6 +124,15 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const jobTitleId = job?.jobTitleId || job?.jobTitle?.id || null;
   const defaultApplyRole = job?.jobTitle?.name || job?.title || '';
   const isEmployee = session?.user.role === 'EMPLOYEE';
+  const applicationRead = useRef(0), applicationContext = useRef('');
+  applicationContext.current = id + ':' + locale + ':' + session?.user.id;
+  async function refreshApplication() {
+    if (!isEmployee) return;
+    const context = applicationContext.current, sequence = ++applicationRead.current;
+    const mine = await api<{applied:boolean;application:MyApplicationState|null}>(`/applications/mine/jobs/${id}`, {signal:AbortSignal.timeout(15000)});
+    if (context === applicationContext.current && sequence === applicationRead.current) setMyApplication(mine.application);
+  }
+  useLiveRefresh('applications', refreshApplication, isEmployee, applicationContext.current);
   const ownsCompany = session?.user.memberships?.some((membership) => membership.companyId === job?.company.id);
   const backHref = jobBackHref(session?.user.role, searchParams.get('returnTo'), ownsCompany ? job?.company.id : undefined);
   useEffect(() => {
@@ -166,11 +176,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
         }
         if (session?.user.role === 'EMPLOYEE') {
           try {
-            const mine = await api<{
-              applied: boolean;
-              application: MyApplicationState | null;
-            }>(`/applications/mine/jobs/${id}`);
-            if (active) setMyApplication(mine.application);
+            await refreshApplication();
           } catch {
             /* ignore - guest / network */
           }
@@ -233,6 +239,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
           source: readSource(id),
         }),
       });
+      ++applicationRead.current;
       setMyApplication({
         id: created.id,
         status: created.status || 'NEW',

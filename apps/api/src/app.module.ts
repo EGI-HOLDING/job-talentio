@@ -27,11 +27,13 @@ import { TelegramModule } from './telegram/telegram.module';
 import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
 import { BenefitsModule } from './benefits/benefits.module';
+import { LiveUpdatesModule } from './common/live-updates';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     RateLimitModule,
+    LiveUpdatesModule,
     SearchModule,
     PresenceModule,
     TranslationModule,

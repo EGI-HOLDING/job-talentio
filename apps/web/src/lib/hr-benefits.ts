@@ -1,12 +1,14 @@
 import { api, ApiError, getSession } from './api';
 const pending = new Map<string, string>();
 /** Keep the same intent key after a timeout, including a page refresh. */
-export async function postOnce<T>(path: string, body: unknown = {}) {
+export async function postOnce<T>(path: string, body: unknown = {}, options: {signal?: AbortSignal} = {}) {
   const payload = JSON.stringify(body);
+  const actor = getSession()?.user.id || 'guest';
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode((getSession()?.user.id || 'guest') + ':' + path + ':' + payload),
+    new TextEncoder().encode(actor + ':' + path + ':' + payload),
   );
+  if (actor !== (getSession()?.user.id || 'guest')) throw new ApiError('Account changed. Please retry.', 409);
   const storageKey =
     'jt-operation:' +
     Array.from(new Uint8Array(digest))
@@ -23,6 +25,7 @@ export async function postOnce<T>(path: string, body: unknown = {}) {
       method: 'POST',
       headers: { 'Idempotency-Key': key },
       body: payload,
+      signal: options.signal,
     });
     clear();
     return result;

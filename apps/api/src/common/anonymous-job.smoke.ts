@@ -27,6 +27,9 @@ function revealsAtInterviewStage() {
   assert(!revealsAnonymousEmployer('NEW') && !revealsAnonymousEmployer('IN_REVIEW'), 'early stages stay hidden');
   assert(revealsAnonymousEmployer('INTERVIEW') && revealsAnonymousEmployer('OFFER') && revealsAnonymousEmployer('HIRED'), 'interview and later reveal');
   assert(!revealsAnonymousEmployer(undefined), 'no application means no reveal');
+  assert(revealsAnonymousEmployer('REJECTED', [{toStatus:'INTERVIEW'}]), 'Previously revealed employer stays available after rejection');
+  assert(revealsAnonymousEmployer('WITHDRAWN', [{toStatus:'OFFER'}]), 'Withdrawal must not erase an existing employer conversation');
+  assert(!revealsAnonymousEmployer('REJECTED', [{toStatus:'IN_REVIEW'}]), 'Rejection before interview must not reveal a confidential employer');
   const revealed = maskAnonymousCompany({ isAnonymous: true, company }, 'en', { reveal: true });
   assert(revealed.company.name === 'Orient Bank Digital', 'reveal flag keeps the company');
 }

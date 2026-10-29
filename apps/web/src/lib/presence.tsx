@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { api, getToken } from '@/lib/api';
+import { LIVE_REFRESH_EVENT } from '@/lib/useLiveRefresh';
 
 export type PresenceStatus = { isOnline: boolean; lastSeenAt: string | null };
 
@@ -78,6 +79,10 @@ export function connectPresence() {
       notify();
     },
   );
+  socket.on('resource:changed', (detail: {resource: string}) => {
+    window.dispatchEvent(new CustomEvent(LIVE_REFRESH_EVENT, {detail}));
+  });
+  socket.on('connect', () => window.dispatchEvent(new CustomEvent(LIVE_REFRESH_EVENT)));
   heartbeatTimer = setInterval(() => {
     socket?.emit('presence:ping');
   }, HEARTBEAT_MS);
@@ -97,6 +102,7 @@ export function disconnectPresence() {
 export function PresenceConnection() {
   useEffect(() => {
     connectPresence();
+    const refresh = () => { disconnectPresence(); connectPresence(); };
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'jt_token') {
         disconnectPresence();
@@ -104,7 +110,8 @@ export function PresenceConnection() {
       }
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('jt-session-updated', refresh);
+    return () => { window.removeEventListener('storage', onStorage); window.removeEventListener('jt-session-updated', refresh); disconnectPresence(); };
   }, []);
   return null;
 }

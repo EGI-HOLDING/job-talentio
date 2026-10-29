@@ -175,9 +175,9 @@ function RecruiterDashboard() {
     }
   }
 
-  async function loadJobs(cid: string) {
+  async function loadJobs(cid: string, quiet = false) {
     const generation = ++companyGeneration.current;
-    setJobsLoading(true);
+    if (!quiet) setJobsLoading(true);
     try {
     const list = await api<any[]>(`/jobs/company/${cid}`);
     if (generation !== companyGeneration.current || companyIdRef.current !== cid) return;
@@ -189,7 +189,7 @@ function RecruiterDashboard() {
       '';
     if (preferred !== selectedJobRef.current) {
       setSelectedJob(preferred);
-    } else if (preferred) {
+    } else if (preferred && !quiet) {
       await loadJobData(preferred);
     }
     } finally { if (generation === companyGeneration.current) setJobsLoading(false); }
@@ -340,7 +340,7 @@ function RecruiterDashboard() {
         {error && <div className={rw.notice} role="alert"><span>{error}</span><button className={rw.textButton} onClick={() => { setError(''); setBootLoading(true); void bootstrap().catch((reason) => setError(reason.message)).finally(() => setBootLoading(false)); }}>{t('workspace.retry')}</button></div>}
         {msg && <div className={rw.notice} data-tone={msgTone} role="status"><span>{msg}</span><button className={rw.icon} aria-label={t('close')} onClick={() => setMsg('')}>×</button></div>}
 
-        {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={() => loadJobs(companyId)} onApplicants={(id) => router.push(employerJobHref(id,'applicants',companyId))} onStatus={changeJobStatus} onFlash={flash} />}
+        {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={(quiet) => loadJobs(companyId, quiet)} onApplicants={(id) => router.push(employerJobHref(id,'applicants',companyId))} onStatus={changeJobStatus} onFlash={flash} />}
         {tab === 'pipeline' && !bootLoading && companyId && <RecruiterPipeline meta={meta} companyId={companyId} jobs={jobs} selectedJob={selectedJob} onJobChange={setSelectedJob} applicants={applicants} companyName={company?.name || ''} loading={applicantsLoading} applicationId={searchParams.get('application') || undefined} templates={bulkTemplates} onReload={() => loadJobData(selectedJob)} onTemplates={() => setTab('bulk')} onFlash={flash} />}
 
         {tab === 'bulk' && companyId && <RecruiterTemplates key={companyId} companyId={companyId} jobPostId={selectedJob || undefined} />}

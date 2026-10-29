@@ -4,7 +4,10 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { LiveUpdates } from '../common/live-updates';
+import { OperationsService } from '../benefits/operations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -13,7 +16,7 @@ import { formatTelegramChatText } from '../telegram/telegram.chat';
 import { emailLocale } from '../common/i18n/email-locale';
 import { AuthUser } from '../common/auth.decorators';
 import { Prisma } from '@prisma/client';
-import { revealsAnonymousEmployer } from '../common/anonymous-job';
+import { revealsAnonymousEmployer, anonymousRevealHistory } from '../common/anonymous-job';
 
 @Injectable()
 export class ChatService {
@@ -24,6 +27,8 @@ export class ChatService {
     private presence: PresenceService,
     private notifications: NotificationsService,
     private telegram: TelegramService,
+    @Optional() private live?: LiveUpdates,
+    @Optional() private operations?: OperationsService,
   ) {}
 
   private pairIds(a: string, b: string) {
@@ -71,9 +76,9 @@ export class ChatService {
           jobPostId: conversation.jobPostId,
           profile: { userId: { in: participantIds } },
         },
-        select: { status: true },
+        select: { status: true, events: anonymousRevealHistory },
       });
-      return Boolean(application && revealsAnonymousEmployer(application.status));
+      return Boolean(application && revealsAnonymousEmployer(application.status, application.events));
     }
 
     if (!companyId) return true;
@@ -94,12 +99,12 @@ export class ChatService {
         profile: { userId: { in: participantIds } },
         jobPost: { companyId },
       },
-      select: { status: true, jobPost: { select: { isAnonymous: true } } },
+      select: { status: true, events: anonymousRevealHistory, jobPost: { select: { isAnonymous: true } } },
     });
     if (!applications.length) return true;
     return applications.some(
       (application) =>
-        !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status),
+        !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events),
     );
   }
 
@@ -150,22 +155,22 @@ export class ChatService {
               profile: { userId: peerUserId },
               jobPost: { companyId },
             },
-            select: { status: true, jobPost: { select: { isAnonymous: true } } },
+            select: { status: true, events: anonymousRevealHistory, jobPost: { select: { isAnonymous: true } } },
           })
         : await this.prisma.application.findMany({
             where: {
               profile: { userId: peerUserId },
               jobPost: { companyId },
             },
-            select: { status: true, jobPost: { select: { isAnonymous: true } } },
+            select: { status: true, events: anonymousRevealHistory, jobPost: { select: { isAnonymous: true } } },
           });
       const hasApplication = applications.some(
         (application) =>
-          !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status),
+          !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events),
       );
       const hiddenAnonymousApplication = applications.some(
         (application) =>
-          application.jobPost.isAnonymous && !revealsAnonymousEmployer(application.status),
+          application.jobPost.isAnonymous && !revealsAnonymousEmployer(application.status, application.events),
       );
 
       if (!hasApplication && hiddenAnonymousApplication) {
@@ -222,9 +227,9 @@ export class ChatService {
             jobPostId: contextJob.id,
             profile: { userId: user.id },
           },
-          select: { status: true },
+          select: { status: true, events: anonymousRevealHistory },
         });
-        if (!application || !revealsAnonymousEmployer(application.status)) {
+        if (!application || !revealsAnonymousEmployer(application.status, application.events)) {
           throw new NotFoundException('Employer not available');
         }
       }
@@ -291,7 +296,7 @@ export class ChatService {
 
     // Inbox fetch = Delivered for peer messages (not Read until the thread is opened)
     if (conversations.length > 0) {
-      await this.prisma.chatMessage.updateMany({
+      const delivered = await this.prisma.chatMessage.updateMany({
         where: {
           conversationId: { in: conversations.map((c) => c.id) },
           senderId: { not: userId },
@@ -299,6 +304,7 @@ export class ChatService {
         },
         data: { deliveredAt: new Date() },
       });
+      if (delivered.count) this.live?.publish(conversations.flatMap(item => [item.userAId,item.userBId]), 'chat');
     }
 
     const peerIds = conversations.map((c) => (c.userAId === userId ? c.userBId : c.userAId));
@@ -411,7 +417,7 @@ export class ChatService {
   /** Thread open/poll = Read (+ Delivered if somehow still missing). */
   private async markPeerRead(conversationId: string, viewerId: string) {
     const now = new Date();
-    await this.prisma.chatMessage.updateMany({
+    const result = await this.prisma.chatMessage.updateMany({
       where: {
         conversationId,
         senderId: { not: viewerId },
@@ -422,6 +428,7 @@ export class ChatService {
         readAt: now,
       },
     });
+    return result.count;
   }
 
   async getMessages(user: AuthUser, conversationId: string) {
@@ -441,7 +448,8 @@ export class ChatService {
     }
 
     if (user.role !== 'SUPER_ADMIN') {
-      await this.markPeerRead(conversationId, user.id);
+      const changed = await this.markPeerRead(conversationId, user.id);
+      if (changed) this.live?.publish([conversation.userAId,conversation.userBId], 'chat');
     }
 
     return this.prisma.chatMessage.findMany({
@@ -455,7 +463,7 @@ export class ChatService {
     user: AuthUser,
     conversationId: string,
     body: string,
-    opts?: { telegram?: 'offline' | 'always' | 'never' },
+    opts?: { telegram?: 'offline' | 'always' | 'never'; idempotencyKey?: string },
   ) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -473,14 +481,20 @@ export class ChatService {
     ) {
       throw new NotFoundException('Conversation not found');
     }
-    const message = await this.prisma.chatMessage.create({
-      data: { conversationId, senderId: user.id, body },
-      include: { sender: { select: { id: true, fullName: true } } },
-    });
-    await this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: { updatedAt: new Date() },
-    });
+    const write = async (tx: Prisma.TransactionClient) => {
+      const value = await tx.chatMessage.create({
+        data: { conversationId, senderId: user.id, body },
+        include: { sender: { select: { id: true, fullName: true } } },
+      });
+      await tx.conversation.update({where:{id:conversationId},data:{updatedAt:new Date()}});
+      return value;
+    };
+    const committed = opts?.idempotencyKey && this.operations
+      ? await this.operations.transaction('chat-message:'+conversationId, opts.idempotencyKey, {senderId:user.id,body}, write)
+      : {value:await this.prisma.$transaction(write),replayed:false};
+    const message = committed.value;
+    if (committed.replayed) return message;
+    this.live?.publish([conversation.userAId, conversation.userBId], 'chat');
     const peerId = conversation.userAId === user.id ? conversation.userBId : conversation.userAId;
     await this.notifyPeer({
       peerId,

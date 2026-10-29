@@ -27,9 +27,11 @@ import { escapeHtml } from '../common/utils';
 import { resolveUgcContent } from '../common/i18n/content-locale';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
-import { maskAnonymousCompany, revealsAnonymousEmployer } from '../common/anonymous-job';
+import { ANONYMOUS_REVEAL_STATUSES, maskAnonymousCompany, revealsAnonymousEmployer } from '../common/anonymous-job';
 import { ApplicantFilters, applicantFilter } from './applicant-filter';
 import { canAddToKanban, safeApplication, submittedResume } from './application-payload';
+import { LiveUpdates } from '../common/live-updates';
+import { jobChatPeers } from '../chat/job-chat-peer';
 
 function isTransactionConflict(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
@@ -50,7 +52,16 @@ export class ApplicationsService {
     private mail: MailService,
     @Optional() private operations?: OperationsService,
     @Optional() private hrEvents?: HrEventsService,
+    @Optional() private live?: LiveUpdates,
   ) {}
+
+  private async publishChange(companyId: string, candidateId?: string) {
+    if (!this.live) return;
+    try {
+      const members = await this.prisma.companyMember.findMany({where:{companyId},select:{userId:true}});
+      this.live.publish([...(candidateId ? [candidateId] : []), ...members.map(member => member.userId)], 'applications');
+    } catch (error) { this.logger.warn('Application refresh hint failed: ' + (error as Error).message); }
+  }
 
   /** PostgreSQL can reject a consistent snapshot when background counters or
    * CV processing touch a locked row. The transaction has no external side
@@ -238,6 +249,7 @@ export class ApplicationsService {
         await this.hrEvents?.submitted(tx, application, funnelSession);
         return { application, job, breakdown };
       });
+      await this.publishChange(job.companyId, user.id);
       for (const member of job.company.members) {
         try {
           await this.notifications.create({
@@ -323,20 +335,25 @@ export class ApplicationsService {
           },
         },
         events: { orderBy: { createdAt: 'desc' }, take: 5 },
+        _count: {select:{events:{where:{toStatus:{in:[...ANONYMOUS_REVEAL_STATUSES]}}}}},
         interviews: { orderBy: { scheduledAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
+    // Continue the actual submitted-job conversation, even when a team recruiter
+    // (rather than the owner) is handling the candidate. Ignore empty threads.
+    const peers = await jobChatPeers(this.prisma,user.id,rows.map(app => ({id:app.jobPostId,companyId:app.jobPost.companyId})));
     // Expose a single chat peer — do not return the members array to clients
     return rows.map((app) => {
       const members = app.jobPost.company.members ?? [];
+      const handlingId = peers.get(app.jobPostId);
       const peer = members.find((m) => m.role === 'OWNER') ?? members[0];
       const { members: _members, ...company } = app.jobPost.company;
       // Confidential posting: the employer (and its chat) stays hidden until interview stage.
-      const reveal = !app.jobPost.isAnonymous || revealsAnonymousEmployer(app.status);
+      const reveal = !app.jobPost.isAnonymous || revealsAnonymousEmployer(app.status) || app._count.events > 0;
       const jobPost = maskAnonymousCompany(
-        { ...app.jobPost, company: { ...company, chatPeerUserId: reveal ? peer?.userId ?? null : null } },
+        { ...app.jobPost, company: { ...company, chatPeerUserId: reveal ? handlingId || peer?.userId || null : null } },
         locale,
         { reveal },
       );
@@ -485,7 +502,7 @@ export class ApplicationsService {
     if (!application) throw new NotFoundException('Application not found');
     const {company} = await this.companies.assertMember(user,application.jobPost.companyId,['OWNER','ADMIN','RECRUITER']);
     if (company.isBanned || company.anonymizedAt) throw new ForbiddenException('Company unavailable');
-    return this.prisma.$transaction(async tx => {
+    const result = await this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
       const current = await tx.application.findUniqueOrThrow({where:{id:applicationId}});
       if (current.kanbanEnteredAt) return {...safeApplication(current),canAddToKanban:false};
@@ -494,6 +511,8 @@ export class ApplicationsService {
       await tx.auditLog.create({data:{actorId:user.id,action:'APPLICATION_KANBAN_ADDED',entityType:'Application',entityId:applicationId,metadata:{companyId:application.jobPost.companyId,jobPostId:application.jobPostId}}});
       return {...safeApplication(updated),canAddToKanban:false};
     });
+    await this.publishChange(application.jobPost.companyId);
+    return result;
   }
 
   async updateStatus(
@@ -549,12 +568,17 @@ export class ApplicationsService {
       await tx.pipelineEvent.create({ data: {
         applicationId, fromStatus: application.status, toStatus: status, note, actorUserId: user.id,
       } });
+      // An interview invitation must not remain actionable after leaving that stage.
+      if (status !== 'INTERVIEW') {
+        await tx.interview.updateMany({where:{applicationId,status:'SCHEDULED'},data:{status:'CANCELLED'}});
+      }
       return tx.application.findUniqueOrThrow({
         where: { id: applicationId },
         include: { events: { orderBy: { createdAt: 'desc' }, take: 10 } },
       });
     });
 
+    await this.publishChange(application.jobPost.companyId, application.profile.userId);
     if (opts?.notify !== false) {
       try {
         await this.notifications.create({
@@ -678,6 +702,9 @@ export class ApplicationsService {
       note?: string;
     },
   ) {
+    if (!Number.isFinite(Date.parse(data.scheduledAt)) || Date.parse(data.scheduledAt) <= Date.now()) {
+      throw new BadRequestException('Interview time must be in the future');
+    }
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
       include: {
@@ -729,6 +756,7 @@ export class ApplicationsService {
       return created;
     });
 
+    await this.publishChange(application.jobPost.companyId, application.profile.userId);
     try {
       await this.notifications.create({
         userId: application.profile.userId,

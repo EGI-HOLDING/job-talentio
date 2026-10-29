@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, getSession } from '@/lib/api';
 import { Link } from '@/lib/navigation';
 import { jobDetailHref } from '@/lib/accountNavigation';
 import { localizedJobLocation } from '@/lib/location';
@@ -36,11 +36,11 @@ function statusClass(status: string) {
   return '';
 }
 function upcoming(app: Application) {
-  if (CLOSED.has(app.status)) return undefined;
+  if (app.status !== 'INTERVIEW') return undefined;
   return (app.interviews || []).filter((item) => item.status !== 'CANCELLED' && item.status !== 'COMPLETED' && new Date(item.scheduledAt).getTime() >= Date.now()).sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt))[0];
 }
 
-function InterviewSummary({ interview }: { interview: Interview }) {
+function InterviewSummary({ interview, allowJoin = true }: { interview: Interview; allowJoin?: boolean }) {
   const { t, locale } = useI18n();
   let meetingUrl: string | null = null;
   try {
@@ -54,7 +54,7 @@ function InterviewSummary({ interview }: { interview: Interview }) {
     </p>
     {interview.location && <p>{interview.location}</p>}
     {interview.note && <p style={{ whiteSpace: 'pre-wrap' }}>{interview.note}</p>}
-    {meetingUrl && interview.status !== 'CANCELLED' && <a className={s.secondary} href={meetingUrl} target="_blank" rel="noopener noreferrer">{t('ew.joinInterview')}<WorkspaceIcon kind="external" /></a>}
+    {allowJoin && meetingUrl && interview.status === 'SCHEDULED' && <a className={s.secondary} href={meetingUrl} target="_blank" rel="noopener noreferrer">{t('ew.joinInterview')}<WorkspaceIcon kind="external" /></a>}
   </div>;
 }
 
@@ -62,13 +62,14 @@ export function ApplicationsWorkspace() {
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const confirm = useConfirm();
-  const resource = useEmployeeResource<Application>('/applications/mine');
+  const resource = useEmployeeResource<Application>('/applications/mine', true);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const withdrawLock = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const selected = resource.items.find((item) => item.id === selectedId);
   const matches = (item: Application, key: string) => key === 'all' || (key === 'active' ? !CLOSED.has(item.status) : key === 'interviews' ? !CLOSED.has(item.status) && (item.status === 'INTERVIEW' || Boolean(upcoming(item))) : key === 'offers' ? item.status === 'OFFER' : CLOSED.has(item.status));
@@ -78,18 +79,24 @@ export function ApplicationsWorkspace() {
   const safePage = Math.min(page, Math.max(1, Math.ceil(visible.length / SIZE)));
 
   async function withdraw(item: Application) {
-    if (!(await confirm({ title: t('emp.withdrawConfirm'), confirmLabel: t('emp.withdraw'), tone: 'danger' }))) return;
-    setBusy(true);
+    if (withdrawLock.current) return;
+    withdrawLock.current = true;
+    const account = getSession()?.user.id;
     try {
+      if (!(await confirm({ title: t('emp.withdrawConfirm'), confirmLabel: t('emp.withdraw'), tone: 'danger' }))) return;
+      if (account !== getSession()?.user.id) return;
+      setBusy(true);
       await api('/applications/' + item.id + '/status', { method: 'POST', body: JSON.stringify({ status: 'WITHDRAWN' }) });
+      if (account !== getSession()?.user.id) return;
       resource.setItems((items) => items.map((row) => row.id === item.id ? { ...row, status: 'WITHDRAWN' } : row));
       resource.setError('');
-    } catch (error) { resource.setError(error instanceof Error ? error.message : t('emp.withdrawFailed')); }
-    finally { setBusy(false); }
+    } catch (error) { if (account === getSession()?.user.id) resource.setError(error instanceof Error ? error.message : t('emp.withdrawFailed')); }
+    finally { withdrawLock.current=false; setBusy(false); }
   }
   function nextStep(item: Application) {
     const interview = upcoming(item);
     if (interview) return <strong>{t('emp.interview')}{' \u00b7 '}{dateLabel(interview.scheduledAt, locale, true)}</strong>;
+    if (item.status === 'INTERVIEW') return t('journey.awaitingSchedule');
     return t(CLOSED.has(item.status) ? item.status === 'HIRED' ? 'ew.completed' : 'ew.closed' : item.status === 'OFFER' ? 'ew.offerReceived' : 'ew.awaiting');
   }
   const retry = () => { void resource.reload().catch((error: Error) => resource.setError(error.message)); };
@@ -99,7 +106,7 @@ export function ApplicationsWorkspace() {
     {resource.error && <ResourceError message={resource.error} onRetry={retry} />}
     {resource.loading ? <WorkspaceLoading /> : <div ref={scrollRef} className={s.scroll}>{!visible.length ? <WorkspaceEmpty title={t(resource.error && !resource.items.length ? 'ew.loadFailed' : resource.items.length ? 'ew.noResults' : 'ew.applicationsEmpty')} hint={resource.error && !resource.items.length ? undefined : t(resource.items.length ? 'ew.adjustSearch' : 'ew.applicationsEmptyHint')}>{!resource.error && !resource.items.length && <FindJobsAction />}</WorkspaceEmpty> : <table className={s.table}><colgroup><col style={{ width: '38%' }} /><col style={{ width: '17%' }} /><col style={{ width: '16%' }} /><col style={{ width: '23%' }} /><col style={{ width: '6%' }} /></colgroup><thead><tr><th scope="col">{t('ew.roleCompany')}</th><th scope="col">{t('ew.status')}</th><th scope="col">{t('ew.applied')}</th><th scope="col">{t('ew.nextStep')}</th><th scope="col"><span className="sr-only">{t('emp.details')}</span></th></tr></thead><tbody>{visible.slice((safePage - 1) * SIZE, safePage * SIZE).map((item) => <tr key={item.id}><td><div className={s.companyCell}><CompanyMark name={item.jobPost.company?.name || item.jobPost.title} logo={item.jobPost.company?.logoUrl} /><div className={s.companyText}><button type="button" className={s.titleButton} onClick={() => setSelectedId(item.id)}>{item.jobPost.title}</button><span className={s.sub}>{[item.jobPost.company?.name, localizedJobLocation(item.jobPost, t)].filter(Boolean).join(' \u00b7 ')}</span></div></div></td><td><span className={s.status + ' ' + statusClass(item.status)}><WorkspaceIcon kind={item.status === 'INTERVIEW' ? 'user' : item.status === 'HIRED' || item.status === 'OFFER' ? 'check' : 'clock'} />{item.status === 'NEW' ? t('ew.applied') : enumLabel('applicationStatus', item.status)}</span></td><td className={s.date} data-mobile="hide">{dateLabel(item.createdAt, locale)}</td><td className={s.nextStep}>{nextStep(item)}</td><td><button type="button" className={s.iconButton} aria-label={t('ew.applicationDetails') + ': ' + item.jobPost.title} onClick={() => setSelectedId(item.id)}><WorkspaceIcon kind="right" /></button></td></tr>)}</tbody></table>}</div>}
     {!resource.loading && <Pagination page={safePage} total={visible.length} size={SIZE} onChange={setPage} />}
-    {selected && <ProfileDialog title={t('ew.applicationDetails')} wide onClose={() => setSelectedId(null)} busy={busy}><div className={s.detailBody}><div className={s.detailIdentity}><CompanyMark name={selected.jobPost.company?.name || selected.jobPost.title} logo={selected.jobPost.company?.logoUrl} /><div><h3>{selected.jobPost.title}</h3><span className={s.sub}>{selected.jobPost.company?.name}{' \u00b7 '}{localizedJobLocation(selected.jobPost, t)}</span></div></div><div className={s.detailMeta}><span className={s.status + ' ' + statusClass(selected.status)}>{selected.status === 'NEW' ? t('ew.applied') : enumLabel('applicationStatus', selected.status)}</span><span>{t('ew.applied')}: {dateLabel(selected.createdAt, locale)}</span></div>{Boolean(selected.interviews?.length) && <div className={s.detailSection}><h3>{t('ew.interviews')}</h3>{selected.interviews!.map((interview) => <InterviewSummary key={interview.id} interview={interview} />)}<span className={s.sub}>{t('ew.timezone').replace('{zone}', Intl.DateTimeFormat().resolvedOptions().timeZone)}</span></div>}{selected.resumeSnapshot?.resume?.title && <div className={s.detailSection}><h3>{t('ew.cv')}</h3><p>{selected.resumeSnapshot.resume.title}</p></div>}{selected.coverLetter && <div className={s.detailSection}><h3>{t('coverLetter')}</h3><p style={{ whiteSpace: 'pre-wrap' }}>{selected.coverLetter}</p></div>}<div className={s.detailActions}>{selected.jobPost.status === 'PUBLISHED' && <Link className={s.secondary} href={jobDetailHref(selected.jobPost.id, '/dashboard/employee?tab=applications')}>{t('ew.viewJob')}<WorkspaceIcon kind="external" /></Link>}{selected.jobPost.company?.chatPeerUserId && <Link className={s.primary} href={'/messages?peer=' + encodeURIComponent(selected.jobPost.company.chatPeerUserId) + '&job=' + encodeURIComponent(selected.jobPost.id)}><WorkspaceIcon kind="message" />{t('chatWithRecruiter')}</Link>}{!CLOSED.has(selected.status) && <button type="button" className={s.danger} disabled={busy} onClick={() => void withdraw(selected)}>{t('emp.withdraw')}</button>}</div></div></ProfileDialog>}
+    {selected && <ProfileDialog title={t('ew.applicationDetails')} wide onClose={() => setSelectedId(null)} busy={busy}><div className={s.detailBody}><div className={s.detailIdentity}><CompanyMark name={selected.jobPost.company?.name || selected.jobPost.title} logo={selected.jobPost.company?.logoUrl} /><div><h3>{selected.jobPost.title}</h3><span className={s.sub}>{selected.jobPost.company?.name}{' \u00b7 '}{localizedJobLocation(selected.jobPost, t)}</span></div></div><div className={s.detailMeta}><span className={s.status + ' ' + statusClass(selected.status)}>{selected.status === 'NEW' ? t('ew.applied') : enumLabel('applicationStatus', selected.status)}</span><span>{t('ew.applied')}: {dateLabel(selected.createdAt, locale)}</span></div>{Boolean(selected.interviews?.length) && <div className={s.detailSection}><h3>{t('ew.interviews')}</h3>{selected.interviews!.map((interview) => <InterviewSummary key={interview.id} interview={interview} allowJoin={selected.status==='INTERVIEW'} />)}<span className={s.sub}>{t('ew.timezone').replace('{zone}', Intl.DateTimeFormat().resolvedOptions().timeZone)}</span></div>}{selected.resumeSnapshot?.resume?.title && <div className={s.detailSection}><h3>{t('ew.cv')}</h3><p>{selected.resumeSnapshot.resume.title}</p></div>}{selected.coverLetter && <div className={s.detailSection}><h3>{t('coverLetter')}</h3><p style={{ whiteSpace: 'pre-wrap' }}>{selected.coverLetter}</p></div>}<div className={s.detailActions}>{selected.jobPost.status === 'PUBLISHED' && <Link className={s.secondary} href={jobDetailHref(selected.jobPost.id, '/dashboard/employee?tab=applications')}>{t('ew.viewJob')}<WorkspaceIcon kind="external" /></Link>}{selected.jobPost.company?.chatPeerUserId && <Link className={s.primary} href={'/messages?peer=' + encodeURIComponent(selected.jobPost.company.chatPeerUserId) + '&job=' + encodeURIComponent(selected.jobPost.id) + '&application=' + encodeURIComponent(selected.id)}><WorkspaceIcon kind="message" />{t('chatWithRecruiter')}</Link>}{!CLOSED.has(selected.status) && <button type="button" className={s.danger} disabled={busy} onClick={() => void withdraw(selected)}>{t('emp.withdraw')}</button>}</div></div></ProfileDialog>}
   </section>;
 }
 

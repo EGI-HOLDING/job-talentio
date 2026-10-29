@@ -1,4 +1,5 @@
 export const recruiterWorkspace = {
+  "journey.awaitingSchedule": {"en":"Interview stage: awaiting schedule", "ru":"Этап собеседования: ожидается расписание", "uz":"Suhbat bosqichi: vaqt belgilanmoqda"},
   "jr.package": {"en": "Package", "ru": "Пакет", "uz": "Tarif"},
   "jr.performance": {"en": "Activity", "ru": "Показатели", "uz": "Natijalar"},
   "jr.period": {"en": "Active until", "ru": "Срок действия", "uz": "Muddati"},

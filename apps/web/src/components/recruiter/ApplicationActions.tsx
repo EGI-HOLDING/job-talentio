@@ -13,7 +13,7 @@ export type Applicant = {
   resumeTitle?: string | null; coverLetter?: string | null;
   profile: { id: string; headline?: string | null; user: {id: string; fullName: string; avatarUrl?: string | null}; city?: {name: string} | null; residenceCountry?: {name: string} | null; skills?: Array<{id: string; skill: {name: string}}> };
   answers?: Array<{id: string; answer: string; question: {question: string}}>;
-  interviews?: Array<{id: string; scheduledAt: string; status: string; meetingUrl?: string | null}>;
+  interviews?: Array<{id: string; scheduledAt: string; status: string; meetingUrl?: string | null; durationMins?: number; location?: string | null; note?: string | null}>;
 };
 
 export function KanbanAction({application, jobId, companyId, onChanged}: {application: Pick<Applicant,'id'|'kanbanEnteredAt'|'canAddToKanban'>; jobId: string; companyId: string; onChanged: (value: Partial<Applicant>) => void}) {

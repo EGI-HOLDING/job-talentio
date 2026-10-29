@@ -6,7 +6,10 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
+import { Optional, OnModuleDestroy } from '@nestjs/common';
+import { LiveUpdates } from '../common/live-updates';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -28,7 +31,7 @@ import { z } from 'zod';
   },
   namespace: '/chat',
 })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, OnModuleDestroy {
   @WebSocketServer()
   server!: Server;
 
@@ -38,7 +41,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private chat: ChatService,
     private prisma: PrismaService,
     private presence: PresenceService,
+    @Optional() private live?: LiveUpdates,
   ) {}
+
+  private unsubscribe?: () => void;
+  afterInit() {
+    this.unsubscribe = this.live?.subscribe((users, resource) => {
+      for (const id of users) this.server.to(`user:${id}`).emit('resource:changed', {resource});
+    });
+  }
+  onModuleDestroy() { this.unsubscribe?.(); }
 
   async handleConnection(client: Socket) {
     try {

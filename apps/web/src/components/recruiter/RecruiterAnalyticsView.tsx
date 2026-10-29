@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { api, apiBlob } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -104,14 +105,17 @@ export function RecruiterAnalyticsView({
     ...(from ? { from: from + 'T00:00:00.000Z' } : {}),
     ...(to ? { to: to + 'T23:59:59.999Z' } : {}),
   }).toString();
+  const loaded=useRef('');
+  useLiveRefresh('applications',async()=>{setRetry(value=>value+1);},true,query+':'+locale);
   useEffect(() => {
     let alive = true;
     setError('');
-    setStats(null);
+    const identity=query+':'+locale;
+    if (loaded.current!==identity) setStats(null);
     if (view === 'job' && !selectedJob) return;
     api('/hr-reports?' + query)
       .then((value) => {
-        if (alive) setStats(value);
+        if (alive) { loaded.current=identity; setStats(value); }
       })
       .catch((error) => {
         if (alive) setError(error.message);

@@ -1,4 +1,5 @@
 'use client';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 
 import { Link, localeHref, usePathname, useRouter } from '@/lib/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -107,15 +108,28 @@ function SiteNavContent() {
     return () => window.removeEventListener('talentio:company', update);
   }, [companies]);
 
+  const noticeRequest = useRef(0);
+  useEffect(() => () => { ++noticeRequest.current; }, []);
+  async function refreshNotifs(showList = open) {
+    const sequence = ++noticeRequest.current, account = getSession()?.user.id;
+    if (!account) return;
+    if (showList) {
+      const data = await api<{items:Notif[];unread:number}>('/notifications');
+      if (sequence !== noticeRequest.current || account !== getSession()?.user.id) return;
+      setNotifs(data.items); setUnread(data.unread);
+    } else {
+      const data = await api<{count:number}>('/notifications/unread-count');
+      if (sequence === noticeRequest.current && account === getSession()?.user.id) setUnread(data.count);
+    }
+  }
+  useLiveRefresh('notifications', refreshNotifs, Boolean(session), locale + ':' + session?.user.id);
   async function toggleNotifs() {
     if (!session) return;
     const next = !open;
     setOpen(next);
     if (next) {
       try {
-        const data = await api<{ items: Notif[]; unread: number }>('/notifications');
-        setNotifs(data.items);
-        setUnread(data.unread);
+        await refreshNotifs(true);
       } catch {
         /* ignore */
       }

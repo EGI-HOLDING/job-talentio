@@ -1,3 +1,4 @@
+import { jobChatPeers } from '../chat/job-chat-peer';
 import {
   Injectable,
   Optional,
@@ -53,6 +54,7 @@ import {
   displayCompanyName,
   maskAnonymousCompany,
   revealsAnonymousEmployer,
+  anonymousRevealHistory,
 } from '../common/anonymous-job';
 
 
@@ -813,7 +815,8 @@ export class JobsService {
     // Confidential posting: the employer stays hidden until this candidate is at interview stage.
     const reveal = job.isAnonymous ? await this.viewerReachedInterview(viewer, id) : true;
     const masked = maskAnonymousCompany(stripped, locale, { reveal });
-    const chatPeerUserId = reveal ? await this.chatPeerUserIdForCompany(job.companyId) : null;
+    const existingPeer = reveal && viewer?.role === 'EMPLOYEE' ? (await jobChatPeers(this.prisma,viewer.id,[{id,companyId:job.companyId}])).get(id) : null;
+    const chatPeerUserId = reveal ? existingPeer || await this.chatPeerUserIdForCompany(job.companyId) : null;
     return {
       ...masked,
       chatPeerUserId,
@@ -825,9 +828,9 @@ export class JobsService {
     if (!viewer) return false;
     const application = await this.prisma.application.findFirst({
       where: { jobPostId: jobId, profile: { userId: viewer.id } },
-      select: { status: true },
+      select: { status: true, events: anonymousRevealHistory },
     });
-    return revealsAnonymousEmployer(application?.status);
+    return revealsAnonymousEmployer(application?.status, application?.events);
   }
 
   /** Minimal public fields for JobPosting JSON-LD. No JobView side effect. */

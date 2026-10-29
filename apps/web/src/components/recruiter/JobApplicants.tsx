@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { api } from '@/lib/api';
 import { useI18n, useEnumLabel } from '@/lib/i18n';
 import { DEFAULT_PIPELINE } from '@job-talentio/shared';
@@ -29,19 +30,23 @@ export function JobApplicants({ jobId, companyId, meta, revision=0, applicationI
   const [loading, setLoading] = useState(true), [error, setError] = useState('');
   const filterKey = JSON.stringify(filters);
   const activeFilters = Object.values(filters).filter(value => value && value !== 'false').length;
+  const loaded = useRef(''), reads = useRef(0);
+  const changed = () => { ++reads.current; setRetry(value=>value+1); onChanged(); };
+  useLiveRefresh('applications', async () => { setRetry(value => value + 1); }, true, jobId + ':' + companyId);
 
   useEffect(() => {
-    let alive = true;
-    setLoading(true); setError('');
+    let alive = true; const sequence = ++reads.current;
+    const identity = JSON.stringify([jobId, companyId, query, filterKey, sort, status, page, locale]);
+    setLoading(loaded.current !== identity); setError('');
     const params = new URLSearchParams({
       ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '')),
       q: query.trim(), sort, ...(status?{status}:{}),
       page: String(page), limit: String(PAGE_SIZE),
     });
     const timer = setTimeout(() => {
-      api<typeof result>('/applications/jobs/'+encodeURIComponent(jobId)+'/search?' + params)
-        .then(data => { if (alive) { setResult(data); if (data.page !== page) setPage(data.page); } })
-        .catch(reason => { if (alive) setError(reason.message); })
+      api<typeof result>('/applications/jobs/'+encodeURIComponent(jobId)+'/search?' + params, {signal:AbortSignal.timeout(15000)})
+        .then(data => { if (alive && sequence===reads.current) { loaded.current=identity; setResult(data); if (data.page !== page) setPage(data.page); } })
+        .catch(reason => { if (alive && sequence===reads.current) setError(reason.message); })
         .finally(() => { if (alive) setLoading(false); });
     }, 200);
     return () => { alive = false; clearTimeout(timer); };
@@ -76,7 +81,7 @@ export function JobApplicants({ jobId, companyId, meta, revision=0, applicationI
             <td className={s.position}>{profile.headline || t('ranking.noHeadline')}</td>
             <td><span className={s.location}>{location && <WorkspaceIcon kind="pin"/>}{location || t('ranking.notProvided')}</span></td>
             <td><span className={s.applicationStatus} data-status={item.status}>{enumLabel('applicationStatus',item.status)}</span></td>
-            <td><div className={s.rowActions}><KanbanAction application={item} jobId={jobId} companyId={companyId} onChanged={value=>{setResult(current=>({...current,items:current.items.map(row=>row.id===item.id?{...row,...value}:row)}));onChanged();}}/><ApplicationCvAction application={item}/><button className={s.profileButton} onClick={()=>setDetail(item.id)}>{t('applicants.details')}</button></div></td>
+            <td><div className={s.rowActions}><KanbanAction application={item} jobId={jobId} companyId={companyId} onChanged={value=>{setResult(current=>({...current,items:current.items.map(row=>row.id===item.id?{...row,...value}:row)}));changed();}}/><ApplicationCvAction application={item}/><button className={s.profileButton} onClick={()=>setDetail(item.id)}>{t('applicants.details')}</button></div></td>
           </tr>;
         })}</tbody>
       </table>
@@ -91,6 +96,6 @@ export function JobApplicants({ jobId, companyId, meta, revision=0, applicationI
         <button type="button" disabled={page >= pageCount} aria-label={t('ew.nextPage')} onClick={() => setPage(page + 1)}><WorkspaceIcon kind="right"/></button>
       </nav>
     </footer>}
-    {detail&&<ApplicationDetail key={jobId+':'+detail} applicationId={detail} jobId={jobId} companyId={companyId} onClose={()=>setDetail(null)} onChanged={()=>{setRetry(n=>n+1);onChanged();}}/>}
+    {detail&&<ApplicationDetail key={jobId+':'+detail} applicationId={detail} jobId={jobId} companyId={companyId} onClose={()=>setDetail(null)} onChanged={changed}/>}
   </section>;
 }

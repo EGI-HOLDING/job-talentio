@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { chatConversationSchema, chatMessageSchema } from '@job-talentio/shared';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
@@ -33,8 +33,9 @@ export class ChatController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() body: unknown,
+    @Headers('idempotency-key') key?: string,
   ) {
     const data = parseDto(chatMessageSchema, body);
-    return this.chat.sendMessage(user, id, data.body);
+    return this.chat.sendMessage(user, id, data.body, {idempotencyKey:key});
   }
 }

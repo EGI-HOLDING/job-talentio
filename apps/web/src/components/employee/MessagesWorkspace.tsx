@@ -5,6 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/lib/navigation';
 import { jobDetailHref } from '@/lib/accountNavigation';
 import { api, getSession, type AuthSession } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
+import { postOnce } from '@/lib/hr-benefits';
+import { useSessionIdentity } from '@/lib/useSessionIdentity';
 import { useI18n } from '@/lib/i18n';
 import { usePresence, seedPresence, type PresenceStatus } from '@/lib/presence';
 import { PresenceDot } from '@/components/presence/PresenceDot';
@@ -29,13 +32,17 @@ export function MessagesWorkspace() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
+  const identity = useSessionIdentity();
+  const lastIdentity = useRef('');
   const peerParam = params.get('peer');
   const jobParam = params.get('job');
+  const applicationParam = params.get('application');
   const [session, setSession] = useState<AuthSession | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const requestVersion = useRef(0);
+  const inboxVersion = useRef(0), generation = useRef(0), sendLock = useRef(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -48,41 +55,56 @@ export function MessagesWorkspace() {
   const nearBottomRef = useRef(true);
 
   const loadConversations = useCallback(async () => {
-    const list = await api<Conversation[]>('/chat/conversations');
+    const version = ++inboxVersion.current, context = generation.current, account = getSession()?.user.id;
+    const list = await api<Conversation[]>('/chat/conversations', {signal:AbortSignal.timeout(15000)});
+    if (version !== inboxVersion.current || context !== generation.current || account !== getSession()?.user.id) return list;
     const me = getSession()?.user.id;
     for (const item of list) seedPresence(item.userAId === me ? item.userBId : item.userAId, item.peerPresence);
     setConversations(list);
+    if (activeIdRef.current && !list.some(item => item.id === activeIdRef.current)) {
+      activeIdRef.current = null; ++requestVersion.current; setActiveId(null); setMessages([]);
+    }
     return list;
   }, [locale]);
 
   const loadMessages = useCallback(async (id: string) => {
-    const version = ++requestVersion.current;
-    const list = await api<Message[]>('/chat/conversations/' + id + '/messages');
-    if (activeIdRef.current !== id || version !== requestVersion.current) return;
+    const version = ++requestVersion.current, context = generation.current, account = getSession()?.user.id;
+    const list = await api<Message[]>('/chat/conversations/' + id + '/messages', {signal:AbortSignal.timeout(15000)});
+    if (context !== generation.current || account !== getSession()?.user.id || activeIdRef.current !== id || version !== requestVersion.current) return;
     setMessages(list);
     const last = list[list.length - 1];
     setConversations((rows) => rows.map((row) => row.id === id && last ? { ...row, messages: [{ ...last, readAt: last.senderId === getSession()?.user.id ? last.readAt : last.readAt || new Date().toISOString() }] } : row));
   }, []);
 
   const openConversation = useCallback(async (id: string) => {
-    if (activeIdRef.current === id) return;
+    const same = activeIdRef.current === id;
     activeIdRef.current = id;
     nearBottomRef.current = true;
-    setActiveId(id); setMessages([]); setThreadLoading(true); setError('');
+    setActiveId(id); if (!same) setMessages([]); setThreadLoading(true); setError('');
     try { await loadMessages(id); }
     catch (reason) { if (activeIdRef.current === id) setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }
     finally { if (activeIdRef.current === id) setThreadLoading(false); }
   }, [loadMessages, t]);
 
   useEffect(() => {
+    if (identity !== lastIdentity.current) {
+      lastIdentity.current = identity;
+      activeIdRef.current = null; setActiveId(null); setMessages([]); setConversations([]); setDrafts({}); setSendingId(null); sendLock.current=false;
+    }
     const current = getSession();
-    if (!current) { router.replace('/login?role=' + (params.get('role') === 'RECRUITER' ? 'RECRUITER' : 'EMPLOYEE') + '&next=' + encodeURIComponent('/messages' + (params.toString() ? '?' + params.toString() : ''))); return; }
+    if (!current) { setSession(null); router.replace('/login?role=' + (params.get('role') === 'RECRUITER' ? 'RECRUITER' : 'EMPLOYEE') + '&next=' + encodeURIComponent('/messages' + (params.toString() ? '?' + params.toString() : ''))); return; }
     setSession(current);
+    const version = ++generation.current;
     let alive = true;
     setLoading(true);
     (async () => {
       try {
-        await loadConversations();
+        const inbox = await loadConversations();
+        // Application links may have been rendered before a team recruiter wrote.
+        // Resolve the existing job thread now instead of opening a second owner thread.
+        const handling = current.user.role === 'EMPLOYEE' && applicationParam && jobParam
+          ? inbox.find(item => item.jobPostId === jobParam && item.messages.length > 0) : null;
+        if (handling && alive) { await openConversation(handling.id); return; }
         if (peerParam && alive) {
           const conversation = await api<Conversation>('/chat/conversations', { method: 'POST', body: JSON.stringify({ peerUserId: peerParam, jobPostId: jobParam || undefined }) });
           if (!alive) return;
@@ -92,20 +114,16 @@ export function MessagesWorkspace() {
       } catch (reason) { if (alive) setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }
       finally { if (alive) setLoading(false); }
     })();
-    return () => { alive = false; };
-  }, [peerParam, jobParam, loadConversations, openConversation, router, t]);
+    return () => { alive = false; if (version === generation.current) ++generation.current; ++inboxVersion.current; ++requestVersion.current; };
+  }, [peerParam, jobParam, applicationParam, loadConversations, openConversation, router, t, identity]);
 
-  useEffect(() => {
-    if (!session) return;
-    const poll = window.setInterval(() => {
-      if (document.visibilityState === 'hidden') return;
-      void (async () => {
-        try { await loadConversations(); if (activeIdRef.current) await loadMessages(activeIdRef.current); }
-        catch { /* Keep the current conversation visible through a transient polling failure. */ }
-      })();
-    }, 5000);
-    return () => window.clearInterval(poll);
-  }, [session, loadConversations, loadMessages]);
+  useLiveRefresh('chat', async () => {
+    const context = generation.current, id = activeIdRef.current;
+    const results = await Promise.allSettled([loadConversations(), ...(id ? [loadMessages(id)] : [])]);
+    if (context !== generation.current || id !== activeIdRef.current) return;
+    const failure = results.find(result => result.status === 'rejected');
+    setError(failure?.status === 'rejected' ? failure.reason instanceof Error ? failure.reason.message : t('ew.loadFailed') : '');
+  }, Boolean(session), locale + ':' + session?.user.id);
 
   useEffect(() => {
     if (!nearBottomRef.current) return;
@@ -121,12 +139,15 @@ export function MessagesWorkspace() {
   const draft = activeId ? drafts[activeId] || '' : '';
 
   async function send() {
-    if (!activeId || !draft.trim() || sendingId) return;
+    if (!activeId || !draft.trim() || sendLock.current) return;
+    sendLock.current = true;
+    const context = generation.current;
     const id = activeId;
     const text = draft.trim();
     setSendingId(id); setError('');
     try {
-      const message = await api<Message>('/chat/conversations/' + id + '/messages', { method: 'POST', body: JSON.stringify({ body: text }) });
+      const message = await postOnce<Message>('/chat/conversations/' + id + '/messages', {body:text}, {signal:AbortSignal.timeout(30000)});
+      if (context !== generation.current) return;
       if (activeIdRef.current === id) {
         requestVersion.current++;
         nearBottomRef.current = true;
@@ -134,14 +155,15 @@ export function MessagesWorkspace() {
       }
       setDrafts((items) => items[id]?.trim() === text ? { ...items, [id]: '' } : items);
       void loadConversations().catch(() => undefined);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t('ui.messageSendFailed')); }
-    finally { setSendingId(null); }
+    } catch (reason) { if (context === generation.current && activeIdRef.current === id) setError(reason instanceof Error ? reason.message : t('ui.messageSendFailed')); }
+    finally { if (context === generation.current) { sendLock.current = false; setSendingId(null); } }
   }
   async function retry() {
+    const context = generation.current;
     setError('');
     try { await loadConversations(); if (activeIdRef.current) { setThreadLoading(true); await loadMessages(activeIdRef.current); } }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }
-    finally { setThreadLoading(false); setLoading(false); }
+    catch (reason) { if (context === generation.current) setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }
+    finally { if (context === generation.current) { setThreadLoading(false); setLoading(false); } }
   }
   if (!session) return <section className={s.root}><WorkspaceLoading /></section>;
   const canLinkJob = active?.job && (active.job.status === 'PUBLISHED' || session.user.role === 'SUPER_ADMIN' || session.user.memberships?.some((membership) => membership.companyId === active.job!.companyId));

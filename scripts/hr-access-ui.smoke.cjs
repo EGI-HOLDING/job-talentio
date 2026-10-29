@@ -1,6 +1,7 @@
 // Execute the real client components with a small hook host. No browser session,
 // personal account, network request or business database is used.
 const { test } = require('node:test');
+require('./journey-sync-ui.smoke.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -74,6 +75,7 @@ function host(file, exportName, dependencies, globals = {}) {
       module,
       exports: module.exports,
       URLSearchParams,
+      AbortSignal,
       setTimeout,
       clearTimeout,
       setInterval: () => 1,
@@ -85,6 +87,7 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name === 'react/jsx-runtime') return requireWeb(name);
         if (name in dependencies) return dependencies[name];
         if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
+        if (name === '@/lib/useLiveRefresh') return { useLiveRefresh() {} };
         throw Error('Unexpected dependency: ' + name);
       },
     },
@@ -163,13 +166,13 @@ test('CV action resolves the submitted application file and has no database perm
   let tree=await ui.render({application:row()});nodes(tree,n=>n.type==='button')[0].props.onClick();await ui.render();assert.deepEqual(requests,['/applications/app/resume-download']);assert.equal(tab.location.href,'https://example.test/submitted');assert.equal(tab.opener,null);
   tree=await ui.render({application:row('empty',{hasResumeFile:false})});assert.equal(nodes(tree,n=>n.type==='button').length,0);ui.unmount();
 });
-test('Kanban loads each column independently and highlights an off-page linked application',async()=>{
-  const stub=()=>null,requests=[];
-  const dependencies=applicantDependencies(async route=>{requests.push(route);if(route.includes('/applicants/'))return row('linked',{kanbanEnteredAt:'2026-10-26'});const q=new URL(route,'http://local').searchParams,page=Number(q.get('page'));return {columns:[{status:'NEW',items:Array.from({length:page===1?20:5},(_,i)=>row('p'+page+'-'+i,{kanbanEnteredAt:'2026-10-26'})),total:25,page,hasMore:page===1}]};},{'@/lib/hr-benefits':{postOnce:async()=>{}},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,dateLabel:()=>''}});
+test('Kanban loads each column independently and preserves loaded pages during live refresh',async()=>{
+  const stub=()=>null,requests=[];let refresh;
+  const dependencies=applicantDependencies(async route=>{requests.push(route);if(route.includes('/applicants/'))return row('linked',{kanbanEnteredAt:'2026-10-26'});const q=new URL(route,'http://local').searchParams,page=Number(q.get('page'));return {columns:[{status:'NEW',items:Array.from({length:page===1?20:5},(_,i)=>row('p'+page+'-'+i,{kanbanEnteredAt:'2026-10-26'})),total:25,totalPages:2,page,hasMore:page===1}]};},{'@/lib/useLiveRefresh':{useLiveRefresh:(_kind,fn)=>{refresh=fn;}},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,dateLabel:()=>''}});
   const ui=host('apps/web/src/components/recruiter/RecruiterPipeline.tsx','RecruiterPipeline',dependencies);
   let tree=await ui.render({embedded:true,meta:{},companyId:'company',companyName:'Company',jobs:[{id:'job'}],selectedJob:'job',applicationId:'linked',applicants:[],templates:[],onReload:async()=>{},onTemplates(){},onFlash(){},onJobChange(){}});
   await new Promise(r=>setTimeout(r,230));tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,21);assert.equal(nodes(tree,n=>n.type==='article'&&n.props['data-active']).length,1);
-  nodes(tree,n=>n.type==='button'&&n.props.children==='applicants.loadMore')[0].props.onClick();tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26);assert.match(requests.at(-1),/status=NEW.*page=2/);assert.doesNotMatch(JSON.stringify(tree),/matchScore|miniScore|\/100/);ui.unmount();
+  nodes(tree,n=>n.type==='button'&&n.props.children==='applicants.loadMore')[0].props.onClick();tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26);assert.match(requests.at(-1),/status=NEW.*page=2/);assert.doesNotMatch(JSON.stringify(tree),/matchScore|miniScore|\/100/);await refresh();tree=await ui.render();await new Promise(r=>setTimeout(r,230));tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26,'Live updates preserve page two');ui.unmount();
 });
 
 test('application detail keeps the application identity and exposes the same Kanban action without scores',async()=>{

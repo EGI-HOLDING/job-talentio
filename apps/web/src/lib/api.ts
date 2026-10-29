@@ -110,6 +110,9 @@ async function tryRefresh(): Promise<string | null> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
         });
+        // A different tab/login may have replaced this session while rotation ran.
+        // Never overwrite or clear the newer account with the old response.
+        if (refreshToken !== getRefreshToken()) return null;
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) {
             clearSession();
@@ -119,6 +122,7 @@ async function tryRefresh(): Promise<string | null> {
           throw new ApiError(formatApiError(body, res.statusText || 'Session refresh failed'), res.status);
         }
         const session = (await res.json()) as AuthSession;
+        if (refreshToken !== getRefreshToken()) return null;
         saveSession(session);
         return session.accessToken;
       } finally {
@@ -193,15 +197,18 @@ export async function api<T>(
   }
   if (!headers.has('X-Locale')) headers.set('X-Locale', activeLocale());
   const useAuth = auth;
+  const actor = getSession()?.user.id;
   if (useAuth) {
     const token = getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
   let res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
+  if (useAuth && actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
 
   // Expired access token: silently rotate once via the refresh token, then retry.
   if (res.status === 401 && useAuth && getToken() && path !== '/auth/refresh') {
     const rotated = await tryRefresh();
+    if (actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
     if (rotated) {
       headers.set('Authorization', `Bearer ${rotated}`);
       res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
@@ -209,6 +216,7 @@ export async function api<T>(
   }
 
   const text = await res.text();
+  if (useAuth && actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
   let data: unknown = null;
   if (text) {
     try {
@@ -224,10 +232,15 @@ export async function api<T>(
 }
 
 export async function apiBlob(path:string):Promise<Blob> {
+  const actor=getSession()?.user.id;
   const headers=new Headers({'X-Locale':activeLocale()});
   if(getToken())headers.set('Authorization','Bearer '+getToken());
   let response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});
-  if(response.status===401){const token=await tryRefresh();if(token){headers.set('Authorization','Bearer '+token);response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});}}
+  if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
+  if(response.status===401){const token=await tryRefresh();if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);if(token){headers.set('Authorization','Bearer '+token);response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});}}
+  if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
   if(!response.ok){const body=await response.json().catch(()=>null);throw new ApiError(formatApiError(body,response.statusText),response.status);}
-  return response.blob();
+  const file=await response.blob();
+  if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
+  return file;
 }

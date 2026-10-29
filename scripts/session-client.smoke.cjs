@@ -46,6 +46,31 @@ function response(status, body) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+if (client==='web') {
+  test('web: an old account request cannot refresh or retry a mutation under a different login',async()=>{
+    let finish;const waiting=new Promise(resolve=>{finish=resolve;});let calls=0;
+    const {api,values}=loadClient(async()=>{calls++;await waiting;return response(401,{message:'Expired'});});
+    values.set('jt_session',JSON.stringify({user:{id:'account-a'}}));
+    const result=api('/applications/application/status',{method:'POST',body:JSON.stringify({status:'WITHDRAWN'})});
+    values.set('jt_session',JSON.stringify({user:{id:'account-b'}}));values.set('jt_token','account-b-token');values.set('jt_refresh','account-b-refresh');
+    finish();await assert.rejects(result,error=>error.status===409);assert.equal(calls,1);assert.equal(values.get('jt_token'),'account-b-token');
+  });
+  for(const status of [200,401])test('web: delayed refresh '+status+' cannot overwrite or log out the new account',async()=>{
+    let finish,started;const waiting=new Promise(resolve=>{finish=resolve;}),refreshStarted=new Promise(resolve=>{started=resolve;});
+    const {api,values}=loadClient(async url=>{if(url.endsWith('/auth/refresh')){started();await waiting;return response(status,{accessToken:'old-rotation',refreshToken:'old-refresh',user:{id:'account-a'}});}return response(401,{message:'Expired'});});
+    values.set('jt_session',JSON.stringify({user:{id:'account-a'}}));const result=api('/auth/me');await refreshStarted;
+    values.set('jt_session',JSON.stringify({user:{id:'account-b'}}));values.set('jt_token','account-b-token');values.set('jt_refresh','account-b-refresh');finish();
+    await assert.rejects(result,error=>error.status===409);assert.equal(values.get('jt_token'),'account-b-token');assert.equal(values.get('jt_refresh'),'account-b-refresh');
+  });
+  test('web: switching accounts while the refresh body is still loading preserves the new login',async()=>{
+    let finish,started;const waiting=new Promise(resolve=>{finish=resolve;}),reading=new Promise(resolve=>{started=resolve;});
+    const {api,values}=loadClient(async url=>url.endsWith('/auth/refresh')?{ok:true,status:200,json:async()=>{started();await waiting;return{accessToken:'old-rotation',refreshToken:'old-refresh',user:{id:'account-a'}};}}:response(401,{message:'Expired'}));
+    values.set('jt_session',JSON.stringify({user:{id:'account-a'}}));const result=api('/auth/me');await reading;
+    values.set('jt_session',JSON.stringify({user:{id:'account-b'}}));values.set('jt_token','account-b-token');values.set('jt_refresh','account-b-refresh');finish();
+    await assert.rejects(result,error=>error.status===409);assert.equal(values.get('jt_token'),'account-b-token');
+  });
+}
+
 test(`${client}: expired access token refreshes /auth/me and retries with the new token`, async () => {
   const requests = [];
   const { api, values } = loadClient(async (url, options) => {

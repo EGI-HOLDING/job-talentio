@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useRef, type ReactNode } from 'react';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
+import { useSessionIdentity } from '@/lib/useSessionIdentity';
 import { api, getSession } from '@/lib/api';
 import { Link, useRouter } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
@@ -39,28 +41,43 @@ export function ResourceError({ message, onRetry }: { message: string; onRetry: 
   return <div className={s.notice} role="alert"><span>{message}</span><button type="button" className={s.textButton} onClick={onRetry}>{t('workspace.retry')}</button></div>;
 }
 
-export function useEmployeeResource<T>(path: string) {
+export function useEmployeeResource<T>(path: string, live = false) {
+  const identity = useSessionIdentity();
   const { locale, t } = useI18n();
   const router = useRouter();
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const generation = useRef(0), request = useRef(0);
   const reload = useCallback(async () => {
-    const data = await api<T[]>(path);
-    setItems(data);
-    setError('');
+    const version = generation.current, sequence = ++request.current, account = getSession()?.user.id;
+    try {
+      const data = await api<T[]>(path, {signal:AbortSignal.timeout(15000)});
+      if (version !== generation.current || sequence !== request.current || account !== getSession()?.user.id) return;
+      setItems(data); setError('');
+    } catch (reason) {
+      if (version === generation.current && sequence === request.current && account === getSession()?.user.id) throw reason;
+    }
   }, [path, locale]);
   useEffect(() => {
+    setItems([]); ++generation.current; ++request.current;
     const session = getSession();
     if (!session) { router.replace('/login?role=EMPLOYEE'); return; }
     if (session.user.role !== 'EMPLOYEE') { router.replace(session.user.role === 'RECRUITER' ? '/dashboard/recruiter?tab=jobs' : '/'); return; }
     let active = true;
+    ++generation.current;
     setLoading(true);
     setError('');
-    api<T[]>(path).then((data) => { if (active) setItems(data); }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [path, locale, router, t]);
-  return { items, setItems, loading, error, setError, reload };
+    const sequence = ++request.current, account = session.user.id;
+    api<T[]>(path).then((data) => { if (active && sequence === request.current && account === getSession()?.user.id) setItems(data); }).catch((reason) => { if (active && sequence === request.current) setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; ++generation.current; ++request.current; };
+  }, [path, locale, router, t, identity]);
+  useLiveRefresh('applications', async () => {
+    const version = generation.current;
+    try { await reload(); } catch (reason) { if (version === generation.current) setError(reason instanceof Error ? reason.message : t('ew.loadFailed')); }
+  }, live && Boolean(identity), path + ':' + locale + ':' + identity);
+  const commitItems = useCallback((value: T[] | ((items:T[])=>T[])) => { ++request.current; setItems(value); }, []);
+  return { items, setItems:commitItems, loading, error, setError, reload };
 }
 
 export function FindJobsAction() {

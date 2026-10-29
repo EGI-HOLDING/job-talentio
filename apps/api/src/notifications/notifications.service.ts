@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { LiveUpdates } from '../common/live-updates';
 import { NotificationType, Prisma } from '@prisma/client';
 import { translateMessage } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,14 +17,14 @@ type NotificationRow = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, @Optional() private live?: LiveUpdates) {}
 
   /**
    * `titleKey`/`bodyKey` are preferred: the text is rendered per reader, so an
    * old notification follows the user when they switch language. `title`/`body`
    * remain for anything without a dictionary entry.
    */
-  create(data: {
+  async create(data: {
     userId: string;
     type: NotificationType;
     title: string;
@@ -34,7 +35,7 @@ export class NotificationsService {
     params?: MessageParams;
   }) {
     const { titleKey, bodyKey, params, ...rest } = data;
-    return this.prisma.notification.create({
+    const result = await this.prisma.notification.create({
       data: {
         ...rest,
         messageKey: titleKey ?? null,
@@ -43,6 +44,8 @@ export class NotificationsService {
           : Prisma.JsonNull,
       },
     });
+    this.live?.publish([data.userId], 'notifications');
+    return result;
   }
 
   private render<T extends NotificationRow>(row: T, locale: Locale): T {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { postOnce } from '@/lib/hr-benefits';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { ApplicantFilters } from './ApplicantFilters';
 import { api } from '@/lib/api';
 import { Link } from '@/lib/navigation';
@@ -41,26 +42,44 @@ export function RecruiterPipeline({ embedded = false, meta, companyId, companyNa
   const [channels, setChannels] = useState({ app: true, email: false, telegram: false });
   const [preview, setPreview] = useState(false);
   const filterKey=JSON.stringify(filters);
+  const actionContext=useRef('');actionContext.current=companyId+':'+selectedJob;
+  const [liveRevision,setLiveRevision]=useState(0);
+  const loaded=useRef('');
+  const loadedPages=useRef<Record<string,number>>({});
+  useLiveRefresh('applications',async()=>{setLiveRevision(value=>value+1);},!busy,companyId+':'+selectedJob);
   useEffect(()=>{setSelected([]);setActive(null);},[selectedJob,query,status,filterKey]);
   useEffect(()=>{
     if(!selectedJob){setApplicants([]);return;}
-    let alive=true;const version=++generation.current;setLoading(true);setApplicants([]);setColumns({});setMoreBusy({});pendingColumns.current.clear();
+    const identity=JSON.stringify([companyId,selectedJob,query,status,filterKey,locale]);
+    let alive=true;const version=++generation.current;const reset=loaded.current!==identity;setLoading(reset);if(reset){setApplicants([]);setColumns({});loadedPages.current={};}setMoreBusy({});pendingColumns.current.clear();
     const params=new URLSearchParams({q:query,page:'1',limit:'20',...Object.fromEntries(Object.entries(filters).filter(([,value])=>value!=='')),...(status?{status}:{})});
-    const timer=setTimeout(()=>{api<any>('/applications/jobs/'+selectedJob+'/kanban?'+params).then(data=>{
-      if(alive&&version===generation.current){setApplicants(data.columns.flatMap((column:any)=>column.items));setColumns(Object.fromEntries(data.columns.map((column:any)=>[column.status,{total:column.total,page:column.page,hasMore:column.hasMore}])));setError('');}
+    const timer=setTimeout(()=>{(async()=>{
+      const data=await api<any>('/applications/jobs/'+selectedJob+'/kanban?'+params);
+      const extra=await Promise.all(data.columns.flatMap((column:any)=>Array.from({length:Math.max(0,Math.min(loadedPages.current[column.status]||1,column.totalPages||1)-1)},(_,index)=>{
+        const pageParams=new URLSearchParams(params);pageParams.set('status',column.status);pageParams.set('page',String(index+2));
+        return api<any>('/applications/jobs/'+selectedJob+'/kanban?'+pageParams).then(value=>value.columns[0]);
+      })));
+      for(const column of data.columns){
+        const pages=[column,...extra.filter(value=>value.status===column.status)].sort((a,b)=>a.page-b.page);
+        column.items=[...new Map(pages.flatMap(value=>value.items).map((item:any)=>[item.id,item])).values()];
+        column.page=pages.at(-1).page;column.hasMore=pages.at(-1).hasMore;
+      }
+      return data;
+    })().then(data=>{
+      if(alive&&version===generation.current){loaded.current=identity;setApplicants(data.columns.flatMap((column:any)=>column.items));setColumns(Object.fromEntries(data.columns.map((column:any)=>[column.status,{total:column.total,page:column.page,hasMore:column.hasMore}])));setError('');}
     }).catch(error=>{if(alive)setError(error.message);}).finally(()=>{if(alive)setLoading(false);});},200);
     return()=>{alive=false;++generation.current;clearTimeout(timer);};
-  },[selectedJob,query,status,filterKey,initialApplicants,locale]);
+  },[companyId,selectedJob,query,status,filterKey,initialApplicants,locale,liveRevision]);
   async function loadMore(stage:string) {
     if(pendingColumns.current.has(stage)||!columns[stage]?.hasMore)return;
     pendingColumns.current.add(stage);setMoreBusy(value=>({...value,[stage]:true}));const version=generation.current;
     const params=new URLSearchParams({q:query,...Object.fromEntries(Object.entries(filters).filter(([,value])=>value!=='')),status:stage,page:String(columns[stage].page+1),limit:'20'});
-    try{const data=await api<any>('/applications/jobs/'+selectedJob+'/kanban?'+params);if(version!==generation.current)return;const column=data.columns[0];setApplicants(rows=>[...rows,...column.items.filter((item:any)=>!rows.some(row=>row.id===item.id))]);setColumns(value=>({...value,[stage]:{total:column.total,page:column.page,hasMore:column.hasMore}}));}
+    try{const data=await api<any>('/applications/jobs/'+selectedJob+'/kanban?'+params);if(version!==generation.current)return;const column=data.columns[0];loadedPages.current[stage]=column.page;setApplicants(rows=>[...rows,...column.items.filter((item:any)=>!rows.some(row=>row.id===item.id))]);setColumns(value=>({...value,[stage]:{total:column.total,page:column.page,hasMore:column.hasMore}}));}
     catch(reason){if(version===generation.current)setError(reason instanceof Error?reason.message:t('ew.loadFailed'));}
     finally{if(version===generation.current){pendingColumns.current.delete(stage);setMoreBusy(value=>({...value,[stage]:false}));}}
   }
   const job = jobs.find((item) => item.id === selectedJob);
-  useEffect(() => { setActive(null); setSelected([]); setBulk(false); setStatus(''); setError(''); }, [selectedJob]);
+  useEffect(() => { setActive(null); setSelected([]); setBulk(false); setBusy(false); setMessage(''); setStatus(''); setError(''); }, [companyId,selectedJob]);
   useEffect(() => { setSelected((ids) => ids.filter((id) => applicants.some((item) => item.id === id))); }, [applicants]);
   const visible = useMemo(() => {
     const rows=focused?.kanbanEnteredAt&&!query&&!Object.values(filters).some(Boolean)&&!applicants.some(row=>row.id===focused.id)?[focused,...applicants]:applicants;
@@ -69,14 +88,14 @@ export function RecruiterPipeline({ embedded = false, meta, companyId, companyNa
   useEffect(()=>{if(!loading&&applicationId)highlight.current?.scrollIntoView({block:'nearest',inline:'center'});},[loading,applicationId,focused]);
   useEffect(() => {
     if (!applicationId || !selectedJob) { setFocused(null); openedLink.current = ''; return; }
-    const identity = selectedJob + ':' + applicationId;
+    const identity = selectedJob + ':' + applicationId + ':' + locale + ':' + liveRevision;
     if (openedLink.current === identity) return;
     let alive = true;
     api('/applications/jobs/' + selectedJob + '/applicants/' + applicationId)
       .then(value => { if (alive) { setFocused(value); openedLink.current = identity; } })
       .catch(reason => { if (alive) setError(reason.message); });
     return () => { alive = false; };
-  }, [applicationId, selectedJob, locale]);
+  }, [applicationId, selectedJob, locale, liveRevision]);
 
   async function reload() {
     await onReload();
@@ -88,17 +107,20 @@ export function RecruiterPipeline({ embedded = false, meta, companyId, companyNa
   const toggle = (id: string) => { if (!selected.includes(id) && selected.length >= 50) { setError(t('rw.bulkLimit')); return; } setSelected((ids) => ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]); };
   async function sendBulk() {
     if (!selected.length || busy || (!nextStatus && !message.trim())) return;
+    const context=actionContext.current;
     if (selected.length > 50) { setError(t('rw.bulkLimit')); return; }
     if (message.trim() && !channels.app && !channels.email && !channels.telegram) { setError(t('rec.bulkChooseTarget')); return; }
     if (!await confirm({ title: t('rw.sendUpdate'), message: t('rec.selectedCount').replace('{n}', String(selected.length)) + (nextStatus ? ' | ' + enumLabel('applicationStatus', nextStatus) : ''), confirmLabel: t('rw.sendUpdate') })) return;
+    if(context!==actionContext.current)return;
     setBusy(true); setError('');
     try {
       const result = await postOnce<any>('/bulk-comms/campaigns', { companyId, jobPostId: selectedJob, applicationIds: selected, toStatus: nextStatus || undefined, templateId: templateId || undefined, messageBody: message.trim() || undefined, channels: message.trim() ? channels : undefined });
+      if(context!==actionContext.current)return;
       const rows = result.recipients || []; const count = (key: string) => rows.filter((row: any) => row.deliveryStatus === key).length;
       onFlash(t('rec.bulkDoneSent').replace('{n}', String(count('SENT'))) + ' | ' + t('rec.bulkDoneSkipped').replace('{n}', String(count('SKIPPED_OPTED_OUT'))) + ' | ' + t('rec.bulkDoneFailed').replace('{n}', String(count('FAILED'))));
       setSelected([]); setBulk(false); setMessage(''); setTemplateId(''); setNextStatus(''); await reload();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t('rec.bulkActionFailed')); }
-    finally { setBusy(false); }
+    } catch (reason) { if(context===actionContext.current)setError(reason instanceof Error ? reason.message : t('rec.bulkActionFailed')); }
+    finally { if(context===actionContext.current)setBusy(false); }
   }
   const previewText = message.replace(/\{\{name\}\}/g, applicants.find((item) => selected.includes(item.id))?.profile?.user?.fullName || '').replace(/\{\{jobTitle\}\}/g, job?.title || '').replace(/\{\{companyName\}\}/g, companyName).replace(/\{\{status\}\}/g, nextStatus ? enumLabel('applicationStatus', nextStatus) : '');
   return <>

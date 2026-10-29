@@ -15,8 +15,12 @@ export function anonymousEmployerName(locale: Locale | string | null | undefined
   return ANONYMOUS_EMPLOYER_NAME[(locale as Locale) in ANONYMOUS_EMPLOYER_NAME ? (locale as Locale) : 'uz'];
 }
 
-export function revealsAnonymousEmployer(status: string | null | undefined): boolean {
-  return (ANONYMOUS_REVEAL_STATUSES as readonly string[]).includes(status ?? '');
+export const anonymousRevealHistory = {
+  where: {toStatus: {in: [...ANONYMOUS_REVEAL_STATUSES]}}, select: {toStatus:true as const}, take:1,
+};
+
+export function revealsAnonymousEmployer(status: string | null | undefined, history: ReadonlyArray<{toStatus:string}> = []): boolean {
+  return [status, ...history.map(event => event.toStatus)].some(value => (ANONYMOUS_REVEAL_STATUSES as readonly string[]).includes(value ?? ''));
 }
 
 export type MaskedCompany = {

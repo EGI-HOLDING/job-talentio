@@ -540,6 +540,7 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   resumeQuotaReached: 'Batas jumlah CV tercapai ({max})',
   creating: 'Membuat...',
   continueWithoutResume: 'Lanjutkan tanpa CV',
+  'journey.awaitingSchedule': 'Tahap wawancara: menunggu jadwal',
   resumeMatchesRole: 'Cocok untuk posisi ini',
   jobLanguagesHint: 'Opsional. Maksimal 4 bahasa dengan tingkat CEFR (mis. Bahasa Inggris B2).',
   postLocale: 'Bahasa lowongan ini',

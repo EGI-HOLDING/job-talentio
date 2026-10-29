@@ -42,6 +42,10 @@ const env = {
   SMTP_HOST: '127.0.0.1',
   CV_PARSE_PROVIDER: 'local',
 };
+if (process.argv.includes('--journey-browser')) {
+  env.JOURNEY_BROWSER_TEST='true';
+  env.WEB_URL='http://127.0.0.1:3089';
+}
 if (process.argv.includes('--linkedin')) {
   // Disposable DB, dedicated demo storage bucket, and Redis DB 13. Never uses the running API queue.
   const demo = require('./lib/hr-demo-env.cjs').config();
@@ -100,7 +104,7 @@ try {
       req.resolve('tsx/cli'),
       '--tsconfig',
       path.join(root, 'apps/api/tsconfig.json'),
-      path.join(root, process.argv.includes('--onboarding') ? 'apps/api/src/auth/recruiter-signin.integration.smoke.ts' : process.argv.includes('--linkedin') ? 'apps/api/src/linkedin/linkedin.integration.smoke.ts' : 'apps/api/src/benefits/' + (process.argv.includes('--commerce') ? 'job-commerce.integration.smoke.ts' : 'benefits.integration.smoke.ts')),
+      path.join(root, process.argv.includes('--journey') || process.argv.includes('--journey-browser') ? 'apps/api/src/applications/journey-sync.integration.smoke.ts' : process.argv.includes('--onboarding') ? 'apps/api/src/auth/recruiter-signin.integration.smoke.ts' : process.argv.includes('--linkedin') ? 'apps/api/src/linkedin/linkedin.integration.smoke.ts' : 'apps/api/src/benefits/' + (process.argv.includes('--commerce') ? 'job-commerce.integration.smoke.ts' : 'benefits.integration.smoke.ts')),
     ]),
   );
 } finally {

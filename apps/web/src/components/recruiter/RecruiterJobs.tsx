@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { useRouter } from '@/lib/navigation';
 import { employerJobHref } from '@/lib/accountNavigation';
 import { useI18n } from '@/lib/i18n';
@@ -15,7 +16,7 @@ import { RecruiterJobRow } from './RecruiterJobRow';
 import table from './RecruiterJobTable.module.css';
 import bar from './RecruiterJobsToolbar.module.css';
 
-type Props = { companyId: string; company: any; jobs: any[]; loading: boolean; meta: any; createRequested: boolean; onCloseCreate: () => void; onReload: () => Promise<void>; onApplicants: (id: string) => void; onStatus: (id: string, status: string, message: string) => Promise<void>; onFlash: (message: string, tone?: 'success' | 'error') => void };
+type Props = { companyId: string; company: any; jobs: any[]; loading: boolean; meta: any; createRequested: boolean; onCloseCreate: () => void; onReload: (quiet?:boolean) => Promise<void>; onApplicants: (id: string) => void; onStatus: (id: string, status: string, message: string) => Promise<void>; onFlash: (message: string, tone?: 'success' | 'error') => void };
 export function RecruiterJobs({ companyId, company, jobs, loading, meta, createRequested, onCloseCreate, onReload, onApplicants, onStatus, onFlash }: Props) {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -26,6 +27,7 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<any | 'new' | null>(createRequested ? 'new' : null);
   const [busyId, setBusyId] = useState('');
+  useLiveRefresh('applications', async()=>{await onReload(true);}, !loading && !busyId && !editing, companyId);
   const actionLock = useRef(false);
   const alive = useRef(true);
   const contextVersion = useRef(0);
