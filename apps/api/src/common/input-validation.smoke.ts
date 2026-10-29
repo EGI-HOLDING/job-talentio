@@ -22,6 +22,7 @@ assert.ok(!jobSearchSchema.safeParse({ workMode: 'invalid' }).success);
 assert.ok(!jobSearchSchema.safeParse({ employmentType: 'invalid' }).success);
 assert.ok(!jobSearchSchema.safeParse({ experienceLevel: 'SENIOR,invalid' }).success);
 assert.ok(jobSearchSchema.safeParse({ experienceLevel: 'SENIOR,LEAD' }).success);
+assert.equal(jobSearchSchema.parse({ sort: 'featured' }).sort, 'featured');
 assert.ok(!applicationListSchema.safeParse({ status: 'invalid' }).success);
 assert.ok(!applicationListSchema.safeParse({ minMatch: 'invalid' }).success);
 assert.ok(!notificationListSchema.safeParse({ page: 'invalid' }).success);

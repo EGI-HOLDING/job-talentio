@@ -48,6 +48,12 @@ import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import { effectiveSourceLocale, pickStoredLocale } from '../common/i18n/detect-locale';
 import type { Locale } from '../common/i18n/locale';
 import { canTransition, transitionError } from './job-status';
+import {
+  effectiveFeaturedPackageCode,
+  isFeaturedBenefitActive,
+  orderFeaturedJobs,
+  type FeaturedJobCandidate,
+} from './featured-job-order';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { resolveJobLocation } from '../common/geo-selection';
 import {
@@ -1118,7 +1124,7 @@ export class JobsService {
     experienceYearsMax?: number;
     postedWithin?: '24h' | '7d' | '30d';
     hotOnly?: boolean;
-    sort?: 'relevance' | 'newest' | 'salary_high' | 'salary_low' | 'experience' | 'match';
+    sort?: 'relevance' | 'featured' | 'newest' | 'salary_high' | 'salary_low' | 'experience' | 'match';
     page: number;
     limit: number;
     profileId?: string;
@@ -1237,7 +1243,9 @@ export class JobsService {
     let meiliTrusted = false;
     let rankedIds: string[] | null = null;
     const sort = query.sort ?? 'relevance';
-    if (sort !== 'match') {
+    const featuredSort = sort === 'featured';
+    if (featuredSort) and.push({ isAnonymous: false });
+    if (sort !== 'match' && (!featuredSort || Boolean(query.q?.trim()))) {
       const eligible = await this.prisma.jobPost.findMany({ where: { AND: and }, select: { id: true } });
       rankedIds = await this.jobsSearch.rankedIds(query.q?.trim() ?? '', eligible.map(job => job.id));
       if (rankedIds?.length) { and.push({ id: { in: rankedIds } }); meiliTrusted = true; }
@@ -1296,45 +1304,101 @@ export class JobsService {
     if (!needsInMemoryRank) {
       const totalPages = Math.max(1, Math.ceil(matchedTotal / limit) || 1);
       page = Math.min(page, matchedTotal === 0 ? 1 : totalPages);
-      if (sort === 'relevance' && !rankedIds) {
-        const eligible = await this.prisma.jobPost.findMany({ where, select: { id: true } });
+      if (sort === 'featured') {
         const now = new Date();
-        const promoted = (await this.benefits?.enabled() ?? false) && (await this.benefits?.enabled('hr_promotions') ?? false);
-        const exposure=await loadExposurePolicy(this.prisma);
-        const q = query.q?.trim() ?? '';
-        const ranked = eligible.length ? await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-          SELECT j.id FROM "JobPost" j LEFT JOIN "JobBenefit" b ON b."jobId"=j.id
-          LEFT JOIN LATERAL (SELECT * FROM "BoostEpisode" WHERE "benefitId"=b.id AND "startsAt" <= ${now} AND "endsAt">${now} ORDER BY "startsAt" DESC LIMIT 1) e ON true
-          WHERE j.id = ANY(${eligible.map(job => job.id)}::text[])
-          ORDER BY CASE WHEN ${q}='' THEN 0 WHEN lower(j.title)=lower(${q}) THEN 2 WHEN j.title ILIKE ${q + '%'} THEN 1 ELSE 0 END DESC,
-          EXTRACT(EPOCH FROM COALESCE(j."publishedAt",j."createdAt"))/${exposure.halfLifeDays*86400}*ln(2.0) +
-          ln(LEAST(${exposure.cap},(CASE WHEN ${promoted} THEN COALESCE((b."policySnapshot"->>'visibility')::float,1) ELSE 1 END)*
-          (1+CASE WHEN ${promoted} AND e.id IS NOT NULL THEN ${exposure.boostAmplitude}*GREATEST(0,LEAST(1,EXTRACT(EPOCH FROM(e."endsAt"-${now}))/EXTRACT(EPOCH FROM(e."endsAt"-e."startsAt")))) ELSE 0 END))) DESC,j.id ASC
-          OFFSET ${(page-1)*limit} LIMIT ${limit}`) : [];
-        rankedIds = ranked.map(job => job.id);
-      } else if (sort === 'relevance' && rankedIds) rankedIds = rankedIds.slice((page-1)*limit,page*limit);
-      const items = await this.prisma.jobPost.findMany({
-        where: sort === 'relevance' ? { AND: [where, { id: { in: rankedIds ?? [] } }] } : where,
-        include: jobInclude,
-        ...(sort === 'relevance' ? {} : { skip: (page - 1) * limit, take: limit }),
-        orderBy: [...dbOrderBy] as Prisma.JobPostOrderByWithRelationInput[],
-      });
-      if (sort === 'relevance' && rankedIds) items.sort((a,b) => rankedIds!.indexOf(a.id)-rankedIds!.indexOf(b.id));
-      sorted = items.map((job) => ({
-        ...job,
-        rankScore: this.computeRankScore({
+        const candidates = await this.prisma.jobPost.findMany({
+          where,
+          select: {
+            id: true,
+            companyId: true,
+            publishedAt: true,
+            benefit: {
+              select: {
+                code: true,
+                startsAt: true,
+                expiresAt: true,
+                boosts: {
+                  where: { startsAt: { lte: now }, endsAt: { gt: now } },
+                  select: { id: true },
+                  take: 1,
+                },
+              },
+            },
+          },
+        });
+        const candidateById = new Map<string, FeaturedJobCandidate>();
+        for (const job of candidates) {
+          const activeBenefit = isFeaturedBenefitActive(job.benefit, now);
+          const packageCode = effectiveFeaturedPackageCode(job.benefit, now);
+          candidateById.set(job.id, {
+            id: job.id,
+            companyId: job.companyId,
+            packageCode,
+            boostActive: activeBenefit && Boolean(job.benefit?.boosts.length),
+            publishedAt: job.publishedAt,
+          });
+        }
+        const ordered = orderFeaturedJobs([...candidateById.values()]);
+        const orderedIds = ordered.map((job) => job.id);
+        const pageIds = orderedIds.slice((page - 1) * limit, page * limit);
+        const items = pageIds.length ? await this.prisma.jobPost.findMany({
+          where: { AND: [where, { id: { in: pageIds } }] },
+          include: jobInclude,
+        }) : [];
+        items.sort((a, b) => pageIds.indexOf(a.id) - pageIds.indexOf(b.id));
+        sorted = items.map((job) => {
+          const rank = candidateById.get(job.id)!;
+          return {
+            ...job,
+            isPromoted: rank.packageCode !== 'FREE' || rank.boostActive,
+            rankScore: this.computeRankScore({ ...job, skillCount: job.jobSkills.length }),
+            isHot: false,
+            boostWeight: rank.boostActive ? 1 : 0,
+            boostUntil: null,
+            matchScore: null as number | null,
+          };
+        });
+      } else {
+        if (sort === 'relevance' && !rankedIds) {
+          const eligible = await this.prisma.jobPost.findMany({ where, select: { id: true } });
+          const now = new Date();
+          const promoted = (await this.benefits?.enabled() ?? false) && (await this.benefits?.enabled('hr_promotions') ?? false);
+          const exposure=await loadExposurePolicy(this.prisma);
+          const q = query.q?.trim() ?? '';
+          const ranked = eligible.length ? await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT j.id FROM "JobPost" j LEFT JOIN "JobBenefit" b ON b."jobId"=j.id
+            LEFT JOIN LATERAL (SELECT * FROM "BoostEpisode" WHERE "benefitId"=b.id AND "startsAt" <= ${now} AND "endsAt">${now} ORDER BY "startsAt" DESC LIMIT 1) e ON true
+            WHERE j.id = ANY(${eligible.map(job => job.id)}::text[])
+            ORDER BY CASE WHEN ${q}='' THEN 0 WHEN lower(j.title)=lower(${q}) THEN 2 WHEN j.title ILIKE ${q + '%'} THEN 1 ELSE 0 END DESC,
+            EXTRACT(EPOCH FROM COALESCE(j."publishedAt",j."createdAt"))/${exposure.halfLifeDays*86400}*ln(2.0) +
+            ln(LEAST(${exposure.cap},(CASE WHEN ${promoted} THEN COALESCE((b."policySnapshot"->>'visibility')::float,1) ELSE 1 END)*
+            (1+CASE WHEN ${promoted} AND e.id IS NOT NULL THEN ${exposure.boostAmplitude}*GREATEST(0,LEAST(1,EXTRACT(EPOCH FROM(e."endsAt"-${now}))/EXTRACT(EPOCH FROM(e."endsAt"-e."startsAt")))) ELSE 0 END))) DESC,j.id ASC
+            OFFSET ${(page-1)*limit} LIMIT ${limit}`) : [];
+          rankedIds = ranked.map(job => job.id);
+        } else if (sort === 'relevance' && rankedIds) rankedIds = rankedIds.slice((page-1)*limit,page*limit);
+        const items = await this.prisma.jobPost.findMany({
+          where: sort === 'relevance' ? { AND: [where, { id: { in: rankedIds ?? [] } }] } : where,
+          include: jobInclude,
+          ...(sort === 'relevance' ? {} : { skip: (page - 1) * limit, take: limit }),
+          orderBy: [...dbOrderBy] as Prisma.JobPostOrderByWithRelationInput[],
+        });
+        if (sort === 'relevance' && rankedIds) items.sort((a,b) => rankedIds!.indexOf(a.id)-rankedIds!.indexOf(b.id));
+        sorted = items.map((job) => ({
           ...job,
-          skillCount: job.jobSkills.length,
-        }),
-        isHot: false,
-        boostWeight: 0,
-        boostUntil: null,
-        matchScore: null as number | null,
-      }));
+          rankScore: this.computeRankScore({
+            ...job,
+            skillCount: job.jobSkills.length,
+          }),
+          isHot: false,
+          boostWeight: 0,
+          boostUntil: null,
+          matchScore: null as number | null,
+        }));
 
-      if (query.profileId) {
-        const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, sorted.map(job => job.id));
-        sorted = sorted.map(job => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights }));
+        if (query.profileId) {
+          const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, sorted.map(job => job.id));
+          sorted = sorted.map((job) => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights }));
+        }
       }
 
     } else {

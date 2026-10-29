@@ -16,6 +16,7 @@ export const jobs = {
   },
 
   'job.sortRelevance': { uz: 'Moslik bo‘yicha', ru: 'По релевантности', en: 'Relevance' },
+  'job.sortFeatured': { uz: 'Tarif ustuvorligi', ru: 'Приоритет тарифа', en: 'Package priority' },
   'job.sortNewest': { uz: 'Eng yangi', ru: 'Сначала новые', en: 'Newest' },
   'job.sortSalaryHigh': { uz: 'Maosh (yuqori)', ru: 'Зарплата (выше)', en: 'Salary high' },
   'job.sortSalaryLow': { uz: 'Maosh (past)', ru: 'Зарплата (ниже)', en: 'Salary low' },

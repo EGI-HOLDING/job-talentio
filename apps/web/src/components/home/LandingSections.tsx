@@ -16,6 +16,7 @@ export type LandingLocation = LandingFacet & { country?: string; countrySlug?: s
 export type LandingJob = {
   id: string; title: string; workMode?: string | null;
   salaryMin?: number | null; salaryMax?: number | null; currency?: string; salaryPeriod?: string;
+  isPromoted?: boolean;
   company: { name: string; slug: string; logoUrl?: string | null };
   city?: { slug?: string; name: string } | null;
 };
@@ -84,12 +85,12 @@ export function LandingSections({ jobs, categories, cities, roles, news, showEmp
 
   return <div className={s.sections}>
     <section className={s.featured}>
-      <Heading title={t('landing.featured')} subtitle={t('landing.featuredSub')} href="/jobs" action={t('landing.viewJobs')} />
+      <Heading title={t('landing.featured')} subtitle={t('landing.featuredSub')} href="/jobs?sort=featured" action={t('landing.viewJobs')} />
       <div className={s.jobs}>
         {jobs.map((job) => <Link data-job-impression={job.id} className={s.job} href={`/jobs/${job.id}`} key={job.id}>
           <div className={s.jobCompany}>
             <span className={s.logo}>{job.company.logoUrl ? <img src={job.company.logoUrl} alt="" loading="lazy" /> : job.company.name.slice(0, 1)}</span>
-            <span>{job.company.name}</span><span className={s.badge}>{t('landing.badge')}</span>
+            <span>{job.company.name}</span>{job.isPromoted && <span className={s.badge}>{t('landing.badge')}</span>}
           </div>
           <h3>{sanitizeMojibake(job.title)}</h3>
           <div className={s.jobLocation}>{jobLocation(job) && <span><LandingIcon kind="pin" />{jobLocation(job)}</span>}{job.workMode && <span className={s.workMode}>{t(`enum.workMode.${job.workMode}`)}</span>}</div>

@@ -236,7 +236,7 @@ export const jobSearchSchema = z.object({
     .optional()
     .transform((v) => v === 'true' || v === '1'),
   sort: z
-    .enum(['relevance', 'newest', 'salary_high', 'salary_low', 'experience', 'match'])
+    .enum(['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', 'match'])
     .default('relevance'),
   page: z.coerce.number().int().min(1).default(1),
   /** Keep in sync with web jobs page DEFAULT_LIMIT (12). */
