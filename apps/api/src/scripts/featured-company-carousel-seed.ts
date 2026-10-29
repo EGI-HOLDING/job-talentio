@@ -178,7 +178,13 @@ async function resolveCatalog(db: PrismaClient): Promise<ResolvedCatalog> {
   const cityRows = await db.city.findMany({
     where: {
       archivedAt: null,
-      OR: [{ name: { in: cityNames } }, { nameId: { in: cityNames } }],
+      // Prefix candidates include catalog labels with accidental surrounding whitespace;
+      // the exact trimmed comparison below remains the only accepted identity match.
+      OR: [
+        { name: { in: cityNames } },
+        { nameId: { in: cityNames } },
+        ...cityNames.flatMap((name) => [{ name: { startsWith: name } }, { nameId: { startsWith: name } }]),
+      ],
       province: { archivedAt: null, country: { iso2: 'ID', isActive: true, archivedAt: null } },
     },
     include: { province: { select: { countryId: true, country: { select: { iso2: true } } } } },
