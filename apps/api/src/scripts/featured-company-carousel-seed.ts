@@ -1,11 +1,11 @@
 /**
- * Opt-in local-only seed for the 21 fictional Indonesian homepage companies.
+ * Opt-in seed for the 21 fictional Indonesian homepage companies.
  * Never imported by application startup or the shared Prisma seed.
  *
  * Commands:
- *   seed:featured-companies dry-run
- *   seed:featured-companies apply --manifest-hash ... --expected-fingerprint ...
- *   seed:featured-companies verify
+ *   seed:featured-companies dry-run [--target local|indonesia-vps]
+ *   seed:featured-companies apply --target ... --manifest-hash ... --expected-fingerprint ...
+ *   seed:featured-companies verify [--target local|indonesia-vps]
  *
  * `apply` requires FEATURED_COMPANY_SEED_PASSWORD in the environment when new
  * recruiter accounts need to be created. Secret values are never printed.
@@ -77,6 +77,139 @@ function skillSlug(value: string) {
   return value.trim().toLowerCase().replace(/c\+\+/g, 'cplusplus').replace(/c#/g, 'csharp')
     .replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
 }
+
+// Curated Indonesian seed labels mapped to canonical skills already present in the
+// VPS catalog. These are lookup aliases only: they never create or edit catalog rows.
+const SKILL_CATALOG_EQUIVALENTS: Record<string, string> = {
+  komunikasi: 'Communication',
+  kerjatim: 'Teamwork',
+  microsoftexcel: 'Excel',
+  pemecahanmasalah: 'Problem Solving',
+  manajemenwaktu: 'Planning',
+  supervisiproduksi: 'Operations Management',
+  manajemenoperasional: 'Operations Management',
+  keamananpangan: 'Food Safety',
+  haccp: 'Food Safety',
+  pengadaan: 'Supply Chain',
+  manajemenrantaipasok: 'Supply Chain',
+  negosiasi: 'Negotiation',
+  evaluasipemasok: 'Supply Chain',
+  operasiritel: 'Retail Operations',
+  layananpelanggan: 'Customer Support',
+  manajemenpersediaan: 'Inventory Management',
+  supervisitim: 'Team Leadership',
+  merchandising: 'Retail Operations',
+  perencanaanpenjualan: 'Sales',
+  analisispenjualan: 'Data Analysis',
+  penjualan: 'Sales',
+  manajemenarea: 'Operations Management',
+  coaching: 'Leadership',
+  manajemenrestoran: 'Hospitality Management',
+  hospitality: 'Hospitality Management',
+  operasidapur: 'Operations Management',
+  perencanaanproduksi: 'Operations Management',
+  kepemimpinan: 'Leadership',
+  koordinasiacara: 'Project Management',
+  perencanaan: 'Planning',
+  kemitraan: 'Customer Relationship Management',
+  komunikasilapangan: 'Communication',
+  pascapanen: 'Supply Chain',
+  keperawatan: 'Nursing',
+  perawatanpasien: 'Patient Care',
+  keselamatanpasien: 'Patient Care',
+  pencegahaninfeksi: 'Nursing',
+  layananpasien: 'Patient Care',
+  farmasi: 'Pharmacy',
+  pelayanankefarmasian: 'Pharmacy',
+  pengembangankurikulum: 'Curriculum Design',
+  desainpembelajaran: 'Curriculum Design',
+  evaluasipendidikan: 'Data Analysis',
+  fasilitasi: 'Communication',
+  mengajar: 'Teaching',
+  pengelolaankelas: 'Teaching',
+  pendidikandasar: 'Teaching',
+  komunikasidenganorangtua: 'Communication',
+  konselingpendidikan: 'Communication',
+  penerimaansiswa: 'Customer Support',
+  administrasipendidikan: 'Excel',
+  operasiarmada: 'Logistics',
+  logistik: 'Logistics',
+  perencanaanrute: 'Logistics',
+  manajemengudang: 'Inventory Management',
+  koordinasipengiriman: 'Logistics',
+  manufaktur: 'Operations Management',
+  gambarteknik: 'AutoCAD',
+  pelatihan: 'Teaching',
+  manajemenproyek: 'Project Management',
+  manajemenkontraktor: 'Project Management',
+  pemeliharaanfasilitas: 'Operations Management',
+  tekniklistrik: 'Electrical Engineering',
+  hubungmasyarakat: 'Communication',
+  fasilitasikomunitas: 'Communication',
+  manajemenpemangkukepentingan: 'Project Management',
+  penjualanproperti: 'Sales',
+  administrasipenjualan: 'Excel',
+  manajemenproperti: 'Operations Management',
+  operasifasilitas: 'Operations Management',
+  manajemenvendor: 'Project Management',
+  layananpenghuni: 'Customer Support',
+  pengelolaandokumen: 'Excel',
+  manajemenjadwal: 'Planning',
+  manajemenrelasinasabah: 'Customer Relationship Management',
+  pembiayaanusaha: 'Financial Analysis',
+  analisiskredit: 'Financial Analysis',
+  analisiskeuangan: 'Financial Analysis',
+  auditinternal: 'Accounting',
+  produksitekstil: 'Operations Management',
+  kemitraanperajin: 'Customer Relationship Management',
+  pembuatanpola: 'desain',
+  konstruksibusana: 'desain',
+  produksigarmen: 'Operations Management',
+  penjualanekspor: 'Sales',
+  administrasiekspor: 'Excel',
+  operasiresepsionis: 'Hospitality Management',
+  layanantamu: 'Customer Support',
+  manajemenreservasi: 'Hospitality Management',
+  operasiwisata: 'Hospitality Management',
+  perencanaanperjalanan: 'Planning',
+  manajemenmitra: 'Customer Relationship Management',
+  pengalamantamu: 'Hospitality Management',
+  pariwisata: 'Hospitality Management',
+  perencanaanpermintaan: 'Planning',
+  distribusi: 'Logistics',
+  perencanaanpasokan: 'Supply Chain',
+  rantaidingin: 'Supply Chain',
+  manajemenakun: 'Customer Relationship Management',
+  penjualanb2b: 'Sales',
+  kemitraannelayan: 'Customer Relationship Management',
+  mutuhasillaut: 'Food Safety',
+  pendidikananakusiadini: 'Teaching',
+  manajemenpusat: 'Operations Management',
+  komunikasidengankeluarga: 'Communication',
+  kemitraankeluarga: 'Customer Relationship Management',
+  farmasiindustri: 'Pharmacy',
+  manufakturfarmasi: 'Operations Management',
+  farmakovigilans: 'Clinical Research',
+  keamananobat: 'Pharmacy',
+  urusanregulatori: 'Contract Law',
+  energisurya: 'Electrical Engineering',
+  instalasilistrik: 'Electrical Engineering',
+  supervisilapangan: 'Operations Management',
+  pemberdayaankomunitas: 'Communication',
+  edukasipublik: 'Teaching',
+  produkkriya: 'desain',
+  pengemasan: 'Operations Management',
+  administrasipesanan: 'Excel',
+  pemeliharaanarmada: 'Logistics',
+  perencanaanpemeliharaan: 'Planning',
+  otomotif: 'Mechanical Design',
+  layananotomotif: 'Customer Support',
+  manajemenkeluhan: 'Customer Support',
+  penjualanarmada: 'Sales',
+  operasiperkebunan: 'Operations Management',
+  agribisnis: 'Supply Chain',
+  penangananhasilpertanian: 'Supply Chain',
+};
 
 function companyId(company: FeaturedCompany) { return `${SEED_PREFIX}-company-${company.slug}`; }
 function userId(company: FeaturedCompany) { return `${SEED_PREFIX}-user-${company.slug}`; }
@@ -172,8 +305,9 @@ async function resolveCatalog(db: PrismaClient): Promise<ResolvedCatalog> {
   const cityNames = [...new Set(FEATURED_COMPANIES.map((company) => company.cityName))];
   const industrySlugs = [...new Set(FEATURED_COMPANIES.map((company) => company.industrySlug))];
   const skillLabels = [...new Set(FEATURED_COMPANIES.flatMap((company) => company.roles.flatMap((role) => role.skills)))];
-  const skillKeys = skillLabels.map(normalKey);
-  const skillSlugs = skillLabels.map(skillSlug);
+  const catalogSkillLabels = [...new Set(skillLabels.flatMap((label) => [label, SKILL_CATALOG_EQUIVALENTS[normalKey(label)] ?? label]))];
+  const skillKeys = catalogSkillLabels.map(normalKey);
+  const skillSlugs = catalogSkillLabels.map(skillSlug);
 
   const cityRows = await db.city.findMany({
     where: {
@@ -212,7 +346,7 @@ async function resolveCatalog(db: PrismaClient): Promise<ResolvedCatalog> {
     where: {
       archivedAt: null,
       OR: [
-        { name: { in: skillLabels, mode: 'insensitive' } },
+        { name: { in: catalogSkillLabels, mode: 'insensitive' } },
         { slug: { in: skillSlugs } },
         { normalizedKey: { in: skillKeys } },
       ],
@@ -232,8 +366,9 @@ async function resolveCatalog(db: PrismaClient): Promise<ResolvedCatalog> {
       const picked: Array<{ id: string; name: string }> = [];
       const pickedIds = new Set<string>();
       for (const label of role.skills) {
-        const key = normalKey(label);
-        const slug = skillSlug(label);
+        const catalogLabel = SKILL_CATALOG_EQUIVALENTS[normalKey(label)] ?? label;
+        const key = normalKey(catalogLabel);
+        const slug = skillSlug(catalogLabel);
         const exactRows = [
           ...skillRows.filter((skill) => skill.slug === slug || skill.normalizedKey === key || normalKey(skill.name) === key),
           ...aliasRows.filter((alias) => alias.aliasKey === key).map((alias) => alias.skill),
