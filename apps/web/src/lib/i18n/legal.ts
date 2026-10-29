@@ -1,4 +1,5 @@
 import type { Locale } from '@/lib/locale';
+import { INDONESIA_PRIVACY_DOCS } from './privacy-indonesia';
 
 export type LegalSection = { heading: string; paragraphs?: string[]; items?: string[] };
 export type LegalDoc = {
@@ -10,6 +11,12 @@ export type LegalDoc = {
 };
 
 export type LegalDocKey = 'terms' | 'privacy';
+export type PrivacyMarket = 'id' | 'uz';
+
+/** The market is fixed when the web image is built, independently of URL locale. */
+export function resolvePrivacyMarket(value = process.env.NEXT_PUBLIC_PRIVACY_MARKET): PrivacyMarket {
+  return value?.trim().toLowerCase() === 'id' ? 'id' : 'uz';
+}
 
 const CONTACT = 'info@jobtalent.io';
 
@@ -625,6 +632,18 @@ export const LEGAL_DOCS: Record<LegalDocKey, Record<Locale, LegalDoc>> = {
   terms: { uz: termsUz, ru: termsRu, en: termsEn, id: termsId },
   privacy: { uz: privacyUz, ru: privacyRu, en: privacyEn, id: privacyId },
 };
+
+/** Privacy jurisdiction follows the deployment market; language only selects a translation. */
+export function getLegalDocument(
+  kind: LegalDocKey,
+  locale: Locale,
+  market: PrivacyMarket = resolvePrivacyMarket(),
+): LegalDoc {
+  if (kind === 'privacy') {
+    return (market === 'id' ? INDONESIA_PRIVACY_DOCS : LEGAL_DOCS.privacy)[locale];
+  }
+  return LEGAL_DOCS.terms[locale];
+}
 
 /** Label shown above the revision date, per locale. */
 export const LEGAL_UPDATED_LABEL: Record<Locale, string> = {
