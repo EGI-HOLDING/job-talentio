@@ -1,197 +1,127 @@
 'use client';
+
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { postOnce } from '@/lib/hr-benefits';
 import { useI18n } from '@/lib/i18n';
-import { Pagination } from '@/components/employee/WorkspacePrimitives';
-import s from './RecruiterWorkspace.module.css';
-import support from './HrSupport.module.css';
-export function HrSupport({ companyId }: { companyId: string }) {
-  return <CompanySupport key={companyId} companyId={companyId} />;
-}
-function CompanySupport({ companyId }: { companyId: string }) {
-  const { t } = useI18n();
-  const threadRequest = useRef(0);
-  useEffect(
-    () => () => {
-      ++threadRequest.current;
-    },
-    [],
-  );
-  const [open, setOpen] = useState(false),
-    [available, setAvailable] = useState(false),
-    [items, setItems] = useState<any[]>([]),
-    [page, setPage] = useState(1),
-    [total, setTotal] = useState(0),
-    [active, setActive] = useState<any>(null),
-    [replyPage, setReplyPage] = useState(1),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [includeResolved, setIncludeResolved] = useState(false);
-  const load = () =>
-    api<any>(
-      '/hr-support?companyId=' +
-        companyId +
-        '&page=' +
-        page +
-        (includeResolved ? '&status=ALL' : ''),
-    ).then((data) => {
-      setItems(data.items);
-      setTotal(data.total);
-      setAvailable(true);
-    });
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
+import { Pagination, WorkspaceLoading, dateLabel } from '@/components/employee/WorkspacePrimitives';
+import { allowEmployerContextChange, useEmployerUnsaved } from './useEmployerUnsaved';
+import s from './HrSupport.module.css';
+
+type Ticket = { id: string; title: string; status: string; priority: boolean; createdAt: string };
+type Thread = Ticket & { replies: Array<{ id: string; body: string; authorRole: string; createdAt: string }>; total: number };
+
+export function HrSupport({ companyId, companyName }: { companyId: string; companyName: string }) {
+  const { t, locale } = useI18n();
+  const [items, setItems] = useState<Ticket[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [includeResolved, setIncludeResolved] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [selected, setSelected] = useState('');
+  const [active, setActive] = useState<Thread | null>(null);
+  const [replyPage, setReplyPage] = useState(1);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState(false);
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [notice, setNotice] = useState('');
+  const titleRef = useRef<HTMLInputElement>(null);
+  const alive = useRef(true);
+  const viewVersion = useRef(0);
+  const submitting = useRef(false);
+  useEmployerUnsaved(Boolean(title || message), busy);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; ++viewVersion.current; }; }, []);
+  useEffect(() => { if (selected === 'new') titleRef.current?.focus(); }, [selected]);
+
   useEffect(() => {
-    let alive = true;
-    api<any>(
-      '/hr-support?companyId=' +
-        companyId +
-        '&page=' +
-        page +
-        (includeResolved ? '&status=ALL' : ''),
-    )
-      .then((data) => {
-        if (alive) {
-          setItems(data.items);
-          setTotal(data.total);
-          setAvailable(true);
-        }
-      })
-      .catch((error) => {
-        if (alive && !(error instanceof ApiError && error.status === 404)) setError(error.message);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [companyId, page, includeResolved]);
+    let current = true;
+    setListLoading(true); setListError(false); setUnavailable(false);
+    const params = new URLSearchParams({ companyId, page: String(page) });
+    if (includeResolved) params.set('status', 'ALL');
+    api<{ items: Ticket[]; total: number }>('/hr-support?' + params).then(data => {
+      if (!current) return;
+      if (page > 1 && !data.items.length) { setPage(Math.max(1, Math.ceil(data.total / 20))); return; }
+      setItems(data.items); setTotal(data.total);
+    }).catch(reason => {
+      if (!current) return;
+      if (reason instanceof ApiError && reason.status === 404) setUnavailable(true);
+      else setListError(true);
+    }).finally(() => { if (current) setListLoading(false); });
+    return () => { current = false; };
+  }, [companyId, page, includeResolved, refresh, locale]);
+
   useEffect(() => {
-    setActive(null);
-    setReplyPage(1);
-  }, [companyId]);
-  async function thread(id: string, next = 1) {
-    const version = ++threadRequest.current;
-    const value = await api('/hr-support/' + id + '?page=' + next);
-    if (version === threadRequest.current) {
-      setActive(value);
-      setReplyPage(next);
-    }
+    setActive(null); setThreadError(false);
+    if (!selected || selected === 'new') { setThreadLoading(false); return; }
+    let current = true;
+    setThreadLoading(true);
+    api<Thread>('/hr-support/' + encodeURIComponent(selected) + '?page=' + replyPage).then(value => {
+      if (current) setActive(value);
+    }).catch(() => { if (current) setThreadError(true); }).finally(() => { if (current) setThreadLoading(false); });
+    return () => { current = false; };
+  }, [selected, companyId, replyPage, refresh, locale]);
+
+  async function choose(id: string) {
+    if (id === selected || !await allowEmployerContextChange()) return;
+    ++viewVersion.current;
+    setSelected(id); setActive(null); setReplyPage(1); setTitle(''); setMessage(''); setSubmitError(''); setNotice('');
   }
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
-    const node = event.currentTarget;
-    const form = new FormData(node);
-    const version = threadRequest.current;
-    setBusy(true);
-    setError('');
+    if (submitting.current || !selected) return;
+    const body = message.trim();
+    if (body.length < (selected === 'new' ? 10 : 1) || (selected === 'new' && title.trim().length < 5)) {
+      setSubmitError(t('support.validation')); return;
+    }
+    const version = viewVersion.current;
+    submitting.current = true; setBusy(true); setSubmitError(''); setNotice('');
     try {
-      if (active) {
-        await postOnce('/hr-support/' + active.id + '/replies', { body: String(form.get('body')) });
-        if (version !== threadRequest.current) return;
-        await thread(active.id, replyPage);
-      } else {
-        const ticket = await postOnce<any>('/hr-support', {
-          companyId,
-          title: String(form.get('title')),
-          body: String(form.get('body')),
-        });
-        if (version !== threadRequest.current) return;
-        await thread(ticket.id);
-      }
-      node.reset();
-      await load();
-    } catch (error) {
-      if (version === threadRequest.current) setError(error instanceof Error ? error.message : t('ew.loadFailed'));
+      const ticket = selected === 'new'
+        ? await postOnce<Ticket>('/hr-support', { companyId, title: title.trim(), body })
+        : await postOnce('/hr-support/' + encodeURIComponent(selected) + '/replies', { body });
+      if (!alive.current || version !== viewVersion.current) return;
+      setTitle(''); setMessage(''); setNotice(t('support.sent'));
+      if (selected === 'new') { setSelected((ticket as Ticket).id); setReplyPage(1); }
+      else setReplyPage(Math.max(1, Math.ceil(((active?.total || 0) + 1) / 50)));
+      // Refresh separately: a failed read must never turn a successful send into a retry.
+      setRefresh(value => value + 1);
+    } catch {
+      if (alive.current && version === viewVersion.current) setSubmitError(t('support.sendFailed'));
     } finally {
-      setBusy(false);
+      submitting.current = false;
+      if (alive.current) setBusy(false);
     }
   }
-  if (!available) return error ? <p role="alert">{error}</p> : null;
-  return (
-    <section className={support.root} style={{ padding: '12px 24px' }}>
-      <button className={s.textButton} onClick={() => setOpen(!open)} aria-expanded={open}>
-        {t('hr.support')}
-      </button>
-      {open && (
-        <div className={s.fields} style={{ paddingBlock: 16 }}>
-          <p>{t('hr.supportHint')}</p>
-          <label>
-            <input
-              type="checkbox"
-              checked={includeResolved}
-              onChange={(event) => {
-                setPage(1);
-                setIncludeResolved(event.target.checked);
-              }}
-            />
-            {t('hr.includeResolved')}
-          </label>
-          <div className={s.actions}>
-            <button
-              className={s.secondary}
-              onClick={() => {
-                ++threadRequest.current;
-                setActive(null);
-              }}
-            >
-              {t('hr.newTicket')}
-            </button>
-            {items.map((ticket) => (
-              <button
-                className={s.textButton}
-                key={ticket.id}
-                onClick={() => void thread(ticket.id).catch((error) => setError(error.message))}
-              >
-                {ticket.title} | {t('hr.ticket.' + ticket.status)}
-                {ticket.priority ? ' | ' + t('hr.priority') : ''}
-              </button>
-            ))}
-          </div>
-          <Pagination page={page} total={total} size={20} onChange={setPage} />
-          {active && (
-            <article>
-              <h3>{active.title}</h3>
-              {active.replies.map((reply: any) => (
-                <p key={reply.id} style={{ whiteSpace: 'pre-wrap' }}>
-                  <strong>
-                    {reply.authorRole === 'SUPER_ADMIN' ? t('hr.support') : t('hr.yourTeam')}
-                  </strong>
-                  : {reply.body}
-                </p>
-              ))}
-              <Pagination
-                page={replyPage}
-                total={active.total}
-                size={50}
-                onChange={(next) =>
-                  void thread(active.id, next).catch((error) => setError(error.message))
-                }
-              />
-            </article>
-          )}
-          <form key={active?.id || 'new'} className={s.fields} onSubmit={(event) => void submit(event)}>
-            {!active && (
-              <label>
-                {t('hr.subject')}
-                <input name="title" minLength={5} maxLength={180} required />
-              </label>
-            )}
-            <label>
-              {t('hr.message')}
-              <textarea
-                name="body"
-                required
-                minLength={active ? 1 : 10}
-                maxLength={10000}
-                rows={3}
-              />
-            </label>
-            <button className={s.primary} type="submit" disabled={busy}>
-              {t(busy ? 'saving' : 'hr.send')}
-            </button>
-          </form>
-          {error && <p role="alert">{error}</p>}
-        </div>
-      )}
-    </section>
-  );
+  const thread = active?.id === selected ? active : null;
+  return <section className={s.root} aria-labelledby="hr-support-title">
+    <header className={s.heading}>
+      <div className={s.identity}><span className={s.headingIcon}><WorkspaceIcon kind="message" /></span><div><span className={s.company}>{companyName}</span><h1 id="hr-support-title">{t('hr.support')}</h1><p>{t('support.subtitle')}</p></div></div>
+      <button type="button" className={s.primary} disabled={busy || listLoading || unavailable || listError || selected === 'new'} onClick={() => void choose('new')}><WorkspaceIcon kind="plus" />{t('hr.newTicket')}</button>
+    </header>
+    <div className={s.priorityNote}><WorkspaceIcon kind="shield" /><p>{t('support.priorityHint')}</p></div>
+    {notice && <p className={s.success} role="status"><WorkspaceIcon kind="check" />{notice}</p>}
+    {unavailable ? <div className={s.unavailable}><WorkspaceIcon kind="message" /><h2>{t('support.unavailable')}</h2><p>{t('support.unavailableHint')}</p></div> : <div className={s.workspace}>
+      <aside className={s.inbox} aria-labelledby="support-requests-title">
+        <div className={s.inboxHead}><h2 id="support-requests-title">{t('support.requests')}</h2><span>{total}</span></div>
+        <label className={s.filter}><input type="checkbox" checked={includeResolved} onChange={event => { setPage(1); setIncludeResolved(event.target.checked); }} />{t('hr.includeResolved')}</label>
+        {listLoading ? <WorkspaceLoading /> : listError ? <div className={s.listError} role="alert"><p>{t('ew.loadFailed')}</p><button className={s.secondary} type="button" onClick={() => setRefresh(value => value + 1)}>{t('workspace.retry')}</button></div> : items.length ? <div className={s.ticketList}>{items.map(ticket => <button type="button" className={s.ticket} key={ticket.id} aria-pressed={selected === ticket.id} disabled={busy} onClick={() => void choose(ticket.id)}><strong>{ticket.title}</strong><span className={s.ticketMeta}><span className={s.badge} data-status={ticket.status}>{t('hr.ticket.' + ticket.status)}</span>{ticket.priority && <span className={s.priority}>{t('hr.priority')}</span>}</span><time dateTime={ticket.createdAt}>{dateLabel(ticket.createdAt, locale)}</time></button>)}</div> : <div className={s.listEmpty}><WorkspaceIcon kind="message" /><strong>{t(includeResolved ? 'support.noRequests' : 'support.noOpenRequests')}</strong><p>{t('support.listEmptyHint')}</p></div>}
+        {!listLoading && !listError && total > 20 && <Pagination page={page} total={total} size={20} onChange={setPage} />}
+      </aside>
+      <div className={s.detail}>
+        {!selected ? <div className={s.empty}><span className={s.emptyIcon}><WorkspaceIcon kind="message" /></span><h2>{t('support.welcome')}</h2><p>{t('support.welcomeHint')}</p><button className={s.secondary} type="button" disabled={listLoading || listError} onClick={() => void choose('new')}><WorkspaceIcon kind="plus" />{t('hr.newTicket')}</button></div> : selected === 'new' ? <div className={s.composer}><h2>{t('hr.newTicket')}</h2><p className={s.description}>{t('support.newHint')}</p><form onSubmit={event => void submit(event)}><fieldset className={s.fields} disabled={busy}><label htmlFor="support-subject">{t('hr.subject')}<input ref={titleRef} id="support-subject" name="title" value={title} onChange={event => setTitle(event.target.value)} minLength={5} maxLength={180} required /></label><label htmlFor="support-message">{t('hr.message')}<textarea id="support-message" name="body" value={message} onChange={event => setMessage(event.target.value)} minLength={10} maxLength={10000} rows={7} required /></label>{submitError && <p className={s.formError} role="alert">{submitError}</p>}<div className={s.formActions}><button type="button" className={s.secondary} onClick={() => void choose('')}>{t('cancel')}</button><button className={s.primary} type="submit"><WorkspaceIcon kind="send" />{t(busy ? 'saving' : 'support.sendRequest')}</button></div></fieldset></form></div> : threadLoading ? <WorkspaceLoading /> : threadError ? <div className={s.empty} role="alert"><WorkspaceIcon kind="message" /><h2>{t('ew.loadFailed')}</h2><button type="button" className={s.secondary} onClick={() => setRefresh(value => value + 1)}>{t('workspace.retry')}</button></div> : thread ? <article className={s.conversation}>
+          <header className={s.threadHead}><div className={s.ticketMeta}><span className={s.badge} data-status={thread.status}>{t('hr.ticket.' + thread.status)}</span>{thread.priority && <span className={s.priority}>{t('hr.priority')}</span>}</div><h2>{thread.title}</h2><time dateTime={thread.createdAt}>{dateLabel(thread.createdAt, locale, true)}</time></header>
+          <div className={s.messages}>{thread.replies.map(reply => <section className={s.message} data-team={reply.authorRole !== 'SUPER_ADMIN'} key={reply.id}><header><strong>{t(reply.authorRole === 'SUPER_ADMIN' ? 'hr.support' : 'hr.yourTeam')}</strong><time dateTime={reply.createdAt}>{dateLabel(reply.createdAt, locale, true)}</time></header><p>{reply.body}</p></section>)}</div>
+          {thread.total > 50 && <Pagination page={replyPage} total={thread.total} size={50} onChange={setReplyPage} />}
+          <form className={s.reply} onSubmit={event => void submit(event)}><fieldset className={s.fields} disabled={busy}><label htmlFor="support-reply">{t('support.yourReply')}<textarea id="support-reply" name="body" value={message} onChange={event => setMessage(event.target.value)} minLength={1} maxLength={10000} rows={4} required /></label>{submitError && <p className={s.formError} role="alert">{submitError}</p>}<div className={s.formActions}><button className={s.primary} type="submit"><WorkspaceIcon kind="send" />{t(busy ? 'saving' : 'hr.send')}</button></div></fieldset></form>
+        </article> : null}
+      </div>
+    </div>}
+  </section>;
 }

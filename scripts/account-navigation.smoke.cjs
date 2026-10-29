@@ -251,3 +251,14 @@ test('the mounted route guard preserves workspace query parameters and redirects
     assert.deepEqual(redirects, destination ? [destination] : [], `${role} ${href}: unexpected redirect`);
   }
 });
+
+
+test('HR support deep links preserve company and locale for recruiters and auth returns, and reject employee access', () => {
+  for (const language of ['en', 'id', 'uz', 'ru']) {
+    const href = `/${language}/dashboard/recruiter/support?company=company-2`;
+    assert.equal(policy.accountHref('RECRUITER', href), href);
+    assert.equal(policy.accountReturnHref('RECRUITER', href), '/dashboard/recruiter/support?company=company-2');
+    assert.equal(policy.accountHref('EMPLOYEE', href), `/${language}/jobs`);
+    assert.equal(policy.accountReturnHref('EMPLOYEE', href), null);
+  }
+});
