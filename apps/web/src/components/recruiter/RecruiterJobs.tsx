@@ -12,7 +12,7 @@ import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { RecruiterJobEditor } from './RecruiterJobEditor';
 import s from './RecruiterWorkspace.module.css';
-import { CompanyBenefits, JobBenefits } from './HrBenefits';
+import { JobBenefits } from './HrBenefits';
 import { HrSupport } from './HrSupport';
 import { RecruiterJobActions } from './RecruiterJobActions';
 
@@ -59,7 +59,7 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>
-    <CompanyBenefits companyId={companyId}/><HrSupport companyId={companyId}/>
+    <HrSupport companyId={companyId}/>
     <div className={s.toolbar}><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobs')} /><WorkspaceSelect value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} /><button type="button" className={s.primary} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
     <nav className={s.tabs} aria-label={t('jobs')}>{[['ALL', 'rw.allJobs'], ['PUBLISHED', 'rw.published'], ['DRAFT', 'rw.drafts'], ['PAUSED', 'rw.paused'], ['CLOSED', 'rw.closed'], ['EXPIRED', 'hr.expired']].map(([key, label]) => <button key={key} type="button" aria-current={status === key ? 'page' : undefined} onClick={() => setStatus(key)}>{t(label)}<span className={s.count}>{key === 'ALL' ? jobs.length : jobs.filter((job) => job.status === key).length}</span></button>)}</nav>
     <div className={s.summary}><span><strong>{jobs.filter((job) => job.status === 'PUBLISHED').length}</strong>{t('rw.published')}</span><span><strong>{jobs.reduce((sum, job) => sum + (job._count?.applications || 0), 0)}</strong>{t('applications')}</span><span><strong>{jobs.reduce((sum, job) => sum + (job._count?.views || 0), 0)}</strong>{t('rec.viewsWord')}</span></div>
