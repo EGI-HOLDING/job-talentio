@@ -483,7 +483,7 @@ async function inspectBatch(db: PrismaClient, catalog: ResolvedCatalog) {
       issues.push(`Seed company/account group is partial and will not be repaired automatically: ${company.slug}`);
     }
     if (membership && membership.role !== 'OWNER') issues.push(`Seed recruiter is not the company owner: ${company.slug}`);
-    if (onboarding && (onboarding.companyId !== id || onboarding.status !== 'COMPLETED')) issues.push(`Recruiter onboarding differs from seed expectation: ${company.slug}`);
+    if (onboarding && (onboarding.companyId !== id || onboarding.status !== 'COMPLETE')) issues.push(`Recruiter onboarding differs from seed expectation: ${company.slug}`);
 
     for (let index = 0; index < company.roles.length; index += 1) {
       const role = company.roles[index];
@@ -614,7 +614,7 @@ async function createCompaniesAndAccounts(db: PrismaClient, catalog: ResolvedCat
       });
       await tx.companyMember.create({ data: { companyId: createdCompany.id, userId: createdUser.id, role: 'OWNER' } });
       await tx.recruiterOnboarding.create({
-        data: { userId: createdUser.id, status: 'COMPLETED', step: 4, companyId: createdCompany.id, completedAt: new Date() },
+        data: { userId: createdUser.id, status: 'COMPLETE', step: 3, companyId: createdCompany.id, completedAt: new Date() },
       });
     }
   }, { timeout: 30000 });
@@ -750,7 +750,7 @@ async function verifySeed(db: PrismaClient, catalog: ResolvedCatalog) {
   }
   for (const account of users) assert.equal(account.role, 'RECRUITER');
   for (const membership of memberships) assert.equal(membership.role, 'OWNER');
-  for (const onboarding of onboardings) assert.equal(onboarding.status, 'COMPLETED');
+  for (const onboarding of onboardings) assert.equal(onboarding.status, 'COMPLETE');
   for (const job of jobs) {
     assert.equal(job.status, 'PUBLISHED', `job must be published: ${job.id}`);
     assert.equal(job.locale, 'id');
@@ -869,15 +869,42 @@ async function main() {
     return;
   }
 
-  const { NestFactory } = await import('@nestjs/core');
-  const { AppModule } = await import('../app.module');
+  // Construct only the services needed by this one-off operation. Booting
+  // AppModule also starts workers, backfills, and unrelated external hooks.
+  const { Logger } = await import('@nestjs/common');
+  const { ConfigService } = await import('@nestjs/config');
   const { PrismaService } = await import('../prisma/prisma.service');
+  const { OperationsService } = await import('../benefits/operations.service');
   const { BenefitsService } = await import('../benefits/benefits.service');
+  const { RecruiterOnboardingService } = await import('../benefits/recruiter-onboarding.service');
+  const { StorageService } = await import('../storage/storage.service');
+  const { TranslationService } = await import('../translation/translation.service');
+  const { NoopTranslationProvider } = await import('../translation/providers/noop-translation.provider');
+  const { MailService } = await import('../mail/mail.service');
+  const { CompaniesService } = await import('../companies/companies.service');
+  const { MatchingService } = await import('../matching/matching.service');
+  const { EmployeeMatchingService } = await import('../matching/employee-matching.service');
+  const { NotificationsService } = await import('../notifications/notifications.service');
+  const { TelegramService } = await import('../telegram/telegram.service');
   const { JobsService } = await import('../jobs/jobs.service');
   const { JobsSearchService } = await import('../search/jobs-search.service');
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
+  Logger.overrideLogger(['error']);
+  // A fixture must never announce synthetic jobs to a real Telegram channel.
+  const config = new ConfigService({ TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHANNEL_ID: '' });
+  const db = new PrismaService({ datasources: { db: { url: databaseUrl } } });
+  await db.$connect();
   try {
-    const db = app.get(PrismaService);
+    const search = new JobsSearchService(db, config);
+    const benefits = new BenefitsService(db, new OperationsService(db));
+    const storage = new StorageService(config);
+    const translation = new TranslationService(db, config, new NoopTranslationProvider(), null);
+    const companies = new CompaniesService(db, storage, translation, new MailService(config), config, search);
+    const matching = new MatchingService(db);
+    const employeeMatching = new EmployeeMatchingService(db, matching);
+    const notifications = new NotificationsService(db);
+    const telegram = new TelegramService(db, config, notifications, employeeMatching);
+    const onboarding = new RecruiterOnboardingService(db, benefits);
+    const jobs = new JobsService(db, companies, matching, notifications, search, telegram, employeeMatching, benefits, undefined, undefined, onboarding);
     const catalog = await resolveCatalog(db);
     const report = await makeDryRunReport(db, target);
     const suppliedManifestHash = getArg('--manifest-hash');
@@ -892,14 +919,14 @@ async function main() {
       db,
       catalog,
       password || 'unused-existing-seed-account',
-      app.get(BenefitsService),
-      app.get(JobsService),
-      app.get(JobsSearchService),
+      benefits,
+      jobs,
+      search,
     );
     const verification = await verifySeed(db, catalog);
     process.stdout.write(`${JSON.stringify({ operation: 'apply', ...result, verification }, null, 2)}\n`);
   } finally {
-    await app.close();
+    await db.$disconnect();
   }
 }
 
