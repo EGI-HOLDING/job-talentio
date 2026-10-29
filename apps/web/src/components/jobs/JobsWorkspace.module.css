@@ -147,6 +147,8 @@
 .outlineButton:hover { background: #f4f0ff; color: #4f31bd; }
 .guestNote { color: #9988ca; font-size: .65rem; line-height: 1.5; margin-left: auto; }
 .applied { color: #0b8877; font-size: .77rem; }
+.cvUnavailable { color: #8290a5; font-size: .75rem; }
+.cvError { flex-basis: 100%; color: #b3294e; font-size: .75rem; }
 .success { padding: 10px; border-radius: 6px; background: #ecf9f4; color: #08795d; font-size: .8rem; }
 .error { padding: 10px; border-radius: 6px; background: #fff4f5; color: #b3294e; font-size: .8rem; }
 .previewEmpty { display: grid; place-content: center; justify-items: center; height: 100%; padding: 32px; color: #9aa4b7; text-align: center; font-size: .85rem; }

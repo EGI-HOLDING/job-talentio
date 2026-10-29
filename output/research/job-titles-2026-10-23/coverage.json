@@ -1,0 +1,226 @@
+{
+  "rows": 450,
+  "languages": [
+    "id",
+    "uz",
+    "en"
+  ],
+  "languageLabelCount": 1350,
+  "escoPreferredLabelRows": 444,
+  "marketExtensionRows": 6,
+  "reviewFamilies": 33,
+  "distinctIsco08UnitGroups": 238,
+  "iscoMajorGroupsCovered": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "localLabelsNeedingReview": 900,
+  "readyForImportRows": 0,
+  "familyCounts": [
+    {
+      "key": "leadership",
+      "nameId": "Manajemen dan kepemimpinan",
+      "nameUz": "Boshqaruv va rahbarlik",
+      "count": 10
+    },
+    {
+      "key": "administration",
+      "nameId": "Administrasi dan perkantoran",
+      "nameUz": "Ma’muriyat va ofis ishlari",
+      "count": 12
+    },
+    {
+      "key": "accounting",
+      "nameId": "Akuntansi, keuangan, dan pajak",
+      "nameUz": "Buxgalteriya, moliya va soliqlar",
+      "count": 16
+    },
+    {
+      "key": "banking-insurance",
+      "nameId": "Perbankan, investasi, dan asuransi",
+      "nameUz": "Bank, investitsiya va sug‘urta",
+      "count": 14
+    },
+    {
+      "key": "human-resources",
+      "nameId": "SDM dan rekrutmen",
+      "nameUz": "Kadrlar va xodimlarni yollash",
+      "count": 10
+    },
+    {
+      "key": "sales-retail",
+      "nameId": "Penjualan dan ritel",
+      "nameUz": "Savdo va chakana savdo",
+      "count": 15
+    },
+    {
+      "key": "marketing",
+      "nameId": "Pemasaran, iklan, dan komunikasi",
+      "nameUz": "Marketing, reklama va kommunikatsiya",
+      "count": 15
+    },
+    {
+      "key": "customer-service",
+      "nameId": "Layanan pelanggan",
+      "nameUz": "Mijozlarga xizmat ko‘rsatish",
+      "count": 10
+    },
+    {
+      "key": "software-data",
+      "nameId": "Perangkat lunak, produk digital, dan data",
+      "nameUz": "Dasturiy ta’minot, raqamli mahsulot va ma’lumotlar",
+      "count": 28
+    },
+    {
+      "key": "it-infrastructure",
+      "nameId": "Infrastruktur IT, jaringan, dan keamanan siber",
+      "nameUz": "IT infratuzilmasi, tarmoqlar va kiberxavfsizlik",
+      "count": 16
+    },
+    {
+      "key": "design",
+      "nameId": "Desain dan karya visual",
+      "nameUz": "Dizayn va tasviriy ijod",
+      "count": 12
+    },
+    {
+      "key": "media-language",
+      "nameId": "Media, penulisan, dan bahasa",
+      "nameUz": "Media, mualliflik va tillar",
+      "count": 14
+    },
+    {
+      "key": "hotel-tourism",
+      "nameId": "Perhotelan dan pariwisata",
+      "nameUz": "Mehmonxona va turizm",
+      "count": 14
+    },
+    {
+      "key": "food-beverage",
+      "nameId": "Restoran, kafe, dan pengolahan makanan",
+      "nameUz": "Restoran, kafe va oziq-ovqat tayyorlash",
+      "count": 14
+    },
+    {
+      "key": "logistics",
+      "nameId": "Logistik, gudang, dan pengadaan",
+      "nameUz": "Logistika, ombor va xaridlar",
+      "count": 15
+    },
+    {
+      "key": "transport",
+      "nameId": "Transportasi dan pengiriman",
+      "nameUz": "Transport va yetkazib berish",
+      "count": 14
+    },
+    {
+      "key": "engineering",
+      "nameId": "Rekayasa dan teknik",
+      "nameUz": "Muhandislik",
+      "count": 16
+    },
+    {
+      "key": "construction",
+      "nameId": "Konstruksi, arsitektur, dan properti",
+      "nameUz": "Qurilish, arxitektura va ko‘chmas mulk",
+      "count": 16
+    },
+    {
+      "key": "manufacturing",
+      "nameId": "Manufaktur dan operasi produksi",
+      "nameUz": "Sanoat ishlab chiqarishi va ishlab chiqarish operatsiyalari",
+      "count": 14
+    },
+    {
+      "key": "maintenance",
+      "nameId": "Pemeliharaan, reparasi, dan pekerjaan logam",
+      "nameUz": "Texnik xizmat, ta’mirlash va metallga ishlov berish",
+      "count": 13
+    },
+    {
+      "key": "energy-mining",
+      "nameId": "Energi, pertambangan, dan utilitas",
+      "nameUz": "Energetika, konchilik va kommunal xizmatlar",
+      "count": 12
+    },
+    {
+      "key": "agriculture",
+      "nameId": "Pertanian, perkebunan, dan kehutanan",
+      "nameUz": "Dehqonchilik, bog‘dorchilik va o‘rmon xo‘jaligi",
+      "count": 12
+    },
+    {
+      "key": "livestock-fisheries",
+      "nameId": "Peternakan, perikanan, dan perawatan hewan",
+      "nameUz": "Chorvachilik, baliqchilik va hayvonlar parvarishi",
+      "count": 12
+    },
+    {
+      "key": "healthcare",
+      "nameId": "Kesehatan dan pelayanan medis",
+      "nameUz": "Sog‘liqni saqlash va tibbiy xizmatlar",
+      "count": 20
+    },
+    {
+      "key": "education",
+      "nameId": "Pendidikan, pelatihan, dan perpustakaan",
+      "nameUz": "Ta’lim, o‘qitish va kutubxona ishlari",
+      "count": 16
+    },
+    {
+      "key": "science",
+      "nameId": "Sains, laboratorium, dan penelitian",
+      "nameUz": "Fan, laboratoriya va tadqiqot",
+      "count": 12
+    },
+    {
+      "key": "legal-compliance",
+      "nameId": "Hukum, kepatuhan, dan layanan profesional",
+      "nameUz": "Huquq, muvofiqlik va professional xizmatlar",
+      "count": 12
+    },
+    {
+      "key": "security-facilities",
+      "nameId": "Keamanan, keselamatan, dan pengelolaan fasilitas",
+      "nameUz": "Xavfsizlik, mehnat muhofazasi va obyektlarni boshqarish",
+      "count": 12
+    },
+    {
+      "key": "personal-care",
+      "nameId": "Perawatan pribadi, kecantikan, dan layanan rumah tangga",
+      "nameUz": "Shaxsiy parvarish, go‘zallik va uy xizmatlari",
+      "count": 12
+    },
+    {
+      "key": "social-community",
+      "nameId": "Sosial, komunitas, dan konseling",
+      "nameUz": "Ijtimoiy ish, hamjamiyat va maslahat",
+      "count": 10
+    },
+    {
+      "key": "sports-events",
+      "nameId": "Olahraga, rekreasi, dan acara",
+      "nameUz": "Sport, dam olish va tadbirlar",
+      "count": 10
+    },
+    {
+      "key": "environment",
+      "nameId": "Lingkungan, air, dan pengelolaan limbah",
+      "nameUz": "Atrof-muhit, suv va chiqindilarni boshqarish",
+      "count": 10
+    },
+    {
+      "key": "textile-handicraft",
+      "nameId": "Tekstil, garmen, percetakan, dan kerajinan",
+      "nameUz": "To‘qimachilik, tikuvchilik, matbaa va hunarmandchilik",
+      "count": 12
+    }
+  ]
+}

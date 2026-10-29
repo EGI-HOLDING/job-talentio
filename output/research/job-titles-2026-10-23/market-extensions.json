@@ -1,0 +1,62 @@
+[
+  {
+    "key": "frontend-developer",
+    "family": "software-data",
+    "labels": { "en": "Frontend developer", "id": "Pengembang frontend", "uz": "Frontend dasturchi" },
+    "sourceId": "stat-uz-frontend",
+    "url": "https://stat.uz/img/12-front_p72730.pdf",
+    "observedTitle": "Senior Frontend Developer (React JS)",
+    "relatedEscoTitle": "user interface developer",
+    "note": "Istilah pasar; level senior dan teknologi React dipisahkan. Kedekatan dengan user interface developer perlu direview sebelum menentukan alias atau entri khusus."
+  },
+  {
+    "key": "backend-developer",
+    "family": "software-data",
+    "labels": { "en": "Backend developer", "id": "Pengembang backend", "uz": "Backend dasturchi" },
+    "sourceId": "uzum-tech",
+    "url": "https://people.uzum.com/career/uz/vacancies?directions=data%2C+dev%2C+infosec",
+    "observedTitle": "RecSys Uzum Market jamoasiga Backend Tech Lead",
+    "relatedEscoTitle": "software developer",
+    "note": "Nama keluarga pekerjaan diturunkan dari cakupan backend pada lowongan. Tanggung jawab Tech Lead tidak dianggap sama dengan developer; hubungan ESCO masih usulan."
+  },
+  {
+    "key": "full-stack-developer",
+    "family": "software-data",
+    "labels": { "en": "Full-stack developer", "id": "Pengembang full-stack", "uz": "Full-stack dasturchi" },
+    "sourceId": "grab-fullstack",
+    "url": "https://jobs.smartrecruiters.com/Grab/744000144675669-senior-software-engineer-fullstack-web-platform",
+    "observedTitle": "Senior Software Engineer, Fullstack - Web Platform",
+    "relatedEscoTitle": "software developer",
+    "note": "Nama tampilan dinormalisasi dari lowongan fullstack. Level senior dan nama tim dipisahkan; hubungan ke ESCO merupakan usulan spesialisasi."
+  },
+  {
+    "key": "machine-learning-engineer",
+    "family": "software-data",
+    "labels": { "en": "Machine learning engineer", "id": "Insinyur pembelajaran mesin", "uz": "Mashinaviy o‘rganish muhandisi" },
+    "sourceId": "uzum-tech",
+    "url": "https://people.uzum.com/career/uz/vacancies?directions=data%2C+dev%2C+infosec",
+    "observedTitle": "Uzum Market Senior ML-muhandisi (Qidiruv)",
+    "relatedEscoTitle": "artificial intelligence engineer",
+    "note": "ML diperluas menjadi machine learning. Level senior dan tim pencarian dipisahkan. Tidak otomatis dijadikan sinonim AI engineer atau data scientist."
+  },
+  {
+    "key": "store-crew",
+    "family": "sales-retail",
+    "labels": { "en": "Store crew", "id": "Kru toko", "uz": "Do‘kon xodimi" },
+    "sourceId": "alfamart",
+    "url": "https://alfakarir.alfamart.co.id/",
+    "observedTitle": "Crew Store",
+    "relatedEscoTitle": "shop assistant",
+    "note": "Istilah jabatan lokal dari pemberi kerja. Cakupan tugas dapat meliputi penjualan, kasir, dan penataan barang; tidak otomatis digabung ke cashier."
+  },
+  {
+    "key": "order-pickup-point-administrator",
+    "family": "logistics",
+    "labels": { "en": "Order pickup point administrator", "id": "Administrator titik pengambilan pesanan", "uz": "Buyurtmalarni topshirish punkti administratori" },
+    "sourceId": "uzum-frontline",
+    "url": "https://people.uzum.com/career/uz/frontline",
+    "observedTitle": "Buyurtmalarni topshirish punkti administratori",
+    "relatedEscoTitle": "inventory coordinator",
+    "note": "Nama Uzbek teramati pada halaman karier pemberi kerja; nama Inggris dan Indonesia merupakan draf. Tugas lintas fungsi memerlukan review sebelum klasifikasi nasional."
+  }
+]

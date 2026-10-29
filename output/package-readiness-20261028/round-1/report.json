@@ -1,0 +1,142 @@
+{
+  "name": "round-1",
+  "startedAt": "2026-10-28T02:09:55.485Z",
+  "sourceHash": "ab6d7556c6be7a4228c9feca67b5f2775af0cd7e5d6e4d9cf2e647a5bb7f6024",
+  "checks": [
+    {
+      "title": "API source regressions",
+      "command": [
+        "node",
+        "scripts/run-api-smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 37699,
+      "passed": true
+    },
+    {
+      "title": "Checkout network and navigation recovery",
+      "command": [
+        "node",
+        "scripts/package-checkout-ui.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 659,
+      "passed": true
+    },
+    {
+      "title": "HR access and stale-response UI",
+      "command": [
+        "node",
+        "scripts/hr-access-ui.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 3520,
+      "passed": true
+    },
+    {
+      "title": "LinkedIn component logic",
+      "command": [
+        "node",
+        "scripts/linkedin-ui.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 1107,
+      "passed": true
+    },
+    {
+      "title": "Account navigation",
+      "command": [
+        "node",
+        "scripts/account-navigation.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 815,
+      "passed": true
+    },
+    {
+      "title": "Commerce database and injected faults",
+      "command": [
+        "node",
+        "scripts/hr-benefits-local.smoke.cjs",
+        "--commerce"
+      ],
+      "exitCode": 0,
+      "durationMs": 17107,
+      "passed": true
+    },
+    {
+      "title": "Benefits applicants analytics search database",
+      "command": [
+        "node",
+        "scripts/hr-benefits-local.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 39298,
+      "passed": true
+    },
+    {
+      "title": "LinkedIn isolated DB storage Redis",
+      "command": [
+        "node",
+        "scripts/hr-benefits-local.smoke.cjs",
+        "--linkedin"
+      ],
+      "exitCode": 0,
+      "durationMs": 23674,
+      "passed": true
+    },
+    {
+      "title": "Pricing onboarding checkout publication upgrades browser",
+      "command": [
+        "node",
+        "scripts/job-commerce-browser.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 48404,
+      "passed": true
+    },
+    {
+      "title": "Auth language refresh logout browser",
+      "command": [
+        "node",
+        "scripts/job-commerce-auth-browser.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 7012,
+      "passed": true
+    },
+    {
+      "title": "Permissions renewal orders admin browser",
+      "command": [
+        "node",
+        "scripts/job-commerce-edge-browser.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 15859,
+      "passed": true
+    },
+    {
+      "title": "Features statistics reports support real UI browser",
+      "command": [
+        "node",
+        "scripts/package-features-browser.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 90615,
+      "passed": true
+    },
+    {
+      "title": "LinkedIn multilingual responsive accessibility browser",
+      "command": [
+        "node",
+        "scripts/linkedin-browser-audit.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 25765,
+      "passed": true
+    }
+  ],
+  "passed": false,
+  "finishedAt": "2026-10-28T02:15:07.520Z",
+  "endSourceHash": "0299dbde5a9d2547dc97ce661db780f5867a6a9539aca5f8d1be03df0993ff45"
+}

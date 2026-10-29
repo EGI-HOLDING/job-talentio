@@ -1,0 +1,62 @@
+1|4419.1|advertising assistant
+2|4323.1|aircraft cargo operations coordinator
+3|4323.2|aircraft dispatcher
+4|4312.1|auditing clerk
+5|4323.3|baggage flow supervisor
+6|4212.1|bingo caller
+7|4212.2|bookmaker
+8|4323.21|bridge operator
+9|4323.4|bus route supervisor
+10|4224.1.1|camping ground operative
+11|4212.3|casino cashier
+12|4212.4|casino gaming manager
+13|4212.4.1|casino pit boss
+14|4323.5|dangerous goods safety adviser
+15|4223.1.1|emergency medical dispatcher
+16|4312.2.1|financial markets back office administrator
+17|4321.1.1|footwear factory warehouse operator
+18|4312.3|foreign exchange cashier
+19|4419.2|foreign language correspondence clerk
+20|4323.6|freight transport dispatcher
+21|4226.1.1|front line medical receptionist
+22|4212.5|gaming dealer
+23|4323.7|gas scheduling representative
+24|4323.8|gas transmission system operator
+25|4221.1|ground steward/ground stewardess
+26|4221.2|host/hostess
+27|4214.2|insurance collector
+28|4312.5|investment clerk
+29|4321.1.2|leather goods warehouse operator
+30|4411.1|library assistant
+31|4222.1.1|live chat operator
+32|4212.6|lottery operator
+33|4322.1|machinery assembly coordinator
+34|4412.1|mail clerk
+35|4227.1|market research interviewer
+36|4110.1.1|membership administrator
+37|4323.9|move coordinator
+38|4224.2|night auditor
+39|4212.7|odds compiler
+40|4213.1|pawnbroker
+41|4323.10|pipeline route manager
+42|4323.11|port coordinator
+43|4211.2|post office counter clerk
+44|4412.2|postman/postwoman
+45|4312.6|property assistant
+46|4212.8|race track operator
+47|4323.12|rail logistics coordinator
+48|4323.13|rail traffic controller
+49|4221.3.1|railway sales agent
+50|4321.1.3|raw material reception operator
+51|4321.1.4|raw materials warehouse specialist
+52|4323.14|road transport maintenance scheduler
+53|4323.15|ship pilot dispatcher
+54|4323.16|ship planner
+55|4323.17|taxi controller
+56|4221.3|ticket sales agent
+57|4221.5|tour operator representative
+58|4323.18|tram controller
+59|4323.19|vessel operations coordinator
+60|4226.1.2|veterinary receptionist
+61|4321.1.5|warehouse operators for clothing
+62|4323.20|water traffic coordinator

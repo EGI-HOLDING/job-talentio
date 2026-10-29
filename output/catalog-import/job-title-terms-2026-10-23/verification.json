@@ -1,0 +1,37 @@
+{
+  "verified": true,
+  "results": [
+    {
+      "input": "AI Engineer",
+      "id": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+      "name": "Artificial Intelligence Engineer",
+      "slug": "artificial-intelligence-engineer",
+      "created": false,
+      "matchedVia": "alias"
+    },
+    {
+      "input": "Machine Learning Engineer",
+      "id": "cmvccxjrj00pf0nrcp4auttow",
+      "name": "Machine Learning Engineer",
+      "slug": "machine-learning-engineer",
+      "created": false,
+      "matchedVia": "slug"
+    },
+    {
+      "input": "ML Engineer",
+      "id": "cmvccxjrj00pf0nrcp4auttow",
+      "name": "Machine Learning Engineer",
+      "slug": "machine-learning-engineer",
+      "created": false,
+      "matchedVia": "alias"
+    },
+    {
+      "input": "Data Engineer",
+      "id": "cmvccxjue00r20nrcw12ybfun",
+      "name": "Data Engineer",
+      "slug": "data-engineer",
+      "created": false,
+      "matchedVia": "slug"
+    }
+  ]
+}

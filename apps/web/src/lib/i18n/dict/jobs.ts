@@ -70,6 +70,11 @@ export const jobs = {
     ru: 'Мои отклики',
     en: 'View my applications',
   },
+  'job.viewSubmittedCv': {
+    uz: 'Yuborilgan CVni ko‘rish',
+    ru: 'Посмотреть отправленное резюме',
+    en: 'View submitted CV',
+  },
   'job.aboutTheRole': { uz: 'Lavozim haqida', ru: 'О вакансии', en: 'About the role' },
   'job.yourMatch': { uz: 'Sizning mosligingiz', ru: 'Ваше совпадение', en: 'Your match' },
   'job.yourMatchHint': {

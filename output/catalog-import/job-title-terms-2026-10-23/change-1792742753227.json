@@ -1,0 +1,252 @@
+{
+  "status": "applied",
+  "at": "2026-10-23T08:05:53.269Z",
+  "before": [
+    {
+      "id": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+      "name": "Artificial Intelligence Engineer",
+      "nameUz": "Sun’iy intellekt muhandisi",
+      "nameRu": null,
+      "nameId": "Insinyur kecerdasan buatan",
+      "nameUzIsMachine": true,
+      "nameRuIsMachine": false,
+      "nameIdIsMachine": true,
+      "i18nStatus": "PENDING",
+      "slug": "artificial-intelligence-engineer",
+      "normalizedKey": "artificial-intelligence-engineer",
+      "archivedAt": null,
+      "curatedAt": null,
+      "createdAt": "2026-10-23T07:37:15.989Z",
+      "updatedAt": "2026-10-23T07:37:15.989Z",
+      "aliases": [
+        {
+          "id": "jobcat_alias_6dd0b568c80353e02d13789923e97102",
+          "jobTitleId": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+          "alias": "Insinyur kecerdasan buatan",
+          "aliasKey": "insinyur-kecerdasan-buatan",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_65db4fec244b4025ec121388feabb254",
+          "jobTitleId": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+          "alias": "Sun’iy intellekt muhandisi",
+          "aliasKey": "sun-iy-intellekt-muhandisi",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        }
+      ],
+      "_count": {
+        "jobPosts": 0,
+        "resumes": 0
+      }
+    },
+    {
+      "id": "cmvccxjue00r20nrcw12ybfun",
+      "name": "Data Engineer",
+      "nameUz": "Ma’lumotlar muhandisi",
+      "nameRu": null,
+      "nameId": "Insinyur data",
+      "nameUzIsMachine": true,
+      "nameRuIsMachine": false,
+      "nameIdIsMachine": true,
+      "i18nStatus": "PENDING",
+      "slug": "data-engineer",
+      "normalizedKey": "dataengineer",
+      "archivedAt": null,
+      "curatedAt": null,
+      "createdAt": "2026-10-17T12:12:57.399Z",
+      "updatedAt": "2026-10-23T07:37:16.052Z",
+      "aliases": [
+        {
+          "id": "jobcat_alias_1723748160ee1c085477474e70dbdcc0",
+          "jobTitleId": "cmvccxjue00r20nrcw12ybfun",
+          "alias": "Insinyur data",
+          "aliasKey": "insinyur-data",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_3e7e194db105ad292f3e097412dda08e",
+          "jobTitleId": "cmvccxjue00r20nrcw12ybfun",
+          "alias": "Ma’lumotlar muhandisi",
+          "aliasKey": "ma-lumotlar-muhandisi",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        }
+      ],
+      "_count": {
+        "jobPosts": 8,
+        "resumes": 0
+      }
+    },
+    {
+      "id": "cmvccxjrj00pf0nrcp4auttow",
+      "name": "Machine Learning Engineer",
+      "nameUz": "Mashinaviy o‘rganish muhandisi",
+      "nameRu": null,
+      "nameId": "Insinyur pembelajaran mesin",
+      "nameUzIsMachine": true,
+      "nameRuIsMachine": false,
+      "nameIdIsMachine": true,
+      "i18nStatus": "PENDING",
+      "slug": "ai-engineer",
+      "normalizedKey": "machinelearningengineer",
+      "archivedAt": null,
+      "curatedAt": null,
+      "createdAt": "2026-10-17T12:12:57.296Z",
+      "updatedAt": "2026-10-23T07:37:16.065Z",
+      "aliases": [
+        {
+          "id": "jobcat_alias_7e925478056d8a7664d2a5b1583f4565",
+          "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+          "alias": "Machine Learning Engineer",
+          "aliasKey": "machine-learning-engineer",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_7cff036da3d43bcd1690857ef7f82e63",
+          "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+          "alias": "Insinyur pembelajaran mesin",
+          "aliasKey": "insinyur-pembelajaran-mesin",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_a6a8eb806d76678ff4bbe9acacb0b646",
+          "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+          "alias": "Mashinaviy o‘rganish muhandisi",
+          "aliasKey": "mashinaviy-o-rganish-muhandisi",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        }
+      ],
+      "_count": {
+        "jobPosts": 24,
+        "resumes": 0
+      }
+    }
+  ],
+  "after": [
+    {
+      "id": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+      "name": "Artificial Intelligence Engineer",
+      "nameUz": "Sun’iy intellekt muhandisi",
+      "nameRu": null,
+      "nameId": "Insinyur kecerdasan buatan",
+      "nameUzIsMachine": true,
+      "nameRuIsMachine": false,
+      "nameIdIsMachine": true,
+      "i18nStatus": "PENDING",
+      "slug": "artificial-intelligence-engineer",
+      "normalizedKey": "artificial-intelligence-engineer",
+      "archivedAt": null,
+      "curatedAt": null,
+      "createdAt": "2026-10-23T07:37:15.989Z",
+      "updatedAt": "2026-10-23T07:37:15.989Z",
+      "aliases": [
+        {
+          "id": "jobcat_alias_6dd0b568c80353e02d13789923e97102",
+          "jobTitleId": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+          "alias": "Insinyur kecerdasan buatan",
+          "aliasKey": "insinyur-kecerdasan-buatan",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_65db4fec244b4025ec121388feabb254",
+          "jobTitleId": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+          "alias": "Sun’iy intellekt muhandisi",
+          "aliasKey": "sun-iy-intellekt-muhandisi",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "cmvkoqxgg00010nxw0m80px8e",
+          "jobTitleId": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+          "alias": "AI Engineer",
+          "aliasKey": "ai-engineer",
+          "createdAt": "2026-10-23T08:05:53.248Z"
+        }
+      ],
+      "_count": {
+        "jobPosts": 0,
+        "resumes": 0
+      }
+    },
+    {
+      "id": "cmvccxjue00r20nrcw12ybfun",
+      "name": "Data Engineer",
+      "nameUz": "Ma’lumotlar muhandisi",
+      "nameRu": null,
+      "nameId": "Insinyur data",
+      "nameUzIsMachine": true,
+      "nameRuIsMachine": false,
+      "nameIdIsMachine": true,
+      "i18nStatus": "PENDING",
+      "slug": "data-engineer",
+      "normalizedKey": "dataengineer",
+      "archivedAt": null,
+      "curatedAt": null,
+      "createdAt": "2026-10-17T12:12:57.399Z",
+      "updatedAt": "2026-10-23T07:37:16.052Z",
+      "aliases": [
+        {
+          "id": "jobcat_alias_1723748160ee1c085477474e70dbdcc0",
+          "jobTitleId": "cmvccxjue00r20nrcw12ybfun",
+          "alias": "Insinyur data",
+          "aliasKey": "insinyur-data",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_3e7e194db105ad292f3e097412dda08e",
+          "jobTitleId": "cmvccxjue00r20nrcw12ybfun",
+          "alias": "Ma’lumotlar muhandisi",
+          "aliasKey": "ma-lumotlar-muhandisi",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        }
+      ],
+      "_count": {
+        "jobPosts": 8,
+        "resumes": 0
+      }
+    },
+    {
+      "id": "cmvccxjrj00pf0nrcp4auttow",
+      "name": "Machine Learning Engineer",
+      "nameUz": "Mashinaviy o‘rganish muhandisi",
+      "nameRu": null,
+      "nameId": "Machine Learning Engineer",
+      "nameUzIsMachine": true,
+      "nameRuIsMachine": false,
+      "nameIdIsMachine": false,
+      "i18nStatus": "PENDING",
+      "slug": "machine-learning-engineer",
+      "normalizedKey": "machinelearningengineer",
+      "archivedAt": null,
+      "curatedAt": "2026-10-23T08:05:53.239Z",
+      "createdAt": "2026-10-17T12:12:57.296Z",
+      "updatedAt": "2026-10-23T08:05:53.240Z",
+      "aliases": [
+        {
+          "id": "jobcat_alias_7e925478056d8a7664d2a5b1583f4565",
+          "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+          "alias": "Machine Learning Engineer",
+          "aliasKey": "machine-learning-engineer",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "jobcat_alias_a6a8eb806d76678ff4bbe9acacb0b646",
+          "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+          "alias": "Mashinaviy o‘rganish muhandisi",
+          "aliasKey": "mashinaviy-o-rganish-muhandisi",
+          "createdAt": "2026-10-23T07:37:16.071Z"
+        },
+        {
+          "id": "cmvkoqxgj00030nxw44hb45af",
+          "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+          "alias": "ML Engineer",
+          "aliasKey": "ml-engineer",
+          "createdAt": "2026-10-23T08:05:53.251Z"
+        }
+      ],
+      "_count": {
+        "jobPosts": 24,
+        "resumes": 0
+      }
+    }
+  ],
+  "total": 478
+}

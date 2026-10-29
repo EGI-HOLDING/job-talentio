@@ -46,6 +46,10 @@ function host(file, exportName, dependencies, globals = {}) {
       const index = cursor++;
       return (cells[index] ||= { current: initial });
     },
+    useId() {
+      const index = cursor++;
+      return (cells[index] ||= 'test-id-' + index);
+    },
     useMemo(run) {
       return run();
     },
@@ -160,6 +164,32 @@ test('adding to Kanban is a single direct action, survives retries and ignores s
   pending.resolve({id:'app',kanbanEnteredAt:'2026-10-26',canAddToKanban:false});await ui.render();assert.equal(changes.length,1);
   tree=await ui.render({...props,application:{...row(),...changes[0]}});assert.match(nodes(tree,n=>n.props?.href)[0].props.href,/section=kanban.*application=app/);ui.unmount();
 });
+test('recruiter job package filter matches confirmed Free, Standard and Premium packages',async()=>{
+  function Select(){} function JobRow(){} function Editor(){}
+  const jobs=[
+    {id:'premium',title:'Premium role',status:'PUBLISHED',createdAt:'2026-10-26',benefit:{code:'PREMIUM',selectionConfirmedAt:'2026-10-26'},_count:{}},
+    {id:'standard',title:'Standard role',status:'PUBLISHED',createdAt:'2026-10-25',benefit:{code:'STANDARD',selectionConfirmedAt:'2026-10-25'},_count:{}},
+    {id:'free',title:'Free role',status:'PUBLISHED',createdAt:'2026-10-24',benefit:{code:'FREE',selectionConfirmedAt:'2026-10-24'},_count:{}},
+    {id:'unselected',title:'Unselected role',status:'DRAFT',createdAt:'2026-10-23',benefit:{code:'FREE',selectionConfirmedAt:null},_count:{}},
+  ];
+  const ui=host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
+    '@/lib/api':{api:async()=>({})},'@/lib/useLiveRefresh':{useLiveRefresh(){}},'@/lib/navigation':{useRouter:()=>({push(){}})},
+    '@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/lib/i18n':t,'@/components/employee/WorkspaceIcon':{WorkspaceIcon:()=>null},
+    '@/components/employee/WorkspacePrimitives':{SearchField:()=>null,WorkspaceEmpty:()=>null,WorkspaceLoading:()=>null,Pagination:()=>null},
+    '@/components/jobs/WorkspaceSelect':{WorkspaceSelect:Select},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},
+    './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:JobRow},
+  });
+  const props={companyId:'company',company:{},jobs,loading:false,meta:{},createRequested:false,onCloseCreate(){},onReload:async()=>{},onApplicants(){},onStatus:async()=>{},onFlash(){}};
+  let tree=await ui.render(props);
+  const packageSelect=()=>nodes(tree,node=>node.type===Select&&node.props.label==='jr.package')[0];
+  assert.deepEqual([...packageSelect().props.options].map(option=>option.value),['ALL','PREMIUM','STANDARD','FREE']);
+  const visibleJobs=()=>nodes(tree,node=>node.type===JobRow).map(node=>node.props.job.id);
+  assert.deepEqual(visibleJobs(),['premium','standard','free','unselected']);
+  packageSelect().props.onChange('PREMIUM');tree=await ui.render();assert.deepEqual(visibleJobs(),['premium']);
+  packageSelect().props.onChange('STANDARD');tree=await ui.render();assert.deepEqual(visibleJobs(),['standard']);
+  packageSelect().props.onChange('FREE');tree=await ui.render();assert.deepEqual(visibleJobs(),['free'],'unselected jobs do not appear as Gratis');
+  packageSelect().props.onChange('ALL');tree=await ui.render();assert.deepEqual(visibleJobs(),['premium','standard','free','unselected']);ui.unmount();
+});
 test('CV action resolves the submitted application file and has no database permission request',async()=>{
   const requests=[],tab={opener:'old',location:{href:''},close(){}};
   const ui=host('apps/web/src/components/recruiter/ApplicationActions.tsx','ApplicationCvAction',{'@/lib/api':{api:async route=>{requests.push(route);return{url:'https://example.test/submitted'};}},'@/lib/i18n':t,'@/lib/navigation':{Link:()=>null},'@/lib/accountNavigation':{employerJobHref(){}}},{window:{open:()=>tab}});
@@ -168,12 +198,13 @@ test('CV action resolves the submitted application file and has no database perm
 });
 test('Kanban loads each column independently and preserves loaded pages during live refresh',async()=>{
   const stub=()=>null,requests=[];let refresh;
-  const dependencies=applicantDependencies(async route=>{requests.push(route);if(route.includes('/applicants/'))return row('linked',{kanbanEnteredAt:'2026-10-26'});const q=new URL(route,'http://local').searchParams,page=Number(q.get('page'));return {columns:[{status:'NEW',items:Array.from({length:page===1?20:5},(_,i)=>row('p'+page+'-'+i,{kanbanEnteredAt:'2026-10-26'})),total:25,totalPages:2,page,hasMore:page===1}]};},{'@/lib/useLiveRefresh':{useLiveRefresh:(_kind,fn)=>{refresh=fn;}},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,dateLabel:()=>''}});
+  const dependencies=applicantDependencies(async route=>{requests.push(route);if(route.includes('/applicants/'))return row('linked',{status:'IN_REVIEW',kanbanEnteredAt:'2026-10-26'});const q=new URL(route,'http://local').searchParams,page=Number(q.get('page'));return {columns:[{status:'IN_REVIEW',items:Array.from({length:page===1?20:5},(_,i)=>row('p'+page+'-'+i,{status:'IN_REVIEW',kanbanEnteredAt:'2026-10-26'})),total:25,totalPages:2,page,hasMore:page===1}]};},{'@/lib/useLiveRefresh':{useLiveRefresh:(_kind,fn)=>{refresh=fn;}},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,dateLabel:()=>''}});
   const ui=host('apps/web/src/components/recruiter/RecruiterPipeline.tsx','RecruiterPipeline',dependencies);
   let tree=await ui.render({embedded:true,meta:{},companyId:'company',companyName:'Company',jobs:[{id:'job'}],selectedJob:'job',applicationId:'linked',applicants:[],templates:[],onReload:async()=>{},onTemplates(){},onFlash(){},onJobChange(){}});
   await new Promise(r=>setTimeout(r,230));tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,21);assert.equal(nodes(tree,n=>n.type==='article'&&n.props['data-active']).length,1);
-  nodes(tree,n=>n.type==='button'&&n.props.children==='applicants.loadMore')[0].props.onClick();tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26);assert.match(requests.at(-1),/status=NEW.*page=2/);assert.doesNotMatch(JSON.stringify(tree),/matchScore|miniScore|\/100/);await refresh();tree=await ui.render();await new Promise(r=>setTimeout(r,230));tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26,'Live updates preserve page two');ui.unmount();
+  nodes(tree,n=>n.type==='button'&&n.props.children==='applicants.loadMore')[0].props.onClick();tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26);assert.match(requests.at(-1),/status=IN_REVIEW.*page=2/);assert.doesNotMatch(JSON.stringify(tree),/applicationStatus\.NEW|matchScore|miniScore|\/100/);await refresh();tree=await ui.render();await new Promise(r=>setTimeout(r,230));tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26,'Live updates preserve page two');ui.unmount();
 });
+
 
 test('application detail keeps the application identity and exposes the same Kanban action without scores',async()=>{
   const stub=()=>null;function Action(){} function Cv(){}
@@ -183,6 +214,23 @@ test('application detail keeps the application identity and exposes the same Kan
   assert.equal(nodes(tree,n=>n.type===Cv)[0].props.application.id,'review');
   const profile=nodes(tree,n=>n.props?.href?.startsWith('/candidates/'))[0];const url=new URL(profile.props.href,'http://local');assert.equal(url.searchParams.get('application'),'review');assert.equal(url.searchParams.get('matchJobId'),'job');assert.equal(url.searchParams.get('company'),'company');
   assert.doesNotMatch(visibleText(tree),/95|matchScore|ranking.index|ranking.coverage/);ui.unmount();
+});
+test('application detail scopes screening to review and offers repeat interview scheduling only in the Interview stage',async()=>{
+  const stub=()=>null,base={profile:{id:'profile-review',user:{id:'employee',fullName:'Fixture applicant'}},kanbanEnteredAt:'2026-10-26',answers:[{id:'answer',question:{question:'Screening fixture question'},answer:'Fixture answer'}],coverLetter:null,interviews:[]};
+  const dependencies=(getApplication,postInterview=async()=>{})=>({'@/lib/api':{api:async()=>getApplication()},'@/lib/i18n':t,'@/lib/navigation':{Link:stub},'@/lib/hr-benefits':{postOnce:postInterview},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/profile/ProfileDialog':{ProfileDialog:stub},'@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=> 'Fixture date'},'./ApplicationActions':{KanbanAction:stub,ApplicationCvAction:stub},'./RecruiterPrimitives':{RecruiterAvatar:stub}});
+  const props={applicationId:'review',jobId:'job',companyId:'company',onClose(){},onChanged(){}};
+  let current={...row('review',base),status:'IN_REVIEW'};
+  let ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',dependencies(()=>current));
+  let tree=await ui.render(props);assert.match(visibleText(tree),/Screening fixture question/);assert.match(visibleText(tree),/Fixture answer/);assert.equal(nodes(tree,node=>node.type==='form').length,0);assert.equal(nodes(tree,node=>node.type==='button'&&String(node.props.children).includes('rec.schedule')).length,0);ui.unmount();
+
+  current={...row('interview',base),status:'INTERVIEW',interviews:[]};const scheduled=[];let changed=0;
+  ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',dependencies(()=>current,async(_path,body)=>{scheduled.push(body);current={...current,interviews:[...current.interviews,{id:'interview-'+scheduled.length,...body,status:'SCHEDULED'}]};return current.interviews.at(-1);}),{FormData:class{get(name){return({scheduledAt:'2030-01-01T10:00',durationMins:'45',meetingUrl:'https://example.test/meeting-next',location:'Fixture room',note:'Next round'})[name]||'';}}});
+  tree=await ui.render({...props,applicationId:'interview',onChanged(){changed++;}});assert.doesNotMatch(visibleText(tree),/Screening fixture question|Fixture answer/);assert.equal(nodes(tree,node=>node.type==='article'&&node.props.className==='interviewItem').length,0);
+  const open=nodes(tree,node=>node.type==='button'&&node.props.children==='rec.scheduleInterview')[0];assert.ok(open);assert.equal(open.props['aria-expanded'],false);open.props.onClick();tree=await ui.render();const form=nodes(tree,node=>node.type==='form')[0];assert.ok(form);form.props.onSubmit({preventDefault(){},currentTarget:{reset(){}}});tree=await ui.render();
+  assert.equal(scheduled.length,1);assert.equal(scheduled[0].durationMins,45);assert.equal(changed,1);assert.equal(nodes(tree,node=>node.type==='form').length,0);assert.equal(nodes(tree,node=>node.type==='article').length,1,'Successful scheduling should refresh the interview history: '+visibleText(tree));assert.ok(nodes(tree,node=>node.type==='button'&&node.props.children==='rec.scheduleNextInterview')[0]);assert.doesNotMatch(visibleText(tree),/Interview 1|Interview 2|Wawancara 1|Wawancara 2/);ui.unmount();
+
+  current={...row('later',{...base,interviews:[{id:'cancelled',scheduledAt:'2026-10-27T10:00:00.000Z',status:'CANCELLED',durationMins:45}]}),status:'OFFER'};
+  ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',dependencies(()=>current));tree=await ui.render({...props,applicationId:'later'});assert.doesNotMatch(visibleText(tree),/Screening fixture question|Fixture answer|rec.scheduleInterview|rec.scheduleNextInterview/);assert.equal(nodes(tree,node=>node.type==='article').length,1);assert.equal(nodes(tree,node=>node.type==='form').length,0);ui.unmount();
 });
 test('a delayed Kanban response cannot update a different application after navigation',async()=>{
   const result=deferred(),changes=[],stub=()=>null;

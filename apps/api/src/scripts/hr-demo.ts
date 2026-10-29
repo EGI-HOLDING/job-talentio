@@ -141,8 +141,8 @@ async function main(){
         const createdAt=at(-14+n%10,n%45),enteredAt=new Date(createdAt.getTime()+3600000);
         let status:any='NEW',entered=false;
         if(job.companyIndex===0&&job.index===0){
-          status=n<45?'NEW':n<60?'IN_REVIEW':n<68?'INTERVIEW':n<72?'OFFER':n<75?'HIRED':n<78?'REJECTED':'WITHDRAWN';entered=n>=20&&n<78;
-        }else{status=['NEW','NEW','IN_REVIEW','INTERVIEW','OFFER','HIRED','REJECTED','WITHDRAWN'][n%8];entered=n%8>0&&n%8<7;}
+          status=n<20?'NEW':n<60?'IN_REVIEW':n<68?'INTERVIEW':n<72?'OFFER':n<75?'HIRED':n<78?'REJECTED':'WITHDRAWN';entered=n>=20&&n<78;
+        }else{status=['NEW','IN_REVIEW','IN_REVIEW','INTERVIEW','OFFER','HIRED','REJECTED','WITHDRAWN'][n%8];entered=n%8>0&&n%8<7;}
         await db.application.update({where:{id:item.id},data:{createdAt,updatedAt:enteredAt,kanbanEnteredAt:entered?enteredAt:null,status}});
         if(entered)await db.auditLog.create({data:{actorId:job.companyIndex===0&&n%3===0?hr2.id:hr.id,action:'APPLICATION_KANBAN_ADDED',entityType:'Application',entityId:item.id,metadata:{synthetic:true,jobPostId:job.id},createdAt:enteredAt}});
         await db.pipelineEvent.updateMany({where:{applicationId:item.id},data:{createdAt}});

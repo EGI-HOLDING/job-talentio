@@ -1,0 +1,160 @@
+{
+  "name": "uz analytics 320",
+  "width": 320,
+  "scroll": 335,
+  "offenders": [
+    {
+      "tag": "DIV",
+      "classes": "nav-links SiteNav_landingLinks__CCGJh SiteNav_signedIn__2xAlp",
+      "left": 145.171875,
+      "right": 335.4375,
+      "width": 190.265625,
+      "overflow": "visible",
+      "text": "O'z3PPackage"
+    },
+    {
+      "tag": "BUTTON",
+      "classes": "SiteNav_menuButton__JHQ67",
+      "left": 303.4375,
+      "right": 335.4375,
+      "width": 32,
+      "overflow": "visible",
+      "text": ""
+    },
+    {
+      "tag": "svg",
+      "classes": {},
+      "left": 307.4375,
+      "right": 331.4375,
+      "width": 24,
+      "overflow": "hidden",
+      "text": ""
+    },
+    {
+      "tag": "path",
+      "classes": {},
+      "left": 310.4375,
+      "right": 328.4375,
+      "width": 18,
+      "overflow": "visible",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "classes": "",
+      "left": 193.953125,
+      "right": 346.109375,
+      "width": 152.15625,
+      "overflow": "visible",
+      "text": "Vakansiya ko‘rsatkichlari"
+    },
+    {
+      "tag": "TABLE",
+      "classes": "RecruiterWorkspace_table___hQiz",
+      "left": 35,
+      "right": 815,
+      "width": 780,
+      "overflow": "visible",
+      "text": "LavozimArizalarIshga olinganPREMIUM Verification Role Русский Indonesi"
+    },
+    {
+      "tag": "THEAD",
+      "classes": "",
+      "left": 35,
+      "right": 815,
+      "width": 780,
+      "overflow": "visible",
+      "text": "LavozimArizalarIshga olingan"
+    },
+    {
+      "tag": "TR",
+      "classes": "",
+      "left": 35,
+      "right": 815,
+      "width": 780,
+      "overflow": "visible",
+      "text": "LavozimArizalarIshga olingan"
+    },
+    {
+      "tag": "TH",
+      "classes": "",
+      "left": 35,
+      "right": 550.546875,
+      "width": 515.546875,
+      "overflow": "visible",
+      "text": "Lavozim"
+    },
+    {
+      "tag": "TH",
+      "classes": "",
+      "left": 550.546875,
+      "right": 656.5,
+      "width": 105.953125,
+      "overflow": "visible",
+      "text": "Arizalar"
+    },
+    {
+      "tag": "TH",
+      "classes": "",
+      "left": 656.5,
+      "right": 815,
+      "width": 158.5,
+      "overflow": "visible",
+      "text": "Ishga olingan"
+    },
+    {
+      "tag": "TBODY",
+      "classes": "",
+      "left": 35,
+      "right": 815,
+      "width": 780,
+      "overflow": "visible",
+      "text": "PREMIUM Verification Role Русский Indonesia10"
+    },
+    {
+      "tag": "TR",
+      "classes": "",
+      "left": 35,
+      "right": 815,
+      "width": 780,
+      "overflow": "visible",
+      "text": "PREMIUM Verification Role Русский Indonesia10"
+    },
+    {
+      "tag": "TD",
+      "classes": "",
+      "left": 35,
+      "right": 550.546875,
+      "width": 515.546875,
+      "overflow": "visible",
+      "text": "PREMIUM Verification Role Русский Indonesia"
+    },
+    {
+      "tag": "BUTTON",
+      "classes": "RecruiterWorkspace_textButton__nvnV0",
+      "left": 45,
+      "right": 331.96875,
+      "width": 286.96875,
+      "overflow": "visible",
+      "text": "PREMIUM Verification Role Русский Indonesia"
+    },
+    {
+      "tag": "TD",
+      "classes": "",
+      "left": 550.546875,
+      "right": 656.5,
+      "width": 105.953125,
+      "overflow": "visible",
+      "text": "1"
+    },
+    {
+      "tag": "TD",
+      "classes": "",
+      "left": 656.5,
+      "right": 815,
+      "width": 158.5,
+      "overflow": "visible",
+      "text": "0"
+    }
+  ]
+}

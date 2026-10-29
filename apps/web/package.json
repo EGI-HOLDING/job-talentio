@@ -11,7 +11,7 @@
     "test:linkedin": "node ../../scripts/linkedin-ui.smoke.cjs",
     "test:recruiter-packages": "node ../../scripts/recruiter-package-onboarding.smoke.cjs",
     "test:auth-providers": "node ../../scripts/auth-providers-ui.smoke.cjs",
-    "test": "node ../../scripts/featured-companies-carousel.smoke.cjs && node ../../scripts/session-client.smoke.cjs web && node ../../scripts/check-i18n-keys.cjs && node ../../scripts/employee-onboarding-auth.smoke.cjs && node ../../scripts/account-navigation.smoke.cjs && node ../../scripts/employee-matching-ui.smoke.cjs && node ../../scripts/hr-access-ui.smoke.cjs && node ../../scripts/recruiter-support.smoke.cjs && node ../../scripts/linkedin-ui.smoke.cjs"
+    "test": "node ../../scripts/featured-companies-carousel.smoke.cjs && node ../../scripts/withdrawn-application-chat.smoke.cjs && node ../../scripts/session-client.smoke.cjs web && node ../../scripts/check-i18n-keys.cjs && node ../../scripts/employee-onboarding-auth.smoke.cjs && node ../../scripts/account-navigation.smoke.cjs && node ../../scripts/employee-matching-ui.smoke.cjs && node ../../scripts/hr-access-ui.smoke.cjs && node ../../scripts/recruiter-support.smoke.cjs && node ../../scripts/linkedin-ui.smoke.cjs"
   },
   "dependencies": {
     "@job-talentio/shared": "workspace:*",

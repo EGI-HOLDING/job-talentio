@@ -33,18 +33,21 @@ export async function runApplicantsKanbanSuite(db:PrismaService,benefits:Benefit
   assert.equal((await service.kanbanForJob(hr,job.id,{page:1,limit:20},'en')).columns.reduce((sum,column)=>sum+column.total,0),0,'Applications do not enter the board automatically');
   const beforeEvents=await db.pipelineEvent.count({where:{applicationId:apps[0].id}});
   const [a,b]=await Promise.all([service.addToKanban(hr,apps[0].id),service.addToKanban(hr,apps[0].id)]);
-  assert.equal(String(a.kanbanEnteredAt),String(b.kanbanEnteredAt));assert.equal(a.status,'NEW');
+  assert.equal(String(a.kanbanEnteredAt),String(b.kanbanEnteredAt));assert.equal(a.status,'IN_REVIEW');assert.equal(b.status,'IN_REVIEW');
   assert.equal(await db.auditLog.count({where:{action:'APPLICATION_KANBAN_ADDED',entityId:apps[0].id}}),1);
-  assert.equal(await db.pipelineEvent.count({where:{applicationId:apps[0].id}}),beforeEvents);assert.equal(notifications,0);
+  assert.equal(await db.pipelineEvent.count({where:{applicationId:apps[0].id}}),beforeEvents+1,'admission records the NEW to IN_REVIEW transition');assert.equal(notifications,1,'the candidate receives the new review status once');
   for(const application of apps.slice(1,30))await service.addToKanban(hr,application.id);
   const board=await service.kanbanForJob(hr,job.id,{page:1,limit:20},'en');
-  const first=board.columns.find(column=>column.status==='NEW')!;assert.equal(first.total,30);assert.equal(first.items.length,20);assert.equal(first.hasMore,true);
-  const next=(await service.kanbanForJob(hr,job.id,{status:'NEW',page:2,limit:20},'en')).columns[0];assert.equal(next.items.length,10);assert.equal(next.total,30);assert.ok(next.items.every(row=>!first.items.some(previous=>previous.id===row.id)));
-  await service.updateStatus(hr,apps[0].id,'IN_REVIEW',undefined,{notify:false});
+  assert.equal(board.columns.length,6,'NEW is no longer a Kanban lane');assert.ok(!board.columns.some(column=>column.status==='NEW'));
+  const first=board.columns.find(column=>column.status==='IN_REVIEW')!;assert.equal(first.total,30);assert.equal(first.items.length,20);assert.equal(first.hasMore,true);
+  const next=(await service.kanbanForJob(hr,job.id,{status:'IN_REVIEW',page:2,limit:20},'en')).columns[0];assert.equal(next.items.length,10);assert.equal(next.total,30);assert.ok(next.items.every(row=>!first.items.some(previous=>previous.id===row.id)));
+  await assert.rejects(()=>service.kanbanForJob(hr,job.id,{status:'NEW',page:1,limit:20},'en'));
   assert.equal(String((await service.addToKanban(hr,apps[0].id)).kanbanEnteredAt),String(a.kanbanEnteredAt));
   assert.equal((await service.addToKanban(hr,apps[0].id)).status,'IN_REVIEW','Retry cannot reset an existing stage');
+  assert.equal(await db.pipelineEvent.count({where:{applicationId:apps[0].id}}),beforeEvents+1,'retry does not add a duplicate transition');
   await service.updateStatus(hr,apps[30].id,'IN_REVIEW',undefined,{notify:false});
   assert.ok((await db.application.findUniqueOrThrow({where:{id:apps[30].id}})).kanbanEnteredAt,'Legacy status processing enrolls in the same transaction');
+  await assert.rejects(()=>service.updateStatus(hr,apps[30].id,'NEW',undefined,{notify:false}));
   const candidate=await db.user.findFirstOrThrow({where:{employeeProfile:{id:apps[31].profileId}}}) as AuthUser;
   await service.updateStatus(candidate,apps[31].id,'WITHDRAWN',undefined,{notify:false});
   assert.equal((await db.application.findUniqueOrThrow({where:{id:apps[31].id}})).kanbanEnteredAt,null);
@@ -73,5 +76,10 @@ export async function runApplicantsKanbanSuite(db:PrismaService,benefits:Benefit
   assert.equal((await db.application.findUniqueOrThrow({where:{id:apps[31].id}})).kanbanEnteredAt,null,'Employee-only withdrawal remains outside');
   assert.ok((await db.application.findUniqueOrThrow({where:{id:apps[32].id}})).kanbanEnteredAt,'Legacy processed terminal remains on board');
   assert.equal((await service.searchForJob(hr,job.id,{sort:'match',page:1,limit:10},'en')).total,36,'Admission never removes applicants');
+  const legacyAdmitted=await db.application.update({where:{id:apps[33].id},data:{kanbanEnteredAt:new Date()}});
+  const normalization=readFileSync('apps/api/prisma/migrations/20261029100000_kanban_new_to_in_review/migration.sql','utf8').trim().replace(/;$/,'');
+  await db.$executeRawUnsafe(normalization);
+  assert.equal((await db.application.findUniqueOrThrow({where:{id:legacyAdmitted.id}})).status,'IN_REVIEW','migration moves already-admitted NEW rows into review');
+  assert.equal(await db.pipelineEvent.count({where:{applicationId:legacyAdmitted.id,fromStatus:'NEW',toStatus:'IN_REVIEW'}}),1,'migration preserves the legacy admission as an auditable status transition');
   console.log('Applicants/Kanban regression passed: applicant-only ranking, private applicants, concurrent admission, per-column pages, snapshot CV, legacy enrollment, terminal guards and migration classification.');
 }

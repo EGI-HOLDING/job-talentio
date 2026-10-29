@@ -1,0 +1,166 @@
+[
+  {
+    "test": "inline title normalization",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/cv-parser.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/cv-import-merge.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/anonymous-job.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/jobs/job-stats.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/parse/cv-line-rejoin.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/parse/cv-local-only.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/catalog-label.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/i18n/detect-locale.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/i18n/catalog-tech-identity.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/translation/catalog-translation.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/companies/company-invite.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/matching/matching.compute.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/auth/telegram-login.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/auth/phone.util.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/auth/oauth-identity.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/auth/session-policy.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/auth/auth-session.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/seed.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/input-validation.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/telegram/telegram.link.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/telegram/telegram.chat.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/telegram/telegram.channel.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/alerts/alerts.deliver.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/admin/admin-user-guards.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/users/erasure-guards.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/search/jobs-search.settings.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/search/jobs-search.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/dedupe.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/cv-parse.service.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/parse/cv-date-grounding.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/auth/employee-onboarding.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/parse/cv-contact.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/catalog-selection.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/common/monetization-removal.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/jobs/jobs-match-viewer.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/profiles/parse/cv-boundaries.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/applications/application-payload.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/matching/employee-matching.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/matching/recruiter-matching.smoke.ts",
+    "passed": true
+  },
+  {
+    "test": "src/linkedin/linkedin.smoke.ts",
+    "passed": true
+  }
+]

@@ -1,0 +1,32 @@
+1|6111.1|agronomic crop production team leader
+2|6221.1|aquaculture cage technician
+3|6221.2|aquaculture harvesting technician
+4|6221.3|aquaculture hatchery manager
+5|6221.4|aquaculture hatchery technician
+6|6221.6|aquaculture husbandry technician
+7|6221.8|aquaculture mooring manager
+8|6221.9|aquaculture rearing technician
+9|6221.10|aquaculture recirculation technician
+10|6112.1|arboriculturist
+11|6114.1|crop production manager
+12|6121.2|equine yard manager
+13|6222.1|fisheries boatman
+14|6223.2.1|fisheries boatmaster
+15|6223.2|fisheries master
+16|6112.2|fruit production team leader
+17|6129.1|fur animals breeder
+18|6113.1|groundsman/groundswoman
+19|6112.3|hop farmer
+20|6121.3|horse breeder
+21|6113.3|horticulture production team leader
+22|6224.1|hunter
+23|6113.4|interior landscaper
+24|6130.2|mixed farmer
+25|6121.4|pig breeder
+26|6122.2|poultry sexer
+27|6121.6|shepherd
+28|6112.4|vineyard cellar master
+29|6112.5|vineyard machinery operator
+30|6112.6|vineyard manager
+31|6112.2.1|vineyard supervisor
+32|6221.11|water-based aquaculture technician

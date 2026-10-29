@@ -1,0 +1,18 @@
+{
+  "cases": [
+    "EMPLOYEE login controls responsive 320",
+    "EMPLOYEE login controls responsive 390",
+    "EMPLOYEE login controls responsive 768",
+    "EMPLOYEE login controls responsive 1280",
+    "RECRUITER login controls responsive 320",
+    "RECRUITER login controls responsive 390",
+    "RECRUITER login controls responsive 768",
+    "RECRUITER login controls responsive 1280"
+  ],
+  "providerResults": {
+    "google": "Official Google account login opens; completing a real account sign-in and allowed-origin configuration still requires owner verification",
+    "telegram": "BLOCKED: bot domain has not authorized localhost",
+    "phone": "Bot deep link opens and pending sign-in/cancel work; separate local API test verifies own-contact authentication and issued session"
+  },
+  "errors": []
+}

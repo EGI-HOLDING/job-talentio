@@ -9,7 +9,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApplicationStatus, Prisma } from '@prisma/client';
-import { DEFAULT_PIPELINE, isMessageKey, translateMessage } from '@job-talentio/shared';
+import { DEFAULT_PIPELINE, KANBAN_STAGES, isMessageKey, translateMessage } from '@job-talentio/shared';
 import type { MessageLocale } from '@job-talentio/shared';
 import { HrEventsService } from '../benefits/hr-events.service';
 import { OperationsService } from '../benefits/operations.service';
@@ -300,12 +300,22 @@ export class ApplicationsService {
         matchScore: true,
         matchBreakdown: true,
         createdAt: true,
+        resumeSnapshot: true,
+        resume: { select: { title: true, fileKey: true } },
       },
     });
 
+    if (!application) return { applied: false as const, application: null };
+    const { resumeSnapshot, resume, ...publicApplication } = application;
+    const submitted = submittedResume(resumeSnapshot, resume);
+
     return {
-      applied: Boolean(application),
-      application: application ?? null,
+      applied: true as const,
+      application: {
+        ...publicApplication,
+        resumeTitle: submitted.title,
+        hasResumeFile: Boolean(submitted.fileKey),
+      },
     };
   }
 
@@ -488,7 +498,13 @@ export class ApplicationsService {
   }
 
   async kanbanForJob(user: AuthUser, jobPostId: string, input: ApplicantFilters & { status?: string; page: number; limit: number }, locale: Locale) {
-    const stages = input.status ? [input.status] : [...DEFAULT_PIPELINE];
+    if (input.status === 'NEW') {
+      const job = await this.prisma.jobPost.findUnique({where:{id:jobPostId},select:{companyId:true}});
+      if (!job) throw new NotFoundException('Job not found');
+      await this.companies.assertMember(user,job.companyId);
+      throw new BadRequestException('New applications must enter review before appearing in Kanban');
+    }
+    const stages = input.status ? [input.status] : [...KANBAN_STAGES];
     const columns = await Promise.all(stages.map(async status => {
       const result = await this.searchForJob(user, jobPostId, {...input, status, sort:'newest', kanbanOnly:true}, locale);
       return {status, ...result, hasMore:result.page < result.totalPages};
@@ -498,21 +514,60 @@ export class ApplicationsService {
 
   async addToKanban(user: AuthUser, applicationId: string) {
     if (user.isBanned || !['RECRUITER','SUPER_ADMIN'].includes(user.role)) throw new ForbiddenException('Employer access required');
-    const application = await this.prisma.application.findUnique({where:{id:applicationId},include:{jobPost:true}});
+    const application = await this.prisma.application.findUnique({
+      where:{id:applicationId},
+      include:{
+        jobPost:true,
+        profile:{select:{userId:true,user:{select:{id:true,email:true,emailVerified:true,locale:true}}}},
+      },
+    });
     if (!application) throw new NotFoundException('Application not found');
     const {company} = await this.companies.assertMember(user,application.jobPost.companyId,['OWNER','ADMIN','RECRUITER']);
     if (company.isBanned || company.anonymizedAt) throw new ForbiddenException('Company unavailable');
     const result = await this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
       const current = await tx.application.findUniqueOrThrow({where:{id:applicationId}});
-      if (current.kanbanEnteredAt) return {...safeApplication(current),canAddToKanban:false};
+      if (current.kanbanEnteredAt) return {application:{...safeApplication(current),canAddToKanban:false},movedToReview:false};
       if (!canAddToKanban(current)) throw new ConflictException('A finalized application cannot enter Kanban');
-      const updated = await tx.application.update({where:{id:applicationId},data:{kanbanEnteredAt:new Date()}});
-      await tx.auditLog.create({data:{actorId:user.id,action:'APPLICATION_KANBAN_ADDED',entityType:'Application',entityId:applicationId,metadata:{companyId:application.jobPost.companyId,jobPostId:application.jobPostId}}});
-      return {...safeApplication(updated),canAddToKanban:false};
+      const movedToReview = current.status === 'NEW';
+      const updated = await tx.application.update({
+        where:{id:applicationId},
+        data:{kanbanEnteredAt:new Date(),...(movedToReview?{status:'IN_REVIEW' as const}:{})},
+      });
+      if (movedToReview) {
+        await tx.pipelineEvent.create({data:{applicationId,fromStatus:'NEW',toStatus:'IN_REVIEW',actorUserId:user.id}});
+      }
+      await tx.auditLog.create({data:{
+        actorId:user.id,
+        action:'APPLICATION_KANBAN_ADDED',
+        entityType:'Application',
+        entityId:applicationId,
+        metadata:{companyId:application.jobPost.companyId,jobPostId:application.jobPostId,fromStatus:current.status,toStatus:updated.status},
+      }});
+      return {application:{...safeApplication(updated),canAddToKanban:false},movedToReview};
     });
-    await this.publishChange(application.jobPost.companyId);
-    return result;
+    await this.publishChange(application.jobPost.companyId,result.movedToReview?application.profile.userId:undefined);
+    if (result.movedToReview) {
+      try {
+        await this.notifications.create({
+          userId:application.profile.user.id,
+          type:'APPLICATION_STATUS',
+          title:`Application update: ${application.jobPost.title}`,
+          body:'Status is now IN_REVIEW',
+          titleKey:'notify.applicationStatus.title',
+          bodyKey:'notify.applicationStatus.body',
+          params:{job:application.jobPost.title,status:'IN_REVIEW'},
+          linkUrl:'/dashboard/employee?tab=applications',
+        });
+      } catch (err) {
+        this.logger.warn(`Application status notification failed: ${(err as Error).message}`);
+      }
+      if (application.profile.user.emailVerified && application.profile.user.email) {
+        const {subject,html}=this.stageEmail(application.jobPost.title,'IN_REVIEW',undefined,emailLocale(application.profile.user.locale));
+        void this.mail.send(application.profile.user.email,subject,html);
+      }
+    }
+    return result.application;
   }
 
   async updateStatus(
@@ -540,6 +595,9 @@ export class ApplicationsService {
         'ADMIN',
         'RECRUITER',
       ]);
+    }
+    if (!isOwnerCandidate && status === 'NEW') {
+      throw new BadRequestException('A processed application cannot return to NEW');
     }
 
     if (isOwnerCandidate && ['HIRED', 'REJECTED'].includes(application.status)) {
@@ -723,20 +781,15 @@ export class ApplicationsService {
       await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
       const current = await tx.application.findUnique({
         where: { id: applicationId },
-        select: { status: true, kanbanEnteredAt:true },
+        select: { status: true },
       });
       if (!current) throw new NotFoundException('Application not found');
 
-      if (['WITHDRAWN', 'HIRED', 'REJECTED'].includes(current.status)) {
-        throw new BadRequestException('Cannot schedule an interview for a finalized application');
+      if (current.status !== 'INTERVIEW') {
+        throw new BadRequestException('Application must be in the INTERVIEW stage before scheduling');
       }
-      const claimed = await tx.application.updateMany({
-        where: { id: applicationId, status: current.status },
-        data: { status: 'INTERVIEW', kanbanEnteredAt:current.kanbanEnteredAt ?? new Date() },
-      });
-      if (!claimed.count) throw new ConflictException('Application status changed. Refresh and try again.');
 
-      const created = await tx.interview.create({
+      return tx.interview.create({
         data: {
           applicationId,
           scheduledAt: new Date(data.scheduledAt),
@@ -746,14 +799,6 @@ export class ApplicationsService {
           note: data.note,
         },
       });
-
-      if (current.status !== 'INTERVIEW') {
-        await tx.pipelineEvent.create({ data: {
-          applicationId, fromStatus: current.status, toStatus: 'INTERVIEW',
-          note: 'Interview scheduled', actorUserId: user.id,
-        } });
-      }
-      return created;
     });
 
     await this.publishChange(application.jobPost.companyId, application.profile.userId);

@@ -448,7 +448,12 @@ export const recruiter = {
     uz: 'Suhbat belgilash',
     ru: 'Назначить собеседование',
     en: 'Schedule interview',
+    id: 'Jadwalkan wawancara',
   },
+  'rec.scheduleNextInterview': { uz: 'Keyingi suhbatni belgilash', ru: 'Назначить следующую встречу', en: 'Schedule another interview', id: 'Jadwalkan wawancara berikutnya' },
+  'rec.hideScheduleForm': { uz: 'Formani yopish', ru: 'Скрыть форму', en: 'Close form', id: 'Tutup formulir' },
+  'rec.interviewStageHint': { uz: 'Barcha suhbat uchrashuvlarini shu yerda boshqaring; ariza bitta suhbat bosqichida qoladi.', ru: 'Управляйте всеми встречами здесь; заявка остаётся на едином этапе собеседования.', en: 'Manage every interview appointment here; the application stays in one Interview stage.', id: 'Atur semua jadwal wawancara di sini; lamaran tetap dalam satu tahap Wawancara.' },
+  'rec.interviewHistoryReadOnly': { uz: 'Avvalgi suhbat uchrashuvlari tarix sifatida saqlanadi.', ru: 'Предыдущие встречи остаются в истории.', en: 'Previous interview appointments remain here as read-only history.', id: 'Jadwal wawancara sebelumnya tetap tersedia sebagai riwayat.' },
   'rec.recommendedCandidates': {
     uz: 'Tavsiya etilgan nomzodlar',
     ru: 'Рекомендуемые кандидаты',

@@ -1,0 +1,1450 @@
+{
+  "version": "employee-evidence-v2",
+  "humanValidated": false,
+  "metrics": {
+    "ndcgAt10": null,
+    "precisionAt10": null
+  },
+  "samples": [
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_3c5916b9c33d8657a7af9856b5642f5d",
+      "labels": {
+        "en": "Air Force Officer",
+        "id": "Perwira angkatan udara",
+        "uz": "Harbiy havo kuchlari ofitseri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_b2a855fcf350547e01a5debb908e90f8",
+      "labels": {
+        "en": "Air Force Pilot",
+        "id": "Pilot angkatan udara",
+        "uz": "Harbiy uchuvchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_40c0dfa7e9a7624e3086d0bca27268e1",
+      "labels": {
+        "en": "Armed Forces Officer",
+        "id": "Perwira angkatan bersenjata",
+        "uz": "Qurolli kuchlar ofitseri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_87bd24a35844e18d865c2f7a097982fc",
+      "labels": {
+        "en": "Army Captain",
+        "id": "Kapten angkatan darat",
+        "uz": "Quruqlik qo‘shinlari kapitani"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_87cc372bb96252cc1c886285a440bedd",
+      "labels": {
+        "en": "Army Corporal",
+        "id": "Kopral angkatan darat",
+        "uz": "Quruqlik qo‘shinlari kaprali"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_f878b1dc716881827d95b5d76f16a65f",
+      "labels": {
+        "en": "Army General",
+        "id": "Jenderal angkatan darat",
+        "uz": "Quruqlik qo‘shinlari generali"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_710365af0a8fa4ca8593016d7b568e13",
+      "labels": {
+        "en": "Army Major",
+        "id": "Mayor angkatan darat",
+        "uz": "Quruqlik qo‘shinlari mayori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_40d186df74241276cff561e7e25d5641",
+      "labels": {
+        "en": "Artillery Officer",
+        "id": "Perwira artileri",
+        "uz": "Artilleriya ofitseri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_e90175940cb640174ba89419646eb279",
+      "labels": {
+        "en": "Bomb Disposal Technician",
+        "id": "Teknisi penjinak bom",
+        "uz": "Portlovchi qurilmalarni zararsizlantirish texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_920ac47b0b15c8b994c562a0898e2a65",
+      "labels": {
+        "en": "Brigadier",
+        "id": "Brigadir jenderal",
+        "uz": "Brigada generali"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_6648fe1c93645659cadacfface08e403",
+      "labels": {
+        "en": "Colonel",
+        "id": "Kolonel",
+        "uz": "Polkovnik"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "0",
+      "occupationId": "jobcat_800e8e44c2b57c50773c8efa3151a763",
+      "labels": {
+        "en": "Fleet Commander",
+        "id": "Komandan armada",
+        "uz": "Flot qo‘mondoni"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_aa69d0fdc026a1acd58628708d0f5644",
+      "labels": {
+        "en": "Accommodation Manager",
+        "id": "Manajer akomodasi",
+        "uz": "Joylashtirish xizmatlari menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_4cdda6a6470c1cd2879a6f4cdc0a241a",
+      "labels": {
+        "en": "Accounting Manager",
+        "id": "Manajer akuntansi",
+        "uz": "Buxgalteriya menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_eb4f4beed603559a0f0a3131f46b68cb",
+      "labels": {
+        "en": "Advertising Manager",
+        "id": "Manajer periklanan",
+        "uz": "Reklama menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_66939c805535ea02b878ec1585a8e012",
+      "labels": {
+        "en": "Aftersales Service Manager",
+        "id": "Manajer layanan purnajual",
+        "uz": "Sotuvdan keyingi xizmat menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_c99908ecb76cc2abc08b06ef366a0c77",
+      "labels": {
+        "en": "Agricultural Machinery And Equipment Distribution Manager",
+        "id": "Manajer distribusi mesin dan peralatan pertanian",
+        "uz": "Qishloq xo‘jaligi mashinalari va uskunalari distribusiyasi menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_9ce0197bf7de0d02ad5443caaf379545",
+      "labels": {
+        "en": "Agricultural Raw Materials, Seeds And Animal Feeds Distribution Manager",
+        "id": "Manajer distribusi bahan baku pertanian, benih, dan pakan ternak",
+        "uz": "Qishloq xo‘jaligi xomashyosi, urug‘lar va yemlar distribusiyasi menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_50367f9ba9bd374b93f912c68c691ba1",
+      "labels": {
+        "en": "Air Traffic Manager",
+        "id": "Manajer lalu lintas udara",
+        "uz": "Havo harakati menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_720dc4f0a2cc261c2ead38b0faf354e8",
+      "labels": {
+        "en": "Airport Chief Executive",
+        "id": "Direktur utama bandar udara",
+        "uz": "Aeroport bosh direktori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_7730c14ebee9920ff5794d880bee5ee2",
+      "labels": {
+        "en": "Airport Director",
+        "id": "Direktur bandar udara",
+        "uz": "Aeroport direktori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_4093332ce8d0dd6868b5f1e7908ff2cf",
+      "labels": {
+        "en": "Airside Safety Manager",
+        "id": "Manajer keselamatan sisi udara",
+        "uz": "Aerodrom hududi xavfsizligi menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_6c2060145607ed6a9f8bbd5c3b84a2c3",
+      "labels": {
+        "en": "Airspace Manager",
+        "id": "Manajer ruang udara",
+        "uz": "Havo hududi menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "1",
+      "occupationId": "jobcat_88e5813a562b891543dcc7e285493759",
+      "labels": {
+        "en": "Ambassador",
+        "id": "Duta besar",
+        "uz": "Elchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_ee316b02d541ff9d792793ab888b3bd4",
+      "labels": {
+        "en": "3D Animator",
+        "id": "Animator 3D",
+        "uz": "3D animator"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_5e06bc031ebb6309c2f8db9d84277b82",
+      "labels": {
+        "en": "3D Modeller",
+        "id": "Pemodel 3D",
+        "uz": "3D modellashtiruvchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_1022023831884410594788048f419a71",
+      "labels": {
+        "en": "Academic Advisor",
+        "id": "Penasihat akademik",
+        "uz": "Akademik maslahatchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_786c96f29fe00d43ca912ca53af1c21a",
+      "labels": {
+        "en": "Academic Support Officer",
+        "id": "Petugas dukungan akademik",
+        "uz": "Akademik yordam xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "cmvccxke9011y0nrcx4ws009s",
+      "labels": {
+        "en": "Accountant",
+        "id": "Akuntan",
+        "uz": "Buxgalter"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_df5d6e54691a4815c8435b0bf8dc6cb8",
+      "labels": {
+        "en": "Accounting Analyst",
+        "id": "Analis akuntansi",
+        "uz": "Buxgalteriya tahlilchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_07b2d96978224aba094e49e9ac97ca48",
+      "labels": {
+        "en": "Acoustical Engineer",
+        "id": "Insinyur akustik",
+        "uz": "Akustika muhandisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_ce094919e5087a33ee29d65d1a2633fb",
+      "labels": {
+        "en": "Activism Officer",
+        "id": "Petugas advokasi aktivisme",
+        "uz": "Faollik va targ‘ibot xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_05afc539755ebbf699e20707c61845a4",
+      "labels": {
+        "en": "Actor/actress",
+        "id": "Aktor dan aktris",
+        "uz": "Aktyor va aktrisa"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_fa40a11e5c0a29c7f035670f289e040f",
+      "labels": {
+        "en": "Actuarial Consultant",
+        "id": "Konsultan aktuaria",
+        "uz": "Aktuar maslahatchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_8c741226e45eff90985684d8ca103272",
+      "labels": {
+        "en": "Acupuncturist",
+        "id": "Akupunkturis",
+        "uz": "Akupunktura mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "2",
+      "occupationId": "jobcat_ff6384bebb328bf272925098a6798698",
+      "labels": {
+        "en": "Admissions Coordinator",
+        "id": "Koordinator penerimaan siswa",
+        "uz": "O‘qishga qabul koordinatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_a72faefe1dfba53d038fd844168d44b0",
+      "labels": {
+        "en": "3D Printing Technician",
+        "id": "Teknisi pencetakan 3D",
+        "uz": "3D bosib chiqarish texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_7dc34f0d1cbbf60ebfe341b012658fe3",
+      "labels": {
+        "en": "Accounting Assistant",
+        "id": "Asisten akuntansi",
+        "uz": "Buxgalter yordamchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_0e809988cefa9f8648facccdbb3f5b54",
+      "labels": {
+        "en": "Activity Leader",
+        "id": "Pemimpin kegiatan rekreasi",
+        "uz": "Dam olish faoliyati yetakchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_b77a8c180e6c45fe061ab8e52d32d603",
+      "labels": {
+        "en": "Actuarial Assistant",
+        "id": "Asisten aktuaria",
+        "uz": "Aktuar yordamchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_3b79ffd5e96d5808000540ae5583265a",
+      "labels": {
+        "en": "Administrative Assistant",
+        "id": "Asisten administrasi",
+        "uz": "Ma’muriy yordamchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_17b14cda3670de8594eca4b586f85258",
+      "labels": {
+        "en": "Adult Community Care Worker",
+        "id": "Petugas perawatan komunitas dewasa",
+        "uz": "Kattalar hamjamiyat parvarishi xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_954964f54006c8ecf5094e12e86f8c90",
+      "labels": {
+        "en": "Advertising Sales Agent",
+        "id": "Agen penjualan iklan",
+        "uz": "Reklama savdo agenti"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_f28842ca19692ea7a1f3012fc076cb2e",
+      "labels": {
+        "en": "Aeronautical Information Service Officer",
+        "id": "Petugas layanan informasi aeronautika",
+        "uz": "Aeronavtika axborot xizmati xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_58160376cfe1dfd981b04ee4be66a371",
+      "labels": {
+        "en": "Aeronautical Information Specialist",
+        "id": "Spesialis informasi aeronautika",
+        "uz": "Aeronavtika axborot mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_4b5bf790ac9d045f2a1650d144db4d88",
+      "labels": {
+        "en": "Aerospace Engineering Drafter",
+        "id": "Juru gambar teknik dirgantara",
+        "uz": "Aerokosmik chizmachi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_44b83ccbff7a8fd4f828cd09ef50ad82",
+      "labels": {
+        "en": "Aerospace Engineering Technician",
+        "id": "Teknisi teknik dirgantara",
+        "uz": "Aerokosmik muhandislik texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "3",
+      "occupationId": "jobcat_1c281679cd50a33092e3561bee2601c0",
+      "labels": {
+        "en": "Agricultural Inspector",
+        "id": "Inspektur pertanian",
+        "uz": "Qishloq xo‘jaligi inspektori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_788c195bc64e29ff7fb2784156f61831",
+      "labels": {
+        "en": "Advertising Assistant",
+        "id": "Asisten periklanan",
+        "uz": "Reklama yordamchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_0cc9f8313f261a20498724e6dbb42e0d",
+      "labels": {
+        "en": "Aircraft Cargo Operations Coordinator",
+        "id": "Koordinator operasi kargo pesawat",
+        "uz": "Havo yuklari operatsiyalari koordinatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_4b630a148a46a8ea52ac6563c56bfc18",
+      "labels": {
+        "en": "Aircraft Dispatcher",
+        "id": "Dispatcher pesawat",
+        "uz": "Havo kemalari dispetcheri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_1ff38f1d2b237715b1fa2f96c3a18069",
+      "labels": {
+        "en": "Auditing Clerk",
+        "id": "Petugas administrasi audit",
+        "uz": "Audit hisobchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_3217953e3715420a75daa6564e2a4301",
+      "labels": {
+        "en": "Back Office Specialist",
+        "id": "Spesialis administrasi operasional",
+        "uz": "Ichki operatsiyalar mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_383aa6056cbd939575d21405d071c90a",
+      "labels": {
+        "en": "Baggage Flow Supervisor",
+        "id": "Supervisor alur bagasi",
+        "uz": "Bagaj oqimi nazoratchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_536e015eb37878eedd7b17496ef75bcc",
+      "labels": {
+        "en": "Bank Teller",
+        "id": "Teller bank",
+        "uz": "Bank kassiri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_fb4a280697153ecb6244513d549b1cfc",
+      "labels": {
+        "en": "Billing Clerk",
+        "id": "Petugas penagihan faktur",
+        "uz": "Hisob-fakturalar bo‘yicha xodim"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_1acce36001690b376e66a80088f70ac9",
+      "labels": {
+        "en": "Bingo Caller",
+        "id": "Pemandu permainan bingo",
+        "uz": "Bingo o‘yini boshlovchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_67d38c5453daf22cd62ed6819f04d95f",
+      "labels": {
+        "en": "Bookmaker",
+        "id": "Bandar taruhan",
+        "uz": "Bukmeker"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_ef07363218f64b61d7b8ddb92b30345d",
+      "labels": {
+        "en": "Bridge Operator",
+        "id": "Operator jembatan bergerak",
+        "uz": "Ko‘tarma ko‘prik operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "4",
+      "occupationId": "jobcat_37e75b365119b6079566879ca703db9f",
+      "labels": {
+        "en": "Bus Route Supervisor",
+        "id": "Supervisor rute bus",
+        "uz": "Avtobus yo‘nalishlari nazoratchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_9e3a78541820529fb4c812fdd0ff2280",
+      "labels": {
+        "en": "Aesthetician",
+        "id": "Ahli perawatan estetika",
+        "uz": "Estetik parvarish mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_bd5e3e337f78ea9dfb57a30cb49eba43",
+      "labels": {
+        "en": "Aircraft Marshaller",
+        "id": "Marshaller pesawat",
+        "uz": "Samolyotni yerda yo‘naltiruvchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_87ecd877859593d1409e52f6f26ad371",
+      "labels": {
+        "en": "Airport Security Officer",
+        "id": "Petugas keamanan bandara",
+        "uz": "Aeroport xavfsizlik xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_68882760e8d56180c1c15ca9defe2749",
+      "labels": {
+        "en": "Ammunition Specialised Seller",
+        "id": "Penjual amunisi",
+        "uz": "O‘q-dori sotuvchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_a3706f9933bf064b98497e7ef018e6d8",
+      "labels": {
+        "en": "Animal Care Attendant",
+        "id": "Petugas perawatan hewan",
+        "uz": "Hayvonlarni parvarishlash xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_ef44c9f63e6618478ceed4321dc84c0e",
+      "labels": {
+        "en": "Animal Groomer",
+        "id": "Penata kebersihan hewan",
+        "uz": "Hayvonlar grumeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_b38323b14fa211639c31d67bae19daed",
+      "labels": {
+        "en": "Animal Handler",
+        "id": "Pawang hewan",
+        "uz": "Hayvonlar bilan ishlash mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_fe46632bc67dde1b138e6002ff236ddb",
+      "labels": {
+        "en": "Animal Shelter Worker",
+        "id": "Petugas penampungan hewan",
+        "uz": "Hayvonlar boshpanasi xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_29e42024f5c55018a7f5d8f1477e8164",
+      "labels": {
+        "en": "Animal Trainer",
+        "id": "Pelatih hewan",
+        "uz": "Hayvon o‘rgatuvchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_82b499fc6ded1b7e7b002317cacf5327",
+      "labels": {
+        "en": "Animal Welfare Inspector",
+        "id": "Inspektur kesejahteraan hewan",
+        "uz": "Hayvonlar farovonligi inspektori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_547ffb913eadfdc0233ca3f6bf587377",
+      "labels": {
+        "en": "Armoured Car Guard",
+        "id": "Petugas pengamanan kendaraan lapis baja",
+        "uz": "Zirhli inkassatsiya avtomobili qo‘riqchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "5",
+      "occupationId": "jobcat_b8c6fb1e8abf5c6c079dafe519a3cda3",
+      "labels": {
+        "en": "Art Model",
+        "id": "Model seni rupa",
+        "uz": "Tasviriy san’at modeli"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_8f624dc253923765453b60a806c996ef",
+      "labels": {
+        "en": "Agronomic Crop Production Team Leader",
+        "id": "Ketua regu produksi tanaman pangan",
+        "uz": "Dala ekinlari yetishtirish brigadasi rahbari"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_9813d6476668d1c01ef7abdf2c7cee59",
+      "labels": {
+        "en": "Aquaculture Cage Technician",
+        "id": "Teknisi keramba budidaya perairan",
+        "uz": "Akvakultura qafaslari texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_cf63c4e1a768fa777f2a088fd330eea7",
+      "labels": {
+        "en": "Aquaculture Harvesting Technician",
+        "id": "Teknisi panen budidaya perairan",
+        "uz": "Akvakultura mahsulotlarini yig‘ish texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_0351e7599996169d22b725b1d46624d4",
+      "labels": {
+        "en": "Aquaculture Hatchery Manager",
+        "id": "Manajer unit pembenihan budidaya perairan",
+        "uz": "Akvakultura inkubatsiya xo‘jaligi menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_d09d9afb1e2ee0a6dbcb05c96f3c20d5",
+      "labels": {
+        "en": "Aquaculture Hatchery Technician",
+        "id": "Teknisi unit pembenihan budidaya perairan",
+        "uz": "Akvakultura inkubatsiya texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_c88cafa3488fcdb49bd92212b688274c",
+      "labels": {
+        "en": "Aquaculture Hatchery Worker",
+        "id": "Pekerja pembenihan akuakultur",
+        "uz": "Akvakultura inkubatsiya ishchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_c7930235d155be51dfd3953f84844e49",
+      "labels": {
+        "en": "Aquaculture Husbandry Technician",
+        "id": "Teknisi pemeliharaan organisme budidaya perairan",
+        "uz": "Akvakultura organizmlarini parvarishlash texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_94415427f171a3e99b5057736479b010",
+      "labels": {
+        "en": "Aquaculture Husbandry Worker",
+        "id": "Pekerja pemeliharaan akuakultur",
+        "uz": "Akvakultura parvarishi ishchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_dca6ad22a606c8126065769d6a29dcb8",
+      "labels": {
+        "en": "Aquaculture Mooring Manager",
+        "id": "Manajer penambatan instalasi budidaya perairan",
+        "uz": "Akvakultura inshootlarini langarlash menejeri"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_ec4742a2182db82a7866348a5547c0f1",
+      "labels": {
+        "en": "Aquaculture Rearing Technician",
+        "id": "Teknisi pembesaran organisme budidaya perairan",
+        "uz": "Akvakultura organizmlarini o‘stirish texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_8b87a30b6b34db34d805d036a6da2a60",
+      "labels": {
+        "en": "Aquaculture Recirculation Technician",
+        "id": "Teknisi sistem resirkulasi budidaya perairan",
+        "uz": "Akvakultura aylanma suv tizimi texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "6",
+      "occupationId": "jobcat_290fdec87e65076856d63469698e0d63",
+      "labels": {
+        "en": "Arboriculturist",
+        "id": "Ahli budidaya pohon",
+        "uz": "Daraxt yetishtirish mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_ef14c8e0d0b2f9cb278a260b240a7026",
+      "labels": {
+        "en": "Agricultural Machinery Technician",
+        "id": "Teknisi mesin pertanian",
+        "uz": "Qishloq xo‘jaligi texnikasi texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_ae75fcc58870e606d10086884322599d",
+      "labels": {
+        "en": "Aircraft Assembly Inspector",
+        "id": "Inspektur perakitan pesawat",
+        "uz": "Samolyot yig‘ilishini tekshirish inspektori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_a1ce2268b3b4156c168e4f0c52c00b46",
+      "labels": {
+        "en": "Aircraft De-icer Installer",
+        "id": "Teknisi pemasangan sistem antipembekuan pesawat",
+        "uz": "Samolyot muzga qarshi tizimini o‘rnatish texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_6e368d505180496a8bd7f7b9e7d3b1e1",
+      "labels": {
+        "en": "Aircraft Engine Specialist",
+        "id": "Spesialis mesin pesawat",
+        "uz": "Samolyot dvigateli mutaxassisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_d8312bd5e21790ae0b30616feb27f1de",
+      "labels": {
+        "en": "Aircraft Gas Turbine Engine Overhaul Technician",
+        "id": "Teknisi overhaul mesin turbin gas pesawat",
+        "uz": "Samolyot gaz turbinali dvigatelini kapital ta’mirlash texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_36a5d8034627d75799e4043318e10c70",
+      "labels": {
+        "en": "Aircraft Interior Technician",
+        "id": "Teknisi interior pesawat",
+        "uz": "Samolyot ichki jihozlari texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_92539c8eb53a00d2d08616bf81ec57ce",
+      "labels": {
+        "en": "Aircraft Maintenance Coordinator",
+        "id": "Koordinator pemeliharaan pesawat",
+        "uz": "Samolyotlarga texnik xizmat koordinatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_c829c43d4e7a454b60cdb6cd8d7aa40a",
+      "labels": {
+        "en": "Aircraft Maintenance Technician",
+        "id": "Teknisi pemeliharaan pesawat",
+        "uz": "Samolyotlarga texnik xizmat ko‘rsatish texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_b670611e0d3abf7ea2e138b1dd151ec6",
+      "labels": {
+        "en": "Antique Furniture Reproducer",
+        "id": "Pembuat reproduksi furnitur antik",
+        "uz": "Antik mebel nusxalarini tayyorlovchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_a797f35a8837d83ca71271cb061aa93e",
+      "labels": {
+        "en": "Artisan Papermaker",
+        "id": "Perajin kertas",
+        "uz": "Qo‘lda qog‘oz tayyorlovchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_e94788689bb90b40c575b4c6ce680acb",
+      "labels": {
+        "en": "Asbestos Abatement Worker",
+        "id": "Petugas penanganan dan penghilangan asbes",
+        "uz": "Asbestni bartaraf etish ishchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "7",
+      "occupationId": "jobcat_ef36b6a5cdbece0e7bb2bca72b929bdc",
+      "labels": {
+        "en": "ATM Repair Technician",
+        "id": "Teknisi perbaikan ATM",
+        "uz": "Bankomatlarni ta’mirlash texnigi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_6e329aa77b97a282f3f29b84b35c7837",
+      "labels": {
+        "en": "Abrasive Blasting Operator",
+        "id": "Operator abrasive blasting",
+        "uz": "Abraziv purkash operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_8e01aaff45f319e4d818becc134011bb",
+      "labels": {
+        "en": "Absorbent Pad Machine Operator",
+        "id": "Operator mesin bantalan penyerap",
+        "uz": "Shimuvchi taglik tayyorlash mashinasi operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_6b669201f74daa1a7398f113b4f73c41",
+      "labels": {
+        "en": "Aircraft Assembler",
+        "id": "Perakit pesawat",
+        "uz": "Samolyot yig‘uvchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_925c582c31edd47e29b742e24eb5d334",
+      "labels": {
+        "en": "Aircraft Engine Assembler",
+        "id": "Perakit mesin pesawat",
+        "uz": "Samolyot dvigateli yig‘uvchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_b8df32b9125a631479caba41312e6d30",
+      "labels": {
+        "en": "Aircraft Fuel System Operator",
+        "id": "Operator sistem pengisian bahan bakar pesawat",
+        "uz": "Samolyot yoqilg‘i quyish tizimi operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_960c94bfb10a1368a8dd2cb0f0903719",
+      "labels": {
+        "en": "Ammunition Assembler",
+        "id": "Perakit amunisi",
+        "uz": "O‘q-dori yig‘uvchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_511f6d1e2c21c4243d1a2298d3df665e",
+      "labels": {
+        "en": "Anaerobic Digestion Plant Operator",
+        "id": "Operator instalasi digesti anaerob",
+        "uz": "Anaerob parchalanish qurilmasi operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_108c627e9dd39ce8ee3aac93b3df206b",
+      "labels": {
+        "en": "Animal Feed Operator",
+        "id": "Operator produksi pakan ternak",
+        "uz": "Hayvon ozuqasi ishlab chiqarish operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_6b50cf6922996ba77425bdfaf69da296",
+      "labels": {
+        "en": "Anodising Machine Operator",
+        "id": "Operator mesin anodisasi",
+        "uz": "Anodlash mashinasi operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_4b270f250d39b52bcb66f4b384caed83",
+      "labels": {
+        "en": "Armoured Car Driver",
+        "id": "Pengemudi kendaraan lapis baja",
+        "uz": "Zirhli avtomobil haydovchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_035fe09cf0d8bb857581bebc0e8d40a6",
+      "labels": {
+        "en": "Asphalt Plant Operator",
+        "id": "Operator instalasi aspal",
+        "uz": "Asfalt ishlab chiqarish qurilmasi operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "8",
+      "occupationId": "jobcat_35d57957f644463c4e28635a33810159",
+      "labels": {
+        "en": "Auger Press Operator",
+        "id": "Operator pengepres ulir keramik",
+        "uz": "Keramika vintli pressi operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_46a4242c82b2f2404dee323146b61367",
+      "labels": {
+        "en": "Advertising Installer",
+        "id": "Petugas pemasangan media iklan",
+        "uz": "Reklama konstruksiyalarini o‘rnatuvchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_54020e22a2ee956a18e6d328b991409b",
+      "labels": {
+        "en": "Aircraft Groomer",
+        "id": "Petugas kebersihan kabin pesawat",
+        "uz": "Samolyot salonini tozalovchi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_97dca8d3b33e5adcbd50fcc34d41e67d",
+      "labels": {
+        "en": "Airport Baggage Handler",
+        "id": "Petugas penanganan bagasi bandara",
+        "uz": "Aeroport yuk-bagaj xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_273daeba67fa222c479c20d24da659d7",
+      "labels": {
+        "en": "Amusement And Recreation Attendant",
+        "id": "Petugas layanan hiburan dan rekreasi",
+        "uz": "Ko‘ngilochar va dam olish xizmatlari xodimi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_e847daa5e43bb46aed02e45eaf5c6e46",
+      "labels": {
+        "en": "Amusement Park Cleaner",
+        "id": "Petugas kebersihan taman hiburan",
+        "uz": "Ko‘ngilochar bog‘ tozalovchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_620cab3154cffedbeb502ef24d6ac709",
+      "labels": {
+        "en": "Aquaculture Cage Mooring Worker",
+        "id": "Pekerja penambatan keramba budidaya perairan",
+        "uz": "Akvakultura qafaslarini langarlash ishchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_677f4cdd10fa9c87103a976c48e4294f",
+      "labels": {
+        "en": "Aquaculture Harvesting Worker",
+        "id": "Pekerja panen budidaya perairan",
+        "uz": "Akvakultura mahsulotlarini yig‘ish ishchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_8bde602b77a0acb538e7334cd09e4db6",
+      "labels": {
+        "en": "Attraction Operator",
+        "id": "Operator wahana hiburan",
+        "uz": "Attraksion operatori"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_9a8b64fdf4ec71b047cb20df91e870c9",
+      "labels": {
+        "en": "Bicycle Courier",
+        "id": "Kurir sepeda",
+        "uz": "Velosipedli kuryer"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_3ed16e1515b06f077131ab27e949182f",
+      "labels": {
+        "en": "Building Cleaner",
+        "id": "Petugas kebersihan gedung",
+        "uz": "Bino tozalovchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_ce479cfaed8459dad6266c6b368084c5",
+      "labels": {
+        "en": "Building Construction Worker",
+        "id": "Pekerja konstruksi bangunan",
+        "uz": "Bino qurilishi ishchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    },
+    {
+      "iscoMajorGroup": "9",
+      "occupationId": "jobcat_cff595c5331f613574462d74c215d071",
+      "labels": {
+        "en": "Carriage Driver",
+        "id": "Kusir kereta",
+        "uz": "Ot aravasi haydovchisi"
+      },
+      "scenario": "synthetic invariant fixture; not human relevance ground truth",
+      "humanRelevance": null,
+      "reviewer": null
+    }
+  ]
+}

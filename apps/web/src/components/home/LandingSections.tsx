@@ -43,8 +43,8 @@ const LOCATION_PHOTOS: Record<string, string> = {
   bukhara: '/images/location-bukhara.webp', andijan: '/images/location-andijan.webp',
 };
 
-export function LandingSections({ jobs, categories, cities, roles, news }: {
-  jobs: LandingJob[]; categories: LandingCategory[]; cities: LandingLocation[]; roles: LandingFacet[]; news: NewsListItem[];
+export function LandingSections({ jobs, categories, cities, roles, news, showEmployerCta = true }: {
+  jobs: LandingJob[]; categories: LandingCategory[]; cities: LandingLocation[]; roles: LandingFacet[]; news: NewsListItem[]; showEmployerCta?: boolean;
 }) {
   const { t, locale } = useI18n();
   const [profileHref, setProfileHref] = useState(() => authLink('/register', '/dashboard/employee?tab=profile&section=cvs', 'EMPLOYEE'));
@@ -134,6 +134,6 @@ export function LandingSections({ jobs, categories, cities, roles, news }: {
       </Link>)}</div>
     </section>}
 
-    <section className={s.employer}><LandingIcon kind="briefcase" /><div><h2>{t('landing.employerTitle')}</h2><p>{t('landing.employerSub')}</p></div><Link href="/register?role=RECRUITER" className={s.outlineButton}>{t('postAJob')}<LandingIcon /></Link></section>
+    {showEmployerCta && <section className={s.employer}><LandingIcon kind="briefcase" /><div><h2>{t('landing.employerTitle')}</h2><p>{t('landing.employerSub')}</p></div><Link href="/register?role=RECRUITER" className={s.outlineButton}>{t('postAJob')}<LandingIcon /></Link></section>}
   </div>;
 }

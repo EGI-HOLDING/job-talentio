@@ -1,0 +1,35 @@
+{
+  "version": "employee-evidence-v2",
+  "database": "isolated local copy",
+  "pairs": 23569,
+  "profiles": 91,
+  "jobs": 259,
+  "groups": {
+    "1": {
+      "pairs": 455,
+      "positiveCore": 65,
+      "unknownRequirements": 1710,
+      "rankMovement": 19607
+    },
+    "2": {
+      "pairs": 4459,
+      "positiveCore": 560,
+      "unknownRequirements": 16579,
+      "rankMovement": 53202
+    },
+    "unmapped": {
+      "pairs": 18655,
+      "positiveCore": 2740,
+      "unknownRequirements": 70663,
+      "rankMovement": 232291
+    }
+  },
+  "pagination": true,
+  "anonymousCompanyMasking": true,
+  "cacheInvalidation": true,
+  "adminMetadataAndAliases": true,
+  "businessCountsPreserved": true,
+  "humanValidated": false,
+  "ndcgAt10": null,
+  "precisionAt10": null
+}

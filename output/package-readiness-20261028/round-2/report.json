@@ -1,0 +1,81 @@
+{
+  "name": "round-2",
+  "startedAt": "2026-10-28T02:16:21.020Z",
+  "sourceHash": "a4435e49273c353f7e78080056e2cbd8e7b24a49a7b621ff1e609328b568aad8",
+  "checks": [
+    {
+      "title": "API source regressions",
+      "command": [
+        "node",
+        "scripts/run-api-smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 41084,
+      "passed": true
+    },
+    {
+      "title": "Checkout network and navigation recovery",
+      "command": [
+        "node",
+        "scripts/package-checkout-ui.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 617,
+      "passed": true
+    },
+    {
+      "title": "HR access and stale-response UI",
+      "command": [
+        "node",
+        "scripts/hr-access-ui.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 3589,
+      "passed": true
+    },
+    {
+      "title": "LinkedIn component logic",
+      "command": [
+        "node",
+        "scripts/linkedin-ui.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 1240,
+      "passed": true
+    },
+    {
+      "title": "Account navigation",
+      "command": [
+        "node",
+        "scripts/account-navigation.smoke.cjs"
+      ],
+      "exitCode": 0,
+      "durationMs": 944,
+      "passed": true
+    },
+    {
+      "title": "Commerce database and injected faults",
+      "command": [
+        "node",
+        "scripts/hr-benefits-local.smoke.cjs",
+        "--commerce"
+      ],
+      "exitCode": 0,
+      "durationMs": 18055,
+      "passed": true
+    },
+    {
+      "title": "Benefits applicants analytics search database",
+      "command": [
+        "node",
+        "scripts/hr-benefits-local.smoke.cjs"
+      ],
+      "exitCode": 1,
+      "durationMs": 24492,
+      "passed": false
+    }
+  ],
+  "passed": false,
+  "finishedAt": "2026-10-28T02:17:51.277Z",
+  "endSourceHash": "a4435e49273c353f7e78080056e2cbd8e7b24a49a7b621ff1e609328b568aad8"
+}

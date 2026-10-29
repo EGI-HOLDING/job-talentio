@@ -126,20 +126,30 @@ async function main() {
     await check('Server rejects past interview times through the authenticated HTTP endpoint',async()=>{
       await request(recruiter,'/applications/'+applied.id+'/interviews',{scheduledAt:'2020-01-01T10:00:00Z'},400,'journey-past-interview');
     });
-    await check('Scheduling is idempotent, both roles see identical interview details, finalization cancels pending interviews',async()=>{
+    await check('Interview scheduling requires the application to already be in the Interview stage',async()=>{
       const data={scheduledAt:new Date(Date.now()+3600000).toISOString(),durationMins:45,location:'Fixture room',meetingUrl:'https://example.test/meeting',note:'Candidate-visible fixture note'};
+      await request(recruiter,'/applications/'+applied.id+'/interviews',data,400,'journey-interview-before-stage');
+      assert.equal((await request(recruiter,'/applications/jobs/'+job.id+'/applicants/'+applied.id)).status,'IN_REVIEW');
+    });
+    await request(recruiter,'/applications/'+applied.id+'/status',{status:'INTERVIEW'},201);
+    await check('Multiple interview appointments remain in one stage, retries are idempotent, and finalization cancels pending appointments',async()=>{
+      const data={scheduledAt:new Date(Date.now()+3600000).toISOString(),durationMins:45,location:'Fixture room',meetingUrl:'https://example.test/meeting',note:'Candidate-visible fixture note'};
+      const eventsBefore=await db.pipelineEvent.count({where:{applicationId:applied.id}});
       const scheduled=await request(recruiter,'/applications/'+applied.id+'/interviews',data,201,'journey-future-interview');
       const repeated=await request(recruiter,'/applications/'+applied.id+'/interviews',data,201,'journey-future-interview');assert.equal(repeated.id,scheduled.id);
-      const mine=await request(employee,'/applications/mine');assert.equal(mine[0].status,'INTERVIEW');assert.equal(mine[0].interviews.find((item:any)=>item.id===scheduled.id).meetingUrl,data.meetingUrl);
+      const nextData={...data,scheduledAt:new Date(Date.now()+7200000).toISOString(),meetingUrl:'https://example.test/meeting-next',note:'Second conversation'};
+      const next=await request(recruiter,'/applications/'+applied.id+'/interviews',nextData,201,'journey-next-interview');assert.notEqual(next.id,scheduled.id);
+      const detail=await request(recruiter,'/applications/jobs/'+job.id+'/applicants/'+applied.id);assert.equal(detail.status,'INTERVIEW');assert.equal(detail.interviews.length,2);assert.equal(await db.pipelineEvent.count({where:{applicationId:applied.id}}),eventsBefore,'Scheduling appointments does not create extra stage transitions');
+      const mine=await request(employee,'/applications/mine');assert.equal(mine[0].status,'INTERVIEW');assert.equal(mine[0].interviews.length,2);assert.equal(mine[0].interviews.find((item:any)=>item.id===scheduled.id).meetingUrl,data.meetingUrl);
       await request(employee,'/applications/'+applied.id+'/status',{status:'WITHDRAWN'},201);
-      const cancelled=await request(recruiter,'/applications/'+applied.id+'/interviews');assert.ok(cancelled.every((item:any)=>item.status==='CANCELLED'));
+      const cancelled=await request(recruiter,'/applications/'+applied.id+'/interviews');assert.equal(cancelled.length,2);assert.ok(cancelled.every((item:any)=>item.status==='CANCELLED'));
     });
     await check('Foreign candidates cannot read chat, application interviews or move another candidate',async()=>{
       await request(stranger,'/chat/conversations/'+conversation.id+'/messages',undefined,403);
       await request(stranger,'/applications/'+applied.id+'/interviews',undefined,403);
       await request(stranger,'/applications/'+applied.id+'/status',{status:'HIRED'},403);
     });
-    await check('A confidential employer and chat stay synchronized after interview, rejection and withdrawal',async()=>{
+    await check('A confidential employer stays revealed after interview, while withdrawal closes its chat',async()=>{
       const anonymous=await db.jobPost.create({data:{companyId:company.id,title:'Private vacancy',description:'Confidential isolated fixture role.',status:'PUBLISHED',isAnonymous:true}});
       const application=await request(employee,'/applications/jobs/'+anonymous.id,{},201);
       await request(recruiter,'/chat/conversations',{peerUserId:employee.id,jobPostId:anonymous.id},403);
@@ -147,22 +157,38 @@ async function main() {
       await request(recruiter,'/applications/'+application.id+'/status',{status:'INTERVIEW'},201);
       const thread=await request(recruiter,'/chat/conversations',{peerUserId:employee.id,jobPostId:anonymous.id},201);
       await request(recruiter,'/chat/conversations/'+thread.id+'/messages',{body:'Confidential process message'},201);
-      for(const status of ['REJECTED','IN_REVIEW','WITHDRAWN']) {
+      for(const status of ['REJECTED','IN_REVIEW']) {
         await request(recruiter,'/applications/'+application.id+'/status',{status},201);
         const mine=await request(employee,'/applications/mine');assert.equal(mine.find((item:any)=>item.id===application.id).jobPost.company.id,company.id);
         assert.ok((await request(employee,'/chat/conversations')).some((item:any)=>item.id===thread.id));
         assert.equal((await request(employee,'/chat/conversations/'+thread.id+'/messages'))[0].body,'Confidential process message');
       }
+      await request(employee,'/applications/'+application.id+'/status',{status:'WITHDRAWN'},201);
+      const mine=await request(employee,'/applications/mine');assert.equal(mine.find((item:any)=>item.id===application.id).jobPost.company.id,company.id);
+      assert.ok(await db.conversation.findUnique({where:{id:thread.id}}),'withdrawal must retain the conversation record');
+      assert.equal(await db.chatMessage.count({where:{conversationId:thread.id}}),1,'withdrawal must retain existing messages');
+      assert.ok(!(await request(employee,'/chat/conversations')).some((item:any)=>item.id===thread.id));
+      assert.ok(!(await request(recruiter,'/chat/conversations')).some((item:any)=>item.id===thread.id));
+      await request(employee,'/chat/conversations/'+thread.id+'/messages',undefined,404);
+      await request(recruiter,'/chat/conversations/'+thread.id+'/messages',undefined,404);
+      await request(employee,'/chat/conversations/'+thread.id+'/messages',{body:'Cannot send after withdrawal'},404);
+      await request(recruiter,'/chat/conversations/'+thread.id+'/messages',{body:'Cannot send after withdrawal'},404);
+      await request(employee,'/chat/conversations',{peerUserId:recruiter.id,jobPostId:anonymous.id},404);
+      await request(recruiter,'/chat/conversations',{peerUserId:employee.id,jobPostId:anonymous.id},404);
     });
     await check('Chat insertion rolls back if conversation update fails',async()=>{
-      const before=await db.chatMessage.count({where:{conversationId:conversation.id}});
+      const rollbackJob=await db.jobPost.create({data:{companyId:company.id,title:'Rollback fixture',description:'Isolated active chat fixture.',status:'PUBLISHED',publishedAt:new Date()}});
+      const rollbackApplication=await request(employee,'/applications/jobs/'+rollbackJob.id,{},201);
+      await request(recruiter,'/applications/'+rollbackApplication.id+'/status',{status:'IN_REVIEW'},201);
+      const rollbackConversation=await request(recruiter,'/chat/conversations',{peerUserId:employee.id,jobPostId:rollbackJob.id},201);
+      const before=await db.chatMessage.count({where:{conversationId:rollbackConversation.id}});
       const failing=new ChatService({
         conversation:db.conversation,companyMember:db.companyMember,jobPost:db.jobPost,application:db.application,
-        $transaction:(run:any)=>db.$transaction(tx=>run({...tx,chatMessage:tx.chatMessage,conversation:{update:async()=>{throw Error('Injected conversation failure');}}})),
+        $transaction:(run:any)=>db.$transaction(tx=>run({...tx,$queryRaw:(query:any)=>tx.$queryRaw(query),chatMessage:tx.chatMessage,conversation:{update:async()=>{throw Error('Injected conversation failure');}}})),
       } as never,presence as never,notifications,{} as never);
       const actor={...recruiter,memberships:[{companyId:company.id,role:'RECRUITER' as const}]};
-      await assert.rejects(()=>failing.sendMessage(actor,conversation.id,'MUST ROLLBACK'),/Injected conversation failure/);
-      assert.equal(await db.chatMessage.count({where:{conversationId:conversation.id}}),before);
+      await assert.rejects(()=>failing.sendMessage(actor,rollbackConversation.id,'MUST ROLLBACK'),/Injected conversation failure/);
+      assert.equal(await db.chatMessage.count({where:{conversationId:rollbackConversation.id}}),before);
     });
     if (process.env.JOURNEY_BROWSER_TEST) {
       await check('Two isolated browser accounts exchange messages and track recruiter progress in four languages',async()=>{

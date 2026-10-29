@@ -1,0 +1,361 @@
+1|7543.7.1|aircraft assembly inspector
+2|7232.1|aircraft de-icer installer
+3|7232.2|aircraft engine specialist
+4|7232.3|aircraft gas turbine engine overhaul technician
+5|7534.1|aircraft interior technician
+6|7232.4|aircraft maintenance coordinator
+7|7232.5|aircraft maintenance technician
+8|7522.1|antique furniture reproducer
+9|7317.1|artisan papermaker
+10|7133.1|asbestos abatement worker
+11|7421.1|ATM repair technician
+12|7543.1|automated optical inspection operator
+13|7412.1|automotive battery technician
+14|7231.1|automotive brake technician
+15|7543.2|automotive test driver
+16|7421.2|avionics technician
+17|7317.2|basketmaker
+18|7126.1|bathroom fitter
+19|7543.3|battery test technician
+20|7536.2.1|bespoke footwear technician
+21|7221.1|blacksmith
+22|7215.2.1|boat rigger
+23|7213.1|boilermaker
+24|7323.3|book restorer
+25|7323.2|book-sewing machine operator
+26|7223.1|boring machine operator
+27|7212.1|brazier
+28|7223.2|briquetting machine operator
+29|7317.3|brush maker
+30|7411.1.1|building electrician
+31|7133.2|building exterior cleaner
+32|7511.1|butcher
+33|7522.2|cabinet maker
+34|7413.1.1|cable jointer
+35|7319.1|candle maker
+36|7122.1|carpet fitter
+37|7318.1|carpet handicraft worker
+38|7318.2|carpet weaver
+39|7222.1|casting mould maker
+40|7123.1|ceiling installer
+41|7316.1.1|ceramic painter
+42|7223.3|chain making machine operator
+43|7133.3|chimney sweep
+44|7133.4|chimney sweep supervisor
+45|7512.2|chocolatier
+46|7543.10.1|cigar inspector
+47|7311.1|clock and watchmaker
+48|7532.1|clothing CAD patternmaker
+49|7532.2|clothing cutter
+50|7532.3|clothing product grader
+51|7543.10.2|clothing quality inspector
+52|7231.2|coachbuilder
+53|7515.1|coffee taster
+54|7422.1|communication infrastructure maintainer
+55|7422.2|computer hardware repair technician
+56|7114.1|concrete finisher
+57|7541.1|construction commercial diver
+58|7233.1|construction equipment technician
+59|7421.3|consumer electronics repair technician
+60|7543.7.2|consumer goods inspector
+61|7213.2|container equipment assembler
+62|7543.4|control panel tester
+63|7522.3|cooper
+64|7213.3|coppersmith
+65|7211.1.1|coquille casting worker
+66|7531.1|costume maker
+67|7233.2|crane technician
+68|7516.1|curing room worker
+69|7513.1|dairy products maker
+70|7133.5|decontamination worker
+71|7316.1|decorative painter
+72|7119.2|demolition worker
+73|7322.1|digital printer
+74|7532.4|digital prototyper
+75|7214.1|dismantling worker
+76|7533.1|doll maker
+77|7411.1.1.1|domestic electrician
+78|7115.2|door installer
+79|7126.2|drain technician
+80|7531.2|dressmaker
+81|7223.6|drill press operator
+82|7223.5|drilling machine operator
+83|7221.2|drop forging hammer worker
+84|7411.1.2|electric meter technician
+85|7543.7.3|electrical equipment inspector
+86|7412.3|electrical mechanic
+87|7413.1|electricity distribution technician
+88|7212.3.1|electron beam welder
+89|7543.7.4|electronic equipment inspector
+90|7533.2|embroiderer
+91|7543.8.1|engineered wood board grader
+92|7223.4.1|engraving machine operator
+93|7411.1.3|event electrician
+94|7215.1|event scaffolder
+95|7515.2|farm milk controller
+96|7221.1.1|farrier
+97|7422.8|fibre optic installer
+98|7313.1.1|filigree maker
+99|7115.3|fireplace installer
+100|7511.2|fish preparation operator
+101|7511.3|fish trimmer
+102|7233.3|fisheries assistant engineer
+103|7318.3|fishing net maker
+104|7223.7|fitter and turner
+105|7322.2|flexographic press operator
+106|7233.4|fluid power technician
+107|7515.3|food grader
+108|7536.2.2|footwear 3D developer
+109|7536.2.3|footwear CAD patternmaker
+110|7536.2.4|footwear hand sewer
+111|7536.2.5|footwear patternmaker
+112|7543.9.1|footwear quality controller
+113|7233.8.2|forestry machinery technician
+114|7233.5|forge equipment technician
+115|7211.1.2|foundry moulder
+116|7211.1|foundry operative
+117|7115.7|frame maker
+118|7522.5|furniture finisher
+119|7522.6|furniture restorer
+120|7534.3.1|furniture upholsterer
+121|7126.3|gas service technician
+122|7223.8|gear machinist
+123|7412.4|geothermal technician
+124|7315.2|glass beveller
+125|7316.2|glass engraver
+126|7316.1.2|glass painter
+127|7315.1|glass-blower
+128|7533.3|glove maker
+129|7313.1.2|goldsmith
+130|7322.3|gravure press operator
+131|7233.6|greaser
+132|7223.4.2|grinding machine operator
+133|7412.5|ground lighting officer
+134|7215.2.2|ground rigger
+135|7312.6.1|guitar maker
+136|7222.2|gunsmith
+137|7511.1.1|halal butcher
+138|7511.6.1|halal slaughterer
+139|7314.1|hand brick moulder
+140|7536.2.6|hand lasting operator
+141|7122.2|hardwood floor layer
+142|7312.6.2|harp maker
+143|7312.3.1|harpsichord maker
+144|7541.2|harvest diver
+145|7223.9|heat treatment furnace operator
+146|7127.1|heating and ventilation service installer
+147|7126.4|heating technician
+148|7531.3|hide grader
+149|7215.2.3|high rigger
+150|7322.4|hot foil operator
+151|7111.1|house builder
+152|7412.6|household appliances repair technician
+153|7221.3|hydraulic forging press worker
+154|7312.1|idiophone musical instruments maker
+155|7321.1.1|imagesetter
+156|7312.2|instrument technician
+157|7124.1|insulation worker
+158|7126.5|irrigation system installer
+159|7313.1.3|jewellery engraver
+160|7313.1.4|jewellery mounter
+161|7313.1.5|jewellery polisher
+162|7313.1.6|jewellery repairer
+163|7312.3|keyboard musical instrument maker
+164|7115.4|kitchen unit installer
+165|7318.4|knitter
+166|7511.1.2|kosher butcher
+167|7511.6.2|kosher slaughterer
+168|7132.1|lacquer spray gun operator
+169|7233.8|land-based machinery technician
+170|7212.3.2|laser beam welder
+171|7223.4.3|laser cutting machine operator
+172|7223.10|laser marking machine operator
+173|7223.4.4|lathe and turning machine operator
+174|7516.2|leaf sorter
+175|7516.3|leaf tier
+176|7318.5|leather goods artisanal worker
+177|7532.5|leather goods CAD patternmaker
+178|7536.1.1|leather goods finishing operator
+179|7536.1.2|leather goods hand cutting operator
+180|7536.1.3|leather goods hand stitcher
+181|7536.1|leather goods manual operator
+182|7532.6|leather goods patternmaker
+183|7543.9.2|leather goods quality controller
+184|7535.1|leather sorter
+185|7412.7|lift technician
+186|7321.1.2|lithographer
+187|7543.8.2|lumber grader
+188|7533.4|made-up textile articles manufacturer
+189|7515.4|malt master
+190|7119.3|manufactured wooden building assembler
+191|7412.8|marine electrician
+192|7421.4|marine electronics technician
+193|7233.9|marine fitter
+194|7233.10|marine mechanic
+195|7131.2|marine painter
+196|7534.3.2|marine upholsterer
+197|7515.5|master coffee roaster
+198|7534.2|mattress maker
+199|7511.4|meat cutter
+200|7511.5|meat preparations operator
+201|7221.4|mechanical forging press worker
+202|7312.4|membranophone musical instruments maker
+203|7316.3|metal engraver
+204|7223.11|metal nibbling operator
+205|7223.12|metal planer operator
+206|7224.1|metal polisher
+207|7543.9.3|metal product quality control inspector
+208|7223.4.5|metal sawing machine operator
+209|7223.4.4.1|metalworking lathe operator
+210|7513.2|milk reception operator
+211|7531.4|milliner
+212|7223.4.6|milling machine operator
+213|7412.9|mining electrician
+214|7233.11|mining equipment mechanic
+215|7422.3|mobile devices technician
+216|7422.3.1|mobile phone repair technician
+217|7543.7.5|motor vehicle assembly inspector
+218|7534.3.3|motor vehicle upholsterer
+219|7223.13|moulding machine operator
+220|7233.12|moulding machine technician
+221|7211.1.3|mouldmaker
+222|7312.5|musical instrument technician
+223|7523.1|nailing machine operator
+224|7543.5|non-destructive testing specialist
+225|7421.5|office equipment repair technician
+226|7514.2|oil mill operator
+227|7514.3|oilseed presser
+228|7311.2|optical instrument assembler
+229|7311.3|optical instrument repairer
+230|7312.3.2|organ builder
+231|7223.14|ornamental metal worker
+232|7536.2.7|orthopaedic footwear technician
+233|7413.1.2|overhead line worker
+234|7223.15|oxy fuel burning machine operator
+235|7322.6|paper embossing press operator
+236|7131.3|paperhanger
+237|7512.4|pasta maker
+238|7512.5|pastry maker
+239|7544.1.1|pesticides sprayer
+240|7312.3.3|piano maker
+241|7212.3.3|pipe welder
+242|7126.7|pipeline maintenance worker
+243|7223.16|plasma cutting machine operator
+244|7123.2|plasterer
+245|7125.1|plate glass installer
+246|7233.13|pneumatic systems technician
+247|7316.1.3|porcelain painter
+248|7314.3|pottery and porcelain caster
+249|7412.10|power tool repair technician
+250|7313.2|precious stone cutter
+251|7313.1.7|precious stone setter
+252|7543.10.3|precision device inspector
+253|7311.4|precision instrument assembler
+254|7222.4|precision mechanic
+255|7321.1.3|prepress operator
+256|7321.1|prepress technician
+257|7323.4|print folding operator
+258|7543.6|printed circuit board test technician
+259|7322.7|printing textile technician
+260|7543.7|product assembly inspector
+261|7543.8|product grader
+262|7543.9|product quality controller
+263|7314.2|production potter
+264|7543.8.3|pulp grader
+265|7223.4.7|punch press operator
+266|7422.4|radio technician
+267|7534.3.4|railway car upholsterer
+268|7421.6|railway electronic technician
+269|7522.7|recreation model maker
+270|7231.4|refurbishing technician
+271|7322.8|reprographics technician
+272|7541.3|rescue diver
+273|7122.3|resilient floor layer
+274|7215.2|rigger
+275|7215.3|rigging supervisor
+276|7214.3.1|riveter
+277|7231.6|roadside vehicle technician
+278|7543.7.6|rolling stock assembly inspector
+279|7412.11|rolling stock electrician
+280|7233.14|rotating equipment mechanic
+281|7223.17|router operator
+282|7321.1.4|scanning operator
+283|7223.18|scrap metal operative
+284|7321.1.5|screen making technician
+285|7223.19|screw machine operator
+286|7422.5|security alarm technician
+287|7126.9|septic tank servicer
+288|7126.11|sewer construction worker
+289|7126.10|sewerage network operative
+290|7533.5|sewing machinist
+291|7214.2|shipwright
+292|7536.2.8|shoe repairer
+293|7542.1|shotfirer
+294|7316.4|sign maker
+295|7313.1.8|silversmith
+296|7412.13|ski lift operator
+297|7511.6|slaughterer
+298|7421.7|smart home installer
+299|7411.1.4|solar energy technician
+300|7212.2|solderer
+301|7223.20|spark erosion machine operator
+302|7319.2|sports equipment repair technician
+303|7212.3.4|spot welder
+304|7126.12|sprinkler fitter
+305|7215.1.1|stagehand
+306|7115.5|staircase installer
+307|7223.21|stamping press operator
+308|7119.4|steeplejack
+309|7113.1.1|stone engraver
+310|7113.1|stonemason
+311|7223.22|straightening machine operator
+312|7413.1.3|street lighting electrician
+313|7312.6|stringed musical instrument maker
+314|7214.3|structural ironworker
+315|7132.2|surface treatment operator
+316|7311.5|surgical instrument maker
+317|7223.23|swaging machine operator
+318|7535.2|tanner
+319|7422.6|telecommunications equipment maintainer
+320|7422.7|telecommunications technician
+321|7119.5|tent installer
+322|7114.2|terrazzo setter
+323|7233.15|textile machinery technician
+324|7322.10|textile printer
+325|7543.10.4|textile quality inspector
+326|7412.12|theme park technician
+327|7223.24|thread rolling machine operator
+328|7224.2|tool grinder
+329|7317.4|toymaker
+330|7421.9|tramways technician
+331|7132.3|transport equipment painter
+332|7321.1.6|typesetter
+333|7231.7|tyre fitter
+334|7223.25|upsetting machine operator
+335|7421.8|vehicle electronics installer
+336|7125.2|vehicle glazier
+337|7231.8|vehicle maintenance attendant
+338|7231.9|vehicle maintenance supervisor
+339|7231.5|vehicle restoration technician
+340|7543.11|veneer grader
+341|7543.7.7|vessel assembly inspector
+342|7312.6.3|violin maker
+343|7311.6|watch and clock repairer
+344|7126.13|water conservation technician
+345|7223.4.8|water jet cutter operator
+346|7126.14|water network operative
+347|7318.6|weaver
+348|7212.4|welding coordinator
+349|7317.5|wicker furniture maker
+350|7531.6|wig and hairpiece maker
+351|7312.7|wind musical instrument maker
+352|7115.6|window installer
+353|7523.2|wood boring machine operator
+354|7521.1|wood drying kiln operator
+355|7316.1.4|wood painter
+356|7523.4|wood pallet maker
+357|7523.5|wood sander
+358|7521.2|wood treater
+359|7317.6|woodcarver
+360|7523.3|wooden furniture machine operator
+361|7523.6|woodturner

@@ -29,11 +29,12 @@ type Props = {
   chatHref?: string;
   job: PreviewJob; country?: string; onBack?: () => void; onApply?: () => void; onSave: () => void;
   onFollow?: () => void; following: boolean; appliedStatus?: string; guest: boolean; busy: boolean;
+  submittedCvAvailable?: boolean; submittedCvTitle?: string | null; submittedCvBusy?: boolean; submittedCvError?: string; onViewSubmittedCv?: () => void;
   saved?: boolean; saving?: boolean; canSave?: boolean; success?: string; error?: string;
   children: ReactNode;
 };
 
-export function JobPreview({ standalone = false, backHref = '/jobs', companyHref, chatHref, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, saved, saving, canSave = true, success, error, children }: Props) {
+export function JobPreview({ standalone = false, backHref = '/jobs', companyHref, chatHref, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const Title = standalone ? 'h1' : 'h2';
@@ -77,7 +78,7 @@ export function JobPreview({ standalone = false, backHref = '/jobs', companyHref
       {!job.company.anonymous && onFollow && <button className={s.textAction} type="button" onClick={onFollow}>{following ? t('following') : t('followCompany')}</button>}
     </div>
     <div className={s.previewActions}>
-      {appliedStatus ? <><span className={s.applied}>{t('job.appliedBadge')} / {enumLabel('applicationStatus', appliedStatus)}</span><Link className={s.outlineButton} href="/dashboard/employee?tab=applications">{t('job.viewMyApplications')}</Link></> : onApply && <button type="button" className={s.primaryButton} onClick={onApply} disabled={busy}>{t('applyNow')}</button>}
+      {appliedStatus ? <><span className={s.applied}>{t('job.appliedBadge')} / {enumLabel('applicationStatus', appliedStatus)}</span><Link className={s.outlineButton} href="/dashboard/employee?tab=applications">{t('job.viewMyApplications')}</Link>{submittedCvAvailable && onViewSubmittedCv ? <button type="button" className={s.outlineButton} onClick={onViewSubmittedCv} disabled={submittedCvBusy} title={submittedCvTitle || undefined} aria-label={submittedCvTitle ? `${t('job.viewSubmittedCv')}: ${submittedCvTitle}` : t('job.viewSubmittedCv')}><JobsIcon kind="document" />{submittedCvBusy ? t('loading') : t('job.viewSubmittedCv')}</button> : <span className={s.cvUnavailable}>{t('noCvAttached')}</span>}{submittedCvError && <span className={s.cvError} role="alert">{submittedCvError}</span>}</> : onApply && <button type="button" className={s.primaryButton} onClick={onApply} disabled={busy}>{t('applyNow')}</button>}
       {canSave && <button type="button" className={s.outlineButton} onClick={onSave} disabled={saving} aria-pressed={saved || false}><JobsIcon kind={saved ? 'check' : 'bookmark'} />{saved ? t('workspace.saved') : t('saveJob')}</button>}
       {chatHref && <Link href={chatHref} className={s.outlineButton}>{t('chatWithRecruiter')}</Link>}
       {guest && <Link href={authLink('/login', `/jobs/${job.id}`)} className={s.guestNote}>{t('workspace.signIn')}</Link>}

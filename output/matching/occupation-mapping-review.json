@@ -1,0 +1,983 @@
+{
+  "localReferences": [
+    {
+      "title": "KBJI 2026, BPS",
+      "url": "https://jdih.kemnaker.go.id/monografi/detail/304"
+    },
+    {
+      "title": "MMK-2025, Uzbekistan National Statistics Committee",
+      "url": "https://stat.uz/oz/interaktiv-xizmatlar-2/statistik-klassifikasiyalar-2"
+    }
+  ],
+  "automaticallyApproved": false,
+  "rows": [
+    {
+      "id": "cmvccxkba01080nrco9pcz7mm",
+      "name": "AI Content Creator",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxk9x00zg0nrcithcpk2n",
+      "name": "AI Content Writer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkh2013m0nrczbxox5id",
+      "name": "Banking Associate",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxmga01zl0nrc8kmjemsf",
+      "name": "C++ Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxk2200va0nrc6d8xv9b5",
+      "name": "C++ Systems Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxky401cq0nrcuewvjo75",
+      "name": "Customer Support Lead",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjq300oj0nrc6ng6d8r7",
+      "name": "DevOps Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkjs01580nrcgno3h7ta",
+      "name": "Digital Marketing Specialist",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkrp019e0nrcrnrhjlep",
+      "name": "English Teacher (Corporate)",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkq1018k0nrcddsyzwsn",
+      "name": "HR Recruiter",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxl6y01gy0nrclrq8ghhy",
+      "name": "Hotel Front Office Manager",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxmh301zn0nrc8k98ny8f",
+      "name": "IT Infrastructure & Support Specialist",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjyr00tk0nrcwyc94p7w",
+      "name": "Java Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxl5001g40nrc7le5za81",
+      "name": "Legal Counsel",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxl1p01eg0nrcqhuys57q",
+      "name": "Logistics Coordinator",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkv601b60nrcm1oomizg",
+      "name": "Mechanical Design Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvl389hl00000n9kxszs6ml0",
+      "name": "Presales",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkof017s0nrc8o4cndod",
+      "name": "Product Designer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkcn01100nrchcr5lksa",
+      "name": "Prompt Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxk0h00ui0nrcenhlwnlb",
+      "name": "Python Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjvw00rw0nrcqf6ghfr0",
+      "name": "QA Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxmgj01zm0nrc3omyd82v",
+      "name": "React Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxktf01aa0nrcwp19lsyp",
+      "name": "Registered Nurse",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxk8k00yo0nrculple4ph",
+      "name": "Security Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxk3t00w00nrczt35zwon",
+      "name": "Site Reliability Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvl389iz00020n9k0dpzgmad",
+      "name": "Solution Architect",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkzy01dk0nrcqb4rh371",
+      "name": "Technical Support Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxkl701620nrc0fsaigyk",
+      "name": "UI-UX Designer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxl3e01fe0nrczv0ii31z",
+      "name": "Warehouse Supervisor",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjom00np0nrccmfvrkyn",
+      "name": "Backend Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "existing_label_preserved",
+        "uz": "existing_label_preserved"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjnb00mz0nrc7l4fxwgu",
+      "name": "Frontend Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "existing_label_preserved",
+        "uz": "existing_label_preserved"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjl000m50nrcjl7m8pf9",
+      "name": "Full-stack Developer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "existing_label_preserved",
+        "uz": "existing_label_preserved"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "cmvccxjrj00pf0nrcp4auttow",
+      "name": "Machine Learning Engineer",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "existing_label_preserved",
+        "uz": "existing_label_preserved"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_4f966832919407c16f3e235cd0871d56",
+      "name": "Order Pickup Point Administrator",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "existing_label_preserved",
+        "uz": "existing_label_preserved"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_fe6cbb4215ffe4714faebe7b9b65d574",
+      "name": "Store Crew",
+      "labelReview": {
+        "en": "existing_market_term",
+        "id": "existing_label_preserved",
+        "uz": "existing_label_preserved"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_19a6fbc21328f1d9e9bd24f63e42dd88",
+      "name": "MLOps Engineer",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_be7608be8b0ede6056b5da6e393877c0",
+      "name": "Human Resources Business Partner",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_4d2568501af1c860c6808e7f7fa3e89c",
+      "name": "Employee Onboarding Manager",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_d5368c1d2ee511bf6b606fca3895bb9f",
+      "name": "KYC Specialist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_0f599b25f0b0b00d9a0606ed76acaeb3",
+      "name": "Data Annotator",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_0176352caa5a4d4bc2ea6f388c8d6ee9",
+      "name": "Production Planning and Inventory Control Specialist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_0904d7aeed42099cc0406c6e6814cfdc",
+      "name": "Security Operations Centre Analyst",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_3c02b1296975da8146f19736f6c0dfb3",
+      "name": "Platform Engineer",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_396173d26964a2af0239d93ea21c1acb",
+      "name": "Batik Artisan",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_da61a1bfe2962d98666c7f71290bb3bc",
+      "name": "Traditional Skullcap Maker",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_bcb399ba8b36373a9b4936819043f520",
+      "name": "Mahalla Youth Leader",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_7d49006680105a893fa888ffe3a88dd4",
+      "name": "Pediatrician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_93f9cd133604f6ebdf59050647ff9862",
+      "name": "Obstetrician and Gynecologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_9832b6e815c5e9251222788a25bd97d1",
+      "name": "Internal Medicine Physician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_bdb237165a70217a03f75994b739ecc3",
+      "name": "General Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_2ce26aee0d76f945867dc452d511c3f3",
+      "name": "Radiologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_7f5ddee54568ef3d232dd3d75ebd4666",
+      "name": "Anesthesiologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_5d3782b9061d1e16ba4718c008bec49c",
+      "name": "Clinical Pathologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_f8bbb520ae50691bce8e2c03f55644c2",
+      "name": "Anatomical Pathologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_f6856b23ddbed398553206642bff2de1",
+      "name": "Clinical Nutrition Physician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_712bfe866ac81ffadf109ef612470d6e",
+      "name": "Cardiothoracic Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_c0ca1fa8b8b260e8bffb30858cd36606",
+      "name": "Clinical Microbiologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_776ce33e8c412a6f05ee1a0c4be8bc3b",
+      "name": "Neurosurgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_fb084cc929a79305c1882160773b2aa1",
+      "name": "Urologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_01b69649fdf38ea30815667c6bde0fc6",
+      "name": "Dermatologist and Venereologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_1bced71a5ceb4aae937805f0cead3e7f",
+      "name": "Neurologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_b654ea730ba55ef63703436573b50340",
+      "name": "Orthopaedic Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_6ed1e79df00a3a3d9fcc21157e790295",
+      "name": "Pulmonologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_a24b9c1ee474ca5270e96c81ccede37e",
+      "name": "Forensic Physician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_158aa7341d6b7e7df0018348442f55e8",
+      "name": "Pediatric Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_4ff10a4228a9cf715ae4b5acec01c1bb",
+      "name": "Psychiatrist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_8327500b0fa55fac9276650eecd90b63",
+      "name": "Physical Medicine and Rehabilitation Physician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_4de63f0339829f163ad3c61c919d9c4f",
+      "name": "Otolaryngologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_2160f5c7c92964de9c71146c0efcd8bf",
+      "name": "Ophthalmologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_0b52c42a492d10f27ee1ec7fa3813285",
+      "name": "Cardiologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_6f1b8f9ef1b49fd107149b73479d2e4e",
+      "name": "Radiation Oncologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_7239cf0ba735aec2f5224ba87be114d8",
+      "name": "Orthodontist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_a135c868af194a3bbb827439056aede5",
+      "name": "Oral and Maxillofacial Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_93cf81579bf21106e6a28af96571b3ba",
+      "name": "Endodontist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_0575e8ef1526a981015a457e0647cf24",
+      "name": "Periodontist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_1fb9e826ae0e95d056c9fa81b9944dc3",
+      "name": "Vascular Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_3568ea917842e400c9205a6c59acbde7",
+      "name": "Cardiac Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_523dfb1fdbe05302fa972af6e9e9aa3a",
+      "name": "Pediatric Cardiac Surgeon",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_eec503ca01f251252a0151f717930d25",
+      "name": "Interventional Cardiologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_5e968f406f34d1b27f24d9e642261f6b",
+      "name": "Medical Oncologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_54c7cbeb7c42b8474f6e4a691f1542c0",
+      "name": "Gastroenterologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_a42381964326db46f141796f925c5c7c",
+      "name": "Endocrinologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_0cf74886ea4ea9f3331b4bde2f21fe2d",
+      "name": "Nephrologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_a00824742d909fb40d7544d97eede7c5",
+      "name": "Hematologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_834dbc88bb5c6c1fc5809f10c8e27350",
+      "name": "Rheumatologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_1759459f1e28ff37efe18ff132d0012c",
+      "name": "Geriatrician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_27326bab2698483a635bed67437c3308",
+      "name": "Infectious Disease Physician",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    },
+    {
+      "id": "jobcat_2e9e907f0f8305c4c95ccbabb923f346",
+      "name": "Allergist and Clinical Immunologist",
+      "labelReview": {
+        "en": "editorial_market_term",
+        "id": "editorial_translation",
+        "uz": "editorial_translation_native_review_recommended"
+      },
+      "candidateExactMappings": [],
+      "status": "NEEDS_LOCAL_REVIEW"
+    }
+  ]
+}

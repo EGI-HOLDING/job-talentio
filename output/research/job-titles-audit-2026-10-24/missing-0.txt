@@ -1,0 +1,21 @@
+1|0110.1|air force officer
+2|0310.1|air force pilot
+3|0110.2|armed forces officer
+4|0110.3|army captain
+5|0210.1|army corporal
+6|0110.4|army general
+7|0110.5|army major
+8|0110.6|artillery officer
+9|0310.2|bomb disposal technician
+10|0110.7|brigadier
+11|0110.8|colonel
+12|0110.9|fleet commander
+13|0310.3|infantry soldier
+14|0310.4|intelligence communications interceptor
+15|0110.10|lieutenant
+16|0310.5|military engineer
+17|0110.11|navy officer
+18|0210.2|sergeant
+19|0210.3|special forces officer
+20|0110.12|squadron leader
+21|0210.4|warfare specialist

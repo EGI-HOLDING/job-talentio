@@ -1,0 +1,46 @@
+[
+  {
+    "file": "draft-labels.txt",
+    "sha256": "daa7f072aaa9262d58cc7ae0e9e1e815b7657a7cf3142d0b5c2dca4da6fac688"
+  },
+  {
+    "file": "market-extensions.json",
+    "sha256": "b0629c20fabedbe57a17c65a93c2a59b56862f429d727c137af4dd6365dd2167"
+  },
+  {
+    "file": "sources.json",
+    "sha256": "aa91f1a7cf5f0df42326feb4a02dc861f051b5e434e2c6b843c7e138050580ea"
+  },
+  {
+    "file": "job-titles-draft.json",
+    "sha256": "2ed5a0cb30ef8b34cb244cce4807802d30dbee107eed2f76d7b80f1158a14741"
+  },
+  {
+    "file": "coverage.json",
+    "sha256": "3c879da651fdac8916568ce52a0acea2c88c950aa9192641c6cf4def5e2f7d70"
+  },
+  {
+    "file": "review.html",
+    "sha256": "fbff90c4153ac9095802748e8ea578ec6421a5944e238fb78f2fc13dccf9c5c6"
+  },
+  {
+    "file": "daftar-jabatan.md",
+    "sha256": "2f520bf6bd66e6757949b6aeb20480722e661d89b596b2061736e813917b529a"
+  },
+  {
+    "file": "sources/esco-occupations-page-0.json",
+    "sha256": "093d3b4c0a77e34107b4ecc59eef83e9646edda62b75ec5affaec5dcc781307b"
+  },
+  {
+    "file": "sources/esco-occupations-page-1.json",
+    "sha256": "787dfa847b7a2304751f01325801b15cdc79e7ca6cf61dcb1fbf89539fb1611b"
+  },
+  {
+    "file": "sources/esco-occupations-page-2.json",
+    "sha256": "13827ea9e984086e3a894be76b586e392ddf414d3dc187b84ce7ee9ba6333db0"
+  },
+  {
+    "file": "sources/esco-occupations-page-3.json",
+    "sha256": "c68d6ea2f83d9dc822eec4112660b1ba57916a4a25c151a4f08fec55af6a7a1b"
+  }
+]

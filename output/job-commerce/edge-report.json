@@ -1,0 +1,8 @@
+{
+  "checks": [
+    "Real HTTP: unauthenticated/employee/foreign-company access rejected; client amount rejected; forged payment notification cannot settle; admin ledger restricted to Super Admin",
+    "Mobile: cancel/restart checkout, Premium card reached with actual scroll, expired order cannot pay, package scoped to its own job, expired Premium renews as Free and gets exactly one new 30-day period",
+    "Admin actual UI/API: search one order, inspect verified local payment event, distinguish no-charge test, retain responsive table scrolling"
+  ],
+  "errors": []
+}

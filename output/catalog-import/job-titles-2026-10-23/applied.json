@@ -1,0 +1,2296 @@
+{
+  "datasetId": "talentio-job-titles-initial-research-2026-10-23",
+  "datasetVersion": "draft-1",
+  "datasetSha256": "2ed5a0cb30ef8b34cb244cce4807802d30dbee107eed2f76d7b80f1158a14741",
+  "target": {
+    "host": "localhost",
+    "port": "5434",
+    "database": "job_talentio"
+  },
+  "summary": {
+    "sourceRows": 450,
+    "createdTitles": 438,
+    "matchedTitles": 12,
+    "titlesWithMissingTranslationsFilled": 12,
+    "createdAliases": 894,
+    "createdAuditRecords": 450,
+    "archivedMatchesPreserved": 0,
+    "curatedMatchesPreserved": 0,
+    "aliasConflicts": 0
+  },
+  "planSha256": "564b9dc24a9b13e11a90ff602a486dc86ce7d61bcd3435b7d4f2570b6e5e851e",
+  "aliasConflicts": [],
+  "mapping": [
+    {
+      "sourceKey": "esco:6c3fd65e-2d24-47d8-bc22-9e93512bdcc2",
+      "jobTitleId": "jobcat_889aa7d91903db09c4f170ef1fabea82",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:544cd9cf-e2ee-4ac0-8a02-7147af6b97d7",
+      "jobTitleId": "jobcat_bf30aa94aaf29a287e241809cce60806",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0917ab6b-18a8-4cfd-8e7a-843b88cf9457",
+      "jobTitleId": "jobcat_a7e3faa8a42d135ed65a4295bdac758e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:94e0bedd-e56e-42be-a5a4-b74a260f437c",
+      "jobTitleId": "jobcat_7058a002ed76af4432a1cfd035f7d9ff",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bea99fea-0383-4c63-b944-70d4799de2c5",
+      "jobTitleId": "jobcat_e908544fc8df420d843f6bfab1908d89",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c94f3565-d987-431f-a46b-6f4e018e0bd7",
+      "jobTitleId": "jobcat_98dc91ec4d7ca8737ea1a2e9213b15f2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4f49df98-98b8-4a9e-98ad-9c5557817eba",
+      "jobTitleId": "jobcat_515b5006e9119b51b388e610418b4726",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9f508305-80ce-4111-8722-f2c9b4a44890",
+      "jobTitleId": "jobcat_00df5f95217b73d25bdab5a5d0f84f22",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:73ceb2f9-18e3-4cfe-9c06-e9fb31ece440",
+      "jobTitleId": "jobcat_5447ca1be2fe7cc0cacacac3565df4dd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:109e0a5d-203d-4af6-8f70-692111335ec3",
+      "jobTitleId": "jobcat_22a53352753cd341c6dcfb1095155f8e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:044d78cc-f62f-4532-83a5-8e04f2889652",
+      "jobTitleId": "jobcat_3b79ffd5e96d5808000540ae5583265a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6c999fc7-c6b7-4ef3-a4b9-af124a1783a2",
+      "jobTitleId": "jobcat_2033f76f87fe864a1ac76c1e243aefaa",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6e6839b6-099c-4802-906e-7f2c8203ee69",
+      "jobTitleId": "jobcat_8a2961a1222743ed33507b13b3888194",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5ac377d2-e1d0-4911-a299-b4ef2782a0ba",
+      "jobTitleId": "jobcat_51eb3bc87f50a5e34d1f031f2986c8f2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2a04a1df-a3b9-403e-a245-e7f93fdddd44",
+      "jobTitleId": "jobcat_8b2d8e122bf12fbb641ea23021feb707",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f7b04542-d8c7-42db-8475-e63b507cce82",
+      "jobTitleId": "jobcat_3f4dc50b5d860278b84b249c360bd3dd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6353b3e8-e8f2-4ecb-b230-186927139892",
+      "jobTitleId": "jobcat_8b80588d10f51c1a51f565fd6ded1ef1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9ab0f0db-1128-4050-becd-b09db5eabdaa",
+      "jobTitleId": "jobcat_82ff63d0f38ac470c82ba6b41f15d9f7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:22f86890-f68b-402f-a711-3e6df4913271",
+      "jobTitleId": "jobcat_af9824e568fe708895baff825c33a3c7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5ccb2c34-e860-43a5-9869-342487518115",
+      "jobTitleId": "jobcat_9aca5c28da971b9bf5d80bf21092473d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c9b2b0a7-0adc-4ca7-bf7c-dc95e18aeac7",
+      "jobTitleId": "jobcat_23272081648d188019546c4f6b88c533",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b2e81332-0972-4e0f-9a4d-1d15c9c9513b",
+      "jobTitleId": "jobcat_3217953e3715420a75daa6564e2a4301",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:eda0d957-3c3c-4139-b89a-a18bc9e18897",
+      "jobTitleId": "cmvccxke9011y0nrcx4ws009s",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:bfe142b9-a049-4d41-89c4-fd2f34ac56b6",
+      "jobTitleId": "jobcat_7dc34f0d1cbbf60ebfe341b012658fe3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c3aae59e-1441-4b3e-bdd1-6da50dc7cf42",
+      "jobTitleId": "jobcat_120694caf8c5cc0454c66b7b8004836c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:caafca69-9faa-4850-8930-a3fa07fea4e6",
+      "jobTitleId": "jobcat_df5d6e54691a4815c8435b0bf8dc6cb8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:04f39bfa-bc03-4480-98bc-b18ce4fe4b4b",
+      "jobTitleId": "jobcat_4cdda6a6470c1cd2879a6f4cdc0a241a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8d586ee9-0ab1-4155-a3b0-2ca786c8e48c",
+      "jobTitleId": "cmvccxkfq012u0nrc1erzj6n6",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:30f3ea93-882a-4525-841c-1d5b4b64076f",
+      "jobTitleId": "jobcat_56428ae713a50368597d8f13e2487eb5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5e5b1b61-1351-4d3b-a293-deb3661715dd",
+      "jobTitleId": "jobcat_7a17ca8c26dca70f4261a5e32744d0cb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1ad59946-d13e-441e-9b36-56e1df055e21",
+      "jobTitleId": "jobcat_e16eb5178af525b13ab3af34b09998f7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4e4a291d-1d38-4c5a-812a-5827d0691b11",
+      "jobTitleId": "jobcat_11985884386d65c0be942dafdb1968a2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:84871c2a-abd1-45eb-b03a-65e51a26fd84",
+      "jobTitleId": "jobcat_d1264c6656926dd43fe118999d4edad8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ade351da-7bda-424e-8682-bbdcab2a25be",
+      "jobTitleId": "jobcat_6ad3f6b5d92dff60c1af1cf7c893d0d6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bafbc672-0ad9-41af-9de8-db0c91a24f9b",
+      "jobTitleId": "jobcat_fb4a280697153ecb6244513d549b1cfc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:59c22779-4d89-4bc9-ba8b-d64bea236723",
+      "jobTitleId": "jobcat_14b1c32d84eefb2c531656e3f6573886",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:84fabf82-4abf-4f41-99aa-55718a2e500b",
+      "jobTitleId": "jobcat_98131c32ae1e57455970197f039424f2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3e1a2f3c-20d6-4d33-aa6f-63cd2a32698d",
+      "jobTitleId": "jobcat_1744545393d436868aee4b11b1616c2b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2ff9e53c-6e7f-42af-8d71-b5dd7f283089",
+      "jobTitleId": "jobcat_536e015eb37878eedd7b17496ef75bcc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5e4d156a-1f05-4b2c-b0f0-5abb82d52ed6",
+      "jobTitleId": "jobcat_5d6ff43ddf7898de52d0b8e823913e94",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:075e4d25-74b3-46fb-9b6e-6b53cdb196e7",
+      "jobTitleId": "jobcat_9669a4711dff78474f8315d6a4dd2d2b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b3ce981c-5b32-4de2-8e53-502a6357b2bc",
+      "jobTitleId": "jobcat_4449ec5c620d57fc4815e4c7f712aea0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1a87e487-6761-4374-b6db-100ac5a9ad5a",
+      "jobTitleId": "jobcat_4b3677eff7e160b647c507b3c39cbfcc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:32fafe2c-0099-4852-889e-46614ce9a9ae",
+      "jobTitleId": "jobcat_68cc9fc86c8134a119962235b3b7fa8d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:38d9c76b-1a7b-4d65-879b-733ae7e9364e",
+      "jobTitleId": "jobcat_cd19a48d2b79a810c7c82d0ba1ebeee2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:076d23f3-a689-4f1a-8b55-ae870c9aaa85",
+      "jobTitleId": "jobcat_5fa6fa5367f3c5e4a1c643879bc5bf32",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9a39a143-d93c-4093-ba3b-47fb67ade318",
+      "jobTitleId": "jobcat_f39a43df3a4a5d59a3f175ee702e2760",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a198de8c-24b1-4002-982f-a57ae6d6c19c",
+      "jobTitleId": "jobcat_84ac2cd7d28e0cd1183e9e5db9f0dd98",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:01a83071-6533-4675-b2da-f0c6d02669f5",
+      "jobTitleId": "jobcat_f6709caf11492c9246fc891844f8ad24",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e937449a-d9e0-4ab7-9ea5-4d3ac673be6d",
+      "jobTitleId": "jobcat_0b6d118e33bd755de051f4698c1e76a3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:068c2787-58ff-468e-bbb6-c4e5dd6ee482",
+      "jobTitleId": "jobcat_fa40a11e5c0a29c7f035670f289e040f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:50a66df6-c141-4b4a-937a-d3bc55737ae3",
+      "jobTitleId": "jobcat_86a08bd5b3ae60aaa06db7497d93deb7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d8ed1703-9c03-4ea0-83cc-b6169bc54ffd",
+      "jobTitleId": "jobcat_ef8e88f95650998ca8857b8335196dbc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d3e32e5e-7f24-48e3-b939-e4f800eb62fb",
+      "jobTitleId": "jobcat_049b51c1f8fa758fbb485a625e030bf6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f605bcd2-90b6-45a0-a558-d05016d68a77",
+      "jobTitleId": "jobcat_d849a36a10a707ebd38c7d8de255b518",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:068370e0-9c27-4814-87d0-44fbb3140815",
+      "jobTitleId": "jobcat_cdcc5e1ce364213d68e7a461a462c405",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a6e8a6bf-9209-4d19-a131-a8b6431e0f75",
+      "jobTitleId": "jobcat_247bef181f6a1cf8f0798a8d16a66b7c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1fce1be0-bf52-449b-9a2b-3f2cc710290a",
+      "jobTitleId": "jobcat_ff7b2c98138cbf034f687b3af73b8a6f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0ba06640-e0ac-4911-9e43-289a8e41651e",
+      "jobTitleId": "jobcat_c566d33263b9e1fd746ecfd9f9867cb3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a14e96a7-6c4d-4d69-8c6f-7ccadf77bac5",
+      "jobTitleId": "jobcat_35bbcc0ab9ea8a4a6428aad97611e8b9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5d0cc30d-068a-424c-8463-f42872a7149e",
+      "jobTitleId": "jobcat_9231717483a49489c93ec0c4005ff73e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:133ab775-f08d-4bc7-8629-89d286180f4e",
+      "jobTitleId": "jobcat_d8eba25dfda6fd4efeb5ece7f846209c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:14031d4a-6e99-442f-b4fe-18262b6432b2",
+      "jobTitleId": "jobcat_814cc4715d79e42a65b5a9217741ea93",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a7594892-ff23-4e2a-aedf-2f967ebca15c",
+      "jobTitleId": "cmvccxkif014e0nrcipdt7lbs",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:2eac08c2-a81a-46fc-8d75-eb0e0f3e0f6d",
+      "jobTitleId": "jobcat_cd0c23fe4aeaeb3b35a0bd8e6114c12e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9ba74e8a-c40c-4228-9998-eb3c7a5c11df",
+      "jobTitleId": "jobcat_5e5da1cbfaf59e8263c25e355fc46f73",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0b15375e-dfdd-4047-9efb-096e0aaee7d2",
+      "jobTitleId": "jobcat_9352a73b542a990fd62c41c971dc4ba1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2b871272-bd61-4206-bd1a-0b96d7023098",
+      "jobTitleId": "jobcat_fde7bc6a2723b17fa7e31389cf277a51",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bdfb48e0-79dc-4b63-8470-db2e03b37326",
+      "jobTitleId": "jobcat_04f0e95bb89a639e611cf5275fe85640",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9e81adde-9983-44fa-b74b-c548d0dbfbdd",
+      "jobTitleId": "jobcat_73543c5b2ea2921a3dd0ac9b73ff656f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b7744a45-a4ce-4037-b679-3d2377e17f31",
+      "jobTitleId": "jobcat_482f0393f0cc8d07946607142a78d221",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:35eb0aa6-b40d-449d-9390-719be8912277",
+      "jobTitleId": "jobcat_f449de629863797ca54bfa2a52286be5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d35f9e79-5778-43b4-8667-0e3ba1fcb19a",
+      "jobTitleId": "jobcat_e5d690d6b38684f7ca0b391ef76f7578",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c956be07-53a3-4b01-b8f8-f0c5a428eaa8",
+      "jobTitleId": "jobcat_331b21eb61164db02b5c9080de4f8367",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ab762f91-d737-485f-a85c-67cab92dee01",
+      "jobTitleId": "jobcat_94201e15d9b73d01a210a94563cefa50",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5c1eba1e-7820-4287-9746-4c5906320100",
+      "jobTitleId": "jobcat_3b8aa48eba58aaa911e104ccf03e9d6d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:47e81c7f-2d04-4a60-a8ff-9913c36d8344",
+      "jobTitleId": "jobcat_e532d4d33660e3fbe82235d7c8003f8b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4791e217-d607-40d5-9f84-df1d0a071cbc",
+      "jobTitleId": "jobcat_6d2d62f89eff55274da58efd89ef873c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6fcf4638-e7c7-4978-9302-9a7b63a3d57c",
+      "jobTitleId": "jobcat_40d037ea393b4c0815a7b3ce616bad3d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:dc97adbe-f807-4ad8-8f3c-c24b3416cdef",
+      "jobTitleId": "jobcat_7a7898c200b89ffda498e0059f57f85b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:356227b9-2263-4dbd-81e9-7dfc6d3f3af7",
+      "jobTitleId": "jobcat_bc31739362a077661cb5aadf4dbcac60",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:092fdeeb-a76f-4ed2-b248-90fd6eaaffef",
+      "jobTitleId": "jobcat_ed1b7789064f39afdbe22fa01ab75759",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b1ab3572-fa2f-4624-8eac-3c3d986d237b",
+      "jobTitleId": "jobcat_524d9b1dd86c224a12546f8ba8274530",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e01719f4-d7dd-42fe-b504-93128520f84a",
+      "jobTitleId": "jobcat_19a1adebea20d787dd46f2d26b9722da",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4795d4e3-c623-47ff-abab-7de97fcb764e",
+      "jobTitleId": "jobcat_ffeb1be05783624342aa42c6d47fe5b1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b55718eb-e8ff-4485-8ad0-bbac32cbd77b",
+      "jobTitleId": "jobcat_b7c9e3ac85cab344263a8d23f2fba229",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:de80bbf0-447d-4a6a-845a-fdba4e0dc30c",
+      "jobTitleId": "jobcat_1ac8b413588308c988e0bb95d13b0d39",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c0489e22-6a1b-4e52-974a-eb71bbb42134",
+      "jobTitleId": "jobcat_c0c740ea291aa208e0ff979ee5db6cac",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6cc19251-763b-4de1-b4f7-526c9ff732d2",
+      "jobTitleId": "jobcat_4d97f2429ceaa5f2202d8438a42f12ce",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cd7b838c-51f6-41ec-9067-bb974c0f991b",
+      "jobTitleId": "jobcat_659facfbd59ace2927d5b6e232561d6a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:137b1d11-c4bc-4016-89ba-45345d4c71f0",
+      "jobTitleId": "jobcat_9af276f983887885d6ddf7c93d72f021",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:13d1b2b4-99dd-44da-9734-c9f74bae18f7",
+      "jobTitleId": "jobcat_53d1854fa28572a47c0d8af5dc68cbaa",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0ededdc2-050a-4ec3-8e70-6295105fcd19",
+      "jobTitleId": "jobcat_fce0727805e992ad62a076bb608afc18",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6aa78e46-ce22-421f-8a75-e915ac63c9d0",
+      "jobTitleId": "jobcat_9d76835642b00893fd91de70baddda6d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:580c98d4-fb97-4597-864c-54140f058f1b",
+      "jobTitleId": "jobcat_405f55be921f7843aed9321d290a1cf0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:dd25a2b0-add0-4ae2-bd85-bb644e0d0c39",
+      "jobTitleId": "jobcat_34e8526139ca1dbdf922579d9f9ea50e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b7b75eb6-34bc-462d-b412-eed393cc1397",
+      "jobTitleId": "jobcat_5214847ee94a91695e2feef8cad22365",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9c9752b7-3e3b-4a08-8553-b63a013f8072",
+      "jobTitleId": "jobcat_0b42b2538029ef7850c19a17a5abe7a3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:725090a7-9943-4dae-8079-a6999d21ddba",
+      "jobTitleId": "jobcat_963c34b8e9046a2fade7dcc70d9fb8ac",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0bf68df5-e808-4c27-abf2-6f85440f2d7f",
+      "jobTitleId": "jobcat_57f2646d298e0d463f912e494e6273e9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:612430b3-dd43-4786-b823-0466c4953f66",
+      "jobTitleId": "jobcat_e2a64303edb83bc9b5bbb39156d9049a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f2b15a0e-e65a-438a-affb-29b9d50b77d1",
+      "jobTitleId": "jobcat_15c5a4837aac26ddeeb77af686c6abc9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c40a2919-48a9-40ea-b506-1f34f693496d",
+      "jobTitleId": "jobcat_333b5f2312917ec4f0a6119246da2f73",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:866c7813-2c03-47d7-9bdc-192cfbace57c",
+      "jobTitleId": "jobcat_5bb475d00f30a085d7a56e234d721adc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2ed56c3f-61d6-4f7e-9ef8-8849eb102e4c",
+      "jobTitleId": "jobcat_cf82c77f8530dddfcff58b58119d0f0a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bd272aee-adc9-4a06-a15c-a73b4b4a46a7",
+      "jobTitleId": "jobcat_4aab15abfa1d884a431285656745f9dd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d0aa0792-4345-474b-9365-686cf4869d2e",
+      "jobTitleId": "jobcat_24c54f88af49d6c00a277b24c74922fb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:04ba4d6c-957d-417f-bf63-5b9e015a9f86",
+      "jobTitleId": "jobcat_2ec2039c2abe11921faec376ed672fd3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:fe0fa514-b48d-4a53-9757-a283c0baacf0",
+      "jobTitleId": "jobcat_3ed90de5411cd169dfcfe16202c0441e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a6a0b60f-08da-4faa-bf54-942987efb471",
+      "jobTitleId": "jobcat_159f9f66c2785ec912f3ff746f198ca3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:106f79e4-6264-45f1-9e7a-297435cd684b",
+      "jobTitleId": "jobcat_dabd7ea20d4b113fcb4721929f5f5ebf",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0ab5c12c-c1c1-4772-8345-aa287d0e391d",
+      "jobTitleId": "jobcat_524b786be55507931e707a749e434497",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:731f38f1-b08f-4dd5-a25e-f8627c038273",
+      "jobTitleId": "jobcat_1ee9275310b6a0e9b7c31806790dbb4c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:50af07f0-7a75-424e-a66d-5a9deea10f4c",
+      "jobTitleId": "jobcat_cc12b9d397e2c03b9f38affa5b01f6a7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d3edb8f8-3a06-47a0-8fb9-9b212c006aa2",
+      "jobTitleId": "cmvccxk7000xq0nrcyj8uqybt",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:258e46f9-0075-4a2e-adae-1ff0477e0f30",
+      "jobTitleId": "jobcat_98c2ff1de42a6ad238e8cb0cf979ff43",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2079755f-d809-49e6-8037-4de6180e54c0",
+      "jobTitleId": "cmvccxjue00r20nrcw12ybfun",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:7086d0ca-1e77-4690-89c9-7ed1a0478fa3",
+      "jobTitleId": "jobcat_1c140e6aa1c999806d196db19620cfb4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:35553663-deab-4d9a-bf22-15c1625d28e8",
+      "jobTitleId": "jobcat_8a08d1d416693424d82fa97d5fa6328e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1c5a45b9-440e-4726-b565-16a952abd341",
+      "jobTitleId": "jobcat_03c82d02db21a3dc7f5163b86e738dd8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9ebaf3f0-0be0-47b7-b2b1-b3b04130fa81",
+      "jobTitleId": "jobcat_dad96283caec03d412cb96ed64032cf5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:57af9090-55b4-4911-b2d0-86db01c00b02",
+      "jobTitleId": "jobcat_1d2816127f3396009fb7d8b6b4cf918a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6ce5f7e3-a534-4aa2-ab23-255408ddb53a",
+      "jobTitleId": "jobcat_0998ef2348f77745e56b3c121d3fe87a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:781a6350-e686-45b9-b075-e4c8d5a05ff7",
+      "jobTitleId": "jobcat_df377feaaf42023290e7ca1ca54f350c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:24135b84-cbdd-4d42-9ed2-02fd982d15b2",
+      "jobTitleId": "jobcat_ea3cd48ac0ee5658b294f21daa60de63",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9e2e6e1e-363b-4e1b-a673-7bc0f7343300",
+      "jobTitleId": "jobcat_675c7f2bbd6856655f08e1abc7f6ee39",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:81480b40-a318-47f3-9b2c-56b69ed67d95",
+      "jobTitleId": "jobcat_2091b3182d8b4375446b0f66a342ecd1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cf2b03cd-feb7-4f47-90f6-ff1ed6016d3d",
+      "jobTitleId": "jobcat_cc6a9bbe4fe1bf97e75327d75788c4cb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e0b544dd-b621-4126-a55e-054af25c6ea0",
+      "jobTitleId": "jobcat_50f5bf8139752b0e63dd29bc93e7219b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8c57af09-719c-42b3-be40-6ed4946236cc",
+      "jobTitleId": "jobcat_fb0efaaa5451d190ae78dee9b0c91b3c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b11e1742-5e28-4270-b081-b0193d85ee7d",
+      "jobTitleId": "jobcat_a7802cd802b86f77f19cd40c124ed426",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8d9ec84d-cf2d-4179-87bc-335cda54a427",
+      "jobTitleId": "jobcat_e6ffdc80e33723cb60bbd98bd89d00b6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:349ee6f6-c295-4c38-9b98-48765b55280e",
+      "jobTitleId": "cmvccxk5i00ww0nrc9y36h8z7",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:2fb96c6c-8d0b-4ef0-b1ee-3e493305e4eb",
+      "jobTitleId": "jobcat_0bddcf96caea6a498eadea6061e95e38",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cc867bee-ab5c-427f-9244-f7a204d9574b",
+      "jobTitleId": "jobcat_d404b21aec8939e4152b7bc0f5271323",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0464b062-cea6-4164-b10d-956c61956ae7",
+      "jobTitleId": "jobcat_2f7ad3f47b2eb6c7b890915eb2dbe0dd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:76ef0a87-6afe-4560-b5d0-9a086abe45c5",
+      "jobTitleId": "jobcat_1196f3cf5a9b9012062ae9135f8d1b2c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0ce5a9f4-e00a-4bbe-b255-3c63407167a4",
+      "jobTitleId": "jobcat_fd1b90af5c7e21cc83502b0929d6e06a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0c448a27-10ec-43ba-b880-d9938bade424",
+      "jobTitleId": "jobcat_e04aee711a9452997403e6a1449583bb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cdd3d773-75a4-4f35-bd1d-1ac720afcf9d",
+      "jobTitleId": "jobcat_fe03b86248140ce1b0dff800e02edd1d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:aaeec9a7-dc57-4485-890c-86b3eef735f9",
+      "jobTitleId": "jobcat_10bbb861568471c665d652d49f369e06",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:69bcbb0a-8d80-4ecd-b0a4-9adea2a40de2",
+      "jobTitleId": "cmvccxkmu01720nrc7olcdk2n",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:30ed83ba-cc89-4d9f-a59d-5c783c1da56e",
+      "jobTitleId": "jobcat_af3511e93bb7cb1b12784870a112495a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:96e20037-0a25-4bf6-a25e-808d1605d890",
+      "jobTitleId": "jobcat_b4e096b963e521d868f00246621d7580",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:faed411a-f920-4100-86a8-b877928b429c",
+      "jobTitleId": "jobcat_e62627755a07ec1c84edf2862f46fcb4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:52df9d56-efd4-48d0-ad93-59231943fc4c",
+      "jobTitleId": "jobcat_ee316b02d541ff9d792793ab888b3bd4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bab5fa79-7f96-4e21-87b6-1eba560b8d9a",
+      "jobTitleId": "jobcat_5e06bc031ebb6309c2f8db9d84277b82",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d5a43cd3-230e-46d0-ba05-d67d61e5cfbb",
+      "jobTitleId": "jobcat_0593d1bde795485f385226805fd13f28",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ab7bccb2-6f81-4a3d-a0c0-fca5d47d2775",
+      "jobTitleId": "jobcat_3e1f739e4b6a9d5e69fa8f0de64db92d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:73e776fb-4d99-4031-bad4-7716f121155d",
+      "jobTitleId": "jobcat_d609c9bb13a3676d8e57727fa29fbaff",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:77bfd6e7-5598-4818-84cb-31e2651eb046",
+      "jobTitleId": "jobcat_6e04f1924214f4c649a52cb10426de04",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0f7c84c5-1c0d-4fc1-8949-07dbe8bd34ef",
+      "jobTitleId": "jobcat_7cc66527809f8cad18cbb2eb5389b984",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cb93fd23-1f51-4495-867a-936c1967066b",
+      "jobTitleId": "jobcat_d0441d6fb1a3be239d645aa2f1a65655",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b06a1dde-e5a1-4219-9491-2bedd0282e4b",
+      "jobTitleId": "jobcat_2e54401a0258dd08c34c07506ab4e2a3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4bef1707-a251-427e-9d8b-96595ec38d45",
+      "jobTitleId": "jobcat_f08426a2e1714af45a006f248e7187e1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8bd74371-1818-47d5-a253-d703c51c5f26",
+      "jobTitleId": "jobcat_689ec8b17b01aed1b8cf2fa2e106eca8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f8f34041-3640-41a9-852e-c5a7574de780",
+      "jobTitleId": "jobcat_3640cfe53f3384c8d5adecbccebf702c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a47f82d3-4cf7-4abf-bb36-2c8cbad28234",
+      "jobTitleId": "jobcat_bc5f32ea5e05c93f6618270f2ab7ffe2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:66542dd6-05a6-4d9e-97ff-3f4858c31ff9",
+      "jobTitleId": "jobcat_a1083fc820a5c27c5eddefa530f3744b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ac734172-ae9a-41ab-80a0-a7b33694e027",
+      "jobTitleId": "jobcat_084336f52e1135febc3ed48925e65049",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1a7fb683-6544-4442-b54c-ec72ef468ff0",
+      "jobTitleId": "jobcat_09e464fd239f19372d1b969b5ab170fc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ebe936e2-64e7-4777-94d6-42caa5a12409",
+      "jobTitleId": "jobcat_ea13abcbbb22e7a47eb7867c9cb21da9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1a07bd7d-2e1d-4930-a84a-1a442b8f2a44",
+      "jobTitleId": "jobcat_471de7c69c5a47195c452163b77b8a33",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:23e692a9-a242-4d4f-988f-ed562f757864",
+      "jobTitleId": "jobcat_7c515f2cda4ee265a4d2a5cbe48fd1b1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9a2147aa-a72f-4f83-8653-c3f50d4e1e73",
+      "jobTitleId": "jobcat_d9ed1f5155e89f969f7bbcf8fdb5ebce",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8cb59bc4-1f39-477e-beea-effed12d186c",
+      "jobTitleId": "jobcat_a9abbec1e62a2abf0f58aee8e9d694b5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:09a9a956-db70-436f-8398-d85a17f6cdfe",
+      "jobTitleId": "jobcat_914ffa752a03362e0c2e73d7dad8b88b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:82025c02-9082-416c-998b-f51eb0359ee6",
+      "jobTitleId": "jobcat_d385a48b804239febbdcbaae15e8c35c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:002da35b-7808-43f3-83bf-63596b8b351f",
+      "jobTitleId": "jobcat_876ef20827280895ff6b2880f9f4b24e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:53cdd34e-22f2-41bd-b3c7-de22bf9bbcae",
+      "jobTitleId": "jobcat_aa69d0fdc026a1acd58628708d0f5644",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:02e19186-458f-40eb-9e78-31c656d12ac7",
+      "jobTitleId": "jobcat_6d2bd6330732700c932a2f0b0f00fcb9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1ae8d28e-407c-48ab-88ff-4cb25bfcdea6",
+      "jobTitleId": "jobcat_8493753ea91a7c1349c3bce44ef3cd04",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3cc51201-cd20-47f8-92ad-4d5861f963cf",
+      "jobTitleId": "jobcat_71f81d46d9a1a70fee0132ad24a6fa64",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:731ecac4-06e8-4ec2-a559-101fecbd9183",
+      "jobTitleId": "jobcat_61a4f5efb8a1e3736f02ffbb4b8c02ad",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:fae51298-03a8-4df4-829a-685dddc1580e",
+      "jobTitleId": "jobcat_896cb0c87aa9bc90a41c9a555336ac7e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0da51178-e386-4534-ae71-15ba789ad756",
+      "jobTitleId": "jobcat_965e42990aad046b9b192e5993160dae",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:79f8f68c-5509-4119-9373-8bef1c364d31",
+      "jobTitleId": "jobcat_457f48f7828f501cc2364e864d3121da",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:291da1ab-1f90-426d-bbc5-60d0fa7d608b",
+      "jobTitleId": "jobcat_bc23678af969acbd6bcda9639b8563d7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b476f45f-2c79-44d5-a4d7-fa357aa83074",
+      "jobTitleId": "jobcat_4b31f497d4d0790437133744e059cfb7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5b9a678a-7c35-4c50-a804-754b82652ee6",
+      "jobTitleId": "jobcat_59fea0bbcc8e3949d25a58b440ff376e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9b35eab1-2adc-4057-a620-181862656a19",
+      "jobTitleId": "jobcat_bc7e0f312b78c39a8a9d1a07dddb219a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d5eb6150-bbff-4a9c-9d0c-21eab4dbe2b6",
+      "jobTitleId": "jobcat_bbc592719e478d5796222af33581aefd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1009be17-7efd-45f1-a033-566bf179c588",
+      "jobTitleId": "jobcat_8656316e5b43c3005e39482da0f64c3a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:90f75f67-495d-49fa-ab57-2f320e251d7e",
+      "jobTitleId": "jobcat_9cad19d79e72337574b4973b382207ab",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:01484951-15e6-4b88-a20f-1201868d36a0",
+      "jobTitleId": "jobcat_451e860ea7a887fa11a31c2b9b5d78bc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8f10ea9b-bfdf-4a4c-9fa7-b6e02daa93e5",
+      "jobTitleId": "jobcat_565699f2934e9f78b3ffa7c5d3e08e3c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1aadb308-432a-4d01-b54b-b4f7f76dd419",
+      "jobTitleId": "jobcat_caddf3edf88003a37bd1459d8458ce5e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e00c46c4-bd3c-4d88-8d30-fc6f951554bd",
+      "jobTitleId": "jobcat_0344736b53a3a919ef433ffd4c203b6a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bf7d8b16-4e2c-48ef-b44e-dc25b2d0ab61",
+      "jobTitleId": "jobcat_0b53cd53f14fa0abb97e666a65ecb12b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2f5e38a0-6578-4665-bdbd-e2ab505be140",
+      "jobTitleId": "jobcat_9372578448a080a72c907ef1c5412658",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d5db9d5c-2ebf-4a54-a79a-1b7e7ff70471",
+      "jobTitleId": "jobcat_51e40d9eff9d713c8bb1f5ef2b7f2b9e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a1b86a8b-ad91-4192-b386-bbf89bb11699",
+      "jobTitleId": "jobcat_70b88df9faa71eb46d9eb9bff548a635",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e1cf6897-158d-4b48-a39e-2a3a8cac216c",
+      "jobTitleId": "jobcat_1da33e97eb5d4554db0580b0e8732fa4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f756fdab-7726-4c48-bfcc-94ff8810fc08",
+      "jobTitleId": "jobcat_40056d894a24aac6533ac3f8d7617bb3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:00ab5610-e715-428f-99f6-b1e5e469dbcd",
+      "jobTitleId": "jobcat_a80ef5580e2e7015dc1623c9310f0e83",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bea705fe-06ac-4147-b8e0-6e8ac1208d8f",
+      "jobTitleId": "jobcat_8645e4f49eb77c4a3213b09db6fb2aaa",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cd94def5-3442-4c2e-ae3d-0761a3008bcb",
+      "jobTitleId": "jobcat_e24ec16f870a7070faadd83b693ee4f4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2f5de1ab-eddf-4715-8193-e994912c22ea",
+      "jobTitleId": "jobcat_19f4ef84263ed0f71628d5beceb467da",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:808becc8-5a4e-4e71-a043-c2ea32b56ae3",
+      "jobTitleId": "jobcat_24b46897d5b007a3df7080b984c164ed",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f5cb9901-86fc-48d0-9cde-667fbe8cef3a",
+      "jobTitleId": "jobcat_054acdc2209f516e6ea2366753e3bdd7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e4f33b45-ee95-48b5-b2f8-e397aa14ed41",
+      "jobTitleId": "jobcat_0fdfaa2a15d2c6ac1f094499936e4f5e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d7a9f9e0-e2f5-4804-a0e0-b21ebb1403ee",
+      "jobTitleId": "jobcat_8d8223b903dd1812e834797c823eff65",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:29fa406d-de89-4515-be8d-0fe7bda993f1",
+      "jobTitleId": "jobcat_67cd292b4b2a8a1660be120ae5e1ed6b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:91f93dc4-1b71-4053-b6fb-c579ec19303a",
+      "jobTitleId": "jobcat_b6c0527c5ef7bdaf726262e73f604916",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:51cd3a7a-eae6-4dc6-9f24-179d7ec6d230",
+      "jobTitleId": "jobcat_5ec25a506987e34aa048e11be9c82fa9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:aacc3918-b5d3-484b-9480-5d29aa550d74",
+      "jobTitleId": "jobcat_8a338ae02c1673084292e36a31aa487c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:61b859ed-24d8-48cf-9c1b-67d7a6c62bb5",
+      "jobTitleId": "jobcat_e9f1c99d184546ddf8395bbd6c0df57b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:56fa783a-cca4-42ef-8862-1fb6e43f215c",
+      "jobTitleId": "jobcat_dc2f39a2014b3a52b95affb42b75b030",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a3ef0728-7540-4676-ad18-cf0a7913b3ce",
+      "jobTitleId": "jobcat_faeefbd3a362907303506ee8874bb45e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0c408028-c48f-4df8-ba5d-c3d3be15f5a2",
+      "jobTitleId": "jobcat_6dc342bca8f5e185a60737b268669980",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:45037d43-a8f5-4f46-b332-b2935bc305f4",
+      "jobTitleId": "jobcat_c0ccdd6cc21eb38697246e83f686abaf",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:00cee175-1376-43fb-9f02-ba3d7a910a58",
+      "jobTitleId": "jobcat_2f4e6bc0c59fcf4304f3a85d3edae497",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6f7c1e84-8162-4c20-a575-b57ff624eef5",
+      "jobTitleId": "jobcat_f0f926640b47a1c035df2aba8cefc806",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3a959644-beed-4afc-8e57-d5068ae6a43e",
+      "jobTitleId": "jobcat_9a8b64fdf4ec71b047cb20df91e870c9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b5f6bb2c-0602-484d-a87f-9cac33f83010",
+      "jobTitleId": "jobcat_bc5162b85d629820370be8d314da1034",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:eeac6251-1974-42f5-91ed-513c6c883755",
+      "jobTitleId": "jobcat_86a35fd766242b7061f0ab18d53960bb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:81f6a814-1f4e-47d4-9c75-47977c7267ee",
+      "jobTitleId": "jobcat_7f9284f0c0c71f616a7bda215096fd82",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:522c55ca-ee4a-407d-9fc6-f810c5266523",
+      "jobTitleId": "jobcat_e93a06401a45938d95a397a20fce0e0e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f20d3ae6-baeb-482c-b68d-c2fb115e5dde",
+      "jobTitleId": "jobcat_b6b2e421f41f014025a58ba0b32659d5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3c2da05f-eb24-41f7-8307-46c96660fee0",
+      "jobTitleId": "jobcat_f0936f281750bc0e40f7661c8d04166a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f2a416b8-c7e4-49ee-964d-a49f6af79b84",
+      "jobTitleId": "jobcat_147a77e0642c8ad314f06244c77aa8cf",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3d974e0c-8ed9-47a7-aec2-ebdb34391c87",
+      "jobTitleId": "jobcat_97dca8d3b33e5adcbd50fcc34d41e67d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:93e4e70b-aae4-4fdc-8037-e48e7077564e",
+      "jobTitleId": "jobcat_7cc9a8bc6e22d7c499c9275462b6112d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d7d986e1-7333-431b-9719-0c5c6939e360",
+      "jobTitleId": "jobcat_a4227bc85b931f63bbd5615f8e28fefb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:579254cf-6d69-4889-9000-9c79dc568644",
+      "jobTitleId": "jobcat_6be9f207b85de1f7b23da1ad0798bf70",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:86ca306c-ab99-420a-9e2a-aa73c5c4de22",
+      "jobTitleId": "cmvccxkws01c00nrc3tqc28bj",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "esco:4d34a9ee-2653-4da0-bef7-f59294577224",
+      "jobTitleId": "jobcat_4b4cfcb570639b2129939d977a1ba187",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:53d2052f-edc0-4f44-8be1-164526412bfe",
+      "jobTitleId": "jobcat_b70dc41f743af15c7e0d2bf2651361c1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ec21ce88-ce14-49b6-be0a-cc53cf5a3a67",
+      "jobTitleId": "jobcat_56e7b200f4f2218b3d8e807eca72bf0b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b5eaf231-77ad-4a86-8e54-15cc4398aad2",
+      "jobTitleId": "jobcat_b326a5c59f63e2698e6492f8b6c3b88c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d7380260-1386-4e36-98b5-8115ca4a3536",
+      "jobTitleId": "jobcat_daa900882d6cff95c84a7a242cb787ed",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bb609566-3ab6-44dd-8f48-cf0b15b96827",
+      "jobTitleId": "jobcat_c1acdf4964af4f7376a359d4c3f81191",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ab360abd-32e2-4e03-967d-a10758efffa7",
+      "jobTitleId": "jobcat_85cdec2ccadab868a0afbdafbb535ff4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:551a6797-3ca9-41fc-9dca-9a982a8fd8a6",
+      "jobTitleId": "jobcat_7c2588e40b42f3b88e6ae9cac93af258",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e6800524-eec2-4c33-af0e-6f36d1d679bc",
+      "jobTitleId": "jobcat_4d1d8132414b3c9b7bf92ce77c78a2f1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:30c0943c-caa1-411d-b273-26f475971273",
+      "jobTitleId": "jobcat_a4adf9d0fe494081ce6420f6b87aa07d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4a375b68-88a0-4e5f-99ce-9b01341dfb81",
+      "jobTitleId": "jobcat_78fe9ff4bbe1cbfc2fe8ce9bf7155c94",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:02eb0ae6-ecdd-4602-9c8e-60ffe6dbe1e2",
+      "jobTitleId": "jobcat_42dd5a4ab9206954dea8b15933e437b6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:01ffb917-98dc-48c1-91ad-93c4104e791d",
+      "jobTitleId": "jobcat_9a5050d3c8f8f9a51d35a8fbdfc2fda5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8c3f536e-ba66-4321-ba40-363dc39f129b",
+      "jobTitleId": "jobcat_c7dfa46d480b689c55cdfe2b018baa8a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:52207284-2681-40d3-a317-ec81ca1b3e41",
+      "jobTitleId": "jobcat_75046b2439a635b26b80b31abff5edc5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0cca32c2-9308-4927-adb2-14771ab787f0",
+      "jobTitleId": "jobcat_919e79d92c8414346634fa05130b3e85",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d8e502b4-1be6-4d10-a224-151688f8f0c8",
+      "jobTitleId": "jobcat_af5ab9b99d4141be289bfd4c0861ecc0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:faed05c0-c1d1-4e34-b575-0dea96459e56",
+      "jobTitleId": "jobcat_22bb4905fb715497a642cbe01c68e596",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0dd7e6cd-2e5a-4fae-9ce0-6a3622d4019f",
+      "jobTitleId": "jobcat_7d2f92a0f5278a8d5a5fa569d6ab6153",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:fb7e2f4f-1545-42f1-972e-94082e49c6dc",
+      "jobTitleId": "jobcat_ce479cfaed8459dad6266c6b368084c5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:05f321f8-055b-407d-bf19-e0ddabda56b7",
+      "jobTitleId": "jobcat_d24a5dd4c6c433ed5d4f9476469b55a4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2a22ff9e-de3b-408d-b312-5034896cc4f4",
+      "jobTitleId": "jobcat_d6e7fc249929b8ebc2ac4e7eed58a4fe",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ed3cf43d-c2c1-4c46-82fc-1375e27e0290",
+      "jobTitleId": "jobcat_5e5bea40007303cd3185320ea271601d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:15620506-fb5d-49cd-87a2-1c9047fb406a",
+      "jobTitleId": "jobcat_bfeba3b149dea184ceb7bf7072333e6d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:02447817-ea01-4d8b-b09c-8bc128e447e6",
+      "jobTitleId": "jobcat_5654ddd56349d7403dec253789bab420",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b4c6d1b0-929e-48be-9f67-47bd8c30658b",
+      "jobTitleId": "jobcat_2a00385505028c4f5fe341c39ceb1877",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:18fa8080-3156-429a-bbd7-b3ef559b6721",
+      "jobTitleId": "jobcat_25a30f3be33812a09dfafa71e8af7f60",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8ec8df02-e9dd-43b7-b416-5846ae0414ab",
+      "jobTitleId": "jobcat_16a95f9d34d6d0914ace45f6469baad9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0f5b4653-50b2-413a-826d-39d447480c21",
+      "jobTitleId": "jobcat_6de3ccb9cca8321767cb3dda631476db",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6426ada1-4d8c-4612-99e3-91bc569805ee",
+      "jobTitleId": "jobcat_3a30daa614c87bfe02a59422534040eb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:680831bb-64fc-4fc8-ae58-c450327d9700",
+      "jobTitleId": "jobcat_3db7f79db9b3bfe14840888b23c158a8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6818c837-072a-4120-b913-bd360b7b14d0",
+      "jobTitleId": "jobcat_186619d2a4d2e213c9c4c6d40a4321bd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bcc21c63-7eee-4520-8fa7-43eefd389668",
+      "jobTitleId": "jobcat_35f8c35cb8abc7f423124730e0f933ca",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:40517ed4-2769-4283-a15b-4b0d939bd2d3",
+      "jobTitleId": "jobcat_aea00f06bbafce0fc14f4b92893c8001",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:245be6d1-fe9a-4ac8-9f81-122a687e4724",
+      "jobTitleId": "jobcat_fd8fcfe13975cb76c281cb626cf3a3f0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e3dc66de-99c7-4607-a82b-7244036d316d",
+      "jobTitleId": "jobcat_98d11e9b39602af26cb0512b6809f78d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b0fa69b4-998c-4e66-acd3-5f5d73cadb5c",
+      "jobTitleId": "jobcat_a4ddd0bd318cf7b98011df3ef2ce0f3b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5c082067-ea18-4ccb-8c43-e70b18ad8120",
+      "jobTitleId": "jobcat_a3124ed08908a282fdc5c621d3f24041",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:502fe307-ae65-46cb-a485-e559b9a35266",
+      "jobTitleId": "jobcat_ede6fce16e2f3cf4280205b5142a816b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6565dc02-14e4-4819-b99c-44c352000f43",
+      "jobTitleId": "jobcat_0f614fe74d2d2ee9b5943da348bbf02d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ffc292f1-89e2-4406-8eff-39096c94e731",
+      "jobTitleId": "jobcat_a11600432bfa06c6c516daae8807f770",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d7f3d76b-23e8-447e-93d5-da13ff9bc102",
+      "jobTitleId": "jobcat_c391f9631d2372e8aa7323a370fe833b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:61d9270c-491d-438d-8d41-77ba2e0ef023",
+      "jobTitleId": "jobcat_4e53842745b9b0637993529f6d68b5aa",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:269c47e7-9017-4aa6-bce8-49e89a696a64",
+      "jobTitleId": "jobcat_dded4d56ec4da9b8d9a88c27a0863d0c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4ad4024e-d1d3-4dea-b6d1-2c7948111dce",
+      "jobTitleId": "jobcat_e48e115faefb464525411f1a8877ed3e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:24d378d8-1e16-4667-bdb4-1f4a0f2c6379",
+      "jobTitleId": "jobcat_29ff43af8703fd105bf9275f17526ee9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6656337f-67eb-4f48-b1e4-ecccdfa44dd2",
+      "jobTitleId": "jobcat_6ba9335f61de1d95b3ac3932b2a8594f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:336cf331-8082-4a0c-bf5f-e7c54706211c",
+      "jobTitleId": "jobcat_d09bd9f61ea79fd47063ea931c428699",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4910419f-b4af-4f59-b544-9dbebc8a74f0",
+      "jobTitleId": "jobcat_cac6d3db10f2d890a9ed407b90c65e01",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5df63943-f1bc-4438-90f1-92768a7a23c8",
+      "jobTitleId": "jobcat_a8bfba510f444ceb52e4ca138da277c5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7aedaa07-3884-4c5b-88f9-80997b2aa54b",
+      "jobTitleId": "jobcat_5b13e35b41560526a08d7c609413d68e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:572c9810-e1ee-4f7a-a71f-820f17c0c25b",
+      "jobTitleId": "jobcat_c005a8eb25ab9c7f4a0412017930d3ea",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ecac98ea-9fc3-4475-9b23-8af94f41603d",
+      "jobTitleId": "jobcat_5779601e33b47c403252337717a4e9c8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:aaa485d0-6787-45c0-8596-b266c0b687fd",
+      "jobTitleId": "jobcat_f3f530be0d882a99859ec26d9fb53414",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3ce9c89d-6f1a-48b5-942d-386e46e2fd06",
+      "jobTitleId": "jobcat_b062cac679762147559a8ee5eb852a36",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:615920c5-4f63-4eb3-8b60-afaaed3ab1ff",
+      "jobTitleId": "jobcat_e47c4b6ec90d11db1a3aad1e98d4f09f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7569f423-2c37-49aa-947e-41acb66ec909",
+      "jobTitleId": "jobcat_d6b84a3c80e46ab013f24984e00fc7e7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7b99007f-c6bf-4703-85d3-f168bc6a9f28",
+      "jobTitleId": "jobcat_752c04cffe06284bde0450c23f9cef80",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c6196b21-20f9-4608-83fb-6f143afc740d",
+      "jobTitleId": "jobcat_a7a29abd686cd9691292c93cbc1f4c9d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0e99c929-364f-4b0a-8a64-2aab42420f00",
+      "jobTitleId": "jobcat_35503d9e62cb0f8a1b145bbc4d4a7e96",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:42dbb769-4c91-47dc-bd16-ec8e70c4180f",
+      "jobTitleId": "jobcat_bfa90576d61018ff88d27dd0e08fcfb4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ac37627c-a999-4779-997e-9795cc4f9a3d",
+      "jobTitleId": "jobcat_ccfdd6120d3cc577633a174dbbb13054",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:72381086-cb6e-455e-a40b-ccb26550aab6",
+      "jobTitleId": "jobcat_94b05d358ff709b5ac7b37f23cbd9998",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:364e61ab-1631-4fe1-a170-e88797aad6f9",
+      "jobTitleId": "jobcat_acca4ee892d88a132356e08d5a3bfc58",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4cdfac8c-b000-4279-985e-31bc1fbe2447",
+      "jobTitleId": "jobcat_5e94ebd7dbdbf414b06b43708f81b37c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:66d22b81-1b5e-42a1-b904-ac67b4a896c6",
+      "jobTitleId": "jobcat_5ec9751ca396905b3716a17430b55e7c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2cad9c6f-0289-4b26-b247-e65c0089f8f4",
+      "jobTitleId": "jobcat_d7157716d4ad01dbbaaa489afbc0767a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1ab184b6-de00-4476-ba1d-c6a71c668be3",
+      "jobTitleId": "jobcat_d9a7ba500fd8884170e6c8af8b2cf248",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c40ef517-d4ab-4932-b184-9c2ea5b24fe2",
+      "jobTitleId": "jobcat_fc0e883e589810b3f3c7038b4a6dcd56",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4d5bd738-9202-4fd7-bd8c-7dbe914048de",
+      "jobTitleId": "jobcat_c9b56f7422d37e407c934b14d33e2eee",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4552095e-3396-4831-86ad-4fc34ec39a19",
+      "jobTitleId": "jobcat_bab3aabffe848b0cdbeae3f87adbc0b8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c9191f7f-28b5-4df8-991d-804c53009b83",
+      "jobTitleId": "jobcat_f468d7a48b7e3292c29e7344e1ed3253",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1a9d99ba-4c08-4864-8f6a-1b0f2b4cf883",
+      "jobTitleId": "jobcat_8ee889d5ece94c0994eeddc7d59effbc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e7970c7a-7769-4002-87d3-0a8ea94fdd6f",
+      "jobTitleId": "jobcat_177ee5fc1e8fc691b2c79a323818cabb",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d36b66f8-c08a-4416-953b-62c271ca7509",
+      "jobTitleId": "jobcat_0af6a1d5cebb0ce141d623c96ce9fe1e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f7145f87-5940-43f5-bc98-aa1a2b872b47",
+      "jobTitleId": "jobcat_ef14c8e0d0b2f9cb278a260b240a7026",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:773cf1de-50a4-42e7-bab1-e68dcbae3f54",
+      "jobTitleId": "jobcat_0a47c965d112492a7208c1b958c1335e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f489b1ec-3d6c-44b1-b1d7-c6c97db7df30",
+      "jobTitleId": "jobcat_52436159c4f3e873c9ab8943209b761e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:fa30c1cb-dbc5-409c-8124-7284592b123c",
+      "jobTitleId": "jobcat_d4c2124439429998ce6d703969ac451e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:534d18fe-eae4-4a02-af4d-f78e92faa5d5",
+      "jobTitleId": "jobcat_da757d41230695046e76bdf92c761181",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:eb6efbb9-9216-4e86-bc3b-de2223cd4667",
+      "jobTitleId": "jobcat_04dda8bee618d9c867aaa12d0c06d45b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:24f1eb3a-e99c-4c38-9bda-ba2ba6bf9fa4",
+      "jobTitleId": "jobcat_154bddc89726e43c241a918cf3a0363d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0b14d5d7-1bbe-4403-b9e6-7b0f37fc44fc",
+      "jobTitleId": "jobcat_a3706f9933bf064b98497e7ef018e6d8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5a940ae0-3fa4-40f9-8ca4-17bf792da243",
+      "jobTitleId": "jobcat_ef44c9f63e6618478ceed4321dc84c0e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b4ff30f8-073b-4dd8-9128-ecf9d0ff87ba",
+      "jobTitleId": "jobcat_ad1c522043985bec4c8554cd0f8baa0d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d20fd82a-9d99-4335-ad83-87484e297a46",
+      "jobTitleId": "jobcat_374a7ecf4150effa831fc3093b63b796",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b2678105-9d5c-403f-b822-274aff706309",
+      "jobTitleId": "jobcat_2afa31525925edb22f85384a47922c37",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:026401a9-7d56-4d7b-8052-38985ddbeafa",
+      "jobTitleId": "jobcat_17c596e2731ca63469b48f8c7ca45852",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a8c7004a-e59c-4a4d-9092-2cb4533ffe58",
+      "jobTitleId": "jobcat_c88cafa3488fcdb49bd92212b688274c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c0a15ec7-10e6-45e7-b69c-b85ff6f4f87f",
+      "jobTitleId": "jobcat_94415427f171a3e99b5057736479b010",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:24413f38-e457-4de1-bba0-5a02b7282e2c",
+      "jobTitleId": "jobcat_e9f1e6c0f96e93472fc04c6753268500",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:83de6811-975d-4f7c-b81e-604c0c17e800",
+      "jobTitleId": "jobcat_5bf96ee99071c808ddd005de9175a6be",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:71f09c8b-a172-408c-b9e7-32e580e39ff6",
+      "jobTitleId": "jobcat_f006ce97762b4a9469609eb72a3bc882",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9b889f07-c39c-464d-b9d9-b2daa650f9ac",
+      "jobTitleId": "jobcat_9a19a662b1e846fc94b07938156853cd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e52b5707-7097-4dbc-ac61-054e917da241",
+      "jobTitleId": "jobcat_ba66780ff3890f09c05b5143e5ac6da3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8d3e8aaa-791b-4c75-a465-f3f827028f50",
+      "jobTitleId": "jobcat_6b3b85f7bd645e80a2f091eadba9ed92",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:18e14e61-495b-44cc-a7c6-df4c625934ba",
+      "jobTitleId": "jobcat_bf09ebe734f822961df4ba2486923d2c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:95cda6a9-a70a-4a93-9442-11d573cb4a02",
+      "jobTitleId": "jobcat_9d356c6e6a296585bca875d4705824c6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:87d0795a-d41f-47ee-979f-0ab7d73836e7",
+      "jobTitleId": "jobcat_1759f88736a525f2ce2fbef166a97123",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7c132147-428b-4ea3-87e1-70f7abb691ce",
+      "jobTitleId": "jobcat_f146cf40f8ee6071afe71200fea51b13",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7b74626d-b487-48a1-9e80-47faf9928210",
+      "jobTitleId": "jobcat_457ae41abf774d2a539f001ade339ff1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:006cc1f9-2841-41c3-991a-dc3f2f3bd533",
+      "jobTitleId": "jobcat_cd42133f28c0da1be0c567be5d668ae8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:33da5532-8c4e-4d1b-b52e-c201ee1bc7ab",
+      "jobTitleId": "jobcat_00de3b12656811a0f3255022e4e0fb06",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8021f3a2-e3de-43c0-b366-075da74dc5b7",
+      "jobTitleId": "jobcat_363fb3b12e5d6646ef164fdafdf06a4c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:8a53f8d3-d995-4c7b-a70d-d79f76bdcb3f",
+      "jobTitleId": "jobcat_f713d217e3b5425f99239d7d4a84427f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bffbe18a-cb8b-4f90-bd87-7505cd3b16f5",
+      "jobTitleId": "jobcat_0ded25b10f0598e7a583cba677ec9aba",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7639a601-6db0-41ed-9fb0-813d9b8beb05",
+      "jobTitleId": "jobcat_d8f5e875f2f4c1acb9cdd8e39ecbb9cd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2e8820ba-5b2d-4572-92a1-942dbd02a6d6",
+      "jobTitleId": "jobcat_d247ce381c49b80b01ebb0565397a7d3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:76bded28-876a-40b2-9efb-3123c8f14cf6",
+      "jobTitleId": "jobcat_142ea625e2a681a6be5fb9b09f9392e3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0044c991-c26f-4261-a213-4bd1c0564a4c",
+      "jobTitleId": "jobcat_d35a6c9790d8e02d594581ea80723bc3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:14eb2c85-fce5-40b6-bcd0-46ac99994b0d",
+      "jobTitleId": "jobcat_cffa72077cd28ce5feb10284ff2d8f0a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0b5dfc02-b825-4445-811d-d39ed442657e",
+      "jobTitleId": "jobcat_1860437682e669a7c0213013eefd60de",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:55d60ead-0343-4008-b9e4-fb4b5a179c83",
+      "jobTitleId": "jobcat_c4117e24d9a4f5b5bfca09fd7ddcabb0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:03d79393-7b30-4159-945b-01963eddd302",
+      "jobTitleId": "jobcat_c07f6d2ac5a8fab4d3e525c525e9052d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5efb2c08-ba3a-4659-a2e4-1883f54e77b6",
+      "jobTitleId": "jobcat_f6ead06f16d5c4a2e8bdda9d52443fce",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:81f8d141-3f67-4fb0-a349-db0147ef7b3a",
+      "jobTitleId": "jobcat_094e4d63bd08026d7cd2ed6a3431369b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:976cbfcc-8958-4800-a435-71d15405a42a",
+      "jobTitleId": "jobcat_a8d4cab7620c4397325c85ffa4b5a4b4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9711dcfc-d9a8-4fba-9c5e-8428d8bcb53e",
+      "jobTitleId": "jobcat_5f127b2d1eb36d048ec936709779ce7d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0d595b87-a1fc-410c-abbe-88b92cb0d334",
+      "jobTitleId": "jobcat_e4ce5ac0261b5af22940af212ed78ab1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f0e1cc13-48e0-4995-8699-ee43467bce0d",
+      "jobTitleId": "jobcat_3396d9fae085f7c590203a44344b288f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:59bce29f-5c8b-47cf-bfd4-6ec003f5323a",
+      "jobTitleId": "jobcat_5cbf90e32bdd26bb366b7328e19492d5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a9c30651-ccbc-4a80-900c-7880615cdf6e",
+      "jobTitleId": "jobcat_aee5a93da71182fb280ea7deb84c11e6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2412bbb1-29ca-4e17-a2b8-70694f0cb14f",
+      "jobTitleId": "jobcat_82ef3b29f199fccf45957331719dff0c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:00674f21-2f8f-4a41-9896-133f7cbe2a6e",
+      "jobTitleId": "jobcat_cd03232abe400eb13fe5b6abac2b0ffa",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e1587bbb-2d4e-4726-839a-7f4895c440e7",
+      "jobTitleId": "jobcat_17906a387163191f632553da3adb6d0a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c3b82711-273d-4fa8-8de7-0ac3d99c16fc",
+      "jobTitleId": "jobcat_fe34dd3cb16fb0a782a5c209de9b9e0b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:60f7eb23-a7ea-4cbe-98a5-1248291f62d5",
+      "jobTitleId": "jobcat_f4aeeff6ed1ef85488d3769316fa3c6a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5ac65daa-0896-4193-9f0e-8b00746b78a1",
+      "jobTitleId": "jobcat_3f4e69acfa573aca879503533bfccb3b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:0d93706d-32fd-4de3-aa08-be1003e325da",
+      "jobTitleId": "jobcat_fe476eae6140f51ec342314de0d478bc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:eee68e13-8248-43bb-a9fb-959832a6c217",
+      "jobTitleId": "jobcat_6d518efa778fb68e2bba6cf972769148",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a7a74a05-3dd0-46c6-99af-92df8042520c",
+      "jobTitleId": "jobcat_4da28ac0e73ad88079b9f3451cd4443e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7f2761eb-4edc-48ad-9fbf-eed0a0db9a21",
+      "jobTitleId": "jobcat_dcf90c8154030a667134ba3307846ae6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:72628f3a-fd49-499a-9741-870b0a1fcef2",
+      "jobTitleId": "jobcat_74e9acabdc9857bbc29eac51689bbc0c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ac8b3cd1-a127-4e6a-8208-5cfcf7111955",
+      "jobTitleId": "jobcat_070df1b852a5a98c9d2da0ef43d08b80",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:99492920-e5a5-4dba-9e5a-93193147198c",
+      "jobTitleId": "jobcat_0f85dd2cb98937527000445b57410a44",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4fef1907-cf82-413b-841a-02ef57e299a6",
+      "jobTitleId": "jobcat_444fc5f618b783549f6b9b2ccd913bfc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4b709f9e-6112-4d58-81b0-2d6e6a69d61b",
+      "jobTitleId": "jobcat_c03a577843d5cd84b506cb8f8d0f9256",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:68ffc53b-6067-4fe7-bd85-c96f4a6c1e45",
+      "jobTitleId": "jobcat_2e4e0f1a2e9c48b098dfdcc285aea2b9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a1cf1406-3632-494c-bff3-0bd5d5327d8f",
+      "jobTitleId": "jobcat_39ca67cca1eba39599ccfc64fb94b4c9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3dab5c3f-84d0-4d52-901d-dd262eaea509",
+      "jobTitleId": "jobcat_cac0c09b958cdad373d5c10be87033fd",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:974d4eab-fbee-4c52-b16e-73bdd8c25b53",
+      "jobTitleId": "jobcat_ace4126acc77df7a2cdea12dfef6fe97",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:fdfce14e-992d-4ff4-9f9d-7a353c75654e",
+      "jobTitleId": "jobcat_14fdfae00849374192858dce813d44c8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:929ef41d-afd0-4d5a-b85b-69eab68fa368",
+      "jobTitleId": "jobcat_c177520d53f20f917310d9409af876f4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:d21890a3-cbe9-49df-9a19-a4120d866548",
+      "jobTitleId": "jobcat_d7f527d3e0f37545e98330749e4b9c05",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2c9939ef-ebab-4111-8f27-605ae8782791",
+      "jobTitleId": "jobcat_01081482fe27d53219d9f27f8155e60c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1619d7f3-7d95-407c-a20e-47745bfcde73",
+      "jobTitleId": "jobcat_c38e6a07a22b744bf232925f801f1117",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:779d13be-60b4-48f3-a339-fe483be96c7f",
+      "jobTitleId": "jobcat_f4bcbdcb680b3a1905bd490a9a9ce9e8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b1ed68f8-8d51-4bcc-8825-bd554859480f",
+      "jobTitleId": "jobcat_2b9061dd56f07785f3b641cc11499ff9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6a29d804-f775-446c-bec7-35fc4e28ac97",
+      "jobTitleId": "jobcat_e1659909b0f966179e87f597284b0d43",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:60082a99-d8ef-4e84-9290-78902681b6ed",
+      "jobTitleId": "jobcat_b5ddd001a61ed711cbe7efb104c434c4",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cb4f98c8-6b8d-41d8-87eb-a2a2033a3a25",
+      "jobTitleId": "jobcat_6d20d6b357a35457a3ecf0d620986739",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5a8835bf-65c7-48e3-ab2f-7ad98b3fdb59",
+      "jobTitleId": "jobcat_6b0f35196a62bfd486c236c1234a8a9a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:31808988-fc0a-4bc3-9e47-27216d6759f5",
+      "jobTitleId": "jobcat_1e6fd9e1405eda3ff88c6a373d74f866",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:37442765-f7bb-4ccd-9de1-4790296f3d37",
+      "jobTitleId": "jobcat_e5c7edce5f7430129970caa50389deb7",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e9507d34-c70f-474f-a4a3-d2cbfe50f6e9",
+      "jobTitleId": "jobcat_7486e50e26f904584e440f6f792393be",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:88721b6c-d2ce-41c6-8878-73c0d3aacf39",
+      "jobTitleId": "jobcat_8b81739e6ac332cab7a42aa82bf8f7e1",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:789517fb-95ee-43d1-9530-c2860be1a439",
+      "jobTitleId": "jobcat_dd51bf93aa081c78946df58061ea375a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a1273779-d2d4-4708-a406-62f7cdd26aab",
+      "jobTitleId": "jobcat_df137e50686b67d5e66caf04d768abff",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b42c5ed4-c6e4-4694-934f-96127719cc43",
+      "jobTitleId": "jobcat_db2d4f49a68de8543f27531323e10c30",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1822bfc2-e735-449f-ba00-ca71eb5c062b",
+      "jobTitleId": "jobcat_29397818937870616ce0ecbbf678cf36",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:303a1e34-cb16-4054-b323-81e5eec17397",
+      "jobTitleId": "jobcat_3ed16e1515b06f077131ab27e949182f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:92cba6b4-8fca-49bb-b68c-45c5096fedc9",
+      "jobTitleId": "jobcat_8b0b3f3ae87fcf02959498065ec73009",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:cbad55a4-c7cf-4ab6-9540-eac72b26729b",
+      "jobTitleId": "jobcat_e4743fee32a2aa199200593031519604",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:21cba86a-68c5-456c-aec2-cc04840b3c0e",
+      "jobTitleId": "jobcat_7ec3816385de0dad31069fcfc581499e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:099c6bb0-22d3-4c5d-8bf5-70910af381ef",
+      "jobTitleId": "jobcat_679699115099c6a021af2756bd2e0709",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4e0c14d6-b170-40f1-bcdc-703c0b92109b",
+      "jobTitleId": "jobcat_eac8784445353df02fb4de1a99ade7b8",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a1e1a788-2352-4172-8fcf-1f985a6968b0",
+      "jobTitleId": "jobcat_9e3a78541820529fb4c812fdd0ff2280",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:49713da4-4e97-4f82-bd1c-16ce7f9179b7",
+      "jobTitleId": "jobcat_9bded9b3bf9e2b067fb4bc2a34adab94",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:bced9b86-d4e7-42f8-bb47-acb2001b9bd0",
+      "jobTitleId": "jobcat_f00473d012401372c8a64c84098556cc",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:489b9a38-89a2-425c-95b9-79cec66379e1",
+      "jobTitleId": "jobcat_8eec957de7df24ea1d6f6bedb6e4b851",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9487f835-b5a9-4742-8ecf-35520911e28c",
+      "jobTitleId": "jobcat_6cbe0c0359024ca6c9d0fae997ac2e36",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2d5a50c6-0bf4-45c3-805c-44d1bf1e3d12",
+      "jobTitleId": "jobcat_cee2c934a7e45fa016dba8619bac8f7e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c4a81f47-6ed8-4a17-ab4a-21a2e67fa1d9",
+      "jobTitleId": "jobcat_a7162cbb6f16ec4a72473cd8d9f045f2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3413f234-6230-47a8-8cc7-2691fd54ce3a",
+      "jobTitleId": "jobcat_35a05cb647b1b958a467662e7b4446ae",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1391bdf9-bd61-4fb5-91ca-c29036ab2b60",
+      "jobTitleId": "jobcat_38d6e5ba64a72d530e17a6f0ff8dc329",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6d50f735-dca9-4a02-96dc-e4310ed98ae2",
+      "jobTitleId": "jobcat_ed7bb6b414b7b83e3fc80eafb9918345",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4b05bef2-ded4-4b09-ab94-f4c6a555a775",
+      "jobTitleId": "jobcat_1deebde2bf01f2adf868f560c4848455",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4fa660b3-ab97-4a99-ad73-ce3c2612f2c3",
+      "jobTitleId": "jobcat_240068d5e59f905c76015e5e034480a0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:39e9fc8f-02bd-4577-b603-2dc96204ce74",
+      "jobTitleId": "jobcat_efa171b1a0f82e36ae23a0903186c019",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:b7507136-e71e-47e8-b873-e77d5cdf2922",
+      "jobTitleId": "jobcat_bd7430199226862edee565c778664e9e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9c55aa23-e3f2-4c00-8c90-5ed5204951a3",
+      "jobTitleId": "jobcat_123eef299d74535e6ee04a0756428b3f",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4c89c65c-4e35-44e3-8fa0-5d73e9e15325",
+      "jobTitleId": "jobcat_ade2516247e00c8713cab12dcecce29d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:52ded7d7-11df-42e3-b90a-d7f4b70fb4b9",
+      "jobTitleId": "jobcat_0c77a20ea767e604d6c11d38bbccdd11",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c3c8c56c-b3ab-4425-a38a-abcace020d22",
+      "jobTitleId": "jobcat_d2c76dbb0bd9aceafa37d0b09b0ab367",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:5727b567-993d-4d41-a13d-81a6af1a9a8e",
+      "jobTitleId": "jobcat_ddf812fcf8b959bd8cf48af65f065d2a",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c2e6609d-0abe-4a38-b295-e06edbd52e82",
+      "jobTitleId": "jobcat_dd3665dcd2e79a53ee26dae032d0344e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1b38a27d-ef98-4d9f-b1b2-8c109bf47e79",
+      "jobTitleId": "jobcat_f1b730bdaadf41b3e76b19a2c9028339",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:84931290-ad27-45ad-b611-9556c5facbdb",
+      "jobTitleId": "jobcat_ad9664af5fb82bf0cdb0153ac1427592",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:6662e56e-bc3d-4d9b-bed2-79d510d7c4ff",
+      "jobTitleId": "jobcat_c92c5f3b105bbc08082b95b66fdf2e91",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3e9c1262-4fe2-4eb1-bf94-4fe64498393a",
+      "jobTitleId": "jobcat_eb31988c3377ce9f5f9d45309ba73f81",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:c784c2db-e636-429f-8492-3191790a58d7",
+      "jobTitleId": "jobcat_b0c6ef37f64c175c75790809166eb02d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f7177f79-63e7-4944-8896-044056b62523",
+      "jobTitleId": "jobcat_cfe0ca13ca1c19bb7f24be1b9dc913f6",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:62975936-0853-4a5d-9f59-bf943aca3cc6",
+      "jobTitleId": "jobcat_41de606d6f8448af517ffb01f5fd069b",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:3025dea4-1752-40a9-9431-fd874420386f",
+      "jobTitleId": "jobcat_e70f0b3aa830b7490848fca7448254b5",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:825ab049-2f0c-4acf-b402-9c6bb51acca2",
+      "jobTitleId": "jobcat_3cb461de7b53f6873bcff18b81eed4a0",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:11695786-9fb7-4895-b161-0480419107e4",
+      "jobTitleId": "jobcat_eb47edcf94838833f6da1334311f9591",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ac1fc6a9-70d2-475c-8fa0-82ef83830968",
+      "jobTitleId": "jobcat_0dd9a7c8c485cc9ecdbcdb5244758f74",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:11d72bd6-779a-4643-9962-313833740094",
+      "jobTitleId": "jobcat_4c19246e83d66f5d94ca9ffc529037ee",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2cf2b905-3308-4b5d-8e8d-633fc7a3f3ce",
+      "jobTitleId": "jobcat_89cc9bb74b78988c574206f733ad4134",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ab4dd4f9-ee6c-41cc-8b72-42ad0b13d1e2",
+      "jobTitleId": "jobcat_3781a779e9f49341d80c1504d18ea8bf",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:9740933e-e04a-41f6-af1f-a6d58c7eb0ec",
+      "jobTitleId": "jobcat_b4d683ae360aba304730977468dfa114",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:fcf9024e-277c-43c7-8ec8-8903e5c9c576",
+      "jobTitleId": "jobcat_b115f3742493c9cc5be848e01719f328",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:4ed9ce62-75d4-4b05-80d4-e86528fecdcd",
+      "jobTitleId": "jobcat_aec97a9a4515441aace1fb35dc6d46aa",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e54683ca-1fc9-468d-b880-6544ff6b7d0b",
+      "jobTitleId": "jobcat_4d1cb171f1119cb78ba7e23c02e671a3",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:1f31c047-3d72-45fe-83ff-91bd826913c6",
+      "jobTitleId": "jobcat_29abd6096b7428f9a96e91897d31373c",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:e8461d2e-3d75-477c-93a2-ea8d342bb55b",
+      "jobTitleId": "jobcat_1ced75a9286d9b8d9e70d58cbc2d0ada",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:978ae3a2-0831-415a-8396-b84dde656fc5",
+      "jobTitleId": "jobcat_6bebab377269b15ba4a54b5713f05138",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:7d4266b3-2108-4330-b27b-430a96012c21",
+      "jobTitleId": "jobcat_e57933279e09e49192ec06bf462e19b2",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ed096599-56a9-443d-9683-8a92f58aa894",
+      "jobTitleId": "jobcat_ce5ccd1934994a3d2b5fb481f7b9ff78",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:939e05ea-2589-4e3c-a501-eea2bdd6864a",
+      "jobTitleId": "jobcat_93d92cf1c7a44c883748c874b118984e",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:2b136e51-154b-4cb2-8130-f73228f14b11",
+      "jobTitleId": "jobcat_f37cd5b7cd3966455b291d6e2b875185",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:18232485-5f8b-4c53-80f2-3d9f8f9d0e20",
+      "jobTitleId": "jobcat_667bd7d290547239a12052d927500518",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:a98f93a6-b1df-4759-88a9-3234f334afad",
+      "jobTitleId": "jobcat_d2f5ff160836568372e08087524a0871",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:ea4aff10-4d20-4a2b-886b-299c2bd349f1",
+      "jobTitleId": "jobcat_7fe743d9f597a393c0f7772e4956bd33",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:49b21ca8-04be-4912-a2f7-0170550e18fa",
+      "jobTitleId": "jobcat_5de653b98911e820b0a7592d8f53e379",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:618a854a-4ecd-4535-84e6-350e1fe0aa0f",
+      "jobTitleId": "jobcat_080f87b94417606efa008af4a557296d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:f8e76759-811e-4b39-9adf-3e77429cff8f",
+      "jobTitleId": "jobcat_c31382fb18767b578ab986d9208875c9",
+      "action": "create"
+    },
+    {
+      "sourceKey": "esco:95a89206-4dc8-4753-a5d9-bc14a0e5f7ca",
+      "jobTitleId": "jobcat_d76b5abdece4a791605dd02adc95719d",
+      "action": "create"
+    },
+    {
+      "sourceKey": "talentio-draft:frontend-developer",
+      "jobTitleId": "cmvccxjnb00mz0nrc7l4fxwgu",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "talentio-draft:backend-developer",
+      "jobTitleId": "cmvccxjom00np0nrccmfvrkyn",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "talentio-draft:full-stack-developer",
+      "jobTitleId": "cmvccxjl000m50nrcjl7m8pf9",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "talentio-draft:machine-learning-engineer",
+      "jobTitleId": "cmvccxjrj00pf0nrcp4auttow",
+      "action": "fill_missing_translations"
+    },
+    {
+      "sourceKey": "talentio-draft:store-crew",
+      "jobTitleId": "jobcat_fe6cbb4215ffe4714faebe7b9b65d574",
+      "action": "create"
+    },
+    {
+      "sourceKey": "talentio-draft:order-pickup-point-administrator",
+      "jobTitleId": "jobcat_4f966832919407c16f3e235cd0871d56",
+      "action": "create"
+    }
+  ],
+  "status": "applied",
+  "appliedAt": "2026-10-23T07:37:19.133Z",
+  "countsBefore": {
+    "titles": 40,
+    "aliases": 13,
+    "jobs": 258,
+    "applications": 140
+  },
+  "countsAfter": {
+    "titles": 478,
+    "aliases": 907,
+    "jobs": 258,
+    "applications": 140
+  },
+  "verification": {
+    "existingTitlesPreserved": true,
+    "existingAliasesPreserved": true,
+    "secondImportWouldBeNoOp": true,
+    "sourceRowsMapped": 450,
+    "translationsRemainDraft": true
+  }
+}

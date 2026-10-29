@@ -95,6 +95,8 @@ type MyApplicationState = {
   matchScore?: number | null;
   matchBreakdown?: MatchBreakdownState | null;
   createdAt: string;
+  resumeTitle?: string | null;
+  hasResumeFile?: boolean;
 };
 
 type DetailProps = { jobId?: string; embedded?: boolean; country?: string; onBack?: () => void; saveState?: { saved: boolean; pending: boolean; onToggle: () => Promise<void> } };
@@ -111,6 +113,8 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const [showCreateResume, setShowCreateResume] = useState(false);
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
+  const [submittedCvBusy, setSubmittedCvBusy] = useState(false);
+  const [submittedCvError, setSubmittedCvError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -125,6 +129,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const defaultApplyRole = job?.jobTitle?.name || job?.title || '';
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const applicationRead = useRef(0), applicationContext = useRef('');
+  const submittedCvRequest = useRef(0), submittedCvPending = useRef(false);
   applicationContext.current = id + ':' + locale + ':' + session?.user.id;
   async function refreshApplication() {
     if (!isEmployee) return;
@@ -186,6 +191,42 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     return () => { active = false; };
   }, [id, locale, retry]);
 
+  useEffect(() => {
+    ++submittedCvRequest.current;
+    submittedCvPending.current = false;
+    setSubmittedCvBusy(false);
+    setSubmittedCvError('');
+    return () => { ++submittedCvRequest.current; };
+  }, [id, session?.user.id, myApplication?.id]);
+
+  async function viewSubmittedCv() {
+    const application = myApplication;
+    if (!application?.id || !application.hasResumeFile || submittedCvPending.current) return;
+    submittedCvPending.current = true;
+    setSubmittedCvBusy(true);
+    setSubmittedCvError('');
+    const request = ++submittedCvRequest.current;
+    const identity = applicationContext.current;
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const result = await api<{ url: string }>(`/applications/${encodeURIComponent(application.id)}/resume-download`);
+      if (request !== submittedCvRequest.current || identity !== applicationContext.current) { tab?.close(); return; }
+      if (tab) tab.location.href = result.url;
+      else window.location.assign(result.url);
+    } catch (reason) {
+      tab?.close();
+      if (request === submittedCvRequest.current && identity === applicationContext.current) {
+        setSubmittedCvError(reason instanceof Error ? reason.message : t('viewCvFailed'));
+      }
+    } finally {
+      if (request === submittedCvRequest.current) {
+        submittedCvPending.current = false;
+        setSubmittedCvBusy(false);
+      }
+    }
+  }
+
   useEffect(()=>{if(showApply)void trackJobEvent(id,'APPLY_START');},[showApply,id]);
 
   async function toggleFollow() {
@@ -246,6 +287,8 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
         matchScore: created.matchScore,
         matchBreakdown: created.matchBreakdown,
         createdAt: created.createdAt || new Date().toISOString(),
+        resumeTitle: selectedResume?.title ?? null,
+        hasResumeFile: selectedHasFile,
       });
       setSuccess(t('job.applySuccess'));
       setShowApply(false);
@@ -437,6 +480,8 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     canSave={!session || session.user.role === 'EMPLOYEE'}
     onFollow={!session || isEmployee ? () => void toggleFollow().catch((error) => setError(error.message)) : undefined} following={following}
     appliedStatus={myApplication?.status} guest={!session} busy={submitting}
+    submittedCvAvailable={Boolean(myApplication?.hasResumeFile)} submittedCvTitle={myApplication?.resumeTitle}
+    submittedCvBusy={submittedCvBusy} submittedCvError={submittedCvError} onViewSubmittedCv={viewSubmittedCv}
     success={success} error={error}
   >{applicationDialogs}</JobPreview>;
 }

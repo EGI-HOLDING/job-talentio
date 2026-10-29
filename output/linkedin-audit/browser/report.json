@@ -1,0 +1,508 @@
+{
+  "startedAt": "2026-10-28T03:18:52.217Z",
+  "method": "Isolated headless Chromium; actual React/CSS/dialogs; synthetic API in component cases",
+  "cases": [
+    {
+      "name": "preview 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "settings 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "disabled 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "expired 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "unknown 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 6,
+      "status": "passed"
+    },
+    {
+      "name": "failed 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "queued 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "publishing 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 1,
+      "status": "passed"
+    },
+    {
+      "name": "published 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "preview 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "settings 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "disabled 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "expired 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "unknown 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 6,
+      "status": "passed"
+    },
+    {
+      "name": "failed 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "queued 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "publishing 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 1,
+      "status": "passed"
+    },
+    {
+      "name": "published 390",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "preview 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "settings 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "disabled 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "expired 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "unknown 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 6,
+      "status": "passed"
+    },
+    {
+      "name": "failed 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "queued 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "publishing 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 1,
+      "status": "passed"
+    },
+    {
+      "name": "published 768",
+      "viewport": 768,
+      "scrollWidth": 768,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "preview 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "settings 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "disabled 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "expired 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "unknown 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 6,
+      "status": "passed"
+    },
+    {
+      "name": "failed 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "queued 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "publishing 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 1,
+      "status": "passed"
+    },
+    {
+      "name": "published 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "preview 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "settings 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "disabled 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "expired 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "unknown 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 6,
+      "status": "passed"
+    },
+    {
+      "name": "failed 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "queued 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "publishing 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 1,
+      "status": "passed"
+    },
+    {
+      "name": "published 1440",
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "controls": 2,
+      "status": "passed"
+    },
+    {
+      "name": "long settings id 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview id 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings id 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview id 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings en 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview en 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings en 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview en 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings ru 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview ru 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings ru 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview ru 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings uz 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview uz 320",
+      "viewport": 320,
+      "scrollWidth": 320,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long settings uz 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "long preview uz 1280",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "narrow desktop container",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "settings 200% text size",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "automatically approved preview mobile",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "approved preview desktop",
+      "viewport": 1280,
+      "scrollWidth": 1280,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "disconnect dialog mobile",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 5,
+      "status": "passed"
+    },
+    {
+      "name": "preference, disconnect confirmation, keyboard trap/Escape/restore and disconnect result",
+      "status": "passed"
+    },
+    {
+      "name": "UNKNOWN confirmation mobile",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 8,
+      "status": "passed"
+    },
+    {
+      "name": "UNKNOWN explicit feed check and confirmed absent result",
+      "status": "passed"
+    },
+    {
+      "name": "prepare failure mobile",
+      "viewport": 390,
+      "scrollWidth": 390,
+      "controls": 3,
+      "status": "passed"
+    },
+    {
+      "name": "preview failure and recovery",
+      "status": "passed"
+    },
+    {
+      "name": "settings failure and retry",
+      "status": "passed"
+    }
+  ],
+  "screenshots": [
+    "C:\\IT\\egi-website\\job-talentio\\output\\linkedin-audit\\browser\\mobile-settings.png",
+    "C:\\IT\\egi-website\\job-talentio\\output\\linkedin-audit\\browser\\mobile-disabled.png",
+    "C:\\IT\\egi-website\\job-talentio\\output\\linkedin-audit\\browser\\mobile-unknown.png",
+    "C:\\IT\\egi-website\\job-talentio\\output\\linkedin-audit\\browser\\mobile-preview.png",
+    "C:\\IT\\egi-website\\job-talentio\\output\\linkedin-audit\\browser\\desktop-preview.png",
+    "C:\\IT\\egi-website\\job-talentio\\output\\linkedin-audit\\browser\\mobile-disconnect-dialog.png"
+  ],
+  "errors": [],
+  "finishedAt": "2026-10-28T03:19:02.463Z"
+}

@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-23T14:51:16.688Z",
+  "result": [
+    {
+      "created": true,
+      "row": {
+        "id": "cmvl389hl00000n9kxszs6ml0",
+        "name": "Presales",
+        "nameUz": null,
+        "nameRu": null,
+        "nameId": "Presales",
+        "nameUzIsMachine": false,
+        "nameRuIsMachine": false,
+        "nameIdIsMachine": false,
+        "i18nStatus": "PENDING",
+        "slug": "presales",
+        "normalizedKey": "presales",
+        "archivedAt": null,
+        "curatedAt": "2026-10-23T14:51:16.611Z",
+        "createdAt": "2026-10-23T14:51:16.618Z",
+        "updatedAt": "2026-10-23T14:51:16.618Z"
+      }
+    },
+    {
+      "created": true,
+      "row": {
+        "id": "cmvl389iz00020n9k0dpzgmad",
+        "name": "Solution Architect",
+        "nameUz": null,
+        "nameRu": null,
+        "nameId": "Solution Architect",
+        "nameUzIsMachine": false,
+        "nameRuIsMachine": false,
+        "nameIdIsMachine": false,
+        "i18nStatus": "PENDING",
+        "slug": "solution-architect",
+        "normalizedKey": "solution-architect",
+        "archivedAt": null,
+        "curatedAt": "2026-10-23T14:51:16.665Z",
+        "createdAt": "2026-10-23T14:51:16.668Z",
+        "updatedAt": "2026-10-23T14:51:16.668Z"
+      }
+    }
+  ]
+}

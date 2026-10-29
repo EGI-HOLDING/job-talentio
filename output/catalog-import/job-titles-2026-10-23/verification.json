@@ -1,0 +1,42 @@
+{
+  "checkedAt": "2026-10-23T07:39:02.355Z",
+  "sourceRowsVisibleInPublicCatalog": 450,
+  "publicCatalogTotal": 478,
+  "threeLanguageNamesPresent": true,
+  "checks": [
+    {
+      "terms": [
+        "Akuntan",
+        "Buxgalter",
+        "Accountant"
+      ],
+      "sameJobTitleId": "cmvccxke9011y0nrcx4ws009s",
+      "suggestionsPassed": true
+    },
+    {
+      "terms": [
+        "Tukang ledeng",
+        "Santexnik",
+        "Plumber"
+      ],
+      "sameJobTitleId": "jobcat_5e5bea40007303cd3185320ea271601d",
+      "suggestionsPassed": true
+    },
+    {
+      "terms": [
+        "Pengembang frontend",
+        "Frontend dasturchi",
+        "Frontend Developer"
+      ],
+      "sameJobTitleId": "cmvccxjnb00mz0nrc7l4fxwgu",
+      "suggestionsPassed": true
+    }
+  ],
+  "legacyTitleIdentityPreserved": true,
+  "counts": {
+    "titles": 478,
+    "aliases": 907,
+    "jobs": 258,
+    "applications": 140
+  }
+}

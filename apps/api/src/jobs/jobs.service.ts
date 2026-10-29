@@ -1070,7 +1070,7 @@ export class JobsService {
       where: { companyId },
       orderBy: { updatedAt: 'desc' },
       include: {
-        benefit: { select: { expiresAt: true } },
+        benefit: { select: { code: true, selectionConfirmedAt: true, expiresAt: true } },
         city: true,
         country: true,
         category: true,

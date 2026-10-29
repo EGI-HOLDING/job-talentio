@@ -1,0 +1,479 @@
+# ESCO preferred English label | Indonesian editorial draft | Uzbek editorial draft
+# @ review-family slug | Indonesian review-family label | Uzbek review-family label
+@leadership|Manajemen dan kepemimpinan|Boshqaruv va rahbarlik
+chief executive officer|Direktur utama|Bosh direktor
+business manager|Manajer bisnis|Biznes menejeri
+branch manager|Manajer cabang|Filial menejeri
+department manager|Manajer departemen|Bo‘lim menejeri
+project manager|Manajer proyek|Loyiha menejeri
+programme manager|Manajer program|Dastur menejeri
+strategic planning manager|Manajer perencanaan strategis|Strategik rejalashtirish menejeri
+product manager|Manajer produk|Mahsulot menejeri
+research and development manager|Manajer riset dan pengembangan|Tadqiqot va ishlanmalar menejeri
+quality services manager|Manajer mutu layanan|Xizmat sifati menejeri
+@administration|Administrasi dan perkantoran|Ma’muriyat va ofis ishlari
+administrative assistant|Asisten administrasi|Ma’muriy yordamchi
+office clerk|Staf administrasi kantor|Ofis ish yurituvchisi
+office manager|Manajer kantor|Ofis menejeri
+secretary|Sekretaris|Kotib
+executive assistant|Asisten eksekutif|Rahbar yordamchisi
+receptionist|Resepsionis kantor|Qabulxona xodimi
+data entry clerk|Petugas entri data|Ma’lumotlarni kiritish operatori
+file clerk|Petugas pengarsipan dokumen|Hujjatlarni arxivlash xodimi
+typist|Juru ketik|Matn teruvchi
+project support officer|Staf pendukung proyek|Loyihani qo‘llab-quvvatlash xodimi
+procurement support officer|Staf administrasi pengadaan|Xaridlar bo‘yicha yordamchi xodim
+back office specialist|Spesialis administrasi operasional|Ichki operatsiyalar mutaxassisi
+@accounting|Akuntansi, keuangan, dan pajak|Buxgalteriya, moliya va soliqlar
+accountant|Akuntan|Buxgalter
+accounting assistant|Asisten akuntansi|Buxgalter yordamchisi
+bookkeeper|Petugas pembukuan|Hisob yurituvchi
+accounting analyst|Analis akuntansi|Buxgalteriya tahlilchisi
+accounting manager|Manajer akuntansi|Buxgalteriya menejeri
+financial analyst|Analis keuangan|Moliyaviy tahlilchi
+financial manager|Manajer keuangan|Moliya menejeri
+financial controller|Pengendali keuangan|Moliyaviy nazoratchi
+financial auditor|Auditor keuangan|Moliyaviy auditor
+budget analyst|Analis anggaran|Budjet tahlilchisi
+cost analyst|Analis biaya|Xarajatlar tahlilchisi
+payroll clerk|Petugas penggajian|Ish haqini hisoblash xodimi
+billing clerk|Petugas penagihan faktur|Hisob-fakturalar bo‘yicha xodim
+tax advisor|Konsultan pajak|Soliq maslahatchisi
+tax clerk|Staf administrasi pajak|Soliq hujjatlari bo‘yicha xodim
+corporate treasurer|Bendahara perusahaan|Korporativ g‘aznachi
+@banking-insurance|Perbankan, investasi, dan asuransi|Bank, investitsiya va sug‘urta
+bank teller|Teller bank|Bank kassiri
+bank account manager|Manajer rekening nasabah|Bank hisobvaraqlari menejeri
+credit analyst|Analis kredit|Kredit tahlilchisi
+credit risk analyst|Analis risiko kredit|Kredit xatarlari tahlilchisi
+credit adviser|Penasihat kredit|Kredit maslahatchisi
+credit manager|Manajer kredit|Kredit menejeri
+investment adviser|Penasihat investasi|Investitsiya maslahatchisi
+securities analyst|Analis sekuritas|Qimmatli qog‘ozlar tahlilchisi
+insurance clerk|Staf administrasi asuransi|Sug‘urta hujjatlari xodimi
+insurance broker|Pialang asuransi|Sug‘urta brokeri
+insurance claims handler|Petugas klaim asuransi|Sug‘urta da’volari bo‘yicha mutaxassis
+insurance underwriter|Penilai risiko asuransi|Sug‘urta anderrayteri
+actuarial consultant|Konsultan aktuaria|Aktuar maslahatchi
+debt collector|Petugas penagihan utang|Qarzdorlikni undirish xodimi
+@human-resources|SDM dan rekrutmen|Kadrlar va xodimlarni yollash
+human resources assistant|Asisten SDM|Kadrlar bo‘yicha yordamchi
+human resources officer|Staf SDM|Kadrlar bo‘yicha mutaxassis
+human resources manager|Manajer SDM|Kadrlar menejeri
+recruitment consultant|Konsultan rekrutmen|Xodimlarni yollash bo‘yicha maslahatchi
+talent acquisition manager|Manajer akuisisi talenta|Iste’dodlarni jalb qilish menejeri
+compensation analyst|Analis kompensasi|Mehnatga haq to‘lash tahlilchisi
+corporate trainer|Pelatih perusahaan|Korporativ trener
+corporate training manager|Manajer pelatihan perusahaan|Korporativ ta’lim menejeri
+career guidance advisor|Konselor karier|Kasbga yo‘naltirish maslahatchisi
+employer branding manager|Manajer citra pemberi kerja|Ish beruvchi brendi menejeri
+@sales-retail|Penjualan dan ritel|Savdo va chakana savdo
+commercial sales representative|Perwakilan penjualan|Savdo vakili
+sales manager|Manajer penjualan|Savdo menejeri
+sales account manager|Manajer akun penjualan|Savdo mijozlari menejeri
+sales assistant|Asisten penjualan|Savdo yordamchisi
+shop assistant|Pramuniaga toko|Do‘kon sotuvchisi
+cashier|Kasir|Kassir
+shop supervisor|Supervisor toko|Do‘kon supervayzeri
+shop manager|Manajer toko|Do‘kon menejeri
+supermarket manager|Manajer supermarket|Supermarket menejeri
+visual merchandiser|Penata tampilan produk|Vizual merchandayzer
+shelf filler|Petugas pengisian rak|Savdo javonlarini to‘ldiruvchi
+technical sales representative|Perwakilan penjualan teknis|Texnik savdo vakili
+medical sales representative|Perwakilan penjualan medis|Tibbiy savdo vakili
+sales support assistant|Asisten pendukung penjualan|Savdoni qo‘llab-quvvatlash yordamchisi
+@marketing|Pemasaran, iklan, dan komunikasi|Marketing, reklama va kommunikatsiya
+marketing assistant|Asisten pemasaran|Marketing yordamchisi
+marketing consultant|Konsultan pemasaran|Marketing maslahatchisi
+marketing manager|Manajer pemasaran|Marketing menejeri
+digital marketing manager|Manajer pemasaran digital|Raqamli marketing menejeri
+online marketer|Spesialis pemasaran daring|Onlayn marketing mutaxassisi
+search engine optimisation expert|Spesialis optimasi mesin pencari|Qidiruv tizimini optimallashtirish mutaxassisi
+advertising copywriter|Penulis naskah iklan|Reklama matni muallifi
+advertising specialist|Spesialis periklanan|Reklama mutaxassisi
+advertising media buyer|Pembeli media iklan|Reklama joylashtirish mutaxassisi
+advertising media planner|Perencana media iklan|Reklama media-rejalashtiruvchisi
+brand manager|Manajer merek|Brend menejeri
+public relations officer|Staf hubungan masyarakat|Jamoatchilik bilan aloqalar mutaxassisi
+public relations manager|Manajer hubungan masyarakat|Jamoatchilik bilan aloqalar menejeri
+communication manager|Manajer komunikasi|Kommunikatsiya menejeri
+online community manager|Manajer komunitas daring|Onlayn hamjamiyat menejeri
+@customer-service|Layanan pelanggan|Mijozlarga xizmat ko‘rsatish
+customer service representative|Petugas layanan pelanggan|Mijozlarga xizmat ko‘rsatish xodimi
+call centre agent|Agen pusat panggilan|Aloqa markazi operatori
+call centre supervisor|Supervisor pusat panggilan|Aloqa markazi supervayzeri
+call centre quality auditor|Auditor mutu pusat panggilan|Aloqa markazi sifati auditori
+call centre manager|Manajer pusat panggilan|Aloqa markazi menejeri
+customer contact centre information clerk|Petugas informasi pusat layanan pelanggan|Mijozlar aloqa markazi axborot xodimi
+customer experience manager|Manajer pengalaman pelanggan|Mijozlar tajribasi menejeri
+client relations manager|Manajer hubungan pelanggan|Mijozlar bilan aloqalar menejeri
+telephone switchboard operator|Operator sambungan telepon|Telefon kommutatori operatori
+ticket issuing clerk|Petugas penerbitan tiket|Chipta rasmiylashtirish xodimi
+@software-data|Perangkat lunak, produk digital, dan data|Dasturiy ta’minot, raqamli mahsulot va ma’lumotlar
+software developer|Pengembang perangkat lunak|Dasturiy ta’minot ishlab chiquvchisi
+web developer|Pengembang web|Veb-dasturchi
+user interface developer|Pengembang antarmuka pengguna|Foydalanuvchi interfeysi dasturchisi
+mobile application developer|Pengembang aplikasi seluler|Mobil ilovalar dasturchisi
+ICT application developer|Pengembang aplikasi TIK|AKT ilovalari dasturchisi
+software architect|Arsitek perangkat lunak|Dasturiy ta’minot arxitektori
+software analyst|Analis perangkat lunak|Dasturiy ta’minot tahlilchisi
+ICT business analyst|Analis bisnis TIK|AKT biznes tahlilchisi
+ICT system analyst|Analis sistem TIK|AKT tizimlari tahlilchisi
+software tester|Penguji perangkat lunak|Dasturiy ta’minot sinovchisi
+ICT test analyst|Analis pengujian TIK|AKT sinovlari tahlilchisi
+ICT integration tester|Penguji integrasi TIK|AKT integratsiyasi sinovchisi
+ICT accessibility tester|Penguji aksesibilitas TIK|AKTdan foydalanish imkoniyati sinovchisi
+data analyst|Analis data|Ma’lumotlar tahlilchisi
+data scientist|Ilmuwan data|Ma’lumotlar olimi
+data engineer|Insinyur data|Ma’lumotlar muhandisi
+data quality specialist|Spesialis mutu data|Ma’lumotlar sifati mutaxassisi
+artificial intelligence engineer|Insinyur kecerdasan buatan|Sun’iy intellekt muhandisi
+computer vision engineer|Insinyur visi komputer|Kompyuter ko‘rishi muhandisi
+digital games developer|Pengembang gim digital|Raqamli o‘yinlar dasturchisi
+embedded systems software developer|Pengembang perangkat lunak sistem tertanam|O‘rnatilgan tizimlar dasturiy ta’minoti dasturchisi
+IoT developer|Pengembang Internet of Things|Buyumlar interneti dasturchisi
+cloud software developer|Pengembang perangkat lunak cloud|Bulutli dasturiy ta’minot dasturchisi
+blockchain developer|Pengembang blockchain|Blokcheyn dasturchisi
+@it-infrastructure|Infrastruktur IT, jaringan, dan keamanan siber|IT infratuzilmasi, tarmoqlar va kiberxavfsizlik
+ICT system administrator|Administrator sistem TIK|AKT tizim administratori
+ICT network administrator|Administrator jaringan TIK|AKT tarmoq administratori
+ICT network engineer|Insinyur jaringan TIK|AKT tarmoq muhandisi
+ICT network architect|Arsitek jaringan TIK|AKT tarmoq arxitektori
+database administrator|Administrator basis data|Ma’lumotlar bazasi administratori
+database developer|Pengembang basis data|Ma’lumotlar bazasi dasturchisi
+database designer|Perancang basis data|Ma’lumotlar bazasi loyihachisi
+cloud engineer|Insinyur cloud|Bulutli texnologiyalar muhandisi
+cloud architect|Arsitek cloud|Bulutli texnologiyalar arxitektori
+cloud DevOps engineer|Insinyur DevOps cloud|Bulutli DevOps muhandisi
+ICT security administrator|Administrator keamanan TIK|AKT xavfsizligi administratori
+ethical hacker|Penguji peretasan etis|Etik xaker
+cyber incident responder|Spesialis respons insiden siber|Kiberhodisalarga javob berish mutaxassisi
+digital forensics expert|Ahli forensik digital|Raqamli kriminalistika eksperti
+IT auditor|Auditor IT|IT auditori
+ICT help desk agent|Petugas help desk TIK|AKT yordam xizmati xodimi
+@design|Desain dan karya visual|Dizayn va tasviriy ijod
+graphic designer|Desainer grafis|Grafik dizayner
+web designer|Desainer web|Veb-dizayner
+user interface designer|Desainer antarmuka pengguna|Foydalanuvchi interfeysi dizayneri
+user experience analyst|Analis pengalaman pengguna|Foydalanuvchi tajribasi tahlilchisi
+3D animator|Animator 3D|3D animator
+3D modeller|Pemodel 3D|3D modellashtiruvchi
+digital media designer|Desainer media digital|Raqamli media dizayneri
+industrial designer|Desainer industri|Sanoat dizayneri
+interior designer|Desainer interior|Interyer dizayneri
+fashion designer|Desainer mode|Moda dizayneri
+textile designer|Desainer tekstil|To‘qimachilik dizayneri
+art director|Direktur artistik|Art-direktor
+@media-language|Media, penulisan, dan bahasa|Media, mualliflik va tillar
+writer|Penulis|Yozuvchi
+book editor|Editor buku|Kitob muharriri
+copy editor|Editor naskah|Matn muharriri
+proofreader|Korektor naskah|Musahhih
+journalist|Jurnalis|Jurnalist
+photographer|Fotografer|Fotograf
+video and motion picture editor|Editor video dan film|Video va kino montajchisi
+video and motion picture director|Sutradara video dan film|Video va kino rejissyori
+script writer|Penulis skenario|Ssenariy muallifi
+translator|Penerjemah tulisan|Yozma tarjimon
+interpreter|Juru bahasa|Og‘zaki tarjimon
+sign language interpreter|Juru bahasa isyarat|Imo-ishora tili tarjimoni
+technical communicator|Penulis komunikasi teknis|Texnik kommunikatsiya mutaxassisi
+presenter|Presenter|Boshlovchi
+@hotel-tourism|Perhotelan dan pariwisata|Mehmonxona va turizm
+hospitality establishment receptionist|Resepsionis hotel|Mehmonxona qabulxonasi xodimi
+hospitality revenue manager|Manajer pendapatan perhotelan|Mehmonxona daromadlari menejeri
+accommodation manager|Manajer akomodasi|Joylashtirish xizmatlari menejeri
+rooms division manager|Manajer divisi kamar|Xonalar bo‘limi menejeri
+hotel concierge|Petugas concierge hotel|Mehmonxona konsyerji
+hotel porter|Petugas porter hotel|Mehmonxona yuk tashuvchisi
+room attendant|Petugas kebersihan kamar|Xonalarni tozalash xodimi
+housekeeping supervisor|Supervisor tata graha|Xo‘jalik xizmati supervayzeri
+laundry worker|Petugas laundry|Kir yuvish xodimi
+travel agent|Agen perjalanan|Sayohat agenti
+travel consultant|Konsultan perjalanan|Sayohat maslahatchisi
+tourist guide|Pemandu wisata|Sayyohlik gidi
+tour organiser|Penyelenggara tur|Sayohat tashkilotchisi
+tourist information officer|Petugas informasi wisata|Turistik axborot xodimi
+@food-beverage|Restoran, kafe, dan pengolahan makanan|Restoran, kafe va oziq-ovqat tayyorlash
+restaurant manager|Manajer restoran|Restoran menejeri
+chef|Koki profesional|Oshpaz
+cook|Juru masak|Taom tayyorlovchi
+head chef|Kepala koki|Bosh oshpaz
+pastry chef|Koki pastry|Qandolatchi oshpaz
+baker|Pembuat roti|Novvoy
+confectioner|Pembuat kue dan manisan|Qandolatchi
+barista|Barista|Barista
+bartender|Bartender|Barmen
+waiter/waitress|Pramusaji|Ofitsiant
+restaurant host/restaurant hostess|Petugas penyambut restoran|Restoran mehmonlarini kutib oluvchi
+kitchen assistant|Asisten dapur|Oshxona yordamchisi
+kitchen porter|Petugas kebersihan dapur|Oshxona tozalovchisi
+food safety specialist|Spesialis keamanan pangan|Oziq-ovqat xavfsizligi mutaxassisi
+@logistics|Logistik, gudang, dan pengadaan|Logistika, ombor va xaridlar
+warehouse worker|Pekerja gudang|Ombor ishchisi
+warehouse order picker|Petugas pengambilan pesanan gudang|Omborda buyurtma yig‘uvchi
+warehouse manager|Manajer gudang|Ombor menejeri
+materials handler|Petugas pemindahan material|Materiallarni tashish xodimi
+hand packer|Petugas pengemasan manual|Qo‘lda qadoqlovchi
+distribution centre dispatcher|Petugas pengiriman pusat distribusi|Taqsimot markazi dispetcheri
+inventory coordinator|Koordinator persediaan|Zaxiralar koordinatori
+purchaser|Petugas pembelian|Xaridlar mutaxassisi
+procurement department manager|Manajer pengadaan|Xaridlar bo‘limi menejeri
+logistics analyst|Analis logistik|Logistika tahlilchisi
+supply chain manager|Manajer rantai pasok|Ta’minot zanjiri menejeri
+import export specialist|Spesialis ekspor impor|Import va eksport mutaxassisi
+international forwarding operations coordinator|Koordinator operasi ekspedisi internasional|Xalqaro ekspeditorlik operatsiyalari koordinatori
+customs and excise officer|Petugas kepabeanan dan cukai|Bojxona va aksiz xodimi
+@transport|Transportasi dan pengiriman|Transport va yetkazib berish
+car and van delivery driver|Pengemudi mobil pengiriman|Haydovchi-kuryer
+cargo vehicle driver|Pengemudi kendaraan angkutan barang|Yuk avtomobili haydovchisi
+bus driver|Pengemudi bus|Avtobus haydovchisi
+taxi driver|Pengemudi taksi|Taksi haydovchisi
+bicycle courier|Kurir sepeda|Velosipedli kuryer
+motorcycle delivery person|Kurir sepeda motor|Motokuryer
+forklift operator|Operator forklift|Yuk ko‘targich operatori
+train driver|Masinis kereta|Poyezd mashinisti
+airline transport pilot|Pilot penerbangan angkutan|Transport aviatsiyasi uchuvchisi
+flight attendant|Awak kabin pesawat|Bortkuzatuvchi
+air traffic controller|Pengendali lalu lintas udara|Havo harakatini boshqaruvchi
+ship captain|Nakhoda kapal|Kema kapitani
+airport baggage handler|Petugas penanganan bagasi bandara|Aeroport yuk-bagaj xodimi
+transport planner|Perencana transportasi|Transport rejalashtiruvchisi
+@engineering|Rekayasa dan teknik|Muhandislik
+civil engineer|Insinyur sipil|Qurilish muhandisi
+mechanical engineer|Insinyur mesin|Mexanika muhandisi
+electrical engineer|Insinyur kelistrikan|Elektr muhandisi
+electronics engineer|Insinyur elektronika|Elektronika muhandisi
+industrial engineer|Insinyur industri|Sanoat muhandisi
+chemical engineer|Insinyur kimia|Kimyo muhandisi
+process engineer|Insinyur proses|Texnologik jarayonlar muhandisi
+production engineer|Insinyur produksi|Ishlab chiqarish muhandisi
+automation engineer|Insinyur otomasi|Avtomatlashtirish muhandisi
+mechatronics engineer|Insinyur mekatronika|Mexatronika muhandisi
+robotics engineer|Insinyur robotika|Robototexnika muhandisi
+instrumentation engineer|Insinyur instrumentasi|Nazorat-o‘lchov asboblari muhandisi
+quality engineer|Insinyur mutu|Sifat muhandisi
+materials engineer|Insinyur material|Materiallar muhandisi
+telecommunications engineer|Insinyur telekomunikasi|Telekommunikatsiya muhandisi
+biomedical engineer|Insinyur biomedis|Biotibbiyot muhandisi
+@construction|Konstruksi, arsitektur, dan properti|Qurilish, arxitektura va ko‘chmas mulk
+architect|Arsitek bangunan|Bino arxitektori
+landscape architect|Arsitek lanskap|Landshaft arxitektori
+quantity surveyor|Surveyor kuantitas konstruksi|Qurilish hajmlari va xarajatlari mutaxassisi
+land surveyor|Surveyor tanah|Yer o‘lchovchi
+construction manager|Manajer konstruksi|Qurilish menejeri
+construction general supervisor|Supervisor umum konstruksi|Qurilishning umumiy nazoratchisi
+building construction worker|Pekerja konstruksi bangunan|Bino qurilishi ishchisi
+bricklayer|Tukang batu bata|G‘isht teruvchi
+carpenter|Tukang kayu|Duradgor
+plumber|Tukang ledeng|Santexnik
+construction painter|Tukang cat bangunan|Qurilish bo‘yoqchisi
+tile fitter|Pemasang ubin|Plitka yotqizuvchi
+roofer|Pemasang atap|Tom yopuvchi
+construction scaffolder|Pemasang perancah konstruksi|Qurilish havozasi o‘rnatuvchisi
+real estate agent|Agen properti|Ko‘chmas mulk agenti
+real estate manager|Manajer properti|Ko‘chmas mulk menejeri
+@manufacturing|Manufaktur dan operasi produksi|Sanoat ishlab chiqarishi va ishlab chiqarish operatsiyalari
+manufacturing manager|Manajer manufaktur|Sanoat ishlab chiqarishi menejeri
+manufacturing facility manager|Manajer fasilitas manufaktur|Ishlab chiqarish obyekti menejeri
+manufacturing engineer|Insinyur manufaktur|Ishlab chiqarish texnologiyasi muhandisi
+industrial engineering technician|Teknisi teknik industri|Sanoat muhandisligi texnigi
+production supervisor|Supervisor produksi|Ishlab chiqarish supervayzeri
+factory hand|Pekerja pabrik|Zavod ishchisi
+food production operator|Operator produksi pangan|Oziq-ovqat ishlab chiqarish operatori
+packaging and filling machine operator|Operator mesin pengemasan dan pengisian|Qadoqlash va to‘ldirish mashinasi operatori
+computer numerical control machine operator|Operator mesin CNC|CNC dastgohi operatori
+injection moulding operator|Operator cetak injeksi|Bosim ostida quyish operatori
+electronic equipment assembler|Perakit peralatan elektronik|Elektron uskunalar yig‘uvchisi
+motor vehicle assembler|Perakit kendaraan bermotor|Avtotransport yig‘uvchisi
+furniture assembler|Perakit furnitur|Mebel yig‘uvchisi
+product quality inspector|Inspektur mutu produk|Mahsulot sifati inspektori
+@maintenance|Pemeliharaan, reparasi, dan pekerjaan logam|Texnik xizmat, ta’mirlash va metallga ishlov berish
+industrial machinery mechanic|Mekanik mesin industri|Sanoat mashinalari mexanigi
+vehicle technician|Teknisi kendaraan|Avtotransport texnigi
+diesel engine mechanic|Mekanik mesin diesel|Dizel dvigateli mexanigi
+automotive electrician|Teknisi kelistrikan kendaraan|Avtomobil elektrigi
+bicycle mechanic|Mekanik sepeda|Velosiped mexanigi
+electrician|Teknisi listrik|Elektrik
+industrial electrician|Teknisi listrik industri|Sanoat elektrigi
+welder|Juru las|Payvandchi
+sheet metal worker|Pekerja pelat logam|Tunukasoz
+tool and die maker|Pembuat perkakas dan cetakan|Asbob va shtamp yasovchi
+locksmith|Tukang kunci|Qulfsoz
+heating, ventilation, air conditioning and refrigeration engineering technician|Teknisi pemanas, ventilasi, AC, dan refrigerasi|Isitish, shamollatish, konditsioner va sovitish texnigi
+maintenance and repair engineer|Insinyur pemeliharaan dan perbaikan|Texnik xizmat va ta’mirlash muhandisi
+@energy-mining|Energi, pertambangan, dan utilitas|Energetika, konchilik va kommunal xizmatlar
+petroleum engineer|Insinyur perminyakan|Neft muhandisi
+mine planning engineer|Insinyur perencanaan tambang|Konni rejalashtirish muhandisi
+geologist|Ahli geologi|Geolog
+renewable energy engineer|Insinyur energi terbarukan|Qayta tiklanuvchi energiya muhandisi
+solar energy engineer|Insinyur energi surya|Quyosh energetikasi muhandisi
+power distribution engineer|Insinyur distribusi tenaga listrik|Elektr energiyasini taqsimlash muhandisi
+power production plant operator|Operator pembangkit listrik|Elektr stansiyasi operatori
+driller|Juru bor|Burg‘ilovchi
+underground miner|Penambang bawah tanah|Yerosti kon ishchisi
+mineral processing operator|Operator pengolahan mineral|Minerallarni qayta ishlash operatori
+boiler operator|Operator boiler|Qozonxona operatori
+water treatment systems operator|Operator sistem pengolahan air|Suv tozalash tizimlari operatori
+@agriculture|Pertanian, perkebunan, dan kehutanan|Dehqonchilik, bog‘dorchilik va o‘rmon xo‘jaligi
+agronomist|Ahli agronomi|Agronom
+agricultural engineer|Insinyur pertanian|Qishloq xo‘jaligi muhandisi
+farm manager|Manajer usaha tani|Fermer xo‘jaligi menejeri
+crop production worker|Pekerja budidaya tanaman|Ekin yetishtirish ishchisi
+horticulture worker|Pekerja hortikultura|Bog‘dorchilik ishchisi
+landscape gardener|Tukang kebun lanskap|Landshaft bog‘boni
+horticulture production manager|Manajer produksi hortikultura|Bog‘dorchilik ishlab chiqarishi menejeri
+agricultural machinery technician|Teknisi mesin pertanian|Qishloq xo‘jaligi texnikasi texnigi
+forest worker|Pekerja kehutanan|O‘rmon xo‘jaligi ishchisi
+forest ranger|Petugas penjaga hutan|O‘rmon nazoratchisi
+tree surgeon|Ahli perawatan pohon|Daraxtlarni parvarishlash mutaxassisi
+irrigation technician|Teknisi irigasi|Sug‘orish tizimlari texnigi
+@livestock-fisheries|Peternakan, perikanan, dan perawatan hewan|Chorvachilik, baliqchilik va hayvonlar parvarishi
+general veterinarian|Dokter hewan umum|Umumiy amaliyot veterinari
+veterinary nurse|Perawat veteriner|Veterinariya hamshirasi
+animal care attendant|Petugas perawatan hewan|Hayvonlarni parvarishlash xodimi
+animal groomer|Penata kebersihan hewan|Hayvonlar grumeri
+cattle breeder|Peternak sapi|Qoramol boquvchi
+poultry breeder|Peternak unggas|Parrandachi
+sheep breeder|Peternak domba|Qo‘ychilik mutaxassisi
+bee breeder|Peternak lebah|Asalarichi
+aquaculture hatchery worker|Pekerja pembenihan akuakultur|Akvakultura inkubatsiya ishchisi
+aquaculture husbandry worker|Pekerja pemeliharaan akuakultur|Akvakultura parvarishi ishchisi
+deep-sea fishery worker|Pekerja perikanan laut dalam|Ochiq dengiz baliqchisi
+fish production operator|Operator produksi olahan ikan|Baliq mahsulotlari ishlab chiqarish operatori
+@healthcare|Kesehatan dan pelayanan medis|Sog‘liqni saqlash va tibbiy xizmatlar
+general practitioner|Dokter umum|Umumiy amaliyot shifokori
+specialised doctor|Dokter spesialis|Mutaxassis shifokor
+dental practitioner|Dokter gigi|Stomatolog
+nurse responsible for general care|Perawat umum|Umumiy parvarish hamshirasi
+specialist nurse|Perawat spesialis|Ixtisoslashgan hamshira
+midwife|Bidan|Akusher
+nurse assistant|Asisten perawat|Hamshira yordamchisi
+pharmacist|Apoteker|Farmatsevt
+pharmacy technician|Teknisi farmasi|Farmatsiya texnigi
+physiotherapist|Fisioterapis|Fizioterapevt
+occupational therapist|Terapis okupasi|Ergoterapevt
+speech and language therapist|Terapis wicara dan bahasa|Nutq va til terapevti
+dietitian|Dietisien|Diyetolog
+optometrist|Optometris|Optometrist
+radiographer|Radiografer|Rentgen-laborant
+biomedical scientist|Ilmuwan biomedis|Biotibbiyot olimi
+dental technician|Teknisi gigi|Tish texnigi
+medical laboratory assistant|Asisten laboratorium medis|Tibbiy laboratoriya yordamchisi
+medical records clerk|Petugas rekam medis|Tibbiy hujjatlar xodimi
+paramedic in emergency responses|Paramedis kegawatdaruratan|Shoshilinch tibbiy yordam paramedigi
+@education|Pendidikan, pelatihan, dan perpustakaan|Ta’lim, o‘qitish va kutubxona ishlari
+early years teacher|Guru pendidikan anak usia dini|Maktabgacha ta’lim o‘qituvchisi
+primary school teacher|Guru sekolah dasar|Boshlang‘ich sinf o‘qituvchisi
+secondary school teacher|Guru sekolah menengah|O‘rta maktab o‘qituvchisi
+vocational teacher|Guru kejuruan|Kasbiy ta’lim o‘qituvchisi
+special educational needs teacher|Guru pendidikan khusus|Maxsus ta’lim o‘qituvchisi
+language school teacher|Pengajar sekolah bahasa|Til maktabi o‘qituvchisi
+ICT teacher secondary school|Guru TIK sekolah menengah|O‘rta maktab AKT o‘qituvchisi
+mathematics teacher at secondary school|Guru matematika sekolah menengah|O‘rta maktab matematika o‘qituvchisi
+tutor|Tutor|Repetitor
+instructional designer|Perancang pembelajaran|Ta’lim dizayneri
+educational counsellor|Konselor pendidikan|Ta’lim bo‘yicha maslahatchi
+primary school teaching assistant|Asisten guru sekolah dasar|Boshlang‘ich sinf o‘qituvchisi yordamchisi
+headteacher|Kepala sekolah|Maktab direktori
+computer science lecturer|Dosen ilmu komputer|Kompyuter fanlari o‘qituvchisi
+librarian|Pustakawan|Kutubxonachi
+university research assistant|Asisten riset universitas|Universitet tadqiqotchi yordamchisi
+@science|Sains, laboratorium, dan penelitian|Fan, laboratoriya va tadqiqot
+chemist|Ahli kimia|Kimyogar
+biologist|Ahli biologi|Biolog
+microbiologist|Ahli mikrobiologi|Mikrobiolog
+physicist|Ahli fisika|Fizik
+mathematician|Ahli matematika|Matematik
+statistician|Ahli statistik|Statistik
+economist|Ekonom|Iqtisodchi
+scientific laboratory technician|Teknisi laboratorium sains|Ilmiy laboratoriya texnigi
+food technologist|Ahli teknologi pangan|Oziq-ovqat texnologi
+food biotechnologist|Ahli bioteknologi pangan|Oziq-ovqat biotexnologi
+survey enumerator|Petugas pencacahan survei|So‘rov o‘tkazuvchi
+research engineer|Insinyur riset|Tadqiqot muhandisi
+@legal-compliance|Hukum, kepatuhan, dan layanan profesional|Huquq, muvofiqlik va professional xizmatlar
+lawyer|Pengacara|Advokat
+corporate lawyer|Pengacara perusahaan|Korporativ yurist
+legal assistant|Asisten hukum|Yuridik yordamchi
+notary|Notaris|Notarius
+contract manager|Manajer kontrak|Shartnomalar menejeri
+data protection officer|Pejabat perlindungan data|Ma’lumotlarni himoya qilish mutaxassisi
+regulatory affairs manager|Manajer urusan regulasi|Normativ talablar bo‘yicha menejer
+director of compliance and information security|Direktur kepatuhan dan keamanan informasi|Muvofiqlik va axborot xavfsizligi direktori
+business consultant|Konsultan bisnis|Biznes maslahatchisi
+business analyst|Analis bisnis|Biznes tahlilchisi
+public procurement specialist|Spesialis pengadaan publik|Davlat xaridlari mutaxassisi
+intellectual property consultant|Konsultan kekayaan intelektual|Intellektual mulk maslahatchisi
+@security-facilities|Keamanan, keselamatan, dan pengelolaan fasilitas|Xavfsizlik, mehnat muhofazasi va obyektlarni boshqarish
+security guard|Petugas keamanan|Qo‘riqchi
+security guard supervisor|Supervisor keamanan|Qo‘riqlash supervayzeri
+security manager|Manajer keamanan|Xavfsizlik menejeri
+firefighter|Petugas pemadam kebakaran|O‘t o‘chiruvchi
+health and safety officer|Petugas keselamatan dan kesehatan kerja|Mehnat muhofazasi va xavfsizlik mutaxassisi
+health and safety engineer|Insinyur keselamatan dan kesehatan kerja|Mehnat muhofazasi va xavfsizlik muhandisi
+facilities manager|Manajer fasilitas|Obyektlarni boshqarish menejeri
+building caretaker|Penjaga dan pengurus gedung|Bino qarovchisi
+building cleaner|Petugas kebersihan gedung|Bino tozalovchisi
+window cleaner|Pembersih jendela|Deraza tozalovchisi
+domestic cleaner|Pembersih rumah|Uy tozalovchisi
+pest management worker|Petugas pengendalian hama|Zararkunandalarga qarshi kurash xodimi
+@personal-care|Perawatan pribadi, kecantikan, dan layanan rumah tangga|Shaxsiy parvarish, go‘zallik va uy xizmatlari
+hairdresser|Penata rambut|Sartarosh
+barber|Pemangkas rambut pria|Erkaklar sartaroshi
+aesthetician|Ahli perawatan estetika|Estetik parvarish mutaxassisi
+make-up artist|Penata rias|Vizajist
+manicurist|Perawat kuku tangan|Manikyur ustasi
+pedicurist|Perawat kuku kaki|Pedikyur ustasi
+massage therapist|Terapis pijat|Massaj terapevti
+spa attendant|Petugas spa|Spa xodimi
+babysitter|Pengasuh anak|Enaga
+child care worker|Pekerja pengasuhan anak|Bolalarni parvarishlash xodimi
+home care aide|Pendamping perawatan di rumah|Uyda parvarishlash yordamchisi
+domestic housekeeper|Pengurus rumah tangga|Uy xo‘jaligi boshqaruvchisi
+@social-community|Sosial, komunitas, dan konseling|Ijtimoiy ish, hamjamiyat va maslahat
+social worker|Pekerja sosial|Ijtimoiy xodim
+social work assistant|Asisten pekerja sosial|Ijtimoiy xodim yordamchisi
+community development officer|Staf pengembangan masyarakat|Hamjamiyatni rivojlantirish xodimi
+youth worker|Pendamping pemuda|Yoshlar bilan ishlash xodimi
+disability support worker|Pendamping penyandang disabilitas|Nogironligi bo‘lgan shaxslarni qo‘llab-quvvatlash xodimi
+family support worker|Pendamping keluarga|Oilalarni qo‘llab-quvvatlash xodimi
+psychologist|Psikolog|Psixolog
+clinical psychologist|Psikolog klinis|Klinik psixolog
+social counsellor|Konselor sosial|Ijtimoiy maslahatchi
+fundraising manager|Manajer penggalangan dana|Mablag‘ jalb qilish menejeri
+@sports-events|Olahraga, rekreasi, dan acara|Sport, dam olish va tadbirlar
+event manager|Manajer acara|Tadbirlar menejeri
+event assistant|Asisten acara|Tadbirlar yordamchisi
+wedding planner|Perencana pernikahan|To‘y rejalashtiruvchisi
+sports coach|Pelatih olahraga|Sport murabbiyi
+fitness instructor|Instruktur kebugaran|Fitnes instruktori
+personal trainer|Pelatih kebugaran pribadi|Shaxsiy fitnes treneri
+swimming teacher|Instruktur renang|Suzish o‘qituvchisi
+life guard|Petugas penyelamat perairan|Suvda qutqaruvchi
+sport facility manager|Manajer fasilitas olahraga|Sport obyekti menejeri
+sports instructor|Instruktur olahraga|Sport instruktori
+@environment|Lingkungan, air, dan pengelolaan limbah|Atrof-muhit, suv va chiqindilarni boshqarish
+environmental engineer|Insinyur lingkungan|Atrof-muhit muhandisi
+environmental scientist|Ilmuwan lingkungan|Atrof-muhit olimi
+sustainability manager|Manajer keberlanjutan|Barqaror rivojlanish menejeri
+waste treatment engineer|Insinyur pengolahan limbah|Chiqindilarni qayta ishlash muhandisi
+wastewater engineer|Insinyur air limbah|Oqova suv muhandisi
+water engineer|Insinyur sumber daya air|Suv xo‘jaligi muhandisi
+recycling worker|Pekerja daur ulang|Qayta ishlash ishchisi
+refuse collector|Petugas pengumpulan sampah|Chiqindi yig‘uvchi
+sewerage cleaner|Pembersih saluran pembuangan|Kanalizatsiya tozalovchisi
+environmental technician|Teknisi lingkungan|Atrof-muhit texnigi
+@textile-handicraft|Tekstil, garmen, percetakan, dan kerajinan|To‘qimachilik, tikuvchilik, matbaa va hunarmandchilik
+tailor|Penjahit pakaian|Tikuvchi
+sewing machine operator|Operator mesin jahit|Tikuv mashinasi operatori
+embroidery machine operator|Operator mesin bordir|Kashta tikish mashinasi operatori
+weaving machine operator|Operator mesin tenun|To‘quv dastgohi operatori
+textile machine operator|Operator mesin tekstil|To‘qimachilik mashinasi operatori
+wearing apparel patternmaker|Pembuat pola pakaian|Kiyim andozachisi
+screen printer|Penyablon|Trafaret bosma ustasi
+offset printer|Operator cetak offset|Ofset bosma operatori
+bindery operator|Operator penjilidan|Muqovalash operatori
+jeweller|Pembuat perhiasan|Zargar
+shoemaker|Pembuat sepatu|Poyabzal ustasi
+upholsterer|Tukang pelapis furnitur|Mebel qoplovchisi

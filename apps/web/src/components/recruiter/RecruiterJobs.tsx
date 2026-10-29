@@ -24,6 +24,7 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ALL');
   const [sort, setSort] = useState('newest');
+  const [packageFilter, setPackageFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<any | 'new' | null>(createRequested ? 'new' : null);
   const [busyId, setBusyId] = useState('');
@@ -56,8 +57,12 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
     finally { if (alive.current && contextVersion.current === requested) setOpening(false); }
   }
   useEffect(() => { if (createRequested) setEditing('new'); }, [createRequested]);
-  useEffect(() => { setPage(1); }, [query, status, sort]);
-  const filtered = useMemo(() => jobs.filter((job) => (status === 'ALL' || job.status === status) && [job.title, job.city?.name, job.country?.name].join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a, b) => sort === 'applications' ? (b._count?.applications || 0) - (a._count?.applications || 0) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [jobs, query, status, sort]);
+  useEffect(() => { setPage(1); }, [query, status, sort, packageFilter]);
+  const filtered = useMemo(() => jobs.filter((job) =>
+    (status === 'ALL' || job.status === status) &&
+    (packageFilter === 'ALL' || (job.benefit?.selectionConfirmedAt && job.benefit.code === packageFilter)) &&
+    [job.title, job.city?.name, job.country?.name].join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
+  ).sort((a, b) => sort === 'applications' ? (b._count?.applications || 0) - (a._count?.applications || 0) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [jobs, query, status, sort, packageFilter]);
   const safePage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 10)));
   async function change(job: any, next: string) {
     if (actionLock.current) return;
@@ -91,11 +96,11 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
       <dl className={bar.metrics} aria-label={t('hr.freeStats')}>
         {[[jobs.filter(job => job.status === 'PUBLISHED').length, t('rw.published')], [jobs.reduce((sum, job) => sum + (job._count?.applications || 0), 0), t('applications')], [jobs.reduce((sum, job) => sum + (job._count?.views || 0), 0), t('rec.viewsWord')]].map(([value, label]) => <div key={label}><dt>{label}</dt><dd>{new Intl.NumberFormat(locale).format(Number(value))}</dd></div>)}
       </dl>
-      <div className={bar.controls}><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobsCompact')} /><WorkspaceSelect className={bar.sort} value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} /><button type="button" className={s.primary + ' ' + bar.create} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
+      <div className={bar.controls}><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobsCompact')} /><WorkspaceSelect className={bar.package} value={packageFilter} options={[{ value: 'ALL', label: t('jr.allPackages') }, { value: 'PREMIUM', label: t('hr.package.PREMIUM') }, { value: 'STANDARD', label: t('hr.package.STANDARD') }, { value: 'FREE', label: t('hr.package.FREE') }]} label={t('jr.package')} onChange={setPackageFilter} /><WorkspaceSelect className={bar.sort} value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} /><button type="button" className={s.primary + ' ' + bar.create} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
     </div>
     <nav className={s.tabs} aria-label={t('jobs')}>{[['ALL', 'rw.allJobs'], ['PUBLISHED', 'rw.published'], ['DRAFT', 'rw.drafts'], ['PAUSED', 'rw.paused'], ['CLOSED', 'rw.closed'], ['EXPIRED', 'hr.expired']].map(([key, label]) => <button key={key} type="button" aria-current={status === key ? 'page' : undefined} onClick={() => setStatus(key)}>{t(label)}<span className={s.count}>{key === 'ALL' ? jobs.length : jobs.filter((job) => job.status === key).length}</span></button>)}</nav>
 
-    {loading ? <WorkspaceLoading /> : !filtered.length ? <WorkspaceEmpty title={t(jobs.length ? 'rw.noResults' : 'rw.noJobs')} hint={jobs.length ? undefined : t('rw.noJobsHint')}>{jobs.length ? <button className={s.secondary} onClick={() => { setQuery(''); setStatus('ALL'); }}>{t('clearFilters')}</button> : <button className={s.primary} onClick={() => setEditing('new')}>{t('postAJob')}</button>}</WorkspaceEmpty> : <div className={table.wrap} data-jobs-table><table className={table.table}>
+    {loading ? <WorkspaceLoading /> : !filtered.length ? <WorkspaceEmpty title={t(jobs.length ? 'rw.noResults' : 'rw.noJobs')} hint={jobs.length ? undefined : t('rw.noJobsHint')}>{jobs.length ? <button className={s.secondary} onClick={() => { setQuery(''); setStatus('ALL'); setPackageFilter('ALL'); }}>{t('clearFilters')}</button> : <button className={s.primary} onClick={() => setEditing('new')}>{t('postAJob')}</button>}</WorkspaceEmpty> : <div className={table.wrap} data-jobs-table><table className={table.table}>
       <colgroup><col className={table.titleCol} /><col className={table.statusCol} /><col className={table.packageCol} /><col className={table.locationCol} /><col className={table.performanceCol} /><col className={table.periodCol} /><col className={table.boostCol} /><col className={table.actionsCol} /></colgroup>
       <thead><tr>{['jobTitleFilter', 'status', 'jr.package', 'city', 'jr.performance', 'jr.period', 'jr.boost', 'rw.actions'].map(key => <th key={key} scope="col">{t(key)}</th>)}</tr></thead>
       <tbody>{filtered.slice((safePage - 1) * 10, safePage * 10).map(job => <RecruiterJobRow key={companyId + ':' + job.id} job={job} companyId={companyId} companyOpen={!company?.anonymizedAt && !company?.isBanned} busy={Boolean(busyId)} onEdit={() => void openEditor(job)} onReviewPublish={() => void openEditor(job, 3)} onDuplicate={() => void duplicate(job)} onStatus={next => void change(job, next)} onApplicants={() => onApplicants(job.id)} onPeriodExpired={refreshRows} onFlash={onFlash} />)}</tbody>

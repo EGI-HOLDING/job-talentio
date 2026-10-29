@@ -7,6 +7,7 @@ import { authProviders } from './dict/authProviders';
 /** Indonesian translations for the complete web interface. */
 export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   "jr.package": "Paket",
+  "jr.allPackages": "Semua paket",
   "jr.performance": "Performa",
   "jr.period": "Masa aktif",
   "jr.boost": "Boost",
@@ -955,6 +956,7 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   'job.confidentialEmployer': 'Perusahaan dirahasiakan',
   'job.confidentialEmployerHint': 'Nama perusahaan akan ditampilkan kepada kandidat yang mencapai tahap wawancara.',
   'job.viewMyApplications': 'Lihat lamaran saya',
+  'job.viewSubmittedCv': 'Cek CV yang dikirim',
   'job.aboutTheRole': 'Tentang posisi ini',
   'job.yourMatch': 'Kecocokan Anda',
   'job.yourMatchHint': 'Skor kecocokan profil Anda dengan posisi ini',
@@ -1299,6 +1301,10 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   'rec.meetingUrl': 'URL rapat',
   'rec.meetingUrlPlaceholder': 'Tautan rapat',
   'rec.scheduleInterview': 'Jadwalkan wawancara',
+  'rec.scheduleNextInterview': 'Jadwalkan wawancara berikutnya',
+  'rec.hideScheduleForm': 'Tutup formulir',
+  'rec.interviewStageHint': 'Atur semua jadwal wawancara di sini; lamaran tetap dalam satu tahap Wawancara.',
+  'rec.interviewHistoryReadOnly': 'Jadwal wawancara sebelumnya tetap tersedia sebagai riwayat.',
   'rec.recommendedCandidates': 'Kandidat rekomendasi',
   'rec.recommendedSubtitle': 'Kandidat yang sangat cocok dan belum melamar.',
   'rec.suggestedCount': '{n} rekomendasi',

@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-28T03:20:35.865Z",
+  "health": [
+    {
+      "name": "api",
+      "status": 200
+    },
+    {
+      "name": "web",
+      "status": 200
+    },
+    {
+      "name": "admin",
+      "status": 200
+    }
+  ],
+  "fixtureUsers": [],
+  "fixtureCompanies": 0,
+  "temporaryDatabases": []
+}

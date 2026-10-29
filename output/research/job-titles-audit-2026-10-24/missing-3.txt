@@ -1,0 +1,587 @@
+1|3118.1|3D printing technician
+2|3423.1|activity leader
+3|3314.1|actuarial assistant
+4|3412.4.1|adult community care worker
+5|3339.1|advertising sales agent
+6|3154.1.1|aeronautical information service officer
+7|3154.1.2|aeronautical information specialist
+8|3118.3.1|aerospace engineering drafter
+9|3115.1.1|aerospace engineering technician
+10|3359.1|agricultural inspector
+11|3142.1|agricultural technician
+12|3133.1.1|air separation plant operator
+13|3155.1|air traffic safety technician
+14|3122.3.1|aircraft assembly supervisor
+15|3115.1.2|aircraft engine inspector
+16|3115.1.3|aircraft engine tester
+17|3153.1|aircraft maintenance engineer
+18|3153.2|aircraft pilot
+19|3119.1|airport maintenance technician
+20|3154.1.3|airport operations officer
+21|3240.1|alternative animal therapist
+22|3259.1|anaesthetic technician
+23|3240.2.1|animal artificial insemination technician
+24|3240.2.2|animal embryo transfer technician
+25|3122.4.1|animal feed supervisor
+26|3142.1.1|aquaculture quality supervisor
+27|3142.1.2|aquaculture site supervisor
+28|3118.3.2|architectural drafter
+29|3433.1|art handler
+30|3422.1|artistic coach
+31|3116.1.1|asphalt laboratory technician
+32|3311.1|asset manager
+33|3259.2|assistant clinical psychologist
+34|3423.1.2.1|assistant outdoor animator
+35|3435.1|assistant stage director
+36|3435.2|assistant video and motion picture director
+37|3153.3|astronaut
+38|3339.2|auctioneer
+39|3435.3|audio production technician
+40|3521.1|audio-visual technician
+41|3214.1|audiology technician
+42|3139.1|automated assembly line operator
+43|3435.4|automated fly bar operator
+44|3119.2|automation engineering technician
+45|3118.3.3|automotive engineering drafter
+46|3115.1.4|automotive engineering technician
+47|3513.1|aviation data communications manager
+48|3154.2|aviation inspector
+49|3119.3|aviation safety officer
+50|3114.1.1|avionics inspector
+51|3141.2.1|bacteriology technician
+52|3113.3|battery maintenance technician
+53|3113.4|battery manufacturing technician
+54|3433.2|big data archive librarian
+55|3141.2.2|biochemistry technician
+56|3133.1.2|biogas technician
+57|3141.2.3|biology technician
+58|3141.1|biotechnical technician
+59|3435.5|body artist
+60|3521.1.1|boom operator
+61|3141.2.4|botanical technician
+62|3422.4.1|boxing instructor
+63|3123.1.1|bricklaying supervisor
+64|3123.1.2|bridge construction supervisor
+65|3112.1.1|bridge inspector
+66|3521.2|broadcast technician
+67|3435.6|broadcasting programme director
+68|3112.1.2|building inspector
+69|3113.1.1|calibration technician
+70|3341.1|call centre analyst
+71|3521.1.2|camera operator
+72|3412.4.2|care home worker
+73|3123.1.3|carpenter supervisor
+74|3411.1|case administrator
+75|3116.1|chemical engineering technician
+76|3116.1.2|chemical manufacturing quality technician
+77|3133.1.3|chemical plant control room operator
+78|3133.1|chemical processing plant controller
+79|3122.4.2|chemical processing supervisor
+80|3111.1|chemistry technician
+81|3412.4.3|child welfare worker
+82|3259.3|chiropractic assistant
+83|3111.1.1|chromatographer
+84|3118.3.4|civil drafter
+85|3112.1|civil engineering technician
+86|3342.1|civil registrar
+87|3252.1.1|clinical coder
+88|3211.1|clinical perfusion scientist
+89|3213.2|clinical trial assistant
+90|3118.2|clothing CAD technician
+91|3139.1.1|clothing process control technician
+92|3153.2.1|co-pilot
+93|3116.1.3|colour sampling technician
+94|3153.2.2|commercial pilot
+95|3119.4|commissioning technician
+96|3324.1|commodity broker
+97|3324.2|commodity trader
+98|3253.1|community health worker
+99|3114.1.2|computer hardware engineering technician
+100|3114.1.3|computer hardware test technician
+101|3118.3.5|computer-aided design operator
+102|3123.1.4|concrete finisher supervisor
+103|3123.1.5|construction painting supervisor
+104|3112.1.3|construction quality inspector
+105|3112.1.4|construction quality manager
+106|3112.2|construction safety inspector
+107|3112.3|construction safety manager
+108|3123.1.6|construction scaffolding supervisor
+109|3359.2|consumer rights advisor
+110|3341.4|contact centre supervisor
+111|3122.3.2|container equipment assembly supervisor
+112|3411.2|conveyance clerk
+113|3112.4|corrosion technician
+114|3435.7.1|costume attendant
+115|3323.1|costume buyer
+116|3411.3|court administrative officer
+117|3411.4|court bailiff
+118|3411.5|court clerk
+119|3411.6|court enforcement officer
+120|3343.1.1|court reporter
+121|3259.4|covid tester
+122|3123.1.7|crane crew supervisor
+123|3355.1|criminal investigator
+124|3412.1|crisis helpline operator
+125|3351.1|customs officer
+126|3122.1|dairy processing technician
+127|3511.1|data centre operator
+128|3341.5|data entry supervisor
+129|3152.1|deck officer
+130|3123.1.8|demolition supervisor
+131|3251.1|dental chairside assistant
+132|3117.1|desalination technician
+133|3259.5|dietetic technician
+134|3123.1.9|dismantling supervisor
+135|3122.4.3|distillery supervisor
+136|3256.1|doctors' surgery assistant
+137|3112.1.5.1|domestic energy assessor
+138|3118.3|drafter
+139|3123.1.10|dredging supervisor
+140|3435.7|dresser
+141|3153.4|drone pilot
+142|3343.2|editorial assistant
+143|3343.1.2|education administrator
+144|3118.3.6|electrical drafter
+145|3113.1|electrical engineering technician
+146|3122.4.4|electrical equipment production supervisor
+147|3131.3.1|electrical power distributor
+148|3123.1.11|electrical supervisor
+149|3131.3.2|electrical transmission system operator
+150|3322.1.1|electricity sales representative
+151|3118.3.7|electromechanical drafter
+152|3113.1.2|electromechanical engineering technician
+153|3118.3.8|electronics drafter
+154|3114.1|electronics engineering technician
+155|3122.4.5|electronics production supervisor
+156|3258.1|emergency ambulance driver
+157|3333.1|employment agent
+158|3112.5|energy analyst
+159|3112.1.5|energy assessor
+160|3112.6|energy conservation officer
+161|3112.7|energy consultant
+162|3311.3.1|energy trader
+163|3112.8|engineering assistant
+164|3257.1|environmental health inspector
+165|3240.2.3|equine dental technician
+166|3435.8|extra
+167|3341.6|field survey manager
+168|3435.9|fight director
+169|3311.2|financial broker
+170|3311.3|financial trader
+171|3112.1.6|fire inspector
+172|3112.1.7|fire protection technician
+173|3112.1.8|fire safety tester
+174|3253.1.1|first aid instructor
+175|3151.1|fisheries engineering technician
+176|3359.3|fisheries observer
+177|3153.2.3|flight instructor
+178|3154.3|flight operations officer
+179|3435.25.1|followspot operator
+180|3111.3|food analyst
+181|3122.2|food production planner
+182|3257.2|food regulatory advisor
+183|3257.3|food safety inspector
+184|3119.5|food technician
+185|3422.3.1|football coach
+186|3122.3.3|footwear assembly supervisor
+187|3119.6|footwear product developer
+188|3122.4.6|footwear production supervisor
+189|3119.7|footwear production technician
+190|3119.16.1|footwear quality control laboratory technician
+191|3119.16.2|footwear quality technician
+192|3315.1|foreclosure specialist
+193|3311.2.1|foreign exchange broker
+194|3311.3.2|foreign exchange trader
+195|3359.4|forestry inspector
+196|3143.1|forestry technician
+197|3331.2|forwarding manager
+198|3131.3.3|fossil-fuel power plant operator
+199|3412.4.6|foster care support worker
+200|3359.5|freight inspector
+201|3343.1.3|fundraising assistant
+202|3311.3.3|futures trader
+203|3359.6|gaming inspector
+204|3134.1|gas processing plant control room operator
+205|3134.2|gas processing plant operator
+206|3133.1.4|gas processing plant supervisor
+207|3133.1.5|gas station operator
+208|3315.2|gemmologist
+209|3111.4|geology technician
+210|3117.2|geotechnician
+211|3131.3.4|geothermal power plant operator
+212|3123.1.12|glass installation supervisor
+213|3422.4.2|golf instructor
+214|3313.3|grants administrator
+215|3323.2.1|green coffee buyer
+216|3351.2|hand luggage inspector
+217|3257.4.1|hazardous materials inspector
+218|3257.4.2|hazardous waste inspector
+219|3116.1.4|hazardous waste technician
+220|3435.10|head of workshop
+221|3434.1.2.1|head pastry chef
+222|3257.7|health and safety inspector
+223|3257.5.1|healthcare inspector
+224|3118.3.9|heating, ventilation, air conditioning (and refrigeration) drafter
+225|3153.2.4|helicopter pilot
+226|3152.2|helmsman
+227|3230.1|herbal therapist
+228|3423.3|horse riding instructor
+229|3334.1|housing manager
+230|3412.4.7|housing support worker
+231|3131.3.5|hydroelectric plant operator
+232|3111.5|hydrographic surveying technician
+233|3113.2|hydropower technician
+234|3422.4.3|ice-skating coach
+235|3323.2.2|ICT buyer
+236|3512.2|ICT help desk manager
+237|3513.2|ICT network technician
+238|3512.3|ICT security technician
+239|3512.4|ICT technician
+240|3354.1|immigration adviser
+241|3351.3|immigration officer
+242|3331.2.1.1|import export specialist in agricultural machinery and equipment
+243|3331.2.1.2|import export specialist in agricultural raw materials, seeds and animal feeds
+244|3331.2.1.3|import export specialist in beverages
+245|3331.2.1.4|import export specialist in chemical products
+246|3331.2.1.5|import export specialist in china and other glassware
+247|3331.2.1.6|import export specialist in clothing and footwear
+248|3331.2.1.7|import export specialist in coffee, tea, cocoa and spices
+249|3331.2.1.8|import export specialist in computers, peripheral equipment and software
+250|3331.2.1.9|import export specialist in dairy products and edible oils
+251|3331.2.1.10|import export specialist in electrical household appliances
+252|3331.2.1.11|import export specialist in electronic and telecommunications equipment
+253|3331.2.1.12|import export specialist in fish, crustaceans and molluscs
+254|3331.2.1.13|import export specialist in flowers and plants
+255|3331.2.1.14|import export specialist in fruit and vegetables
+256|3331.2.1.15|import export specialist in furniture, carpets and lighting equipment
+257|3331.2.1.16|import export specialist in hardware, plumbing and heating equipment
+258|3331.2.1.17|import export specialist in hides, skins and leather products
+259|3331.2.1.18|import export specialist in household goods
+260|3331.2.1.19|import export specialist in live animals
+261|3331.2.1.21|import export specialist in machine tools
+262|3331.2.1.20|import export specialist in machinery, industrial equipment, ships and aircraft
+263|3331.2.1.22|import export specialist in meat and meat products
+264|3331.2.1.23|import export specialist in metals and metal ores
+265|3331.2.1.24|import export specialist in mining, construction, civil engineering machinery
+266|3331.2.1.25|import export specialist in office furniture
+267|3331.2.1.26|import export specialist in office machinery and equipment
+268|3331.2.1.27|import export specialist in perfume and cosmetics
+269|3331.2.1.28|import export specialist in pharmaceutical goods
+270|3331.2.1.29|import export specialist in sugar, chocolate and sugar confectionery
+271|3331.2.1.30|import export specialist in textile industry machinery
+272|3331.2.1.31|import export specialist in textiles and textile semi-finished and raw materials
+273|3331.2.1.32|import export specialist in tobacco products
+274|3331.2.1.33|import export specialist in waste and scrap
+275|3331.2.1.34|import export specialist in watches and jewellery
+276|3331.2.1.35|import export specialist in wood and construction materials
+277|3132.1|incinerator operator
+278|3122.3|industrial assembly supervisor
+279|3115.1.6|industrial maintenance supervisor
+280|3139.2|industrial robot controller
+281|3257.4|industrial waste inspector
+282|3114.1.4|instrumentation engineering technician
+283|3123.1.13|insulation supervisor
+284|3315.4|insurance fraud investigator
+285|3321.2|insurance risk consultant
+286|3435.15.1|intelligent lighting engineer
+287|3432.1.1|interior planner
+288|3343.1.4|international student exchange coordinator
+289|3411.9|justice of the peace
+290|3112.1.9|landfill supervisor
+291|3119.9|leather goods manufacturing technician
+292|3122.4.7|leather goods production supervisor
+293|3119.16.3|leather goods quality control laboratory technician
+294|3119.16.4|leather goods quality technician
+295|3111.6|leather laboratory technician
+296|3342.2|legal administrative assistant
+297|3412.2|legal guardian
+298|3423.2.1|leisure attendant
+299|3334.3.1|letting agent
+300|3354.2|licensing officer
+301|3412.3|life coach
+302|3422.2|lifeguard instructor
+303|3123.1.14|lift installation supervisor
+304|3435.25.2|light board operator
+305|3132.2|liquid waste treatment plant operator
+306|3312.5|loan officer
+307|3435.11|location manager
+308|3315.5|loss adjuster
+309|3122.4.8|machine operator supervisor
+310|3122.3.4|machinery assembly supervisor
+311|3122.4.9|malt house supervisor
+312|3343.4|management assistant
+313|3359.5.1|marine cargo inspector
+314|3151.2|marine chief engineer
+315|3118.3.10|marine engineering drafter
+316|3115.1.7|marine engineering technician
+317|3115.1.8|marine mechatronics technician
+318|3115.1.9|marine surveyor
+319|3152.3|maritime pilot
+320|3435.12|mask maker
+321|3115.1.10|material stress analyst
+322|3111.7|material testing technician
+323|3222.1|maternity support worker
+324|3118.3.11|mechanical engineering drafter
+325|3115.1|mechanical engineering technician
+326|3115.1.11|mechatronics engineering technician
+327|3435.13|media integration operator
+328|3344.1|medical administrative assistant
+329|3114.1.5|medical device engineering technician
+330|3344.2|medical practice manager
+331|3252.2|medical records manager
+332|3344.3|medical transcriptionist
+333|3412.4.8|mental health support worker
+334|3432.2|merchandiser
+335|3119.10|metal additive manufacturing operator
+336|3135.1|metal furnace operator
+337|3122.4.10|metal production supervisor
+338|3117.3|metallurgical technician
+339|3111.8|meteorology technician
+340|3111.9|metrology technician
+341|3114.1.6|microelectronics engineering technician
+342|3114.1.7|microelectronics maintenance technician
+343|3114.1.8|microsystem engineering technician
+344|3117.4|mine safety officer
+345|3121.1.1|mine shift manager
+346|3121.1|mine supervisor
+347|3117.5|mine surveying technician
+348|3432.3|miniature set designer
+349|3413.1|monk/nun
+350|3312.8|mortgage broker
+351|3312.6|mortgage loan underwriter
+352|3122.3.5|motor vehicle assembly supervisor
+353|3115.1.12|motor vehicle engine inspector
+354|3115.1.13|motor vehicle engine tester
+355|3423.4|mountain guide
+356|3311.2.3|mutual fund broker
+357|3324.3|non-vessel operating common carrier
+358|3131.3.6|nuclear reactor operator
+359|3111.10|nuclear technician
+360|3257.5|occupational health and safety inspector
+361|3152.6|officer of the watch
+362|3131.1|offshore renewable energy plant operator
+363|3119.11|offshore renewable energy technician
+364|3134.3|oil refinery control room operator
+365|3131.2|onshore wind farm technician
+366|3122.4.11|optical instrument production supervisor
+367|3254.1.1|optical technician
+368|3254.1|optician
+369|3114.1.9|optoelectronic engineering technician
+370|3115.1.14|optomechanical engineering technician
+371|3423.1.1|outdoor activities coordinator
+372|3423.1.2.2|outdoor activities instructor
+373|3423.1.2|outdoor animator
+374|3122.4.12|paper mill supervisor
+375|3123.1.15|paperhanger supervisor
+376|3354.3|passport officer
+377|3413.2|pastoral worker
+378|3353.2.1|pensions administrator
+379|3435.14|performance flying director
+380|3435.15|performance lighting technician
+381|3521.1.3|performance rental technician
+382|3521.1.4|performance video operator
+383|3315.6|personal property appraiser
+384|3134.4|petroleum pump system operator
+385|3213.1|pharmacy assistant
+386|3431.2|photojournalist
+387|3119.12|photonics engineering technician
+388|3111.11|physics technician
+389|3255.2|physiotherapy assistant
+390|3252.3|picture archiving and communication systems administrator
+391|3423.2.3|pilates teacher
+392|3119.13|pipeline compliance coordinator
+393|3123.1.16|plastering supervisor
+394|3122.4.13|plastic and rubber products manufacturing supervisor
+395|3123.1.17|plumbing supervisor
+396|3115.1.15|pneumatic engineering technician
+397|3355.2|police detective
+398|3355.3|police inspector
+399|3123.1.18|power lines supervisor
+400|3131.3.7|power plant control room operator
+401|3122.4.14|precision mechanics supervisor
+402|3122.4.15|print studio supervisor
+403|3118.4|printed circuit board designer
+404|3434.1.3|private chef
+405|3411.8|private detective
+406|3153.2.5|private pilot
+407|3119.14|process engineering technician
+408|3118.3.12|product development engineering drafter
+409|3119.15|product development engineering technician
+410|3115.1.16|production engineering technician
+411|3421.1|professional athlete
+412|3521.1.5|projectionist
+413|3339.4|promoter
+414|3435.16|prompter
+415|3435.17|prop maker
+416|3435.18|prop master/prop mistress
+417|3334.2|property acquisitions manager
+418|3315.7|property appraiser
+419|3321.3.1|property insurance underwriter
+420|3214.3|prosthetist-orthotist
+421|3339.5|publishing rights manager
+422|3139.3|pulp control operator
+423|3323.2.3|purchase planner
+424|3435.19|pyrotechnic designer
+425|3435.20|pyrotechnician
+426|3119.16|quality engineering technician
+427|3111.12|radiation protection technician
+428|3211.2|radiation therapist
+429|3123.1.19|rail construction supervisor
+430|3112.1.10|rail maintenance technician
+431|3112.9|railway infrastructure inspector
+432|3334.3.2|real estate investor
+433|3334.4|real estate leasing manager
+434|3315.8|real estate surveyor
+435|3521.1.6|recording studio technician
+436|3134.5|refinery shift manager
+437|3115.1.17|refrigeration air condition and heat pump technician
+438|3339.6|relocation officer
+439|3111.13|remote sensing technician
+440|3322.1.2|renewable energy sales representative
+441|3412.4.10|residential childcare worker
+442|3412.4.11|residential home adult care worker
+443|3412.4.12|residential home older adult care worker
+444|3412.4.13|residential home young people care worker
+445|3259.7|respiratory therapy technician
+446|3123.1.20|road construction supervisor
+447|3112.1.11|road maintenance technician
+448|3119.2.1|robotics engineering technician
+449|3122.3.6|rolling stock assembly supervisor
+450|3115.1.19|rolling stock engine inspector
+451|3115.1.20|rolling stock engine tester
+452|3118.3.13|rolling stock engineering drafter
+453|3115.1.18|rolling stock engineering technician
+454|3115.1.21|rolling stock inspector
+455|3123.1.21|roofing supervisor
+456|3435.25.3|scenery technician
+457|3432.4.1|scenic painter
+458|3343.5|scopist
+459|3435.21|script supervisor
+460|3153.2.6|second officer
+461|3311.2.4|securities broker
+462|3311.3.4|securities trader
+463|3311.2.4.1|securities underwriter
+464|3114.1.10|sensor engineering technician
+465|3432.4|set builder
+466|3323.3|set buyer
+467|3432.5|set designer
+468|3123.1.22|sewer construction supervisor
+469|3112.1.12|sewerage maintenance technician
+470|3255.3|shiatsu practitioner
+471|3151.3|ship assistant engineer
+472|3151.4|ship duty engineer
+473|3324.1.1|shipbroker
+474|3331.2.2|shipping agent
+475|3422.4.4|ski instructor
+476|3152.5|skipper
+477|3422.4.5|snowboard instructor
+478|3412.4|social care worker
+479|3353.1|social security inspector
+480|3353.2|social security officer
+481|3111.14|soil surveying technician
+482|3131.3.8|solar power plant operator
+483|3132.3|solid waste operator
+484|3255.4|sophrologist
+485|3521.1.7|sound designer
+486|3521.1.8|sound editor
+487|3521.1.9|sound mastering engineer
+488|3521.1.10|sound operator
+489|3423.1.2.3|specialised outdoor animator
+490|3423.2.4|sport therapist
+491|3422.5|sports official
+492|3435.25.4|stage machinist
+493|3435.22|stage manager
+494|3435.25.5|stage technician
+495|3435.23|stand-in
+496|3323.4|standalone public buyer
+497|3314.2|statistical assistant
+498|3131.3.9|steam turbine operator
+499|3311.2.5|stock broker
+500|3311.3.5|stock trader
+501|3411.8.1|store detective
+502|3123.1.23|structural ironwork supervisor
+503|3312.7|student financial support coordinator
+504|3435.24|stunt performer
+505|3343.1.7|supply chain assistant
+506|3112.10|surveying technician
+507|3423.1.2.2.1|survival instructor
+508|3339.7|talent agent
+509|3119.17|tanning technician
+510|3352.1|tax compliance officer
+511|3352.2|tax inspector
+512|3433.3|taxidermist
+513|3522.1|telecommunications engineering technician
+514|3259.8|temperature screener
+515|3422.4.7|tennis coach
+516|3123.1.24|terrazzo setter supervisor
+517|3119.16.5|textile chemical quality technician
+518|3119.18|textile process controller
+519|3119.16.6|textile quality technician
+520|3323.2.4|textile sourcing merchandiser
+521|3435.25|theatre technician
+522|3123.1.25|tiling supervisor
+523|3323.5|timber trader
+524|3334.2.1|title closer
+525|3339.8|tourism contract negotiator
+526|3257.6|transport health and safety inspector
+527|3123.2|underwater construction supervisor
+528|3119.19|utilities inspector
+529|3332.2.1|venue director
+530|3332.3|venue programmer
+531|3122.3.7|vessel assembly supervisor
+532|3115.1.22|vessel engine inspector
+533|3115.1.23|vessel engine tester
+534|3240.2|veterinary technician
+535|3521.1.11|video technician
+536|3142.1.3|viticulture adviser
+537|3412.6|volunteer mentor
+538|3252.4|waiting list coordinator
+539|3324.1.2|waste broker
+540|3122.5|waste management supervisor
+541|3132.4|wastewater treatment operator
+542|3132.5|wastewater treatment technician
+543|3123.1.26|water conservation technician supervisor
+544|3132.6|water plant technician
+545|3112.1.13|water systems engineering technician
+546|3514.1|webmaster
+547|3359.8|weights and measures inspector
+548|3115.1.24|welding inspector
+549|3324.4|wholesale merchant
+550|3324.4.1|wholesale merchant in agricultural machinery and equipment
+551|3324.4.2|wholesale merchant in agricultural raw materials, seeds and animal feeds
+552|3324.4.3|wholesale merchant in beverages
+553|3324.4.4|wholesale merchant in chemical products
+554|3324.4.5|wholesale merchant in china and other glassware
+555|3324.4.6|wholesale merchant in clothing and footwear
+556|3324.4.7|wholesale merchant in coffee, tea, cocoa and spices
+557|3324.4.8|wholesale merchant in computer peripheral equipment and software
+558|3324.4.9|wholesale merchant in dairy products and edible oils
+559|3324.4.10|wholesale merchant in electrical household appliances
+560|3324.4.11|wholesale merchant in electronic and telecommunications equipment and parts
+561|3324.4.12|wholesale merchant in fish crustaceans and molluscs
+562|3324.4.13|wholesale merchant in flowers and plants
+563|3324.4.14|wholesale merchant in fruit and vegetables
+564|3324.4.15|wholesale merchant in furniture, carpets and lighting equipment
+565|3324.4.16|wholesale merchant in hardware, plumbing and heating equipment and supplies
+566|3324.4.17|wholesale merchant in hides, skins and leather products
+567|3324.4.18|wholesale merchant in household goods
+568|3324.4.19|wholesale merchant in live animals
+569|3324.4.21|wholesale merchant in machine tools
+570|3324.4.20|wholesale merchant in machinery, industrial equipment, ships and aircraft
+571|3324.4.22|wholesale merchant in meat and meat products
+572|3324.4.23|wholesale merchant in metals and metal ores
+573|3324.4.24|wholesale merchant in mining, construction and civil engineering machinery
+574|3324.4.25|wholesale merchant in office furniture
+575|3324.4.26|wholesale merchant in office machinery and equipment
+576|3324.4.27|wholesale merchant in perfume and cosmetics
+577|3324.4.28|wholesale merchant in pharmaceutical goods
+578|3324.4.29|wholesale merchant in sugar, chocolate and sugar confectionery
+579|3324.4.30|wholesale merchant in textile industry machinery
+580|3324.4.31|wholesale merchant in textiles and textile semi-finished and raw materials
+581|3324.4.32|wholesale merchant in tobacco products
+582|3324.4.33|wholesale merchant in waste and scrap
+583|3324.4.34|wholesale merchant in watches and jewellery
+584|3324.4.35|wholesale merchant in wood and construction materials
+585|3122.3.8|wood assembly supervisor
+586|3122.4.16|wood production supervisor
+587|3141.2.5|zoology technician

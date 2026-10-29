@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "id 1440px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "en 1440px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "ru 1440px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "uz 1440px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "id 390px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "en 390px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "ru 390px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "uz 390px: planned AI labels on cards/comparison, no candidate quotas, no overflow",
+    "Removed workspace tab stays absent; an old section URL falls back safely without calling recommendations"
+  ],
+  "errors": []
+}

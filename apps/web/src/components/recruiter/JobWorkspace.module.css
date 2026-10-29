@@ -82,7 +82,28 @@ button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 .applicationDetail{padding:8px 24px 24px;color:#52617c;font-size:14px;}.applicationDetail section{border-top:1px solid #e7ebf3;padding-top:16px;margin-top:20px;}.applicationDetail h3{font-size:15px;color:#17213a;}.applicationDetail h4{font-size:13px;margin-bottom:6px;}
 .detailIdentity{display:flex;align-items:center;gap:14px;}.detailIdentity .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;}.detailIdentity h2{font-size:18px;color:#17213a;margin:0;}.detailIdentity p{margin:6px 0;}
 .detailActions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;}.stageField{display:flex;gap:12px;align-items:center;margin-top:20px;}.stageField select{max-width:240px;}
+.interviewSection > .interviewHead { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.interviewHead > div { min-width:0; }
+.interviewHead h3 { margin:0 0 6px; }
+.interviewHead p,.interviewAwaiting { margin:0; color:#74829a; font-size:12px; line-height:1.55; }
+.interviewHead .secondary { flex:0 0 auto; min-height:36px; padding:7px 12px; font-size:12px; }
+.interviewAwaiting { margin-top:14px; padding:10px 12px; border-radius:7px; background:#f7f5ff; color:#6552a6; }
+.interviewList { display:grid; gap:9px; margin-top:14px; }
+.interviewItem { padding:12px 14px; border:1px solid #e5e9f1; border-radius:8px; background:#fbfcfe; }
+.interviewItemHead { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.interviewItemHead time { color:#293750; font-size:13px; font-weight:600; line-height:1.5; }
+.interviewBadge { flex:0 0 auto; padding:4px 8px; border-radius:999px; background:#eaf1fa; color:#61718d; font-size:11px; font-weight:600; }
+.interviewBadge[data-status=SCHEDULED] { background:#e8f7f0; color:#087e5b; }
+.interviewBadge[data-status=COMPLETED] { background:#f0edff; color:#6248b1; }
+.interviewBadge[data-status=CANCELLED] { background:#f1f3f6; color:#77849a; }
+.interviewItemMeta { display:flex; flex-wrap:wrap; gap:5px 14px; margin-top:7px; color:#74829a; font-size:12px; }
+.interviewItem > p { margin:8px 0 0; font-size:12px; line-height:1.6; }
+.interviewItem > a { display:inline-flex; margin-top:9px; color:#5635e8; font-size:12px; font-weight:600; text-decoration:none; }
+.interviewItem > a:hover { text-decoration:underline; }
+.interviewFormPanel { margin-top:14px; padding:16px; border:1px solid #e4e0f1; border-radius:9px; background:#faf9fe; }
 .interviewForm{display:grid;grid-template-columns:1fr 1fr;gap:14px;}.interviewForm label{display:flex;flex-direction:column;gap:7px;font-size:13px;}.interviewForm input,.interviewForm select,.interviewForm textarea{min-width:0;width:100%;}.interviewForm small{grid-column:1/-1;}
+.interviewFormActions { grid-column:1/-1; display:flex; justify-content:flex-end; flex-wrap:wrap; gap:9px; }
+.interviewFormActions button { min-height:38px; padding:8px 13px; font-size:12px; }
 .cvLink { color:#5635e8; font-size:13px; white-space:nowrap; text-decoration:none; }
 .cvLink:hover { text-decoration:underline; }
 .cvUnavailable { color:#8290a5; font-size:12px; }
@@ -98,5 +119,5 @@ button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 .details { padding:26px; line-height:1.7; }.details h2{font-size:20px;}.details h3{font-size:15px;margin-top:26px;}.description{white-space:pre-wrap;overflow-wrap:anywhere;}
 @media(max-width:1100px){.rankingHeader{grid-template-columns:1fr;}.controls{justify-content:flex-start;flex-wrap:wrap;}.search{flex:1;width:auto;min-width:200px;}.table{min-width:1000px;}}
 @media(max-width:1400px){.rankingHeader{grid-template-columns:1fr;}.controls{justify-content:flex-start;flex-wrap:wrap;}.search{flex:1;width:auto;}}
-@media(max-width:760px){.interviewForm{grid-template-columns:1fr;}.applicationDetail{padding-inline:16px;}}
+@media(max-width:760px){.interviewForm{grid-template-columns:1fr;}.interviewFormActions{grid-column:1;}.interviewHead{flex-wrap:wrap;}.interviewHead .secondary{width:100%;}.interviewItemHead{align-items:flex-start;}.applicationDetail{padding-inline:16px;}}
 @media(max-width:760px){.header{padding:18px 16px;gap:12px;flex-wrap:wrap;}.header .actions{margin-left:32px;}.heading{gap:10px;}.heading h1{font-size:21px;}.subtitle{font-size:12px;}.tabs{padding-inline:16px;gap:22px;overflow-x:auto;}.tabs a{font-size:13px;}.card{width:calc(100% - 32px);margin-inline:16px;}.rankingHeader{padding:12px;}.rankingIntro h2{font-size:18px;}.controls{gap:8px;}.controls .search{flex-basis:100%;}.sort{flex:1;}.filterPanel{padding-inline:12px;}.primary,.secondary{font-size:13px;}}
