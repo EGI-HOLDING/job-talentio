@@ -34,8 +34,11 @@ Never restore a whole cluster or change another application's database.
 
 The web image is built with Indonesia's API/admin/site URLs and default language
 `id`, with `NEXT_PUBLIC_LOCALE_DETECTION=default` so a new visitor starts in
-Indonesian even when their browser prefers another language. Explicit locale URLs
-and saved language cookies still win; login retains the account's saved language.
+Indonesian even when their browser prefers another language. At the canonical
+`https://cari-kerja.co.id/` entry point, Nginx always redirects to `/id`, preserves
+query parameters, replaces the old language cookie with `id`, and disables caching
+of that redirect. Explicit locale URLs remain available; saved cookies apply to
+other unprefixed paths, and login retains the account's saved language.
 These public settings are build arguments: rebuild the web image when changing
 them. Railway retains browser negotiation and its `uz` fallback when the optional
 settings are absent. API registration without a locale follows `APP_DEFAULT_LOCALE`;
