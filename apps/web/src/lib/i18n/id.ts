@@ -6,6 +6,24 @@ import { authProviders } from './dict/authProviders';
 
 /** Indonesian translations for the complete web interface. */
 export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
+  "rw.searchJobsCompact": "Cari jabatan atau lokasi",
+  "support.subtitle": "Kelola pertanyaan rekrutmen bersama tim dukungan kami.",
+  "support.priorityHint": "Lowongan Premium aktif memberikan prioritas antrean. Waktu respons belum ditetapkan.",
+  "support.requests": "Permintaan Anda",
+  "support.noRequests": "Belum ada permintaan",
+  "support.noOpenRequests": "Tidak ada permintaan aktif",
+  "support.listEmptyHint": "Permintaan bantuan Anda akan tampil di sini.",
+  "support.welcome": "Ada yang bisa kami bantu?",
+  "support.welcomeHint": "Pilih permintaan untuk membaca percakapan, atau buat permintaan baru untuk perusahaan Anda.",
+  "support.newHint": "Jelaskan kebutuhan atau kendala Anda. Sertakan halaman dan langkah yang terkait agar tim kami dapat membantu.",
+  "support.sendRequest": "Kirim permintaan",
+  "support.yourReply": "Balasan Anda",
+  "support.sent": "Pesan Anda berhasil dikirim.",
+  "support.sendFailed": "Pesan belum terkirim. Silakan coba lagi; isi pesan Anda tetap tersimpan.",
+  "support.validation": "Judul minimal 5 karakter dan pesan permintaan baru minimal 10 karakter. Balasan tidak boleh kosong.",
+  "support.unavailable": "Bantuan HR belum tersedia",
+  "support.unavailableHint": "Layanan bantuan belum diaktifkan pada platform ini. Anda dapat kembali ke daftar lowongan.",
+
   "rw.promotion": "Promosi",
   "rw.promotionTitle": "Promosi perusahaan",
   "rw.promotionHint": "Lihat status dan masa aktif promosi perusahaan Anda.",
