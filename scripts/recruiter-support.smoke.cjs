@@ -1,6 +1,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {host, nodes, text} = require('./lib/react-hook-host.cjs');
+require('./recruiter-job-table.smoke.cjs');
 const stub = () => null;
 const deferred = () => { let resolve; const promise = new Promise(r => resolve = r); return {promise, resolve}; };
 const i18n = {useI18n: () => ({t: key => key, locale: 'id'}), useEnumLabel: () => (_, value) => value};
@@ -126,20 +127,53 @@ test('reply uses the selected ticket and loads the last reply page after a succe
 });
 
 test('combined job toolbar retains company totals while filtering and still opens the correct create-job editor', async () => {
-  function SearchField() {} function WorkspaceSelect() {} function Editor() {}
+  function SearchField() {} function WorkspaceSelect() {} function Editor() {} function JobRow() {}
   const ui = host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
     '@/lib/api':{api:async()=>{}},'@/lib/navigation':{Link:stub,useRouter:()=>({push(){}})},'@/lib/accountNavigation':{employerJobHref:id=>'/job/'+id},
     '@/lib/i18n':i18n,'@/lib/location':{localizedJobLocation:()=>''},'@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},
     '@/components/employee/WorkspacePrimitives':{SearchField,WorkspaceEmpty:stub,WorkspaceLoading:stub,Pagination:stub,dateLabel:()=>''},
     '@/components/jobs/WorkspaceSelect':{WorkspaceSelect},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},
-    './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./HrBenefits':{JobBenefits:stub},'./RecruiterJobActions':{RecruiterJobActions:stub},
+    './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:JobRow},
   });
   const jobs=[{id:'a',title:'Backend Engineer',status:'PUBLISHED',createdAt:'2026-10-29',_count:{applications:3,views:5}},{id:'b',title:'QA Engineer',status:'DRAFT',createdAt:'2026-10-28',_count:{applications:2,views:7}}];
   let tree=await ui.render({companyId:'company-a',company:{name:'Company A'},jobs,loading:false,meta:{},createRequested:false});
   const metrics=()=>text(nodes(tree,n=>n.type==='dl')[0]); const initial=metrics();
   nodes(tree,n=>n.type===SearchField)[0].props.onChange('Backend');tree=await ui.render();assert.equal(metrics(),initial);
-  assert.equal(nodes(tree,n=>n.type===stub&&n.props.href==='/job/a').length,1);
-  assert.equal(nodes(tree,n=>n.type===stub&&n.props.href==='/job/b').length,0);
+  assert.equal(nodes(tree,n=>n.type===JobRow&&n.props.job.id==='a').length,1);
+  assert.equal(nodes(tree,n=>n.type===JobRow&&n.props.job.id==='b').length,0);
   assert.match(initial,/rw.published 1/);assert.match(initial,/applications 5/);assert.match(initial,/rec.viewsWord 12/);
   button(tree,'postAJob').props.onClick();tree=await ui.render();const editor=nodes(tree,n=>n.type===Editor)[0];assert.equal(editor.props.companyId,'company-a');assert.equal(editor.props.job,null);ui.unmount();
+});
+
+function jobList(api, confirm=async()=>true) {
+  function Editor() {} function Row() {}
+  const ui=host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
+    '@/lib/api':{api},'@/lib/navigation':{useRouter:()=>({push(){}})},'@/lib/accountNavigation':{employerJobHref:id=>'/job/'+id},'@/lib/i18n':i18n,
+    '@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,Pagination:stub},
+    '@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/ui/ConfirmProvider':{useConfirm:()=>confirm},'./RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:Row},
+  });
+  const props={companyId:'a',company:{name:'A'},jobs:[{id:'job-a',title:'Platform Engineer',status:'CLOSED',createdAt:'2026-10-29'}],loading:false,meta:{},createRequested:false,onCloseCreate(){},onReload:async()=>{},onApplicants(){},onStatus:async()=>{},onFlash(){}};
+  return {ui,Editor,Row,props};
+}
+
+test('first publication opens Review; closing names the job and uses danger confirmation with a double-click lock',async()=>{
+  const confirmations=[],allow=deferred(),statuses=[];
+  const h=jobList(async()=>({id:'job-a',questions:[]}),value=>{confirmations.push(value);return allow.promise;});
+  let tree=await h.ui.render({...h.props,onStatus:async(id,next)=>statuses.push([id,next])});
+  nodes(tree,n=>n.type===h.Row)[0].props.onReviewPublish();tree=await h.ui.render();assert.equal(nodes(tree,n=>n.type===h.Editor)[0].props.initialStep,3);
+  nodes(tree,n=>n.type===h.Editor)[0].props.onClose();tree=await h.ui.render();
+  const row=nodes(tree,n=>n.type===h.Row)[0];row.props.onStatus('CLOSED');row.props.onStatus('CLOSED');await h.ui.render();
+  assert.equal(confirmations.length,1);assert.equal(confirmations[0].message,'Platform Engineer');assert.equal(confirmations[0].tone,'danger');assert.equal(statuses.length,0);
+  allow.resolve(true);await h.ui.render();assert.deepEqual(statuses,[['job-a','CLOSED']]);h.ui.unmount();
+});
+
+test('a successful duplicate remains editable after refresh failure, and company changes invalidate old editor/duplicate responses',async()=>{
+  const flashes=[],h=jobList(async()=>({id:'new-draft',status:'DRAFT'}));
+  let tree=await h.ui.render({...h.props,onReload:async()=>{throw Error('read failed');},onFlash:message=>flashes.push(message)});
+  nodes(tree,n=>n.type===h.Row)[0].props.onDuplicate();tree=await h.ui.render();assert.equal(nodes(tree,n=>n.type===h.Editor)[0].props.job.id,'new-draft');assert.deepEqual(flashes,['jr.draftCreatedRefreshFailed']);h.ui.unmount();
+  for(const action of ['onEdit','onDuplicate']) {
+    const late=deferred(),old=jobList(()=>late.promise);tree=await old.ui.render(old.props);nodes(tree,n=>n.type===old.Row)[0].props[action]();await old.ui.render();
+    await old.ui.render({...old.props,companyId:'b'});await old.ui.render(old.props);late.resolve({id:'old-response',status:'DRAFT'});tree=await old.ui.render();
+    assert.equal(nodes(tree,n=>n.type===old.Editor).length,0);old.ui.unmount();
+  }
 });
