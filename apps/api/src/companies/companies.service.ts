@@ -27,6 +27,7 @@ import { JobsSearchService } from '../search/jobs-search.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { resolveJobLocation } from '../common/geo-selection';
 import { closeCompanyBlocked, transferOwnershipBlocked } from '../users/erasure-guards';
+import { compareFeaturedCompanies } from './featured-company-order';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -126,7 +127,7 @@ export class CompaniesService {
     q?: string;
     industrySlug?: string;
     plan?: PlanCode;
-    sort: 'jobs' | 'name';
+    sort: 'jobs' | 'name' | 'featured';
     page: number;
     limit: number;
   }) {
@@ -155,6 +156,72 @@ export class CompaniesService {
     const total = await this.prisma.company.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
     const safePage = Math.min(page, total === 0 ? 1 : totalPages);
+
+    if (query.sort === 'featured') {
+      const featured = await this.prisma.$queryRaw<Array<{
+        id: string;
+        slug: string;
+        tier: number;
+        latestPublishedAt: Date | null;
+      }>>(Prisma.sql`
+        SELECT
+          c."id",
+          c."slug",
+          MAX(CASE b."code"
+            WHEN 'PREMIUM' THEN 3
+            WHEN 'STANDARD' THEN 2
+            ELSE 1
+          END)::int AS "tier",
+          MAX(j."publishedAt") AS "latestPublishedAt"
+        FROM "Company" c
+        JOIN "JobPost" j ON j."companyId" = c."id"
+        LEFT JOIN "JobBenefit" b ON b."jobId" = j."id"
+        WHERE c."isBanned" = false
+          AND c."anonymizedAt" IS NULL
+          AND j."status" = 'PUBLISHED'
+          AND j."isAnonymous" = false
+          AND (b."expiresAt" IS NULL OR b."expiresAt" > ${new Date()})
+          ${query.industrySlug ? Prisma.sql`AND EXISTS (
+            SELECT 1 FROM "Industry" i WHERE i."id" = c."industryId" AND i."slug" = ${query.industrySlug}
+          )` : Prisma.empty}
+          ${q ? Prisma.sql`AND (
+            c."name" ILIKE ${`%${q}%`}
+            OR c."slug" ILIKE ${`%${q.toLowerCase().replace(/\s+/g, '-')}%`}
+          )` : Prisma.empty}
+        GROUP BY c."id", c."slug"
+      `);
+
+      featured.sort(compareFeaturedCompanies);
+      const selected = featured.slice((safePage - 1) * limit, safePage * limit);
+      const selectedRows = selected.length
+        ? await this.prisma.company.findMany({
+            where: { id: { in: selected.map((row) => row.id) } },
+            select: {
+              slug: true,
+              name: true,
+              logoUrl: true,
+              industry: { select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true } },
+              _count: {
+                select: { jobPosts: { where: { ...liveJobWhere(), isAnonymous: false } } },
+              },
+            },
+          })
+        : [];
+      const rowsBySlug = new Map(selectedRows.map((row) => [row.slug, row]));
+      return {
+        items: selected.map(({ slug }) => rowsBySlug.get(slug)).filter((row): row is NonNullable<typeof row> => Boolean(row)).map((c) => ({
+          slug: c.slug,
+          name: c.name,
+          logoUrl: c.logoUrl,
+          industry: c.industry,
+          openJobsCount: c._count.jobPosts,
+        })),
+        total,
+        page: safePage,
+        limit,
+        totalPages,
+      };
+    }
 
     const rows = await this.prisma.company.findMany({
       where,

@@ -8,6 +8,7 @@ import { formatCompactCount } from '@/lib/numberFormat';
 import type { TopCompany } from './TopCompaniesCarousel';
 import styles from './SeekerHero.module.css';
 import { HeroLocationPicker } from './HeroLocationPicker';
+import { FeaturedCompaniesCarousel } from './FeaturedCompaniesCarousel';
 
 export type PlatformStats = {
   openRoles: number;
@@ -117,25 +118,7 @@ export function SeekerHero({ stats, cities, companies, popularRoles }: Props) {
         ))}
       </dl>
 
-      {companies.length > 0 && (
-        <section className={styles.employers} aria-labelledby="featured-employers-title">
-          <div className={styles.employersHeading}>
-            <h2 id="featured-employers-title">{t('home.hiringCompanies')}</h2>
-            <Link href="/explore/companies">{t('viewAll')}<Arrow diagonal /></Link>
-          </div>
-          <div className={styles.companyRow}>
-            {companies.slice(0, 5).map((company) => (
-              <Link key={company.slug} href={`/jobs?companySlug=${company.slug}`} className={styles.company}>
-                {company.logoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={company.logoUrl} alt="" width="56" height="56" loading="lazy" />
-                )}
-                <span>{company.name}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {companies.length > 0 && <FeaturedCompaniesCarousel companies={companies} />}
     </>
   );
 }

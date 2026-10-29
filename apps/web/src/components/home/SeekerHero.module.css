@@ -89,17 +89,6 @@
 .stats > div + div { border-left: 1px solid #dfe1e9; }
 .stats dt { color: #596077; font-size: .95rem; }
 .stats dd { margin: 0; color: #101326; font-family: var(--font-display); font-size: 1.85rem; font-weight: 800; letter-spacing: -.04em; }
-.employers { padding: 1.2rem .5rem 2.7rem; border-bottom: 1px solid #edf0f5; }
-.employersHeading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.75rem; }
-.employersHeading h2 { margin: 0; font-family: var(--font-display); font-size: clamp(1.15rem, 1.7vw, 1.6rem); letter-spacing: -.035em; }
-.employersHeading > a { display: inline-flex; align-items: center; gap: .5rem; flex-shrink: 0; font-size: .9rem; color: #5032df; }
-.companyRow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; }
-.company { display: flex; align-items: center; justify-content: center; gap: .8rem; min-height: 72px; padding: .5rem 1.1rem; color: #242b41; }
-.company + .company { border-left: 1px solid #e5e7ed; }
-.company img { flex-shrink: 0; width: 56px; height: 56px; object-fit: contain; }
-.company span { font-family: var(--font-display); font-size: 1.02rem; line-height: 1.3; font-weight: 700; letter-spacing: -.03em; }
-.company:hover { color: #5032df; }
-.company:focus-visible, .employersHeading > a:focus-visible { outline: 2px solid #5032df; outline-offset: 2px; border-radius: 4px; }
 
 @media (max-width: 1100px) {
   .hero { padding: 2.5rem 2rem 1.5rem; }
@@ -110,9 +99,6 @@
   .queryField, .cityField { padding-inline: .6rem; gap: .5rem; }
   .queryField input { font-size: .9rem; }
   .stats > div { padding-inline: 1.8rem; }
-  .company { padding-inline: .65rem; gap: .5rem; }
-  .company img { width: 42px; height: 42px; }
-  .company span { font-size: .88rem; }
 }
 
 @media (max-width: 760px) {
@@ -136,14 +122,6 @@
   .stats > div { flex: 1; flex-direction: column-reverse; align-items: center; gap: .35rem; padding: 0 .65rem; text-align: center; }
   .stats dd { font-size: 1.6rem; }
   .stats dt { font-size: .75rem; }
-  .employers { padding: 1.25rem 0 1.75rem; }
-  .employersHeading { margin-bottom: 1rem; gap: .7rem; }
-  .employersHeading h2 { max-width: 70%; font-size: 1.1rem; line-height: 1.4; }
-  .employersHeading > a { font-size: .8rem; gap: .2rem; }
-  .companyRow { display: flex; overflow-x: auto; padding: .2rem 0 .7rem; scroll-snap-type: x proximity; }
-  .company { flex: 0 0 190px; scroll-snap-align: start; padding: .5rem .8rem; justify-content: flex-start; }
-  .company img { width: 44px; height: 44px; }
-  .company span { font-size: .9rem; }
 }
 
 @media (max-width: 380px) {

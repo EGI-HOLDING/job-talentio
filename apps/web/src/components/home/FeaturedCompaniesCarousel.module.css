@@ -1,0 +1,102 @@
+.carousel {
+  position: relative;
+  padding: .7rem 3.4rem 1.15rem;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.viewport {
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.track {
+  display: flex;
+  width: 100%;
+  transition: transform 420ms cubic-bezier(.22, .75, .22, 1);
+  will-change: transform;
+}
+
+.page {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(62px, 1fr));
+  place-items: center;
+  gap: .5rem 1.1rem;
+  padding: .3rem 0;
+}
+
+.company {
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  outline-offset: 3px;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.company:hover { background: #f8f7ff; transform: translateY(-1px); }
+.company:focus-visible { outline: 2px solid #6040ef; }
+.company img { display: block; width: min(100%, 150px); height: 54px; object-fit: contain; }
+
+.monogram {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f0edff, #e5e0ff);
+  color: #5032df;
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+
+.arrow {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid #e8e7f0;
+  border-radius: 50%;
+  background: rgba(255,255,255,.96);
+  color: #4630c7;
+  box-shadow: 0 3px 12px rgba(26, 20, 68, .1);
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.arrow:hover { background: #f5f2ff; box-shadow: 0 5px 16px rgba(26, 20, 68, .16); }
+.arrow:active { transform: translateY(-50%) scale(.96); }
+.arrow:focus-visible { outline: 3px solid #b9aaff; outline-offset: 3px; }
+.previous { left: .3rem; }
+.next { right: .3rem; }
+
+@media (max-width: 900px) {
+  .carousel { padding-inline: 2.7rem; }
+  .page { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(58px, 1fr)); gap: .35rem .7rem; }
+  .company { min-height: 58px; }
+  .company img { width: min(100%, 132px); height: 48px; }
+}
+
+@media (max-width: 560px) {
+  .carousel { padding: .4rem 2.2rem 1rem; }
+  .page { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(54px, 1fr)); gap: .15rem .35rem; }
+  .company { min-height: 54px; border-radius: 9px; }
+  .company img { width: min(100%, 104px); height: 42px; }
+  .monogram { width: 42px; height: 42px; border-radius: 12px; font-size: .85rem; }
+  .arrow { width: 34px; height: 34px; }
+  .previous { left: .1rem; }
+  .next { right: .1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track, .company, .arrow { transition-duration: .01ms; }
+}

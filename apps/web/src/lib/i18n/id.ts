@@ -231,6 +231,7 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   topCompaniesSubtitle: 'Perusahaan yang sedang merekrut',
   topCompaniesCarousel: 'Karusel perusahaan unggulan',
   topCompaniesGoToSlide: 'Tampilkan grup {n}',
+  topCompaniesSlideStatus: 'Grup {current} dari {total}',
   exploreCompaniesTabs: 'Jelajahi perusahaan',
   exploreCompaniesTabIndustry: 'Menurut industri',
   exploreCompaniesTabAll: 'Semua',

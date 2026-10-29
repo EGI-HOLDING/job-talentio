@@ -25,7 +25,7 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
     let active = true;
     api<PlatformStats>('/meta/platform-stats', { auth: false }).then((data) => { if (active) setPlatformStats(data); }).catch(() => undefined);
     api<{ items: LandingJob[] }>('/jobs?limit=6&sort=newest', { auth: false }).then((data) => { if (active) setFeaturedJobs(data.items); }).catch(() => undefined);
-    api<{ items: TopCompany[] }>('/companies?limit=36&sort=jobs', { auth: false }).then((data) => { if (active) setTopCompanies(data.items || []); }).catch(() => undefined);
+    api<{ items: TopCompany[] }>('/companies?sort=featured&limit=48', { auth: false }).then((data) => { if (active) setTopCompanies(data.items || []); }).catch(() => undefined);
     api<{ items: NewsListItem[] }>('/news?category=CAREER&limit=3', { auth: false }).then((data) => { if (active) setLatestNews(data.items); }).catch(() => undefined);
     Promise.all([
       api<Array<{ slug: string; name: string; icon?: string | null }>>('/meta/categories', { auth: false }),

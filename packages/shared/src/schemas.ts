@@ -351,7 +351,7 @@ export const companyBrowseSchema = z.object({
   industrySlug: z.string().optional(),
   /** Deprecated; accepted and ignored for saved URLs. */
   plan: z.enum(['VIP', 'PREMIUM', 'STANDARD', 'FREE']).optional(),
-  sort: z.enum(['jobs', 'name']).default('jobs'),
+  sort: z.enum(['jobs', 'name', 'featured']).default('jobs'),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(48).default(24),
 });

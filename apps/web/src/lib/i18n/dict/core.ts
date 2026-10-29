@@ -280,6 +280,11 @@ export const core = {
     ru: 'Показать группу {n}',
     en: 'Show group {n}',
   },
+  topCompaniesSlideStatus: {
+    uz: '{total} guruhdan {current}-guruh',
+    ru: 'Группа {current} из {total}',
+    en: 'Group {current} of {total}',
+  },
   exploreCompaniesTabs: {
     uz: 'Kompaniyalar bo‘yicha ko‘rish',
     ru: 'Просмотр компаний',
