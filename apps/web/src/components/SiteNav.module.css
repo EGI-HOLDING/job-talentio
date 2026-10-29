@@ -17,7 +17,7 @@
 .mobileMenu { display: none; }
 .account { position: relative; }
 .accountButton { display: flex; align-items: center; gap: .6rem; padding: .2rem .3rem; border: 0; background: transparent; color: #23304a; font-size: .82rem; }
-.accountButton:hover { background: #f6f4fc; }
+.accountButton:hover,.accountButton[aria-expanded=true] { background:#f6f4fc; color:#23304a; }
 .initial { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #ede8ff; color: #5635e8; font-weight: 700; }
 .accountMenu { position: absolute; z-index: 80; top: calc(100% + 14px); right: 0; width: min(270px, calc(100vw - 32px)); padding: 8px; border: 1px solid #e5e8f1; border-radius: 12px; background: #fff; box-shadow: 0 16px 48px #1824481c; }
 .accountIdentity { padding: 12px 10px; border-bottom: 1px solid #edf0f5; margin-bottom: 5px; }
@@ -124,6 +124,6 @@
 .companyChoices > button > span { flex:1; min-width:0; overflow-wrap:anywhere; }
 .companyChoices > button > svg { flex-shrink:0; width:16px; }
 .companyChoices > button[aria-pressed=true] { color:#5635e8; background:#f5f2ff; font-weight:600; }
-.companyChoices > button:hover { background:#eee9ff; }
+.companyChoices > button:hover { background:#eee9ff; color:#5635e8; }
 .account button:focus-visible,.account a:focus-visible { outline:2px solid #7455df; outline-offset:2px; }
 @media(max-width:760px) { .accountAttention { position:absolute; top:2px; right:2px; border:1px solid #fff; width:8px; height:8px; } }
