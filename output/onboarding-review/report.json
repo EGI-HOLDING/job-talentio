@@ -1,8 +1,0 @@
-{
-  "checks": [
-    "Actual API accepts partial draft/edit/reload; incomplete final import rejected; seven reviewed experiences imported exactly once",
-    "Browser 390: autosave, incomplete roles excluded, role edit, selected empty field validation, exclusions persist on refresh, complete with eight experiences",
-    "Browser 1280: autosave, incomplete roles excluded, role edit, selected empty field validation, exclusions persist on refresh, complete with eight experiences"
-  ],
-  "errors": []
-}

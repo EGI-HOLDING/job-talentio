@@ -1,8 +1,0 @@
-{
-  "checks": [
-    "Anonymous pricing Premium CTA → actual registration → server preference → language/refresh/logout → login without next → first-job editor → highlighted package after refresh → explicit correctly bound pending order; no automatic purchase",
-    "Actual password registration and login create recruiter onboarding metadata and a company; direct dashboard entry goes to onboarding",
-    "Mobile: changing language waits for the latest company draft to save; logout saves a newer draft; login resumes the same server progress"
-  ],
-  "errors": []
-}
