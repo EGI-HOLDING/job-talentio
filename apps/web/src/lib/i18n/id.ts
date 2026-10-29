@@ -6,6 +6,15 @@ import { authProviders } from './dict/authProviders';
 
 /** Indonesian translations for the complete web interface. */
 export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
+  "rw.promotion": "Promosi",
+  "rw.promotionTitle": "Promosi perusahaan",
+  "rw.promotionHint": "Lihat status dan masa aktif promosi perusahaan Anda.",
+  "rw.promotionActive": "Perusahaan Anda sedang dipromosikan",
+  "rw.promotionInactive": "Belum ada promosi aktif",
+  "rw.promotionActiveBadge": "Aktif",
+  "rw.promotionInactiveBadge": "Tidak aktif",
+  "rw.promotionEnds": "Aktif hingga",
+  "rw.promotionPackageHint": "Promosi perusahaan mengikuti manfaat paket lowongan yang aktif. Paket, masa tayang, dan boost setiap lowongan dapat dilihat di daftar lowongan.",
  ...Object.fromEntries(Object.entries(jobCommerce).map(([key, labels]) => [key, labels.id])),
  ...Object.fromEntries(Object.entries(authProviders).map(([key, labels]) => [key, labels.id])),
  ...Object.fromEntries(Object.entries(linkedin).map(([key, labels]) => [key, labels.id])),

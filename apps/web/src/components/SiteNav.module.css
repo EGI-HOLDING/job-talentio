@@ -111,3 +111,19 @@
   .employee .menuButton, .recruiter .menuButton { width:44px; min-height:44px; }
   .landing .mobileMenu { grid-row:3; }
 }
+
+.accountName { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.accountAttention,.verificationLink i { width:7px; height:7px; border-radius:50%; background:#ca8b22; flex-shrink:0; }
+.accountAttention { box-shadow:0 0 0 3px #fff6e4; }
+.accountMenu { max-height:calc(100dvh - var(--app-nav-height, 70px) - 24px); overflow-y:auto; overscroll-behavior:contain; }
+.accountIdentity .verificationLink { display:flex; align-items:center; gap:7px; margin-top:10px; padding:8px; font-size:.7rem; color:#94621c; background:#fff8e9; border-radius:6px; }
+.verificationLink svg { width:14px; margin-left:auto; flex-shrink:0; }
+.companyChoices { padding:10px 4px; border-bottom:1px solid #edf0f5; margin-bottom:5px; }
+.companyChoices > span { display:block; padding:0 6px 8px; color:#8290a7; font-size:.66rem; font-weight:600; letter-spacing:.04em; }
+.companyChoices > button { display:flex; align-items:center; gap:9px; width:100%; min-height:40px; padding:9px 7px; border:0; border-radius:6px; background:transparent; color:#53617a; text-align:left; font-size:.76rem; }
+.companyChoices > button > span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.companyChoices > button > svg { flex-shrink:0; width:16px; }
+.companyChoices > button[aria-pressed=true] { color:#5635e8; background:#f5f2ff; font-weight:600; }
+.companyChoices > button:hover { background:#eee9ff; }
+.account button:focus-visible,.account a:focus-visible { outline:2px solid #7455df; outline-offset:2px; }
+@media(max-width:760px) { .accountAttention { position:absolute; top:2px; right:2px; border:1px solid #fff; width:8px; height:8px; } }

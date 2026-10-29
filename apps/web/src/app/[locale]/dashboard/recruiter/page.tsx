@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { allowEmployerContextChange } from '@/components/recruiter/useEmployerUnsaved';
-import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { RecruiterJobs } from '@/components/recruiter/RecruiterJobs';
 import { RecruiterPipeline } from '@/components/recruiter/RecruiterPipeline';
 import { RecruiterCompany } from '@/components/recruiter/RecruiterCompany';
@@ -107,9 +106,6 @@ function RecruiterDashboard() {
     [],
   );
   const [companyDetail, setCompanyDetail] = useState<any>(null);
-  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
-  const [accountEmail, setAccountEmail] = useState<string | null>(null);
-  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const company = useMemo(
     () => companyDetail || memberships.find((m) => m.companyId === companyId)?.company,
@@ -124,33 +120,6 @@ function RecruiterDashboard() {
     [memberships, companyId],
   );
 
-  async function requestEmailVerification() {
-    setVerifyBusy(true);
-    try {
-      const r = await api<{ message?: string; alreadyVerified?: boolean; email: string }>(
-        '/auth/request-verification',
-        { method: 'POST' },
-      );
-      if (r.alreadyVerified) {
-        setEmailVerified(true);
-        const session = getSession();
-        if (session) {
-          saveSession({
-            ...session,
-            user: { ...session.user, emailVerified: true },
-          });
-        }
-        flash(t('emailVerifiedBadge'));
-      } else {
-        flash(r.message || `${t('verifyEmailSentTo')} ${r.email}`);
-      }
-    } catch (err) {
-      flash(err instanceof Error ? err.message : t('verifyEmailFailed'), 'error');
-    } finally {
-      setVerifyBusy(false);
-    }
-  }
-
   function flash(message: string, tone: 'success' | 'error' = 'success') {
     setMsgTone(tone);
     setMsg(message);
@@ -162,12 +131,6 @@ function RecruiterDashboard() {
   }
 
   async function selectTab(next: Tab) { if (await allowEmployerContextChange()) setTab(next); }
-  async function chooseCompany(id: string) {
-    if (id === companyId || !await allowEmployerContextChange()) return;
-    setCompanyDetail(null); setApplicants([]); setSelectedJob(''); setCompanyId(id); rememberCompany(id);
-
-  }
-
   async function bootstrap() {
     const session = getSession();
     if (!session) {
@@ -178,8 +141,6 @@ function RecruiterDashboard() {
       window.location.href = localeHref(session.user.role === 'EMPLOYEE' ? '/jobs' : '/');
       return;
     }
-    setAccountEmail(session.user.email);
-    setEmailVerified(session.user.emailVerified ?? null);
     const [mine, cities, skills, categories, benefits, inds, langs, me] = await Promise.all([
       api<any[]>('/companies/mine'),
       api('/meta/cities', { auth: false }),
@@ -195,8 +156,6 @@ function RecruiterDashboard() {
     ]);
     if (me) {
       saveSession(me);
-      setAccountEmail(me.user.email);
-      setEmailVerified(Boolean(me.user.emailVerified));
     }
     setMemberships(mine);
     setMeta({
@@ -370,12 +329,8 @@ function RecruiterDashboard() {
 
   return (
     <div className={rw.root} aria-label={t('employers.badge')}>
-      {(memberships.length > 0 || (!bootLoading && emailVerified !== null && (!accountEmail || emailVerified === false))) && <div className={rw.context}>
-        {memberships.length > 0 && <strong title={company?.name}>{company?.name || t('company')}</strong>}
-        {memberships.length > 1 && <WorkspaceSelect value={companyId} label={t('company')} options={memberships.map((membership) => ({ value: membership.companyId, label: membership.company.name }))} onChange={(id) => void chooseCompany(id)} />}
-        {tab === 'pipeline' || tab === 'bulk' ? <nav className={rw.actions} aria-label={t('jobs')}><button className={rw.textButton} onClick={() => void selectTab('jobs')}>{t('rw.backJobs')}</button><button className={tab === 'pipeline' ? rw.secondary : rw.textButton} onClick={() => void selectTab('pipeline')}>{t('applications')}</button><button className={tab === 'bulk' ? rw.secondary : rw.textButton} onClick={() => void selectTab('bulk')}>{t('rec.templatesHistory')}</button></nav> : null}
-        {!bootLoading && emailVerified !== null && !accountEmail && <div className={rw.accountNotice}><span title={t('addEmailDashboardHint')}>{t('addEmailDashboardHint')}</span><Link className={rw.textButton} href="/settings">{t('addEmailGoToSettings')}</Link></div>}
-        {!bootLoading && accountEmail && emailVerified === false && <div className={rw.accountNotice}><span title={`${accountEmail} | ${t('emailUnverifiedBadge')}`}>{accountEmail} | {t('emailUnverifiedBadge')}</span><button className={rw.textButton} disabled={verifyBusy} onClick={() => void requestEmailVerification()}>{t(verifyBusy ? 'verifyEmailSending' : 'verifyEmailCta')}</button><Link className={rw.textButton} href="/settings">{t('settings')}</Link></div>}
+      {(tab === 'pipeline' || tab === 'bulk') && <div className={rw.context}>
+        <nav className={rw.actions} aria-label={t('jobs')}><button className={rw.textButton} onClick={() => void selectTab('jobs')}>{t('rw.backJobs')}</button><button className={tab === 'pipeline' ? rw.secondary : rw.textButton} onClick={() => void selectTab('pipeline')}>{t('applications')}</button><button className={tab === 'bulk' ? rw.secondary : rw.textButton} onClick={() => void selectTab('bulk')}>{t('rec.templatesHistory')}</button></nav>
       </div>}
 
 

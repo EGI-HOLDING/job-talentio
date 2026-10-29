@@ -1,4 +1,14 @@
 export const recruiterWorkspace = {
+  "rw.promotion": {"en": "Promotion", "ru": "Продвижение", "uz": "Targ‘ibot"},
+  "rw.promotionTitle": {"en": "Company promotion", "ru": "Продвижение компании", "uz": "Kompaniyani targ‘ib qilish"},
+  "rw.promotionHint": {"en": "Review your company promotion status and active period.", "ru": "Статус и срок действия продвижения вашей компании.", "uz": "Kompaniyangiz targ‘iboti holati va amal qilish muddatini ko‘ring."},
+  "rw.promotionActive": {"en": "Your company is being promoted", "ru": "Ваша компания продвигается", "uz": "Kompaniyangiz targ‘ib qilinmoqda"},
+  "rw.promotionInactive": {"en": "No active promotion", "ru": "Нет активного продвижения", "uz": "Faol targ‘ibot yo‘q"},
+  "rw.promotionActiveBadge": {"en": "Active", "ru": "Активно", "uz": "Faol"},
+  "rw.promotionInactiveBadge": {"en": "Inactive", "ru": "Неактивно", "uz": "Faol emas"},
+  "rw.promotionEnds": {"en": "Active until", "ru": "Активно до", "uz": "Amal qilish muddati"},
+  "rw.promotionPackageHint": {"en": "Company promotion follows active job package benefits. View each job’s package, publication period and boosts in your jobs list.", "ru": "Продвижение компании зависит от активных пакетов вакансий. Пакет, срок публикации и поднятия каждой вакансии доступны в списке вакансий.", "uz": "Kompaniya targ‘iboti faol vakansiya paketi imtiyozlariga bog‘liq. Har bir vakansiya paketi, e’lon muddati va ko‘tarishlarini vakansiyalar ro‘yxatida ko‘ring."},
+
   "geo.country": {"en":"Country","ru":"Страна","uz":"Mamlakat"},
   "geo.selectCountry": {"en":"Select a country","ru":"Выберите страну","uz":"Mamlakatni tanlang"},
   "geo.chooseCountryFirst": {"en":"Choose a country first","ru":"Сначала выберите страну","uz":"Avval mamlakatni tanlang"},
