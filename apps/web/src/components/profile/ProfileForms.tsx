@@ -12,6 +12,8 @@ import { useOnboardingText } from '@/lib/i18n/onboarding';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
+import { PhoneNumberField, phoneErrorText } from '@/components/ui/PhoneNumberField';
+import { phoneDraftFromE164, validatePhoneDraft } from '@job-talentio/shared';
 import { ProfileDialog } from './ProfileDialog';
 import { ProfileIcon } from './ProfileIcon';
 import { dateValue, type CareerProfile, type City, type ProfileEditor } from './types';
@@ -30,6 +32,13 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   const { t } = useI18n();
   const enumLabel = useEnumLabel();
   const onboardingText = useOnboardingText();
+  const marketPhoneCountry = process.env.NEXT_PUBLIC_DEFAULT_LOCALE === 'id' ? 'ID' : 'UZ';
+  const [phoneDraft, setPhoneDraft] = useState(() => phoneDraftFromE164(
+    profile.phone,
+    profile.residenceCountry?.iso2 || profile.city?.province?.country?.iso2,
+    marketPhoneCountry,
+  ));
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
   const [roles, setRoles] = useState(profile.desiredPositions?.length ? profile.desiredPositions : profile.desiredPosition ? [profile.desiredPosition] : []);
   const [preferredCountries, setPreferredCountries] = useState(profile.preferredCountries?.map(c=>c.id) || []);
@@ -45,7 +54,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   const certification = profile.certifications.find((row) => row.id === editor.id);
   const [current, setCurrent] = useState(experience?.isCurrent || false);
   const titles = {
-    basics: t('pc.editProfile'), skills: t('pc.editSkills'), languages: t('pc.editLanguages'),
+    basics: t('pc.editProfile'), phone: onboardingText('phoneEdit'), skills: t('pc.editSkills'), languages: t('pc.editLanguages'),
     experience: t(editor.id ? 'pc.editExperience' : 'pc.addExperience'),
     education: t(editor.id ? 'pc.editEducation' : 'pc.addEducation'),
     certification: t(editor.id ? 'pc.editCertification' : 'pc.addCertification'),
@@ -59,7 +68,10 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       await api(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       await onSaved(t('pc.saved'));
       if (close) onClose();
-    } catch (error) { setError(error instanceof Error ? error.message : t('emp.saveFailed')); }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('emp.saveFailed');
+      setError(editor.kind === 'phone' ? phoneErrorText(message, onboardingText) : message);
+    }
     finally { inFlight.current = false; setBusy(false); }
   }
 
@@ -68,9 +80,16 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     const fd = new FormData(event.currentTarget);
     const value = (key: string) => String(fd.get(key) || '').trim();
     const start = value('startDate'), end = value('endDate');
+    if (editor.kind === 'phone') {
+      setPhoneTouched(true);
+      const result = validatePhoneDraft(phoneDraft);
+      if (!result.ok) return;
+      await mutate('/profiles/me', 'PATCH', { phone: result.phone }, true);
+      return;
+    }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      await mutate('/profiles/me', 'PATCH', { headline: value('headline'), summary: value('summary'), citySlug: homeCity || null, phone: value('phone'), desiredPositions: roles, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      await mutate('/profiles/me', 'PATCH', { headline: value('headline'), summary: value('summary'), citySlug: homeCity || null, desiredPositions: roles, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -86,7 +105,19 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   const listEditor = editor.kind === 'skills' || editor.kind === 'languages';
   return <ProfileDialog title={titles[editor.kind]} subtitle={editor.kind === 'basics' ? t('pc.basicsHint') : undefined} onClose={onClose} busy={busy} guardChanges={!listEditor}>
     {error && <div className={s.formError} role="alert">{error}</div>}
-    {listEditor ? <div className={s.dialogBody}>
+    {editor.kind === 'phone' ? <form onSubmit={submit} className={s.form}>
+      <fieldset disabled={busy} className={s.resetFieldset}>
+        <PhoneNumberField
+          value={phoneDraft}
+          onChange={(value) => { setPhoneDraft(value); setError(''); }}
+          label={onboardingText('phone')}
+          hint={onboardingText('phoneHint')}
+          required
+          errorCode={phoneTouched && !validatePhoneDraft(phoneDraft).ok ? (validatePhoneDraft(phoneDraft) as { ok: false; error: string }).error : undefined}
+        />
+      </fieldset>
+      <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose} disabled={busy}>{t('cancel')}</button><button type="submit" className={s.primary} disabled={busy}>{busy ? t('saving') : t('save')}</button></footer>
+    </form> : listEditor ? <div className={s.dialogBody}>
       <fieldset disabled={busy} className={s.resetFieldset}>
         {editor.kind === 'skills' ? <SkillCombobox focusSuggestions disabled={busy} onPick={(item) => mutate('/profiles/me/skills', 'POST', { ...(item.slug ? { slug: item.slug } : { name: item.name }), level: item.level || 'INTERMEDIATE' })} /> : <LookupCombobox focusSuggestions kind="languages" disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1" onPick={(item) => mutate('/profiles/me/languages', 'POST', { ...(item.code || item.slug ? { code: item.code || item.slug } : { name: item.name }), level: item.level || 'B1' })} />}
         <div className={s.editList}>
@@ -103,7 +134,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
         {editor.kind === 'basics' && <>
           <FormField label={t('emp.headline')}><input name="headline" defaultValue={profile.headline || ''} maxLength={200} /></FormField>
           <FormField label={t('emp.summary')}><textarea name="summary" rows={4} defaultValue={profile.summary || ''} maxLength={5000} /></FormField>
-          <div className={s.formGrid}><LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} /><FormField label={t('emp.phone')}><input type="tel" name="phone" maxLength={40} defaultValue={profile.phone || ''} autoComplete="tel" /></FormField></div>
+          <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
           <RoleInput value={roles} onChange={setRoles} />
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
 

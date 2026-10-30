@@ -2,13 +2,17 @@
 
 import { Link } from '@/lib/navigation';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, getSession } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { localizedJobLocation } from '@/lib/location';
 import { useI18n } from '@/lib/i18n';
 import { ExploreSection } from '@/components/explore/ExploreSection';
+import { PromotionBadge } from '@/components/jobs/PromotionBadge';
+import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
+import type { JobPromotion } from '@job-talentio/shared';
 
 type RecommendedJob = {
+  promotion?: JobPromotion | null;
   id: string;
   title: string;
   company: { name: string; logoUrl?: string | null; slug: string };
@@ -37,10 +41,18 @@ function hasMatchSignal(profile: ProfileSignal | null): boolean {
 const HOME_FOR_YOU_LIMIT = 6;
 
 export function ForYouJobsSection() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [items, setItems] = useState<RecommendedItem[]>([]);
   const [profile, setProfile] = useState<ProfileSignal | null>(null);
   const [ready, setReady] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [identity, setIdentity] = useState(() => getSession()?.user.id);
+  useEffect(() => {
+    const changed = () => { setIdentity(getSession()?.user.id); setItems([]); setProfile(null); setReady(false); setRetry(value => value + 1); };
+    window.addEventListener('jt-session-updated', changed); window.addEventListener('storage', changed);
+    return () => { window.removeEventListener('jt-session-updated', changed); window.removeEventListener('storage', changed); };
+  }, []);
+  usePromotionRefresh(items.map(item => item.job), () => setRetry(value => value + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +68,7 @@ export function ForYouJobsSection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale, retry, identity]);
 
   const emptyCopy = hasMatchSignal(profile) ? (
     <>
@@ -108,6 +120,7 @@ export function ForYouJobsSection() {
                   </Link>
                   <div className="job-meta">
                     <span>{item.job.company.name}</span>
+                    <PromotionBadge promotion={item.job.promotion} />
                     <span>{localizedJobLocation(item.job, t)}</span>
                   </div>
                 </div>

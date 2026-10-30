@@ -9,11 +9,14 @@ import { sanitizeMojibake } from '@/lib/text';
 import type { NewsListItem } from '@/lib/newsSeo';
 import { formatNewsDate, NEWS_CATEGORY_LABEL_KEY } from '@/components/news/NewsCard';
 import s from './LandingSections.module.css';
+import { PromotionBadge } from '@/components/jobs/PromotionBadge';
+import type { JobPromotion } from '@job-talentio/shared';
 
 export type LandingFacet = { slug: string; name: string; count: number };
 export type LandingCategory = LandingFacet & { icon?: string | null };
 export type LandingLocation = LandingFacet & { country?: string; countrySlug?: string };
 export type LandingJob = {
+  promotion?: JobPromotion | null;
   id: string; title: string; workMode?: string | null;
   salaryMin?: number | null; salaryMax?: number | null; currency?: string; salaryPeriod?: string;
   isPromoted?: boolean;
@@ -87,15 +90,15 @@ export function LandingSections({ jobs, categories, cities, roles, news, showEmp
     <section className={s.featured}>
       <Heading title={t('landing.featured')} subtitle={t('landing.featuredSub')} href="/jobs?sort=featured" action={t('landing.viewJobs')} />
       <div className={s.jobs}>
-        {jobs.map((job) => <Link data-job-impression={job.id} className={s.job} href={`/jobs/${job.id}`} key={job.id}>
+        {jobs.map((job) => <article data-job-impression={job.id} className={s.job} key={job.id}>
           <div className={s.jobCompany}>
             <span className={s.logo}>{job.company.logoUrl ? <img src={job.company.logoUrl} alt="" loading="lazy" /> : job.company.name.slice(0, 1)}</span>
-            <span>{job.company.name}</span>{job.isPromoted && <span className={s.badge}>{t('landing.badge')}</span>}
+            <span>{job.company.name}</span><span className={s.promotionControl}><PromotionBadge promotion={job.promotion} /></span>
           </div>
-          <h3>{sanitizeMojibake(job.title)}</h3>
+          <h3><Link className={s.jobTitleLink} href={`/jobs/${job.id}`}>{sanitizeMojibake(job.title)}</Link></h3>
           <div className={s.jobLocation}>{jobLocation(job) && <span><LandingIcon kind="pin" />{jobLocation(job)}</span>}{job.workMode && <span className={s.workMode}>{t(`enum.workMode.${job.workMode}`)}</span>}</div>
           <div className={s.jobBottom}><strong>{salary(job)}</strong><span className={s.viewJob}>{t('landing.viewJob')}<LandingIcon /></span></div>
-        </Link>)}
+        </article>)}
         {!jobs.length && <p className="muted">{t('hotJobsEmpty')}</p>}
       </div>
     </section>

@@ -1,5 +1,7 @@
 /** Job search list and job detail page. */
 export const jobs = {
+  'job.promoted': { en: 'Promoted', id: 'Dipromosikan', ru: 'Продвигается', uz: 'Targ‘ib qilinmoqda' },
+  'job.promotionInfo': { en: 'The company is promoting this job to help people discover it.', id: 'Perusahaan mempromosikan lowongan ini agar lebih mudah ditemukan.', ru: 'Компания продвигает эту вакансию, чтобы её было легче найти.', uz: 'Kompaniya ushbu vakansiyani topishni osonlashtirish uchun targ‘ib qilmoqda.' },
   'job.negotiable': { uz: 'Kelishilgan', ru: 'По договорённости', en: 'Negotiable' },
 
   'job.salaryMin': { uz: 'Maosh (min)', ru: 'Зарплата от', en: 'Salary min' },
@@ -16,7 +18,7 @@ export const jobs = {
   },
 
   'job.sortRelevance': { uz: 'Moslik bo‘yicha', ru: 'По релевантности', en: 'Relevance' },
-  'job.sortFeatured': { uz: 'Tarif ustuvorligi', ru: 'Приоритет тарифа', en: 'Package priority' },
+  'job.sortFeatured': { uz: 'Tanlangan vakansiyalar', ru: 'Избранные вакансии', en: 'Featured jobs' },
   'job.sortNewest': { uz: 'Eng yangi', ru: 'Сначала новые', en: 'Newest' },
   'job.sortSalaryHigh': { uz: 'Maosh (yuqori)', ru: 'Зарплата (выше)', en: 'Salary high' },
   'job.sortSalaryLow': { uz: 'Maosh (past)', ru: 'Зарплата (ниже)', en: 'Salary low' },

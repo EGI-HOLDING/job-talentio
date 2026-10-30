@@ -16,6 +16,7 @@ uploads
 .vscode
 *.tsbuildinfo
 /reports/
+/output/
 /.catalog-sync-private/
 
 # Local-only notes / source copies (not shipped)

@@ -176,3 +176,10 @@
   .outlineButton { order: 2; padding: .65rem 1rem; }
 }
 @media (prefers-reduced-motion: reduce) { .job { transition: none; } }
+
+.job { position:relative; min-width:0; }
+.jobTitleLink { color:inherit; }
+.jobTitleLink::after { content:''; position:absolute; inset:0; z-index:1; }
+.jobCompany { flex-wrap:wrap; }
+.jobCompany > span:nth-child(2) { flex:1; min-width:70px; }
+.promotionControl { position:relative; z-index:2; display:inline-flex; }

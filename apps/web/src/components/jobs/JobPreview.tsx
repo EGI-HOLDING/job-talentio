@@ -9,8 +9,11 @@ import { JobsIcon } from './JobsIcon';
 import { formatJobSalary } from './formatJobSalary';
 import s from './JobsWorkspace.module.css';
 import { authLink } from '@/lib/authReturn';
+import type { JobPromotion } from '@job-talentio/shared';
+import { PromotionBadge } from './PromotionBadge';
 
 type PreviewJob = {
+  promotion?: JobPromotion | null;
   country?: { name: string } | null;
   id: string; title: string; description: string; contentLocale?: string | null;
   salaryMin?: number | null; salaryMax?: number | null; currency?: string | null;
@@ -51,7 +54,7 @@ export function JobPreview({ standalone = false, backHref = '/jobs', companyHref
     <div className={s.previewScroll}>
       <div className={s.previewCompany}>
         <span className={s.previewLogo}>{job.company.anonymous ? <JobsIcon kind="briefcase" /> : job.company.logoUrl ? <img src={job.company.logoUrl} alt="" /> : employerName.charAt(0)}</span>
-        <div><strong>{employerName}{!job.company.anonymous && job.company.isVerified && <span aria-label={t('trustVerifiedChip')}> {'\u2713'}</span>}</strong>
+        <div><div className={s.previewCompanyHeading}><strong>{employerName}{!job.company.anonymous && job.company.isVerified && <span aria-label={t('trustVerifiedChip')}> {'\u2713'}</span>}</strong><PromotionBadge promotion={job.promotion} /></div>
           {!job.company.anonymous && <Link href={companyHref || `/companies/${job.company.slug}`}>{t('viewCompanyProfile')} <span aria-hidden="true">{'\u2192'}</span></Link>}
         </div>
       </div>

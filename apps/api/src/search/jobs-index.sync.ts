@@ -2,12 +2,12 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import {
   exposureLog,
   liveJobWhere,
-  BenefitPolicy,
   ExposurePolicy,
   INITIAL_EXPOSURE,
   loadExposurePolicy,
 } from '../benefits/benefit-policy';
 import { JOBS_INDEX_SETTINGS } from './jobs-search.settings';
+import { resolveJobPromotion } from '../benefits/job-promotion';
 
 const INDEX = 'jobs';
 const BATCH = 500;
@@ -76,12 +76,16 @@ export const jobIndexInclude = {
 } satisfies Prisma.JobPostInclude;
 
 type IndexedJob = {
+  status?: string;
   id: string;
   isAnonymous: boolean;
   title: string;
   description: string;
   publishedAt: Date | null;
   benefit?: {
+    code?: string;
+    startsAt?: Date | null;
+    expiresAt?: Date | null;
     policySnapshot: Prisma.JsonValue | null;
     boosts: Array<{ startsAt: Date; endsAt: Date }>;
   } | null;
@@ -109,8 +113,9 @@ export function toJobSearchDocument(
     ...names(job.jobTitle),
     ...(job.jobTitle?.aliases || []).map((row) => row.alias),
   ];
-  const now = new Date(),
-    boost = promoted ? job.benefit?.boosts[0] : null;
+  const now = new Date();
+  const effective = resolveJobPromotion(job.status ?? 'PUBLISHED', job.benefit, promoted, now);
+  const boost = effective.boost;
   return {
     boostProjectedActive: !!boost && boost.startsAt <= now && boost.endsAt > now,
     boostEndsAt: boost?.endsAt.getTime() ?? 0,
@@ -120,9 +125,7 @@ export function toJobSearchDocument(
     exposureLog: exposureLog(
       {
         publishedAt: job.publishedAt,
-        visibility: promoted
-          ? ((job.benefit?.policySnapshot as BenefitPolicy | undefined)?.visibility ?? 1)
-          : 1,
+        visibility: effective.visibility,
         boost,
       },
       now,

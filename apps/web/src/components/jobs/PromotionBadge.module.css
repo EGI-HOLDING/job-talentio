@@ -1,0 +1,5 @@
+.badge { display:inline-flex; align-items:center; gap:5px; flex-shrink:0; width:fit-content; min-height:22px; padding:3px 7px; border:1px solid #e9e2fa; border-radius:5px; background:#f6f2ff; color:#6b4bb2; font:500 11px/14px var(--font-sans, sans-serif); white-space:nowrap; cursor:pointer; vertical-align:middle; }
+.badge:hover { background:#eee7fc; border-color:#d9ccef; color:#55338f; }
+.badge:focus-visible { outline:2px solid #7150d5; outline-offset:3px; }
+.badge svg { flex-shrink:0; }
+.popover { position:fixed; z-index:1500; width:min(288px, calc(100vw - 32px)); box-sizing:border-box; padding:13px 15px; border:1px solid #e6e0f0; border-radius:10px; background:#fff; color:#526079; box-shadow:0 8px 28px #2430501a; font-size:12px; line-height:1.65; overflow-wrap:anywhere; }

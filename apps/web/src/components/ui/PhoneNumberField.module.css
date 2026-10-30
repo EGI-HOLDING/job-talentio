@@ -1,0 +1,36 @@
+.field { position: relative; display: grid; gap: 8px; min-width: 0; color: #18233b; }
+.label { font-size: .86rem; font-weight: 650; }
+.label span { color: #6745e8; }
+.control { display: grid; grid-template-columns: minmax(135px, .92fr) minmax(0, 1.15fr); min-height: 52px; border: 1px solid #d8dfec; border-radius: 12px; background: #fff; transition: border-color .16s ease, box-shadow .16s ease; }
+.control:focus-within { border-color: #8061ed; box-shadow: 0 0 0 3px #7655eb1c; }
+.control.invalid { border-color: #d84d66; }
+.countryButton { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 0 12px 0 14px; border: 0; border-right: 1px solid #edf0f6; border-radius: 11px 0 0 11px; background: #fbfcff; color: #27344d; cursor: pointer; text-align: left; font: inherit; }
+.countryButton:hover:not(:disabled) { background: #f5f2ff; }
+.countryButton:focus-visible { z-index: 1; outline: 2px solid #8061ed; outline-offset: -2px; }
+.countryName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #596781; font-size: .82rem; }
+.countryButton strong { flex: 0 0 auto; color: #25314a; font-size: .85rem; font-weight: 700; }
+.countryButton svg { width: 15px; height: 15px; flex: 0 0 auto; fill: none; stroke: #7b879d; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.numberInput { min-width: 0; width: 100%; padding: 0 15px; border: 0; border-radius: 0 11px 11px 0; outline: 0; background: transparent; color: #18233b; font: inherit; font-size: .94rem; letter-spacing: .015em; }
+.numberInput::placeholder { color: #a0aabc; }
+.numberInput:disabled, .countryButton:disabled { cursor: not-allowed; opacity: .6; }
+.hint, .error { margin: 0; font-size: .76rem; line-height: 1.55; }
+.hint { color: #7b879d; }
+.error { color: #b4233d; }
+.menu { position: absolute; z-index: 60; top: calc(100% + 8px); left: 0; width: min(390px, 100%); padding: 10px; border: 1px solid #e1e5ef; border-radius: 14px; background: #fff; box-shadow: 0 20px 52px #1b25401f, 0 3px 10px #1b25400e; }
+.menuAbove { top: auto; bottom: calc(100% + 8px); }
+.search { display: block; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #e0e5ef; border-radius: 9px; outline: 0; color: #25314a; background: #fbfcff; font: inherit; font-size: .82rem; }
+.search:focus { border-color: #947bf0; box-shadow: 0 0 0 3px #7655eb1a; }
+.options { max-height: 252px; margin-top: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.option { display: flex; width: 100%; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: #46536d; cursor: pointer; text-align: left; font: inherit; font-size: .81rem; }
+.option:hover, .option.active { background: #f6f3ff; color: #3d2b91; }
+.option[aria-selected="true"] { color: #5635e8; font-weight: 650; }
+.option strong { flex: 0 0 auto; color: #68748c; font-variant-numeric: tabular-nums; font-size: .78rem; }
+.noResults { margin: 0; padding: 16px 10px; color: #7d899e; font-size: .8rem; text-align: center; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 540px) {
+  .control { grid-template-columns: minmax(112px, .86fr) minmax(0, 1fr); }
+  .countryButton { gap: 6px; padding: 0 8px 0 10px; }
+  .countryName { font-size: .72rem; }
+  .countryButton strong { font-size: .78rem; }
+  .numberInput { padding: 0 10px; font-size: .86rem; }
+}

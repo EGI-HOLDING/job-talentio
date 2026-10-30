@@ -18,6 +18,7 @@ import {
   jobScreeningQuestionSchema,
 } from '@job-talentio/shared';
 import { exposureLog, liveJobWhere,loadExposurePolicy, HR_PUBLICATION_LOCK } from '../benefits/benefit-policy';
+import { loadJobPromotions, publicJobPromotion, type PromotionBatch } from '../benefits/job-promotion';
 import { OperationsService } from '../benefits/operations.service';
 import { HrAnalyticsService } from '../benefits/hr-analytics.service';
 import { BenefitsService } from '../benefits/benefits.service';
@@ -49,8 +50,6 @@ import { effectiveSourceLocale, pickStoredLocale } from '../common/i18n/detect-l
 import type { Locale } from '../common/i18n/locale';
 import { canTransition, transitionError } from './job-status';
 import {
-  effectiveFeaturedPackageCode,
-  isFeaturedBenefitActive,
   orderFeaturedJobs,
   type FeaturedJobCandidate,
 } from './featured-job-order';
@@ -785,6 +784,7 @@ export class JobsService {
   }
 
   async get(id: string, viewer?: AuthUser, locale: Locale = DEFAULT_LOCALE) {
+    const now = new Date();
     const found = await this.prisma.jobPost.findUnique({
       where: { id },
       include: this.jobInclude,
@@ -804,13 +804,14 @@ export class JobsService {
 
     const member = this.isCompanyMember(viewer, job.companyId);
     const benefit = await this.prisma.jobBenefit.findUnique({ where: { jobId: id } });
-    if (!member && benefit?.expiresAt && benefit.expiresAt <= new Date()) throw new NotFoundException('Job expired');
+    if (!member && benefit?.expiresAt && benefit.expiresAt <= now) throw new NotFoundException('Job expired');
     if (job.status !== 'PUBLISHED' && !member) {
       throw new NotFoundException('Job not found');
     }
 
 
-    const resolved = this.withResolvedIcons(job);
+    const promotionState = await loadJobPromotions(this.prisma, [id], now);
+    const resolved = { ...this.withResolvedIcons(job), ...publicJobPromotion(promotionState, id) };
     const viewerMatch = await this.matchForEmployeeViewer(viewer, id);
 
     if (member) {
@@ -1131,7 +1132,8 @@ export class JobsService {
     locale?: Locale;
   }) {
     const locale = query.locale ?? DEFAULT_LOCALE;
-    const and: Prisma.JobPostWhereInput[] = [liveJobWhere()];
+    const now = new Date();
+    const and: Prisma.JobPostWhereInput[] = [liveJobWhere(now)];
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (citySlugs.length) and.push({ city: { slug: { in: citySlugs } } });
@@ -1300,41 +1302,30 @@ export class JobsService {
     let total = matchedTotal;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let sorted: any[] = [];
+    let promotionState: PromotionBatch | undefined;
 
     if (!needsInMemoryRank) {
       const totalPages = Math.max(1, Math.ceil(matchedTotal / limit) || 1);
       page = Math.min(page, matchedTotal === 0 ? 1 : totalPages);
       if (sort === 'featured') {
-        const now = new Date();
         const candidates = await this.prisma.jobPost.findMany({
           where,
           select: {
             id: true,
             companyId: true,
             publishedAt: true,
-            benefit: {
-              select: {
-                code: true,
-                startsAt: true,
-                expiresAt: true,
-                boosts: {
-                  where: { startsAt: { lte: now }, endsAt: { gt: now } },
-                  select: { id: true },
-                  take: 1,
-                },
-              },
-            },
           },
         });
+        promotionState = await loadJobPromotions(this.prisma, candidates.map(job => job.id), now);
         const candidateById = new Map<string, FeaturedJobCandidate>();
         for (const job of candidates) {
-          const activeBenefit = isFeaturedBenefitActive(job.benefit, now);
-          const packageCode = effectiveFeaturedPackageCode(job.benefit, now);
+          const effective = promotionState.rows.get(job.id);
+          const packageCode = effective?.packageCode ?? 'FREE';
           candidateById.set(job.id, {
             id: job.id,
             companyId: job.companyId,
             packageCode,
-            boostActive: activeBenefit && Boolean(job.benefit?.boosts.length),
+            boostActive: effective?.publicState.boostActive ?? false,
             publishedAt: job.publishedAt,
           });
         }
@@ -1361,7 +1352,6 @@ export class JobsService {
       } else {
         if (sort === 'relevance' && !rankedIds) {
           const eligible = await this.prisma.jobPost.findMany({ where, select: { id: true } });
-          const now = new Date();
           const promoted = (await this.benefits?.enabled() ?? false) && (await this.benefits?.enabled('hr_promotions') ?? false);
           const exposure=await loadExposurePolicy(this.prisma);
           const q = query.q?.trim() ?? '';
@@ -1371,8 +1361,8 @@ export class JobsService {
             WHERE j.id = ANY(${eligible.map(job => job.id)}::text[])
             ORDER BY CASE WHEN ${q}='' THEN 0 WHEN lower(j.title)=lower(${q}) THEN 2 WHEN j.title ILIKE ${q + '%'} THEN 1 ELSE 0 END DESC,
             EXTRACT(EPOCH FROM COALESCE(j."publishedAt",j."createdAt"))/${exposure.halfLifeDays*86400}*ln(2.0) +
-            ln(LEAST(${exposure.cap},(CASE WHEN ${promoted} THEN COALESCE((b."policySnapshot"->>'visibility')::float,1) ELSE 1 END)*
-            (1+CASE WHEN ${promoted} AND e.id IS NOT NULL THEN ${exposure.boostAmplitude}*GREATEST(0,LEAST(1,EXTRACT(EPOCH FROM(e."endsAt"-${now}))/EXTRACT(EPOCH FROM(e."endsAt"-e."startsAt")))) ELSE 0 END))) DESC,j.id ASC
+            ln(LEAST(${exposure.cap},(CASE WHEN ${promoted} AND b."startsAt"<=${now} AND (b."expiresAt" IS NULL OR b."expiresAt">${now}) THEN GREATEST(1,COALESCE((b."policySnapshot"->>'visibility')::float,1)) ELSE 1 END)*
+            (1+CASE WHEN ${promoted} AND b."startsAt"<=${now} AND (b."expiresAt" IS NULL OR b."expiresAt">${now}) AND e.id IS NOT NULL THEN ${exposure.boostAmplitude}*GREATEST(0,LEAST(1,EXTRACT(EPOCH FROM(e."endsAt"-${now}))/EXTRACT(EPOCH FROM(e."endsAt"-e."startsAt")))) ELSE 0 END))) DESC,j.id ASC
             OFFSET ${(page-1)*limit} LIMIT ${limit}`) : [];
           rankedIds = ranked.map(job => job.id);
         } else if (sort === 'relevance' && rankedIds) rankedIds = rankedIds.slice((page-1)*limit,page*limit);
@@ -1446,6 +1436,9 @@ export class JobsService {
       page = Math.min(page, total === 0 ? 1 : totalPages);
       sorted = withScore.slice((page - 1) * limit, page * limit);
     }
+
+    promotionState ??= await loadJobPromotions(this.prisma, sorted.map(job => job.id), now);
+    sorted = sorted.map(job => ({ ...job, ...publicJobPromotion(promotionState!, job.id), placement: 'ORGANIC' }));
 
     // Facet counts on the full filtered set (without pagination)
     const facetJobs = await this.prisma.jobPost.findMany({

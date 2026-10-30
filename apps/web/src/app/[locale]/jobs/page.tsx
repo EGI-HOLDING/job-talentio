@@ -21,6 +21,9 @@ import { JobsIcon } from '@/components/jobs/JobsIcon';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { formatJobSalary } from '@/components/jobs/formatJobSalary';
 import s from '@/components/jobs/JobsWorkspace.module.css';
+import { PromotionBadge } from '@/components/jobs/PromotionBadge';
+import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
+import type { JobPromotion } from '@job-talentio/shared';
 import {
   csvHasLanguageCode,
   LanguageLevelCode,
@@ -31,6 +34,7 @@ import {
 type MetaItem = { id: string; name: string; slug: string; icon?: string | null; code?: string; province?: { country?: { name: string; slug: string } } };
 type LangMeta = { id: string; name: string; code: string };
 type Job = {
+  promotion?: JobPromotion | null;
   id: string;
   title: string;
   salaryMin?: number | null;
@@ -81,7 +85,7 @@ type EmployeeProfile = {
   resumes?: unknown[];
 };
 type RecommendedItem = { job: Job };
-type RecommendationPage = {items:RecommendedItem[];total:number;totalPages:number;page:number;mode:string};
+type RecommendationPage = {rankingRevision?:string;items:RecommendedItem[];total:number;totalPages:number;page:number;mode:string};
 
 function hasCareerSignal(profile: EmployeeProfile | null) {
   return Boolean(profile && (profile.skills?.length || profile.headline?.trim() || profile.desiredPosition?.trim() || profile.experiences?.some((item) => item.title?.trim())));
@@ -223,7 +227,11 @@ function JobsInner() {
   const enumLabel = useEnumLabel();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  useEffect(() => { setSession(getSession()); setAuthReady(true); }, []);
+  useEffect(() => {
+    const refresh = () => { setSession(getSession()); setAuthReady(true); };
+    refresh(); window.addEventListener('jt-session-updated', refresh); window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('jt-session-updated', refresh); window.removeEventListener('storage', refresh); };
+  }, []);
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const implicitSort = defaultJobSort();
   const filterParams = new URLSearchParams(searchParams.toString());
@@ -248,6 +256,8 @@ function JobsInner() {
   const [retry, setRetry] = useState(0);
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [recommendationPage,setRecommendationPage]=useState(1);
+  const recommendationRevision = useRef<string | undefined>(undefined);
+  useEffect(() => { recommendationRevision.current = undefined; setRecommendationPage(1); setDiscovery({status:'loading',profile:null,rows:[]}); }, [session?.user.id, locale]);
   const [recommendationMeta,setRecommendationMeta]=useState({total:0,totalPages:1,mode:"LATEST"});
   const [discovery, setDiscovery] = useState<{ status: 'loading' | 'ready' | 'error'; profile: EmployeeProfile | null; rows: RecommendedItem[] }>({ status: 'loading', profile: null, rows: [] });
   const requestedMode = searchParams.get('mode');
@@ -260,10 +270,14 @@ function JobsInner() {
     let active = true;
     setDiscovery((current) => ({ ...current, status: 'loading' }));
     Promise.all([api<EmployeeProfile>('/profiles/me'), api<RecommendationPage>(`/jobs/recommended?page=${recommendationPage}&limit=24`)])
-      .then(([profile, result]) => { if (active) { setDiscovery({ status: 'ready', profile, rows:result.items }); setRecommendationMeta(result); setRecommendationPage(result.page); } })
+      .then(([profile, result]) => { if (active) {
+        if (recommendationPage > 1 && recommendationRevision.current && result.rankingRevision !== recommendationRevision.current) { setRecommendationPage(1); return; }
+        recommendationRevision.current = result.rankingRevision;
+        setDiscovery({ status: 'ready', profile, rows:result.items }); setRecommendationMeta(result); setRecommendationPage(result.page);
+      } })
       .catch(() => { if (active) setDiscovery((current) => ({ ...current, status: 'error' })); });
     return () => { active = false; };
-  }, [isEmployee, locale, discoveryRetry,recommendationPage]);
+  }, [isEmployee, session?.user.id, locale, discoveryRetry,recommendationPage]);
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
@@ -330,7 +344,7 @@ function JobsInner() {
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [filters, router, browseCompanies, implicitSort, retry, requestedMode]);
+  }, [filters, router, browseCompanies, implicitSort, retry, requestedMode, locale, session?.user.id]);
 
   const selectedSkills = filters.skills.split(',').filter(Boolean);
   const selectedCities = filters.city.split(',').filter(Boolean);
@@ -526,6 +540,11 @@ function JobsInner() {
   const completeness = profile ? scoreProfileCompleteness({ ...profile, email: session?.user.email, emailVerified: session?.user.emailVerified, telegramLinked: session?.user.telegramLinked, avatarUrl: session?.user.avatarUrl }).percent : 0;
   const recommendations = discovery.rows.map((item) => item.job);
   const visibleJobs = personalized ? recommendations : data?.items || [];
+  usePromotionRefresh(visibleJobs, () => {
+    if (personalized) { setRecommendationPage(1); setDiscoveryRetry(value => value + 1); }
+    else if (filters.page > 1) apply({page:1});
+    else setRetry(value => value + 1);
+  });
   const resultsLoading = decidingMode || (personalized ? discovery.status === 'loading' : loading);
   const resultsError = personalized ? discovery.status === 'error' ? t('workspace.recommendationError') : '' : error;
 
@@ -707,10 +726,10 @@ function JobsInner() {
             {isEmployee && !personalized && !decidingMode && discovery.status !== 'loading' && (discovery.status === 'error' || !hasCareerSignal(profile) || !discovery.rows.length) && <div className={s.personalizeBanner}><JobsIcon kind="sparkles" /><div><strong>{t(discovery.status === 'error' ? 'workspace.recommendationError' : !hasCareerSignal(profile) ? 'workspace.unlockTitle' : 'workspace.noMatchesTitle')}</strong>{discovery.status !== 'error' && <p>{t(!hasCareerSignal(profile) ? 'workspace.unlockCopy' : 'workspace.noMatchesCopy')}</p>}</div>{discovery.status === 'error' ? <button type="button" className={s.textButton} onClick={() => setDiscoveryRetry((value) => value + 1)}>{t('workspace.retry')}</button> : <Link href="/dashboard/employee?tab=profile">{t('workspace.editProfile')}<JobsIcon kind="external" /></Link>}</div>}
             {resultsError && <div className={s.message} role="alert"><p>{resultsError}</p><button type="button" className={s.outlineButton} onClick={() => personalized ? setDiscoveryRetry((value) => value + 1) : setRetry((value) => value + 1)}>{t('workspace.retry')}</button></div>}
             {resultsLoading ? <div className={s.listSkeleton} role="status" aria-label={t('ui.loading')}>{Array.from({ length: 6 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div> : !resultsError && visibleJobs.map((job) => <article key={job.id} data-job-impression={job.id} className={`${s.jobRow} ${selectedId === job.id ? s.selectedRow : ''}`}>
-              <Link href={`/jobs/${job.id}`} className={s.jobLink} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>
+              <div className={s.jobLink}>
                 <span className={s.jobLogo}>{job.company.logoUrl ? <img src={job.company.logoUrl} alt="" loading="lazy" /> : job.company.name.charAt(0)}</span>
-                <div className={s.jobCopy}><div className={s.rowHeading}><h2>{sanitizeMojibake(job.title)}</h2></div><p>{job.company.name}</p><div className={s.jobMeta}>{job.city?.name && <span><JobsIcon kind="pin" />{[job.city.name, countryForCity(job.city.slug)].filter(Boolean).join(', ')}</span>}{job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}{job.employmentType && <span><JobsIcon kind="document" />{enumLabel('employmentType', job.employmentType)}</span>}</div><strong className={s.jobSalary}>{formatJobSalary(job, locale, t)}</strong></div>
-              </Link>
+                <div className={s.jobCopy}><div className={s.rowHeading}><h2><Link className={s.jobTitleLink} href={`/jobs/${job.id}`} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>{sanitizeMojibake(job.title)}</Link></h2></div><div className={s.companyMeta}><span>{job.company.name}</span><span className={s.promotionControl}><PromotionBadge promotion={job.promotion} /></span></div><div className={s.jobMeta}>{job.city?.name && <span><JobsIcon kind="pin" />{[job.city.name, countryForCity(job.city.slug)].filter(Boolean).join(', ')}</span>}{job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}{job.employmentType && <span><JobsIcon kind="document" />{enumLabel('employmentType', job.employmentType)}</span>}</div><strong className={s.jobSalary}>{formatJobSalary(job, locale, t)}</strong></div>
+              </div>
               {(!session || isEmployee) && <button className={s.saveButton} type="button" aria-label={`${t('saveJob')}: ${job.title}`} aria-pressed={savedIds.has(job.id)} disabled={savingIds.has(job.id)} onClick={() => void toggleSaved(job.id)}><JobsIcon kind={savedIds.has(job.id) ? 'check' : 'bookmark'} /></button>}
             </article>)}
             {!resultsLoading && !resultsError && visibleJobs.length === 0 && (personalized ? <div className={s.discoveryEmpty}><JobsIcon kind="sparkles" /><h2>{t(hasCareerSignal(profile) ? 'workspace.noMatchesTitle' : 'workspace.unlockTitle')}</h2><p>{t(hasCareerSignal(profile) ? 'workspace.noMatchesCopy' : 'workspace.unlockCopy')}</p><div><button type="button" className={s.primaryButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')}</button><Link href="/dashboard/employee?tab=profile" className={s.outlineButton}>{t('workspace.editProfile')}</Link></div></div> : <div className={s.message}><JobsIcon kind="search" /><h2>{t('job.noResults')}</h2><button className={s.primaryButton} type="button" onClick={() => apply({ ...EMPTY, sort: implicitSort })}>{t('clearFilters')}</button></div>)}

@@ -175,6 +175,7 @@ test('job preview renders employer return without candidate follow/apply control
     '@/components/ui/UgcText': { UgcText: ({ text }) => React.createElement('p', null, text) },
     '@/components/ui/ShareButton': { ShareButton: (props) => { shares.push(props.path); return null; } },
     './JobsIcon': { JobsIcon: () => null }, './formatJobSalary': { formatJobSalary: () => 'IDR 100' },
+    './PromotionBadge': { PromotionBadge: () => null },
     './JobsWorkspace.module.css': {}, '@/lib/authReturn': { authLink: () => '/login' },
   }).JobPreview;
   const job = { id: 'job-7', title: 'Developer', description: 'Role description', company: { name: 'Example', slug: 'example' } };

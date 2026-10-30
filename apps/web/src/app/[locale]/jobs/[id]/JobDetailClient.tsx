@@ -4,6 +4,8 @@ import { authLink } from '@/lib/authReturn';
 import { Link, localeHref } from '@/lib/navigation';
 import { FormEvent, useEffect, useState, useRef } from 'react';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
+import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
+import type { JobPromotion } from '@job-talentio/shared';
 import { useParams, useSearchParams } from 'next/navigation';
 import { jobBackHref, jobDetailHref } from '@/lib/accountNavigation';
 import { trackJobEvent,jobAttribution } from '@/lib/hr-events';
@@ -29,6 +31,7 @@ type ResumeOption = {
   targetJobTitle?: { id: string; name: string; slug: string } | null;
 };
 type Job = {
+  promotion?: JobPromotion | null;
   id: string;
   title: string;
   description: string;
@@ -122,6 +125,15 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
   const session = typeof window !== 'undefined' ? getSession() : null;
+  const promotionRead = useRef(0);
+  const promotionContext = useRef('');
+  promotionContext.current = id + ':' + locale + ':' + (session?.user.id ?? '');
+  usePromotionRefresh(job ? [job] : [], () => {
+    const request = ++promotionRead.current, context = promotionContext.current;
+    api<Job>('/jobs/' + encodeURIComponent(id)).then(fresh => {
+      if (request === promotionRead.current && context === promotionContext.current) setJob(current => current?.id === fresh.id ? {...current,promotion:fresh.promotion} : current);
+    }).catch(() => { if (request === promotionRead.current && context === promotionContext.current) setJob(current => current ? {...current,promotion:null} : current); });
+  });
   const alreadyApplied = Boolean(myApplication);
   const selectedResume = resumes.find((r) => r.id === selectedResumeId);
   const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);

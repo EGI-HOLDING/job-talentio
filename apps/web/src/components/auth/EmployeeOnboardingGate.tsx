@@ -5,6 +5,7 @@ import { api, getSession } from "@/lib/api";
 import { safeAuthNext } from "@/lib/authReturn";
 import { useI18n } from "@/lib/i18n";
 import { WorkspaceLoading } from "@/components/employee/WorkspacePrimitives";
+import { normalizeE164Phone } from "@job-talentio/shared";
 export function EmployeeOnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname(),
     router = useRouter(),
@@ -27,7 +28,7 @@ export function EmployeeOnboardingGate({ children }: { children: ReactNode }) {
     }
     const controller = new AbortController();
     setError("");
-    api<{ status: string }>("/profiles/me/onboarding", {
+    api<{ status: string; profile?: { phone?: string | null } }>("/profiles/me/onboarding", {
       signal: controller.signal,
     })
       .then((state) => {
@@ -41,6 +42,16 @@ export function EmployeeOnboardingGate({ children }: { children: ReactNode }) {
             ) || "/jobs?mode=for-you";
           router.replace(
             "/onboarding/employee?next=" + encodeURIComponent(next),
+          );
+        } else if (!normalizeE164Phone(state.profile?.phone)) {
+          const next =
+            safeAuthNext(
+              window.location.pathname +
+                window.location.search +
+                window.location.hash,
+            ) || "/dashboard/employee";
+          router.replace(
+            "/onboarding/employee/phone?next=" + encodeURIComponent(next),
           );
         } else setVerified(pathname);
       })

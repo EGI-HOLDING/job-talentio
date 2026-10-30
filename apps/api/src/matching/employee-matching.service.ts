@@ -5,6 +5,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmployeeEvaluation, EmployeeMatchJob, EmployeeMatchProfile, OccupationIndex, evaluateEmployee, rankEmployeeJobs, EMPLOYEE_MATCH_VERSION } from './employee-matching';
 import { MatchingService } from './matching.service';
+import { loadJobPromotions, publicJobPromotion } from '../benefits/job-promotion';
+import { placeEmployeeBoosts } from './employee-boost-placement';
 
 export const employeeJobFeatures = {
   id:true, title:true, jobTitleId:true, companyId:true, publishedAt:true, countryId:true, cityId:true,
@@ -61,20 +63,28 @@ export class EmployeeMatchingService {
   }
 
   async recommend(profileId: string, page = 1, limit = 24) {
+    const now = new Date();
     const context = await this.context(profileId);
     // Retrieve lightweight evidence only. Full posting content is fetched for one page.
-    const features = await this.prisma.jobPost.findMany({where:{...liveJobWhere(),
+    const features = await this.prisma.jobPost.findMany({where:{...liveJobWhere(now),
       applications:{none:{profileId}}},select:employeeJobFeatures});
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,features.map(job=>job.id));
     const scored = features.map(job => {const evaluation=this.evaluate(context,job);return {job,evaluation:old ? {...evaluation,score:old.get(job.id)?.total ?? 0,positiveCore:true} : evaluation};});
     const personal = scored.filter(row => row.evaluation.positiveCore);
     const selected = personal.length ? personal : scored;
-    const ranked = rankEmployeeJobs(selected);
+    const organic = rankEmployeeJobs(selected);
+    const promotions = await loadJobPromotions(this.prisma, organic.map(row => row.job.id), now);
+    const placementEnabled = process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED === 'true' && this.enabled(profileId)
+      && personal.length > 0 && promotions.available && promotions.enabled;
+    const activeBoosts = new Set(placementEnabled ? [...promotions.rows].filter(([, state]) => state.publicState.boostActive).map(([id]) => id) : []);
+    const ranked = placeEmployeeBoosts(organic, activeBoosts);
+    const rankingRevision = digest([context.fingerprint, placementEnabled, promotions.available,
+      ranked.map(row => [row.job.id, row.placement, promotions.rows.get(row.job.id)?.publicState])]);
     const total = ranked.length;
     const totalPages = Math.max(1,Math.ceil(total/limit));
     page = Math.min(page,totalPages);
     const rows = ranked.slice((page-1)*limit,page*limit);
-    const jobs = await this.prisma.jobPost.findMany({where:{id:{in:rows.map(row => row.job.id)},...liveJobWhere()},
+    const jobs = await this.prisma.jobPost.findMany({where:{id:{in:rows.map(row => row.job.id)},...liveJobWhere(now)},
       select:{id:true,title:true,companyId:true,isAnonymous:true,locale:true,createdAt:true,publishedAt:true,
         employmentType:true,workMode:true,salaryMin:true,salaryMax:true,currency:true,salaryPeriod:true,
         city:{include:{province:true}},country:true,category:true,
@@ -82,7 +92,7 @@ export class EmployeeMatchingService {
     const byId = new Map(jobs.map(job => [job.id,job]));
     return { items:rows.flatMap(row => {
       const job = byId.get(row.job.id);
-      return job ? [{job,matchScore:row.evaluation.score,matchInsights:row.evaluation.insights}] : [];
-    }), page,limit,total,totalPages,mode:personal.length ? 'PERSONALIZED' as const : 'LATEST' as const,version:EMPLOYEE_MATCH_VERSION };
+      return job ? [{job:{...job,...publicJobPromotion(promotions,job.id),placement:row.placement},matchScore:row.evaluation.score,matchInsights:row.evaluation.insights}] : [];
+    }), page,limit,total,totalPages,mode:personal.length ? 'PERSONALIZED' as const : 'LATEST' as const,version:EMPLOYEE_MATCH_VERSION,rankingRevision };
   }
 }

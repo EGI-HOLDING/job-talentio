@@ -104,7 +104,7 @@ try {
       req.resolve('tsx/cli'),
       '--tsconfig',
       path.join(root, 'apps/api/tsconfig.json'),
-      path.join(root, process.argv.includes('--journey') || process.argv.includes('--journey-browser') ? 'apps/api/src/applications/journey-sync.integration.smoke.ts' : process.argv.includes('--onboarding') ? 'apps/api/src/auth/recruiter-signin.integration.smoke.ts' : process.argv.includes('--linkedin') ? 'apps/api/src/linkedin/linkedin.integration.smoke.ts' : 'apps/api/src/benefits/' + (process.argv.includes('--commerce') ? 'job-commerce.integration.smoke.ts' : 'benefits.integration.smoke.ts')),
+      path.join(root, process.argv.includes('--employee-boost') ? 'apps/api/src/benefits/employee-boost.integration.smoke.ts' : process.argv.includes('--journey') || process.argv.includes('--journey-browser') ? 'apps/api/src/applications/journey-sync.integration.smoke.ts' : process.argv.includes('--onboarding') ? 'apps/api/src/auth/recruiter-signin.integration.smoke.ts' : process.argv.includes('--linkedin') ? 'apps/api/src/linkedin/linkedin.integration.smoke.ts' : 'apps/api/src/benefits/' + (process.argv.includes('--commerce') ? 'job-commerce.integration.smoke.ts' : 'benefits.integration.smoke.ts')),
     ]),
   );
 } finally {

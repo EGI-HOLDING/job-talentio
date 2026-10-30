@@ -1,0 +1,102 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
+import { BenefitsService } from './benefits.service';
+import { BenefitsController } from './benefits.controller';
+import { OperationsService } from './operations.service';
+import { JobsService } from '../jobs/jobs.service';
+import { JobsSearchService } from '../search/jobs-search.service';
+import { MatchingService } from '../matching/matching.service';
+import { EmployeeMatchingService } from '../matching/employee-matching.service';
+import { rebuildJobsIndex } from '../search/jobs-index.sync';
+import { INITIAL_POLICIES, DAY_MS } from './benefit-policy';
+import type { AuthUser } from '../common/auth.decorators';
+
+async function main() {
+  assert.equal(process.env.DATABASE_URL,process.env.HR_TEST_DATABASE_URL);
+  const url=new URL(process.env.DATABASE_URL!);
+  assert.equal(url.hostname,'127.0.0.1'); assert.match(url.pathname,/^\/talentio_hr_it_\d+$/);
+  const db=new PrismaService();await db.$connect();
+  const previous=process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED;
+  const cohort=process.env.EMPLOYEE_MATCHING_V2_PERCENT;
+  try {
+    process.env.EMPLOYEE_MATCHING_V2_PERCENT='100';
+    const now=new Date(), startsAt=new Date(now.getTime()-DAY_MS), expiresAt=new Date(now.getTime()+30*DAY_MS);
+    for(const key of ['hr_packages','hr_promotions'])await db.featureFlag.upsert({where:{key},create:{key,enabled:true},update:{enabled:true}});
+    const hr=await db.user.create({data:{role:'RECRUITER',fullName:'Isolated HR'}});
+    const employee=await db.user.create({data:{role:'EMPLOYEE',fullName:'Isolated candidate',employeeProfile:{create:{desiredPosition:'Engineer',noExperience:true}}},include:{employeeProfile:true}});
+    const profile=employee.employeeProfile!;
+    const companies=await Promise.all([0,1].map(i=>db.company.create({data:{name:'Isolated company '+i,slug:'isolated-'+i,members:{create:{userId:hr.id,role:'OWNER'}}}})));
+    const ids:string[]=[];
+    for(let i=0;i<30;i++){
+      const code=i===21?'PREMIUM':i===20?'STANDARD':'FREE';
+      const job=await db.jobPost.create({data:{companyId:companies[i%2].id,title:'Engineer',description:'Synthetic engineering fixture only.',status:'PUBLISHED',publishedAt:new Date(now.getTime()-(i+1)*3600000),workMode:'REMOTE',salaryMin:1000+i,salaryMax:2000+i,experienceYearsMin:i===21?5:null,isAnonymous:i===20,
+        benefit:{create:{companyId:companies[i%2].id,code,highestCode:code,policySnapshot:INITIAL_POLICIES[code],startsAt,expiresAt,boostGrantedSeconds:INITIAL_POLICIES[code].boostDays*86400}}}});
+      ids.push(job.id);
+    }
+    const benefits=new BenefitsService(db,new OperationsService(db)), matching=new MatchingService(db), employeeMatching=new EmployeeMatchingService(db);
+    const sqlSearch={enabled:false,rankedIds:async()=>null,reindexInBackground(){}};
+    const facade=(search:unknown)=>new JobsService(db,null as never,matching,null as never,search as never,null as never,employeeMatching,benefits);
+    const jobs=facade(sqlSearch), query={page:1,limit:50};
+    process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED='false';
+    const before=await employeeMatching.recommend(profile.id,1,50);
+    const sorts=['newest','salary_high','salary_low','experience','match'] as const;
+    const sortBefore=await Promise.all(sorts.map(sort=>jobs.search({...query,sort,profileId:profile.id})));
+    const scoresBefore=await employeeMatching.scoreJobsForProfile(profile.id,ids);
+    const actor={...hr,memberships:companies.map(c=>({companyId:c.id,role:'OWNER'}))} as AuthUser;
+    const native=new JobsSearchService(db,new ConfigService({MEILI_HOST:process.env.HR_TEST_MEILI_HOST,MEILI_MASTER_KEY:process.env.HR_TEST_MEILI_KEY,MEILI_JOBS_INDEX:process.env.HR_TEST_MEILI_INDEX}));
+    await rebuildJobsIndex({prisma:db,host:process.env.HR_TEST_MEILI_HOST,apiKey:process.env.HR_TEST_MEILI_KEY,index:process.env.HR_TEST_MEILI_INDEX});
+    const controller=new BenefitsController(benefits,native);
+    const episode=await controller.boost(actor,ids[20],'isolated-boost');
+    assert.equal((await controller.boost(actor,ids[20],'isolated-boost')).id,episode.id);
+    await controller.boost(actor,ids[21],'isolated-unmet-boost');
+    assert.equal(await db.boostEpisode.count({where:{benefit:{jobId:ids[20]}}}),1);
+    assert.equal((await db.jobBenefit.findUniqueOrThrow({where:{jobId:ids[20]}})).boostGrantedSeconds,3*86400);
+    process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED='true';
+    const boosted=await employeeMatching.recommend(profile.id,1,50);
+    assert.equal(boosted.items[2].job.id,ids[20]);assert.equal(boosted.items[2].job.placement,'BOOST');
+    assert.ok(!boosted.items.some(row=>row.job.id===ids[21]&&row.job.placement==='BOOST'));
+    assert.deepEqual(await employeeMatching.scoreJobsForProfile(profile.id,ids),scoresBefore);
+    assert.equal(boosted.total,before.total);
+    const prefix=await employeeMatching.recommend(profile.id,1,6), page2=await employeeMatching.recommend(profile.id,2,6);
+    assert.deepEqual(prefix.items.map(r=>r.job.id),boosted.items.slice(0,6).map(r=>r.job.id));
+    assert.equal(prefix.rankingRevision,page2.rankingRevision);
+    assert.ok(page2.items.every(r=>!prefix.items.some(first=>first.job.id===r.job.id)));
+    const viewer={...employee} as AuthUser;
+    const publicPage=await jobs.recommendedForUser(viewer,'id',1,24);
+    assert.ok(!Array.isArray(publicPage));
+    const confidential=(publicPage as {items:Array<{job:any}>}).items.find(row=>row.job.id===ids[20])!.job;
+    assert.equal(confidential.company.id,'');assert.ok(!confidential.companyId);
+    assert.deepEqual(Object.keys(confidential.promotion).sort(),['active','boostActive','revalidateAt']);
+    assert.ok(Array.isArray(await jobs.recommendedForUser(viewer,'uz',undefined,6)));
+    const detail=await jobs.get(ids[20],viewer,'id');
+    assert.equal(detail.promotion?.boostActive,true);assert.equal(detail.company.id,'');
+    for(const [i,sort] of sorts.entries())assert.deepEqual((await jobs.search({...query,sort,profileId:profile.id})).items.map(j=>j.id),sortBefore[i].items.map(j=>j.id),sort+' must retain its ordering');
+    const sql=await jobs.search({...query,sort:'relevance'});
+    const projected=await facade(native).search({...query,sort:'relevance'});
+    assert.deepEqual(projected.items.map(j=>j.id),sql.items.map(j=>j.id),'Meilisearch and SQL boost ranking agree');
+    const featured=await jobs.search({...query,sort:'featured'});
+    assert.equal(featured.items[0].id,ids[21],'Premium tier leads; confidential boosted jobs remain excluded');
+    await db.featureFlag.update({where:{key:'hr_promotions'},data:{enabled:false}});
+    const disabled=await jobs.search({...query,sort:'featured'});
+    assert.equal(disabled.items[0].id,ids[0]);assert.ok(disabled.items.every(j=>!j.isPromoted));
+    assert.deepEqual((await employeeMatching.recommend(profile.id,1,50)).items.map(r=>r.job.id),before.items.map(r=>r.job.id));
+    await db.featureFlag.update({where:{key:'hr_promotions'},data:{enabled:true}});
+    await db.boostEpisode.update({where:{id:episode.id},data:{endsAt:new Date(Date.now()-1000)}});
+    const ended=await employeeMatching.recommend(profile.id,1,50);
+    assert.notEqual(ended.rankingRevision,boosted.rankingRevision);
+    assert.ok(!ended.items.some(r=>r.job.placement==='BOOST'));
+    assert.equal(await db.application.count(),0);assert.equal(await db.resume.count(),0);
+    const report={database:'disposable only',scoreAndEvidenceInvariant:true,activationIdempotent:true,allowanceUnchanged:true,slotsAndMandatoryGate:true,pagination:true,anonymousMasking:true,allExplicitSortsUnchanged:true,meiliSqlParity:true,featuredFlags:true,expiry:true,businessFixtures:{companies:2,jobs:30,applications:0,resumes:0}};
+    const out=path.resolve(__dirname,'../../../../output/employee-boost');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'database-report.json'),JSON.stringify(report,null,2));
+    console.log(JSON.stringify(report));
+  } finally {
+    if(previous===undefined)delete process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED;else process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED=previous;
+    if(cohort===undefined)delete process.env.EMPLOYEE_MATCHING_V2_PERCENT;else process.env.EMPLOYEE_MATCHING_V2_PERCENT=cohort;
+    await db.$disconnect();
+  }
+}
+void main().catch(error=>{console.error(error);process.exitCode=1;});

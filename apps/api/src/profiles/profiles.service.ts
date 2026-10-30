@@ -18,6 +18,7 @@ import {
   levelsAtOrAbove,
   parseLanguagesCsv,
   MAX_RESUMES_PER_PROFILE,
+  normalizeE164Phone,
   type ResumeImportInput,
 } from '@job-talentio/shared';
 import { LanguageLevel, Prisma } from '@prisma/client';
@@ -36,7 +37,6 @@ import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify } from '../common/utils';
-import { normalizePhone } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
@@ -49,7 +49,7 @@ import type { Locale } from '../common/i18n/locale';
 import { maskAnonymousCompany } from '../common/anonymous-job';
 import { TranslationService } from '../translation/translation.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
-import { ParsedCvData, normalizeCvPhone } from './cv-parser';
+import { ParsedCvData } from './cv-parser';
 import { CvParseService } from './cv-parse.service';
 import { careerDates } from './career-dates';
 import { RATE_LIMIT_REDIS } from '../rate-limit/search-rate-limit.guard';
@@ -289,16 +289,20 @@ export class ProfilesService {
     let phone: string | null | undefined = undefined;
     if (data.phone !== undefined) {
       const raw = String(data.phone || '').trim();
-      if (!raw) phone = null;
-      else {
-        phone = normalizePhone(raw);
-        if (phone.length < 9) throw new BadRequestException('Invalid phone number');
+      if (!raw) {
+        if (profile.onboardingStatus !== 'IN_PROGRESS') {
+          throw new BadRequestException('PHONE_REQUIRED');
+        }
+        phone = null;
+      } else {
+        phone = normalizeE164Phone(raw);
+        if (!phone) throw new BadRequestException('PHONE_INVALID');
         const taken = await this.prisma.employeeProfile.findFirst({
           where: { phone, NOT: { id: profile.id } },
           select: { id: true },
         });
         if (taken) {
-          throw new ConflictException('This phone number is already linked to another account');
+          throw new ConflictException('PHONE_DUPLICATE');
         }
       }
     }
@@ -338,8 +342,9 @@ export class ProfilesService {
         include: this.profileInclude,
       });
     } catch (e: unknown) {
-      if ((e as { code?: string })?.code === 'P2002') {
-        throw new ConflictException('This phone number is already linked to another account');
+      const target = String((e as { meta?: { target?: unknown } })?.meta?.target || '').toLowerCase();
+      if ((e as { code?: string })?.code === 'P2002' && (target.includes('phone') || data.phone !== undefined)) {
+        throw new ConflictException('PHONE_DUPLICATE');
       }
       throw e;
     }
@@ -1318,31 +1323,20 @@ export class ProfilesService {
 
     const headline = draft.headline?.trim();
     const summary = draft.summary?.trim();
-    const rawPhone = draft.phone?.trim();
     const replaceExisting = Boolean(draft.replaceExisting);
 
     const kept = pickFilledProfileFields(
       {
         headline: profile.headline ?? '',
         summary: profile.summary ?? '',
-        phone: profile.phone ?? '',
       },
-      { headline, summary, phone: rawPhone },
+      { headline, summary },
       replaceExisting,
     );
 
     const profilePatch: Record<string, unknown> = {};
     if (kept.headline) profilePatch.headline = kept.headline;
     if (kept.summary) profilePatch.summary = kept.summary;
-    if (kept.phone) {
-      const phone = normalizeCvPhone(kept.phone);
-      if(!phone) throw new BadRequestException('Check the reviewed phone number');
-      const taken = await tx.employeeProfile.findFirst({
-        where: { phone, NOT: { id: profile.id } },
-        select: { id: true },
-      });
-      if (!taken) profilePatch.phone = phone;
-    }
     if (Object.keys(profilePatch).length) {
       if (profilePatch.headline || profilePatch.summary) {
         profilePatch.contentLocale = this.narrativeLocale(
@@ -1362,7 +1356,7 @@ export class ProfilesService {
       educations: 0,
       languages: 0,
       skippedSkills: 0,
-      skippedPhoneTaken: Boolean(kept.phone && !profilePatch.phone),
+      skippedPhoneTaken: false,
     };
 
     const seenExperiences = new Set(

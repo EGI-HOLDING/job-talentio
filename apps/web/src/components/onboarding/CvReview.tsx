@@ -24,7 +24,6 @@ export function createReview(parsed: ParsedCv): OnboardingReview {
     replaceExisting: false,
     headline: parsed.headline || "",
     summary: parsed.summary || "",
-    phone: parsed.phone || "",
     skills: (parsed.skillNames || []).slice(0, 50),
     experiences: (parsed.experiences || []).slice(0, 20),
     educations: (parsed.educations || [])
@@ -58,7 +57,7 @@ export function selectedReview(review: OnboardingReview, noExperience = false): 
   return {
     replaceExisting: false,
     ...(review.basics
-      ? { headline: d.headline, summary: d.summary, phone: d.phone }
+      ? { headline: d.headline, summary: d.summary }
       : {}),
     skills: d.skills.filter((_, i) => review.skills[i]),
     experiences: noExperience ? [] : d.experiences.filter((_, i) => review.experiences[i]),
@@ -158,14 +157,6 @@ export function CvReview({
             value={d.summary || ""}
             maxLength={5000}
             onChange={(e) => field("summary", e.target.value)}
-          />
-        </label>
-        <label>
-          {t("phone")}
-          <input
-            value={d.phone || ""}
-            maxLength={40}
-            onChange={(e) => field("phone", e.target.value)}
           />
         </label>
       </details>

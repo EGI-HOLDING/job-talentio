@@ -92,8 +92,6 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
   const [headline, setHeadline] = useState(parsed.headline || '');
   const [includeSummary, setIncludeSummary] = useState(Boolean(parsed.summary));
   const [summary, setSummary] = useState(parsed.summary || '');
-  const [includePhone, setIncludePhone] = useState(Boolean(parsed.phone));
-  const [phone, setPhone] = useState(parsed.phone || '');
 
   const [skills, setSkills] = useState<SkillDraft[]>(() =>
     (parsed.skillNames || []).map((name) => ({
@@ -136,8 +134,7 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
   const selectedCount = useMemo(() => {
     const basics =
       (includeHeadline && headline.trim() ? 1 : 0) +
-      (includeSummary && summary.trim() ? 1 : 0) +
-      (includePhone && phone.trim() ? 1 : 0);
+      (includeSummary && summary.trim() ? 1 : 0);
     const skillCount = skills.filter((s) => s.include && s.name.trim() && !catalogLabelIssue(s.name)).length;
     const expCount = experiences.filter((x) => x.include && x.title.trim() && x.companyName.trim()).length;
     const eduCount = educations.filter((x) => x.include && x.school.trim()).length;
@@ -148,8 +145,6 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
     headline,
     includeSummary,
     summary,
-    includePhone,
-    phone,
     skills,
     experiences,
     educations,
@@ -199,7 +194,6 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
           resumeGeneration,
           headline: includeHeadline && headline.trim() ? headline.trim() : undefined,
           summary: includeSummary && summary.trim() ? summary.trim() : undefined,
-          phone: includePhone && phone.trim() ? phone.trim() : undefined,
           skills: skills
             .filter((s) => s.include && s.name.trim() && !catalogLabelIssue(s.name))
             .map((s) => s.name.trim()),
@@ -270,7 +264,7 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
         )}
 
         <div className="cv-review-body">
-          {(parsed.headline || parsed.summary || parsed.phone || parsed.email) && (
+          {(parsed.headline || parsed.summary || parsed.email) && (
             <section className="cv-section">
               <h4>{t('ui.profileBasics')}</h4>
               {parsed.headline !== undefined && parsed.headline !== '' && (
@@ -307,20 +301,6 @@ export function CvReviewModal({ resumeId, resumeGeneration, parsed, onClose, onI
                       onChange={(e) => setSummary(e.target.value)}
                       maxLength={5000}
                     />
-                  </div>
-                </div>
-              )}
-              {parsed.phone !== undefined && parsed.phone !== '' && (
-                <div className="cv-check">
-                  <input
-                    type="checkbox"
-                    checked={includePhone}
-                    onChange={(e) => setIncludePhone(e.target.checked)}
-                    aria-label={t('ui.phone')}
-                  />
-                  <div className="cv-check-fields">
-                    <strong>{t('ui.phone')}</strong>
-                    <input value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} />
                   </div>
                 </div>
               )}

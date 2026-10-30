@@ -52,6 +52,13 @@ export const employeePreferencesSchema = z.object({
 });
 export const employeeOnboardingSchema = employeePreferencesSchema.extend({
   step: z.number().int().min(1).max(5).optional(),
+  /** Canonical E.164 number; omitted while the employee is still editing it. */
+  phone: z.string().trim().max(40).optional(),
+  /** In-progress UI draft only. EmployeeProfile.phone stores the validated E.164 value. */
+  phoneDraft: z.object({
+    country: z.string().regex(/^[A-Z]{2}$/),
+    nationalNumber: z.string().max(40),
+  }).optional(),
   fullName: z.string().trim().max(200).optional(),
   visibility: z
     .enum(["PUBLIC", "TO_REGISTERED_RECRUITERS", "PRIVATE"])

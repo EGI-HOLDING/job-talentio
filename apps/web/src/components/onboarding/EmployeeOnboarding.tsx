@@ -1,13 +1,20 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { EmployeeOnboardingInput } from "@job-talentio/shared";
+import {
+  defaultPhoneCountry,
+  phoneDraftFromE164,
+  validatePhoneDraft,
+  type EmployeeOnboardingInput,
+  type PhoneDraft,
+} from "@job-talentio/shared";
 import { api, saveSession, type AuthSession } from "@/lib/api";
 import { safeAuthNext } from "@/lib/authReturn";
 import { useRouter } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useOnboardingText } from "@/lib/i18n/onboarding";
 import { WorkspaceLoading } from "@/components/employee/WorkspacePrimitives";
+import { PhoneNumberField, phoneErrorText } from "@/components/ui/PhoneNumberField";
 import { CV_ACCEPT, cvFileError } from "@/components/profile/types";
 import {
   RoleInput,
@@ -49,6 +56,8 @@ type State = {
     salaryNegotiable: boolean;
     visibility: Form["visibility"];
     noExperience: boolean;
+    phone: string | null;
+    residenceCountry?: Country | null;
   };
 };
 function Badge({ step }: { step: number }) {
@@ -95,6 +104,8 @@ export function EmployeeOnboarding() {
     [countries, setCountries] = useState<Country[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
+    [phoneTouched, setPhoneTouched] = useState(false),
+    [phoneServerError, setPhoneServerError] = useState<string | undefined>(),
     [saveState, setSaveState] = useState(""),
     [loadKey, setLoadKey] = useState(0);
   const [editor, setEditor] = useState<number | "new" | null>(null),
@@ -122,6 +133,22 @@ export function EmployeeOnboarding() {
         }
         const p = state.profile,
           draft = state.draft || {};
+        const marketPhoneCountry = process.env.NEXT_PUBLIC_DEFAULT_LOCALE === "id" ? "ID" : "UZ";
+        const savedPhoneDraft = draft.phoneDraft as PhoneDraft | undefined;
+        const phoneDraft = savedPhoneDraft
+          ? {
+              ...savedPhoneDraft,
+              country: defaultPhoneCountry(
+                savedPhoneDraft.country,
+                p.residenceCountry?.iso2 || marketPhoneCountry,
+              ),
+            }
+          : phoneDraftFromE164(
+              p.phone,
+              p.residenceCountry?.iso2,
+              marketPhoneCountry,
+            );
+        const initialPhone = validatePhoneDraft(phoneDraft);
         setFileName(
           p.resumes.find((r) => r.id === draft.resumeId)?.title || "",
         );
@@ -142,7 +169,11 @@ export function EmployeeOnboarding() {
           noExperience: p.noExperience,
           manualExperiences: [],
           ...draft,
+          phoneDraft,
+          phone: initialPhone.ok ? initialPhone.phone : undefined,
         });
+        setPhoneTouched(false);
+        setPhoneServerError(undefined);
         loaded.current = true;
         setError("");
       })
@@ -179,7 +210,12 @@ export function EmployeeOnboarding() {
       (e) => {
         if (version === saveVersion.current) {
           setSaveState("");
-          setError(e.message);
+          const message = e instanceof Error ? e.message : String(e);
+          if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
+            setPhoneTouched(true);
+            setPhoneServerError(message);
+            setError("");
+          } else setError(phoneErrorText(message, t));
         }
       },
     );
@@ -226,10 +262,12 @@ export function EmployeeOnboarding() {
   }, [form?.resumeId, pollKey]);
   function update(value: Partial<Form>) {
     setError("");
+    if (value.phoneDraft !== undefined) setPhoneServerError(undefined);
     setForm((prev) => (prev ? { ...prev, ...value } : prev));
   }
   async function navigate(targetStep: number, skipSalary = false) {
     if (!form || busy) return;
+    let normalizedPhone = form.phone;
     if (targetStep > step) {
       if (step === 1 && !form.desiredPositions.length) {
         setError(t("requiredRoles"));
@@ -260,21 +298,38 @@ export function EmployeeOnboarding() {
         setError(t("requiredIdentity"));
         return;
       }
+      if (step === 4) {
+        const phone = validatePhoneDraft(form.phoneDraft || { country: "", nationalNumber: "" });
+        if (!phone.ok) {
+          setPhoneTouched(true);
+          setPhoneServerError(undefined);
+          return;
+        }
+        normalizedPhone = phone.phone;
+      }
     }
     setBusy(true);
     setError("");
     try {
-      const next = skipSalary
-        ? { ...form, desiredSalaryMin: null, salaryNegotiable: false }
-        : form;
+      const next = {
+        ...(skipSalary
+          ? { ...form, desiredSalaryMin: null, salaryNegotiable: false }
+          : form),
+        ...(step === 4 && targetStep > step ? { phone: normalizedPhone } : {}),
+      };
       await persist(next, targetStep);
-      if (skipSalary) setForm(next);
+      if (skipSalary || step === 4) setForm(next);
       setStep(targetStep);
       document
         .querySelector("[data-onboarding-heading]")
         ?.scrollIntoView({ block: "start" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
+        setPhoneTouched(true);
+        setPhoneServerError(message);
+        setError("");
+      } else setError(phoneErrorText(message, t));
     } finally {
       setBusy(false);
     }
@@ -284,6 +339,13 @@ export function EmployeeOnboarding() {
     const review = !withoutImport && form.reviewState ? selectedReview(form.reviewState, Boolean(form.noExperience)) : null;
     const invalidReview = review && reviewError(review);
     if (invalidReview) { setError(t(invalidReview)); return; }
+    const phone = validatePhoneDraft(form.phoneDraft || { country: "", nationalNumber: "" });
+    if (!phone.ok) {
+      setPhoneTouched(true);
+      setPhoneServerError(undefined);
+      setStep(4);
+      return;
+    }
     setBusy(true);
     setError("");
     stopped.current = true;
@@ -293,6 +355,7 @@ export function EmployeeOnboarding() {
         method: "POST",
         body: JSON.stringify({
           ...form,
+          phone: phone.phone,
           step: 5,
           review,
           reviewState: withoutImport ? null : form.reviewState,
@@ -303,7 +366,13 @@ export function EmployeeOnboarding() {
       router.replace(destination);
     } catch (e) {
       stopped.current = false;
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
+        setPhoneTouched(true);
+        setPhoneServerError(message);
+        setStep(4);
+        setError("");
+      } else setError(phoneErrorText(message, t));
       setBusy(false);
     }
   }
@@ -448,6 +517,19 @@ export function EmployeeOnboarding() {
                     onChange={(e) => update({ fullName: e.target.value })}
                   />
                 </label>
+                <PhoneNumberField
+                  value={form.phoneDraft || { country: "", nationalNumber: "" }}
+                  onChange={(phoneDraft) => {
+                    const result = validatePhoneDraft(phoneDraft);
+                    update({ phoneDraft, phone: result.ok ? result.phone : undefined });
+                  }}
+                  label={t("phone")}
+                  hint={t("phoneHint")}
+                  required
+                  errorCode={phoneServerError || (phoneTouched && !validatePhoneDraft(form.phoneDraft || { country: "", nationalNumber: "" }).ok
+                    ? (validatePhoneDraft(form.phoneDraft || { country: "", nationalNumber: "" }) as { ok: false; error: string }).error
+                    : undefined)}
+                />
               </div>
               <CountryPicker
                 countries={countries}

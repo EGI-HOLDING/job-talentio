@@ -30,7 +30,7 @@ export type CareerProfile = {
   certifications: Certification[];
   resumes: Resume[];
 };
-export type ProfileEditor = { kind: 'basics' | 'skills' | 'experience' | 'education' | 'languages' | 'certification'; id?: string };
+export type ProfileEditor = { kind: 'basics' | 'phone' | 'skills' | 'experience' | 'education' | 'languages' | 'certification'; id?: string };
 export type ImportedResult = { imported?: { skills?: number; experiences?: number; educations?: number; languages?: number } };
 export const PROFILE_HREF = '/dashboard/employee?tab=profile';
 export const CVS_HREF = `${PROFILE_HREF}&section=cvs`;

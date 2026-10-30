@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
   employeeOnboardingSchema,
+  normalizeE164Phone,
   type EmployeeOnboardingInput,
 } from "@job-talentio/shared";
 import { PrismaService } from "../prisma/prisma.service";
@@ -49,6 +50,15 @@ export class EmployeeOnboardingService {
       },
     };
   }
+  private rethrowPhoneConflict(error: unknown): never {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002" &&
+      String(error.meta?.target || "").toLowerCase().includes("phone")
+    )
+      throw new ConflictException("PHONE_DUPLICATE");
+    throw error;
+  }
   async get(user: AuthUser) {
     return this.result(await this.profile(this.prisma, user.id));
   }
@@ -67,6 +77,8 @@ export class EmployeeOnboardingService {
       throw new BadRequestException(
         "Complete your name and country of residence",
       );
+    if (step >= 5 && !normalizeE164Phone(profile.phone))
+      throw new BadRequestException("PHONE_REQUIRED");
   }
   private async save(db: Db, user: AuthUser, input: EmployeeOnboardingInput) {
     const before = await this.profile(db, user.id);
@@ -82,6 +94,7 @@ export class EmployeeOnboardingService {
       "fullName",
       "desiredSalaryCurrency",
       "desiredSalaryPeriod",
+      "phoneDraft",
     ] as const)
       if (input[key] !== undefined) draft[key] = input[key];
     if (input.resumeId) {
@@ -128,6 +141,20 @@ export class EmployeeOnboardingService {
       input.desiredPositions === undefined
         ? undefined
         : await canonicalRoleNames(db, input.desiredPositions);
+    let phone: string | null | undefined;
+    if (input.phone !== undefined) {
+      const rawPhone = input.phone.trim();
+      if (!rawPhone) phone = null;
+      else {
+        phone = normalizeE164Phone(rawPhone);
+        if (!phone) throw new BadRequestException("PHONE_INVALID");
+        const taken = await db.employeeProfile.findFirst({
+          where: { phone, NOT: { id: before.id } },
+          select: { id: true },
+        });
+        if (taken) throw new ConflictException("PHONE_DUPLICATE");
+      }
+    }
     if (input.fullName && input.fullName.trim().length >= 2)
       await db.user.update({
         where: { id: user.id },
@@ -158,6 +185,7 @@ export class EmployeeOnboardingService {
         salaryNegotiable: input.salaryNegotiable,
         visibility: input.visibility,
         noExperience: input.noExperience,
+        ...(phone !== undefined ? { phone } : {}),
         onboardingDraft: JSON.parse(
           JSON.stringify(draft),
         ) as Prisma.InputJsonValue,
@@ -172,18 +200,23 @@ export class EmployeeOnboardingService {
     return profile;
   }
   async patch(user: AuthUser, input: EmployeeOnboardingInput) {
-    return this.prisma.$transaction(async (db) => {
-      await db.$queryRaw(
-        Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE "userId"=${user.id} FOR UPDATE`,
-      );
-      const current = await this.profile(db, user.id);
-      if (current.onboardingStatus !== "IN_PROGRESS")
-        return this.result(current);
-      return this.result(await this.save(db, user, input));
-    });
+    try {
+      return await this.prisma.$transaction(async (db) => {
+        await db.$queryRaw(
+          Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE "userId"=${user.id} FOR UPDATE`,
+        );
+        const current = await this.profile(db, user.id);
+        if (current.onboardingStatus !== "IN_PROGRESS")
+          return this.result(current);
+        return this.result(await this.save(db, user, input));
+      });
+    } catch (error) {
+      this.rethrowPhoneConflict(error);
+    }
   }
   async complete(user: AuthUser, input: EmployeeOnboardingInput) {
-    return this.prisma.$transaction(
+    try {
+      return await this.prisma.$transaction(
       async (db) => {
         await db.$queryRaw(
           Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE "userId"=${user.id} FOR UPDATE`,
@@ -284,6 +317,9 @@ export class EmployeeOnboardingService {
         return this.result(await this.profile(db, user.id));
       },
       { timeout: 30000 },
-    );
+      );
+    } catch (error) {
+      this.rethrowPhoneConflict(error);
+    }
   }
 }

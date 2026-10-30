@@ -9,6 +9,7 @@ import { ForYouJobsSection } from './ForYouJobsSection';
 import { LandingSections, type LandingCategory, type LandingJob, type LandingLocation, type LandingFacet } from './LandingSections';
 import type { NewsListItem } from '@/lib/newsSeo';
 import styles from './SeekerHero.module.css';
+import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
 
 type CityMetadata = { slug: string; name: string; province?: { country?: { slug: string; name: string } } };
 type Catalog = { cities: LandingLocation[]; categories: LandingCategory[]; titles: LandingFacet[] };
@@ -20,6 +21,8 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   const [topCompanies, setTopCompanies] = useState<TopCompany[]>([]);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
   const [latestNews, setLatestNews] = useState<NewsListItem[]>([]);
+  const [promotionRetry, setPromotionRetry] = useState(0);
+  usePromotionRefresh(featuredJobs, () => setPromotionRetry(value => value + 1));
 
   useEffect(() => {
     let active = true;
@@ -48,7 +51,7 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
       });
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [locale]);
+  }, [locale, promotionRetry]);
 
   return (
     <div className={styles.page}>

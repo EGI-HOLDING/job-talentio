@@ -14,7 +14,8 @@ async function delayReply(target,url,send,change){let release,arrived;const gate
 async function main(){
   const tag='package-features-'+randomUUID();
   const hr=await db.user.create({data:{fullName:'Package features HR '+tag,role:'RECRUITER',recruiterOnboarding:{create:{status:'NOT_REQUIRED'}}}});users.push(hr.id);
-  const employee=await db.user.create({data:{fullName:'Package features employee '+tag,role:'EMPLOYEE',employeeProfile:{create:{onboardingStatus:'COMPLETED'}}}});users.push(employee.id);
+  const employeePhoneSuffix=String(1_000_000+Math.floor(Math.random()*9_000_000));
+  const employee=await db.user.create({data:{fullName:'Package features employee '+tag,role:'EMPLOYEE',employeeProfile:{create:{onboardingStatus:'COMPLETED',phone:'+99890'+employeePhoneSuffix}}}});users.push(employee.id);
   const company=await db.company.create({data:{name:'Package features verified company',slug:tag,members:{create:{userId:hr.id,role:'OWNER'}}}});companies.push(company.id);const bearer=token(hr),employeeToken=token(employee);
   for(const code of ['FREE','STANDARD','PREMIUM']){
     const descriptions={FREE:'Design accessible customer interfaces and collaborate with product designers to deliver web experiences.',STANDARD:'Maintain automated quality checks, investigate software defects and coordinate test coverage with engineers.',PREMIUM:'Plan international warehouse operations, optimize shipping routes and manage inventory schedules for suppliers.'};

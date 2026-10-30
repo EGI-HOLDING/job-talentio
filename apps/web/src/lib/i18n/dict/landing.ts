@@ -16,7 +16,7 @@ export const landing = {
   'landing.locations': { en: 'Locations', ru: 'Локации', uz: 'Joylar' },
   'landing.companiesHiring': { en: 'Companies hiring', ru: 'Компании нанимают', uz: 'Ish beruvchi kompaniyalar' },
   'landing.featured': { en: 'Featured jobs', ru: 'Приоритетные вакансии', uz: 'Ustuvor vakansiyalar' },
-  'landing.featuredSub': { en: 'Active roles ordered by package priority, boost, and publication date.', ru: 'Активные вакансии с учётом приоритета тарифа, boost и даты публикации.', uz: 'Faol vakansiyalar tarif ustuvorligi, boost va e’lon sanasi bo‘yicha saralangan.' },
+  'landing.featuredSub': { en: 'Explore featured opportunities from companies that are hiring.', ru: 'Откройте для себя вакансии компаний, которые сейчас нанимают.', uz: 'Xodim izlayotgan kompaniyalarning tanlangan vakansiyalarini ko‘ring.' },
   'landing.badge': { en: 'Promoted', ru: 'Продвигается', uz: 'Targ‘ib qilinmoqda' },
   'landing.viewJobs': { en: 'View all jobs', ru: 'Все вакансии', uz: 'Barcha ishlar' },
   'landing.viewJob': { en: 'View job', ru: 'Подробнее', uz: 'Batafsil' },

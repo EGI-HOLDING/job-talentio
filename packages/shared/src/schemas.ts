@@ -382,7 +382,7 @@ export const profileUpdateSchema = z.object({
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),
   citySlug: z.string().max(120).optional().nullable(),
-  phone: z.string().max(40).optional(),
+  phone: z.string().trim().max(40).optional(),
   visibility: z
     .enum(['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'])
     .optional(),
