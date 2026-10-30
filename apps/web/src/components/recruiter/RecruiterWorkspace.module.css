@@ -145,6 +145,7 @@
 .dragPreview small { color:#7055c9; font-size:.67rem; }
 .srOnly { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
 .applicant .sub { font-size:.68rem; margin-top:4px; }
+.applicant .offerLock { display:block; margin-top:5px; color:#86651c; font-size:.62rem; line-height:1.4; font-weight:550; }
 .applicant footer { display:flex; gap:10px; align-items:center; justify-content:space-between; margin:12px 0 0 0; color:#8591a5; font-size:.65rem; }
 .miniScore { color:#07815f; font-size:.7rem; background:#eaf8f0; border-radius:4px; padding:3px 5px; }
 .drawer { width:390px; max-width:40vw; display:flex; flex-direction:column; flex-shrink:0; border-left:1px solid #e7ebf3; background:#fff; min-height:0; }

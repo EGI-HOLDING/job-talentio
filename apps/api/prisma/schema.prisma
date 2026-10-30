@@ -224,6 +224,19 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
+enum OfferPacketKind {
+  OFFER
+  POST_HIRE
+}
+
+enum OfferPacketStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  SHARED
+}
+
 enum ResumeParseStatus {
   NONE
   PENDING
@@ -714,6 +727,8 @@ model User {
   linkedInPreviews        LinkedInPreview[]
   linkedInPosts           LinkedInSocialPost[]
   recruiterOnboarding    RecruiterOnboarding?
+  offerPacketsCreated    ApplicationOfferPacket[] @relation("OfferPacketCreator")
+  offerDocumentsUploaded ApplicationOfferDocument[] @relation("OfferDocumentUploader")
 }
 
 model RefreshToken {
@@ -1278,6 +1293,7 @@ model Application {
   events     PipelineEvent[]
   answers    ApplicationAnswer[]
   interviews Interview[]
+  offerPackets ApplicationOfferPacket[]
 
   @@unique([jobPostId, profileId])
   @@index([profileId])
@@ -1300,6 +1316,45 @@ model PipelineEvent {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
+}
+
+/// Immutable offer or post-hire document batch attached to one application.
+model ApplicationOfferPacket {
+  id          String            @id @default(cuid())
+  applicationId String
+  version     Int
+  kind        OfferPacketKind
+  status      OfferPacketStatus
+  createdById String?
+  note        String?           @db.VarChar(2000)
+  createdAt   DateTime          @default(now())
+  respondedAt DateTime?
+  revokedAt   DateTime?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("OfferPacketCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  documents   ApplicationOfferDocument[]
+
+  @@unique([applicationId, kind, version])
+  @@index([applicationId, kind, createdAt])
+  @@index([applicationId, status])
+}
+
+/// Private object-store metadata; the object key is never sent to clients.
+model ApplicationOfferDocument {
+  id           String   @id @default(cuid())
+  packetId     String
+  storageKey   String   @unique
+  originalName String   @db.VarChar(255)
+  contentType  String   @db.VarChar(100)
+  sizeBytes    Int
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  packet     ApplicationOfferPacket @relation(fields: [packetId], references: [id], onDelete: Cascade)
+  uploadedBy User?                  @relation("OfferDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([packetId, createdAt])
 }
 
 model SavedJob {

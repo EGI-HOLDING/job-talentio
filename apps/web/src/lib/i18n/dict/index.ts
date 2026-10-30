@@ -19,6 +19,7 @@ import { registerUi } from './registerUi';
 import { recruiterWorkspace } from './recruiterWorkspace';
 import { linkedin } from './linkedin';
 import { authProviders } from './authProviders';
+import { applicationOffer } from './applicationOffer';
 
 /** Namespaces are merged into one flat lookup so `t('key')` stays unchanged. */
 export const DICT = {
@@ -43,6 +44,7 @@ export const DICT = {
   ...recruiterWorkspace,
   ...linkedin,
   ...authProviders,
+  ...applicationOffer,
 } as const;
 
 export type DictKey = keyof typeof DICT;

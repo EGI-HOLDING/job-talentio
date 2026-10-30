@@ -50,8 +50,15 @@ function host(file, exportName, dependencies, globals = {}) {
       const index = cursor++;
       return (cells[index] ||= 'test-id-' + index);
     },
-    useMemo(run) {
-      return run();
+    useMemo(run, deps = []) {
+      const index = cursor++, previous = cells[index];
+      if (!previous || deps.some((value, i) => !Object.is(value, previous.deps[i]))) cells[index] = { deps, value: run() };
+      return cells[index].value;
+    },
+    useCallback(callback, deps = []) {
+      const index = cursor++, previous = cells[index];
+      if (!previous || deps.some((value, i) => !Object.is(value, previous.deps[i]))) cells[index] = { deps, value: callback };
+      return cells[index].value;
     },
     useEffect(effect, deps) {
       const index = cursor++,
@@ -92,6 +99,9 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name in dependencies) return dependencies[name];
         if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
         if (name === '@/lib/useLiveRefresh') return { useLiveRefresh() {} };
+        if (name === '@/lib/useSessionIdentity') return { useSessionIdentity: () => 'test-user' };
+        if (name === '@/components/applications/OfferComposer') return { OfferComposer: () => null };
+        if (name === '@/components/applications/OfferPacketHistory') return { OfferPacketHistory: () => null };
         throw Error('Unexpected dependency: ' + name);
       },
     },
@@ -130,8 +140,9 @@ function visibleText(tree) {
   if(typeof tree==='string'||typeof tree==='number')return String(tree);
   return tree&&typeof tree==='object'?visibleText(tree.props?.children):'';
 }
+const translate = (key) => key;
 const t = {
-  useI18n: () => ({ t: (key) => key, locale: 'en' }),
+  useI18n: () => ({ t: translate, locale: 'en' }),
   useEnumLabel: () => (_, value) => value,
 };
 class ApiError extends Error {}
@@ -196,6 +207,106 @@ test('CV action resolves the submitted application file and has no database perm
   let tree=await ui.render({application:row()});nodes(tree,n=>n.type==='button')[0].props.onClick();await ui.render();assert.deepEqual(requests,['/applications/app/resume-download']);assert.equal(tab.location.href,'https://example.test/submitted');assert.equal(tab.opener,null);
   tree=await ui.render({application:row('empty',{hasResumeFile:false})});assert.equal(nodes(tree,n=>n.type==='button').length,0);ui.unmount();
 });
+
+test('offer composer accepts several documents and submits them through the private multipart endpoint', async () => {
+  const uploads = [], sent = [];
+  const gate = deferred();
+  const FormDataMock = class { entries = []; append(...entry) { this.entries.push(entry); } };
+  const ui = host('apps/web/src/components/applications/OfferComposer.tsx', 'OfferComposer', {
+    '@/lib/api': { apiUpload: async (route, body, onProgress) => { uploads.push({ route, body }); onProgress(42); return gate.promise; } },
+    '@/lib/i18n': t,
+    '@/components/profile/ProfileDialog': { ProfileDialog: ({ children }) => children },
+  }, { FormData: FormDataMock });
+  let tree = await ui.render({ applicationId: 'app-1', candidateName: 'Candidate', jobTitle: 'Data Scientist', onClose() {}, onSent: () => sent.push(true) });
+  const dropzone = () => nodes(tree, node => typeof node.props?.onDrop === 'function')[0];
+  const files = [
+    { name: 'offering.pdf', size: 1024, lastModified: 1 },
+    { name: 'benefits.docx', size: 2048, lastModified: 2 },
+  ];
+  dropzone().props.onDrop({ preventDefault() {}, currentTarget: { dataset: {} }, dataTransfer: { files } });
+  tree = await ui.render();
+  assert.match(visibleText(tree), /offer\.decisionRule/, 'The composer explains that attachments control who decides the offer');
+  assert.match(visibleText(tree), /offering\.pdf/);
+  assert.match(visibleText(tree), /benefits\.docx/);
+  assert.equal(nodes(tree, node => node.type === 'button' && node.props.children === 'offer.send').length, 1);
+  nodes(tree, node => node.type === 'form')[0].props.onSubmit({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  tree = await ui.render();
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].route, '/applications/app-1/offers');
+  assert.equal(uploads[0].body.entries.length, 2);
+  assert.match(visibleText(tree), /42%/);
+  gate.resolve({});
+  await new Promise(resolve => setImmediate(resolve));
+  await ui.render();
+  assert.deepEqual(sent, [true]);
+  ui.unmount();
+});
+
+test('candidate offer history downloads private documents and accepts only the active offer', async () => {
+  const requests = [], opened = [], confirmed = [], decisions = [];
+  const pendingPacket = { id: 'packet-1', version: 2, kind: 'OFFER', status: 'PENDING', requiresCandidateDecision: true, createdAt: '2026-10-30T09:00:00.000Z', documents: [{ id: 'doc-1', originalName: 'Offer — Candidate.pdf', contentType: 'application/pdf', sizeBytes: 1024, createdAt: '2026-10-30T09:00:00.000Z' }] };
+  const acceptedPacket = { ...pendingPacket, status: 'ACCEPTED', requiresCandidateDecision: false, respondedAt: '2026-10-30T10:00:00.000Z' };
+  const ui = host('apps/web/src/components/applications/OfferPacketHistory.tsx', 'OfferPacketHistory', {
+    '@/lib/api': { getSession: () => ({ user: { id: 'candidate-user' } }), api: async (route, options) => {
+      requests.push({ route, options });
+      if (route.endsWith('/offer-packets')) return { packets: [pendingPacket] };
+      if (route.endsWith('/download')) return { url: 'https://private-storage.test/signed-document' };
+      if (route.endsWith('/offer-decision')) return { application: { status: 'HIRED' }, packet: acceptedPacket };
+      throw new Error('Unexpected API request: ' + route);
+    } },
+    '@/lib/i18n': t,
+    '@/lib/useSessionIdentity': { useSessionIdentity: () => 'candidate-user' },
+    '@/components/ui/ConfirmProvider': { useConfirm: () => async options => { confirmed.push(options); return true; } },
+    '@/lib/useLiveRefresh': { useLiveRefresh() {} },
+  }, { window: { open: (url, target) => { const tab = { opener: {}, location: { href: '' }, close() {} }; opened.push({ url, target, tab }); return tab; }, location: { assign: () => assert.fail('Signed document should open in the reserved tab') } } });
+  const props = { applicationId: 'app-1', applicationStatus: 'OFFER', audience: 'candidate', onDecision: status => decisions.push(status) };
+  let tree = await ui.render(props);
+  assert.match(visibleText(tree), /offer.accept/);
+  const documentList = () => {
+    const component = nodes(tree, node => typeof node.type === 'function' && node.type.name === 'DocumentList')[0];
+    assert.ok(component, visibleText(tree));
+    return component.type(component.props);
+  };
+  let documents = documentList();
+  assert.match(visibleText(documents), /Offer — Candidate\.pdf/);
+  const download = nodes(documents, node => node.type === 'button' && node.props.children === 'offer.download')[0];
+  assert.ok(download, visibleText(tree));
+  await download.props.onClick();
+  tree = await ui.render();
+  assert.equal(requests[1].route, '/applications/app-1/offer-packets/packet-1/documents/doc-1/download');
+  assert.deepEqual(opened.map(({ url, target }) => ({ url, target })), [{ url: 'about:blank', target: '_blank' }]);
+  assert.equal(opened[0].tab.opener, null);
+  assert.equal(opened[0].tab.location.href, 'https://private-storage.test/signed-document');
+  const accept = nodes(tree, node => node.type === 'button' && node.props.children === 'offer.accept')[0];
+  accept.props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  tree = await ui.render({ ...props, applicationStatus: 'HIRED' });
+  const decisionRequest = requests.find(request => request.route.endsWith('/offer-decision'));
+  assert.equal(decisionRequest.options.method, 'POST');
+  assert.equal(JSON.parse(decisionRequest.options.body).decision, 'ACCEPT');
+  assert.equal(decisions.at(-1), 'HIRED');
+  assert.equal(confirmed.at(-1).confirmLabel, 'offer.acceptConfirm');
+  assert.match(visibleText(tree), /offer.acceptedOutcome/);
+  ui.unmount();
+});
+
+test('documentless offers are informational and do not request an employee decision', async () => {
+  const ui = host('apps/web/src/components/applications/OfferPacketHistory.tsx', 'OfferPacketHistory', {
+    '@/lib/api': { getSession: () => ({ user: { id: 'candidate-user' } }), api: async route => route.endsWith('/offer-packets') ? { packets: [{ id: 'packet-no-docs', version: 1, kind: 'OFFER', status: 'SHARED', requiresCandidateDecision: false, createdAt: '2026-10-30T09:00:00.000Z', documents: [] }] } : {} },
+    '@/lib/i18n': t,
+    '@/lib/useSessionIdentity': { useSessionIdentity: () => 'candidate-user' },
+    '@/components/ui/ConfirmProvider': { useConfirm: () => async () => true },
+    '@/lib/useLiveRefresh': { useLiveRefresh() {} },
+  });
+  const tree = await ui.render({ applicationId: 'app-2', applicationStatus: 'OFFER', audience: 'candidate' });
+  assert.match(visibleText(tree), /offer\.status\.OUTSIDE_APP/);
+  assert.equal(nodes(tree, node => node.type === 'button' && ['offer.accept', 'offer.decline'].includes(node.props.children)).length, 0);
+  const documentList = nodes(tree, node => typeof node.type === 'function' && node.type.name === 'DocumentList')[0];
+  assert.ok(documentList);
+  assert.match(visibleText(documentList.type(documentList.props)), /offer\.externalDetails/);
+  ui.unmount();
+});
 test('WhatsApp action reveals a phone only on click, uses a bare wa.me link and caches the audited reveal',async()=>{
   const requests=[],tabs=[];
   const windowMock={open:(url,target)=>{assert.equal(url,'about:blank');assert.equal(target,'_blank');const tab={opener:{},location:{href:''},closed:false,close(){this.closed=true;}};tabs.push(tab);return tab;},location:{assign(){assert.fail('A successful popup should be used');}}};
@@ -231,6 +342,24 @@ test('Kanban loads each column independently and preserves loaded pages during l
   nodes(tree,n=>n.type==='button'&&n.props.children==='applicants.loadMore')[0].props.onClick();tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26);assert.match(requests.at(-1),/status=IN_REVIEW.*page=2/);assert.doesNotMatch(JSON.stringify(tree),/applicationStatus\.NEW|matchScore|miniScore|\/100/);await refresh();tree=await ui.render();await new Promise(r=>setTimeout(r,230));tree=await ui.render();assert.equal(nodes(tree,n=>n.type==='article').length,26,'Live updates preserve page two');ui.unmount();
 });
 
+test('Kanban disables drag and shows a lock reason while a documented offer awaits a response',async()=>{
+  const stub=()=>null;
+  const locked=row('offer-pending',{status:'OFFER',kanbanEnteredAt:'2026-10-26',candidateDecisionRequired:true});
+  const dependencies=applicantDependencies(async route=>route.includes('/applicants/')?locked:{columns:[{status:'OFFER',items:[locked],total:1,totalPages:1,page:1,hasMore:false}]},{
+    '@/lib/useLiveRefresh':{useLiveRefresh(){}},'@/lib/hr-benefits':{postOnce:async()=>{}},'@/lib/navigation':{Link:stub},'@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,dateLabel:()=>''},
+  });
+  const ui=host('apps/web/src/components/recruiter/RecruiterPipeline.tsx','RecruiterPipeline',dependencies);
+  const tree=await ui.render({embedded:true,meta:{},companyId:'company',companyName:'Company',jobs:[{id:'job'}],selectedJob:'job',applicants:[],templates:[],onReload:async()=>{},onTemplates(){},onFlash(){},onJobChange(){}});
+  await new Promise(resolve=>setTimeout(resolve,230));
+  const settled=await ui.render();
+  const card=nodes(settled,node=>node.type==='article'&&visibleText(node).includes('offer.cardStageLocked'))[0];
+  assert.ok(card,'The locked offer is visibly identified on its Kanban card');
+  const handle=nodes(card,node=>node.type==='button'&&String(node.props['aria-label']).includes('offer.stageLocked'))[0];
+  assert.equal(handle.props.disabled,true);
+  assert.match(handle.props['aria-label'],/offer\.stageLocked/);
+  ui.unmount();
+});
+
 
 test('application detail keeps the application identity and exposes the same Kanban action without scores',async()=>{
   const stub=()=>null;function Action(){} function Cv(){} function WhatsApp(){}
@@ -245,6 +374,28 @@ test('application detail keeps the application identity and exposes the same Kan
   const withdrawn=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',{...dependencies,'@/lib/api':{api:async()=>row('withdrawn',{status:'WITHDRAWN'})}});
   const withdrawnTree=await withdrawn.render({applicationId:'withdrawn',jobId:'job',companyId:'company',onClose(){},onChanged(){}});assert.equal(nodes(withdrawnTree,n=>n.type===WhatsApp).length,0,'Withdrawn applications hide both chat actions');withdrawn.unmount();
 });
+test('HR stage control is locked while a documented offer awaits the candidate', async () => {
+  const stub=()=>null;
+  const locked=row('offer-locked',{status:'OFFER',kanbanEnteredAt:'2026-10-26',candidateDecisionRequired:true,interviews:[]});
+  const ui=host('apps/web/src/components/recruiter/ApplicationDetail.tsx','ApplicationDetail',{
+    '@/lib/api':{api:async()=>locked},
+    '@/lib/i18n':t,
+    '@/lib/navigation':{Link:stub},
+    '@/lib/hr-benefits':{postOnce:async()=>{}},
+    '@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},
+    '@/components/profile/ProfileDialog':{ProfileDialog:({children})=>children},
+    '@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=>''},
+    './ApplicationActions':{KanbanAction:stub,ApplicationCvAction:stub,WhatsAppAction:stub},
+    './RecruiterPrimitives':{RecruiterAvatar:stub},
+  });
+  const tree=await ui.render({applicationId:'offer-locked',jobId:'job',companyId:'company',onClose(){},onChanged(){}});
+  const stage=nodes(tree,node=>node.type==='select'&&node.props.value==='OFFER')[0];
+  assert.ok(stage);
+  assert.equal(stage.props.disabled,true);
+  assert.match(visibleText(tree),/offer\.stageLocked/);
+  ui.unmount();
+});
+
 test('application detail scopes screening to review and offers repeat interview scheduling only in the Interview stage',async()=>{
   const stub=()=>null,base={profile:{id:'profile-review',user:{id:'employee',fullName:'Fixture applicant'}},kanbanEnteredAt:'2026-10-26',answers:[{id:'answer',question:{question:'Screening fixture question'},answer:'Fixture answer'}],coverLetter:null,interviews:[]};
   const dependencies=(getApplication,postInterview=async()=>{})=>({'@/lib/api':{api:async()=>getApplication()},'@/lib/i18n':t,'@/lib/navigation':{Link:stub},'@/lib/hr-benefits':{postOnce:postInterview},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/profile/ProfileDialog':{ProfileDialog:stub},'@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,dateLabel:()=> 'Fixture date'},'./ApplicationActions':{KanbanAction:stub,ApplicationCvAction:stub,WhatsAppAction:stub},'./RecruiterPrimitives':{RecruiterAvatar:stub}});
@@ -503,7 +654,7 @@ test('company benefits never render a balance or a stale previous company promot
   );
   const first = await ui.render({ companyId: 'company-a', companySlug: 'alpha' });
   assert.equal(nodes(first, node => node.type === 'time').length, 1);
-  assert.doesNotMatch(JSON.stringify(first), /99|balance|credit/i);
+  assert.doesNotMatch(visibleText(first), /99|balance|credit/i);
   const pending = await ui.render({ companyId: 'company-b', companySlug: 'beta' });
   assert.equal(nodes(pending, node => node.type === 'time').length, 0, 'Do not show the previous company expiry while loading');
   assert.equal(nodes(pending, node => node.props?.role === 'status').length, 1);

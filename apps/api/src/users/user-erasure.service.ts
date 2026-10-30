@@ -71,6 +71,12 @@ export class UserErasureService {
           select: { id: true, fileKey: true },
         })
       : [];
+    const offerDocuments = profile
+      ? await this.prisma.applicationOfferDocument.findMany({
+          where: { packet: { application: { profileId: profile.id } } },
+          select: { id: true, storageKey: true, packetId: true },
+        })
+      : [];
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -152,6 +158,15 @@ export class UserErasureService {
             },
           },
         });
+        if (withdraw) {
+          await tx.applicationOfferPacket.updateMany({
+            where: { applicationId: application.id, kind: 'OFFER', status: 'PENDING' },
+            data: { status: 'REVOKED', revokedAt: new Date() },
+          });
+        }
+      }
+      if (offerDocuments.length) {
+        await tx.applicationOfferDocument.deleteMany({ where: { id: { in: offerDocuments.map(document => document.id) } } });
       }
 
       await tx.employeeProfile.update({
@@ -212,6 +227,9 @@ export class UserErasureService {
       });
       if (snapshotRefs) continue;
       await this.storage.delete(key).catch(() => undefined);
+    }
+    for (const document of offerDocuments) {
+      await this.storage.delete(document.storageKey);
     }
 
     return { ok: true as const, id: userId };

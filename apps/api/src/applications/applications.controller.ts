@@ -1,10 +1,12 @@
-import { Body, Headers, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Headers, Controller, Get, Param, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { applicantSearchSchema, applicationListSchema, applicationStatusSchema, applySchema, interviewSchema } from '@job-talentio/shared';
 import { ApplicationsService } from './applications.service';
 import { JwtAuthGuard, Roles, RolesGuard, CurrentUser, AuthUser } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
 import { requestLocale } from '../common/i18n/request-locale';
+import { offerDocumentUploadOptions } from '../common/upload';
 
 @Controller('applications')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -92,6 +94,51 @@ export class ApplicationsController {
   ) {
     const data = parseDto(applicationStatusSchema, body);
     return this.applications.updateStatus(user, id, data.status, data.note);
+  }
+
+  @Post(':id/offers')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  @UseInterceptors(FilesInterceptor('files', 5, offerDocumentUploadOptions))
+  sendOffer(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @UploadedFiles() files: Express.Multer.File[] = [],
+  ) {
+    return this.applications.createOffer(user, id, files);
+  }
+
+  @Post(':id/hiring-documents')
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  @UseInterceptors(FilesInterceptor('files', 5, offerDocumentUploadOptions))
+  shareHiringDocuments(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @UploadedFiles() files: Express.Multer.File[] = [],
+  ) {
+    return this.applications.createPostHireDocuments(user, id, files);
+  }
+
+  @Get(':id/offer-packets')
+  listOfferPackets(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.applications.listOfferPackets(user, id);
+  }
+
+  @Get(':id/offer-packets/:packetId/documents/:documentId/download')
+  downloadOfferDocument(
+    @Param('id') id: string,
+    @Param('packetId') packetId: string,
+    @Param('documentId') documentId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.applications.downloadOfferDocument(user, id, packetId, documentId);
+  }
+
+  @Post(':id/offer-decision')
+  @Roles('EMPLOYEE')
+  decideOffer(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() body: unknown) {
+    const value = body && typeof body === 'object' ? (body as { decision?: unknown }).decision : undefined;
+    if (value !== 'ACCEPT' && value !== 'DECLINE') throw new BadRequestException('Decision must be ACCEPT or DECLINE');
+    return this.applications.decideOffer(user, id, value);
   }
 
   @Post(':id/rescore')

@@ -150,10 +150,25 @@ export class StorageService implements OnModuleInit {
     await this.client.send(new HeadObjectCommand({Bucket:this.bucket,Key:key}));
   }
 
-  async getPresignedGetUrl(key: string, expiresIn = 900) {
-    const command = new GetObjectCommand({
+  async getPresignedGetUrl(
+    key: string,
+    expiresIn = 900,
+    response?: { filename?: string; contentType?: string },
+  ) {
+    const commandInput: ConstructorParameters<typeof GetObjectCommand>[0] = {
       Bucket: this.bucket,
       Key: key,
+      ...(response?.contentType ? { ResponseContentType: response.contentType } : {}),
+    };
+    if (response?.filename) {
+      const ascii = response.filename.replace(/[\r\n"\\]/g, '_').replace(/[^\x20-\x7e]/g, '_');
+      const utf8 = encodeURIComponent(response.filename).replace(/[!'()*]/g, (value) =>
+        '%' + value.charCodeAt(0).toString(16).toUpperCase(),
+      );
+      commandInput.ResponseContentDisposition = `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
+    }
+    const command = new GetObjectCommand({
+      ...commandInput,
     });
     return getSignedUrl(this.signerClient, command, { expiresIn });
   }

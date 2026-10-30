@@ -3,9 +3,11 @@ import { jobCommerce } from './dict/jobCommerce';
 import { hrRanking } from './dict/hrRanking';
 import { linkedin } from './dict/linkedin';
 import { authProviders } from './dict/authProviders';
+import { applicationOfferId } from './applicationOffer.id';
 
 /** Indonesian translations for the complete web interface. */
 export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
+  ...applicationOfferId,
   "jr.package": "Paket",
   "jr.allPackages": "Semua paket",
   "jr.performance": "Performa",
@@ -1301,7 +1303,7 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   'rec.matchDetails': 'Kecocokan {n}% | detail',
   'rec.chat': 'Obrolan',
   'rec.whatsappChat': 'Chat lewat WhatsApp',
-  'rec.whatsappOpening': 'Membuka WhatsApp…',
+  'rec.whatsappOpening': 'Membuka WhatsApp...',
   'rec.whatsappNoPhone': 'Nomor WhatsApp kandidat tidak tersedia.',
   'rec.whatsappFailed': 'WhatsApp tidak dapat dibuka. Coba lagi.',
   'rec.interviewTime': 'Waktu wawancara',

@@ -89,6 +89,7 @@ button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 .applicationDetail{padding:8px 24px 24px;color:#52617c;font-size:14px;}.applicationDetail section{border-top:1px solid #e7ebf3;padding-top:16px;margin-top:20px;}.applicationDetail h3{font-size:15px;color:#17213a;}.applicationDetail h4{font-size:13px;margin-bottom:6px;}
 .detailIdentity{display:flex;align-items:center;gap:14px;}.detailIdentity .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;}.detailIdentity h2{font-size:18px;color:#17213a;margin:0;}.detailIdentity p{margin:6px 0;}
 .detailActions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;}.stageField{display:flex;gap:12px;align-items:center;margin-top:20px;}.stageField select{max-width:240px;}
+.offerStageNotice{display:flex;align-items:flex-start;gap:9px;max-width:620px;margin:9px 0 0;padding:10px 12px;border:1px solid #eadfb9;border-radius:8px;background:#fffbef;color:#725b1d;font-size:12px;line-height:1.55}.offerStageNotice svg{flex:0 0 17px;width:17px;height:17px;margin-top:1px}
 .interviewSection > .interviewHead { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .interviewHead > div { min-width:0; }
 .interviewHead h3 { margin:0 0 6px; }
@@ -107,6 +108,8 @@ button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 .interviewItem > p { margin:8px 0 0; font-size:12px; line-height:1.6; }
 .interviewItem > a { display:inline-flex; margin-top:9px; color:#5635e8; font-size:12px; font-weight:600; text-decoration:none; }
 .interviewItem > a:hover { text-decoration:underline; }
+.hiringDocuments{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 16px!important;border:1px solid #e6e9f1;border-radius:10px;background:#fbfcff}
+.hiringDocuments>div{min-width:0}.hiringDocuments h3{margin:0 0 5px}.hiringDocuments p{margin:0;color:#74829a;font-size:12px;line-height:1.55}
 .interviewFormPanel { margin-top:14px; padding:16px; border:1px solid #e4e0f1; border-radius:9px; background:#faf9fe; }
 .interviewForm{display:grid;grid-template-columns:1fr 1fr;gap:14px;}.interviewForm label{display:flex;flex-direction:column;gap:7px;font-size:13px;}.interviewForm input,.interviewForm select,.interviewForm textarea{min-width:0;width:100%;}.interviewForm small{grid-column:1/-1;}
 .interviewFormActions { grid-column:1/-1; display:flex; justify-content:flex-end; flex-wrap:wrap; gap:9px; }

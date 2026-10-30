@@ -8,25 +8,29 @@ import {useLiveRefresh} from '@/lib/useLiveRefresh';
 import {useI18n,useEnumLabel} from '@/lib/i18n';
 import {useConfirm} from '@/components/ui/ConfirmProvider';
 import {ProfileDialog} from '@/components/profile/ProfileDialog';
+import {OfferComposer} from '@/components/applications/OfferComposer';
+import {OfferPacketHistory} from '@/components/applications/OfferPacketHistory';
 import {ResourceError,WorkspaceLoading,dateLabel} from '@/components/employee/WorkspacePrimitives';
 import {KANBAN_STAGES} from '@job-talentio/shared';
 import {Applicant,ApplicationCvAction,KanbanAction,WhatsAppAction} from './ApplicationActions';
 import {RecruiterAvatar} from './RecruiterPrimitives';
 import s from './JobWorkspace.module.css';
 
-export function ApplicationDetail({applicationId,jobId,companyId,from='applicants',onClose,onChanged}: {applicationId:string;jobId:string;companyId:string;from?:'applicants'|'kanban';onClose:()=>void;onChanged:()=>void}) {
+export function ApplicationDetail({applicationId,jobId,companyId,jobTitle='',from='applicants',onClose,onChanged}: {applicationId:string;jobId:string;companyId:string;jobTitle?:string;from?:'applicants'|'kanban';onClose:()=>void;onChanged:()=>void}) {
   const {t,locale}=useI18n(),label=useEnumLabel(),confirm=useConfirm();
   const [data,setData]=useState<Applicant|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[retry,setRetry]=useState(0);
   const [scheduleOpen,setScheduleOpen]=useState(false),schedulePending=useRef(false),scheduleFormId=useId();
+  const [composerMode,setComposerMode]=useState<'offer'|'post-hire'|null>(null);
   const context=useRef(''); context.current=jobId+':'+applicationId;
   const loaded=useRef(''),reads=useRef(0);
   useLiveRefresh('applications',async()=>{setRetry(value=>value+1);},!busy,context.current+':'+locale);
   useEffect(()=>{let alive=true;const sequence=++reads.current,identity=jobId+':'+applicationId+':'+locale;if(loaded.current!==identity)setData(null);setError('');api<Applicant>('/applications/jobs/'+encodeURIComponent(jobId)+'/applicants/'+encodeURIComponent(applicationId),{signal:AbortSignal.timeout(15000)}).then(value=>{if(alive&&sequence===reads.current){loaded.current=identity;setData(value);}}).catch(reason=>{if(alive&&sequence===reads.current)setError(reason.message);});return()=>{alive=false;};},[applicationId,jobId,locale,retry]);
-  useEffect(()=>{schedulePending.current=false;setScheduleOpen(false);},[applicationId,jobId,companyId]);
+  useEffect(()=>{schedulePending.current=false;setScheduleOpen(false);setComposerMode(null);},[applicationId,jobId,companyId]);
   useEffect(()=>{setScheduleOpen(false);},[data?.status]);
   const changed=(value:Partial<Applicant>)=>{setData(current=>current?{...current,...value}:null);onChanged();};
   async function move(status:string) {
-    if(!data||busy)return;
+    if(!data||busy||(data.candidateDecisionRequired&&status!==data.status))return;
+    if(status==='OFFER'){setComposerMode('offer');return;}
     if(['REJECTED','HIRED'].includes(status)&&!await confirm({title:label('applicationStatus',status),message:data.profile.user.fullName,confirmLabel:t('rec.saveChanges')}))return;
     const version=context.current;++reads.current;setBusy(true);setError('');
     try {const value=await api<Partial<Applicant>>('/applications/'+data.id+'/status',{method:'POST',body:JSON.stringify({status})});if(version===context.current){++reads.current;changed(value);setRetry(value=>value+1);if(status!=='INTERVIEW')setScheduleOpen(false);}}
@@ -46,13 +50,18 @@ export function ApplicationDetail({applicationId,jobId,companyId,from='applicant
   const interviewHistory=[...(data?.interviews||[])].sort((a,b)=>Date.parse(a.scheduledAt)-Date.parse(b.scheduledAt));
   const hasUpcomingInterview=interviewHistory.some(item=>item.status==='SCHEDULED'&&Date.parse(item.scheduledAt)>=Date.now());
   useEffect(()=>()=>{context.current='';},[]);
-  return <ProfileDialog title={data?.profile.user.fullName||t('applicants.details')} wide onClose={onClose} busy={busy}>
+  return <>{!composerMode&&<ProfileDialog title={data?.profile.user.fullName||t('applicants.details')} wide onClose={onClose} busy={busy}>
     <div className={s.applicationDetail}>
       {error&&<ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/>}
       {!data&&!error?<WorkspaceLoading/>:data&&<>
         <div className={s.detailIdentity}><RecruiterAvatar name={data.profile.user.fullName} src={data.profile.user.avatarUrl} className={s.avatar}/><div><h2>{data.profile.user.fullName}</h2><p>{data.profile.headline||t('ranking.noHeadline')}</p><small>{t('rw.applied')}: {dateLabel(data.createdAt,locale,true)}</small></div></div>
         <div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('viewProfile')}</Link>{data.status!=='WITHDRAWN'&&<><Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link><WhatsAppAction profileId={data.profile.id} companyId={companyId}/></>}</div>
-        {data.kanbanEnteredAt&&<label className={s.stageField}>{t('status')}<select value={data.status} disabled={busy||data.status==='WITHDRAWN'} onChange={event=>void move(event.target.value)}>{KANBAN_STAGES.map(status=><option key={status} value={status}>{label('applicationStatus',status)}</option>)}</select></label>}
+        {data.kanbanEnteredAt&&<>
+          <label className={s.stageField}>{t('status')}<select value={data.status} disabled={busy||data.status==='WITHDRAWN'||data.status==='HIRED'||Boolean(data.candidateDecisionRequired)} onChange={event=>void move(event.target.value)}>{KANBAN_STAGES.map(status=><option key={status} value={status}>{label('applicationStatus',status)}</option>)}</select></label>
+          {data.candidateDecisionRequired&&<div className={s.offerStageNotice} role="status"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="8.5" width="12" height="8.5" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M6.5 8.5V6a3.5 3.5 0 1 1 7 0v2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M10 11.5v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg><span>{t('offer.stageLocked')}</span></div>}
+        </>}
+        <OfferPacketHistory applicationId={data.id} applicationStatus={data.status} audience="hr"/>
+        {data.status==='HIRED'&&<section className={s.hiringDocuments}><div><h3>{t('offer.postHireDocuments')}</h3><p>{t('offer.postHireHint')}</p></div><button type="button" className={s.secondary} disabled={busy} onClick={()=>setComposerMode('post-hire')}>{t('offer.shareDocuments')}</button></section>}
         {data.coverLetter&&<section><h3>{t('coverLetter')}</h3><p className={s.description}>{data.coverLetter}</p></section>}
         {data.status==='IN_REVIEW'&&<section><h3>{t('rw.screening')}</h3>{data.answers?.length?data.answers.map(answer=><div key={answer.id}><h4>{answer.question?.question}</h4><p className={s.description}>{answer.answer==='Yes'?t('job.yes'):answer.answer==='No'?t('job.no'):answer.answer}</p></div>):<p>{t('rec.answersNone')}</p>}</section>}
         {(data.status==='INTERVIEW'||interviewHistory.length>0)&&<section className={s.interviewSection}>
@@ -65,5 +74,5 @@ export function ApplicationDetail({applicationId,jobId,companyId,from='applicant
         </section>}
       </>}
     </div>
-  </ProfileDialog>;
+  </ProfileDialog>}{data&&composerMode&&<OfferComposer applicationId={data.id} candidateName={data.profile.user.fullName} jobTitle={jobTitle} mode={composerMode} onClose={()=>setComposerMode(null)} onSent={result=>{const mode=composerMode;setComposerMode(null);setRetry(value=>value+1);if(mode==='offer')setData(current=>current?{...current,status:'OFFER',candidateDecisionRequired:Boolean(result.packet?.requiresCandidateDecision)}:null);onChanged();}}/>}</>;
 }

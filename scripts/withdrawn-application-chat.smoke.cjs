@@ -10,7 +10,8 @@ const recruiterProfile = read('apps/web/src/components/recruiter/RecruiterCandid
 const chatService = read('apps/api/src/chat/chat.service.ts');
 
 assert.match(employee, /selected\.status !== 'WITHDRAWN' && selected\.jobPost\.company\?\.chatPeerUserId/);
-assert.match(recruiterDetail, /data\.status!=='WITHDRAWN'&&<Link[^>]*\/messages/);
+assert.match(recruiterDetail, /data\.status!=='WITHDRAWN'&&<>/);
+assert.match(recruiterDetail, /\/messages\?/);
 assert.match(recruiterProfile, /matchJobId && data\.applicationForJob\?\.status === 'WITHDRAWN'/);
 assert.ok((chatService.match(/applicationChatAllowed/g) || []).length >= 3, 'chat API must enforce withdrawn state when opening and accessing job chats');
 console.log('withdrawn application chat: UI smoke ok');

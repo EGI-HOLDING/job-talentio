@@ -8,8 +8,11 @@
 .browse a { white-space: nowrap; }
 .browse a:hover { color: #5032df; }
 .landing .landingLinks { gap: 1.6rem; color: #171a2e; font-size: .9rem; }
-.employer { display: inline-flex; align-items: center; gap: .6rem; margin-right: .75rem; white-space: nowrap; }
-.browse .mobileEmployer { display: none; }
+.audienceToggle { display: inline-flex; align-items: center; gap: 3px; margin-right: .45rem; padding: 3px; border: 1px solid #e5e8f1; border-radius: 999px; background: #f4f6fb; white-space: nowrap; }
+.audienceOption { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: .5rem .8rem; border: 1px solid transparent; border-radius: 999px; color: #65708a; font-size: .78rem; font-weight: 600; line-height: 1; transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease; }
+.audienceOption:hover { color: #3924ad; }
+.audienceActive, .audienceActive:hover { border-color: #ebe7ff; background: #fff; box-shadow: 0 2px 7px rgb(34 31 74 / 9%); color: #3924ad; }
+.audienceOption:focus-visible { outline: 2px solid #7455df; outline-offset: 2px; }
 .landingLinks .register { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .65rem 1.2rem; border: 1px solid #6042e8; border-radius: 8px; color: #4b2dd5; font-weight: 600; white-space: nowrap; }
 .landingLinks .register:hover { background: #f3f0ff; color: #3920ac; }
 .landing a:focus-visible { outline: 2px solid #6042e8; outline-offset: 4px; border-radius: 4px; }
@@ -48,7 +51,7 @@
   .primary { gap: 1.5rem; }
   .browse { gap: 1.1rem; font-size: .86rem; }
   .landing .landingLinks { gap: 1rem; font-size: .85rem; }
-  .employer { gap: .3rem; margin-right: 0; }
+  .audienceOption { padding-inline: .65rem; font-size: .75rem; }
   .landingLinks .register { padding-inline: .8rem; }
 }
 
@@ -56,8 +59,6 @@
   .landing .landingNav { flex-wrap: wrap; }
   .primary { flex: 1; justify-content: space-between; }
   .landing .landingLinks { margin-left: auto; }
-  .landingLinks .employer { display: none; }
-  .browse .mobileEmployer { display: inline-flex; gap: .25rem; }
 }
 
 @media (max-width: 760px) {
@@ -66,7 +67,6 @@
   .landing .brand { grid-column: 1; grid-row: 1; font-size: 1.2rem; }
   .browse { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; flex-wrap: wrap; gap: 0 .8rem; font-size: .8rem; }
   .browse a { display: inline-flex; align-items: center; min-height: 40px; }
-  .browse .mobileEmployer { margin-left: auto; font-size: .75rem; }
   .landing .landingLinks { grid-column: 2; grid-row: 1; gap: .6rem; flex-wrap: nowrap; font-size: .8rem; }
   .landingLinks .register { padding: .5rem .65rem; min-height: 38px; font-size: .75rem; }
   .landingLinks :global(.nav-user) > a > span { display: none; }

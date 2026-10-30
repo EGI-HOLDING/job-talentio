@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { CatalogI18nStatus } from '@prisma/client';
 import {
+  adminApplicationStatusOverrideSchema,
   adminAuditListSchema,
   adminBanSchema,
   adminBulkBanSchema,
@@ -93,6 +94,12 @@ export class AdminController {
   @Get('metrics')
   metrics() {
     return this.admin.metrics();
+  }
+
+  @Post('applications/:id/status-override')
+  overrideHiredApplication(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const data = parseDto(adminApplicationStatusOverrideSchema, body);
+    return this.admin.overrideHiredApplication(user.id, id, data.status, data.reason);
   }
 
   // ─── Users ────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { CatalogI18nStatus, JobStatus, Prisma } from '@prisma/client';
 import { HR_PUBLICATION_LOCK, initializePublicationPeriods } from '../benefits/benefit-policy';
 import type { PrismaClient } from '@prisma/client';
@@ -10,6 +10,8 @@ import { dateRange, envelope, skipFor } from './admin-query';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { TranslationService } from '../translation/translation.service';
 import { JobsService } from '../jobs/jobs.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { LiveUpdates } from '../common/live-updates';
 import type { AuthUser } from '../common/auth.decorators';
 import {
   allowsTechIdentity,
@@ -42,11 +44,15 @@ function catalogAliasKey(kind: CatalogKind, name: string): string {
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private prisma: PrismaService,
     private jobsSearch: JobsSearchService,
     private translation: TranslationService,
     private jobs: JobsService,
+    @Optional() private notifications?: NotificationsService,
+    @Optional() private live?: LiveUpdates,
   ) {}
 
   async metrics() {
@@ -99,6 +105,51 @@ export class AdminService {
 
   async forceJobStatus(user: AuthUser, jobId: string, status: JobStatus) {
     return this.jobs.changeStatus(user, jobId, status, { actorId: user.id });
+  }
+
+  async overrideHiredApplication(actorId: string, applicationId: string, status: 'IN_REVIEW' | 'INTERVIEW' | 'REJECTED' | 'WITHDRAWN', reason: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
+      const current = await tx.application.findUnique({
+        where: { id: applicationId },
+        include: { jobPost: { select: { id: true, title: true, companyId: true } }, profile: { select: { userId: true } } },
+      });
+      if (!current) throw new NotFoundException('Application not found');
+      if (current.status !== 'HIRED') throw new ConflictException('Only hired applications can use this correction action');
+      const updated = await tx.application.update({ where: { id: applicationId }, data: { status } });
+      await tx.pipelineEvent.create({
+        data: { applicationId, fromStatus: 'HIRED', toStatus: status, note: `ADMIN_OVERRIDE: ${reason}`, actorUserId: actorId },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'APPLICATION_HIRED_STATUS_OVERRIDE',
+          entityType: 'Application',
+          entityId: applicationId,
+          metadata: { companyId: current.jobPost.companyId, fromStatus: 'HIRED', toStatus: status, reason },
+        },
+      });
+      return { application: updated, companyId: current.jobPost.companyId, jobId: current.jobPost.id, jobTitle: current.jobPost.title, candidateId: current.profile.userId };
+    });
+    const members = await this.prisma.companyMember.findMany({ where: { companyId: result.companyId }, select: { userId: true } }).catch(() => []);
+    this.live?.publish([result.candidateId, ...members.map((member) => member.userId)], 'applications');
+    for (const userId of new Set([result.candidateId, ...members.map((member) => member.userId)])) {
+      try {
+        await this.notifications?.create({
+          userId,
+          type: 'APPLICATION_STATUS',
+          title: `Application update: ${result.jobTitle}`,
+          body: `Status is now ${status}. Note: ${reason}`,
+          titleKey: 'notify.applicationStatus.title',
+          bodyKey: 'notify.applicationStatus.bodyWithNote',
+          params: { job: result.jobTitle, status, note: reason },
+          linkUrl: userId === result.candidateId
+            ? '/dashboard/employee?tab=applications'
+            : `/dashboard/recruiter/jobs/${result.jobId}?section=applicants&company=${result.companyId}&application=${applicationId}`,
+        });
+      } catch (error) { this.logger.warn(`Hired application correction notification failed: ${(error as Error).message}`); }
+    }
+    return result.application;
   }
 
   listFlags() {

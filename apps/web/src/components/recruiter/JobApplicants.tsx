@@ -16,7 +16,7 @@ import { ApplicationDetail } from './ApplicationDetail';
 const PAGE_SIZE = 10;
 
 /** Query the complete authorized pool before server-side ranking/pagination. */
-export function JobApplicants({ jobId, companyId, meta, revision=0, applicationId, onChanged }: { jobId: string; companyId: string; meta: any; revision?:number; applicationId?:string; onChanged:()=>void }) {
+export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0, applicationId, onChanged }: { jobId: string; jobTitle?:string; companyId: string; meta: any; revision?:number; applicationId?:string; onChanged:()=>void }) {
   const { t, locale } = useI18n();
   const enumLabel=useEnumLabel();
   const [query, setQuery] = useState('');
@@ -96,6 +96,6 @@ export function JobApplicants({ jobId, companyId, meta, revision=0, applicationI
         <button type="button" disabled={page >= pageCount} aria-label={t('ew.nextPage')} onClick={() => setPage(page + 1)}><WorkspaceIcon kind="right"/></button>
       </nav>
     </footer>}
-    {detail&&<ApplicationDetail key={jobId+':'+detail} applicationId={detail} jobId={jobId} companyId={companyId} onClose={()=>setDetail(null)} onChanged={changed}/>}
+    {detail&&<ApplicationDetail key={jobId+':'+detail} applicationId={detail} jobId={jobId} jobTitle={jobTitle} companyId={companyId} onClose={()=>setDetail(null)} onChanged={changed}/>}
   </section>;
 }

@@ -2209,6 +2209,9 @@ export class ProfilesService {
     const rows = await this.prisma.savedJob.findMany({
       where: {
         profileId: profile.id,
+        // Saved jobs are a reminder to apply later. Once an application exists,
+        // the bookmark no longer belongs in this list (including withdrawn apps).
+        jobPost: { applications: { none: { profileId: profile.id } } },
       },
       include: {
         jobPost: {

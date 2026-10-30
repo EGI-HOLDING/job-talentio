@@ -80,7 +80,7 @@ export function RecruiterJobWorkspace() {
     <nav className={s.tabs} aria-label={job.title}>{[['applicants','ranking.applicants'],['kanban','applicants.kanban'],['details','ranking.details']].map(([value,key])=><Link key={value} href={href(value)} aria-current={section===value?'page':undefined}>{t(key)}{value==='applicants'&&job._count?.applications!=null&&<span className={s.count}>{job._count.applications}</span>}</Link>)}</nav>
     {notice&&<div className={s.notice} role="status">{notice}</div>}
     {section!=='details' && <LinkedInJobSummary jobId={id} companyId={companyId}/>}
-    {section==='applicants'&&<JobApplicants key={id} jobId={id} companyId={companyId} meta={meta} revision={data.revision} applicationId={params.get('application')||undefined} onChanged={()=>{void refresh().catch(reason=>setNotice(reason.message));}}/>}
+    {section==='applicants'&&<JobApplicants key={id} jobId={id} jobTitle={job.title} companyId={companyId} meta={meta} revision={data.revision} applicationId={params.get('application')||undefined} onChanged={()=>{void refresh().catch(reason=>setNotice(reason.message));}}/>}
     {section==='kanban'&&<div className={s.card}><RecruiterPipeline embedded meta={meta} companyId={companyId} companyName={company?.name||''} jobs={[job]} selectedJob={id} onJobChange={()=>{}} applicants={data.applicants} loading={false} applicationId={params.get('application')||undefined} templates={data.templates} onReload={refresh} onTemplates={()=>router.push(employerWorkspaceHref('bulk',companyId)+'&job='+encodeURIComponent(id))} onFlash={message=>setNotice(message)}/></div>}
     {section==='details'&&<article className={s.card+' '+s.details}>
       <JobBenefits jobId={id} status={job.status}/>

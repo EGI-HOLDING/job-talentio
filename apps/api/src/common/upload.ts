@@ -7,6 +7,11 @@ const ALLOWED_MIME = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
+const OFFER_DOCUMENT_MIME = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.doc', 'application/msword'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+]);
 const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /** Shared Multer limits for CV / resume uploads. */
@@ -27,6 +32,19 @@ export const documentUploadOptions: MulterOptions = {
   fileFilter: (_req, file, cb) => {
     if (file.mimetype !== 'application/pdf' && !ALLOWED_IMAGE_MIME.has(file.mimetype)) {
       cb(new BadRequestException('Only PDF, JPEG, PNG, or WebP files are allowed') as never, false);
+      return;
+    }
+    cb(null, true);
+  },
+};
+
+/** Employer offer packets: a small bounded set of private PDF/Word documents. */
+export const offerDocumentUploadOptions: MulterOptions = {
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 5 },
+  fileFilter: (_req, file, cb) => {
+    const extension = file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase();
+    if (OFFER_DOCUMENT_MIME.get(extension) !== file.mimetype) {
+      cb(new BadRequestException('Only matching PDF or Word documents are allowed') as never, false);
       return;
     }
     cb(null, true);

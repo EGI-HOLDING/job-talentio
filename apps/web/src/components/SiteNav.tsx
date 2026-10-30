@@ -23,6 +23,12 @@ type Notif = {
 };
 
 const LOCALE_LABELS: Record<Locale, string> = { uz: "O'z", ru: 'Ру', en: 'En', id: 'ID' };
+const AUDIENCE_LABELS: Record<Locale, { group: string; seekers: string; employers: string }> = {
+  id: { group: 'Pilih tujuan', seekers: 'Cari kerja', employers: 'Cari kandidat' },
+  en: { group: 'Choose a destination', seekers: 'Find a job', employers: 'Find candidates' },
+  ru: { group: 'Выберите раздел', seekers: 'Найти работу', employers: 'Найти кандидатов' },
+  uz: { group: 'Bo‘limni tanlang', seekers: 'Ish topish', employers: 'Nomzod topish' },
+};
 
 function SiteNavContent() {
   const { locale, setLocale, t } = useI18n();
@@ -194,14 +200,16 @@ function SiteNavContent() {
         {isLanding && (
           <div className={styles.browse}>
             {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={(isRecruiter ? recruiterActive[index] : isEmployee ? [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'][index] : !isEmployerContext && [isJobs, isCompanies, isInsights][index]) ? 'page' : undefined}>{t(key)}</Link>)}
-            {!session && <Link className={styles.mobileEmployer} href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')} <span aria-hidden="true">{'\u2197'}</span></Link>}
           </div>
         )}
         </div>
         <div className={`nav-links ${isLanding ? styles.landingLinks : ''} ${isLanding && session ? styles.signedIn : ''}`}>
           {!isLanding && <><Link href="/jobs">{t('jobs')}</Link>{dash && <Link href={dash}>{t('dashboard')}</Link>}</>}
           {!isLanding && <Link href="/news">{t('news')}</Link>}
-          {isLanding && !session && <Link className={styles.employer} href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')} <span aria-hidden="true">{'\u2197'}</span></Link>}
+          {isLanding && !session && <div className={styles.audienceToggle} role="group" aria-label={AUDIENCE_LABELS[locale].group}>
+            <Link className={`${styles.audienceOption} ${!isEmployerContext ? styles.audienceActive : ''}`} href="/" aria-current={!isEmployerContext ? 'page' : undefined}>{AUDIENCE_LABELS[locale].seekers}</Link>
+            <Link className={`${styles.audienceOption} ${isEmployerContext ? styles.audienceActive : ''}`} href="/employers" aria-current={isEmployerContext ? 'page' : undefined}>{AUDIENCE_LABELS[locale].employers}</Link>
+          </div>}
           {session && !isEmployee && !isRecruiter && <Link href="/messages">{t('messages')}</Link>}
           {session?.user.role === 'SUPER_ADMIN' && (
             <a href={ADMIN_URL} target="_blank" rel="noreferrer">

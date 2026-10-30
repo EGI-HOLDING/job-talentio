@@ -276,10 +276,10 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
       {
         heading: '2. Maqsadlar va huquqiy asoslar',
         items: [
-          'Hisob, profil, vakansiya qidiruvi, arizalar, muloqot va siz so‘ragan boshqa funksiyalarni taqdim etish uchun — shartnomani bajarish yoki shartnomadan oldingi so‘rovingizni bajarish asosida.',
-          'Mos vakansiyalarni ko‘rsatish, profil va vakansiya ma’lumotlarini solishtirish hamda siz tanlagan bildirishnomalarni yuborish uchun — xizmatni ishlatish va zarur joylarda sozlamalaringiz yoki roziligingiz asosida.',
-          'Xizmatni himoyalash, firibgarlik va suiiste’molning oldini olish, yordam ko‘rsatish va tizim ishonchliligini ta’minlash uchun — huquqlaringizni hisobga olgan holda qonuniy manfaatlarimiz asosida.',
-          'Telegram yoki LinkedIn ulash va mashina tarjimasi kabi ixtiyoriy integratsiyalardan foydalanish uchun — roziligingiz yoki o‘zingiz tanlagan harakat asosida. Rozilikni mavjud sozlamalarda yoki bizga murojaat qilib qaytarib olishingiz mumkin.',
+          'Hisob, profil, vakansiya qidiruvi, arizalar, muloqot va siz so‘ragan boshqa funksiyalarni taqdim etish uchun: shartnomani bajarish yoki shartnomadan oldingi so‘rovingizni bajarish asosida.',
+          'Mos vakansiyalarni ko‘rsatish, profil va vakansiya ma’lumotlarini solishtirish hamda siz tanlagan bildirishnomalarni yuborish uchun: xizmatni ishlatish va zarur joylarda sozlamalaringiz yoki roziligingiz asosida.',
+          'Xizmatni himoyalash, firibgarlik va suiiste’molning oldini olish, yordam ko‘rsatish va tizim ishonchliligini ta’minlash uchun: huquqlaringizni hisobga olgan holda qonuniy manfaatlarimiz asosida.',
+          'Telegram yoki LinkedIn ulash va mashina tarjimasi kabi ixtiyoriy integratsiyalardan foydalanish uchun: roziligingiz yoki o‘zingiz tanlagan harakat asosida. Rozilikni mavjud sozlamalarda yoki bizga murojaat qilib qaytarib olishingiz mumkin.',
           'Qonuniy majburiyatlarni bajarish va davlat organlarining qonuniy so‘rovlariga javob berish uchun.',
         ],
       },

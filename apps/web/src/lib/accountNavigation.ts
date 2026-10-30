@@ -38,7 +38,7 @@ export function accountHref(role: string | null | undefined, href: string): stri
       if (url.searchParams.get('application')) target += '&application=' + encodeURIComponent(url.searchParams.get('application')!);
     }
     if (/^\/billing(\/|$)/.test(path) || (path === '/dashboard/recruiter' && url.searchParams.get('tab') === 'billing')) target = EMPLOYER_JOBS;
-    if (path === '/' || path === '/jobs' || /^\/(dashboard\/employee|onboarding\/employee)(\/|$)/.test(path)) target = EMPLOYER_JOBS;
+    if ((path === '/' && url.searchParams.get('audience') !== 'seekers') || path === '/jobs' || /^\/(dashboard\/employee|onboarding\/employee)(\/|$)/.test(path)) target = EMPLOYER_JOBS;
   } else if (role === 'EMPLOYEE' && path === '/dashboard/employee' && !['applications', 'saved', 'alerts', 'profile'].includes(url.searchParams.get('tab') || '')) {
     target = '/jobs?mode=for-you';
   } else if (role === 'EMPLOYEE' && /^\/(dashboard\/recruiter|talent|candidates|billing)(\/|$)/.test(path)) {

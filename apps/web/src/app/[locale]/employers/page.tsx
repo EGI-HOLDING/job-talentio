@@ -17,5 +17,5 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 export default function EmployersPage() {
-  return <RoleGate role="RECRUITER" allowAnonymous><EmployerLanding /></RoleGate>;
+  return <RoleGate role="RECRUITER" allowAnonymous allowLandingAudiencePreview><EmployerLanding /></RoleGate>;
 }

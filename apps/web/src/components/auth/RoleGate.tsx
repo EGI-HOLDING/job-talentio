@@ -13,10 +13,12 @@ type AppRole = 'EMPLOYEE' | 'RECRUITER';
 export function RoleGate({
   role,
   allowAnonymous = false,
+  allowLandingAudiencePreview = false,
   children,
 }: {
   role: AppRole;
   allowAnonymous?: boolean;
+  allowLandingAudiencePreview?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -41,6 +43,11 @@ export function RoleGate({
       return;
     }
 
+    if (allowLandingAudiencePreview && new URLSearchParams(window.location.search).get('audience') === 'employers') {
+      setAllowed(true);
+      return;
+    }
+
     if (session.user.role === 'EMPLOYEE') {
       router.replace('/jobs');
       return;
@@ -55,7 +62,7 @@ export function RoleGate({
     }
 
     router.replace('/');
-  }, [allowAnonymous, pathname, role, router]);
+  }, [allowAnonymous, allowLandingAudiencePreview, pathname, role, router]);
 
   if (!allowed) return <WorkspaceLoading />;
   return <>{children}</>;

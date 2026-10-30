@@ -693,6 +693,11 @@ export const bulkCampaignSchema = z
       .optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.toStatus === 'OFFER') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['toStatus'], message: 'Offers must be sent individually through the offer workflow' });
+    }
+  })
+  .superRefine((data, ctx) => {
     if (!data.toStatus && !data.templateId && !data.messageBody) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -824,6 +829,13 @@ export const adminInviteOperatorSchema = z.object({
 
 export const adminUserAnonymizeSchema = z.object({
   reason: z.string().trim().min(8).max(500),
+});
+
+export const offerDecisionSchema = z.object({ decision: z.enum(['ACCEPT', 'DECLINE']) });
+
+export const adminApplicationStatusOverrideSchema = z.object({
+  status: z.enum(['IN_REVIEW', 'INTERVIEW', 'REJECTED', 'WITHDRAWN']),
+  reason: z.string().trim().min(10).max(1000),
 });
 
 export const deleteAccountSchema = z.object({

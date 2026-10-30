@@ -32,12 +32,29 @@ import { ApplicantFilters, applicantFilter } from './applicant-filter';
 import { canAddToKanban, safeApplication, submittedResume } from './application-payload';
 import { LiveUpdates } from '../common/live-updates';
 import { jobChatPeers } from '../chat/job-chat-peer';
+import { validateOfferFiles, type OfferUploadFile, type ValidatedOfferFile } from './application-offer-files';
 
 function isTransactionConflict(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   return error.code === 'P2034' || (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code)));
 }
 type ApplicationWindow = { ids:string[]; scores:Map<string,RecruiterBreakdown>;total:number;page:number;totalPages:number };
+
+function safeOfferPacket<T extends {
+  kind?: string;
+  status?: string;
+  createdById?: string | null;
+  documents?: Array<{ storageKey: string; uploadedById: string | null }>;
+}>(packet: T) {
+  const { documents, createdById: _createdById, ...safe } = packet;
+  const emptyInformalOffer = packet.kind === 'OFFER' && packet.status === 'PENDING' && documents !== undefined && documents.length === 0;
+  return {
+    ...safe,
+    ...(emptyInformalOffer ? { status: 'SHARED' } : {}),
+    requiresCandidateDecision: packet.kind === 'OFFER' && packet.status === 'PENDING' && Boolean(documents?.length),
+    ...(documents ? { documents: documents.map(({ storageKey: _storageKey, uploadedById: _uploadedById, ...document }) => document) } : {}),
+  };
+}
 
 @Injectable()
 export class ApplicationsService {
@@ -246,6 +263,10 @@ export class ApplicationsService {
         },
       });
 
+      // Applying fulfills the purpose of a saved-job bookmark. Keep this in the
+      // same transaction so a failed application never removes the bookmark.
+      await tx.savedJob.deleteMany({ where: { profileId: profile.id, jobPostId } });
+
         await this.hrEvents?.submitted(tx, application, funnelSession);
         return { application, job, breakdown };
       });
@@ -418,6 +439,12 @@ export class ApplicationsService {
     const order = new Map(window.ids.map((id,index)=>[id,index]));
     rows.sort((a,b)=>order.get(a.id)!-order.get(b.id)!);
 
+    const pendingOffers = window.ids.length ? await this.prisma.applicationOfferPacket.findMany({
+      where: { applicationId: { in: window.ids }, kind: 'OFFER', status: 'PENDING' },
+      select: { applicationId: true, _count: { select: { documents: true } } },
+    }) : [];
+    const decisionRequired = new Set(pendingOffers.filter(packet => packet._count.documents > 0).map(packet => packet.applicationId));
+
     return rows.map((row) => {
       const { resume, resumeSnapshot, profile, ...rest } = row;
       const snap = resumeSnapshot as
@@ -445,6 +472,7 @@ export class ApplicationsService {
       );
       return {
         ...safeApplication(rest),
+        candidateDecisionRequired: row.status === 'OFFER' && decisionRequired.has(row.id),
         canAddToKanban: canAddToKanban(row),
         matchSnapshot: {score:row.matchScore,breakdown:row.matchBreakdown},
         matchScore: window.scores.get(row.id)?.total ?? null,
@@ -485,6 +513,336 @@ export class ApplicationsService {
     const rows = await this.listForJob(user, jobPostId, { applicationId, page: 1, limit: 1, locale });
     if (!rows[0]) throw new NotFoundException('Application not found in this job');
     return rows[0];
+  }
+
+  private async offerApplicationForAccess(user: AuthUser, applicationId: string) {
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      select: {
+        id: true,
+        status: true,
+        jobPostId: true,
+        profile: { select: { userId: true, user: { select: { id: true, fullName: true, email: true, emailVerified: true, locale: true } } } },
+        jobPost: { select: { id: true, title: true, companyId: true } },
+      },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.profile.userId !== user.id && user.role !== 'SUPER_ADMIN') {
+      await this.companies.assertMember(user, application.jobPost.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    }
+    return application;
+  }
+
+  private async assertOfferCompanyAccess(tx: Prisma.TransactionClient, user: AuthUser, companyId: string) {
+    const company = await tx.company.findUnique({ where: { id: companyId }, select: { isBanned: true, anonymizedAt: true } });
+    if (!company || company.isBanned || company.anonymizedAt) throw new ForbiddenException('Company unavailable');
+    if (user.role === 'SUPER_ADMIN') return;
+    const membership = await tx.companyMember.findUnique({
+      where: { companyId_userId: { companyId, userId: user.id } },
+      select: { role: true },
+    });
+    if (!membership || !['OWNER', 'ADMIN', 'RECRUITER'].includes(membership.role)) {
+      throw new ForbiddenException('Company membership changed. Refresh and try again.');
+    }
+  }
+
+  async listOfferPackets(user: AuthUser, applicationId: string) {
+    await this.offerApplicationForAccess(user, applicationId);
+    const packets = await this.prisma.applicationOfferPacket.findMany({
+      where: { applicationId },
+      include: { documents: { orderBy: { createdAt: 'asc' } } },
+      orderBy: [{ version: 'desc' }],
+    });
+    return { packets: packets.map(safeOfferPacket) };
+  }
+
+  async downloadOfferDocument(user: AuthUser, applicationId: string, packetId: string, documentId: string) {
+    await this.offerApplicationForAccess(user, applicationId);
+    const document = await this.prisma.applicationOfferDocument.findFirst({
+      where: { id: documentId, packetId, packet: { applicationId } },
+    });
+    if (!document) throw new NotFoundException('Offer document not found');
+    try {
+      await this.storage.assertObjectAvailable(document.storageKey);
+    } catch (reason) {
+      const error = reason as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (error.name === 'NotFound' || error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+        throw new NotFoundException('Offer document unavailable');
+      }
+      throw new ServiceUnavailableException('Document storage is temporarily unavailable. Try again.');
+    }
+    const url = await this.storage.getPresignedGetUrl(document.storageKey, 900, {
+      filename: document.originalName,
+      contentType: document.contentType,
+    });
+    return { url, expiresIn: 900, filename: document.originalName, contentType: document.contentType, sizeBytes: document.sizeBytes };
+  }
+
+  private async uploadOfferFiles(applicationId: string, userId: string, validated: ValidatedOfferFile[]) {
+    const uploaded: Array<{ storageKey: string; originalName: string; contentType: string; sizeBytes: number }> = [];
+    try {
+      for (const file of validated) {
+        const saved = await this.storage.upload(
+          file.buffer,
+          file.originalName,
+          file.contentType,
+          `application-offers/${applicationId}`,
+        );
+        uploaded.push({
+          storageKey: saved.key,
+          originalName: file.originalName,
+          contentType: file.contentType,
+          sizeBytes: file.sizeBytes,
+        });
+      }
+      return uploaded.map((file) => ({ ...file, uploadedById: userId }));
+    } catch (error) {
+      await Promise.all(uploaded.map((file) => this.storage.delete(file.storageKey)));
+      throw error;
+    }
+  }
+
+  private async removeUploadedOfferFiles(files: Array<{ storageKey: string }>) {
+    await Promise.all(files.map((file) => this.storage.delete(file.storageKey)));
+  }
+
+  async createOffer(user: AuthUser, applicationId: string, files: OfferUploadFile[]) {
+    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') throw new ForbiddenException('Employer access required');
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { jobPost: true, profile: { include: { user: true } } },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    const { company } = await this.companies.assertMember(user, application.jobPost.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    if (company.isBanned || company.anonymizedAt) throw new ForbiddenException('Company unavailable');
+    const validated = validateOfferFiles(files);
+    if (application.status === 'HIRED' || application.status === 'WITHDRAWN') {
+      throw new ConflictException('This application cannot receive a new offer');
+    }
+    if (application.status === 'OFFER') {
+      const pending = await this.prisma.applicationOfferPacket.findFirst({
+        where: { applicationId, kind: 'OFFER', status: 'PENDING' },
+        include: { documents: { select: { id: true } } },
+        orderBy: { version: 'desc' },
+      });
+      if (pending?.documents.length) throw new ConflictException('An offer with documents is already waiting for the candidate');
+    }
+
+    const uploaded = await this.uploadOfferFiles(applicationId, user.id, validated);
+    let result: { packet: { id: string; version: number; createdById?: string | null; documents?: Array<{ storageKey: string; uploadedById: string | null }> }; application: unknown; changed: boolean };
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        await this.assertOfferCompanyAccess(tx, user, application.jobPost.companyId);
+        await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
+        const current = await tx.application.findUniqueOrThrow({ where: { id: applicationId } });
+        if (current.status === 'HIRED' || current.status === 'WITHDRAWN') throw new ConflictException('This application cannot receive a new offer');
+        const existing = await tx.applicationOfferPacket.findFirst({
+          where: { applicationId, kind: 'OFFER', status: 'PENDING' },
+          include: { documents: { select: { id: true } } },
+          orderBy: { version: 'desc' },
+        });
+        if (current.status === 'OFFER' && existing?.documents.length) throw new ConflictException('An offer with documents is already waiting for the candidate');
+        if (existing && existing.documents.length === 0) {
+          await tx.applicationOfferPacket.update({ where: { id: existing.id }, data: { status: 'SHARED' } });
+        }
+        const latest = await tx.applicationOfferPacket.aggregate({ where: { applicationId, kind: 'OFFER' }, _max: { version: true } });
+        const changed = current.status !== 'OFFER';
+        const packet = await tx.applicationOfferPacket.create({
+          data: {
+            applicationId,
+            version: (latest._max.version ?? 0) + 1,
+            kind: 'OFFER',
+            status: uploaded.length ? 'PENDING' : 'SHARED',
+            createdById: user.id,
+            documents: { create: uploaded },
+          },
+          include: { documents: true },
+        });
+        const updated = changed
+          ? await tx.application.update({
+              where: { id: applicationId },
+              data: { status: 'OFFER', ...(!current.kanbanEnteredAt ? { kanbanEnteredAt: new Date() } : {}) },
+              include: { events: { orderBy: { createdAt: 'desc' }, take: 10 } },
+            })
+          : current;
+        if (changed) {
+          await tx.pipelineEvent.create({ data: { applicationId, fromStatus: current.status, toStatus: 'OFFER', actorUserId: user.id } });
+        }
+        await tx.auditLog.create({
+          data: {
+            actorId: user.id,
+            action: 'APPLICATION_OFFER_SENT',
+            entityType: 'ApplicationOfferPacket',
+            entityId: packet.id,
+            metadata: { applicationId, companyId: application.jobPost.companyId, version: packet.version, documentCount: uploaded.length },
+          },
+        });
+        return { packet, application: updated, changed };
+      });
+    } catch (error) {
+      await this.removeUploadedOfferFiles(uploaded);
+      throw error;
+    }
+
+    await this.publishChange(application.jobPost.companyId, application.profile.userId);
+    if (result.changed || result.packet.id) {
+      try {
+        await this.notifications.create({
+          userId: application.profile.userId,
+          type: 'APPLICATION_STATUS',
+          title: `Job offer: ${application.jobPost.title}`,
+          body: uploaded.length ? 'A job offer with documents is ready for your review.' : 'The employer will discuss the offer with you outside the app.',
+          titleKey: 'notify.applicationOffer.received.title',
+          bodyKey: uploaded.length ? 'notify.applicationOffer.received.body' : 'notify.applicationOffer.external.body',
+          params: { job: application.jobPost.title },
+          linkUrl: '/dashboard/employee?tab=applications',
+        });
+      } catch (error) { this.logger.warn(`Offer notification failed: ${(error as Error).message}`); }
+      if (application.profile.user.emailVerified && application.profile.user.email) {
+        const { subject, html } = this.stageEmail(application.jobPost.title, 'OFFER', undefined, emailLocale(application.profile.user.locale));
+        void this.mail.send(application.profile.user.email, subject, html);
+      }
+    }
+    return { application: safeApplication(result.application as object), packet: safeOfferPacket(result.packet) };
+  }
+
+  async createPostHireDocuments(user: AuthUser, applicationId: string, files: OfferUploadFile[]) {
+    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') throw new ForbiddenException('Employer access required');
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { jobPost: true, profile: { include: { user: true } } },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    const { company } = await this.companies.assertMember(user, application.jobPost.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
+    if (company.isBanned || company.anonymizedAt) throw new ForbiddenException('Company unavailable');
+    if (application.status !== 'HIRED') throw new ConflictException('Hiring documents can only be shared after the candidate is hired');
+    const validated = validateOfferFiles(files);
+    if (!validated.length) throw new BadRequestException('Choose at least one document');
+    const uploaded = await this.uploadOfferFiles(applicationId, user.id, validated);
+    let packet: Awaited<ReturnType<typeof this.prisma.applicationOfferPacket.create>>;
+    try {
+      packet = await this.prisma.$transaction(async (tx) => {
+        await this.assertOfferCompanyAccess(tx, user, application.jobPost.companyId);
+        await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
+        const current = await tx.application.findUniqueOrThrow({ where: { id: applicationId } });
+        if (current.status !== 'HIRED') throw new ConflictException('Hiring documents can only be shared after the candidate is hired');
+        const latest = await tx.applicationOfferPacket.aggregate({ where: { applicationId, kind: 'POST_HIRE' }, _max: { version: true } });
+        const created = await tx.applicationOfferPacket.create({
+          data: {
+            applicationId,
+            version: (latest._max.version ?? 0) + 1,
+            kind: 'POST_HIRE',
+            status: 'SHARED',
+            createdById: user.id,
+            documents: { create: uploaded },
+          },
+          include: { documents: true },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: user.id,
+            action: 'APPLICATION_HIRING_DOCUMENTS_SHARED',
+            entityType: 'ApplicationOfferPacket',
+            entityId: created.id,
+            metadata: { applicationId, companyId: application.jobPost.companyId, version: created.version, documentCount: uploaded.length },
+          },
+        });
+        return created;
+      });
+    } catch (error) {
+      await this.removeUploadedOfferFiles(uploaded);
+      throw error;
+    }
+    await this.publishChange(application.jobPost.companyId, application.profile.userId);
+    try {
+      await this.notifications.create({
+        userId: application.profile.userId,
+        type: 'APPLICATION_STATUS',
+        title: `Documents from ${application.jobPost.title}`,
+        body: 'New hiring documents are available to download.',
+        titleKey: 'notify.applicationOffer.documents.title',
+        bodyKey: 'notify.applicationOffer.documents.body',
+        params: { job: application.jobPost.title },
+        linkUrl: '/dashboard/employee?tab=applications',
+      });
+    } catch (error) { this.logger.warn(`Hiring document notification failed: ${(error as Error).message}`); }
+    return safeOfferPacket(packet);
+  }
+
+  async decideOffer(user: AuthUser, applicationId: string, decision: 'ACCEPT' | 'DECLINE') {
+    if (user.role !== 'EMPLOYEE') throw new ForbiddenException('Employee access required');
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { jobPost: true, profile: { include: { user: true } } },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.profile.userId !== user.id) throw new ForbiddenException('Only the applicant can decide this offer');
+    const now = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
+      const current = await tx.application.findUniqueOrThrow({ where: { id: applicationId } });
+      const active = await tx.applicationOfferPacket.findFirst({
+        where: { applicationId, kind: 'OFFER', status: 'PENDING' },
+        include: { documents: true },
+        orderBy: { version: 'desc' },
+      });
+      const targetStatus = decision === 'ACCEPT' ? 'HIRED' : 'WITHDRAWN';
+      const targetPacketStatus = decision === 'ACCEPT' ? 'ACCEPTED' : 'DECLINED';
+      if (current.status === targetStatus && active === null) {
+        const latest = await tx.applicationOfferPacket.findFirst({ where: { applicationId, kind: 'OFFER' }, include: { documents: true }, orderBy: { version: 'desc' } });
+        if (latest?.status === targetPacketStatus) return { application: current, packet: latest, changed: false };
+      }
+      if (current.status !== 'OFFER' || !active || active.documents.length === 0) {
+        throw new ConflictException('This offer has no in-app decision or is no longer awaiting a decision');
+      }
+      await tx.application.update({ where: { id: applicationId }, data: { status: targetStatus } });
+      const packet = await tx.applicationOfferPacket.update({
+        where: { id: active.id },
+        data: { status: targetPacketStatus, respondedAt: now },
+        include: { documents: true },
+      });
+      await tx.pipelineEvent.create({
+        data: {
+          applicationId,
+          fromStatus: 'OFFER',
+          toStatus: targetStatus,
+          actorUserId: user.id,
+          note: decision === 'ACCEPT' ? 'OFFER_ACCEPTED' : 'OFFER_DECLINED',
+        },
+      });
+      await tx.interview.updateMany({ where: { applicationId, status: 'SCHEDULED' }, data: { status: 'CANCELLED' } });
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: decision === 'ACCEPT' ? 'APPLICATION_OFFER_ACCEPTED' : 'APPLICATION_OFFER_DECLINED',
+          entityType: 'ApplicationOfferPacket',
+          entityId: active.id,
+          metadata: { applicationId, companyId: application.jobPost.companyId, version: active.version },
+        },
+      });
+      return { application: { ...current, status: targetStatus }, packet, changed: true };
+    });
+
+    if (result.changed) {
+      await this.publishChange(application.jobPost.companyId, application.profile.userId);
+      const members = await this.prisma.companyMember.findMany({ where: { companyId: application.jobPost.companyId }, select: { userId: true } });
+      const accepted = decision === 'ACCEPT';
+      for (const member of members) {
+        try {
+          await this.notifications.create({
+            userId: member.userId,
+            type: 'APPLICATION_STATUS',
+            title: `${accepted ? 'Offer accepted' : 'Offer declined'}: ${application.jobPost.title}`,
+            body: accepted ? 'The candidate accepted the offer.' : 'The candidate declined the offer.',
+            titleKey: 'notify.applicationOffer.decision.title',
+            bodyKey: accepted ? 'notify.applicationOffer.accepted.body' : 'notify.applicationOffer.declined.body',
+            params: { job: application.jobPost.title },
+            linkUrl: `/dashboard/recruiter/jobs/${application.jobPost.id}?section=applicants&company=${application.jobPost.companyId}&application=${application.id}`,
+          });
+        } catch (error) { this.logger.warn(`Offer decision notification failed: ${(error as Error).message}`); }
+      }
+    }
+    return { application: safeApplication(result.application), packet: safeOfferPacket(result.packet), changed: result.changed };
   }
 
   async searchForJob(user: AuthUser, jobPostId: string, input: ApplicantFilters & { status?: string; sort?: 'match' | 'newest'; minMatch?: number; page: number; limit: number; kanbanOnly?: boolean }, locale: Locale) {
@@ -589,6 +947,9 @@ export class ApplicationsService {
 
     const isOwnerCandidate =
       application.profile.userId === user.id && status === 'WITHDRAWN';
+    if (status === 'OFFER') {
+      throw new BadRequestException('Offers must be sent through the offer workflow');
+    }
     if (!isOwnerCandidate) {
       await this.companies.assertMember(user, application.jobPost.companyId, [
         'OWNER',
@@ -603,6 +964,9 @@ export class ApplicationsService {
     if (isOwnerCandidate && ['HIRED', 'REJECTED'].includes(application.status)) {
       throw new BadRequestException('A finalized application cannot be withdrawn');
     }
+    if (application.status === 'HIRED' && status !== 'HIRED') {
+      throw new ConflictException('A hired application is final. Use the audited Super Admin correction action if needed.');
+    }
     if (application.status === 'WITHDRAWN' && status !== 'WITHDRAWN') {
       throw new BadRequestException('A withdrawn application cannot be reopened');
     }
@@ -614,29 +978,99 @@ export class ApplicationsService {
       return safeApplication(result);
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const transition = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Application" WHERE id=${applicationId} FOR UPDATE`;
       const current = await tx.application.findUniqueOrThrow({where:{id:applicationId}});
       if (current.status !== application.status) throw new ConflictException('Application status changed. Refresh and try again.');
+      if (current.status === 'HIRED' && status !== 'HIRED') {
+        throw new ConflictException('A hired application is final. Use the audited Super Admin correction action if needed.');
+      }
+      if (current.status === 'WITHDRAWN' && status !== 'WITHDRAWN') {
+        throw new BadRequestException('A withdrawn application cannot be reopened');
+      }
+      let offerDecision = false;
+      if (current.status === 'OFFER') {
+        const activeOffer = await tx.applicationOfferPacket.findFirst({
+          where: { applicationId, kind: 'OFFER', status: 'PENDING' },
+          include: { documents: { select: { id: true } } },
+          orderBy: { version: 'desc' },
+        });
+        if (activeOffer) {
+          const hasDocuments = activeOffer.documents.length > 0;
+          if (hasDocuments && !isOwnerCandidate) {
+            throw new ConflictException('The candidate must respond to the documented offer before HR can change the application stage');
+          }
+          offerDecision = hasDocuments && isOwnerCandidate && status === 'WITHDRAWN';
+          await tx.applicationOfferPacket.update({
+            where: { id: activeOffer.id },
+            data: {
+              status: hasDocuments ? (offerDecision ? 'DECLINED' : 'REVOKED') : 'SHARED',
+              ...(offerDecision ? { respondedAt: new Date() } : hasDocuments ? { revokedAt: new Date() } : {}),
+            },
+          });
+          if (offerDecision) {
+            await tx.auditLog.create({
+              data: {
+                actorId: user.id,
+                action: 'APPLICATION_OFFER_DECLINED',
+                entityType: 'ApplicationOfferPacket',
+                entityId: activeOffer.id,
+                metadata: { applicationId, companyId: application.jobPost.companyId, targetStatus: status },
+              },
+            });
+          }
+          if (hasDocuments && !offerDecision) {
+            await tx.auditLog.create({
+              data: {
+                actorId: user.id,
+                action: 'APPLICATION_OFFER_REVOKED',
+                entityType: 'ApplicationOfferPacket',
+                entityId: activeOffer.id,
+                metadata: { applicationId, companyId: application.jobPost.companyId, targetStatus: status },
+              },
+            });
+          }
+        }
+      }
       const claimed = await tx.application.updateMany({
-        where: { id: applicationId, status: application.status },
+        where: { id: applicationId, status: current.status },
         data: { status, ...(!isOwnerCandidate && !current.kanbanEnteredAt ? {kanbanEnteredAt:new Date()} : {}) },
       });
       if (!claimed.count) throw new ConflictException('Application status changed. Refresh and try again.');
       await tx.pipelineEvent.create({ data: {
-        applicationId, fromStatus: application.status, toStatus: status, note, actorUserId: user.id,
+        applicationId, fromStatus: current.status, toStatus: status,
+        note: offerDecision ? 'OFFER_DECLINED' : note,
+        actorUserId: user.id,
       } });
       // An interview invitation must not remain actionable after leaving that stage.
       if (status !== 'INTERVIEW') {
         await tx.interview.updateMany({where:{applicationId,status:'SCHEDULED'},data:{status:'CANCELLED'}});
       }
-      return tx.application.findUniqueOrThrow({
+      const updated = await tx.application.findUniqueOrThrow({
         where: { id: applicationId },
         include: { events: { orderBy: { createdAt: 'desc' }, take: 10 } },
       });
+      return { application: updated, offerDecision };
     });
 
     await this.publishChange(application.jobPost.companyId, application.profile.userId);
+    if (transition.offerDecision) {
+      const members = await this.prisma.companyMember.findMany({ where: { companyId: application.jobPost.companyId }, select: { userId: true } });
+      for (const member of members) {
+        try {
+          await this.notifications.create({
+            userId: member.userId,
+            type: 'APPLICATION_STATUS',
+            title: `Offer declined: ${application.jobPost.title}`,
+            body: 'The candidate declined the offer.',
+            titleKey: 'notify.applicationOffer.decision.title',
+            bodyKey: 'notify.applicationOffer.declined.body',
+            params: { job: application.jobPost.title },
+            linkUrl: `/dashboard/recruiter/jobs/${application.jobPost.id}?section=applicants&company=${application.jobPost.companyId}&application=${application.id}`,
+          });
+        } catch (err) { this.logger.warn(`Offer decline notification failed: ${(err as Error).message}`); }
+      }
+    }
     if (opts?.notify !== false) {
       try {
         await this.notifications.create({
@@ -681,7 +1115,7 @@ export class ApplicationsService {
       }
     }
 
-    return safeApplication(updated);
+    return safeApplication(transition.application);
   }
 
   /** Right of the previous stage in DEFAULT_PIPELINE order = forward move. */

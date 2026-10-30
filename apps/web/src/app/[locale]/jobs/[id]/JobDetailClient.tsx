@@ -302,6 +302,12 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
         resumeTitle: selectedResume?.title ?? null,
         hasResumeFile: selectedHasFile,
       });
+      setSaved(false);
+      if (saveState?.saved) {
+        // The API removes the bookmark atomically with the application. Keep
+        // the surrounding job list's local bookmark state in sync as well.
+        void saveState.onToggle().catch(() => undefined);
+      }
       setSuccess(t('job.applySuccess'));
       setShowApply(false);
     } catch (err) {
@@ -314,6 +320,10 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
             application: MyApplicationState | null;
           }>(`/applications/mine/jobs/${id}`);
           setMyApplication(mine.application);
+          if (mine.application) {
+            setSaved(false);
+            if (saveState?.saved) void saveState.onToggle().catch(() => undefined);
+          }
           setShowApply(false);
         } catch {
           /* ignore */

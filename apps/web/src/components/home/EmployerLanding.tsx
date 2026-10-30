@@ -14,6 +14,7 @@ import hero from './SeekerHero.module.css';
 import sections from './LandingSections.module.css';
 import s from './EmployerLanding.module.css';
 import { PackagePricing } from '@/components/recruiter/PackagePricing';
+import { FeaturedCompaniesCarousel } from './FeaturedCompaniesCarousel';
 
 
 const POST_JOB = '/dashboard/recruiter?tab=jobs&focus=create';
@@ -27,7 +28,7 @@ export function EmployerLanding() {
   useEffect(() => {
     let active = true;
     setRecruiter(getSession()?.user.role === 'RECRUITER');
-    api<{ items: TopCompany[] }>('/companies?limit=5&sort=jobs', { auth: false }).then((data) => {
+    api<{ items: TopCompany[] }>('/companies?sort=featured&limit=48', { auth: false }).then((data) => {
       if (active) setCompanies(data.items || []);
     }).catch(() => undefined);
     api<{ items: NewsListItem[] }>('/news?category=INSIGHT&limit=3', { auth: false }).then((data) => {
@@ -37,7 +38,6 @@ export function EmployerLanding() {
   }, [locale]);
 
   // Public calls to action keep their intended destination through employer auth.
-  const workspaceHref = recruiter ? '/dashboard/recruiter?tab=jobs' : authLink('/login', '/dashboard/recruiter?tab=jobs', 'RECRUITER');
   const postHref = recruiter ? POST_JOB : authLink('/register', POST_JOB, 'RECRUITER');
 
   return <div className={hero.page}><div className={hero.shell}>
@@ -47,19 +47,13 @@ export function EmployerLanding() {
       <div className={`${hero.overlay} ${s.overlay}`} aria-hidden="true" />
       <div className={`${hero.content} ${s.content}`}>
         <p className={hero.eyebrow}>{t('employers.eyebrow')}</p>
-        <h1 id="employer-title" className={`${hero.title} ${s.title}`}><span>{t('employers.title1')}</span><span>{t('employers.title2')}</span></h1>
-        <p className={`${hero.subtitle} ${s.subtitle}`}><span>{t('employers.subtitle1')}</span><span>{t('ranking.entryGuidance')}</span></p>
-        <Link className={s.heroPost} href={postHref}>{t('postAJob')}<LandingIcon /></Link>
+        <h1 id="employer-title" className={`${hero.title} ${s.title}`}><span>{t('employers.title1')} </span><span>{t('employers.title2')}</span></h1>
+        <p className={`${hero.subtitle} ${s.subtitle}`}>{t('employers.subtitle1')}</p>
       </div>
-      <div className={hero.search} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:24,flexWrap:'wrap'}}><p style={{color:'#415274',margin:0}}>{t('ranking.entryGuidance')}</p><Link className={hero.searchButton} href={workspaceHref}>{t('jobs')}<LandingIcon/></Link></div>
+      <div className={`${hero.search} ${s.search}`}><p>{t('employers.subtitle2')}</p><Link className={hero.searchButton} href={postHref}>{t('postAJob')}<LandingIcon /></Link></div>
     </section>
 
-    {companies.length > 0 && <section className={`${hero.employers} ${s.trust}`} aria-labelledby="employer-companies">
-      <div className={hero.employersHeading}><h2 id="employer-companies">{t('employers.companies')}</h2></div>
-      <div className={hero.companyRow}>{companies.map((company) => <Link className={hero.company} key={company.slug} href={`/companies/${company.slug}`}>
-        {company.logoUrl && <img src={company.logoUrl} alt="" width="56" height="56" loading="lazy" />}<span>{company.name}</span>
-      </Link>)}</div>
-    </section>}
+    {companies.length > 0 && <FeaturedCompaniesCarousel companies={companies} />}
 
     <div className={`${sections.sections} ${s.sections}`}>
       <section id="how-it-works" className={`${sections.candidate} ${s.onboarding}`} aria-labelledby="employer-start">

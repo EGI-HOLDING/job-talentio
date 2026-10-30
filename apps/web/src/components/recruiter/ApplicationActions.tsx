@@ -9,7 +9,7 @@ import s from './JobWorkspace.module.css';
 
 export type Applicant = {
   id: string; jobPostId: string; status: string; kanbanEnteredAt: string | null;
-  canAddToKanban: boolean; createdAt: string; hasResumeFile: boolean;
+  canAddToKanban: boolean; candidateDecisionRequired?: boolean; createdAt: string; hasResumeFile: boolean;
   resumeTitle?: string | null; coverLetter?: string | null;
   profile: { id: string; headline?: string | null; user: {id: string; fullName: string; avatarUrl?: string | null}; city?: {name: string} | null; residenceCountry?: {name: string} | null; skills?: Array<{id: string; skill: {name: string}}> };
   answers?: Array<{id: string; answer: string; question: {question: string}}>;

@@ -231,6 +231,47 @@ export async function api<T>(
   return data as T;
 }
 
+/** Multipart upload with upload progress and the same account/locale protections as api(). */
+export async function apiUpload<T>(path: string, body: FormData, onProgress?: (percent: number) => void): Promise<T> {
+  const actor = getSession()?.user.id;
+  const send = (token: string | null) => new Promise<{ status: number; text: string }>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `${API_URL}/api${path}`);
+    request.timeout = 120_000;
+    request.setRequestHeader('X-Locale', activeLocale());
+    if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
+    request.upload.onprogress = event => {
+      if (event.lengthComputable) onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onload = () => resolve({ status: request.status, text: request.responseText });
+    request.onerror = () => reject(new ApiError('Network error while uploading files', 0));
+    request.ontimeout = () => reject(new ApiError('File upload timed out', 408));
+    request.onabort = () => reject(new ApiError('File upload was cancelled', 0));
+    request.send(body);
+  });
+  const assertAccount = () => {
+    if (actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
+  };
+  let response = await send(getToken());
+  assertAccount();
+  if (response.status === 401 && getToken()) {
+    const rotated = await tryRefresh();
+    assertAccount();
+    if (rotated) response = await send(rotated);
+  }
+  assertAccount();
+  let data: unknown = null;
+  if (response.text) {
+    try { data = JSON.parse(response.text); }
+    catch { data = { message: response.text }; }
+  }
+  if (response.status < 200 || response.status >= 300) {
+    throw new ApiError(formatApiError(data, 'Upload failed'), response.status);
+  }
+  onProgress?.(100);
+  return data as T;
+}
+
 export async function apiBlob(path:string):Promise<Blob> {
   const actor=getSession()?.user.id;
   const headers=new Headers({'X-Locale':activeLocale()});
