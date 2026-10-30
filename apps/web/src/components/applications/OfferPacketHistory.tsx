@@ -15,8 +15,10 @@ function dateLabel(value: string | null | undefined, locale: string) {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
-export function OfferPacketHistory({ applicationId, applicationStatus, audience, onDecision }: {
-  applicationId: string; applicationStatus: string; audience: 'candidate' | 'hr'; onDecision?: (status: 'HIRED' | 'WITHDRAWN') => void;
+export function OfferPacketHistory({ applicationId, applicationStatus, audience, candidateDecisionRequired = false, onSendOffer, onDecision }: {
+  applicationId: string; applicationStatus: string; audience: 'candidate' | 'hr';
+  candidateDecisionRequired?: boolean; onSendOffer?: () => void;
+  onDecision?: (status: 'HIRED' | 'WITHDRAWN') => void;
 }) {
   const { t, locale } = useI18n();
   const sessionIdentity = useSessionIdentity();
@@ -41,9 +43,9 @@ export function OfferPacketHistory({ applicationId, applicationStatus, audience,
     if (scopeRef.current !== scope) { scopeRef.current = scope; setPackets([]); setLoadedScope(''); }
     setLoading(true);
     setError('');
-    api<{ packets: OfferPacket[] }>('/applications/' + encodeURIComponent(applicationId) + '/offer-packets')
+    api<{ packets: OfferPacket[] }>('/applications/' + encodeURIComponent(applicationId) + '/offer-packets', { signal: AbortSignal.timeout(15_000) })
       .then(result => { if (alive && version === request.current && actor === getSession()?.user.id) { setPackets(result.packets); setLoadedScope(scope); } })
-      .catch(reason => { if (alive && version === request.current && actor === getSession()?.user.id) { setPackets([]); setLoadedScope(scope); setError(reason instanceof Error ? reason.message : t('offer.loadFailed')); } })
+      .catch(reason => { if (alive && version === request.current && actor === getSession()?.user.id) { setPackets([]); setLoadedScope(scope); setError(reason instanceof Error && reason.name !== 'TimeoutError' && reason.name !== 'AbortError' ? reason.message : t('offer.loadFailed')); } })
       .finally(() => { if (alive && version === request.current) setLoading(false); });
     return () => { alive = false; };
   }, [applicationId, audience, retry, t, sessionIdentity]);
@@ -97,10 +99,11 @@ export function OfferPacketHistory({ applicationId, applicationStatus, audience,
   const offers = scopedPackets.filter(packet => packet.kind === 'OFFER');
   const documents = scopedPackets.filter(packet => packet.kind === 'POST_HIRE');
   const activeOffer = offers.find(packet => packet.requiresCandidateDecision);
-  if (offers.length === 0 && documents.length === 0 && !scopedLoading && !error) return null;
+  const canSendOfferDocuments = audience === 'hr' && applicationStatus === 'OFFER' && !candidateDecisionRequired && Boolean(onSendOffer);
+  if (offers.length === 0 && documents.length === 0 && !scopedLoading && !error && !canSendOfferDocuments) return null;
 
   return <section className={s.history} aria-labelledby={'offer-heading-' + applicationId}>
-    <header className={s.historyHead}><div><span className={s.eyebrow}>{t('offer.candidateDocuments')}</span><h3 id={'offer-heading-' + applicationId}>{t('offer.sectionTitle')}</h3><p>{t(audience === 'candidate' ? 'offer.candidateHint' : 'offer.hrHint')}</p></div><span className={s.historyMark} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 4h7l4 4v11a1.75 1.75 0 0 1-1.75 1.75h-9.5A1.75 1.75 0 0 1 5 19V5.75A1.75 1.75 0 0 1 6.75 4Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M14 4v4h4M8.5 12h7M8.5 15.5h7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></span></header>
+    <header className={s.historyHead}><div><span className={s.eyebrow}>{t('offer.candidateDocuments')}</span><h3 id={'offer-heading-' + applicationId}>{t('offer.sectionTitle')}</h3><p>{t(audience === 'candidate' ? 'offer.candidateHint' : 'offer.hrHint')}</p></div><div className={s.historyHeadActions}>{canSendOfferDocuments&&<button type="button" className={s.sendOfferButton} onClick={onSendOffer}><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 3.5h7l3 3V16a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 5 16V5a1.5 1.5 0 0 1 1.5-1.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/><path d="M12 3.75V7h3M10 9v5m-2.5-2.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>{t('offer.addDocuments')}</button>}<span className={s.historyMark} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 4h7l4 4v11a1.75 1.75 0 0 1-1.75 1.75h-9.5A1.75 1.75 0 0 1 5 19V5.75A1.75 1.75 0 0 1 6.75 4Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/><path d="M14 4v4h4M8.5 12h7M8.5 15.5h7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></span></div></header>
     {error && <div className={s.error} role="alert"><span>{error}</span><button type="button" onClick={() => setRetry(value => value + 1)}>{t('offer.retry')}</button></div>}
     {scopedLoading && <div className={s.loading} aria-live="polite">{t('offer.loading')}</div>}
     {!scopedLoading && <>

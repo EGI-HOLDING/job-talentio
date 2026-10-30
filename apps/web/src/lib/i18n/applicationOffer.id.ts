@@ -1,6 +1,7 @@
 export const applicationOfferId = {
   'offer.sendTitle': 'Kirim penawaran kerja',
   'offer.sendHint': 'Lampiran bersifat opsional; dokumen menentukan alur keputusan penawaran di aplikasi.',
+  'offer.addDocuments': 'Kirim dokumen penawaran',
   'offer.documents': 'Dokumen penawaran',
   'offer.postHireDocuments': 'Dokumen untuk kandidat',
   'offer.postHireHint': 'Bagikan dokumen kontrak atau dokumen susulan. Kandidat dapat mengunduhnya tanpa keputusan tambahan.',

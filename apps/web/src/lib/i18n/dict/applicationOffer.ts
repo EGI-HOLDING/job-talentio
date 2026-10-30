@@ -1,6 +1,7 @@
 export const applicationOffer = {
   'offer.sendTitle': { en: 'Send a job offer', ru: 'Отправить предложение о работе', uz: 'Ish taklifini yuborish' },
   'offer.sendHint': { en: 'Attachments are optional; documents determine whether the offer needs an in-app decision.', ru: 'Вложения необязательны; их наличие определяет, требуется ли решение в приложении.', uz: 'Ilovalar ixtiyoriy; hujjatlar taklif uchun ilovada qaror kerakligini belgilaydi.' },
+  'offer.addDocuments': { en: 'Send offer documents', ru: 'Отправить документы предложения', uz: 'Taklif hujjatlarini yuborish' },
   'offer.documents': { en: 'Offer documents', ru: 'Документы предложения', uz: 'Taklif hujjatlari' },
   'offer.postHireDocuments': { en: 'Documents for the candidate', ru: 'Документы для кандидата', uz: 'Nomzod uchun hujjatlar' },
   'offer.postHireHint': { en: 'Share signed or follow-up documents. The candidate can download them without another decision.', ru: 'Отправьте подписанные или дополнительные документы. Кандидат сможет скачать их без повторного решения.', uz: 'Imzolangan yoki keyingi hujjatlarni yuboring. Nomzod ularni qayta qaror bermasdan yuklab oladi.' },
