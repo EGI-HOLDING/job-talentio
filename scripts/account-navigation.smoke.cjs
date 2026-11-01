@@ -173,6 +173,7 @@ test('job preview renders employer return without candidate follow/apply control
     '@/lib/navigation': { Link: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) },
     '@/lib/i18n': { useI18n: () => ({ t: (key) => key, locale: 'id' }), useEnumLabel: () => (_group, value) => value || '' },
     '@/components/ui/UgcText': { UgcText: ({ text }) => React.createElement('p', null, text) },
+    '@/components/employee/EmployeeWhatsAppAction': { EmployeeWhatsAppAction: () => null },
     '@/components/ui/ShareButton': { ShareButton: (props) => { shares.push(props.path); return null; } },
     './JobsIcon': { JobsIcon: () => null }, './formatJobSalary': { formatJobSalary: () => 'IDR 100' },
     './PromotionBadge': { PromotionBadge: () => null },

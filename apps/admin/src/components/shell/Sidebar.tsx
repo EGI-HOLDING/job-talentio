@@ -97,10 +97,8 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <span className="sidebar-mark" aria-hidden>
-          JT
-        </span>
-        <span>Admin</span>
+        <img className="sidebar-mark" src="/brand/talentio-mark.png" alt="" />
+        <span>Talentio Admin</span>
       </div>
 
       <nav aria-label="Sections" style={{ display: 'grid', gap: '0.15rem' }}>

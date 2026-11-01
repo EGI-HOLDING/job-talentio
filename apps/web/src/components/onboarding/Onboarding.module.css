@@ -283,21 +283,42 @@
   color: var(--on-muted);
   font-weight: 400;
 }
+.pickerButton > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #71809a;
+  transition: color 160ms ease, transform 160ms ease;
+}
+.pickerButton[aria-expanded="true"] > svg {
+  color: var(--on-purple);
+  transform: rotate(180deg);
+}
 .countryOptions {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid #d9dfeb;
   border-radius: 10px;
   padding: 10px;
+  background: #fff;
+  color: var(--on-ink, #101d36);
   box-shadow: 0 6px 16px #172d5510;
 }
 .countryOptions > input {
+  flex: 0 0 auto;
+  box-sizing: border-box;
   width: 100%;
+  min-height: 44px;
   padding: 12px !important;
   margin: 0 0 6px !important;
   background: #f6f7fb !important;
 }
 .countryScroll {
-  max-height: 260px;
+  min-height: 0;
+  flex: 1;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .countryScroll label {
   display: flex;
@@ -539,7 +560,8 @@
 .body {
   min-height: 0;
   overflow: auto;
-  padding-right: 4px;
+  box-sizing: border-box;
+  padding-inline: 12px;
 }
 .footer {
   position: static;

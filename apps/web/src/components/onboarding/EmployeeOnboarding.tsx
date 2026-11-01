@@ -8,7 +8,7 @@ import {
   type EmployeeOnboardingInput,
   type PhoneDraft,
 } from "@job-talentio/shared";
-import { api, saveSession, type AuthSession } from "@/lib/api";
+import { api, getSession, saveSession, type AuthSession } from "@/lib/api";
 import { safeAuthNext } from "@/lib/authReturn";
 import { useRouter } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
@@ -23,13 +23,6 @@ import {
   type Country,
   type SalaryValue,
 } from "./PreferenceFields";
-import { ExperienceEditor, type ExperienceDraft } from "./ExperienceEditor";
-import { CvReview, createReview, selectedReview, reviewError } from "./CvReview";
-import {
-  waitForResumeParse,
-  type ResumeParseStatusResponse,
-} from "@/lib/cvParse";
-import type { ParsedCv } from "@/components/CvReviewModal";
 import s from "./Onboarding.module.css";
 
 type Form = EmployeeOnboardingInput &
@@ -38,7 +31,6 @@ type Form = EmployeeOnboardingInput &
     preferredCountryIds: string[];
     fullName: string;
     visibility: "PUBLIC" | "TO_REGISTERED_RECRUITERS" | "PRIVATE";
-    manualExperiences: ExperienceDraft[];
   };
 type State = {
   status: "IN_PROGRESS" | "NOT_REQUIRED" | "COMPLETED";
@@ -46,7 +38,7 @@ type State = {
   draft: EmployeeOnboardingInput;
   profile: {
     user: { fullName: string };
-    resumes: { id: string; title: string }[];
+    resumes: { id: string; title: string;isPrimary:boolean;hasFile:boolean }[];
     desiredPositions: string[];
     preferredCountries: Country[];
     residenceCountryId: string | null;
@@ -82,6 +74,8 @@ function Badge({ step }: { step: number }) {
             <circle cx="16" cy="9" r="5" />
             <path d="M6 28v-4c0-11 20-11 20 0v4Z" />
           </>
+        ) : step === 5 ? (
+          <><path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9" /></>
         ) : (
           <>
             <rect x="3" y="9" width="26" height="20" rx="3" />
@@ -108,11 +102,9 @@ export function EmployeeOnboarding() {
     [phoneServerError, setPhoneServerError] = useState<string | undefined>(),
     [saveState, setSaveState] = useState(""),
     [loadKey, setLoadKey] = useState(0);
-  const [editor, setEditor] = useState<number | "new" | null>(null),
-    [parse, setParse] = useState<ResumeParseStatusResponse | null>(null),
-    [pollKey, setPollKey] = useState(0),
-    [uploading, setUploading] = useState(false),
+  const [uploading, setUploading] = useState(false),
     [fileName, setFileName] = useState("");
+  const uploadPending=useRef(false),uploadEpoch=useRef(0);
   const queue = useRef<Promise<unknown>>(Promise.resolve()),
     stopped = useRef(false),
     fileInput = useRef<HTMLInputElement>(null),
@@ -149,9 +141,8 @@ export function EmployeeOnboarding() {
               marketPhoneCountry,
             );
         const initialPhone = validatePhoneDraft(phoneDraft);
-        setFileName(
-          p.resumes.find((r) => r.id === draft.resumeId)?.title || "",
-        );
+        const selectedCv=p.resumes.find(r=>r.id===draft.resumeId&&r.hasFile)||p.resumes.find(r=>r.isPrimary&&r.hasFile);
+        setFileName(selectedCv?.title||'');
         setCountries(options);
         setStep(state.step);
         setForm({
@@ -167,8 +158,9 @@ export function EmployeeOnboarding() {
           salaryNegotiable: p.salaryNegotiable,
           visibility: p.visibility,
           noExperience: p.noExperience,
-          manualExperiences: [],
           ...draft,
+          resumeId:selectedCv?.id,
+          review:null,reviewState:null,manualExperiences:[],
           phoneDraft,
           phone: initialPhone.ok ? initialPhone.phone : undefined,
         });
@@ -183,6 +175,7 @@ export function EmployeeOnboarding() {
     return () => {
       abort.abort();
       stopped.current = true;
+      ++uploadEpoch.current;
     };
   }, [loadKey, router, destination]);
   function persist(value: Form, targetStep: number) {
@@ -221,45 +214,10 @@ export function EmployeeOnboarding() {
     );
     return task;
   }
-  // Queue writes in order. Every edit is sent immediately, including the CV review.
+  // Queue writes in order. Every edit is sent immediately, including the selected CV file.
   useEffect(() => {
     if (form && loaded.current && !stopped.current) void persist(form, step);
   }, [form, step]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!form?.resumeId) return;
-    const abort = new AbortController(),
-      resumeId = form.resumeId;
-    setParse({ id: resumeId, parseStatus: "PROCESSING" });
-    waitForResumeParse(resumeId, { signal: abort.signal, timeoutMs: 180000 })
-      .then((result) => {
-        if (abort.signal.aborted) return;
-        setParse(result);
-        setForm((prev) => {
-          if (!prev || prev.resumeId !== resumeId) return prev;
-          if (result.parseStatus === "READY" && result.parsedData)
-            return {
-              ...prev,
-              resumeGeneration: result.parseGeneration,
-              reviewState:
-                prev.reviewState &&
-                prev.resumeGeneration === result.parseGeneration
-                  ? prev.reviewState
-                  : createReview(result.parsedData as ParsedCv),
-            };
-          return prev;
-        });
-      })
-      .catch((e) => {
-        if (!abort.signal.aborted) {
-          setParse({
-            id: resumeId,
-            parseStatus: "FAILED",
-            parseError: e.message,
-          });
-        }
-      });
-    return () => abort.abort();
-  }, [form?.resumeId, pollKey]);
   function update(value: Partial<Form>) {
     setError("");
     if (value.phoneDraft !== undefined) setPhoneServerError(undefined);
@@ -334,11 +292,10 @@ export function EmployeeOnboarding() {
       setBusy(false);
     }
   }
-  async function finish(withoutImport = false) {
+  async function finish() {
     if (!form || busy || uploading) return;
-    const review = !withoutImport && form.reviewState ? selectedReview(form.reviewState, Boolean(form.noExperience)) : null;
-    const invalidReview = review && reviewError(review);
-    if (invalidReview) { setError(t(invalidReview)); return; }
+    if(!form.resumeId){setError(appText('cv.required'));return;}
+    const review=null;
     const phone = validatePhoneDraft(form.phoneDraft || { country: "", nationalNumber: "" });
     if (!phone.ok) {
       setPhoneTouched(true);
@@ -358,7 +315,7 @@ export function EmployeeOnboarding() {
           phone: phone.phone,
           step: 5,
           review,
-          reviewState: withoutImport ? null : form.reviewState,
+          reviewState:null,manualExperiences:[],
         }),
       });
       const session = await api<AuthSession>("/auth/me");
@@ -377,24 +334,27 @@ export function EmployeeOnboarding() {
     }
   }
   async function upload(file?: File) {
-    if (!file || uploading) return;
+    if (!file || uploadPending.current) return;
     const validation = cvFileError(file, appText);
     if (validation) {
       setError(validation);
       return;
     }
+    uploadPending.current=true;
+    const epoch=++uploadEpoch.current,actor=getSession()?.user.id;
     setUploading(true);
     setError("");
     try {
-      // Keep the previous reviewed CV until the replacement upload succeeds.
+      // Keep the selected file until its replacement has been stored successfully.
       const body = new FormData();
       body.append("file", file);
       body.append("parse", "true");
-      body.append("title", file.name);
-      const resume = await api<{ id: string }>("/profiles/me/resumes/upload", {
+      body.append("title", file.name.slice(0,160));
+      const resume = await api<{ id: string }>(form?.resumeId?`/profiles/me/resumes/${form.resumeId}/file`:"/profiles/me/resumes/upload", {
         method: "POST",
         body,
       });
+      if(epoch!==uploadEpoch.current||getSession()?.user.id!==actor)return;
       setFileName(file.name);
       update({
         resumeId: resume.id,
@@ -403,22 +363,11 @@ export function EmployeeOnboarding() {
         review: null,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if(epoch===uploadEpoch.current&&getSession()?.user.id===actor)setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setUploading(false);
+      uploadPending.current=false;
+      if(epoch===uploadEpoch.current)setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
-    }
-  }
-  async function retry() {
-    if (!form?.resumeId) return;
-    setError("");
-    try {
-      await api(`/profiles/me/resumes/${form.resumeId}/parse`, {
-        method: "POST",
-      });
-      setPollKey((v) => v + 1);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
     }
   }
   if (!form)
@@ -442,17 +391,15 @@ export function EmployeeOnboarding() {
     t("countryTitle"),
     t("salaryTitle"),
     t("identity"),
-    form.reviewState ? t("reviewTitle") : t("experience"),
+    appText('cv.upload'),
   ];
   const hints = [
     t("positionsHint"),
     t("countryHint"),
     t("salaryHint"),
     t("identityHint"),
-    t("experienceHint"),
+    appText('cv.uploadHint'),
   ];
-  const parsing =
-    parse?.parseStatus === "PROCESSING" || parse?.parseStatus === "PENDING";
   return (
     <section className={s.page}>
       <div className={s.progressLabel}>
@@ -560,162 +507,16 @@ export function EmployeeOnboarding() {
               </div>
             </>
           )}
-          {step === 5 && (
-            <>
-              <input
-                ref={fileInput}
-                className={s.srOnly}
-                type="file"
-                accept={CV_ACCEPT}
-                aria-label={t("chooseFile")}
-                onChange={(e) => void upload(e.target.files?.[0])}
-              />
-              {form.resumeId && (
-                <div className={`${s.card} ${s.fileCard}`}>
-                  <div>
-                    <strong>{fileName || "CV"}</strong>
-                    <p>{t("uploaded")}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className={s.textButton}
-                    onClick={() => fileInput.current?.click()}
-                  >
-                    {t("changeCv")}
-                  </button>
-                </div>
-              )}
-              {uploading && (
-                <p className={s.success} role="status">
-                  {t("reading")}
-                </p>
-              )}
-              {parsing && (
-                <div className={s.success} role="status">
-                  {t(parse?.parseStatus === "PENDING" ? "pending" : "reading")}
-                  <button
-                    type="button"
-                    className={s.textButton}
-                    onClick={() => void retry()}
-                  >
-                    {t("retry")}
-                  </button>
-                </div>
-              )}
-              {parse?.parseStatus === "FAILED" && (
-                <div className={s.error} role="alert">
-                  <p>{t("parseFailed")}</p>
-                  {parse.parseError && <p>{parse.parseError}</p>}
-                  <button
-                    type="button"
-                    className={s.secondary}
-                    onClick={() => void retry()}
-                  >
-                    {t("retry")}
-                  </button>
-                </div>
-              )}
-              {form.reviewState && parse?.parseStatus === "READY" && (
-                <CvReview
-                  value={form.reviewState}
-                  countries={countries}
-                  noExperience={Boolean(form.noExperience)}
-                  onChange={(v) => update({ reviewState: v })}
-                />
-              )}
-              {!form.noExperience && (
-                <>
-                  {form.manualExperiences.map((exp, i) => (
-                    <article className={s.card} key={i}>
-                      <div className={s.cardTop}>
-                        <strong>{exp.title}</strong>
-                        <div>
-                          <button
-                            type="button"
-                            className={s.textButton}
-                            onClick={() => setEditor(i)}
-                          >
-                            {t("edit")}
-                          </button>
-                          <button
-                            type="button"
-                            className={s.textButton}
-                            onClick={() =>
-                              update({
-                                manualExperiences:
-                                  form.manualExperiences.filter(
-                                    (_, j) => j !== i,
-                                  ),
-                              })
-                            }
-                          >
-                            {t("remove")}
-                          </button>
-                        </div>
-                      </div>
-                      <p>
-                        {exp.companyName} | {exp.startDate} -{" "}
-                        {exp.isCurrent ? t("current") : exp.endDate || "-"}
-                      </p>
-                    </article>
-                  ))}
-                  <div className={s.empty}>
-                    {!form.manualExperiences.length && !form.reviewState && (
-                      <>
-                        <Badge step={5} />
-                        <p>{t("emptyExperience")}</p>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      className={s.secondary}
-                      disabled={form.manualExperiences.length >= 20}
-                      onClick={() => setEditor("new")}
-                    >
-                      + {t("addExperience")}
-                    </button>
-                  </div>
-                </>
-              )}
-              {!form.resumeId && (
-                <>
-                  <div className={s.divider}>{t("or")}</div>
-                  <div
-                    className={s.upload}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      void upload(e.dataTransfer.files[0]);
-                    }}
-                  >
-                    <Badge step={5} />
-                    <h2>{t("upload")}</h2>
-                    <p>{t("uploadHint")}</p>
-                    <button
-                      className={s.secondary}
-                      type="button"
-                      onClick={() => fileInput.current?.click()}
-                    >
-                      {t("chooseFile")}
-                    </button>
-                    <p>
-                      {t("fileHint")}
-                      <br />
-                      {t("reviewHint")}
-                    </p>
-                  </div>
-                </>
-              )}
-              <label className={s.check}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(form.noExperience)}
-                  onChange={(e) => update({ noExperience: e.target.checked })}
-                />
-                {t("noExperience")}
-              </label>
-            </>
-          )}
+          {step === 5 && <>
+            <input ref={fileInput} className={s.srOnly} type="file" accept={CV_ACCEPT} aria-label={t('chooseFile')} onChange={event=>void upload(event.target.files?.[0])} />
+            <div className={s.upload} aria-busy={uploading} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();if(!uploading)void upload(event.dataTransfer.files[0]);}}>
+              <Badge step={5} /><h2>{form.resumeId?fileName||'CV':appText('cv.upload')}</h2>
+              <p>{form.resumeId?appText('cv.saved'):appText('cv.noManual')}</p>
+              <button className={s.secondary} type="button" disabled={uploading} onClick={()=>fileInput.current?.click()}>{t(form.resumeId?'changeCv':'chooseFile')}</button>
+              <p>{t('fileHint')}</p>
+              {uploading&&<div role="status"><progress aria-label={appText('cv.uploading')} /><p>{appText('cv.uploading')}</p></div>}
+            </div>
+          </>}
         </fieldset>
         <div className={s.status} role="status" aria-live="polite">
           {saveState === "saving"
@@ -737,53 +538,28 @@ export function EmployeeOnboarding() {
           </button>
         )}
         <div className={s.footerRight}>
-          {(step === 3 || step === 5) && (
+          {step === 3 && (
             <button
               className={s.textButton}
               disabled={busy || uploading}
               type="button"
               onClick={() =>
-                step === 3 ? void navigate(4, true) : void finish(true)
+                void navigate(4, true)
               }
             >
-              {t(step === 5 && parsing ? "finishWithoutImport" : "skip")}
+              {t("skip")}
             </button>
           )}
           <button
             type="button"
             className={s.primary}
-            disabled={busy || uploading || (step === 5 && Boolean(parsing))}
+            disabled={busy || uploading || (step === 5 && !form.resumeId)}
             onClick={() => (step < 5 ? void navigate(step + 1) : void finish())}
           >
             {busy ? t("saving") : t(step === 5 ? "finish" : "next")} →
           </button>
         </div>
       </footer>
-      {editor !== null && (
-        <ExperienceEditor
-          initial={
-            typeof editor === "number"
-              ? form.manualExperiences[editor]
-              : undefined
-          }
-          countries={countries}
-          onClose={() => setEditor(null)}
-          onSave={async (exp) => {
-            const next = {
-              ...form,
-              manualExperiences:
-                editor === "new"
-                  ? [...form.manualExperiences, exp]
-                  : form.manualExperiences.map((v, i) =>
-                      i === editor ? exp : v,
-                    ),
-            };
-            await persist(next, step);
-            setForm(next);
-            setEditor(null);
-          }}
-        />
-      )}
     </section>
   );
 }

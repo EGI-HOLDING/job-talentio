@@ -11,6 +11,14 @@ const root = path.resolve(__dirname, '..');
 const requireWeb = createRequire(path.join(root, 'apps/web/package.json'));
 const ts = requireWeb('typescript');
 const React = requireWeb('react');
+const whatsAppModule = (() => {
+  const module = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(path.join(root, 'apps/web/src/lib/whatsapp.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(code, { module, exports: module.exports });
+  return module.exports;
+})();
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => {
@@ -96,6 +104,7 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name === 'react') return hooks;
         if (name === '@job-talentio/shared') return requireWeb(name);
         if (name === 'react/jsx-runtime') return requireWeb(name);
+        if (name === '@/lib/whatsapp') return whatsAppModule;
         if (name in dependencies) return dependencies[name];
         if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
         if (name === '@/lib/useLiveRefresh') return { useLiveRefresh() {} };
@@ -665,12 +674,13 @@ test('company benefits never render a balance or a stale previous company promot
   ui.unmount();
 });
 
-test('the actual candidate CV tab mounts the direct CV component with company context', async () => {
+test('the candidate CV workspace opens the authorized file with company context', async () => {
   function SharedCv() {} function SharedWhatsApp() {}
-  const remembered=[];
+  const remembered=[],downloads=[];
   const stub = () => null;
   const profile = {
     user: { id: 'user', fullName: 'Synthetic Candidate' },
+    cv:{hasFile:true,title:'Submitted CV',format:'pdf',downloadPath:'/profiles/candidates/candidate/database-cv?companyId=free-company',application:false},
     resumes: [],
     experiences: [],
     educations: [],
@@ -691,6 +701,7 @@ test('the actual candidate CV tab mounts the direct CV component with company co
       './HrBenefits': { DatabaseCvAccess: SharedCv },
       '@/lib/i18n': t,
       '@/lib/api': {
+        apiBlob:async route=>{downloads.push(route);return {};},
         getSession: () => ({ user: { role: 'RECRUITER' } }),
         api: async (route) =>
           route === '/companies/mine'
@@ -718,16 +729,37 @@ test('the actual candidate CV tab mounts the direct CV component with company co
         rememberCompany:id=>remembered.push(id),
       },
     },
+    {URL:{createObjectURL:()=> 'blob:fixture-cv',revokeObjectURL(){}},window:{addEventListener(){},removeEventListener(){}}},
   );
-  const tree = await ui.render({});
-  const components = nodes(tree, (node) => node.type === SharedCv);
-  assert.equal(components.length, 1, 'An unused import cannot substitute for a mounted CV action');
-  assert.equal(components[0].props.companyId, 'free-company');
-  assert.equal(components[0].props.profileId, 'candidate');
+  let tree = await ui.render({});
+  const open=nodes(tree,node=>node.type==='button'&&visibleText(node).includes('viewCv'))[0];
+  assert.ok(open,'The CV workspace offers its authorized CV action');
+  await open.props.onClick();tree=await ui.render();
+  assert.deepEqual(downloads,['/profiles/candidates/candidate/database-cv?companyId=free-company']);
+  assert.equal(nodes(tree,node=>node.type==='iframe')[0].props.src,'blob:fixture-cv');
   const whatsApp = nodes(tree, (node) => node.type === SharedWhatsApp);
   assert.equal(whatsApp.length, 1, 'The recruiter candidate profile exposes the shared WhatsApp action beside internal chat');
   assert.deepEqual({profileId:whatsApp[0].props.profileId,companyId:whatsApp[0].props.companyId,contactRevealed:whatsApp[0].props.contactRevealed},{profileId:'candidate',companyId:'free-company',contactRevealed:false});
   assert.deepEqual(remembered,['free-company'],'An authorized profile keeps the same company when returning to reports or jobs');
   assert.doesNotMatch(JSON.stringify(tree), /hr\.oneAccess|hr\.alreadyUnlocked|hr\.accessBalance/);
+  ui.unmount();
+});
+
+test('CV upload prevents duplicate submissions and discards a response after account changes', async () => {
+  const pending=deferred(),calls=[],saved=[],closed=[];
+  let actor='employee-a';
+  function Drop(){} function Dialog(){} function Icon(){}
+  const ui=host('apps/web/src/components/profile/CvUploadDialog.tsx','CvUploadDialog',{
+    '@/lib/api':{getSession:()=>({user:{id:actor}}),api:async(route,options)=>{calls.push({route,options});return pending.promise;}},
+    '@/lib/i18n':t,'./ProfileDialog':{ProfileDialog:Dialog},'./CvFileDrop':{CvFileDrop:Drop},'./ProfileIcon':{ProfileIcon:Icon},'./types':{cvFileError:()=>null},
+  },{FormData:class{append(){}}});
+  let tree=await ui.render({onClose:()=>closed.push(true),onUploaded:async id=>saved.push(id)});
+  nodes(tree,node=>node.type===Drop)[0].props.onPick({name:'source.pdf'});tree=await ui.render();
+  const submit=nodes(tree,node=>node.type==='form')[0].props.onSubmit;
+  const first=submit({preventDefault(){}});await submit({preventDefault(){}});
+  assert.equal(calls.length,1,'Only one file request may run for a double click');
+  assert.equal(calls[0].route,'/profiles/me/resumes/upload');
+  actor='employee-b';pending.resolve({id:'cv-owned-by-a'});await first;await ui.render();
+  assert.deepEqual(saved,[],'A previous account CV must not become the active account selection');assert.deepEqual(closed,[]);
   ui.unmount();
 });

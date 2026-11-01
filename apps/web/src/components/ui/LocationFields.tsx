@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { LabelText } from './Field';
+import { floatingPanelPosition, type FloatingPanelPosition } from './floatingPanelPosition';
 import s from './LocationFields.module.css';
 
 type Country = { id: string; name: string; iso2: string; currencyCode?: string | null };
@@ -32,7 +33,7 @@ export function LocationFields({ countryId, citySlug, onChange, initialCity, cou
   const [active, setActive] = useState(0);
   const control = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
+  const [position, setPosition] = useState<FloatingPanelPosition | null>(null);
   const global = countryId === '__WORLDWIDE__';
   const selected = cities.find(city => city.slug === citySlug) || (initialCity?.slug === citySlug ? initialCity : null);
   const options = cities.filter(city => normalize([city.name, city.province?.name, ...(city.aliases || []).map(a => a.alias)].join(' ')).includes(normalize(text)));
@@ -60,13 +61,19 @@ export function LocationFields({ countryId, citySlug, onChange, initialCity, cou
     function place() {
       const rect = control.current?.getBoundingClientRect();
       if (!rect) return;
-      const below = window.innerHeight - rect.bottom;
-      const flip = below < 240 && rect.top > below;
-      setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)), width: Math.min(rect.width, window.innerWidth - 16), maxHeight: Math.max(120, Math.min(320, (flip ? rect.top : below) - 16)), ...(flip ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }) });
+      setPosition(floatingPanelPosition(rect, 320));
     }
     place();
-    window.addEventListener('scroll', place, true); window.addEventListener('resize', place);
-    return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place); };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
+    };
   }, [open]);
   useEffect(() => {
     if (!open) return;
@@ -88,7 +95,7 @@ export function LocationFields({ countryId, citySlug, onChange, initialCity, cou
     </div>
     <div className={s.field}>
       <label htmlFor={`${id}-city`}><LabelText required={cityRequired} optional={false}>{label}</LabelText></label>
-      <input ref={control} id={`${id}-city`} role="combobox" autoComplete="off" aria-autocomplete="list" aria-expanded={open} aria-controls={open ? `${id}-options` : undefined} aria-activedescendant={open && options[active] ? `${id}-option-${active}` : undefined} aria-invalid={Boolean(cityError)} aria-describedby={cityError ? `${id}-city-error` : undefined} disabled={!countryId || global || loading} placeholder={loading ? t('loading') : !countryId ? t('geo.chooseCountryFirst') : global ? t('geo.cityNotRequired') : t('geo.searchCity')} value={open ? text : selected ? `${selected.name}${selected.province?.name ? ' - ' + selected.province.name : ''}` : text} onFocus={() => { setText(''); setActive(0); setOpen(true); }} onChange={event => { setText(event.target.value); setActive(0); setOpen(true); if (citySlug) onChange({ countryId, citySlug: '', label: country?.name || '' }); }} onKeyDown={event => {
+      <input ref={control} id={`${id}-city`} role="combobox" autoComplete="off" aria-autocomplete="list" aria-expanded={open} aria-controls={open ? `${id}-options` : undefined} aria-activedescendant={open && options[active] ? `${id}-option-${active}` : undefined} aria-invalid={Boolean(cityError)} aria-describedby={cityError ? `${id}-city-error` : undefined} disabled={!countryId || global || loading} placeholder={loading ? t('loading') : !countryId ? t('geo.chooseCountryFirst') : global ? t('geo.cityNotRequired') : t('geo.searchCity')} value={open ? text : selected ? `${selected.name}${selected.province?.name ? ' - ' + selected.province.name : ''}` : text} onFocus={() => { setText(''); setActive(0); setOpen(true); }} onClick={() => { if (!open) { setText(''); setActive(0); setOpen(true); } }} onChange={event => { setText(event.target.value); setActive(0); setOpen(true); if (citySlug) onChange({ countryId, citySlug: '', label: country?.name || '' }); }} onKeyDown={event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); setActive(index => Math.max(0, Math.min(options.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))); }
         else if (event.key === 'Enter' && open) { event.preventDefault(); if (options[active]) choose(options[active]); }
         else if (event.key === 'Escape' || event.key === 'Tab') { setOpen(false); setText(''); }

@@ -56,7 +56,7 @@ profileService.prisma = {
     findFirst: async () => duplicate ? { id: 'another-profile' } : null,
     update: async ({ data }: { data: { phone?: string } }) => {
       if (data.phone) phoneWrites.push(data.phone);
-      return { ...profile, phone: data.phone };
+      return { ...profile, phone: data.phone, resumes: [] };
     },
   },
 };

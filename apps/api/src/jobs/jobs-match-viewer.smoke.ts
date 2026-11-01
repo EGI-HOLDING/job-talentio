@@ -4,19 +4,22 @@ import { JobsController } from './jobs.controller';
 
 async function main() {
   for (const [fields, hasSignal] of [
-    [{ desiredPositions: ['Data Analyst', 'Full-stack Developer'] }, true],
-    [{ desiredPosition: 'Full-stack Developer' }, true],
-    [{ headline: 'Software Engineer' }, true],
-    [{ experiences: [{ title: 'Engineer' }] }, true],
-    [{ _count: { skills: 1 } }, true],
+    [{ resumes: [{currentVersion:{parseStatus:'READY'}}] }, true],
+    [{ resumes: [{currentVersion:{parseStatus:'PENDING'}}] }, false],
+    [{ resumes: [{currentVersion:{parseStatus:'FAILED'}}] }, false],
+    [{ desiredPositions: ['Data Analyst', 'Full-stack Developer'] }, false],
+    [{ desiredPosition: 'Full-stack Developer' }, false],
+    [{ headline: 'Software Engineer' }, false],
+    [{ experiences: [{ title: 'Engineer' }] }, false],
+    [{ _count: { skills: 1 } }, false],
     [{}, false],
   ] as const) {
     let received: any;
-    const profile = Object.assign({ id: 'profile', desiredPositions: [], desiredPosition: null, headline: null, experiences: [], _count: { skills: 0 } }, fields);
+    const profile = Object.assign({ id: 'profile',resumes:[], desiredPositions: [], desiredPosition: null, headline: null, experiences: [], _count: { skills: 0 } }, fields);
     const controller = new JobsController({ search: async (query: unknown) => { received = query; return query; } } as never, {
       employeeProfile: { findUnique: async (args: any) => {
-        assert.equal(args.select.desiredPositions, true);
-        assert.equal(args.select.experiences.select.title, true);
+        assert.equal(args.select.resumes.where.isPrimary, true);
+        assert.equal(args.select.resumes.select.currentVersion.select.parseStatus, true);
         return profile;
       } },
     } as never);
@@ -24,6 +27,6 @@ async function main() {
     assert.equal(received.profileId, hasSignal ? 'profile' : undefined);
     assert.equal(received.sort, hasSignal ? 'match' : 'relevance');
   }
-  console.log('PASS: job list matching uses roles/history or skills; genuinely empty profiles stay unscored');
+  console.log('PASS: job list matching uses the primary CV; pending/failed CVs and manual career fields cannot produce a match badge');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -71,6 +71,7 @@ export class UserErasureService {
           select: { id: true, fileKey: true },
         })
       : [];
+    const cvVersions=profile?await this.prisma.resumeVersion.findMany({where:{OR:[{resumeId:{in:resumes.map(r=>r.id)}},{applications:{some:{profileId:profile.id}}}]},select:{id:true,fileKey:true}}):[];
     const offerDocuments = profile
       ? await this.prisma.applicationOfferDocument.findMany({
           where: { packet: { application: { profileId: profile.id } } },
@@ -140,6 +141,7 @@ export class UserErasureService {
             ...(withdraw ? { status: 'WITHDRAWN' as const } : {}),
             coverLetter: null,
             resumeSnapshot: { anonymized: true },
+            resumeVersionId:null,
             matchScore: null,
             matchBreakdown: Prisma.DbNull,
             answers: { deleteMany: {} },
@@ -175,6 +177,13 @@ export class UserErasureService {
           headline: null,
           summary: null,
           phone: null,
+          // The anonymized account cannot authenticate. Reset its tombstone
+          // state so clearing the phone satisfies the onboarding constraint.
+          onboardingStatus:'IN_PROGRESS',
+          onboardingStep:1,
+          onboardingCompletedAt:null,
+          databaseCvEnabled:false,
+          databaseResumeId:null,
           desiredPosition: null,
           desiredPositions: [],
           preferredCountries: { set: [] },
@@ -194,6 +203,8 @@ export class UserErasureService {
       await tx.workExperience.deleteMany({ where: { profileId: profile.id } });
       await tx.education.deleteMany({ where: { profileId: profile.id } });
       await tx.certification.deleteMany({ where: { profileId: profile.id } });
+      await tx.resume.updateMany({where:{id:{in:resumes.map(r=>r.id)}},data:{currentVersionId:null}});
+      await tx.resumeVersion.deleteMany({where:{id:{in:cvVersions.map(v=>v.id)}}});
       for (const resume of resumes) {
         await tx.resume.update({
           where: { id: resume.id },
@@ -217,7 +228,7 @@ export class UserErasureService {
     if (avatarKey) {
       await this.storage.delete(avatarKey).catch(() => undefined);
     }
-    for (const resume of resumes) {
+    for (const resume of [...resumes,...cvVersions]) {
       const key = (resume.fileKey || '').trim();
       if (!key) continue;
       const stillOnResume = await this.prisma.resume.count({ where: { fileKey: key } });

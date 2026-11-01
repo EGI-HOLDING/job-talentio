@@ -51,7 +51,8 @@
 .soloLead .lead { max-width: 800px; }
 .footer { padding: 22px 0; border-top: 1px solid #e8ecf3; background: #fff; color: #7e8ba3; }
 .footerInner { width: min(1260px, calc(100% - 5rem)); display: flex; align-items: center; flex-wrap: wrap; gap: 30px; margin-inline: auto; }
-.footerBrand { color: #5635e8; font-family: var(--font-display); font-size: 1rem; font-weight: 800; letter-spacing: -.04em; }
+.footerBrand { display: inline-flex; align-items: center; color: #5635e8; font-family: var(--font-display); font-size: 1rem; font-weight: 800; letter-spacing: -.04em; }
+.footerBrand img { display: block; width: 136px; height: auto; }
 .footerLinks { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; font-size: .67rem; }
 .footerLinks a:hover { color: #5635e8; }
 .footer a:focus-visible { outline: 2px solid #9b83ed; outline-offset: 4px; }

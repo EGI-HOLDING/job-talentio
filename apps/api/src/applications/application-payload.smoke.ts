@@ -7,6 +7,7 @@ assert.equal((payload.resumeSnapshot as any).resume.hasFile, true);
 assert.equal((payload.resume as any).hasFile, true);
 assert.doesNotMatch(JSON.stringify(payload), /fileKey|fileUrl|private-key|private-url|parsedData|unreviewed|secret/);
 assert.equal(row.resume.fileKey, 'replacement-key', 'Sanitizing must not mutate persisted snapshots');
+assert.doesNotMatch(JSON.stringify(safeApplication({resumeSnapshot:{experiences:[{companyName:'Hidden history'}],skills:['Hidden skill'],cvEvidence:{private:'evidence'},resume:{title:'Original file',fileKey:'private'}}})),/Hidden|cvEvidence/,'Application metadata must not expose a reconstructed career profile');
 assert.deepEqual(safeApplication({ resumeSnapshot: null, resume: null }), { resumeSnapshot: null, resume: null });
 assert.equal(submittedResume({ resume: null }, row.resume).fileKey, null);
 assert.equal(submittedResume({ resume: { fileKey: null, title: 'No submitted file' } }, row.resume).fileKey, null);

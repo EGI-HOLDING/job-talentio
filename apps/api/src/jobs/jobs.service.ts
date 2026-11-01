@@ -1,4 +1,5 @@
 import { jobChatPeers } from '../chat/job-chat-peer';
+import { employeeApplicationChatAllowed } from '../chat/application-chat-access';
 import {
   Injectable,
   Optional,
@@ -772,15 +773,21 @@ export class JobsService {
   /** Single safe contact for employee chat — never return full members list publicly. */
   private async chatPeerUserIdForCompany(companyId: string): Promise<string | null> {
     const owner = await this.prisma.companyMember.findFirst({
-      where: { companyId, role: 'OWNER' },
+      where: { companyId, role: 'OWNER', user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null } },
       select: { userId: true },
     });
     if (owner) return owner.userId;
     const admin = await this.prisma.companyMember.findFirst({
-      where: { companyId, role: 'ADMIN' },
+      where: { companyId, role: 'ADMIN', user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null } },
       select: { userId: true },
     });
-    return admin?.userId ?? null;
+    if (admin) return admin.userId;
+    const recruiter = await this.prisma.companyMember.findFirst({
+      where: { companyId, role: 'RECRUITER', user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null } },
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return recruiter?.userId ?? null;
   }
 
   async get(id: string, viewer?: AuthUser, locale: Locale = DEFAULT_LOCALE) {
@@ -820,24 +827,26 @@ export class JobsService {
 
     const stripped = this.stripPrivateCompanyFields(resolved);
     // Confidential posting: the employer stays hidden until this candidate is at interview stage.
-    const reveal = job.isAnonymous ? await this.viewerReachedInterview(viewer, id) : true;
+    const employeeApplication = viewer?.role === 'EMPLOYEE'
+      ? await this.prisma.application.findFirst({
+          where: { jobPostId: id, profile: { userId: viewer.id } },
+          select: { status: true, events: anonymousRevealHistory },
+        })
+      : null;
+    const reveal = job.isAnonymous
+      ? revealsAnonymousEmployer(employeeApplication?.status, employeeApplication?.events)
+      : true;
     const masked = maskAnonymousCompany(stripped, locale, { reveal });
-    const existingPeer = reveal && viewer?.role === 'EMPLOYEE' ? (await jobChatPeers(this.prisma,viewer.id,[{id,companyId:job.companyId}])).get(id) : null;
-    const chatPeerUserId = reveal ? existingPeer || await this.chatPeerUserIdForCompany(job.companyId) : null;
+    let chatPeerUserId: string | null = null;
+    if (viewer?.role === 'EMPLOYEE' && employeeApplicationChatAllowed(employeeApplication?.status) && reveal) {
+      const existingPeer = (await jobChatPeers(this.prisma, viewer.id, [{ id, companyId: job.companyId }])).get(id);
+      chatPeerUserId = existingPeer || await this.chatPeerUserIdForCompany(job.companyId);
+    }
     return {
       ...masked,
       chatPeerUserId,
       ...(viewerMatch || {}),
     };
-  }
-
-  private async viewerReachedInterview(viewer: AuthUser | undefined, jobId: string): Promise<boolean> {
-    if (!viewer) return false;
-    const application = await this.prisma.application.findFirst({
-      where: { jobPostId: jobId, profile: { userId: viewer.id } },
-      select: { status: true, events: anonymousRevealHistory },
-    });
-    return revealsAnonymousEmployer(application?.status, application?.events);
   }
 
   /** Minimal public fields for JobPosting JSON-LD. No JobView side effect. */

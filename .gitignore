@@ -17,6 +17,7 @@ uploads
 *.tsbuildinfo
 /reports/
 /output/
+/research/
 /.catalog-sync-private/
 
 # Local-only notes / source copies (not shipped)

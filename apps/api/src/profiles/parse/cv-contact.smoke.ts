@@ -31,5 +31,5 @@ const completeness = scoreProfileCompleteness({
   noExperience: true,
 });
 assert.equal(completeness.checks.find((c) => c.id === "city")?.ok, true);
-assert.equal(completeness.checks.find((c) => c.id === "experience")?.ok, true);
+assert.equal(completeness.checks.some((c) => c.id === "experience"), false, "CV upload replaces manual experience requirements");
 console.log("CV contacts and country/no-experience completeness passed");

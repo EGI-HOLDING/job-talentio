@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { floatingPanelPosition, type FloatingPanelPosition } from './floatingPanelPosition';
 import s from './JobTitleInput.module.css';
 
 type Suggestion = { id: string; name: string; label: string; slug: string; usageCount?: number };
@@ -119,7 +120,8 @@ export function JobTitleInput({
   const { t, locale } = useI18n();
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [position, setPosition] = useState<{left:number;top?:number;bottom?:number;width:number;maxHeight:number} | null>(null);
+  const panelRef = useRef<HTMLUListElement>(null);
+  const [position, setPosition] = useState<FloatingPanelPosition | null>(null);
   const [inner, setInner] = useState(defaultValue);
   const value = controlledValue !== undefined ? controlledValue : inner;
   const setValue = (next: string) => {
@@ -134,20 +136,30 @@ export function JobTitleInput({
   const [loadFailed, setLoadFailed] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const showStatus = (loading && suggestions.length === 0 || loadFailed || (!loading && !loadFailed && value.trim() && suggestions.length === 0)) && (!focusSuggestions || isOpen);
+  const showPanel = (suggestions.length > 0 && (!focusSuggestions || isOpen)) || showStatus;
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const loadingMoreRef = useRef(false);
   useLayoutEffect(() => {
-    if (!suggestions.length || (focusSuggestions && !isOpen)) { setPosition(null); return; }
+    if (!showPanel) { setPosition(null); return; }
     const place = () => {
       const rect = inputRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const below = window.innerHeight - rect.bottom, flip = below < 220 && rect.top > below;
-      setPosition({left:Math.max(8,rect.left),width:Math.min(rect.width,window.innerWidth-16),maxHeight:Math.max(120,Math.min(300,(flip?rect.top:below)-16)),...(flip?{bottom:window.innerHeight-rect.top+6}:{top:rect.bottom+6})});
+      setPosition(floatingPanelPosition(rect, 300));
     };
-    place(); window.addEventListener('scroll',place,true); window.addEventListener('resize',place);
-    return () => {window.removeEventListener('scroll',place,true);window.removeEventListener('resize',place);};
-  }, [suggestions.length, isOpen, focusSuggestions]);
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
+    };
+  }, [showPanel]);
   useEffect(() => { if (highlight >= 0) document.getElementById(`${listId}-${highlight}`)?.scrollIntoView({block:'nearest'}); }, [highlight,listId]);
 
   useEffect(() => {
@@ -255,14 +267,20 @@ export function JobTitleInput({
     if (inferredLevel) onInferredLevel?.(inferredLevel);
   }
 
-  function onBlur() {
+  function onBlur(event: React.FocusEvent<HTMLInputElement>) {
     if (focusSuggestions) {
-      requestIdRef.current += 1;
-      loadingMoreRef.current = false;
-      setIsOpen(false);
-      setSuggestions([]);
-      setLoading(false);
-      setLoadingMore(false);
+      const nextTarget = event.relatedTarget as Node | null;
+      if (!nextTarget || !panelRef.current?.contains(nextTarget)) {
+        window.setTimeout(() => {
+          if (panelRef.current?.contains(document.activeElement)) return;
+          requestIdRef.current += 1;
+          loadingMoreRef.current = false;
+          setIsOpen(false);
+          setSuggestions([]);
+          setLoading(false);
+          setLoadingMore(false);
+        }, 0);
+      }
     }
     const { roleTitle, inferredLevel } = normalizeSeniority ? softNormalizeJobTitle(value) : { roleTitle: value, inferredLevel: null };
     if (roleTitle !== value.trim()) setValue(roleTitle);
@@ -283,6 +301,7 @@ export function JobTitleInput({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         onFocus={() => { if (focusSuggestions) setIsOpen(true); }}
+        onClick={() => { if (focusSuggestions) setIsOpen(true); }}
         required={required}
         minLength={minLength}
         maxLength={focusSuggestions ? 160 : undefined}
@@ -315,23 +334,40 @@ export function JobTitleInput({
           }
         }}
       />
-      {loading && suggestions.length === 0 && (!focusSuggestions || isOpen) && (
-        <div className="lookup-suggest-skel" role="status" aria-live="polite">
-          {t('jobTitleLoading')}
-        </div>
-      )}
-      {loadFailed && (!focusSuggestions || isOpen) && (
-        <div className="lookup-suggest-skel" role="alert">{t('jobTitleLoadError')}</div>
-      )}
-      {!loading && !loadFailed && value.trim() && suggestions.length === 0 && (!focusSuggestions || isOpen) && (
-        <div className="lookup-suggest-skel" role="status">{t('jobTitleNoMatches')}</div>
+      {showStatus && position && createPortal(
+        <div
+          className="lookup-suggest-skel"
+          role={loadFailed ? 'alert' : 'status'}
+          aria-live="polite"
+          style={{
+            ...position,
+            position: 'fixed',
+            zIndex: 10050,
+            boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
+            minHeight: 50,
+            background: '#fff',
+            color: '#6a7891',
+            boxShadow: '0 12px 32px #17213a26',
+            borderRadius: 8,
+          }}
+        >
+          {loading && suggestions.length === 0
+            ? t('jobTitleLoading')
+            : loadFailed
+              ? t('jobTitleLoadError')
+              : t('jobTitleNoMatches')}
+        </div>,
+        inputRef.current?.closest('dialog') || document.body,
       )}
       {suggestions.length > 0 && position && createPortal(
         <ul
+          ref={panelRef}
           id={listId}
           role="listbox"
           className={s.panel}
-          style={{...position,position:'fixed',zIndex:10050,margin:0,overflowY:'auto'}}
+          style={{...position,position:'fixed',zIndex:10050,margin:0,overflowY:'auto',boxSizing:'border-box'}}
           onScroll={(event) => {
             const list = event.currentTarget;
             if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) void loadNextPage();

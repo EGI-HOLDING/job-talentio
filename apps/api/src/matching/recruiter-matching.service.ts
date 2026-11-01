@@ -3,8 +3,10 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OccupationIndex } from './employee-matching';
 import { evaluateRecruiter, type RecruiterJob, type RecruiterProfile } from './recruiter-matching';
+import { cvSourceInclude, discoveryVersion, withCvFacts } from '../profiles/cv-evidence';
 
 export const recruiterProfileInclude = {
+  ...cvSourceInclude,
   skills:{include:{skill:{include:{aliases:{select:{aliasKey:true}}}}}}, experiences:true,
   languages:{include:{language:true}},preferredCountries:{select:{id:true}},
   city:{include:{province:{select:{countryId:true}}}},
@@ -29,10 +31,14 @@ export class RecruiterMatchingService {
   }
   async forProfile(profileId:string,jobId:string) {
     const [profile,context] = await Promise.all([this.db.employeeProfile.findUniqueOrThrow({where:{id:profileId},include:recruiterProfileInclude}),this.context(jobId)]);
-    return evaluateRecruiter(profile,context.job,context.index,context.now);
+    return evaluateRecruiter(withCvFacts(profile,discoveryVersion(profile)),context.job,context.index,context.now);
   }
   async forProfiles(profiles:RecruiterProfile[],jobId:string) {
     const context = await this.context(jobId);
+    return profiles.map(profile=>evaluateRecruiter('cvSource' in profile ? profile : withCvFacts(profile,discoveryVersion(profile as typeof profile & Parameters<typeof discoveryVersion>[0])),context.job,context.index,context.now));
+  }
+  async forEvidence(profiles:RecruiterProfile[],jobId:string){
+    const context=await this.context(jobId);
     return profiles.map(profile=>evaluateRecruiter(profile,context.job,context.index,context.now));
   }
 }

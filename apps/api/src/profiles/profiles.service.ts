@@ -1,4 +1,8 @@
 import { liveJobWhere } from '../benefits/benefit-policy';
+import { createHash } from 'node:crypto';
+import { validateOfferFiles } from '../applications/application-offer-files';
+import { registerCvVersion, withCvFacts,cvVersionSelect } from './cv-evidence';
+import { CvCandidatesService } from './cv-candidates.service';
 import {
   Injectable,
   NotFoundException,
@@ -87,7 +91,7 @@ export class ProfilesService {
     resumes: {
       where: { deletedAt: null },
       orderBy: { updatedAt: 'desc' as const },
-      include: resumeTargetTitleInclude,
+      include: {...resumeTargetTitleInclude,currentVersion:{select:cvVersionSelect}},
     },
     city: { include: { province: { include: { country: true } } } },
     residenceCountry: true,
@@ -115,15 +119,15 @@ export class ProfilesService {
 
   /** Never expose storage object keys to clients. */
   private sanitizeResume<T extends { fileKey?: string | null }>(resume: T) {
-    const { fileKey, ...rest } = resume as T & { fileKey?: string | null };
-    return { ...rest, hasFile: Boolean(fileKey) };
+    const {fileKey,fileUrl:_url,currentVersion:_version,versions:_versions,parsedData:_parsed,content:_content,...rest}=resume as T & {fileKey?:string|null;fileUrl?:unknown;currentVersion?:unknown;versions?:unknown;parsedData?:unknown;content?:unknown};
+    return { ...rest, ...(_version?{parseStatus:(_version as {parseStatus:string}).parseStatus}:{}),format:typeof fileKey==='string'?fileKey.split('.').pop()?.toLowerCase():null,hasFile: Boolean(fileKey) };
   }
 
   private sanitizeProfileResumes<T extends { resumes?: Array<{ fileKey?: string | null }> }>(
     profile: T,
   ): T {
-    // Unreviewed CV rows may contain excluded/private details. They are only
-    // available through the employee's authenticated onboarding endpoint.
+    // Parser output and private file references stay behind authenticated
+    // file actions; profile settings contain only safe library metadata.
     const { onboardingDraft: _draft, ...safe } = profile as T & {onboardingDraft?:unknown};
     return {
       ...safe,
@@ -273,10 +277,11 @@ export class ProfilesService {
 
   async myProfile(user: AuthUser) {
     const profile = await this.getProfileForUser(user.id);
-    return { ...this.sanitizeProfileResumes(profile), desiredSalaryMin: profile.desiredSalaryMin === null ? null : Number(profile.desiredSalaryMin) };
+    return { ...this.sanitizeProfileResumes(withCvFacts(profile,profile.resumes.find(r=>r.isPrimary&&r.fileKey)?.currentVersion)), desiredSalaryMin: profile.desiredSalaryMin === null ? null : Number(profile.desiredSalaryMin) };
   }
 
   async updateProfile(user: AuthUser, data: Record<string, unknown>) {
+    if(data.headline!==undefined||data.summary!==undefined||data.noExperience!==undefined)throw new BadRequestException('Professional information follows the uploaded CV');
     const profile = await this.getProfileForUser(user.id);
     let cityId: string | null | undefined = undefined;
     let residenceCountryId = data.residenceCountryId as string | null | undefined;
@@ -316,7 +321,7 @@ export class ProfilesService {
     const summary = data.summary as string | undefined;
 
     try {
-      return await this.prisma.employeeProfile.update({
+      const updated = await this.prisma.employeeProfile.update({
         where: { userId: user.id },
         data: {
           headline,
@@ -341,6 +346,7 @@ export class ProfilesService {
         },
         include: this.profileInclude,
       });
+      return this.sanitizeProfileResumes(withCvFacts(updated,updated.resumes.find(resume=>resume.isPrimary&&resume.fileKey)?.currentVersion));
     } catch (e: unknown) {
       const target = String((e as { meta?: { target?: unknown } })?.meta?.target || '').toLowerCase();
       if ((e as { code?: string })?.code === 'P2002' && (target.includes('phone') || data.phone !== undefined)) {
@@ -624,7 +630,9 @@ export class ProfilesService {
       const primary = await tx.resume.findFirst({ where: { profileId: data.profileId, deletedAt: null, isPrimary: true }, select: { id: true } });
       const makePrimary = Boolean(data.isPrimary) || !primary;
       if (makePrimary) await tx.resume.updateMany({ where: { profileId: data.profileId }, data: { isPrimary: false } });
-      return tx.resume.create({ data: { ...data, isPrimary: makePrimary }, include: resumeTargetTitleInclude });
+      const created=await tx.resume.create({ data: { ...data, isPrimary: makePrimary }, include: resumeTargetTitleInclude });
+      if(created.fileKey)await registerCvVersion(tx,created.id,created.fileKey);
+      return created;
     });
   }
 
@@ -633,17 +641,25 @@ export class ProfilesService {
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${profileId} FOR UPDATE`);
       const owned = await tx.resume.findFirst({ where: { id: resumeId, profileId, deletedAt: null } });
       if (!owned) throw new NotFoundException('Resume not found');
+      if(data.isPrimary===true&&!owned.fileKey)throw new BadRequestException('Upload a CV file before making it primary');
       if (expectedUpdatedAt && owned.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new ConflictException('CV changed while exporting; refresh and export again');
       if (data.isPrimary === true) await tx.resume.updateMany({ where: { profileId }, data: { isPrimary: false } });
       if (data.isPrimary === false && owned.isPrimary) {
-        const next = await tx.resume.findFirst({ where: { profileId, deletedAt: null, NOT: { id: resumeId } }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
+        const next = await tx.resume.findFirst({ where: { profileId, deletedAt: null,fileKey:{not:null}, NOT: { id: resumeId } }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
         if (next) await tx.resume.update({ where: { id: next.id }, data: { isPrimary: true } });
         else data = { ...data, isPrimary: true };
       }
       const updated = await tx.resume.update({ where: { id: resumeId }, data, include: resumeTargetTitleInclude });
+      if(typeof data.fileKey==='string')await registerCvVersion(tx,resumeId,data.fileKey);
+      else if(data.isPrimary===true&&owned.fileKey)await registerCvVersion(tx,resumeId,owned.fileKey);
       return { updated, previousKey: owned.fileKey };
     });
-    if (typeof data.fileKey === 'string' && result.previousKey && result.previousKey !== data.fileKey) await this.deleteStorageKeyIfOrphan(result.previousKey);
+    if (typeof data.fileKey === 'string' && result.previousKey && result.previousKey !== data.fileKey) {
+      try {
+        await this.prisma.resumeVersion.deleteMany({where:{resumeId,fileKey:result.previousKey,currentFor:{is:null},applications:{none:{}}}});
+        await this.deleteStorageKeyIfOrphan(result.previousKey);
+      } catch(error){this.logger.warn('CV updated; previous file cleanup failed: '+(error as Error).message);}
+    }
     return result.updated;
   }
 
@@ -718,6 +734,7 @@ export class ProfilesService {
    * still point at it (apply durability must keep the applied PDF).
    */
   private async deleteStorageKeyIfOrphan(fileKey: string | null | undefined): Promise<boolean> {
+    if(fileKey && await this.prisma.resumeVersion.count({where:{fileKey}}))return false;
     const key = (fileKey || '').trim();
     if (!key) return false;
 
@@ -746,11 +763,14 @@ export class ProfilesService {
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${owner.profileId} FOR UPDATE`);
       const resume = await tx.resume.findUnique({ where: { id: resumeId }, include: { _count: { select: { applications: true } } } });
       if (!resume?.deletedAt || resume._count.applications > 0) return null;
+      await tx.resume.update({where:{id:resumeId},data:{currentVersionId:null}});
+      const versions=await tx.resumeVersion.findMany({where:{resumeId,applications:{none:{}}},select:{id:true,fileKey:true}});
+      await tx.resumeVersion.deleteMany({where:{id:{in:versions.map(v=>v.id)},applications:{none:{}}}});
       await tx.resume.delete({ where: { id: resumeId } });
-      return { fileKey: resume.fileKey };
+      return { keys:[resume.fileKey,...versions.map(v=>v.fileKey)] };
     });
     if (!removed) return { purged: false };
-    await this.deleteStorageKeyIfOrphan(removed.fileKey);
+    for(const key of removed.keys)await this.deleteStorageKeyIfOrphan(key);
     return { purged: true };
   }
 
@@ -778,15 +798,16 @@ export class ProfilesService {
 
   private async ensurePrimaryResume(profileId: string, db: Prisma.TransactionClient = this.prisma) {
     const primary = await db.resume.findFirst({
-      where: { profileId, deletedAt: null, isPrimary: true },
+      where: { profileId, deletedAt: null, isPrimary: true,fileKey:{not:null} },
       select: { id: true },
     });
     if (primary) return;
     const next = await db.resume.findFirst({
-      where: { profileId, deletedAt: null },
+      where: { profileId, deletedAt: null,fileKey:{not:null} },
       orderBy: { updatedAt: 'desc' },
       select: { id: true },
     });
+    await db.resume.updateMany({where:{profileId},data:{isPrimary:false}});
     if (next) await db.resume.update({ where: { id: next.id }, data: { isPrimary: true } });
   }
 
@@ -796,13 +817,18 @@ export class ProfilesService {
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${profile.id} FOR UPDATE`);
       const resume = await tx.resume.findFirst({ where: { id: resumeId, profileId: profile.id, deletedAt: null } });
       if (!resume) throw new NotFoundException('Resume not found');
-      const used = await tx.application.count({ where: { resumeId } });
+      const used = await tx.application.count({ where: { OR:[{resumeId},{resumeVersion:{resumeId}}] } });
+      const versions=used?[]:await tx.resumeVersion.findMany({where:{resumeId,applications:{none:{}}},select:{id:true,fileKey:true}});
       if (used) await tx.resume.update({ where: { id: resumeId }, data: { deletedAt: new Date(), isPrimary: false, parseGeneration: { increment: 1 }, parseStatus: 'NONE', parseStartedAt: null } });
-      else await tx.resume.delete({ where: { id: resumeId } });
+      else {
+        await tx.resume.update({where:{id:resumeId},data:{currentVersionId:null}});
+        await tx.resumeVersion.deleteMany({where:{id:{in:versions.map(v=>v.id)},applications:{none:{}}}});
+        await tx.resume.delete({ where: { id: resumeId } });
+      }
       await this.ensurePrimaryResume(profile.id, tx);
-      return { key: used ? null : resume.fileKey, softDeleted: Boolean(used), hardDeleted: !used };
+      return { keys: used ? [] : [resume.fileKey,...versions.map(v=>v.fileKey)], softDeleted: Boolean(used), hardDeleted: !used };
     });
-    if (removed.key) await this.deleteStorageKeyIfOrphan(removed.key);
+    for(const key of removed.keys)await this.deleteStorageKeyIfOrphan(key);
     return { ok: true, softDeleted: removed.softDeleted, hardDeleted: removed.hardDeleted,
       ...(removed.softDeleted ? { message: 'Removed from your library. The file stays available for applications already submitted.' } : {}) };
   }
@@ -1169,7 +1195,7 @@ export class ProfilesService {
           orderBy: { createdAt: 'desc' },
         });
         allowed = Boolean(applied);
-        const submitted = submittedResume(applied?.resumeSnapshot, { fileKey, title });
+        const submitted = submittedResume(applied?.resumeSnapshot);
         fileKey = submitted.fileKey;
         title = submitted.title ?? 'Resume';
       }
@@ -1182,10 +1208,10 @@ export class ProfilesService {
     return { url, expiresIn: 900, title, softDeleted: Boolean(resume.deletedAt) };
   }
 
-  async attachFileToResume(user: AuthUser, resumeId: string, file: Express.Multer.File) {
+  async attachFileToResume(user: AuthUser, resumeId: string, file: Express.Multer.File,title?:string) {
     if (!file) throw new BadRequestException('File required');
+    validateOfferFiles([file]);
     const { profile, resume } = await this.ownedResume(user.id, resumeId);
-    const previousKey = resume.fileKey;
     const uploaded = await this.storage.upload(
       file.buffer,
       file.originalname,
@@ -1194,6 +1220,7 @@ export class ProfilesService {
     );
 
     const updated = await this.updateLibraryResume(profile.id, resume.id, {
+        ...(title?{title}:{}),
         fileKey: uploaded.key,
         fileUrl: null,
         parsedData: Prisma.DbNull,
@@ -1205,13 +1232,11 @@ export class ProfilesService {
         parsedAt: null,
     }).catch(async error => { await this.deleteStorageKeyIfOrphan(uploaded.key); throw error; });
 
-    if (previousKey && previousKey !== uploaded.key) {
-      await this.deleteStorageKeyIfOrphan(previousKey);
-    }
-
+    await this.prisma.resumeVersion.updateMany({where:{resumeId:resume.id,fileKey:uploaded.key},data:{checksum:createHash('sha256').update(file.buffer).digest('hex')}});
+    await this.cvParse.enqueue(resume.id).catch(error=>this.logger.warn('CV saved; recovery worker will retry processing: '+error.message));
     return {
       ...this.sanitizeResume(updated),
-      parseStatus: 'NONE' as const,
+      parseStatus: 'PENDING' as const,
       profileId: profile.id,
       needsReview: false,
     };
@@ -1223,6 +1248,7 @@ export class ProfilesService {
     meta?: { title?: string; jobTitle?: string; jobTitleSlug?: string; parse?: boolean },
   ) {
     if (!file) throw new BadRequestException('File required');
+    validateOfferFiles([file]);
     if (file.size > 5 * 1024 * 1024) {
       throw new BadRequestException('File too large (max 5MB)');
     }
@@ -1239,10 +1265,7 @@ export class ProfilesService {
 
     const profile = await this.getProfileForUser(user.id);
     await this.assertResumeQuota(profile.id);
-    const targetJobTitleId = await this.resolveTargetJobTitleId({
-      jobTitle: meta?.jobTitle,
-      jobTitleSlug: meta?.jobTitleSlug,
-    });
+    const targetJobTitleId = null;
     let resolvedTitle =
       (meta?.title || '').trim() ||
       file.originalname.replace(/\.[^.]+$/, '') ||
@@ -1262,14 +1285,15 @@ export class ProfilesService {
       'cvs',
     );
 
-    const shouldParse = Boolean(meta?.parse);
+    const shouldParse = true;
     const resume = await this.insertLibraryResume({
       profileId: profile.id, title: resolvedTitle, fileKey: uploaded.key, fileUrl: null,
       isPrimary: true, parseStatus: shouldParse ? 'PENDING' : 'NONE', targetJobTitleId,
     }).catch(async error => { await this.deleteStorageKeyIfOrphan(uploaded.key); throw error; });
 
+    await this.prisma.resumeVersion.updateMany({where:{resumeId:resume.id,fileKey:uploaded.key},data:{checksum:createHash('sha256').update(file.buffer).digest('hex')}});
     if (shouldParse) {
-      await this.cvParse.enqueue(resume.id);
+      await this.cvParse.enqueue(resume.id).catch(error=>this.logger.warn('CV saved; recovery worker will retry processing: '+error.message));
     }
 
     return {
@@ -1296,8 +1320,7 @@ export class ProfilesService {
       parseError: resume.parseError,
       parseGeneration: resume.parseGeneration,
       parsedAt: resume.parsedAt,
-      parsedData: resume.parsedData,
-      needsReview: resume.parseStatus === 'READY' && Boolean(resume.parsedData),
+      needsReview: false,
     };
   }
 
@@ -1511,394 +1534,7 @@ export class ProfilesService {
       locale?: Locale;
     },
   ) {
-    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException();
-    }
-
-    if(this.candidateAccess) {
-      const job=query.matchJobId?await this.prisma.jobPost.findUnique({where:{id:query.matchJobId},select:{companyId:true}}):null;
-      const context=await this.candidateAccess!.context(user,query.companyId||job?.companyId);
-      if(job&&job.companyId!==context)throw new ForbiddenException('Job and company context differ');
-    }
-    if (query.matchJobId) {
-      const matchJob = await this.prisma.jobPost.findUnique({
-        where: { id: query.matchJobId },
-        select: { id: true, companyId: true, status: true, publishedAt: true },
-      });
-      if (!matchJob) throw new NotFoundException('Match job not found');
-      if (matchJob.status === 'DRAFT' || !matchJob.publishedAt) throw new BadRequestException('Publish this job before ranking candidates');
-      if (user.role !== 'SUPER_ADMIN') {
-        await this.companies.assertMember(user, matchJob.companyId);
-      }
-    }
-
-    const activeCompanyIds = await this.activeCompanyIds(user);
-    const limited = user.role !== 'SUPER_ADMIN' && activeCompanyIds.length === 0;
-
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 12;
-    const locale = query.locale ?? DEFAULT_LOCALE;
-    const and: Prisma.EmployeeProfileWhereInput[] = [
-      { visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] } },
-      { user: { isBanned: false, anonymizedAt: null } },
-    ];
-    if (query.excludeApplied && query.matchJobId) and.push({ applications: { none: { jobPostId: query.matchJobId } } });
-
-    const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
-    if (citySlugs.length) and.push({ city: { slug: { in: citySlugs } } });
-    const countrySlugs = (query.country || '').split(',').map(value => value.trim()).filter(Boolean);
-    if (countrySlugs.length) and.push({ OR: [
-      { residenceCountry: { slug: { in: countrySlugs } } },
-      { residenceCountryId: null, city: { province: { country: { slug: { in: countrySlugs } } } } },
-    ] });
-
-    const skillSlugs = (query.skills || '').split(',').map((s) => s.trim()).filter(Boolean);
-    if (skillSlugs.length) {
-      if (query.skillMode === 'AND') {
-        for (const slug of skillSlugs) {
-          and.push({ skills: { some: { skill: { slug } } } });
-        }
-      } else {
-        and.push({ skills: { some: { skill: { slug: { in: skillSlugs } } } } });
-      }
-    }
-
-    if (query.degree) {
-      and.push({ educations: { some: { degree: query.degree as never } } });
-    }
-
-    const languageTokens = parseLanguagesCsv(query.languages);
-    if (languageTokens.length) {
-      and.push({
-        OR: languageTokens.map((token) => ({
-          languages: {
-            some: {
-              language: { code: token.code },
-              level: { in: levelsAtOrAbove(token.minLevel) as LanguageLevel[] },
-            },
-          },
-        })),
-      });
-    }
-
-    if (query.hasCertification) {
-      and.push({ certifications: { some: {} } });
-    }
-
-    if (query.q) {
-      const term = query.q.trim();
-      const pattern = '%' + term.replace(/[\\%_]/g, '\\$&') + '%';
-      const secondaryRoles = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE EXISTS (SELECT 1 FROM unnest("desiredPositions") AS role(label) WHERE role.label ILIKE ${pattern})`);
-      and.push({
-        OR: [
-          { headline: { contains: term, mode: 'insensitive' } },
-          { summary: { contains: term, mode: 'insensitive' } },
-          { desiredPosition: { contains: term, mode: 'insensitive' } },
-          { id: { in: secondaryRoles.map(profile => profile.id) } },
-          { user: { fullName: { contains: term, mode: 'insensitive' } } },
-          { skills: { some: { skill: { name: { contains: term, mode: 'insensitive' } } } } },
-          {
-            experiences: {
-              some: {
-                OR: [
-                  { title: { contains: term, mode: 'insensitive' } },
-                  { companyName: { contains: term, mode: 'insensitive' } },
-                ],
-              },
-            },
-          },
-        ],
-      });
-    }
-
-    const titleSlugs = (query.jobTitle || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const titleKeySet = new Set<string>();
-    if (titleSlugs.length) {
-      const catalog = await this.prisma.jobTitle.findMany({
-        where: { slug: { in: titleSlugs }, ...ACTIVE_CATALOG },
-        include: { aliases: true },
-      });
-      for (const t of catalog) {
-        if (t.normalizedKey) titleKeySet.add(t.normalizedKey);
-        const keyFromName = normalizeJobTitleKey(t.name);
-        if (keyFromName) titleKeySet.add(keyFromName);
-        for (const label of [t.nameRu, t.nameUz, t.nameId]) if (label) titleKeySet.add(normalizeJobTitleKey(label));
-        for (const alias of t.aliases) {
-          const key = normalizeJobTitleKey(alias.alias);
-          if (key) titleKeySet.add(key);
-        }
-      }
-      const terms = [
-        ...new Set(
-          catalog.flatMap((t) => [t.name, t.nameId, t.nameUz, t.nameRu, ...t.aliases.map((a) => a.alias)].filter((label): label is string => Boolean(label))),
-        ),
-      ];
-      if (terms.length) {
-        and.push({
-          OR: terms.flatMap((term) => [
-            { desiredPositions: { has: term } },
-            { desiredPosition: { contains: term, mode: 'insensitive' as const } },
-            { headline: { contains: term, mode: 'insensitive' as const } },
-            { experiences: { some: { title: { contains: term, mode: 'insensitive' as const } } } },
-          ]),
-        });
-      } else {
-        // Unknown slugs → empty result
-        and.push({ id: '__no_such_job_title__' });
-      }
-    }
-
-    const where: Prisma.EmployeeProfileWhereInput = { AND: and };
-    const sort = query.sort ?? 'relevance';
-    const needsExperienceFilter =
-      query.experienceYearsMin !== undefined || query.experienceYearsMax !== undefined;
-    const needsMatchRank = Boolean(query.matchJobId) && sort === 'match';
-    const needsTitleKeyFilter = titleKeySet.size > 0;
-    /** Scan in batches; an older high-match employee must not disappear at an arbitrary cap. */
-    const SCAN_BATCH = 100;
-    const needsScan = needsExperienceFilter || needsMatchRank || needsTitleKeyFilter;
-
-    const candidateInclude = {
-      // Contacts never appear in search payloads; reveals go through the
-      // audited click-to-reveal endpoint.
-      user: {
-        select: {
-          id: true,
-          fullName: true,
-          avatarUrl: true,
-        },
-      },
-      skills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
-      city: { include: { province: { include: { country: true } } } },
-      residenceCountry: true,
-      experiences: true,
-      educations: true,
-      languages: { include: { language: true } },
-      certifications: true,
-      translations: { select: { locale: true, headline: true, isMachine: true } },
-      _count: { select: { certifications: true } },
-      preferredCountries: true,
-      // Project only availability into the list; never expose storage keys.
-      databaseResume: { select: { profileId: true, fileKey: true, deletedAt: true } },
-    };
-
-    const matchedTotal = await this.prisma.employeeProfile.count({ where });
-    let currentPage = Math.max(1, page);
-    let truncated = false;
-    let total = matchedTotal;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let pageItems: any[] = [];
-    let facetSource: Array<{
-      city?: {
-        slug: string;
-        name: string;
-        nameUz?: string | null;
-        nameRu?: string | null;
-        nameId?: string | null;
-        archivedAt?: Date | null;
-      } | null;
-      skills: Array<{
-        skill: {
-          slug: string;
-          name: string;
-          nameUz?: string | null;
-          nameRu?: string | null;
-          nameId?: string | null;
-          archivedAt?: Date | null;
-        };
-      }>;
-      desiredPosition?: string | null;
-      desiredPositions?: string[];
-      headline?: string | null;
-      experiences?: Array<{ title?: string | null }>;
-    }> = [];
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mapProfile = (p: any) => {
-      const years = this.matching.totalExperienceYears(p.experiences);
-      // Translate only after matching. A translated headline must not change
-      // the score or the role-family filter for the same employee.
-      const { phone: _phone, onboardingDraft: _draft, databaseResume, ...publicProfile } = p;
-      return {
-        ...publicProfile,
-        canReadCv: !limited && Boolean(p.databaseCvEnabled && databaseResume?.fileKey &&
-          !databaseResume.deletedAt && databaseResume.profileId === p.id),
-        experienceYears: years,
-        user: {
-          id: p.user.id,
-          fullName: p.user.fullName,
-          avatarUrl: p.user.avatarUrl,
-        },
-        contactsBlurred: limited,
-        matchScore: null as number | null,
-        matchBreakdown: null as unknown,
-      };
-    };
-
-    if (!needsScan) {
-      // Pure DB pagination for relevance/newest (and match without job id).
-      const totalPages = Math.max(1, Math.ceil(matchedTotal / limit) || 1);
-      currentPage = Math.min(currentPage, matchedTotal === 0 ? 1 : totalPages);
-      const items = await this.prisma.employeeProfile.findMany({
-        where,
-        include: candidateInclude,
-        skip: (currentPage - 1) * limit,
-        take: limit,
-        orderBy: { updatedAt: 'desc' },
-      });
-      pageItems = items.map(mapProfile);
-
-      if (query.matchJobId) {
-        const breakdowns = await this.matching.scoreProfilesAgainstJob(pageItems, query.matchJobId);
-        pageItems = pageItems.map((profile, index) => ({ ...profile, matchScore: breakdowns[index].total, matchBreakdown: breakdowns[index] }));
-      }
-
-      facetSource = await this.prisma.employeeProfile.findMany({
-        where,
-        select: {
-          city: {
-            select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true, archivedAt: true },
-          },
-          skills: {
-            select: {
-              skill: {
-                select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true, archivedAt: true },
-              },
-            },
-          },
-          desiredPosition: true,
-          desiredPositions: true,
-          headline: true,
-          experiences: { select: { title: true }, take: 5, orderBy: { startDate: 'desc' } },
-        },
-        take: 1000,
-        orderBy: { updatedAt: 'desc' },
-      });
-    } else {
-      let cursor: string | undefined;
-      let scored: ReturnType<typeof mapProfile>[] = [];
-      while (true) {
-        const batch = await this.prisma.employeeProfile.findMany({ where, include: candidateInclude,
-          take: SCAN_BATCH, orderBy: { id: 'asc' }, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
-        scored.push(...batch.map(mapProfile));
-        if (batch.length < SCAN_BATCH) break;
-        cursor = batch[batch.length - 1].id;
-      }
-      scored.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime() || a.id.localeCompare(b.id));
-
-      if (needsTitleKeyFilter) {
-        scored = scored.filter((p) => this.profileMatchesTitleKeys(p, titleKeySet));
-      }
-
-      if (query.experienceYearsMin !== undefined) {
-        scored = scored.filter((p) => p.experienceYears >= query.experienceYearsMin!);
-      }
-      if (query.experienceYearsMax !== undefined) {
-        scored = scored.filter((p) => p.experienceYears <= query.experienceYearsMax!);
-      }
-
-      if (query.matchJobId) {
-        const breakdowns = await this.matching.scoreProfilesAgainstJob(scored, query.matchJobId);
-        scored = scored.map((profile, index) => ({ ...profile, matchScore: breakdowns[index].total, matchBreakdown: breakdowns[index] }));
-        if (sort === 'match') scored.sort((a, b) => compareRecruiterMatches(a.matchBreakdown as RecruiterBreakdown,b.matchBreakdown as RecruiterBreakdown) || a.id.localeCompare(b.id));
-      }
-
-      // Advertise pages only for the ranked/filtered window.
-      total = scored.length;
-      const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
-      currentPage = Math.min(currentPage, total === 0 ? 1 : totalPages);
-      pageItems = scored.slice((currentPage - 1) * limit, currentPage * limit);
-      facetSource = scored;
-    }
-
-    type Facet = {
-      slug: string;
-      name: string;
-      nameUz?: string | null;
-      nameRu?: string | null;
-      nameId?: string | null;
-      count: number;
-    };
-    const cityFacets: Record<string, Facet> = {};
-    const skillFacets: Record<string, Facet> = {};
-    const titleFacets: Record<string, Facet> = {};
-
-    const catalogTitles = await this.prisma.jobTitle.findMany({
-      where: ACTIVE_CATALOG,
-      select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true, normalizedKey: true },
-    });
-    const catalogByKey = new Map<
-      string,
-      { slug: string; name: string; nameUz?: string | null; nameRu?: string | null; nameId?: string | null }
-    >();
-    for (const t of catalogTitles) {
-      const key = t.normalizedKey || normalizeJobTitleKey(t.name);
-      if (key && !catalogByKey.has(key)) {
-        catalogByKey.set(key, { slug: t.slug, name: t.name, nameUz: t.nameUz, nameRu: t.nameRu, nameId: t.nameId });
-      }
-    }
-
-    // Archived entries stay on the candidate cards that use them but are not
-    // offered as filter options.
-    for (const p of facetSource) {
-      if (p.city && !p.city.archivedAt) {
-        const key = p.city.slug;
-        cityFacets[key] = cityFacets[key]
-          ? { ...cityFacets[key], count: cityFacets[key].count + 1 }
-          : { slug: p.city.slug, name: p.city.name, nameUz: p.city.nameUz, nameRu: p.city.nameRu, nameId: p.city.nameId, count: 1 };
-      }
-      for (const s of p.skills) {
-        if (s.skill.archivedAt) continue;
-        const key = s.skill.slug;
-        skillFacets[key] = skillFacets[key]
-          ? { ...skillFacets[key], count: skillFacets[key].count + 1 }
-          : {
-              slug: s.skill.slug,
-              name: s.skill.name,
-              nameUz: s.skill.nameUz,
-              nameRu: s.skill.nameRu, nameId: s.skill.nameId,
-              count: 1,
-            };
-      }
-      const seenKeys = new Set<string>();
-      for (const text of this.profileTitleTexts(p)) {
-        const key = normalizeJobTitleKey(text);
-        if (!key || seenKeys.has(key)) continue;
-        seenKeys.add(key);
-        const cat = catalogByKey.get(key);
-        if (!cat) continue;
-        titleFacets[cat.slug] = titleFacets[cat.slug]
-          ? { ...titleFacets[cat.slug], count: titleFacets[cat.slug].count + 1 }
-          : { slug: cat.slug, name: cat.name, nameUz: cat.nameUz, nameRu: cat.nameRu, nameId: cat.nameId, count: 1 };
-      }
-    }
-
-    const presenceMap = await this.presence.getPresence(
-      pageItems.map((p) => p.user?.id as string).filter(Boolean),
-    );
-    pageItems = pageItems.map((p) => ({
-      ...this.resolveHeadlineForList(p, locale),
-      presence: (p.user?.id && presenceMap[p.user.id]) || null,
-    }));
-
-    return {
-      items: pageItems,
-      total,
-      matchedTotal,
-      truncated,
-      page: currentPage,
-      limit,
-      totalPages: Math.max(1, Math.ceil(total / limit) || 1),
-      limited,
-      facets: {
-        cities: Object.values(cityFacets).sort((a, b) => b.count - a.count).slice(0, 80),
-        skills: Object.values(skillFacets).sort((a, b) => b.count - a.count).slice(0, 80),
-        jobTitles: Object.values(titleFacets).sort((a, b) => b.count - a.count).slice(0, 80),
-      },
-    };
+    return new CvCandidatesService(this.prisma,this.matching,this.companies,this.presence,this.candidateAccess??new CandidateAccessService(this.prisma)).search(user,query);
   }
 
   /**
@@ -1947,160 +1583,7 @@ export class ProfilesService {
     locale: Locale = DEFAULT_LOCALE,
     companyId?: string,
   ) {
-    if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException();
-    }
-
-    let scopedCompany:string|undefined;
-    if(this.candidateAccess) {
-      const job=matchJobId?await this.prisma.jobPost.findUnique({where:{id:matchJobId},select:{companyId:true}}):null;
-      scopedCompany=await this.candidateAccess!.context(user,companyId||job?.companyId);
-      if(job&&job.companyId!==scopedCompany)throw new ForbiddenException('Job and company context differ');
-    }
-    const profile = await this.prisma.employeeProfile.findUnique({
-      where: { id: profileId },
-      include: {
-        residenceCountry: true,
-        user: {
-          select: { id: true, fullName: true, avatarUrl: true, locale: true },
-        },
-        skills: { include: { skill: true } },
-        translations: {
-          select: { locale: true, headline: true, summary: true, isMachine: true },
-        },
-        experiences: {
-          include: {
-            country: true,
-            city: { include: { province: { include: { country: true } } } },
-            translations: {
-              select: { locale: true, title: true, description: true, isMachine: true },
-            },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        educations: {
-          include: {
-            translations: { select: { locale: true, field: true, isMachine: true } },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        certifications: true,
-        languages: { include: { language: true } },
-        // Candidate detail pages need display metadata only. Do not return private
-        // CV contents, parsed text, storage URLs, or internal storage keys.
-        resumes: {
-          where: { isPrimary: true, deletedAt: null },
-          take: 1,
-          select: {
-            id: true,
-            title: true,
-            fileKey: true,
-            isPrimary: true,
-            targetJobTitle: {
-              select: { id: true, name: true, nameUz: true, nameRu: true, nameId: true, slug: true },
-            },
-          },
-        },
-        city: { include: { province: { include: { country: true } } } },
-      },
-    });
-    if (!profile) {
-      throw new NotFoundException('Profile not available');
-    }
-
-    const accountState = await this.prisma.user.findUnique({
-      where: { id: profile.user.id },
-      select: { isBanned: true, anonymizedAt: true },
-    });
-    if (!accountState || accountState.isBanned || accountState.anonymizedAt) {
-      throw new NotFoundException('Profile not available');
-    }
-
-    const { limited, appliedToMyCompany } = await this.contactAccessFor(user, profileId,scopedCompany);
-
-    if (profile.visibility === 'PRIVATE' && !appliedToMyCompany) {
-      throw new NotFoundException('Profile not available');
-    }
-
-    const experienceYears = this.matching.totalExperienceYears(profile.experiences);
-
-    let match: unknown = null;
-    let applicationForJob: {
-      id: string;
-      resumeTitle: string | null;
-      hasResumeFile: boolean;
-      status: string;
-      kanbanEnteredAt: Date | null;
-      canAddToKanban: boolean;
-    } | null = null;
-    if (matchJobId) {
-      const matchJob = await this.prisma.jobPost.findUnique({
-        where: { id: matchJobId },
-        select: { id: true, companyId: true },
-      });
-      if (!matchJob) throw new NotFoundException('Match job not found');
-      if (user.role !== 'SUPER_ADMIN') {
-        await this.companies.assertMember(user, matchJob.companyId);
-      }
-      match = await this.matching.scoreProfileAgainstJob(profileId, matchJobId);
-
-      const application = await this.prisma.application.findUnique({
-        where: {
-          jobPostId_profileId: { jobPostId: matchJobId, profileId },
-        },
-        include: { resume: { select: { title: true, fileKey: true } } },
-      });
-      if (application) {
-        const submitted = submittedResume(application.resumeSnapshot);
-        applicationForJob = {
-          id: application.id,
-          resumeTitle: submitted.title,
-          hasResumeFile: Boolean(submitted.fileKey),
-          status: application.status,
-          kanbanEnteredAt: application.kanbanEnteredAt,
-          canAddToKanban: !application.kanbanEnteredAt && !['WITHDRAWN','REJECTED','HIRED'].includes(application.status),
-        };
-      }
-    }
-
-    const localized = this.localizeCandidateProfile(profile, locale);
-    const safe = this.sanitizeProfileResumes(localized);
-    const candidateResumeIds = profile.resumes.map((resume) => resume.id);
-    const companyIds = scopedCompany?[scopedCompany]:await this.activeCompanyIds(user);
-    const downloadableResumeIds = new Set<string>();
-    if (user.role === 'SUPER_ADMIN') {
-      for (const resumeId of candidateResumeIds) downloadableResumeIds.add(resumeId);
-    } else if (candidateResumeIds.length && companyIds.length) {
-      const applications = await this.prisma.application.findMany({
-        where: {
-          profileId,
-          resumeId: { in: candidateResumeIds },
-          jobPost: { companyId: { in: companyIds } },
-        },
-        select: { resumeId: true },
-      });
-      for (const application of applications) {
-        if (application.resumeId) downloadableResumeIds.add(application.resumeId);
-      }
-    }
-    const resumes = (safe.resumes as Array<Record<string, unknown>> | undefined)?.map((resume) => ({
-      ...resume,
-      canDownload: resume.hasFile === true && downloadableResumeIds.has(String(resume.id)),
-    }));
-    return {
-      ...safe,
-      ...(resumes ? { resumes } : {}),
-      // Contacts are never in the profile payload; use POST
-      // /profiles/candidates/:id/reveal-contact so reveals are audited
-      // and rate limited (anti-scrape).
-      phone: undefined,
-      contactsBlurred: limited,
-      experienceYears,
-      match,
-      appliedToMyCompany,
-      applicationForJob,
-      presence: await this.presence.getOne(profile.user.id),
-    };
+    return new CvCandidatesService(this.prisma,this.matching,this.companies,this.presence,this.candidateAccess??new CandidateAccessService(this.prisma)).get(user,profileId,matchJobId,companyId);
   }
 
   async machineTranslateCandidate(
@@ -2120,16 +1603,30 @@ export class ProfilesService {
   }
 
   /** Click-to-reveal: returns contacts for one candidate, audited + quota'd. */
-  async revealCandidateContact(user: AuthUser, profileId: string, companyId?: string) {
+  async revealCandidateContact(user: AuthUser, profileId: string, companyId?: string, jobPostId?: string) {
     if (user.role !== 'RECRUITER' && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException();
     }
 
+    let scopedCompanyId = companyId;
+    if (jobPostId) {
+      const job = await this.prisma.jobPost.findUnique({ where: { id: jobPostId }, select: { companyId: true } });
+      if (!job || (scopedCompanyId && scopedCompanyId !== job.companyId)) {
+        throw new NotFoundException('Contact not available');
+      }
+      scopedCompanyId = job.companyId;
+      const withdrawnApplication = await this.prisma.application.findFirst({
+        where: { jobPostId, profileId, status: 'WITHDRAWN' },
+        select: { id: true },
+      });
+      if (withdrawnApplication) throw new NotFoundException('Contact not available');
+    }
+
     if (this.candidateAccess) {
-      const context = await this.candidateAccess!.context(user, companyId);
-      const profile = await this.candidateAccess!.assertAccess(user, context, profileId, 'CONTACT');
+      const context = await this.candidateAccess.context(user, scopedCompanyId);
+      const profile = await this.candidateAccess.assertAccess(user, context, profileId, 'CONTACT');
       await this.assertRevealQuota(user);
-      await this.prisma.auditLog.create({data:{actorId:user.id,action:'CANDIDATE_CONTACT_REVEAL',entityType:'EmployeeProfile',entityId:profileId,metadata:{companyId:context}}});
+      await this.prisma.auditLog.create({data:{actorId:user.id,action:'CANDIDATE_CONTACT_REVEAL',entityType:'EmployeeProfile',entityId:profileId,metadata:{companyId:context,...(jobPostId?{jobPostId}:{})}}});
       return { email: profile.user.email, phone: profile.phone };
     }
     const profile = await this.prisma.employeeProfile.findUnique({
@@ -2164,6 +1661,7 @@ export class ProfilesService {
         action: 'CANDIDATE_CONTACT_REVEAL',
         entityType: 'EmployeeProfile',
         entityId: profileId,
+        ...(jobPostId ? { metadata: { companyId: scopedCompanyId, jobPostId } } : {}),
       },
     });
 

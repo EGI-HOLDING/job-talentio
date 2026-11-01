@@ -330,3 +330,12 @@
 @media (prefers-reduced-motion: reduce) {
   .spinner, .loading i { animation: none; }
 }
+
+/* CV library follows the four visible columns; controls can wrap on small screens. */
+.cvTableHeader, .cvRow { grid-template-columns: minmax(180px, 1.4fr) minmax(160px, 1fr) 130px minmax(160px, auto); }
+.cvIdentity, .cvStatus { min-width:0; }
+.cvName strong, .fileSelected > div { overflow-wrap:anywhere; }
+.cvStatus { align-items:flex-start; }
+.cvStatus > span { white-space:normal; line-height:1.5; }
+@media(max-width:900px){.cvTableHeader{display:none}.cvRow{grid-template-columns:minmax(0,1fr) auto}.cvStatus{grid-column:1 / -1}.cvRow .cvDate{display:none}.rowActions{flex-wrap:wrap;justify-content:flex-end}}
+@media(max-width:480px){.cvRow{grid-template-columns:minmax(0,1fr)}.rowActions{grid-column:1;justify-content:flex-start}.libraryActions{flex-wrap:wrap}}

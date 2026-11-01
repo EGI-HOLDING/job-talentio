@@ -4,9 +4,11 @@ import { hrRanking } from './dict/hrRanking';
 import { linkedin } from './dict/linkedin';
 import { authProviders } from './dict/authProviders';
 import { applicationOfferId } from './applicationOffer.id';
+import { cvSourceId } from './dict/cvSource';
 
 /** Indonesian translations for the complete web interface. */
 export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
+  ...cvSourceId,
   ...applicationOfferId,
   "jr.package": "Paket",
   "jr.allPackages": "Semua paket",
@@ -1306,6 +1308,10 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   'rec.whatsappOpening': 'Membuka WhatsApp...',
   'rec.whatsappNoPhone': 'Nomor WhatsApp kandidat tidak tersedia.',
   'rec.whatsappFailed': 'WhatsApp tidak dapat dibuka. Coba lagi.',
+  'emp.whatsappChat': 'Chat HR lewat WhatsApp',
+  'emp.whatsappOpening': 'Membuka WhatsApp...',
+  'emp.whatsappNoPhone': 'Nomor WhatsApp HR belum tersedia.',
+  'emp.whatsappFailed': 'WhatsApp tidak dapat dibuka. Coba lagi.',
   'rec.interviewTime': 'Waktu wawancara',
   'rec.meetingUrl': 'URL rapat',
   'rec.meetingUrlPlaceholder': 'Tautan rapat',

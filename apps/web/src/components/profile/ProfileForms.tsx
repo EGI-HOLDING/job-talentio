@@ -89,7 +89,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      await mutate('/profiles/me', 'PATCH', { headline: value('headline'), summary: value('summary'), citySlug: homeCity || null, desiredPositions: roles, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -132,8 +132,6 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     </div> : <form onSubmit={submit} className={s.form}>
       <fieldset disabled={busy} className={s.resetFieldset}>
         {editor.kind === 'basics' && <>
-          <FormField label={t('emp.headline')}><input name="headline" defaultValue={profile.headline || ''} maxLength={200} /></FormField>
-          <FormField label={t('emp.summary')}><textarea name="summary" rows={4} defaultValue={profile.summary || ''} maxLength={5000} /></FormField>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
           <RoleInput value={roles} onChange={setRoles} />
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />

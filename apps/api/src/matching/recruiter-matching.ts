@@ -41,14 +41,15 @@ export function evaluateRecruiter(profile: RecruiterProfile, job: RecruiterJob, 
   const parts: Array<{ key: string; weight: number; fraction: number; known: number }> = [];
   const review = profile.experiences.filter(row => experienceNeedsReview(row,now));
   const valid = profile.experiences.filter(row => !experienceNeedsReview(row,now));
-  const roleTexts = [profile.headline, profile.desiredPosition, ...(profile.desiredPositions ?? []), ...valid.filter(row=>row.isCurrent).map(row=>row.title)].filter((v): v is string=>Boolean(v));
+  const preferences = profile.cvSource ? [] : [profile.desiredPosition, ...(profile.desiredPositions ?? [])];
+  const roleTexts = [profile.headline, ...preferences, ...valid.filter(row=>row.isCurrent).map(row=>row.title)].filter((v): v is string=>Boolean(v));
   const roleIds = new Set(roleTexts.flatMap(text=>[...index.resolve(text)]));
   const jobIds = job.jobTitleId ? new Set([job.jobTitleId]) : index.resolve(job.title);
   const direct = !job.jobTitleId && roleTexts.some(text=>normalizeJobTitleKey(text)===normalizeJobTitleKey(job.title));
   const exact = overlaps(roleIds,jobIds) || direct;
   const related = !exact && [...roleIds].some(from=>[...jobIds].some(to=>index.related(from,to)));
   const relevant = valid.filter(row=>overlaps(index.resolve(row.title),jobIds) || (!job.jobTitleId && normalizeJobTitleKey(row.title)===normalizeJobTitleKey(job.title)));
-  const history = relevant.length > 0;
+  const history = relevant.length > 0 || (profile.cvRoleTitles??[]).some(title=>overlaps(index.resolve(title),jobIds)||(!job.jobTitleId&&normalizeJobTitleKey(title)===normalizeJobTitleKey(job.title)));
   const roleFraction = exact ? 1 : related || history ? 0.5 : 0;
   parts.push({key:'title',weight:15,fraction:roleFraction,known:roleFraction ? 1 : 0});
   evidence.push({kind:'ROLE',label:job.title,required:false,status:roleFraction ? 'MET' : 'UNKNOWN',code:exact?'ROLE_MATCH':history?'PAST_ROLE':related?'RELATED_ROLE':'NOT_LISTED',evidenceRefs:[`job:${job.id}:title`,`profile:${profile.id}:roles`]});
@@ -124,7 +125,8 @@ export function evaluateRecruiter(profile: RecruiterProfile, job: RecruiterJob, 
   const hasJobRequirements = requirements.length>0 || minimum!==null || requiredLanguages.length>0;
   const positiveCore = roleFraction>0 || coreSkill || relevant.length>0;
   const hasConfirmedAssessment = evidence.some(row=>row.required && row.status!=='UNKNOWN');
-  const assessable = hasJobRequirements && (positiveCore || hasConfirmedAssessment);
+  const sourceReady=!('cvSource' in profile)||(profile.cvSource as {status:string}).status==='READY';
+  const assessable = sourceReady && hasJobRequirements && (positiveCore || hasConfirmedAssessment);
   const weight = parts.reduce((sum,row)=>sum+row.weight,0);
   const components = parts.map(row=>({key:row.key,maximum:row.weight/weight*100,earned:row.weight*row.fraction/weight*100}));
   const component = (key:string) => components.find(row=>row.key===key)?.earned ?? 0;
@@ -132,7 +134,7 @@ export function evaluateRecruiter(profile: RecruiterProfile, job: RecruiterJob, 
   const languagesBy = (status:Status,requiredOnly=false) => evidence.filter(row=>row.kind==='LANGUAGE'&&row.status===status&&(!requiredOnly||row.required)).map(row=>row.label);
   return {
     version:RECRUITER_MATCH_VERSION,evaluatedAt:now.toISOString(),total:assessable?Math.round(components.reduce((sum,row)=>sum+row.earned,0)*10)/10:0,
-    assessable,positiveCore,optionalScore,evidenceCoverage:Math.round(parts.reduce((sum,row)=>sum+row.weight*row.known,0)/weight*100),evidence,components,
+    assessable,positiveCore:sourceReady&&positiveCore,optionalScore,evidenceCoverage:Math.round(parts.reduce((sum,row)=>sum+row.weight*row.known,0)/weight*100),evidence,components,
     skills:component('skills'),title:component('title'),experience:component('experience'),location:component('location'),education:0,language:component('language'),
     details:{matchedSkills:skillsBy('MET'),missingRequiredSkills:skillsBy('UNMET',true),unknownRequiredSkills:skillsBy('UNKNOWN',true),matchedLanguages:languagesBy('MET'),missingRequiredLanguages:languagesBy('UNMET',true),unknownRequiredLanguages:languagesBy('UNKNOWN',true),experienceYears:years,requiredYears:minimum,relevantExperienceYears:experienceKnown?years:null,requiredSkills:skillCounts,reviewExperienceIds:review.map((row,i)=>row.id ?? `unidentified:${i}`),hasJobRequirements},
   };

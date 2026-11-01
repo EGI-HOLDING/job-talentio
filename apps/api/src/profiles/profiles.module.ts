@@ -68,7 +68,7 @@ export class ProfilesModule implements OnModuleInit, OnModuleDestroy {
       const worker = new Worker<CvParseJobPayload>(
         CV_PARSE_QUEUE,
         async (job) => {
-          await this.cvParse.processResume(job.data.resumeId, job.data.generation);
+          await this.cvParse.processResume(job.data.resumeId, job.data.generation,job.data.versionId);
         },
         {
           connection: workerConnection,

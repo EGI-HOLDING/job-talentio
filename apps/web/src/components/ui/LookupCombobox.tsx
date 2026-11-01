@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { benefitIconLabel } from '@/lib/icons';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { useI18n } from '@/lib/i18n';
+import { floatingPanelPosition, type FloatingPanelPosition } from './floatingPanelPosition';
 
 export type LookupSuggestion = {
   id: string;
@@ -76,6 +78,8 @@ export function LookupCombobox({
   const confirm = useConfirm();
   const listId = useId();
   const statusId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLUListElement>(null);
   const levelRef = useRef<HTMLSelectElement>(null);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<LookupSuggestion[]>([]);
@@ -83,6 +87,7 @@ export function LookupCombobox({
   const [status, setStatus] = useState('');
   const [highlight, setHighlight] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<FloatingPanelPosition | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -109,6 +114,40 @@ export function LookupCombobox({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, kind, focusSuggestions, isOpen]);
+
+  const showSuggestions = suggestions.length > 0 && (!focusSuggestions || isOpen);
+  useLayoutEffect(() => {
+    if (!showSuggestions) { setPosition(null); return; }
+    const place = () => {
+      const rect = inputRef.current?.getBoundingClientRect();
+      if (rect) setPosition(floatingPanelPosition(rect, 240));
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
+    };
+  }, [showSuggestions]);
+
+  useEffect(() => {
+    if (!focusSuggestions || !isOpen) return;
+    const closeWhenOutside = (event: Event) => {
+      const target = event.target as Node;
+      if (!inputRef.current?.contains(target) && !panelRef.current?.contains(target)) setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', closeWhenOutside);
+    document.addEventListener('focusin', closeWhenOutside);
+    return () => {
+      document.removeEventListener('pointerdown', closeWhenOutside);
+      document.removeEventListener('focusin', closeWhenOutside);
+    };
+  }, [focusSuggestions, isOpen]);
 
   function currentLevel() {
     if (!levelOptions?.length) return defaultLevel;
@@ -173,6 +212,7 @@ export function LookupCombobox({
       <label>
         <span className="sr-only">{t(KIND_LABEL_KEY[kind])}</span>
         <input
+          ref={inputRef}
           type="text"
           role="combobox"
           aria-expanded={suggestions.length > 0 && (!focusSuggestions || isOpen)}
@@ -185,7 +225,14 @@ export function LookupCombobox({
           placeholder={placeholder || t('skillSearchPlaceholder')}
           onChange={(e) => { setQuery(e.target.value); if (focusSuggestions) setIsOpen(true); }}
           onFocus={() => { if (focusSuggestions) setIsOpen(true); }}
-          onBlur={() => { if (focusSuggestions) setIsOpen(false); }}
+          onClick={() => { if (focusSuggestions) setIsOpen(true); }}
+          onBlur={() => {
+            if (!focusSuggestions) return;
+            window.setTimeout(() => {
+              const active = document.activeElement;
+              if (!inputRef.current?.contains(active) && !panelRef.current?.contains(active)) setIsOpen(false);
+            }, 0);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') {
               e.preventDefault();
@@ -211,8 +258,25 @@ export function LookupCombobox({
           <span className="skel skel-line short" />
         </div>
       )}
-      {suggestions.length > 0 && (!focusSuggestions || isOpen) && (
-        <ul id={listId} role="listbox" className="skill-suggest-list">
+      {showSuggestions && position && createPortal(
+        <ul
+          ref={panelRef}
+          id={listId}
+          role="listbox"
+          className="skill-suggest-list"
+          style={{
+            ...position,
+            position: 'fixed',
+            zIndex: 10050,
+            boxSizing: 'border-box',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            background: '#fff',
+            boxShadow: '0 12px 32px #17213a26',
+            borderRadius: 8,
+            padding: 5,
+          }}
+        >
           {suggestions.map((s, i) => (
             <li key={s.id} role="presentation">
               <button
@@ -242,7 +306,8 @@ export function LookupCombobox({
               </button>
             </li>
           ))}
-        </ul>
+        </ul>,
+        inputRef.current?.closest('dialog') || document.body,
       )}
       {canCreate && (
         <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>

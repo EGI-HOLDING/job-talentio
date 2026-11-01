@@ -46,6 +46,12 @@ export class ApplicationsController {
     return this.applications.getMyApplicationForJob(user, jobId);
   }
 
+  @Post(':id/recruiter-whatsapp-contact')
+  @Roles('EMPLOYEE')
+  recruiterWhatsAppContact(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.applications.recruiterWhatsAppContact(user, id);
+  }
+
   @Get('jobs/:jobId/search')
   @Roles('RECRUITER', 'SUPER_ADMIN')
   searchForJob(@Param('jobId') jobId: string, @CurrentUser() user: AuthUser, @Req() req: Request, @Query() query: unknown) {

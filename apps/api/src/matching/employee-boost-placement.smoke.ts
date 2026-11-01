@@ -64,7 +64,8 @@ async function main() {
   }
 
   const role={id:'engineer',name:'Engineer',normalizedKey:'engineer',aliases:[]};
-  const profile={id:'profile',desiredPosition:'Engineer',skills:[],experiences:[],languages:[]};
+  const cv={headline:'Engineer',skills:[],experiences:[],educations:[]};
+  const profile={id:'profile',desiredPosition:'Engineer',skills:[],experiences:[],languages:[],resumes:[{currentVersion:{id:'cv-version',parseStatus:'READY',matchingData:cv}}]};
   const jobs=Array.from({length:30},(_,i)=>({id:'j'+i,companyId:'c'+i%3,title:'Engineer',jobTitleId:role.id,workMode:'REMOTE',publishedAt:new Date(past.getTime()-i*60000),jobSkills:[],jobLanguages:[],company:{name:'Company',slug:'company'},isAnonymous:false}));
   let flags=true, active=true, unavailable=false;
   const db={employeeProfile:{findUniqueOrThrow:async()=>profile},jobTitle:{findMany:async()=>[role]},jobPost:{findMany:async(args:any)=>args.where.id ? jobs.filter(j=>args.where.id.in.includes(j.id)) : jobs},
@@ -94,7 +95,7 @@ async function main() {
     const legacy={scoreJobsForProfile:async()=>new Map(jobs.map(j=>[j.id,{total:10}]))};
     process.env.EMPLOYEE_MATCHING_V2_PERCENT='0';
     assert.ok((await new EmployeeMatchingService(db as never,legacy as never).recommend(profile.id)).items.every(r=>r.job.placement==='ORGANIC'));
-    process.env.EMPLOYEE_MATCHING_V2_PERCENT='100';profile.desiredPosition='Unrelated role';
+    process.env.EMPLOYEE_MATCHING_V2_PERCENT='100';profile.desiredPosition='Unrelated role';cv.headline='Unrelated role';
     const latest=await service.recommend(profile.id);assert.equal(latest.mode,'LATEST');assert.ok(latest.items.every(r=>r.job.placement==='ORGANIC'));
   } finally {
     if(env===undefined)delete process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED;else process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED=env;

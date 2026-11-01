@@ -22,7 +22,7 @@ export function LandingFooter({ employer = false }: { employer?: boolean }) {
   ];
   return <footer className={s.footer}>
     <div className={s.inner}>
-      <div className={s.top}><div className={s.identity}><Link href={employer ? '/employers' : '/'} className={s.brand}>Job Talentio</Link><p>{t('landing.mission')}</p></div>
+      <div className={s.top}><div className={s.identity}><Link href={employer ? '/employers' : '/'} className={s.brand}><img src="/brand/talentio-logo-white.webp" alt="Talentio" /></Link><p>{t('landing.mission')}</p></div>
         <nav className={s.links} aria-label={t('landing.footerNav')}>{groups.map((group, index) => <div key={index}>{group.map(([href, key]) => <Link href={href} key={href}>{t(key)}</Link>)}</div>)}</nav>
       </div>
       <div className={s.bottom}><span>© {new Date().getFullYear()} Job Talentio</span><div className={s.languages} aria-label={t('language')}>{(['en', 'ru', 'uz', 'id'] as Locale[]).map((item) => <button key={item} type="button" onClick={() => setLocale(item)} aria-pressed={locale === item}>{item.toUpperCase()}</button>)}</div></div>

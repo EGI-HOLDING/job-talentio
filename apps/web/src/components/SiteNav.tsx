@@ -194,8 +194,8 @@ function SiteNavContent() {
     <div ref={navWrapRef} className={`nav-wrap ${isLanding ? styles.landing : ''} ${isDiscovery ? styles.jobs : ''} ${isEmployee ? styles.employee : ''} ${isRecruiter ? styles.recruiter : ''}`}>
       <nav className={`nav shell ${isLanding ? styles.landingNav : ''}`}>
         <div className={isLanding ? styles.primary : undefined}>
-        <Link href={isRecruiter ? '/dashboard/recruiter?tab=jobs' : isEmployee ? '/jobs' : isEmployerContext ? '/employers' : '/'} className={`brand ${isLanding ? styles.brand : ''} ${(isRecruiter || isEmployerContext) && !isEmployee ? styles.employerBrand : ''}`}>
-          <span>Job Talentio</span>{(isRecruiter || isEmployerContext) && !isEmployee && <small>{t('employers.badge')}</small>}
+        <Link href={isRecruiter ? '/dashboard/recruiter?tab=jobs' : isEmployee ? '/jobs' : isEmployerContext ? '/employers' : '/'} className={`brand ${styles.logoLink} ${isLanding ? styles.brand : ''} ${(isRecruiter || isEmployerContext) && !isEmployee ? styles.employerBrand : ''}`}>
+          <img className={styles.logo} src="/brand/talentio-logo.webp" alt="Talentio" />{(isRecruiter || isEmployerContext) && !isEmployee && <small>{t('employers.badge')}</small>}
         </Link>
         {isLanding && (
           <div className={styles.browse}>

@@ -161,7 +161,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
 
   async function loadResumes() {
     const p = await api<{ resumes?: ResumeOption[] }>('/profiles/me');
-    const list = p.resumes || [];
+    const list = (p.resumes || []).filter(row=>row.hasFile||row.fileKey);
     setResumes(list);
     const primary = list.find((r) => r.isPrimary) || list[0];
     setSelectedResumeId(primary?.id || '');
@@ -269,6 +269,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
       return;
     }
     if (alreadyApplied || submitting) return;
+    if(!selectedHasFile){setError(t('cv.required'));return;}
 
     const fd = new FormData(e.currentTarget);
     // Only send non-empty answers. Optional blanks must not hit Zod min(1).
@@ -377,11 +378,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
         open={showCreateResume && !alreadyApplied}
         defaultJobTitle={defaultApplyRole}
         defaultTitle={defaultApplyRole}
-        secondaryLabel={t('continueWithoutResume')}
-        onSecondary={() => {
-          setShowCreateResume(false);
-          setShowApply(true);
-        }}
         onCancel={() => setShowCreateResume(false)}
         onCreated={async (result) => {
           setShowCreateResume(false);
@@ -392,9 +388,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
             /* ignore */
           }
           setShowApply(true);
-          if (result.method === 'builder') {
-            setSuccess(t('job.resumeDraftCreated'));
-          }
         }}
       />
 
@@ -422,7 +415,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
                   <select
                     value={selectedResumeId}
                     onChange={(e) => setSelectedResumeId(e.target.value)}
-                    required={resumes.length > 0}
+                    required
                   >
                     {resumes.length === 0 && (
                       <option value="">{t('job.noResumesOnProfile')}</option>
@@ -494,7 +487,12 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   return <JobPreview standalone={!embedded}
     backHref={backHref}
     companyHref={'/companies/' + job.company.slug + '?returnTo=' + encodeURIComponent(jobDetailHref(id, backHref))}
-    chatHref={isEmployee && job.chatPeerUserId ? `/messages?peer=${job.chatPeerUserId}&job=${id}` : undefined}
+    chatHref={isEmployee && myApplication && myApplication.status !== 'WITHDRAWN' && job.chatPeerUserId
+      ? `/messages?peer=${encodeURIComponent(job.chatPeerUserId)}&job=${encodeURIComponent(id)}&application=${encodeURIComponent(myApplication.id)}`
+      : undefined}
+    whatsappApplicationId={isEmployee && myApplication && myApplication.status !== 'WITHDRAWN' && job.chatPeerUserId
+      ? myApplication.id
+      : undefined}
     job={job} country={country} onBack={onBack}
     onApply={!alreadyApplied && (!session || session.user.role === 'EMPLOYEE') ? () => {void trackJobEvent(id,'APPLY_CLICK');void beginApply();} : undefined}
     onSave={() => { if (saveState) void saveState.onToggle(); else void saveJob().catch((error) => setError(error.message)); }}

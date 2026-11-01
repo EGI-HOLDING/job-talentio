@@ -14,6 +14,8 @@ import type { MessageLocale } from '@job-talentio/shared';
 import { HrEventsService } from '../benefits/hr-events.service';
 import { OperationsService } from '../benefits/operations.service';
 import { recruiterProfileInclude } from '../matching/recruiter-matching.service';
+import { registerCvVersion, withCvFacts } from '../profiles/cv-evidence';
+import { applicationCvProfile } from '../profiles/cv-source';
 import { compareRecruiterMatches, type RecruiterBreakdown } from '../matching/recruiter-matching';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -27,11 +29,12 @@ import { escapeHtml } from '../common/utils';
 import { resolveUgcContent } from '../common/i18n/content-locale';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
 import type { Locale } from '../common/i18n/locale';
-import { ANONYMOUS_REVEAL_STATUSES, maskAnonymousCompany, revealsAnonymousEmployer } from '../common/anonymous-job';
+import { ANONYMOUS_REVEAL_STATUSES, anonymousRevealHistory, maskAnonymousCompany, revealsAnonymousEmployer } from '../common/anonymous-job';
 import { ApplicantFilters, applicantFilter } from './applicant-filter';
 import { canAddToKanban, safeApplication, submittedResume } from './application-payload';
 import { LiveUpdates } from '../common/live-updates';
 import { jobChatPeers } from '../chat/job-chat-peer';
+import { employeeApplicationChatAllowed } from '../chat/application-chat-access';
 import { validateOfferFiles, type OfferUploadFile, type ValidatedOfferFile } from './application-offer-files';
 
 function isTransactionConflict(error: unknown): boolean {
@@ -202,18 +205,25 @@ export class ApplicationsService {
       throw new BadRequestException('Select a resume to apply with');
     }
 
-    const breakdown = await this.matching.scoreInputs(profile, job, tx);
+    if(!selectedResume?.fileKey)throw new BadRequestException('Upload a CV before applying');
+    const version=await registerCvVersion(tx,selectedResume.id,selectedResume.fileKey);
+    const cvInput=withCvFacts(profile,version);
+    const breakdown = await this.matching.scoreInputs(cvInput, job, tx);
+    if(cvInput.cvSource.status!=='READY'){breakdown.assessable=false;breakdown.total=0;breakdown.positiveCore=false;breakdown.evidence=[];}
 
     const resumeSnapshot = {
-      headline: profile.headline,
-      summary: profile.summary,
-      skills: profile.skills.map((s) => ({
+      cvVersionId:version.id,
+      cvEvidence:version.parseStatus==='READY'?version.matchingData:null,
+      cvSupplement:{languages:profile.languages,certifications:profile.certifications},
+      headline: cvInput.headline,
+      summary: null,
+      skills: cvInput.skills.map((s) => ({
         name: s.skill.name,
         slug: s.skill.slug,
-        level: s.level,
+        levelSource: s.levelSource,
       })),
-      experiences: profile.experiences,
-      educations: profile.educations,
+      experiences: cvInput.experiences,
+      educations: cvInput.educations,
       resume: selectedResume
         ? {
             id: selectedResume.id,
@@ -232,11 +242,12 @@ export class ApplicationsService {
           jobPostId,
           profileId: profile.id,
           resumeId: selectedResume?.id ?? null,
+          resumeVersionId:version.id,
           coverLetter,
           source: source ? source.toLowerCase().slice(0, 40) : null,
           resumeSnapshot,
-          matchScore: breakdown.total,
-          matchBreakdown: breakdown,
+          matchScore: cvInput.cvSource.status==='READY'?breakdown.total:null,
+          matchBreakdown: cvInput.cvSource.status==='READY'?breakdown:Prisma.DbNull,
           status: 'NEW',
           events: {
             create: {
@@ -277,10 +288,10 @@ export class ApplicationsService {
             userId: member.userId,
             type: 'NEW_APPLICANT',
             title: `New applicant for ${job.title}`,
-            body: `${user.fullName} applied (fit index ${breakdown.total}/100)`,
+            body: `${user.fullName} applied`,
             titleKey: 'notify.newApplicant.title',
             bodyKey: 'notify.newApplicant.body',
-            params: { job: job.title, name: user.fullName, match: breakdown.total },
+            params: { job: job.title, name: user.fullName, match: breakdown.assessable?breakdown.total:'—' },
             linkUrl: `/dashboard/recruiter/jobs/${job.id}?section=applicants&company=${job.companyId}&application=${application.id}`,
           });
         } catch (err) {
@@ -328,7 +339,7 @@ export class ApplicationsService {
 
     if (!application) return { applied: false as const, application: null };
     const { resumeSnapshot, resume, ...publicApplication } = application;
-    const submitted = submittedResume(resumeSnapshot, resume);
+    const submitted = submittedResume(resumeSnapshot);
 
     return {
       applied: true as const,
@@ -354,8 +365,13 @@ export class ApplicationsService {
                 name: true,
                 slug: true,
                 logoUrl: true,
+                isBanned: true,
+                anonymizedAt: true,
                 members: {
-                  where: { role: { in: ['OWNER', 'ADMIN'] } },
+                  where: {
+                    role: { in: ['OWNER', 'ADMIN', 'RECRUITER'] },
+                    user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null },
+                  },
                   select: { userId: true, role: true },
                   take: 5,
                 },
@@ -379,12 +395,16 @@ export class ApplicationsService {
     return rows.map((app) => {
       const members = app.jobPost.company.members ?? [];
       const handlingId = peers.get(app.jobPostId);
-      const peer = members.find((m) => m.role === 'OWNER') ?? members[0];
-      const { members: _members, ...company } = app.jobPost.company;
+      const peer = members.find((m) => m.role === 'OWNER') ?? members.find((m) => m.role === 'ADMIN') ?? members[0];
+      const companyIsActive = !app.jobPost.company.isBanned && !app.jobPost.company.anonymizedAt;
+      const { members: _members, isBanned: _isBanned, anonymizedAt: _anonymizedAt, ...company } = app.jobPost.company;
       // Confidential posting: the employer (and its chat) stays hidden until interview stage.
       const reveal = !app.jobPost.isAnonymous || revealsAnonymousEmployer(app.status) || app._count.events > 0;
+      const chatPeerUserId = companyIsActive && employeeApplicationChatAllowed(app.status)
+        ? handlingId || peer?.userId || null
+        : null;
       const jobPost = maskAnonymousCompany(
-        { ...app.jobPost, company: { ...company, chatPeerUserId: reveal ? handlingId || peer?.userId || null : null } },
+        { ...app.jobPost, company: { ...company, chatPeerUserId: reveal ? chatPeerUserId : null } },
         locale,
         { reveal },
       );
@@ -392,6 +412,92 @@ export class ApplicationsService {
         ...safeApplication(app),
         jobPost,
       };
+    });
+  }
+
+  /** Reveal a verified recruiter phone only for an eligible application, on explicit employee action. */
+  async recruiterWhatsAppContact(user: AuthUser, applicationId: string) {
+    if (user.role !== 'EMPLOYEE') throw new ForbiddenException();
+
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize this reveal with an application withdrawal so the phone cannot
+      // be returned after a concurrent withdrawal has committed.
+      await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT a."id"
+        FROM "Application" a
+        JOIN "EmployeeProfile" p ON p."id" = a."profileId"
+        WHERE a."id" = ${applicationId} AND p."userId" = ${user.id}
+        FOR UPDATE OF a
+      `);
+
+      const application = await tx.application.findFirst({
+        where: { id: applicationId, profile: { userId: user.id } },
+        select: {
+          id: true,
+          status: true,
+          jobPostId: true,
+          events: anonymousRevealHistory,
+          jobPost: {
+            select: {
+              isAnonymous: true,
+              companyId: true,
+              company: { select: { isBanned: true, anonymizedAt: true } },
+            },
+          },
+        },
+      });
+      if (!application || !employeeApplicationChatAllowed(application.status)) {
+        throw new NotFoundException('Application not available for contact');
+      }
+
+      const company = application.jobPost.company;
+      if (company.isBanned || company.anonymizedAt) throw new NotFoundException('Recruiter not available');
+      if (application.jobPost.isAnonymous && !revealsAnonymousEmployer(application.status, application.events)) {
+        throw new NotFoundException('Recruiter not available');
+      }
+
+      const members = await tx.companyMember.findMany({
+        where: {
+          companyId: application.jobPost.companyId,
+          user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null },
+        },
+        select: {
+          userId: true,
+          role: true,
+          createdAt: true,
+          user: { select: { phone: true, phoneVerifiedAt: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      const existingHandlerId = (await jobChatPeers(tx, user.id, [{
+        id: application.jobPostId,
+        companyId: application.jobPost.companyId,
+      }])).get(application.jobPostId);
+      const hasVerifiedWhatsAppNumber = (member: (typeof members)[number]) =>
+        Boolean(member.user.phoneVerifiedAt && member.user.phone && /^\+[1-9]\d{7,14}$/.test(member.user.phone));
+      const eligibleMembers = members.filter(hasVerifiedWhatsAppNumber);
+      const recruiter =
+        eligibleMembers.find((member) => member.userId === existingHandlerId) ??
+        eligibleMembers.find((member) => member.role === 'OWNER') ??
+        eligibleMembers.find((member) => member.role === 'ADMIN') ??
+        eligibleMembers[0];
+
+      if (!recruiter?.user.phone) return { phone: null };
+
+      await tx.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'EMPLOYEE_RECRUITER_WHATSAPP_CONTACT_REVEAL',
+          entityType: 'Application',
+          entityId: application.id,
+          metadata: {
+            companyId: application.jobPost.companyId,
+            jobPostId: application.jobPostId,
+            recruiterId: recruiter.userId,
+          },
+        },
+      });
+      return { phone: recruiter.user.phone };
     });
   }
 
@@ -408,7 +514,7 @@ export class ApplicationsService {
     const where: Record<string, unknown> = { jobPostId };
     if (opts?.kanbanOnly) where.kanbanEnteredAt = { not: null };
     if (opts?.applicationId) where.id = opts.applicationId;
-    if (opts?.filters) where.profile = await applicantFilter(this.prisma, opts.filters);
+    if (opts?.filters) where.AND = [await applicantFilter(this.prisma, opts.filters)];
     if (opts?.status) where.status = opts.status;
     const window = opts?.window ?? await this.applicationWindow(where as Prisma.ApplicationWhereInput,jobPostId,opts);
 
@@ -458,7 +564,10 @@ export class ApplicationsService {
       const submitted = submittedResume(resumeSnapshot);
       const hasResumeFile = Boolean(submitted.fileKey);
       const safeSnapshot = safeApplication({ resumeSnapshot }).resumeSnapshot;
-      const { translations, onboardingDraft: _unreviewedDraft, ...profileRest } = profile;
+      const evidence=(resumeSnapshot as {cvEvidence?:unknown}|null)?.cvEvidence;
+      const cvProfile=withCvFacts(profile,evidence?{id:row.resumeVersionId??'submitted',parseStatus:'READY',matchingData:evidence}:null);
+      const profileRest={id:profile.id,headline:cvProfile.headline,skills:cvProfile.skills.map(s=>({id:s.id,skill:s.skill})),city:profile.city,residenceCountry:profile.residenceCountry,user:{id:profile.user.id,fullName:profile.user.fullName,avatarUrl:profile.user.avatarUrl},contentLocale:null};
+      const translations: Array<{locale:string;headline:string|null;isMachine:boolean}>=[];
       const resolvedHeadline = resolveUgcContent(
         { headline: profileRest.headline ?? '' },
         profileRest.contentLocale,
@@ -475,7 +584,7 @@ export class ApplicationsService {
         candidateDecisionRequired: row.status === 'OFFER' && decisionRequired.has(row.id),
         canAddToKanban: canAddToKanban(row),
         matchSnapshot: {score:row.matchScore,breakdown:row.matchBreakdown},
-        matchScore: window.scores.get(row.id)?.total ?? null,
+        matchScore: window.scores.get(row.id)?.assessable ? window.scores.get(row.id)!.total : null,
         matchBreakdown: window.scores.get(row.id) ?? null,
         profile: {
           ...profileRest,
@@ -494,14 +603,16 @@ export class ApplicationsService {
     const limit = opts?.limit ?? 12;
     const page = opts?.page ? Math.min(opts.page,Math.max(1,Math.ceil(count/limit))) : 1;
     const rows = await this.prisma.application.findMany({where,
-      select:{id:true,createdAt:true,profile:{include:recruiterProfileInclude}},
+      select:{id:true,createdAt:true,resumeId:true,resumeVersionId:true,resumeVersion:true,resumeSnapshot:true,profile:{include:recruiterProfileInclude}},
       ...(newestOnly && opts?.page ? {skip:(page-1)*limit,take:limit}:{}),
       orderBy:[{createdAt:'desc'},{id:'asc'}],
     });
-    const scores = opts?.kanbanOnly ? [] : await this.matching.scoreProfilesAgainstJob(rows.map(row=>row.profile),jobPostId);
+    const inputs=opts?.kanbanOnly?[]:await Promise.all(rows.map(row=>applicationCvProfile(this.prisma,row,row.profile)));
+    const scores=opts?.kanbanOnly?[]:await this.matching.scoreEvidenceProfiles(inputs,jobPostId);
+    for(let i=0;i<inputs.length;i++)if(inputs[i].cvSource.status==='READY')await this.prisma.application.updateMany({where:{id:rows[i].id,matchScore:null},data:{matchScore:scores[i].total,matchBreakdown:scores[i]}});
     const byId = new Map(rows.flatMap((row,index)=>scores[index]?[[row.id,scores[index]] as const]:[]));
-    let ranked = rows.filter(row=>opts?.minMatch===undefined || byId.get(row.id)!.total>=opts.minMatch);
-    if (opts?.sort !== 'newest') ranked.sort((a,b)=>compareRecruiterMatches(byId.get(a.id)!,byId.get(b.id)!) || a.id.localeCompare(b.id));
+    let ranked = rows.filter(row=>opts?.minMatch===undefined || (byId.get(row.id)?.assessable&&byId.get(row.id)!.total>=opts.minMatch));
+    if (!opts?.kanbanOnly && opts?.sort !== 'newest') ranked.sort((a,b)=>compareRecruiterMatches(byId.get(a.id)!,byId.get(b.id)!) || a.id.localeCompare(b.id));
     const total = newestOnly ? count : ranked.length;
     const totalPages = Math.max(1,Math.ceil(total/limit));
     const currentPage = opts?.page ? Math.min(opts.page,totalPages) : 1;
@@ -849,7 +960,7 @@ export class ApplicationsService {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobPostId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId);
-    const where: Prisma.ApplicationWhereInput = { jobPostId, profile: await applicantFilter(this.prisma, input), ...(input.status ? { status: input.status as never } : {}), ...(input.kanbanOnly ? {kanbanEnteredAt:{not:null}} : {}) };
+    const where: Prisma.ApplicationWhereInput = { jobPostId, AND: [await applicantFilter(this.prisma, input)], ...(input.status ? { status: input.status as never } : {}), ...(input.kanbanOnly ? {kanbanEnteredAt:{not:null}} : {}) };
     const window = await this.applicationWindow(where,jobPostId,input);
     const items = await this.listForJob(user, jobPostId, { ...input, page:window.page, filters: input, locale,window });
     return { items, total:window.total, page:window.page, limit: input.limit, totalPages:window.totalPages };
@@ -1161,15 +1272,14 @@ export class ApplicationsService {
   async rescore(user: AuthUser, applicationId: string) {
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
-      include: { jobPost: true },
+      include: { jobPost: {include:{jobSkills:{include:{skill:{include:{aliases:true}}}},jobLanguages:{include:{language:true}},city:{include:{province:true}}}},profile:{include:recruiterProfileInclude} },
     });
     if (!application) throw new NotFoundException();
     await this.companies.assertMember(user, application.jobPost.companyId);
 
-    const breakdown = await this.matching.scoreProfileAgainstJob(
-      application.profileId,
-      application.jobPostId,
-    );
+    const source=await applicationCvProfile(this.prisma,application,application.profile);
+    if(source.cvSource.status!=='READY')throw new ConflictException('CV processing is not complete');
+    const breakdown = await this.matching.scoreInputs(source,application.jobPost);
     return safeApplication(await this.prisma.application.update({
       where: { id: applicationId },
       data: { matchScore: breakdown.total, matchBreakdown: breakdown },

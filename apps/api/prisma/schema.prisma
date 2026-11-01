@@ -1258,6 +1258,9 @@ model Resume {
   deletedAt        DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  currentVersionId String? @unique
+  currentVersion ResumeVersion? @relation("CurrentCvVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions ResumeVersion[] @relation("CvVersions")
 
   profile        EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   targetJobTitle JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
@@ -1270,11 +1273,44 @@ model Resume {
   @@index([parseStatus])
 }
 
+/// A file revision is retained independently of the editable CV library entry.
+model ResumeVersion {
+  id String @id @default(cuid())
+  resumeId String?
+  fileKey String
+  checksum String?
+  parseStatus ResumeParseStatus @default(NONE)
+  parseGeneration Int @default(0)
+  parseStartedAt DateTime?
+  parseError String?
+  parsedAt DateTime?
+  parserVersion String @default("cv-evidence-v1")
+  parsedData Json?
+  matchingData Json?
+  skillIds String[] @default([])
+  roleKeys String[] @default([])
+  degreeLevels String[] @default([])
+  searchText String @default("")
+  experienceYears Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resume Resume? @relation("CvVersions", fields: [resumeId], references: [id], onDelete: SetNull)
+  currentFor Resume? @relation("CurrentCvVersion")
+  applications Application[]
+  @@unique([resumeId, fileKey])
+  @@index([skillIds], type: Gin)
+  @@index([roleKeys], type: Gin)
+  @@index([degreeLevels], type: Gin)
+  @@index([parseStatus])
+}
+
 model Application {
   id             String            @id @default(cuid())
   jobPostId      String
   profileId      String
   resumeId       String?
+  resumeVersionId String?
+  resumeVersion ResumeVersion? @relation(fields: [resumeVersionId], references: [id], onDelete: SetNull)
   status         ApplicationStatus @default(NEW)
   kanbanEnteredAt DateTime?
   coverLetter    String?
@@ -1300,6 +1336,7 @@ model Application {
   @@index([status])
   @@index([matchScore])
   @@index([resumeId])
+  @@index([resumeVersionId])
   @@index([jobPostId, source])
   @@index([jobPostId, kanbanEnteredAt, status])
 }

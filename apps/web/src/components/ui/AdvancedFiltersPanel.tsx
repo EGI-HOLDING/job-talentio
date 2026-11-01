@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect, useId, useState } from 'react';
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
 import { useI18n } from '@/lib/i18n';
 
 type AdvancedFiltersPanelProps = {
@@ -64,8 +65,8 @@ export function AdvancedFiltersPanel({
             </span>
           ) : null}
         </span>
-        <span className={`advanced-filters-chevron ${open ? 'open' : ''}`} aria-hidden>
-          ▾
+        <span className={`advanced-filters-chevron ${open ? 'open' : ''}`} aria-hidden="true">
+          <WorkspaceIcon kind="chevronDown" />
         </span>
       </button>
       <div

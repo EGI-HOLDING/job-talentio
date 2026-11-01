@@ -1,7 +1,8 @@
 .footer { background: linear-gradient(115deg, #202744, #10162f); color: #eef0ff; padding: 2.4rem 0 1.4rem; }
 .inner { width: min(1544px, calc(100% - 4rem)); margin-inline: auto; }
 .top { display: grid; grid-template-columns: 1fr 2fr; gap: 3rem; }
-.brand { font-family: var(--font-display); font-size: 1.65rem; font-weight: 750; letter-spacing: -.045em; }
+.brand { display: inline-flex; align-items: center; font-family: var(--font-display); font-size: 1.65rem; font-weight: 750; letter-spacing: -.045em; }
+.brand img { display: block; width: 156px; height: auto; object-fit: contain; }
 .identity p { color: #b0b7cf; font-size: .9rem; margin: .55rem 0 0; }
 .links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; font-size: .85rem; }
 .links > div { display: flex; flex-direction: column; gap: .85rem; }
@@ -16,6 +17,7 @@
   .inner { width: calc(100% - 2rem); }
   .top { grid-template-columns: 1fr; gap: 2rem; }
   .brand { font-size: 1.65rem; }
+  .brand img { width: 142px; }
   .identity p { font-size: .82rem; }
   .links { gap: .7rem; font-size: .75rem; }
   .links > div { gap: .9rem; }

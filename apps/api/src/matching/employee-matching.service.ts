@@ -7,6 +7,7 @@ import { EmployeeEvaluation, EmployeeMatchJob, EmployeeMatchProfile, OccupationI
 import { MatchingService } from './matching.service';
 import { loadJobPromotions, publicJobPromotion } from '../benefits/job-promotion';
 import { placeEmployeeBoosts } from './employee-boost-placement';
+import { withCvFacts,cvVersionSelect } from '../profiles/cv-evidence';
 
 export const employeeJobFeatures = {
   id:true, title:true, jobTitleId:true, companyId:true, publishedAt:true, countryId:true, cityId:true,
@@ -29,15 +30,16 @@ export class EmployeeMatchingService {
   }
 
   private async context(profileId: string) {
-    const [profile, roles] = await Promise.all([
+    const [stored, roles] = await Promise.all([
       this.prisma.employeeProfile.findUniqueOrThrow({where:{id:profileId}, include:{
-        skills:{include:{skill:{include:{aliases:{select:{aliasKey:true}}}}}}, experiences:true,
+        resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},take:1,include:{currentVersion:{select:cvVersionSelect}}},
         languages:{include:{language:true}}, preferredCountries:{select:{id:true}},
         city:{include:{province:{select:{countryId:true}}}},
       }}),
       this.prisma.jobTitle.findMany({where:{archivedAt:null},select:{id:true,name:true,nameId:true,nameUz:true,nameRu:true,
         normalizedKey:true,matchingMetadata:true,aliases:{select:{alias:true,aliasKey:true}}}}),
     ]);
+    const profile=withCvFacts(stored,stored.resumes[0]?.currentVersion);
     return { profile, index:new OccupationIndex(roles), fingerprint:digest([EMPLOYEE_MATCH_VERSION,profile,roles,new Date().toISOString().slice(0,10)]) };
   }
 
@@ -54,6 +56,7 @@ export class EmployeeMatchingService {
   async scoreJobsForProfile(profileId: string, ids: string[]) {
     if (!ids.length) return new Map<string, EmployeeEvaluation>();
     const [context,jobs] = await Promise.all([this.context(profileId),this.prisma.jobPost.findMany({where:{id:{in:ids}},select:employeeJobFeatures})]);
+    if(context.profile.cvSource.status!=='READY')return new Map<string,EmployeeEvaluation>();
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,ids);
     return new Map(jobs.map(job => { const evaluation=this.evaluate(context,job);return [job.id,old ? {...evaluation,score:old.get(job.id)?.total ?? 0,positiveCore:true} : evaluation]; }));
   }
@@ -70,9 +73,18 @@ export class EmployeeMatchingService {
       applications:{none:{profileId}}},select:employeeJobFeatures});
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,features.map(job=>job.id));
     const scored = features.map(job => {const evaluation=this.evaluate(context,job);return {job,evaluation:old ? {...evaluation,score:old.get(job.id)?.total ?? 0,positiveCore:true} : evaluation};});
+    const ready=context.profile.cvSource.status==='READY';
+    if(!ready)for(const row of scored){row.evaluation={...row.evaluation,score:0,positiveCore:false,insights:{...row.evaluation.insights,mode:'LATEST',evidence:[]}};}
     const personal = scored.filter(row => row.evaluation.positiveCore);
     const selected = personal.length ? personal : scored;
     const organic = rankEmployeeJobs(selected);
+    if(!ready){
+      const countries=new Set(context.profile.preferredCountries?.map(country=>country.id));
+      const wanted=new Set([context.profile.desiredPosition,...(context.profile.desiredPositions??[])].filter((text):text is string=>Boolean(text)).flatMap(text=>[...context.index.resolve(text)]));
+      const country=(job:EmployeeMatchJob)=>Number(countries.has(job.countryId??job.city?.province?.countryId??''));
+      const role=(job:EmployeeMatchJob)=>Number(job.jobTitleId?wanted.has(job.jobTitleId):[...context.index.resolve(job.title)].some(id=>wanted.has(id)));
+      organic.sort((a,b)=>country(b.job)-country(a.job)||role(b.job)-role(a.job)||(b.job.publishedAt?.getTime()??0)-(a.job.publishedAt?.getTime()??0)||a.job.id.localeCompare(b.job.id));
+    }
     const promotions = await loadJobPromotions(this.prisma, organic.map(row => row.job.id), now);
     const placementEnabled = process.env.EMPLOYEE_BOOST_PLACEMENTS_ENABLED === 'true' && this.enabled(profileId)
       && personal.length > 0 && promotions.available && promotions.enabled;
@@ -92,7 +104,7 @@ export class EmployeeMatchingService {
     const byId = new Map(jobs.map(job => [job.id,job]));
     return { items:rows.flatMap(row => {
       const job = byId.get(row.job.id);
-      return job ? [{job:{...job,...publicJobPromotion(promotions,job.id),placement:row.placement},matchScore:row.evaluation.score,matchInsights:row.evaluation.insights}] : [];
-    }), page,limit,total,totalPages,mode:personal.length ? 'PERSONALIZED' as const : 'LATEST' as const,version:EMPLOYEE_MATCH_VERSION,rankingRevision };
+      return job ? [{job:{...job,...publicJobPromotion(promotions,job.id),placement:row.placement},matchScore:ready?row.evaluation.score:null,matchInsights:ready?row.evaluation.insights:null}] : [];
+    }), page,limit,total,totalPages,mode:personal.length ? 'PERSONALIZED' as const : 'LATEST' as const,version:EMPLOYEE_MATCH_VERSION,rankingRevision,cvSource:context.profile.cvSource };
   }
 }

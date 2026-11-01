@@ -15,14 +15,19 @@ const valid: ParsedCvData = {
 function fixture(parse: (input: CvParseProviderInput) => Promise<ParsedCvData> = async () => valid, storageError?: Error) {
   let row: any = {
     id: "resume",
+    currentVersionId:"version-1",
     fileKey: "cv.pdf",
     deletedAt: null,
     parseGeneration: 1,
     parseStatus: "PENDING",
     updatedAt: new Date(),
   };
+  const versions=new Map<string,any>([['version-1',{id:'version-1',resumeId:'resume',fileKey:'cv.pdf',parseGeneration:1,parseStatus:'PENDING',checksum:null}]]);
+  const matches=(row:any,where:any)=>Object.entries(where).every(([key,value]:any)=>value&&typeof value==='object'&&'in' in value?value.in.includes(row[key]):row[key]===value);
   let reads = 0;
   const db: any = {
+    $transaction:async (run:any)=>run(db),
+    $queryRaw:async()=>[],
     resume: {
       findUnique: async () => ({ ...row }),
       update: async ({ data }: any) => {
@@ -45,12 +50,19 @@ function fixture(parse: (input: CvParseProviderInput) => Promise<ParsedCvData> =
         return { count: 1 };
       },
     },
+    resumeVersion:{
+      findUnique:async({where}:any)=>versions.get(where.id)??null,
+      upsert:async({where,create,update}:any)=>{const found=[...versions.values()].find(v=>v.resumeId===where.resumeId_fileKey?.resumeId&&v.fileKey===where.resumeId_fileKey?.fileKey);if(found){Object.assign(found,update);return {...found};}const made={id:'version-'+versions.size,...create};versions.set(made.id,made);return {...made};},
+      update:async({where,data}:any)=>{Object.assign(versions.get(where.id),data);return {...versions.get(where.id)};},
+      updateMany:async({where,data}:any)=>{let count=0;for(const row of versions.values())if(matches(row,where)){Object.assign(row,data);count++;}return {count};},
+    },
     skill: { findMany: async (query: any) => {
       assert.equal(query.take, undefined, 'Parser catalog must not have an arbitrary row cap');
       return Array.from({ length: 601 }, (_, i) => ({ name: `Catalog skill ${i}`, slug: `catalog-${i}`, aliases: [] }));
     } },
     language: { findMany: async () => [] },
   };
+  db.resume.findUniqueOrThrow=db.resume.findUnique;
   const service = new CvParseService(
     db,
     {
@@ -71,10 +83,12 @@ function fixture(parse: (input: CvParseProviderInput) => Promise<ParsedCvData> =
       row = {
         ...row,
         fileKey: "new.pdf",
+        currentVersionId:"version-2",
         parseGeneration: row.parseGeneration + 1,
         parseStatus: "PENDING",
       };
     },
+    get versions(){return versions;},
     remove: () => { row = { ...row, deletedAt: new Date(), parseGeneration: row.parseGeneration + 1, parseStatus: 'NONE' }; },
     get reads() {
       return reads;
@@ -109,6 +123,7 @@ async function main() {
   await work;
   assert.equal(stale.row.parseStatus, "PENDING");
   assert.equal(stale.row.parsedData, undefined);
+  assert.equal(stale.versions.get('version-1').parseStatus,'READY','Old file evidence may finish without contaminating the replacement');
   let finishRemoved!: (result: ParsedCvData) => void;
   const removed = fixture(() => new Promise(resolve => { finishRemoved = resolve; }));
   const beforeDelete = removed.service.processResume('resume', 1);
@@ -131,7 +146,7 @@ async function main() {
   }));
   await assert.rejects(
     () => empty.service.processResume("resume", 1),
-    /No readable/,
+    /no readable/i,
   );
   assert.equal(empty.row.parseStatus, "FAILED");
   const offline = fixture();

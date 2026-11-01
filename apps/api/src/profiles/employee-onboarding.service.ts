@@ -8,19 +8,16 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { ProfilesService } from "./profiles.service";
 import { AuthUser } from "../common/auth.decorators";
-import { experienceImportKey, resumeStartDate } from "./cv-import-merge";
 import { canonicalRoleNames } from "../common/title-resolve";
 import { resolveJobLocation } from "../common/geo-selection";
-import { careerDates } from './career-dates';
 
 const include = {
   user: { select: { fullName: true, email: true } },
   residenceCountry: true,
   preferredCountries: true,
-  experiences: { include: { country: true } },
   resumes: {
     where: { deletedAt: null },
-    select: { id: true, title: true, parseStatus: true, parseGeneration: true },
+    select: { id: true, title: true, parseStatus: true, parseGeneration: true,isPrimary:true,fileKey:true },
   },
 } as const;
 type Db = Prisma.TransactionClient;
@@ -43,6 +40,7 @@ export class EmployeeOnboardingService {
       draft: profile.onboardingDraft || {},
       profile: {
         ...profile,
+        resumes:profile.resumes.map(({fileKey,...resume})=>({...resume,hasFile:Boolean(fileKey)})),
         desiredSalaryMin:
           profile.desiredSalaryMin === null
             ? null
@@ -97,6 +95,7 @@ export class EmployeeOnboardingService {
       "phoneDraft",
     ] as const)
       if (input[key] !== undefined) draft[key] = input[key];
+    if(input.review || input.reviewState || input.manualExperiences?.length)throw new BadRequestException("CV information is processed automatically");
     if (input.resumeId) {
       const owned = await db.resume.findFirst({
         where: { id: input.resumeId, profileId: before.id, deletedAt: null },
@@ -117,9 +116,7 @@ export class EmployeeOnboardingService {
       ...new Set([
         ...(input.preferredCountryIds || []),
         ...(input.residenceCountryId ? [input.residenceCountryId] : []),
-        ...(input.review?.experiences || []).flatMap((e) =>
-          e.countryId ? [e.countryId] : [],
-        ),
+
         ...(input.manualExperiences || []).flatMap((e) =>
           e.countryId ? [e.countryId] : [],
         ),
@@ -184,7 +181,6 @@ export class EmployeeOnboardingService {
         desiredSalaryPeriod: input.desiredSalaryPeriod,
         salaryNegotiable: input.salaryNegotiable,
         visibility: input.visibility,
-        noExperience: input.noExperience,
         ...(phone !== undefined ? { phone } : {}),
         onboardingDraft: JSON.parse(
           JSON.stringify(draft),
@@ -231,80 +227,10 @@ export class EmployeeOnboardingService {
         );
         if (draft.fullName !== undefined && draft.fullName.trim().length < 2)
           throw new BadRequestException("Complete your full name");
-        if (draft.resumeId && draft.review) {
-          const resume = await db.resume.findFirst({
-            where: {
-              id: draft.resumeId,
-              profileId: profile.id,
-              deletedAt: null,
-            },
-          });
-          if (
-            !resume ||
-            resume.parseGeneration !== draft.resumeGeneration ||
-            resume.parseStatus !== "READY"
-          )
-            throw new BadRequestException(
-              "CV changed; read it again before importing",
-            );
-          for (const exp of profile.noExperience
-            ? []
-            : draft.review.experiences) {
-            const start = resumeStartDate(exp.startDate),
-              end = resumeStartDate(exp.endDate);
-            if (!start || (!exp.isCurrent && end && end < start))
-              throw new BadRequestException(
-                "Check selected CV experience dates",
-              );
-          }
-          await this.profiles.importParsedResume(
-            user,
-            draft.resumeId,
-            {
-              ...draft.review,
-              experiences: profile.noExperience ? [] : draft.review.experiences,
-            },
-            draft.resumeGeneration!,
-            db,
-          );
-        }
-        if (!profile.noExperience) {
-          const experiences = await db.workExperience.findMany({
-            where: { profileId: profile.id },
-          });
-          const seen = new Set(
-            experiences.map((e) =>
-              experienceImportKey(e.title, e.companyName, e.startDate),
-            ),
-          );
-          for (const exp of draft.manualExperiences || []) {
-            const { startDate, endDate } = careerDates(exp, true);
-            if (
-              !startDate ||
-              (!exp.isCurrent && endDate && endDate < startDate)
-            )
-              throw new BadRequestException("Check experience dates");
-            const key = experienceImportKey(
-              exp.title,
-              exp.companyName,
-              startDate,
-            );
-            if (seen.has(key)) continue;
-            seen.add(key);
-            await db.workExperience.create({
-              data: {
-                profileId: profile.id,
-                title: exp.title,
-                companyName: exp.companyName,
-                description: exp.description,
-                startDate,
-                endDate: exp.isCurrent ? null : endDate,
-                isCurrent: Boolean(exp.isCurrent),
-                countryId: exp.countryId,
-              },
-            });
-          }
-        }
+        const selected=draft.resumeId ? await db.resume.findFirst({where:{id:draft.resumeId,profileId:profile.id,deletedAt:null,fileKey:{not:null}}}) : await db.resume.findFirst({where:{profileId:profile.id,isPrimary:true,deletedAt:null,fileKey:{not:null}}});
+        if(!selected)throw new BadRequestException('Upload a CV before completing onboarding');
+        await db.resume.updateMany({where:{profileId:profile.id},data:{isPrimary:false}});
+        await db.resume.update({where:{id:selected.id},data:{isPrimary:true}});
         await db.employeeProfile.update({
           where: { id: profile.id },
           data: {

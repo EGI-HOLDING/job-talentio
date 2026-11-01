@@ -36,7 +36,6 @@ import {
 import { parseDto } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
-import { profileRoleTexts } from '../common/title-resolve';
 
 function assertLocale(value: string): Locale {
   if (!isLocale(value)) throw new BadRequestException('Unsupported locale');
@@ -64,16 +63,11 @@ export class JobsController {
         where: { userId: user.id },
         select: {
           id: true,
-          headline: true,
-          desiredPosition: true,
-          desiredPositions: true,
-          experiences: { select: { title: true } },
-          _count: { select: { skills: true } },
+          resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},select:{currentVersion:{select:{parseStatus:true}}}},
         },
       });
-      // A desired role is a valid matching signal even before skills are filled in.
-      // Keep genuinely empty profiles from driving match sorting or score badges.
-      if (profile && (profile._count.skills > 0 || profileRoleTexts(profile).length > 0)) {
+      // CV readiness gates scores; preferences alone must not claim a CV match.
+      if (profile && profile.resumes.some(r=>r.currentVersion?.parseStatus==='READY')) {
         profileId = profile.id;
       }
     }

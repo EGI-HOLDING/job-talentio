@@ -17,7 +17,7 @@ import { emailLocale } from '../common/i18n/email-locale';
 import { AuthUser } from '../common/auth.decorators';
 import { Prisma } from '@prisma/client';
 import { revealsAnonymousEmployer, anonymousRevealHistory } from '../common/anonymous-job';
-import { applicationChatAllowed } from './application-chat-access';
+import { applicationChatAllowed, employeeApplicationChatAllowed } from './application-chat-access';
 
 @Injectable()
 export class ChatService {
@@ -36,22 +36,62 @@ export class ChatService {
     return a < b ? [a, b] : [b, a];
   }
 
-  private async assertApplicationChatNotWithdrawn(
-    tx: Prisma.TransactionClient,
-    conversation: { jobPostId: string | null; userAId: string; userBId: string },
+  private async isRecruiterInitiatedColdOutreach(
+    db: Prisma.TransactionClient | PrismaService,
+    conversation: { isColdOutreach: boolean; initiatedBy: string },
   ) {
-    if (!conversation.jobPostId) return;
-    const applications = await tx.$queryRaw<Array<{ status: string }>>(Prisma.sql`
+    if (!conversation.isColdOutreach) return false;
+    const initiator = await db.user.findUnique({
+      where: { id: conversation.initiatedBy },
+      select: { role: true },
+    });
+    return initiator?.role === 'RECRUITER';
+  }
+
+  private async assertConversationChatAllowed(
+    tx: Prisma.TransactionClient,
+    conversation: {
+      jobPostId: string | null;
+      companyId: string | null;
+      userAId: string;
+      userBId: string;
+      isColdOutreach: boolean;
+      initiatedBy: string;
+    },
+    senderRole: string,
+  ) {
+    const participants = [conversation.userAId, conversation.userBId];
+    const applications = conversation.jobPostId
+      ? await tx.$queryRaw<Array<{ status: string }>>(Prisma.sql`
       SELECT a."status"::text AS "status"
       FROM "Application" a
       JOIN "EmployeeProfile" p ON p."id" = a."profileId"
       WHERE a."jobPostId" = ${conversation.jobPostId}
-        AND p."userId" IN (${Prisma.join([conversation.userAId, conversation.userBId])})
+        AND p."userId" IN (${Prisma.join(participants)})
       FOR UPDATE OF a
-    `);
-    if (applications.some((application) => !applicationChatAllowed(application.status))) {
+    `)
+      : conversation.companyId
+        ? await tx.$queryRaw<Array<{ status: string }>>(Prisma.sql`
+          SELECT a."status"::text AS "status"
+          FROM "Application" a
+          JOIN "EmployeeProfile" p ON p."id" = a."profileId"
+          JOIN "JobPost" j ON j."id" = a."jobPostId"
+          WHERE j."companyId" = ${conversation.companyId}
+            AND p."userId" IN (${Prisma.join(participants)})
+          FOR UPDATE OF a
+        `)
+        : [];
+
+    if (conversation.jobPostId && applications.some((application) => application.status === 'WITHDRAWN')) {
       throw new NotFoundException('Conversation not found');
     }
+    if (applications.some((application) => employeeApplicationChatAllowed(application.status))) return;
+    if (
+      !applications.length &&
+      (senderRole === 'RECRUITER' || senderRole === 'SUPER_ADMIN') &&
+      await this.isRecruiterInitiatedColdOutreach(tx, conversation)
+    ) return;
+    throw new NotFoundException('Conversation not found');
   }
 
   private assertParticipant(
@@ -65,11 +105,26 @@ export class ChatService {
 
   /** Keep confidential employer context behind the same stage gate as job details. */
   private async canAccessConversationContext(
-    conversation: { jobPostId: string | null; companyId: string | null },
+    conversation: {
+      jobPostId: string | null;
+      companyId: string | null;
+      userAId: string;
+      userBId: string;
+      isColdOutreach: boolean;
+      initiatedBy: string;
+    },
     participantIds: string[],
     viewer: AuthUser,
   ) {
     if (viewer.role === 'SUPER_ADMIN') return true;
+    const activeParticipants = await this.prisma.user.count({
+      where: {
+        id: { in: [conversation.userAId, conversation.userBId] },
+        isBanned: false,
+        anonymizedAt: null,
+      },
+    });
+    if (activeParticipants !== 2) return false;
     let companyId = conversation.companyId;
     if (conversation.jobPostId) {
       const job = await this.prisma.jobPost.findUnique({
@@ -88,6 +143,17 @@ export class ChatService {
           select: { userId: true },
         });
         if (!membership) return false;
+      } else if (viewer.role === 'EMPLOYEE') {
+        const peerId = conversation.userAId === viewer.id ? conversation.userBId : conversation.userAId;
+        const membership = await this.prisma.companyMember.findFirst({
+          where: {
+            companyId,
+            userId: peerId,
+            user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null },
+          },
+          select: { userId: true },
+        });
+        if (!membership) return false;
       }
       const application = await this.prisma.application.findFirst({
         where: {
@@ -96,12 +162,18 @@ export class ChatService {
         },
         select: { status: true, events: anonymousRevealHistory },
       });
-      if (!applicationChatAllowed(application?.status)) return false;
+      if (!employeeApplicationChatAllowed(application?.status)) {
+        if (
+          viewer.role === 'EMPLOYEE' ||
+          application ||
+          !(await this.isRecruiterInitiatedColdOutreach(this.prisma, conversation))
+        ) return false;
+      }
       if (!job.isAnonymous) return true;
       return Boolean(application && revealsAnonymousEmployer(application.status, application.events));
     }
 
-    if (!companyId) return true;
+    if (!companyId) return false;
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
       select: { isBanned: true, anonymizedAt: true },
@@ -113,6 +185,17 @@ export class ChatService {
         select: { userId: true },
       });
       if (!membership) return false;
+    } else if (viewer.role === 'EMPLOYEE') {
+      const peerId = conversation.userAId === viewer.id ? conversation.userBId : conversation.userAId;
+      const membership = await this.prisma.companyMember.findFirst({
+        where: {
+          companyId,
+          userId: peerId,
+          user: { role: 'RECRUITER', isBanned: false, anonymizedAt: null },
+        },
+        select: { userId: true },
+      });
+      if (!membership) return false;
     }
     const applications = await this.prisma.application.findMany({
       where: {
@@ -121,10 +204,14 @@ export class ChatService {
       },
       select: { status: true, events: anonymousRevealHistory, jobPost: { select: { isAnonymous: true } } },
     });
-    if (!applications.length) return true;
+    if (!applications.length) {
+      if (viewer.role === 'EMPLOYEE') return false;
+      return this.isRecruiterInitiatedColdOutreach(this.prisma, conversation);
+    }
     return applications.some(
       (application) =>
-        !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events),
+        employeeApplicationChatAllowed(application.status) &&
+        (!application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events)),
     );
   }
 
@@ -135,7 +222,7 @@ export class ChatService {
   ) {
     if (peerUserId === user.id) throw new BadRequestException('Cannot chat with yourself');
     const peer = await this.prisma.user.findUnique({ where: { id: peerUserId } });
-    if (!peer || peer.isBanned) throw new NotFoundException('User not found');
+    if (!peer || peer.isBanned || peer.anonymizedAt) throw new NotFoundException('User not found');
 
     const contextJob = opts?.jobPostId
       ? await this.prisma.jobPost.findUnique({
@@ -187,12 +274,17 @@ export class ChatService {
       if (contextJob && applications.some((application) => !applicationChatAllowed(application.status))) {
         throw new NotFoundException('Conversation not found');
       }
+      if (!contextJob && applications.length && !applications.some((application) => applicationChatAllowed(application.status))) {
+        throw new NotFoundException('Conversation not found');
+      }
       const hasApplication = applications.some(
         (application) =>
-          !application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events),
+          applicationChatAllowed(application.status) &&
+          (!application.jobPost.isAnonymous || revealsAnonymousEmployer(application.status, application.events)),
       );
       const hiddenAnonymousApplication = applications.some(
         (application) =>
+          applicationChatAllowed(application.status) &&
           application.jobPost.isAnonymous && !revealsAnonymousEmployer(application.status, application.events),
       );
 
@@ -210,6 +302,7 @@ export class ChatService {
             { userAId: user.id, userBId: peerUserId },
           ],
           initiatedBy: peerUserId,
+          isColdOutreach: true,
         },
       });
 
@@ -224,9 +317,13 @@ export class ChatService {
         }
         isColdOutreach = true;
       }
-    } else if (user.role === 'EMPLOYEE' && (contextJob || opts?.companyId)) {
+    } else if (user.role === 'EMPLOYEE') {
+      if (peer.role !== 'RECRUITER') throw new NotFoundException('Recruiter not found for this company');
+      if (!contextJob) {
+        throw new NotFoundException('An application is required to chat with this recruiter');
+      }
       const requestedCompanyId = contextJob?.companyId ?? opts?.companyId;
-      if (!requestedCompanyId || peer.role !== 'RECRUITER') {
+      if (!requestedCompanyId) {
         throw new NotFoundException('Recruiter not found for this company');
       }
       const [company, membership] = await Promise.all([
@@ -252,8 +349,11 @@ export class ChatService {
           },
           select: { status: true, events: anonymousRevealHistory },
         });
-        if (!applicationChatAllowed(application?.status)) {
+        if (application?.status === 'WITHDRAWN') {
           throw new NotFoundException('Conversation not found');
+        }
+        if (!employeeApplicationChatAllowed(application?.status)) {
+          throw new NotFoundException('An application is required to chat with this recruiter');
         }
         if (contextJob.isAnonymous && (!application || !revealsAnonymousEmployer(application.status, application.events))) {
           throw new NotFoundException('Employer not available');
@@ -508,7 +608,7 @@ export class ChatService {
       throw new NotFoundException('Conversation not found');
     }
     const write = async (tx: Prisma.TransactionClient) => {
-      await this.assertApplicationChatNotWithdrawn(tx, conversation);
+      await this.assertConversationChatAllowed(tx, conversation, user.role);
       const value = await tx.chatMessage.create({
         data: { conversationId, senderId: user.id, body },
         include: { sender: { select: { id: true, fullName: true } } },

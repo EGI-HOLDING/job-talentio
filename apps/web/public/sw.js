@@ -1,9 +1,9 @@
-/* Job Talentio service worker: app shell offline fallback + static asset cache.
+/* Talentio service worker: app shell offline fallback + static asset cache.
  * Pages and API responses are never cached; only Next static chunks, icons and
- * the offline page are. Bump CACHE when the offline page or icons change. */
-const CACHE = 'jt-static-v2';
+ * brand assets, and the offline page are. Bump CACHE when these assets change. */
+const CACHE = 'jt-static-v3';
 const OFFLINE_URL = '/offline.html';
-const PRECACHE = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest'];
+const PRECACHE = [OFFLINE_URL, '/brand/talentio-logo.webp', '/brand/talentio-logo-white.webp', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -27,6 +27,7 @@ function isStaticAsset(url) {
   return (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/brand/') ||
     url.pathname === '/manifest.webmanifest'
   );
 }

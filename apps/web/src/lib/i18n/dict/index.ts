@@ -20,9 +20,11 @@ import { recruiterWorkspace } from './recruiterWorkspace';
 import { linkedin } from './linkedin';
 import { authProviders } from './authProviders';
 import { applicationOffer } from './applicationOffer';
+import { cvSource } from './cvSource';
 
 /** Namespaces are merged into one flat lookup so `t('key')` stays unchanged. */
 export const DICT = {
+  ...cvSource,
   ...jobCommerce,
   ...core,
   ...hrBenefits,

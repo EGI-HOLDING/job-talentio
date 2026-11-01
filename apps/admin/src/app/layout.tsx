@@ -8,6 +8,7 @@ import { Toaster } from '@/components/ui/Toaster';
 export const metadata: Metadata = {
   title: 'Job Talentio Admin',
   description: 'Super Admin console',
+  icons: { icon: '/favicon.ico' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

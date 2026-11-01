@@ -11,6 +11,7 @@ export type CatalogRole = {
 type Skill = { id?: string; name: string; nameId?:string | null; nameUz?:string | null; nameRu?:string | null; normalizedKey?: string | null; slug: string; aliases?: Array<{ aliasKey: string }> };
 export type EmployeeMatchProfile = {
   id: string; headline?: string | null; desiredPosition?: string | null; desiredPositions?: string[];
+  cvSource?: {versionId:string|null;status:string}; cvRoleTitles?:string[];
   cityId?: string | null; residenceCountryId?: string | null; noExperience?: boolean;
   preferredCountries?: Array<{ id: string }>;
   city?: { provinceId?: string; province?: { countryId: string } } | null;
@@ -85,17 +86,18 @@ export function evaluateEmployee(profile: EmployeeMatchProfile, job: EmployeeMat
   const review = profile.experiences.filter(e => experienceNeedsReview(e, now));
   const validExperiences = profile.experiences.filter(e => !experienceNeedsReview(e, now));
   const roles = new Set<string>();
-  for (const text of [profile.headline, profile.desiredPosition, ...(profile.desiredPositions ?? []),
+  const preferences = profile.cvSource ? [] : [profile.desiredPosition, ...(profile.desiredPositions ?? [])];
+  for (const text of [profile.headline, ...preferences,
     ...validExperiences.filter(e => e.isCurrent).map(e => e.title)]) {
     if (text) for (const id of index.resolve(text)) roles.add(id);
   }
   const jobRoles = job.jobTitleId ? new Set([job.jobTitleId]) : index.resolve(job.title);
-  const historyRoles=new Set(validExperiences.flatMap(e=>[...index.resolve(e.title)]));
+  const historyRoles=new Set([...validExperiences.map(e=>e.title),...(profile.cvRoleTitles??[])].flatMap(title=>[...index.resolve(title)]));
   const matchingHistory=overlap(historyRoles,jobRoles);
   const matchingRole = overlap(roles, jobRoles);
   const related = !matchingRole && [...roles].some(from => [...jobRoles].some(to => index.related(from, to)));
   // Free text can match exactly, but cannot invent equivalence or a related occupation.
-  const direct = !job.jobTitleId && !matchingRole && !related && [profile.headline, profile.desiredPosition, ...(profile.desiredPositions ?? [])]
+  const direct = !job.jobTitleId && !matchingRole && !related && [profile.headline, ...preferences]
     .filter((v): v is string => Boolean(v)).some(text => normalizeJobTitleKey(text) === normalizeJobTitleKey(job.title));
   let score = matchingRole || direct ? 15 : related || matchingHistory ? 8 : 0;
   if (matchingRole || related || direct || matchingHistory) evidence.push({ kind:'ROLE', label:job.title, status:'MET', required:false,

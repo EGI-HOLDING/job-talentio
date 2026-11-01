@@ -1,4 +1,5 @@
 import { liveJobWhere } from '../benefits/benefit-policy';
+import { withCvFacts,cvSourceInclude,cvVersionSelect,discoveryVersion } from '../profiles/cv-evidence';
 import { Injectable } from '@nestjs/common';
 import {
   DegreeLevel,
@@ -46,13 +47,15 @@ type SkillRef = {
 };
 
 type MatchProfile = {
+  cvSource?:{versionId:string|null;status:string};
+  cvRoleTitles?:string[];
   cityId: string | null;
   headline: string | null;
   desiredPosition?: string | null;
   desiredPositions?: string[];
   preferredCountries?: Array<{id:string}>;
   summary: string | null;
-  skills: Array<{ skillId: string; level: SkillLevel; skill: SkillRef }>;
+  skills: Array<{ skillId: string; level: SkillLevel; levelSource?:string; skill: SkillRef }>;
   experiences: Array<{
     title?: string | null;
     startDate: Date;
@@ -321,10 +324,10 @@ function roleMatchScore(primaryTexts: string[], historyTexts: string[], job: Mat
 
 function splitRoleTexts(profile: MatchProfile): { primary: string[]; history: string[] } {
   const clean = (value: string | null | undefined) => (value || '').trim();
-  const primary = [...(profile.desiredPositions || []), profile.desiredPosition, profile.headline]
+  const primary = [...(profile.cvSource?[]:[...(profile.desiredPositions || []), profile.desiredPosition]), profile.headline]
     .map(clean)
     .filter(Boolean);
-  const history: string[] = [];
+  const history: string[] = [...(profile.cvRoleTitles??[])];
   for (const exp of profile.experiences) {
     const title = clean(exp.title);
     if (!title) continue;
@@ -340,6 +343,7 @@ export class MatchingService {
   constructor(private prisma: PrismaService) { this.recruiter = new RecruiterMatchingService(prisma); }
 
   scoreInputs(...args: Parameters<RecruiterMatchingService['scoreInputs']>) { return this.recruiter.scoreInputs(...args); }
+  scoreEvidenceProfiles(...args:Parameters<RecruiterMatchingService['forEvidence']>){return this.recruiter.forEvidence(...args);}
 
   /** Profiles without skills or a role title are not matchable for discovery. */
   profileHasMatchSignal(profile: {
@@ -361,6 +365,7 @@ export class MatchingService {
   }
 
   private readonly scoringProfileInclude = {
+    resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},include:{currentVersion:{select:cvVersionSelect}}},
     skills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
     experiences: true, educations: true, languages: { include: { language: true } },
     certifications: true, preferredCountries: true, city: { include: { province: true } },
@@ -384,7 +389,8 @@ export class MatchingService {
       this.prisma.employeeProfile.findUniqueOrThrow({ where: { id: profileId }, include: this.scoringProfileInclude }),
       this.prisma.jobPost.findMany({ where: { id: { in: jobIds } }, include: this.scoringJobInclude }),
     ]);
-    return new Map(jobs.map(job => [job.id, this.compute(profile, job)]));
+    const source=withCvFacts(profile,profile.resumes[0]?.currentVersion);
+    return new Map(jobs.map(job => [job.id, this.compute(source, job)]));
   }
 
   compute(profile: MatchProfile, job: MatchJob): MatchBreakdown {
@@ -403,7 +409,8 @@ export class MatchingService {
         weightedTotal += w;
         const ps = findProfileSkill(profile.skills, js);
         if (ps) {
-          weightedHit += w * Math.min(1.15, SKILL_LEVEL_SCORE[ps.level]);
+          // CV extraction establishes presence, never a proficiency bonus.
+          weightedHit += w * (ps.levelSource==='CV_UNCONFIRMED'?1:Math.min(1.15, SKILL_LEVEL_SCORE[ps.level]));
           matchedSkills.push(js.skill.name);
           if (isSoftSkill(js.skill)) matchedSoft += 1;
           else matchedDistinctive += 1;
@@ -595,24 +602,25 @@ export class MatchingService {
     const context = await this.recruiter.context(jobPostId);
     // Response-size protection applies equally to every job; it is not a package quota.
     const resultLimit = Math.max(1, Math.min(200, Math.floor(limit) || 20));
-    const include = {...this.scoringProfileInclude,user:{select:{id:true,fullName:true,avatarUrl:true}},residenceCountry:true} as const;
+    const include = {...this.scoringProfileInclude,...cvSourceInclude,user:{select:{id:true,fullName:true,avatarUrl:true}},residenceCountry:true} as const;
     type Candidate = Prisma.EmployeeProfileGetPayload<{include:typeof include}>;
     let cursor:string|undefined;
     let ranked:Array<{profile:Candidate;matchScore:number;matchBreakdown:RecruiterBreakdown}>=[];
     while(true) {
       const batch=await this.prisma.employeeProfile.findMany({where:{visibility:VISIBLE_PROFILE,user:{isBanned:false,anonymizedAt:null},applications:{none:{jobPostId}}},include,take:100,orderBy:{id:'asc'},...(cursor?{cursor:{id:cursor},skip:1}:{})});
-      const scored=batch.map(profile=>{const matchBreakdown=evaluateRecruiter(profile,context.job,context.index,context.now);return {profile,matchScore:matchBreakdown.total,matchBreakdown};}).filter(row=>row.matchBreakdown.positiveCore);
+      const scored=batch.map(profile=>{const matchBreakdown=evaluateRecruiter(withCvFacts(profile,discoveryVersion(profile)),context.job,context.index,context.now);return {profile,matchScore:matchBreakdown.total,matchBreakdown};}).filter(row=>row.matchBreakdown.positiveCore);
       ranked=[...ranked,...scored].sort((a,b)=>compareRecruiterMatches(a.matchBreakdown,b.matchBreakdown)||a.profile.id.localeCompare(b.profile.id)).slice(0,resultLimit);
       if(batch.length<100)break;
       cursor=batch[batch.length-1].id;
     }
-    return ranked.map(row=>({...row,profile:{id:row.profile.id,headline:row.profile.headline,city:row.profile.city,residenceCountry:row.profile.residenceCountry,user:row.profile.user,skills:row.profile.skills.map(skill=>({name:skill.skill.name,slug:skill.skill.slug,level:skill.level}))}}));
+    return ranked.map(row=>({...row,profile:{id:row.profile.id,headline:withCvFacts(row.profile,discoveryVersion(row.profile)).headline,city:row.profile.city,residenceCountry:row.profile.residenceCountry,user:row.profile.user,skills:withCvFacts(row.profile,discoveryVersion(row.profile)).skills.map(skill=>({name:skill.skill.name,slug:skill.skill.slug}))}}));
   }
 
   async recommendJobsForProfile(profileId: string, limit = FOR_YOU_JOBS_LIMIT) {
-    const profile = await this.prisma.employeeProfile.findUniqueOrThrow({
+    const stored = await this.prisma.employeeProfile.findUniqueOrThrow({
       where: { id: profileId },
       include: {
+        resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},include:{currentVersion:{select:cvVersionSelect}}},
         skills: { include: { skill: { include: { aliases: { select: { aliasKey: true } } } } } },
         experiences: true,
         educations: true,
@@ -623,6 +631,7 @@ export class MatchingService {
       },
     });
 
+    const profile=withCvFacts(stored,stored.resumes[0]?.currentVersion);
     const resultLimit = Math.max(1, Math.min(FOR_YOU_JOBS_LIMIT, Math.floor(limit)));
 
     const jobInclude = {

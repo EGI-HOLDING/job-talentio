@@ -16,11 +16,10 @@
 .hint, .error { margin: 0; font-size: .76rem; line-height: 1.55; }
 .hint { color: #7b879d; }
 .error { color: #b4233d; }
-.menu { position: absolute; z-index: 60; top: calc(100% + 8px); left: 0; width: min(390px, 100%); padding: 10px; border: 1px solid #e1e5ef; border-radius: 14px; background: #fff; box-shadow: 0 20px 52px #1b25401f, 0 3px 10px #1b25400e; }
-.menuAbove { top: auto; bottom: calc(100% + 8px); }
+.menu { display: flex; flex-direction: column; position: fixed; padding: 10px; border: 1px solid #e1e5ef; border-radius: 14px; background: #fff; box-shadow: 0 20px 52px #1b25401f, 0 3px 10px #1b25400e; }
 .search { display: block; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #e0e5ef; border-radius: 9px; outline: 0; color: #25314a; background: #fbfcff; font: inherit; font-size: .82rem; }
 .search:focus { border-color: #947bf0; box-shadow: 0 0 0 3px #7655eb1a; }
-.options { max-height: 252px; margin-top: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.options { min-height: 0; margin-top: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .option { display: flex; width: 100%; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: #46536d; cursor: pointer; text-align: left; font: inherit; font-size: .81rem; }
 .option:hover, .option.active { background: #f6f3ff; color: #3d2b91; }
 .option[aria-selected="true"] { color: #5635e8; font-weight: 650; }

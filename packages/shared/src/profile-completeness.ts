@@ -2,11 +2,14 @@ export type ProfileCompletenessCheck = {
   id: string;
   ok: boolean;
   labelKey: string;
-  /** Career items sum to 100. Account chips are 0 and do not move the bar. */
+  /** Basic information and a stored CV sum to 100. Optional account chips are 0. */
   weight: number;
 };
 
 export type ProfileCompletenessInput = {
+  phone?: string | null;
+  desiredPosition?: string | null;
+  desiredPositions?: string[];
   headline?: string | null;
   city?: unknown;
   residenceCountryId?: string | null;
@@ -27,7 +30,7 @@ function filled(value?: string | null) {
 }
 
 /**
- * Career-weighted profile strength (0-100).
+ * CV and basic information readiness (0-100).
  * Imported Google/Telegram photos and OAuth identity do not add percent.
  */
 export function scoreProfileCompleteness(input: ProfileCompletenessInput): {
@@ -36,48 +39,10 @@ export function scoreProfileCompleteness(input: ProfileCompletenessInput): {
   missing: ProfileCompletenessCheck[];
 } {
   const career: ProfileCompletenessCheck[] = [
-    {
-      id: 'headline',
-      ok: filled(input.headline),
-      labelKey: 'emp.checkAddHeadline',
-      weight: 12,
-    },
-    {
-      id: 'city',
-      ok: Boolean(input.residenceCountryId || input.city),
-      labelKey: 'emp.checkSetCountry',
-      weight: 10,
-    },
-    {
-      id: 'skills',
-      ok: (input.skills ?? []).length >= 3,
-      labelKey: 'emp.checkAddSkills',
-      weight: 18,
-    },
-    {
-      id: 'experience',
-      ok: Boolean(input.noExperience) || (input.experiences ?? []).length >= 1,
-      labelKey: 'emp.checkAddExperience',
-      weight: 20,
-    },
-    {
-      id: 'education',
-      ok: (input.educations ?? []).length >= 1,
-      labelKey: 'emp.checkAddEducation',
-      weight: 12,
-    },
-    {
-      id: 'language',
-      ok: (input.languages ?? []).length >= 1,
-      labelKey: 'emp.checkAddLanguage',
-      weight: 8,
-    },
-    {
-      id: 'resume',
-      ok: (input.resumes ?? []).length >= 1,
-      labelKey: 'emp.checkAddResume',
-      weight: 20,
-    },
+    {id:'city',ok:Boolean(input.residenceCountryId||input.city),labelKey:'emp.checkSetCountry',weight:20},
+    {id:'preferences',ok:Boolean(input.desiredPositions?.length||filled(input.desiredPosition)),labelKey:'cv.addPreferences',weight:20},
+    {id:'phone',ok:filled(input.phone),labelKey:'cv.addPhone',weight:20},
+    {id:'resume',ok:(input.resumes??[]).some(row=>Boolean(row&&typeof row==='object'&&('hasFile' in row?row.hasFile:'fileKey' in row&&row.fileKey))),labelKey:'emp.checkAddResume',weight:40},
   ];
 
   const total = career.reduce((sum, item) => sum + item.weight, 0);

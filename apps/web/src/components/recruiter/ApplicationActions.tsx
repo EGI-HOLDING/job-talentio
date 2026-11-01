@@ -5,7 +5,10 @@ import { api } from '@/lib/api';
 import { Link } from '@/lib/navigation';
 import { employerJobHref } from '@/lib/accountNavigation';
 import { useI18n } from '@/lib/i18n';
+import { whatsAppChatUrl } from '@/lib/whatsapp';
 import s from './JobWorkspace.module.css';
+
+export { whatsAppChatUrl };
 
 export type Applicant = {
   id: string; jobPostId: string; status: string; kanbanEnteredAt: string | null;
@@ -56,21 +59,16 @@ export function ApplicationCvAction({application}: {application: Pick<Applicant,
   return <span className={s.actionMessage}><button type="button" className={s.cvLink} disabled={busy} onClick={()=>void view()}>{t(busy?'loading':'viewCv')}</button>{error&&<span role="alert">{error}</span>}</span>;
 }
 
-export function whatsAppChatUrl(phone: string | null | undefined) {
-  if (!phone || !/^\+[1-9]\d{7,14}$/.test(phone)) return null;
-  return 'https://wa.me/' + phone.slice(1);
-}
-
 /** Reveals a candidate's phone only after an explicit, audited HR action. */
-export function WhatsAppAction({profileId,companyId,phone,contactRevealed=false}: {profileId:string;companyId:string;phone?:string|null;contactRevealed?:boolean}) {
+export function WhatsAppAction({profileId,companyId,jobPostId,phone,contactRevealed=false}: {profileId:string;companyId:string;jobPostId?:string;phone?:string|null;contactRevealed?:boolean}) {
   const {t}=useI18n();
   const [busy,setBusy]=useState(false),[error,setError]=useState<'no-phone'|'failed'|''>('');
-  const request=useRef(0),pending=useRef(false),revealed=useRef<{profileId:string;companyId:string;phone:string|null}|null>(null);
+  const request=useRef(0),pending=useRef(false),revealed=useRef<{profileId:string;companyId:string;jobPostId?:string;phone:string|null}|null>(null);
   useEffect(()=>{
     const version=++request.current;
     pending.current=false;revealed.current=null;setBusy(false);setError('');
     return()=>{if(request.current===version)++request.current;};
-  },[profileId,companyId]);
+  },[profileId,companyId,jobPostId]);
   async function openChat() {
     if(pending.current)return;
     pending.current=true;setBusy(true);setError('');const version=request.current;
@@ -78,13 +76,14 @@ export function WhatsAppAction({profileId,companyId,phone,contactRevealed=false}
     try{tab=window.open('about:blank','_blank');if(tab)tab.opener=null;}catch{/* Continue in this tab if the browser refuses a new window. */}
     try {
       let candidatePhone:string|null|undefined;
-      if(revealed.current?.profileId===profileId&&revealed.current.companyId===companyId)candidatePhone=revealed.current.phone;
+      if(revealed.current?.profileId===profileId&&revealed.current.companyId===companyId&&revealed.current.jobPostId===jobPostId)candidatePhone=revealed.current.phone;
       else if(contactRevealed)candidatePhone=phone||null;
       else {
-        const result=await api<{phone?:string|null}>('/profiles/candidates/'+encodeURIComponent(profileId)+'/reveal-contact?'+new URLSearchParams({companyId}).toString(),{method:'POST'});
+        const query=new URLSearchParams({companyId,...(jobPostId?{jobPostId}:{})});
+        const result=await api<{phone?:string|null}>('/profiles/candidates/'+encodeURIComponent(profileId)+'/reveal-contact?'+query.toString(),{method:'POST'});
         if(version!==request.current){tab?.close();return;}
         candidatePhone=result.phone||null;
-        revealed.current={profileId,companyId,phone:candidatePhone};
+        revealed.current={profileId,companyId,jobPostId,phone:candidatePhone};
       }
       if(version!==request.current){tab?.close();return;}
       const url=whatsAppChatUrl(candidatePhone);

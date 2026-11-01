@@ -9,6 +9,7 @@ import { JobsIcon } from './JobsIcon';
 import { formatJobSalary } from './formatJobSalary';
 import s from './JobsWorkspace.module.css';
 import { authLink } from '@/lib/authReturn';
+import { EmployeeWhatsAppAction } from '@/components/employee/EmployeeWhatsAppAction';
 import type { JobPromotion } from '@job-talentio/shared';
 import { PromotionBadge } from './PromotionBadge';
 
@@ -30,6 +31,7 @@ type Props = {
   backHref?: string;
   companyHref?: string;
   chatHref?: string;
+  whatsappApplicationId?: string;
   job: PreviewJob; country?: string; onBack?: () => void; onApply?: () => void; onSave: () => void;
   onFollow?: () => void; following: boolean; appliedStatus?: string; guest: boolean; busy: boolean;
   submittedCvAvailable?: boolean; submittedCvTitle?: string | null; submittedCvBusy?: boolean; submittedCvError?: string; onViewSubmittedCv?: () => void;
@@ -37,7 +39,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function JobPreview({ standalone = false, backHref = '/jobs', companyHref, chatHref, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
+export function JobPreview({ standalone = false, backHref = '/jobs', companyHref, chatHref, whatsappApplicationId, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const Title = standalone ? 'h1' : 'h2';
@@ -84,6 +86,7 @@ export function JobPreview({ standalone = false, backHref = '/jobs', companyHref
       {appliedStatus ? <><span className={s.applied}>{t('job.appliedBadge')} / {enumLabel('applicationStatus', appliedStatus)}</span><Link className={s.outlineButton} href="/dashboard/employee?tab=applications">{t('job.viewMyApplications')}</Link>{submittedCvAvailable && onViewSubmittedCv ? <button type="button" className={s.outlineButton} onClick={onViewSubmittedCv} disabled={submittedCvBusy} title={submittedCvTitle || undefined} aria-label={submittedCvTitle ? `${t('job.viewSubmittedCv')}: ${submittedCvTitle}` : t('job.viewSubmittedCv')}><JobsIcon kind="document" />{submittedCvBusy ? t('loading') : t('job.viewSubmittedCv')}</button> : <span className={s.cvUnavailable}>{t('noCvAttached')}</span>}{submittedCvError && <span className={s.cvError} role="alert">{submittedCvError}</span>}</> : onApply && <button type="button" className={s.primaryButton} onClick={onApply} disabled={busy}>{t('applyNow')}</button>}
       {canSave && !appliedStatus && <button type="button" className={s.outlineButton} onClick={onSave} disabled={saving} aria-pressed={saved || false}><JobsIcon kind={saved ? 'check' : 'bookmark'} />{saved ? t('workspace.saved') : t('saveJob')}</button>}
       {chatHref && <Link href={chatHref} className={s.outlineButton}>{t('chatWithRecruiter')}</Link>}
+      {whatsappApplicationId && <EmployeeWhatsAppAction applicationId={whatsappApplicationId} />}
       {guest && <Link href={authLink('/login', `/jobs/${job.id}`)} className={s.guestNote}>{t('workspace.signIn')}</Link>}
     </div>
     {children}

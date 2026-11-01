@@ -1,6 +1,26 @@
 /** Employee dashboard and resume builder. */
 export const employee = {
   // Toasts and inline messages
+  'emp.whatsappChat': {
+    uz: 'Ish beruvchiga WhatsApp orqali yozish',
+    ru: 'Написать работодателю в WhatsApp',
+    en: 'Message employer on WhatsApp',
+  },
+  'emp.whatsappOpening': {
+    uz: 'WhatsApp ochilmoqda...',
+    ru: 'Открываем WhatsApp...',
+    en: 'Opening WhatsApp...',
+  },
+  'emp.whatsappNoPhone': {
+    uz: 'Ish beruvchining WhatsApp raqami mavjud emas.',
+    ru: 'У работодателя нет доступного номера WhatsApp.',
+    en: 'The employer has no available WhatsApp number.',
+  },
+  'emp.whatsappFailed': {
+    uz: 'WhatsApp ochilmadi. Qayta urinib ko‘ring.',
+    ru: 'Не удалось открыть WhatsApp. Попробуйте ещё раз.',
+    en: 'Could not open WhatsApp. Please try again.',
+  },
   'emp.profileUpdated': { uz: 'Profil yangilandi', ru: 'Профиль обновлён', en: 'Profile updated' },
   'emp.skillResolvedSaved': {
     uz: '“{name}” ko‘nikmasi aniqlandi va saqlandi',

@@ -71,7 +71,7 @@ function emptyOauthProfileIsZeroPercent() {
     telegramOnly.missing.some((item) => item.id === 'optionalEmail'),
     'Telegram-only should still offer add-email after career chips',
   );
-  assert(telegramOnly.missing[0].id === 'headline', 'career chips must come first');
+  assert(telegramOnly.missing[0].id === 'city', 'location and CV requirements must precede optional account suggestions');
 }
 
 function careerWeightsMatchPlan() {
@@ -80,7 +80,7 @@ function careerWeightsMatchPlan() {
     city: { id: 'tashkent' },
     skills: [{}, {}, {}],
   });
-  assert(partial.percent === 40, `headline+city+3 skills should be 40, got ${partial.percent}`);
+  assert(partial.percent === 20, `professional manual fields must not affect completeness, got ${partial.percent}`);
 
   const passwordUnverified = scoreProfileCompleteness({
     email: 'ada@jobtalent.io',

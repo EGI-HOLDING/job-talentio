@@ -22,7 +22,7 @@ function SiteFooterContent() {
   if (pathname === '/messages' || pathname === '/settings' || pathname.startsWith('/dashboard/recruiter') || pathname.startsWith('/billing/') || pathname === '/talent' || pathname.startsWith('/candidates/')) return null;
   if (pathname === '/employers') return <LandingFooter employer />;
   if (pathname === '/' && (!isRecruiter || seekerLandingPreview)) return <LandingFooter />;
-  if (!/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname)) return <footer className={insightsStyles.footer}><div className={insightsStyles.footerInner}><Link href={isRecruiter ? EMPLOYER_JOBS : '/'} className={insightsStyles.footerBrand}>Job Talentio</Link><nav className={insightsStyles.footerLinks} aria-label={t('footer')}><Link href={jobsHref}>{t(isRecruiter ? 'jobs' : 'home.findJobs')}</Link><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></nav></div></footer>;
+  if (!/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname)) return <footer className={insightsStyles.footer}><div className={insightsStyles.footerInner}><Link href={isRecruiter ? EMPLOYER_JOBS : '/'} className={insightsStyles.footerBrand}><img src="/brand/talentio-logo.webp" alt="Talentio" /></Link><nav className={insightsStyles.footerLinks} aria-label={t('footer')}><Link href={jobsHref}>{t(isRecruiter ? 'jobs' : 'home.findJobs')}</Link><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></nav></div></footer>;
   return (
     <footer className="footer">
       <div className="shell" style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>

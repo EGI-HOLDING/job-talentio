@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   phoneCountryOptions,
   type PhoneDraft,
 } from '@job-talentio/shared';
 import { useI18n } from '@/lib/i18n';
 import { useOnboardingText } from '@/lib/i18n/onboarding';
+import { floatingPanelPosition, type FloatingPanelPosition } from './floatingPanelPosition';
 import s from './PhoneNumberField.module.css';
 
 type Props = {
@@ -56,9 +58,11 @@ export function PhoneNumberField({
   const text = useOnboardingText();
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const countryButton = useRef<HTMLButtonElement>(null);
   const queryRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
-  const [menuAbove, setMenuAbove] = useState(false);
+  const [position, setPosition] = useState<FloatingPanelPosition | null>(null);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const countries = useMemo(() => phoneCountryOptions(locale), [locale]);
@@ -81,21 +85,36 @@ export function PhoneNumberField({
   useEffect(() => {
     if (!open) return;
     queryRef.current?.focus();
-    const measure = () => {
-      const bounds = root.current?.getBoundingClientRect();
-      if (bounds) setMenuAbove(window.innerHeight - bounds.bottom < 310 && bounds.top > 310);
-    };
     const closeOutside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!root.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false);
     };
-    measure();
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
+    const closeOnFocusOutside = (event: FocusEvent) => {
+      if (!root.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false);
+    };
     document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('focusin', closeOnFocusOutside);
     return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
       document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('focusin', closeOnFocusOutside);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) { setPosition(null); return; }
+    const place = () => {
+      const bounds = root.current?.getBoundingClientRect();
+      if (bounds) setPosition(floatingPanelPosition(bounds, 360, 390));
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
     };
   }, [open]);
 
@@ -108,12 +127,14 @@ export function PhoneNumberField({
     onChange({ ...value, country });
     setOpen(false);
     setQuery('');
+    countryButton.current?.focus();
   }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Escape') {
       event.preventDefault();
       setOpen(false);
+      countryButton.current?.focus();
     } else if (event.key === 'ArrowDown' && filtered.length) {
       event.preventDefault();
       setActiveIndex((index) => (index + 1) % filtered.length);
@@ -133,6 +154,7 @@ export function PhoneNumberField({
       </label>
       <div className={`${s.control} ${shownError ? s.invalid : ''}`}>
         <button
+          ref={countryButton}
           type="button"
           className={s.countryButton}
           aria-label={`${text('phoneCountry')}: ${selected.name} ${selected.dialCode}`}
@@ -167,8 +189,12 @@ export function PhoneNumberField({
       </div>
       <p id={`${id}-hint`} className={s.hint}>{value.country === 'ID' ? text('phoneHintIndonesia') : hint}</p>
       {shownError && <p id={`${id}-error`} className={s.error} role="alert">{shownError}</p>}
-      {open && (
-        <div className={`${s.menu} ${menuAbove ? s.menuAbove : ''}`}>
+      {open && position && createPortal(
+        <div
+          ref={menu}
+          className={s.menu}
+          style={{ ...position, position: 'fixed', zIndex: 10050, boxSizing: 'border-box', overflow: 'hidden' }}
+        >
           <label className={s.srOnly} htmlFor={`${id}-search`}>{text('phoneSearchCountry')}</label>
           <input
             ref={queryRef}
@@ -185,7 +211,7 @@ export function PhoneNumberField({
             onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
             onKeyDown={handleSearchKeyDown}
           />
-          <div id={`${id}-countries`} className={s.options} role="listbox" aria-label={text('phoneCountry')}>
+          <div id={`${id}-countries`} className={s.options} role="listbox" aria-label={text('phoneCountry')} style={{ maxHeight: Math.max(0, position.maxHeight - 76) }}>
             {filtered.map((option, index) => (
               <button
                 id={`${id}-country-${option.country}`}
@@ -202,7 +228,8 @@ export function PhoneNumberField({
             ))}
             {!filtered.length && <p className={s.noResults}>{text('phoneNoCountry')}</p>}
           </div>
-        </div>
+        </div>,
+        root.current?.closest('dialog') || document.body,
       )}
     </div>
   );

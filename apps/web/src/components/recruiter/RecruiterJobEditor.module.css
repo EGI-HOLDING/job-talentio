@@ -23,7 +23,7 @@
 .steps { min-width:0; }
 .steps ol { display:flex; align-items:center; justify-content:center; list-style:none; padding:0; margin:0; }
 .steps li { display:flex; align-items:center; min-width:0; }
-.steps li:not(:last-child)::after { content:''; width:5px; height:5px; flex:0 0 5px; border-top:1.5px solid #91a0b7; border-right:1.5px solid #91a0b7; transform:rotate(45deg); margin:0 16px; }
+.steps li:not(:last-child)::after { content:''; width:16px; height:16px; flex:0 0 16px; background:var(--icon-chevron-right) center / 16px 16px no-repeat; margin:0 12px; }
 .steps button { display:inline-flex; align-items:center; gap:8px; padding:0; border:0; background:transparent; color:#596d8d; font-size:.81rem; white-space:nowrap; min-height:36px; }
 .steps button:hover { background: transparent; color: #5635e8; }
 .steps button:disabled { cursor: wait; }
@@ -65,11 +65,7 @@
 .footerInner > :first-child { padding-left: 0; }
 .alert { padding: 13px 16px; margin-bottom: 18px; border: 1px solid #f5cbd4; border-radius: 8px; color: #bf3452; background: #fff5f7; font-size: .83rem; }
 .alert[data-tone=success] { border-color: #bce3d7; background: #effaf5; color: #167356; }
-.formPanel :global(.job-title-input) :global(.lookup-suggest-skel), .formPanel :global(.job-title-input) :global(.skill-suggest-list) { position: absolute; top: calc(100% + 5px); inset-inline: 0; z-index: 10; margin: 0; background: #fff; box-shadow: 0 12px 32px #17213a12; }
-.formPanel :global(.job-title-input) :global(.lookup-suggest-skel) { display: flex; align-items: center; min-height: 50px; }
-.formPanel :global(.job-title-input) :global(.skill-suggest-list) { max-height: min(220px, 40vh); overflow-y: auto; overscroll-behavior: contain; padding: 5px; border: 1px solid #dce3ef; border-radius: 8px; list-style: none; }
-.formPanel :global(.job-title-input) :global(.skill-suggest-item) { padding-block: 11px; }
-.formPanel :global(.job-title-input)::after { content:''; position:absolute; right:16px; top:17px; width:7px; height:7px; border-right:1.5px solid #526582; border-bottom:1.5px solid #526582; transform:rotate(45deg); pointer-events:none; }
+.formPanel :global(.job-title-input)::after { content:''; position:absolute; right:12px; top:14px; width:16px; height:16px; background:var(--icon-chevron-down) center / 16px 16px no-repeat; pointer-events:none; }
 .formPanel :global(.job-title-input) input { padding-right:38px !important; }
 @media (max-width: 1100px) {
   .content,.toolbarInner { width:calc(100% - 48px); }
@@ -103,7 +99,7 @@
   .heading > span { font-size:.62rem; padding:3px 6px; }
   .steps [data-active=true] .stepLabel { display:none; }
   .steps button { min-height:36px; }
-  .steps li:not(:last-child)::after { margin:0 5px; width:4px; height:4px; flex-basis:4px; }
+  .steps li:not(:last-child)::after { margin:0 5px; }
   .stepNumber { width:22px; height:22px; flex-basis:22px; font-size:.7rem; }
   .company { display:none; }
   .formPanel { padding: 20px 16px; border-radius: 9px; }

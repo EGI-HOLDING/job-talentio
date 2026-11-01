@@ -166,10 +166,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <main className="login-wrap">
       <div className="login-card">
         <div className="sidebar-brand" style={{ padding: 0, marginBottom: '1rem' }}>
-          <span className="sidebar-mark" aria-hidden>
-            JT
-          </span>
-          <span>Job Talentio Admin</span>
+          <img className="sidebar-mark" src="/brand/talentio-mark.png" alt="" />
+          <span>Talentio Admin</span>
         </div>
         <h1>Sign in</h1>
         <p className="muted" style={{ marginTop: 0, fontSize: '0.85rem' }}>

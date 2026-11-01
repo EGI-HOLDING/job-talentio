@@ -21,12 +21,18 @@ export function safeApplication<T extends object>(application: T) {
   const snapshot = source.resumeSnapshot;
   if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
     const snap = snapshot as Record<string, unknown>;
+    const publicSnapshot = {
+      ...(typeof snap.snapshotAt==='string'?{snapshotAt:snap.snapshotAt}:{}),
+      ...(snap.anonymized===true?{anonymized:true}:{}),
+    };
+    result.resumeSnapshot=publicSnapshot;
     const resume = snap.resume;
     if (resume && typeof resume === 'object' && !Array.isArray(resume)) {
-      const { fileKey, fileUrl, ...safeResume } = resume as Record<string, unknown>;
-      result.resumeSnapshot = { ...snap, resume: { ...safeResume, hasFile: Boolean(fileKey || safeResume.hasFile) } };
+      const value = resume as Record<string, unknown>;
+      result.resumeSnapshot = { ...publicSnapshot, resume: { id:value.id,title:value.title,templateKey:value.templateKey,hasFile: Boolean(value.fileKey || value.hasFile) } };
     }
   }
+  delete result.resumeVersion;
   if (source.resume && typeof source.resume === 'object') {
     const resume = source.resume as Record<string, unknown>;
     result.resume = { id: resume.id, title: resume.title, templateKey: resume.templateKey, hasFile: Boolean(resume.fileKey) };

@@ -2,6 +2,8 @@ import { EmployeeOnboardingService } from './employee-onboarding.service';
 import { employeeOnboardingSchema } from '@job-talentio/shared';
 import {
   BadRequestException,
+  GoneException,
+  CanActivate,
   Body,
   Controller,
   Delete,
@@ -45,6 +47,8 @@ function assertLocale(value: string): Locale {
   return value;
 }
 
+class CvManagedGuard implements CanActivate { canActivate():boolean {throw new GoneException('Professional information is read automatically from uploaded CV files');} }
+
 @Controller('profiles')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProfilesController {
@@ -80,6 +84,7 @@ export class ProfilesController {
   }
 
   @Post('me/skills')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   addSkill(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(skillSchema, body);
@@ -87,6 +92,7 @@ export class ProfilesController {
   }
 
   @Patch('me/skills/:id')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   updateSkill(
     @CurrentUser() user: AuthUser,
@@ -98,12 +104,14 @@ export class ProfilesController {
   }
 
   @Delete('me/skills/:id')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   removeSkill(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.profiles.removeSkill(user, id);
   }
 
   @Post('me/experiences')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   addExp(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(experienceSchema, body);
@@ -111,6 +119,7 @@ export class ProfilesController {
   }
 
   @Patch('me/experiences/:id')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   updateExp(
     @CurrentUser() user: AuthUser,
@@ -122,12 +131,14 @@ export class ProfilesController {
   }
 
   @Delete('me/experiences/:id')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   removeExp(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.profiles.removeExperience(user, id);
   }
 
   @Post('me/educations')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   addEdu(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(educationSchema, body);
@@ -135,6 +146,7 @@ export class ProfilesController {
   }
 
   @Patch('me/educations/:id')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   updateEdu(
     @CurrentUser() user: AuthUser,
@@ -146,6 +158,7 @@ export class ProfilesController {
   }
 
   @Delete('me/educations/:id')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   removeEdu(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.profiles.removeEducation(user, id);
@@ -200,6 +213,7 @@ export class ProfilesController {
   }
 
   @Get('me/resume-document')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   resumeDocument(
     @CurrentUser() user: AuthUser,
@@ -209,6 +223,7 @@ export class ProfilesController {
   }
 
   @Post('me/resumes')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   createResume(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(resumeSchema, body);
@@ -216,6 +231,7 @@ export class ProfilesController {
   }
 
   @Post('me/resumes/from-builder')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   createFromBuilder(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const data = parseDto(
@@ -240,10 +256,12 @@ export class ProfilesController {
     @Body() body: unknown,
   ) {
     const data = parseDto(resumeSchema.partial(), body);
+    if(data.content!==undefined||data.jobTitle!==undefined||data.jobTitleSlug!==undefined)throw new GoneException('CV content follows the uploaded file');
     return this.profiles.updateResume(user, id, data);
   }
 
   @Patch('me/resumes/:id/builder')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   updateBuilder(
     @CurrentUser() user: AuthUser,
@@ -255,6 +273,7 @@ export class ProfilesController {
   }
 
   @Post('me/resumes/:id/export')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   exportResume(@CurrentUser() user: AuthUser, @Param('id') id: string, @Req() req: Request) {
     return this.profiles.exportResumePdf(user, id, requestLocale(req));
@@ -298,11 +317,14 @@ export class ProfilesController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body() body:unknown,
   ) {
-    return this.profiles.attachFileToResume(user, id, file);
+    const meta=parseDto(resumeSchema.pick({title:true}).partial(),body||{});
+    return this.profiles.attachFileToResume(user, id, file,meta.title);
   }
 
   @Post('me/resumes/:id/import')
+  @UseGuards(CvManagedGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   importParsed(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     const data = parseDto(resumeImportRequestSchema, body);
@@ -334,8 +356,13 @@ export class ProfilesController {
   /** Click-to-reveal contacts: audited + hourly quota; never in profile payloads. */
   @Post('candidates/:id/reveal-contact')
   @Roles('RECRUITER', 'SUPER_ADMIN')
-  revealContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('companyId') companyId?: string) {
-    return this.profiles.revealCandidateContact(user, id, companyId);
+  revealContact(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query('companyId') companyId?: string,
+    @Query('jobPostId') jobPostId?: string,
+  ) {
+    return this.profiles.revealCandidateContact(user, id, companyId, jobPostId);
   }
 
   @Get('candidates')
@@ -355,6 +382,7 @@ export class ProfilesController {
   }
 
   @Post('candidates/:id/translate/:locale')
+  @UseGuards(CvManagedGuard)
   @UseGuards(SearchRateLimitGuard)
   @Roles('RECRUITER', 'SUPER_ADMIN')
   machineTranslateCandidate(
