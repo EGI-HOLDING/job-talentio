@@ -15,6 +15,8 @@ async function prepare() {
  if(fs.existsSync(fixtureFile))return console.log('Local performance fixtures already exist');
  await db.user.deleteMany({where:{id:{startsWith:prefix}}});await db.jobPost.deleteMany({where:{id:{startsWith:prefix}}});await db.company.deleteMany({where:{slug:prefix}});
  const all=await db.jobTitle.findMany({where:{matchingApproved:true,canonicalRoleId:null,archivedAt:null},include:{family:true}});
+ const {intentRoleInclude}=require('../apps/api/dist/matching/employee-occupation');
+ const parserVersion=require('../apps/api/dist/matching/employee-intent-evidence').employeeEvidenceParserVersion(await db.jobTitle.findMany({include:intentRoleInclude}));
  const families=new Set(), roles=all.filter(r=>{if(!r.family||families.has(r.familyId))return false;families.add(r.familyId);return true;}).slice(0,6);
  assert.equal(roles.length,6);
  const company=await db.company.create({data:{name:'Local performance fixture',slug:prefix}});
@@ -24,7 +26,7 @@ async function prepare() {
   const ids=selected.map(r=>r.id),names=selected.map(r=>r.name);
   const user=await db.user.create({data:{id:prefix+'-'+n,email:prefix+'-'+n+'@example.test',fullName:'Local performance '+n,role:'EMPLOYEE',emailVerified:true,employeeProfile:{create:{desiredPositions:names,desiredPosition:names[0],matchingPreferencesReviewed:true,onboardingStatus:'COMPLETED',phone:'+62811999000'+fixtures.length,desiredRoles:{create:ids.map(jobTitleId=>({jobTitleId}))}}}},include:{employeeProfile:true}});
   const resume=await db.resume.create({data:{profileId:user.employeeProfile.id,title:'Performance CV',fileKey:'local-performance/cv.pdf',isPrimary:true,parseStatus:processing?'PROCESSING':'READY',parseGeneration:1}});
-  const version=await db.resumeVersion.create({data:{resumeId:resume.id,fileKey:resume.fileKey,parseGeneration:1,parseStatus:processing?'PROCESSING':'READY',matchingData:{headline:names[0]||'',skills:[],experiences:[]},employeeEvidence:{create:{generation:1,parserVersion:'employee-cv-v3.1',status:processing?'PROCESSING':'READY',facts:{roles:selected.map(r=>({key:r.id,jobTitleId:r.id,title:r.name,source:'CV',confirmed:false})),skills:[],experiences:[],languages:[]}}}}});
+  const version=await db.resumeVersion.create({data:{resumeId:resume.id,fileKey:resume.fileKey,parseGeneration:1,parseStatus:processing?'PROCESSING':'READY',matchingData:{headline:names[0]||'',skills:[],experiences:[]},employeeEvidence:{create:{generation:1,parserVersion,status:processing?'PROCESSING':'READY',facts:{roles:selected.map(r=>({key:r.id,jobTitleId:r.id,title:r.name,source:'CV',confirmed:false})),skills:[],experiences:[],languages:[]}}}}});
   await db.resume.update({where:{id:resume.id},data:{currentVersionId:version.id}});
   const token=new (req('@nestjs/jwt').JwtService)({secret:env.JWT_SECRET}).sign({sub:user.id,tv:user.tokenVersion},{expiresIn:'12h'});
   fixtures.push({name:n,profileId:user.employeeProfile.id,selectedIds:ids,session:{accessToken:token,user:{id:user.id,email:user.email,fullName:user.fullName,role:'EMPLOYEE',phone:user.employeeProfile.phone,emailVerified:true,employeeOnboarding:{status:'COMPLETED',step:5}}}});

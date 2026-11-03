@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { parseCvText } from '../profiles/cv-parser';
-import { EmployeeOccupationIndex } from './employee-occupation';
+import { EmployeeOccupationIndex, employeeOccupationRevision, type IntentRole } from './employee-occupation';
 export const EMPLOYEE_EVIDENCE_PARSER = 'employee-cv-v3.1';
+export const employeeEvidenceParserVersion = (roles: IntentRole[]) => EMPLOYEE_EVIDENCE_PARSER + '@' + employeeOccupationRevision(roles);
 export type IntentSkill = {
     id: string;
     name: string;

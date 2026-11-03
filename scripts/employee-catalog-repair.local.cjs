@@ -1,0 +1,11 @@
+const fs=require('node:fs');
+const path=require('node:path');
+const {createRequire}=require('node:module');
+const {spawnSync}=require('node:child_process');
+const api=createRequire(path.resolve('apps/api/package.json'));
+const dotenv=createRequire(api.resolve('@nestjs/config'))('dotenv');
+const env=dotenv.parse(fs.readFileSync('.env'));
+const url=new URL(env.DATABASE_URL);url.pathname='/talentio_mapping_local_20261103';
+if(!['localhost','127.0.0.1'].includes(url.hostname)||url.port!=='5434')throw Error('Local database only');
+const r=spawnSync(process.execPath,[api.resolve('tsx/cli'),'--tsconfig','apps/api/tsconfig.json','apps/api/src/scripts/employee-catalog-repair.local.ts',...process.argv.slice(2)],{stdio:'inherit',windowsHide:true,env:{...process.env,...env,DATABASE_URL:url.toString(),REDIS_URL:'redis://127.0.0.1:6381'}});
+process.exitCode=r.status??1;

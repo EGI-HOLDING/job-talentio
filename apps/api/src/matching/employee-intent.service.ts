@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { liveJobWhere } from '../benefits/benefit-policy';
 import { loadJobPromotions, publicJobPromotion } from '../benefits/job-promotion';
 import { EmployeeOccupationIndex, intentRoleInclude } from './employee-occupation';
-import { applyEmployeeOverrides, evidenceConflicts, hasEmployeeCareerEvidence, type IntentFacts, type EvidenceOverride, EMPLOYEE_EVIDENCE_PARSER } from './employee-intent-evidence';
+import { applyEmployeeOverrides, evidenceConflicts, hasEmployeeCareerEvidence, type IntentFacts, type EvidenceOverride, employeeEvidenceParserVersion } from './employee-intent-evidence';
 import { evaluateIntent, compareIntent, type IntentEvaluation } from './employee-intent';
 export const employeeIntentJobSelect = { id: true, title: true, jobTitleId: true, jobTitle:{select:currentRoleSelect}, companyId: true, publishedAt: true, countryId: true, cityId: true, workMode: true, experienceYearsMin: true, experienceLevel: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { select: { province: { select: { countryId: true } } } }, jobSkills: { include: { skill: { select: { name: true, matchingKind: true } } } }, jobLanguages: { include: { language: { select: { code: true, name: true } } } } } as const;
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -48,7 +48,7 @@ export class EmployeeIntentService {
             state = 'CV_REQUIRED';
         else if (version.parseStatus === 'FAILED')
             state = 'CV_FAILED';
-        else if (version.parseStatus !== 'READY' || !stored || stored.parserVersion !== EMPLOYEE_EVIDENCE_PARSER || stored.generation !== version.parseGeneration || ['PENDING', 'PROCESSING'].includes(stored.status))
+        else if (version.parseStatus !== 'READY' || !stored || stored.parserVersion !== employeeEvidenceParserVersion(roles) || stored.generation !== version.parseGeneration || ['PENDING', 'PROCESSING'].includes(stored.status))
             state = 'CV_PROCESSING';
         else if (stored.status === 'FAILED')
             state = 'CV_FAILED';

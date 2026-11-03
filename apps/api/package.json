@@ -39,6 +39,7 @@
     "test:cv-source:local": "node ../../scripts/cv-source-local.smoke.cjs",
     "test:employee-intent": "tsx src/matching/employee-intent.smoke.ts",
     "test:employee-intent:local": "node ../../scripts/employee-intent-local.integration.cjs",
+    "test:employee-catalog-repair": "tsx src/matching/employee-catalog-repair.smoke.ts",
     "matching:v3:backfill": "tsx src/scripts/employee-intent-backfill.ts",
     "matching:v3:benchmark": "tsx src/matching/employee-intent.benchmark.ts ../../output/employee-intent-v3",
     "matching:v3:validate": "tsx src/scripts/employee-intent-validate.ts"

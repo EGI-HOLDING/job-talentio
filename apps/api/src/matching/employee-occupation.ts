@@ -1,4 +1,5 @@
 import { catalogTitleIdentityKey } from '../common/title-resolve';
+import { createHash } from 'node:crypto';
 import type { EmployeeEligibility } from '@job-talentio/shared';
 export type IntentRole = {
     id: string;
@@ -22,6 +23,12 @@ export type IntentRole = {
     }>;
 };
 export const intentRoleInclude = { family: true, aliases: { select: { alias: true, aliasKey:true, matchingApproved: true } } } as const;
+/** Semantic catalog identity is independent of DB row timestamps and ordering. */
+export function employeeOccupationRevision(roles: IntentRole[]) {
+ const rows=[...roles].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>[r.id,r.name,r.nameId||null,r.nameUz||null,r.nameRu||null,r.familyId,r.canonicalRoleId,r.matchingApproved,!!r.archivedAt,!!r.family?.archivedAt,
+   r.aliases.filter(a=>a.matchingApproved).map(a=>catalogTitleIdentityKey(a.alias)).sort()]);
+ return createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+}
 export const currentRoleSelect = {
   id:true,familyId:true,canonicalRoleId:true,matchingApproved:true,archivedAt:true,family:{select:{archivedAt:true}},
   canonicalRole:{select:{id:true,familyId:true,canonicalRoleId:true,matchingApproved:true,archivedAt:true,family:{select:{archivedAt:true}}}},
@@ -39,6 +46,7 @@ export class EmployeeOccupationIndex {
     constructor(roles: IntentRole[]) {
         this.roles = new Map(roles.map(role => [role.id, role]));
         for (const role of roles) {
+            if (role.archivedAt) continue;
             for (const label of [role.name, role.nameId, role.nameUz, role.nameRu, ...role.aliases.filter(a => a.matchingApproved).map(a => a.alias)]) {
                 if (!label)
                     continue;

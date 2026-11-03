@@ -28,6 +28,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
 import { EmployeeMatchingService } from '../matching/employee-matching.service';
+import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
+import { employeeIntentMode } from '../matching/employee-intent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify, parseDto } from '../common/utils';
@@ -651,6 +653,11 @@ export class JobsService {
         throw new ConflictException('Job changed. Refresh and try again.');
       }
       if (status === 'PUBLISHED') {
+        if (['enabled','shadow'].includes(employeeIntentMode())) {
+          await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock_shared(742159744)`);
+          const role=current.jobTitleId?await tx.jobTitle.findUnique({where:{id:current.jobTitleId},select:currentRoleSelect}):null;
+          if(!currentRoleIdentity(role))throw new BadRequestException('Select a reviewed position from the catalog before publishing');
+        }
         await this.recruiterOnboarding?.beforePublish(user, current.companyId, tx);
         this.assertLocationRules(current.workMode, current.cityId, true);
         if (current.description.trim().length < 20) throw new BadRequestException('Description is too short');

@@ -14,7 +14,8 @@ import { EmployeeMatchingService } from './employee-matching.service';
 import { EmployeeEvidenceService } from './employee-evidence.service';
 import { EmployeeCatalogController } from './employee-catalog.controller';
 import { employeePreferenceUpdate } from './employee-preferences';
-import { EMPLOYEE_EVIDENCE_PARSER } from './employee-intent-evidence';
+import { employeeEvidenceParserVersion } from './employee-intent-evidence';
+import { intentRoleInclude } from './employee-occupation';
 import { makeEmployeeBenchmark, benchmarkRoles } from './employee-intent.benchmark';
 async function main() {
     const url = new URL(process.env.TEST_DATABASE_URL!);
@@ -31,6 +32,7 @@ async function main() {
             await db.jobTitle.create({ data: { id: role.id, name: role.name, nameId: role.nameId, slug: role.id.replace(':', '-'), normalizedKey: role.id, familyId: role.familyId, matchingApproved: true } });
         }
         const company = await db.company.create({ data: { name: 'Integration Company', slug: 'integration-company' } });
+        const EMPLOYEE_EVIDENCE_PARSER = employeeEvidenceParserVersion(await db.jobTitle.findMany({include:intentRoleInclude}));
         for (let r = 0; r < 10; r++)
             await db.skill.create({ data: { id: 'skill:' + r, name: fixture.jobs[r * 12].jobSkills[0].skill.name, slug: 'skill-' + r, matchingKind: 'PROFESSIONAL' } });
         for (const job of fixture.jobs.filter(j => !j.id.startsWith('decoy:'))) {
@@ -116,17 +118,38 @@ async function main() {
         await worker.process(workerVersion.id, 1);
         const reread = await worker.get(user.id, workerResume.id, workerVersion.id);
         check(reread.conflicts.length === 0 && reread.facts!.skills.find(skill => skill.skillId === 'skill:0')!.confirmed, 'same-file reread preserves stable corrections');
+        await db.jobTitleAlias.create({data:{jobTitleId:benchmarkRoles[0].id,alias:'Reviewed Accounting Profession',aliasKey:'reviewed-accounting-profession',matchingApproved:true}});
+        check((await worker.get(user.id,workerResume.id,workerVersion.id)).status==='PENDING','catalog change makes old CV evidence unavailable until re-read');
+        await assert.rejects(()=>worker.patch(user.id,workerResume.id,workerVersion.id,{revision:reread.revision,kind:'SKILL',operation:'UPSERT',key:nativeSkill.key,value:{skillId:'skill:0',level:'BEGINNER'}}),/changed/);
+        passed++;
+        await worker.prepare(user.id,workerResume.id,workerVersion.id);
+        await worker.process(workerVersion.id,1);
+        const afterCatalog=await worker.get(user.id,workerResume.id,workerVersion.id);
+        check(afterCatalog.status==='READY'&&afterCatalog.facts!.skills.find(s=>s.skillId==='skill:0')!.confirmed,'catalog re-read preserves same-version candidate corrections');
         let release!: () => void;
         const waiting = new Promise<void>(resolve => release = resolve);
         let started!: () => void;
         const didStart = new Promise<void>(resolve => started = resolve);
         const delayedWorker = new EmployeeEvidenceService(db, { getObjectBuffer: async () => { started(); await waiting; return Buffer.from(pdf); } } as never, new ConfigService({ CV_PARSE_OCR: false }));
-        await db.resumeEmployeeEvidence.update({ where: { versionId: workerVersion.id }, data: { status: 'PENDING' } });
-        const oldRevision = reread.revision;
-        const pendingWork = delayedWorker.process(workerVersion.id, 1);
+        await db.resumeEmployeeEvidence.update({where:{versionId:workerVersion.id},data:{status:'PENDING'}});
+        const catalogRace=delayedWorker.process(workerVersion.id,1);
         await didStart;
+        await db.resumeEmployeeEvidence.update({where:{versionId:workerVersion.id},data:{status:'PENDING',revision:{increment:1}}});
+        await worker.process(workerVersion.id,1);
+        const freshCatalogRevision=(await db.resumeEmployeeEvidence.findUniqueOrThrow({where:{versionId:workerVersion.id}})).revision;
+        release();await catalogRace;
+        check((await db.resumeEmployeeEvidence.findUniqueOrThrow({where:{versionId:workerVersion.id}})).revision===freshCatalogRevision,'worker claimed before catalog requeue cannot overwrite the new result at the same CV generation');
+        let releaseGeneration!:()=>void;
+        const generationWait=new Promise<void>(resolve=>releaseGeneration=resolve);
+        let generationStarted!:()=>void;
+        const generationReady=new Promise<void>(resolve=>generationStarted=resolve);
+        const generationWorker=new EmployeeEvidenceService(db,{getObjectBuffer:async()=>{generationStarted();await generationWait;return Buffer.from(pdf);}} as never,new ConfigService({CV_PARSE_OCR:false}));
+        await db.resumeEmployeeEvidence.update({ where: { versionId: workerVersion.id }, data: { status: 'PENDING' } });
+        const oldRevision = freshCatalogRevision;
+        const pendingWork = generationWorker.process(workerVersion.id, 1);
+        await generationReady;
         await db.resumeVersion.update({ where: { id: workerVersion.id }, data: { parseGeneration: 2 } });
-        release();
+        releaseGeneration();
         await pendingWork;
         check((await db.resumeEmployeeEvidence.findUniqueOrThrow({ where: { versionId: workerVersion.id } })).revision === oldRevision, 'a stale worker cannot publish after a generation change');
         const baseline = new EmployeeMatchingService(db);

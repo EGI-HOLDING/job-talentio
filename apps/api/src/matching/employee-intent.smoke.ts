@@ -2,11 +2,12 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { EmployeeOccupationIndex, type IntentRole } from './employee-occupation';
 import { evaluateIntent, compareIntent } from './employee-intent';
-import { applyEmployeeOverrides, evidenceConflicts, parseEmployeeEvidence, EMPLOYEE_EVIDENCE_PARSER, type IntentFacts } from './employee-intent-evidence';
+import { applyEmployeeOverrides, evidenceConflicts, parseEmployeeEvidence, employeeEvidenceParserVersion, type IntentFacts } from './employee-intent-evidence';
 import { EmployeeIntentService } from './employee-intent.service';
 import { employeePreferenceUpdate } from './employee-preferences';
 import { employeeQualityGateAccepted } from './employee-quality-gate';
 import { makeEmployeeBenchmark, benchmarkJob, benchmarkRoles, benchmarkIndex, benchmarkSkills, benchmarkRank, evaluateHumanLabels } from './employee-intent.benchmark';
+const EMPLOYEE_EVIDENCE_PARSER = employeeEvidenceParserVersion(benchmarkRoles);
 async function main() {
     let assertions = 0;
     const check = (v: unknown, message: string) => { assert.ok(v, message); assertions++; };

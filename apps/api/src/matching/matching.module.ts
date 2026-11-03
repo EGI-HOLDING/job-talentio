@@ -18,6 +18,6 @@ import { EmployeeMatchingStatusController } from './employee-status.controller';
 export class MatchingModule implements OnModuleInit,OnModuleDestroy {
   private timer?:ReturnType<typeof setInterval>;
   constructor(private evidence:EmployeeEvidenceService,private matching:EmployeeMatchingService){}
-  async onModuleInit(){await this.matching.warmCatalog();const recover=()=>void this.evidence.recover().catch(e=>new Logger('EmployeeEvidence').warn(e.message));recover();this.timer=setInterval(recover,30000);this.timer.unref();}
+  async onModuleInit(){await this.matching.warmCatalog();const recover=()=>void this.evidence.recover().catch(e=>new Logger('EmployeeEvidence').warn(e.message));recover();this.timer=setInterval(recover,5000);this.timer.unref();}
   onModuleDestroy(){if(this.timer)clearInterval(this.timer);}
 }

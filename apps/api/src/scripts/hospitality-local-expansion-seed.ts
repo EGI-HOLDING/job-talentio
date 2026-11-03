@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ExperienceLevel, Prisma, PrismaClient } from '@prisma/client';
 import { contentHash, jobFingerprint } from '../common/dedupe';
+import { EmployeeOccupationIndex, intentRoleInclude } from '../matching/employee-occupation';
 import { FEATURED_COMPANIES, type FeaturedCompany } from './featured-company-carousel-manifest';
 
 const TARGET_SLUGS = [
@@ -415,6 +416,9 @@ async function applyPlan(db: PrismaClient, plan: Awaited<ReturnType<typeof resol
   let companiesCreated = 0;
   let jobsCreated = 0;
   await db.$transaction(async (tx) => {
+    const occupations=new EmployeeOccupationIndex(await tx.jobTitle.findMany({include:intentRoleInclude}));
+    const missing=plan.jobs.filter(job=>!occupations.resolve(job.title));
+    if(missing.length)throw new Error('Occupation catalog repair is required before seeding: '+missing.map(job=>job.title).join(', '));
     for (const resolved of plan.companies) {
       const existing = await tx.company.findUnique({ where: { id: resolved.id }, select: { id: true, slug: true, name: true, description: true, locale: true, cityId: true, industryId: true, size: true, website: true } });
       if (existing) {
@@ -446,6 +450,7 @@ async function applyPlan(db: PrismaClient, plan: Awaited<ReturnType<typeof resol
           id: job.id,
           companyId: job.company.id,
           title: job.title,
+          jobTitleId: occupations.resolve(job.title)!,
           description: job.description,
           cityId: job.company.cityId,
           countryId: job.company.countryId,
