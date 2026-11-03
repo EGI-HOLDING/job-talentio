@@ -606,7 +606,7 @@ async function main() {
     assert.equal(mode[0], indonesiaVps ? '--apply-indonesia-vps' : '--apply-local');
     const applied = await applyPlan(db, plan);
     const byCompany = await verifyPlan(db, plan);
-    console.log(JSON.stringify({ target, mode: 'apply-local', ...applied, alreadyPresent: inspected.jobsAlreadySeeded, totalVerified: byCompany.reduce((sum, row) => sum + row.seededJobs, 0), companies: byCompany }, null, 2));
+    console.log(JSON.stringify({ target, mode: mode[0], ...applied, alreadyPresent: inspected.jobsAlreadySeeded, totalVerified: byCompany.reduce((sum, row) => sum + row.seededJobs, 0), companies: byCompany }, null, 2));
   } finally {
     await db.$disconnect();
   }
