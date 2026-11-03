@@ -21,6 +21,10 @@ export const employeeIntentSelected = (profileId: string) => {
 @Injectable()
 export class EmployeeIntentService {
     constructor(private db: PrismaService, @Optional() private catalogSnapshot?: EmployeeCatalogSnapshot, @Optional() private cache?: CandidateCache) { }
+    onModuleInit() {
+        if (employeeIntentMode() === 'enabled' && process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION === 'true')
+            new Logger('EmployeeIntent').warn('Ranking v3 activated by operator; independent human quality validation remains pending. Mandatory role-family and CV evidence checks remain enforced.');
+    }
     catalog() { return (this.catalogSnapshot || new EmployeeCatalogSnapshot(this.db)).get(); }
     async context(profileId: string) {
         const [profile, catalog] = await Promise.all([
@@ -34,7 +38,7 @@ export class EmployeeIntentService {
         const preferences = { ...profile, selectedIds };
         let state: EmployeeRecommendationState = 'READY';
         const gate = employeeIntentMode() === 'enabled' ? await this.db.featureFlag.findUnique({ where: { key: 'employee_intent_v3_quality_gate' } }) : null;
-        if (employeeIntentMode() === 'unavailable' || employeeIntentMode() === 'enabled' && (!Number.isFinite(Number(process.env.EMPLOYEE_INTENT_V3_PERCENT ?? 100)) || !gate?.enabled || !employeeQualityGateAccepted(gate.payload)))
+        if (employeeIntentMode() === 'unavailable' || employeeIntentMode() === 'enabled' && (!Number.isFinite(Number(process.env.EMPLOYEE_INTENT_V3_PERCENT ?? 100)) || process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION !== 'true' && (!gate?.enabled || !employeeQualityGateAccepted(gate.payload))))
             state = 'UNAVAILABLE';
         else if (!selectedIds.length)
             state = profile.desiredPositions.length ? 'PREFERENCES_REVIEW_REQUIRED' : 'PREFERENCES_REQUIRED';

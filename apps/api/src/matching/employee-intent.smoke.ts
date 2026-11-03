@@ -124,6 +124,19 @@ async function main() {
     check((await service.recommend('p')).state === 'PREFERENCES_REQUIRED', 'no selected positions has explicit state');
     process.env.EMPLOYEE_INTENT_V3_MODE = 'enabled';
     check((await service.recommend('p')).state === 'UNAVAILABLE', 'enabled environment cannot bypass human quality gate');
+    const oldOperatorActivation = process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION;
+    process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION = 'true';
+    check((await service.recommend('p')).state === 'PREFERENCES_REQUIRED', 'explicit operator activation retains mandatory preference checks');
+    profile.desiredRoles = [{ jobTitleId: accountant.id }];
+    check((await service.recommend('p')).state === 'CV_FAILED', 'operator activation retains CV readiness checks');
+    profile.resumes = [{ currentVersion: { id: 'new', parseStatus: 'PENDING', parseGeneration: 2 } }];
+    check((await service.recommend('p')).state === 'CV_PROCESSING', 'operator activation never falls back when CV is processing');
+    profile.resumes = [{ currentVersion: { id: 'v', parseStatus: 'READY', parseGeneration: 1, employeeEvidence: { parserVersion: EMPLOYEE_EVIDENCE_PARSER, generation: 1, status: 'READY', revision: 1, facts: confirmed, overrides: [] } } }];
+    profile.desiredRoles = fiveIds.map(jobTitleId => ({ jobTitleId }));
+    const activated = await service.recommend('p', 1, 100);
+    check(activated.state === 'READY' && activated.total === 61 && activated.items.every(item => item.eligibility.eligible && fiveIds.includes(item.eligibility.canonicalRoleId!)), 'operator activation serves v3 ranking while enforcing all five selected identities');
+    if (oldOperatorActivation === undefined) delete process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION;
+    else process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION = oldOperatorActivation;
     process.env.EMPLOYEE_INTENT_V3_MODE = 'unavailable';
     check((await service.recommend('p')).items.length === 0, 'kill switch never falls back to latest');
     if (oldMode === undefined)
