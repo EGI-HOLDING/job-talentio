@@ -4,7 +4,7 @@ export type Experience = { id: string; title: string; companyName: string; descr
 export type Education = { id: string; school: string; degree?: string | null; field?: string | null; startDate?: string | null; endDate?: string | null };
 export type Certification = { id: string; name: string; issuer?: string | null; issuedAt?: string | null; expiresAt?: string | null; credentialUrl?: string | null };
 export type ProfileLanguage = { id: string; level: string; language: { name: string; code: string } };
-export type Resume = { id: string; title: string; isPrimary: boolean; hasFile: boolean; updatedAt?: string; targetJobTitle?: { name: string; slug: string } | null; parseStatus?: string; builderMeta?: { lastExportAt?: string } | null };
+export type Resume = { currentVersionId?:string|null; id: string; title: string; isPrimary: boolean; hasFile: boolean; updatedAt?: string; targetJobTitle?: { name: string; slug: string } | null; parseStatus?: string; builderMeta?: { lastExportAt?: string } | null };
 export type CareerProfile = {
   id: string;
   headline?: string | null;
@@ -13,6 +13,9 @@ export type CareerProfile = {
   desiredPosition?: string | null;
   desiredSalaryMin?: number | null;
   desiredPositions?: string[];
+  desiredRoles?:Array<{jobTitleId:string;jobTitle:{name:string;family?:{name:string}|null}}> ;
+  matchingPreferencesReviewed?:boolean;
+  preferredWorkModes?:Array<"ONSITE"|"HYBRID"|"REMOTE">;
   preferredCountries?: import('../onboarding/PreferenceFields').Country[];
   residenceCountry?: import('../onboarding/PreferenceFields').Country | null;
   residenceCountryId?: string | null;

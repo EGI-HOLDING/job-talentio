@@ -40,6 +40,7 @@ type State = {
     user: { fullName: string };
     resumes: { id: string; title: string;isPrimary:boolean;hasFile:boolean }[];
     desiredPositions: string[];
+    desiredRoles?:Array<{jobTitleId:string;jobTitle:{name:string}}>;
     preferredCountries: Country[];
     residenceCountryId: string | null;
     desiredSalaryMin: number | null;
@@ -146,7 +147,8 @@ export function EmployeeOnboarding() {
         setCountries(options);
         setStep(state.step);
         setForm({
-          desiredPositions: p.desiredPositions || [],
+          desiredPositions: p.desiredRoles?.length?p.desiredRoles.map(r=>r.jobTitle.name):p.desiredPositions || [],
+          ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
           preferredCountryIds: p.preferredCountries.map((c) => c.id),
           fullName: p.user.fullName,
           residenceCountryId: p.residenceCountryId,
@@ -227,7 +229,7 @@ export function EmployeeOnboarding() {
     if (!form || busy) return;
     let normalizedPhone = form.phone;
     if (targetStep > step) {
-      if (step === 1 && !form.desiredPositions.length) {
+      if (step === 1 && !(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
         setError(t("requiredRoles"));
         return;
       }
@@ -435,7 +437,8 @@ export function EmployeeOnboarding() {
           {step === 1 && (
             <RoleInput
               value={form.desiredPositions}
-              onChange={(v) => update({ desiredPositions: v })}
+              selectedIds={form.desiredJobTitleIds}
+              onChange={(v,ids) => update({ desiredPositions: v,...(ids?{desiredJobTitleIds:ids}:{}) })}
             />
           )}
           {step === 2 && (

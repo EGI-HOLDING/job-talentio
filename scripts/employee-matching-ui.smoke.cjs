@@ -19,4 +19,4 @@ assert.ok(!applications.includes('/match-insights'),'application details should 
 assert.ok(!fs.existsSync(path.join(root,'apps/web/src/components/ui/MatchInsightsPanel.tsx')),'employee matching explanation panel should be removed');
 const catalog=fs.readFileSync(path.join(root,'apps/admin/src/app/catalog/page.tsx'),'utf8');
 assert.ok(catalog.includes('<OccupationMatchingEditor'),'admin references must be editable');
-console.log(`Employee matching UI passed: ${files.length} surfaces, no score or explanation panels; Admin matching metadata editor remains wired.`);
+console.log(`Employee matching UI passed: ${files.length} surfaces, no numeric assessments or legacy panels; v3 evidence reasons are allowed; Admin matching metadata editor remains wired.`);

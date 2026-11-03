@@ -1,4 +1,5 @@
 'use client';
+import { EmployeeIntentIdentityEditor } from '@/components/ui/EmployeeIntentIdentityEditor';
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -642,6 +643,7 @@ export default function CatalogPage() {
               </label>
             </>
           ) : null}
+          {type === 'jobTitle' && editing && <EmployeeIntentIdentityEditor key={editing.id} id={editing.id}/>}
           {type === 'jobTitle' && <OccupationMatchingEditor value={form.matchingMetadata} onChange={matchingMetadata=>setForm(f=>({...f,matchingMetadata}))}/>}
           {spec?.hasAliases ? (
             <section style={{ display: 'grid', gap: '0.65rem' }}>

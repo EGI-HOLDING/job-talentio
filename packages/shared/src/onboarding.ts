@@ -26,6 +26,8 @@ export const onboardingReviewSchema = z.object({
 });
 export type OnboardingReview = z.infer<typeof onboardingReviewSchema>;
 export const employeePreferencesSchema = z.object({
+  desiredJobTitleIds: z.array(z.string().min(1).max(100)).max(10).optional(),
+  preferredWorkModes: z.array(z.enum(["ONSITE","HYBRID","REMOTE"])).max(3).optional(),
   desiredPositions: z
     .array(z.string().trim().min(1).max(160))
     .max(10)

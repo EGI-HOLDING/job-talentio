@@ -1,3 +1,4 @@
+import { employeePreferenceUpdate, desiredRolesInclude } from '../matching/employee-preferences';
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
@@ -12,6 +13,7 @@ import { canonicalRoleNames } from "../common/title-resolve";
 import { resolveJobLocation } from "../common/geo-selection";
 
 const include = {
+  desiredRoles:desiredRolesInclude,
   user: { select: { fullName: true, email: true } },
   residenceCountry: true,
   preferredCountries: true,
@@ -134,6 +136,7 @@ export class EmployeeOnboardingService {
       !Intl.supportedValuesOf("currency").includes(input.desiredSalaryCurrency)
     )
       throw new BadRequestException("Invalid currency");
+    const intentPreferences = await employeePreferenceUpdate(db,input);
     const roles =
       input.desiredPositions === undefined
         ? undefined
@@ -165,6 +168,8 @@ export class EmployeeOnboardingService {
         ...(roles
           ? { desiredPositions: roles, desiredPosition: roles[0] || null }
           : {}),
+        ...intentPreferences,
+        ...(input.preferredWorkModes ? {preferredWorkModes:input.preferredWorkModes} : {}),
         ...(input.preferredCountryIds
           ? {
               preferredCountries: {

@@ -1,4 +1,5 @@
 "use client";
+import { EmployeePositionPicker } from './EmployeePositionPicker';
 import { createPortal } from "react-dom";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { JobTitleInput } from "@/components/ui/JobTitleInput";
@@ -40,9 +41,10 @@ function countryPanelPosition(rect: DOMRect): FloatingPanelPosition {
   const top = Math.min(Math.max(edge, rect.bottom + 6), Math.max(edge, window.innerHeight - edge - maxHeight));
   return { left, top, width, maxHeight };
 }
-export function RoleInput({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) {
+export function RoleInput({ value, onChange,selectedIds }: { value: string[]; selectedIds?:string[]; onChange: (value: string[],ids?:string[]) => void }) {
   const t = useOnboardingText(), id = useId();
   const [text, setText] = useState("");
+  if(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true')return <EmployeePositionPicker value={value} selectedIds={selectedIds} onChange={onChange}/>;
   function add(input = text) {
     const role = input.trim().replace(/\s+/g, " ");
     if (!role || value.length >= 10) return;

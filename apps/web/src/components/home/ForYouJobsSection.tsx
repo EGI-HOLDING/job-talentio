@@ -1,4 +1,6 @@
 'use client';
+import { EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
+import type { EmployeeRecommendationState,MatchInsights } from '@job-talentio/shared';
 
 import { Link } from '@/lib/navigation';
 import { useEffect, useState } from 'react';
@@ -21,7 +23,7 @@ type RecommendedJob = {
 };
 
 type RecommendedItem = {
-  job: RecommendedJob;
+  job: RecommendedJob;matchInsights?:MatchInsights;
 };
 
 type ProfileSignal = {
@@ -42,6 +44,7 @@ const HOME_FOR_YOU_LIMIT = 6;
 
 export function ForYouJobsSection() {
   const { t, locale } = useI18n();
+  const [recommendationState,setRecommendationState]=useState<EmployeeRecommendationState|undefined>();
   const [items, setItems] = useState<RecommendedItem[]>([]);
   const [profile, setProfile] = useState<ProfileSignal | null>(null);
   const [ready, setReady] = useState(false);
@@ -57,11 +60,11 @@ export function ForYouJobsSection() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      api<RecommendedItem[]>('/jobs/recommended?limit=6').catch(() => [] as RecommendedItem[]),
+      api<{items:RecommendedItem[];state?:EmployeeRecommendationState}>('/jobs/recommended?page=1&limit=6').catch(() => ({items:[] as RecommendedItem[],state:'UNAVAILABLE' as const})),
       api<ProfileSignal>('/profiles/me').catch(() => null),
     ]).then(([rows, me]) => {
       if (cancelled) return;
-      setItems(Array.isArray(rows) ? rows.slice(0, HOME_FOR_YOU_LIMIT) : []);
+      setItems(rows.items.slice(0, HOME_FOR_YOU_LIMIT)); setRecommendationState(rows.state);
       setProfile(me);
       setReady(true);
     });
@@ -70,6 +73,7 @@ export function ForYouJobsSection() {
     };
   }, [locale, retry, identity]);
 
+  useEffect(()=>{if(recommendationState!=='CV_PROCESSING')return;const timer=setInterval(()=>setRetry(n=>n+1),5000);return()=>clearInterval(timer);},[recommendationState]);
   const emptyCopy = hasMatchSignal(profile) ? (
     <>
       {t('emp.recommendedEmptyNoOverlap')}{' '}
@@ -92,7 +96,7 @@ export function ForYouJobsSection() {
     >
       {!ready ? (
         <div className="muted" style={{ minHeight: '2.5rem' }} />
-      ) : items.length === 0 ? (
+      ) : recommendationState&&recommendationState!=='READY' ? (<EmployeeRecommendationNotice state={recommendationState}/>) : items.length === 0 ? (
         <p className="muted">{emptyCopy}</p>
       ) : (
         <div className="grid-2">

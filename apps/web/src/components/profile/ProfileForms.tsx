@@ -40,7 +40,9 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   ));
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
-  const [roles, setRoles] = useState(profile.desiredPositions?.length ? profile.desiredPositions : profile.desiredPosition ? [profile.desiredPosition] : []);
+  const [roleIds,setRoleIds]=useState(profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
+  const [workModes,setWorkModes]=useState(profile.preferredWorkModes||[]);
+  const [roles, setRoles] = useState(profile.desiredRoles?.length?profile.desiredRoles.map(r=>r.jobTitle.name):profile.desiredPositions?.length ? profile.desiredPositions : profile.desiredPosition ? [profile.desiredPosition] : []);
   const [preferredCountries, setPreferredCountries] = useState(profile.preferredCountries?.map(c=>c.id) || []);
   const [residence, setResidence] = useState(profile.residenceCountryId ? [profile.residenceCountryId] : profile.city?.province?.country?.id ? [profile.city.province.country.id] : []);
   const [homeCity, setHomeCity] = useState(profile.city?.slug || '');
@@ -89,7 +91,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -133,7 +135,8 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       <fieldset disabled={busy} className={s.resetFieldset}>
         {editor.kind === 'basics' && <>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
-          <RoleInput value={roles} onChange={setRoles} />
+          <RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />
+          {process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
 
           <SalaryFields countries={countries} value={salary} onChange={setSalary} />

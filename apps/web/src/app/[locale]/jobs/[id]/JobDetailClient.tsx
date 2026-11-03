@@ -1,4 +1,5 @@
 'use client';
+import { EmployeeJobMatch } from '@/components/jobs/EmployeeJobMatch';
 import { authLink } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
@@ -484,7 +485,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
       )}
   </>;
 
-  return <JobPreview standalone={!embedded}
+  return <JobPreview matchReasons={isEmployee?<EmployeeJobMatch jobId={id}/>:undefined} standalone={!embedded}
     backHref={backHref}
     companyHref={'/companies/' + job.company.slug + '?returnTo=' + encodeURIComponent(jobDetailHref(id, backHref))}
     chatHref={isEmployee && myApplication && myApplication.status !== 'WITHDRAWN' && job.chatPeerUserId

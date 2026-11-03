@@ -1,0 +1,657 @@
+{
+  "source": "https://www.ilo.org/ilostat-files/ISCO/newdocs-08-2021/ISCO-08/ISCO-08%20EN.csv",
+  "sourceVersion": "ISCO-08",
+  "rows": [
+    {
+      "code": "011",
+      "name": "Commissioned Armed Forces Officers",
+      "nameId": "Perwira Angkatan Bersenjata"
+    },
+    {
+      "code": "021",
+      "name": "Non-commissioned Armed Forces Officers",
+      "nameId": "Bintara Angkatan Bersenjata"
+    },
+    {
+      "code": "031",
+      "name": "Armed Forces Occupations, Other Ranks",
+      "nameId": "Prajurit Angkatan Bersenjata Lainnya"
+    },
+    {
+      "code": "111",
+      "name": "Legislators and Senior Officials",
+      "nameId": "Anggota Legislatif dan Pejabat Tinggi"
+    },
+    {
+      "code": "112",
+      "name": "Managing Directors and Chief Executives",
+      "nameId": "Direktur Utama dan Pimpinan Eksekutif"
+    },
+    {
+      "code": "121",
+      "name": "Business Services and Administration Managers",
+      "nameId": "Manajer Layanan Bisnis dan Administrasi"
+    },
+    {
+      "code": "122",
+      "name": "Sales, Marketing and Development Managers",
+      "nameId": "Manajer Penjualan, Pemasaran, dan Pengembangan"
+    },
+    {
+      "code": "131",
+      "name": "Production Managers in Agriculture, Forestry and Fisheries",
+      "nameId": "Manajer Produksi Pertanian, Kehutanan, dan Perikanan"
+    },
+    {
+      "code": "132",
+      "name": "Manufacturing, Mining, Construction and Distribution Managers",
+      "nameId": "Manajer Manufaktur, Pertambangan, Konstruksi, dan Distribusi"
+    },
+    {
+      "code": "133",
+      "name": "Information and Communications Technology Services Managers",
+      "nameId": "Manajer Layanan Teknologi Informasi dan Komunikasi"
+    },
+    {
+      "code": "134",
+      "name": "Professional Services Managers",
+      "nameId": "Manajer Layanan Profesional"
+    },
+    {
+      "code": "141",
+      "name": "Hotel and Restaurant Managers",
+      "nameId": "Manajer Hotel dan Restoran"
+    },
+    {
+      "code": "142",
+      "name": "Retail and Wholesale Trade Managers",
+      "nameId": "Manajer Perdagangan Eceran dan Grosir"
+    },
+    {
+      "code": "143",
+      "name": "Other Services Managers",
+      "nameId": "Manajer Layanan Lainnya"
+    },
+    {
+      "code": "211",
+      "name": "Physical and Earth Science Professionals",
+      "nameId": "Profesional Ilmu Fisika dan Kebumian"
+    },
+    {
+      "code": "212",
+      "name": "Mathematicians, Actuaries and Statisticians",
+      "nameId": "Matematikawan, Aktuaris, dan Statistisi"
+    },
+    {
+      "code": "213",
+      "name": "Life Science Professionals",
+      "nameId": "Profesional Ilmu Hayati"
+    },
+    {
+      "code": "214",
+      "name": "Engineering Professionals (excluding Electrotechnology)",
+      "nameId": "Profesional Teknik Selain Elektroteknologi"
+    },
+    {
+      "code": "215",
+      "name": "Electrotechnology Engineers",
+      "nameId": "Insinyur Elektroteknologi"
+    },
+    {
+      "code": "216",
+      "name": "Architects, Planners, Surveyors and Designers",
+      "nameId": "Arsitek, Perencana, Surveyor, dan Desainer"
+    },
+    {
+      "code": "221",
+      "name": "Medical Doctors",
+      "nameId": "Dokter"
+    },
+    {
+      "code": "222",
+      "name": "Nursing and Midwifery Professionals",
+      "nameId": "Profesional Keperawatan dan Kebidanan"
+    },
+    {
+      "code": "223",
+      "name": "Traditional and Complementary Medicine Professionals",
+      "nameId": "Profesional Pengobatan Tradisional dan Komplementer"
+    },
+    {
+      "code": "224",
+      "name": "Paramedical Practitioners",
+      "nameId": "Praktisi Paramedis"
+    },
+    {
+      "code": "225",
+      "name": "Veterinarians",
+      "nameId": "Dokter Hewan"
+    },
+    {
+      "code": "226",
+      "name": "Other Health Professionals",
+      "nameId": "Profesional Kesehatan Lainnya"
+    },
+    {
+      "code": "231",
+      "name": "University and Higher Education Teachers",
+      "nameId": "Dosen Perguruan Tinggi"
+    },
+    {
+      "code": "232",
+      "name": "Vocational Education Teachers",
+      "nameId": "Pengajar Pendidikan Kejuruan"
+    },
+    {
+      "code": "233",
+      "name": "Secondary Education Teachers",
+      "nameId": "Guru Pendidikan Menengah"
+    },
+    {
+      "code": "234",
+      "name": "Primary School and Early Childhood Teachers",
+      "nameId": "Guru Sekolah Dasar dan Pendidikan Anak Usia Dini"
+    },
+    {
+      "code": "235",
+      "name": "Other Teaching Professionals",
+      "nameId": "Profesional Pengajaran Lainnya"
+    },
+    {
+      "code": "241",
+      "name": "Finance Professionals",
+      "nameId": "Profesional Keuangan"
+    },
+    {
+      "code": "242",
+      "name": "Administration Professionals",
+      "nameId": "Profesional Administrasi"
+    },
+    {
+      "code": "243",
+      "name": "Sales, Marketing and Public Relations Professionals",
+      "nameId": "Profesional Penjualan, Pemasaran, dan Hubungan Masyarakat"
+    },
+    {
+      "code": "251",
+      "name": "Software and Applications Developers and Analysts",
+      "nameId": "Pengembang dan Analis Perangkat Lunak dan Aplikasi"
+    },
+    {
+      "code": "252",
+      "name": "Database and Network Professionals",
+      "nameId": "Profesional Basis Data dan Jaringan"
+    },
+    {
+      "code": "261",
+      "name": "Legal Professionals",
+      "nameId": "Profesional Hukum"
+    },
+    {
+      "code": "262",
+      "name": "Librarians, Archivists and Curators",
+      "nameId": "Pustakawan, Arsiparis, dan Kurator"
+    },
+    {
+      "code": "263",
+      "name": "Social and Religious Professionals",
+      "nameId": "Profesional Sosial dan Keagamaan"
+    },
+    {
+      "code": "264",
+      "name": "Authors, Journalists and Linguists",
+      "nameId": "Penulis, Jurnalis, dan Ahli Bahasa"
+    },
+    {
+      "code": "265",
+      "name": "Creative and Performing Artists",
+      "nameId": "Seniman Kreatif dan Pertunjukan"
+    },
+    {
+      "code": "311",
+      "name": "Physical and Engineering Science Technicians",
+      "nameId": "Teknisi Ilmu Fisika dan Teknik"
+    },
+    {
+      "code": "312",
+      "name": "Mining, Manufacturing and Construction Supervisors",
+      "nameId": "Pengawas Pertambangan, Manufaktur, dan Konstruksi"
+    },
+    {
+      "code": "313",
+      "name": "Process Control Technicians",
+      "nameId": "Teknisi Pengendalian Proses"
+    },
+    {
+      "code": "314",
+      "name": "Life Science Technicians and Related Associate Professionals",
+      "nameId": "Teknisi Ilmu Hayati dan Tenaga Terkait"
+    },
+    {
+      "code": "315",
+      "name": "Ship and Aircraft Controllers and Technicians",
+      "nameId": "Pengendali dan Teknisi Kapal dan Pesawat"
+    },
+    {
+      "code": "321",
+      "name": "Medical and Pharmaceutical Technicians",
+      "nameId": "Teknisi Medis dan Farmasi"
+    },
+    {
+      "code": "322",
+      "name": "Nursing and Midwifery Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Keperawatan dan Kebidanan"
+    },
+    {
+      "code": "323",
+      "name": "Traditional and Complementary Medicine Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Pengobatan Tradisional dan Komplementer"
+    },
+    {
+      "code": "324",
+      "name": "Veterinary Technicians and Assistants",
+      "nameId": "Teknisi dan Asisten Kesehatan Hewan"
+    },
+    {
+      "code": "325",
+      "name": "Other Health Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Kesehatan Lainnya"
+    },
+    {
+      "code": "331",
+      "name": "Financial and Mathematical Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Keuangan dan Matematika"
+    },
+    {
+      "code": "332",
+      "name": "Sales and Purchasing Agents and Brokers",
+      "nameId": "Agen dan Perantara Penjualan dan Pembelian"
+    },
+    {
+      "code": "333",
+      "name": "Business Services Agents",
+      "nameId": "Agen Layanan Bisnis"
+    },
+    {
+      "code": "334",
+      "name": "Administrative and Specialized Secretaries",
+      "nameId": "Sekretaris Administratif dan Khusus"
+    },
+    {
+      "code": "335",
+      "name": "Government Regulatory Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Pengawasan Pemerintah"
+    },
+    {
+      "code": "341",
+      "name": "Legal, Social and Religious Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Hukum, Sosial, dan Keagamaan"
+    },
+    {
+      "code": "342",
+      "name": "Sports and Fitness Workers",
+      "nameId": "Pekerja Olahraga dan Kebugaran"
+    },
+    {
+      "code": "343",
+      "name": "Artistic, Cultural and Culinary Associate Professionals",
+      "nameId": "Tenaga Ahli Madya Seni, Budaya, dan Kuliner"
+    },
+    {
+      "code": "351",
+      "name": "Information and Communications Technology Operations and User Support Technicians",
+      "nameId": "Teknisi Operasional TIK dan Dukungan Pengguna"
+    },
+    {
+      "code": "352",
+      "name": "Telecommunications and Broadcasting Technicians",
+      "nameId": "Teknisi Telekomunikasi dan Penyiaran"
+    },
+    {
+      "code": "411",
+      "name": "General Office Clerks",
+      "nameId": "Staf Administrasi Kantor Umum"
+    },
+    {
+      "code": "412",
+      "name": "Secretaries (general)",
+      "nameId": "Sekretaris Umum"
+    },
+    {
+      "code": "413",
+      "name": "Keyboard Operators",
+      "nameId": "Operator Entri Data dan Pengetikan"
+    },
+    {
+      "code": "421",
+      "name": "Tellers, Money Collectors and Related Clerks",
+      "nameId": "Teller, Penagih, dan Staf Terkait"
+    },
+    {
+      "code": "422",
+      "name": "Client Information Workers",
+      "nameId": "Petugas Informasi Pelanggan"
+    },
+    {
+      "code": "431",
+      "name": "Numerical Clerks",
+      "nameId": "Staf Pencatatan Angka dan Keuangan"
+    },
+    {
+      "code": "432",
+      "name": "Material Recording and Transport Clerks",
+      "nameId": "Staf Pencatatan Material dan Transportasi"
+    },
+    {
+      "code": "441",
+      "name": "Other Clerical Support Workers",
+      "nameId": "Staf Pendukung Administrasi Lainnya"
+    },
+    {
+      "code": "511",
+      "name": "Travel Attendants, Conductors and Guides",
+      "nameId": "Pramugara, Kondektur, dan Pemandu Perjalanan"
+    },
+    {
+      "code": "512",
+      "name": "Cooks",
+      "nameId": "Juru Masak"
+    },
+    {
+      "code": "513",
+      "name": "Waiters and Bartenders",
+      "nameId": "Pramusaji dan Bartender"
+    },
+    {
+      "code": "514",
+      "name": "Hairdressers, Beauticians and Related Workers",
+      "nameId": "Penata Rambut, Ahli Kecantikan, dan Pekerja Terkait"
+    },
+    {
+      "code": "515",
+      "name": "Building and Housekeeping Supervisors",
+      "nameId": "Pengawas Gedung dan Tata Graha"
+    },
+    {
+      "code": "516",
+      "name": "Other Personal Services Workers",
+      "nameId": "Pekerja Layanan Pribadi Lainnya"
+    },
+    {
+      "code": "521",
+      "name": "Street and Market Salespersons",
+      "nameId": "Pedagang Kaki Lima dan Pasar"
+    },
+    {
+      "code": "522",
+      "name": "Shop Salespersons",
+      "nameId": "Tenaga Penjualan Toko"
+    },
+    {
+      "code": "523",
+      "name": "Cashiers and Ticket Clerks",
+      "nameId": "Kasir dan Petugas Tiket"
+    },
+    {
+      "code": "524",
+      "name": "Other Sales Workers",
+      "nameId": "Pekerja Penjualan Lainnya"
+    },
+    {
+      "code": "531",
+      "name": "Child Care Workers and Teachers' Aides",
+      "nameId": "Pengasuh Anak dan Asisten Guru"
+    },
+    {
+      "code": "532",
+      "name": "Personal Care Workers in Health Services",
+      "nameId": "Pekerja Perawatan Pribadi dalam Layanan Kesehatan"
+    },
+    {
+      "code": "541",
+      "name": "Protective Services Workers",
+      "nameId": "Pekerja Layanan Perlindungan"
+    },
+    {
+      "code": "611",
+      "name": "Market Gardeners and Crop Growers",
+      "nameId": "Petani Tanaman dan Hortikultura untuk Pasar"
+    },
+    {
+      "code": "612",
+      "name": "Animal Producers",
+      "nameId": "Peternak untuk Pasar"
+    },
+    {
+      "code": "613",
+      "name": "Mixed Crop and Animal Producers",
+      "nameId": "Petani Tanaman dan Peternak Campuran"
+    },
+    {
+      "code": "621",
+      "name": "Forestry and Related Workers",
+      "nameId": "Pekerja Kehutanan dan Terkait"
+    },
+    {
+      "code": "622",
+      "name": "Fishery Workers, Hunters and Trappers",
+      "nameId": "Pekerja Perikanan, Pemburu, dan Penangkap Hewan"
+    },
+    {
+      "code": "631",
+      "name": "Subsistence Crop Farmers",
+      "nameId": "Petani Tanaman Subsisten"
+    },
+    {
+      "code": "632",
+      "name": "Subsistence Livestock Farmers",
+      "nameId": "Peternak Subsisten"
+    },
+    {
+      "code": "633",
+      "name": "Subsistence Mixed Crop and Livestock Farmers",
+      "nameId": "Petani dan Peternak Campuran Subsisten"
+    },
+    {
+      "code": "634",
+      "name": "Subsistence Fishers, Hunters, Trappers and Gatherers",
+      "nameId": "Nelayan, Pemburu, Penangkap, dan Peramu Subsisten"
+    },
+    {
+      "code": "711",
+      "name": "Building Frame and Related Trades Workers",
+      "nameId": "Pekerja Struktur Bangunan dan Terkait"
+    },
+    {
+      "code": "712",
+      "name": "Building Finishers and Related Trades Workers",
+      "nameId": "Pekerja Penyelesaian Bangunan dan Terkait"
+    },
+    {
+      "code": "713",
+      "name": "Painters, Building Structure Cleaners and Related Trades Workers",
+      "nameId": "Pengecat, Pembersih Struktur Bangunan, dan Terkait"
+    },
+    {
+      "code": "721",
+      "name": "Sheet and Structural Metal Workers, Moulders and Welders, and Related Workers",
+      "nameId": "Pekerja Pelat dan Struktur Logam, Pengecor, dan Pengelas"
+    },
+    {
+      "code": "722",
+      "name": "Blacksmiths, Toolmakers and Related Trades Workers",
+      "nameId": "Pandai Besi, Pembuat Perkakas, dan Terkait"
+    },
+    {
+      "code": "723",
+      "name": "Machinery Mechanics and Repairers",
+      "nameId": "Mekanik dan Reparatur Mesin"
+    },
+    {
+      "code": "731",
+      "name": "Handicraft Workers",
+      "nameId": "Pekerja Kerajinan Tangan"
+    },
+    {
+      "code": "732",
+      "name": "Printing Trades Workers",
+      "nameId": "Pekerja Percetakan"
+    },
+    {
+      "code": "741",
+      "name": "Electrical Equipment Installers and Repairers",
+      "nameId": "Pemasang dan Reparatur Peralatan Listrik"
+    },
+    {
+      "code": "742",
+      "name": "Electronics and Telecommunications Installers and Repairers",
+      "nameId": "Pemasang dan Reparatur Elektronik dan Telekomunikasi"
+    },
+    {
+      "code": "751",
+      "name": "Food Processing and Related Trades Workers",
+      "nameId": "Pekerja Pengolahan Makanan dan Terkait"
+    },
+    {
+      "code": "752",
+      "name": "Wood Treaters, Cabinet-makers and Related Trades Workers",
+      "nameId": "Pengolah Kayu, Pembuat Furnitur, dan Terkait"
+    },
+    {
+      "code": "753",
+      "name": "Garment and Related Trades Workers",
+      "nameId": "Pekerja Pembuatan Pakaian dan Terkait"
+    },
+    {
+      "code": "754",
+      "name": "Other Craft and Related Workers",
+      "nameId": "Pekerja Kerajinan dan Terkait Lainnya"
+    },
+    {
+      "code": "811",
+      "name": "Mining and Mineral Processing Plant Operators",
+      "nameId": "Operator Instalasi Pertambangan dan Pengolahan Mineral"
+    },
+    {
+      "code": "812",
+      "name": "Metal Processing and Finishing Plant Operators",
+      "nameId": "Operator Instalasi Pengolahan dan Penyelesaian Logam"
+    },
+    {
+      "code": "813",
+      "name": "Chemical and Photographic Products Plant and Machine Operators",
+      "nameId": "Operator Instalasi dan Mesin Produk Kimia dan Fotografi"
+    },
+    {
+      "code": "814",
+      "name": "Rubber, Plastic and Paper Products Machine Operators",
+      "nameId": "Operator Mesin Produk Karet, Plastik, dan Kertas"
+    },
+    {
+      "code": "815",
+      "name": "Textile, Fur and Leather Products Machine Operators",
+      "nameId": "Operator Mesin Produk Tekstil, Bulu, dan Kulit"
+    },
+    {
+      "code": "816",
+      "name": "Food and Related Products Machine Operators",
+      "nameId": "Operator Mesin Produk Makanan dan Terkait"
+    },
+    {
+      "code": "817",
+      "name": "Wood Processing and Papermaking Plant Operators",
+      "nameId": "Operator Instalasi Pengolahan Kayu dan Pembuatan Kertas"
+    },
+    {
+      "code": "818",
+      "name": "Other Stationary Plant and Machine Operators",
+      "nameId": "Operator Instalasi dan Mesin Stasioner Lainnya"
+    },
+    {
+      "code": "821",
+      "name": "Assemblers",
+      "nameId": "Perakit"
+    },
+    {
+      "code": "831",
+      "name": "Locomotive Engine Drivers and Related Workers",
+      "nameId": "Masinis dan Pekerja Terkait"
+    },
+    {
+      "code": "832",
+      "name": "Car, Van and Motorcycle Drivers",
+      "nameId": "Pengemudi Mobil, Van, dan Sepeda Motor"
+    },
+    {
+      "code": "833",
+      "name": "Heavy Truck and Bus Drivers",
+      "nameId": "Pengemudi Truk Berat dan Bus"
+    },
+    {
+      "code": "834",
+      "name": "Mobile Plant Operators",
+      "nameId": "Operator Mesin Bergerak"
+    },
+    {
+      "code": "835",
+      "name": "Ships' Deck Crews and Related Workers",
+      "nameId": "Awak Geladak Kapal dan Terkait"
+    },
+    {
+      "code": "911",
+      "name": "Domestic, Hotel and Office Cleaners and Helpers",
+      "nameId": "Petugas Kebersihan dan Pembantu Rumah Tangga, Hotel, dan Kantor"
+    },
+    {
+      "code": "912",
+      "name": "Vehicle, Window, Laundry and Other Hand Cleaning Workers",
+      "nameId": "Pembersih Kendaraan, Jendela, Penatu, dan Pembersih Manual Lainnya"
+    },
+    {
+      "code": "921",
+      "name": "Agricultural, Forestry and Fishery Labourers",
+      "nameId": "Buruh Pertanian, Kehutanan, dan Perikanan"
+    },
+    {
+      "code": "931",
+      "name": "Mining and Construction Labourers",
+      "nameId": "Buruh Pertambangan dan Konstruksi"
+    },
+    {
+      "code": "932",
+      "name": "Manufacturing Labourers",
+      "nameId": "Buruh Manufaktur"
+    },
+    {
+      "code": "933",
+      "name": "Transport and Storage Labourers",
+      "nameId": "Buruh Transportasi dan Pergudangan"
+    },
+    {
+      "code": "941",
+      "name": "Food Preparation Assistants",
+      "nameId": "Asisten Penyiapan Makanan"
+    },
+    {
+      "code": "951",
+      "name": "Street and Related Services Workers",
+      "nameId": "Pekerja Layanan Jalanan dan Terkait"
+    },
+    {
+      "code": "952",
+      "name": "Street Vendors (excluding Food)",
+      "nameId": "Pedagang Jalanan Selain Makanan"
+    },
+    {
+      "code": "961",
+      "name": "Refuse Workers",
+      "nameId": "Pekerja Penanganan Sampah"
+    },
+    {
+      "code": "962",
+      "name": "Other Elementary Workers",
+      "nameId": "Pekerja Kasar Lainnya"
+    }
+  ],
+  "indonesianLabelSource": "Editorial translation; official codes and English labels from ILO. Local-standard review not claimed."
+}

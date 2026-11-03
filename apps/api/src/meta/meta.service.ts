@@ -548,6 +548,7 @@ export class MetaService {
       this.prisma.jobTitle.findMany({
         where,
         include: {
+          family:true,canonicalRole:{include:{family:true}},
           _count: {
             select: { jobPosts: { where: liveJobWhere() } },
           },
@@ -562,6 +563,7 @@ export class MetaService {
       id: t.id,
       name: t.name,
       canonicalName: t.name,
+        canonicalRoleId:t.canonicalRoleId??t.id,family:t.family,matchingEligible:Boolean(t.matchingApproved&&t.family&&!t.family.archivedAt&&(!t.canonicalRoleId||t.canonicalRole?.matchingApproved&&!t.canonicalRole.canonicalRoleId&&t.canonicalRole.familyId===t.familyId)),
       nameUz: t.nameUz,
       nameRu: t.nameRu,
       nameId: t.nameId,
@@ -622,6 +624,7 @@ export class MetaService {
     const rows = await this.prisma.jobTitle.findMany({
       where,
       include: {
+        family:true,canonicalRole:{include:{family:true}},
         _count: { select: { jobPosts: { where: liveJobWhere() } } },
         aliases: { take: 3, select: { alias: true } },
       },
@@ -634,6 +637,7 @@ export class MetaService {
         id: t.id,
         name: t.name,
         canonicalName: t.name,
+        canonicalRoleId:t.canonicalRoleId??t.id,family:t.family,matchingEligible:Boolean(t.matchingApproved&&t.family&&!t.family.archivedAt&&(!t.canonicalRoleId||t.canonicalRole?.matchingApproved&&!t.canonicalRole.canonicalRoleId&&t.canonicalRole.familyId===t.familyId)),
         nameUz: t.nameUz,
         nameRu: t.nameRu,
         nameId: t.nameId,

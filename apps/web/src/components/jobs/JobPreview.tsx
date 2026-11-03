@@ -27,6 +27,7 @@ type PreviewJob = {
 };
 
 type Props = {
+  matchReasons?:ReactNode;
   standalone?: boolean;
   backHref?: string;
   companyHref?: string;
@@ -39,7 +40,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function JobPreview({ standalone = false, backHref = '/jobs', companyHref, chatHref, whatsappApplicationId, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
+export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs', companyHref, chatHref, whatsappApplicationId, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const Title = standalone ? 'h1' : 'h2';
@@ -60,7 +61,7 @@ export function JobPreview({ standalone = false, backHref = '/jobs', companyHref
           {!job.company.anonymous && <Link href={companyHref || `/companies/${job.company.slug}`}>{t('viewCompanyProfile')} <span aria-hidden="true">{'\u2192'}</span></Link>}
         </div>
       </div>
-      <Title className={s.previewTitle}>{job.title}</Title>
+      <Title className={s.previewTitle}>{job.title}</Title>{matchReasons}
       <div className={s.previewMeta}>
         {(job.city?.name || country || job.country?.name) && <span><JobsIcon kind="pin" />{[job.city?.name, country || job.country?.name].filter(Boolean).join(', ')}</span>}
         {job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}

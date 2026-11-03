@@ -14,3 +14,4 @@ export * from './catalog-tech-identity';
 export * from './catalog-label';
 export * from './match-insights';
 export * from './job-promotion';
+export * from './employee-intent';

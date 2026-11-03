@@ -391,6 +391,8 @@ export const profileUpdateSchema = z.object({
   desiredSalaryPeriod: z.enum(['MONTHLY','YEARLY','HOURLY']).optional(),
   salaryNegotiable: z.boolean().optional(),
   desiredPositions: z.array(z.string().trim().min(1).max(160)).max(10).optional(),
+  desiredJobTitleIds: z.array(z.string().min(1).max(100)).max(10).optional(),
+  preferredWorkModes: z.array(z.enum(["ONSITE","HYBRID","REMOTE"])).max(3).optional(),
   preferredCountryIds: z.array(z.string().min(1).max(100)).max(10).optional(),
   residenceCountryId: z.string().min(1).max(100).nullable().optional(),
   noExperience: z.boolean().optional(),

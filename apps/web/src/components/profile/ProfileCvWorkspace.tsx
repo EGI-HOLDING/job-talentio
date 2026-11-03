@@ -1,4 +1,6 @@
 'use client';
+import { EmployeeEvidenceReview } from './EmployeeEvidenceReview';
+import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { DatabaseCvPermission } from './DatabaseCvPermission';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -30,6 +32,7 @@ function Section({ id, title, action, children }: { id: string; title: string; a
 }
 
 export function ProfileCvWorkspace() {
+  const intentText=useEmployeeIntentText();
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const onboardingText = useOnboardingText();
@@ -61,6 +64,7 @@ export function ProfileCvWorkspace() {
   const [fileUrl, setFileUrl] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
   const fileRequest = useRef(0);
+  const [evidenceReview,setEvidenceReview]=useState<Resume|null>(null);
   const [resumeEditor, setResumeEditor] = useState<Resume | null>(null);
   const [resumeError, setResumeError] = useState('');
 
@@ -191,7 +195,7 @@ export function ProfileCvWorkspace() {
         <div className={s.cvTableHeader} aria-hidden="true"><span>{t('pc.cv')}</span><span>{t('pc.fileStatus')}</span><span className={s.cvDate}>{t('pc.updated')}</span><span>{t('pc.actions')}</span></div>
         {profile.resumes.map((resume) => <article key={resume.id} className={s.cvRow} aria-label={resume.title}>
           <div className={s.cvIdentity}><span className={s.documentThumb}><ProfileIcon /></span><div><div className={s.cvName}><strong>{resume.title}</strong>{resume.isPrimary && <span className={s.primaryBadge}>{t('emp.primary')}</span>}</div><p>{resume.hasFile ? t('pc.attached') : t('pc.noFile')}</p></div></div>
-          <div className={s.cvStatus}><span className={resume.parseStatus==='READY'?s.badge:s.warningBadge}>{t(resume.parseStatus==='READY'?'cv.ready':resume.parseStatus==='FAILED'?'cv.failed':resume.hasFile?'cv.processing':'pc.noFile')}</span>{resume.parseStatus==='FAILED'&&<button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={()=>void action('retry-'+resume.id,async()=>{await api('/profiles/me/resumes/'+resume.id+'/parse',{method:'POST'});await refresh();})}>{t('cv.retry')}</button>}</div>
+          <div className={s.cvStatus}>{process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'&&resume.currentVersionId&&<button type="button" className={s.textButton} style={{display:'block',marginBottom:6,textAlign:'left',whiteSpace:'normal'}} onClick={()=>setEvidenceReview(resume)}>{intentText('reviewCVMatchingEvidence')}</button>}<span className={resume.parseStatus==='READY'?s.badge:s.warningBadge}>{t(resume.parseStatus==='READY'?'cv.ready':resume.parseStatus==='FAILED'?'cv.failed':resume.hasFile?'cv.processing':'pc.noFile')}</span>{resume.parseStatus==='FAILED'&&<button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={()=>void action('retry-'+resume.id,async()=>{await api('/profiles/me/resumes/'+resume.id+'/parse',{method:'POST'});await refresh();})}>{t('cv.retry')}</button>}</div>
           <time className={s.cvDate} dateTime={resume.updatedAt}>{date(resume.updatedAt, false, true)}</time>
           <div className={s.rowActions}>{resume.hasFile && <button className={s.secondary} type="button" disabled={Boolean(busy)} onClick={() => openFile(resume, 'preview')} aria-label={`${t('pc.preview')}: ${resume.title}`}><ProfileIcon kind="eye" /><span>{t('pc.preview')}</span></button>}<div className={s.overflow} data-cv-menu><button className={s.iconButton} type="button" aria-expanded={menu === resume.id} aria-controls={`cv-actions-${resume.id}`} aria-label={t('pc.moreActions').replace('{name}', resume.title)} onClick={(event) => { menuButton.current = event.currentTarget; setMenuUp(event.currentTarget.getBoundingClientRect().bottom > window.innerHeight - 310); setMenu(menu === resume.id ? null : resume.id); }}><ProfileIcon kind="more" /></button>
             {menu === resume.id && <div id={`cv-actions-${resume.id}`} className={s.overflowMenu} style={menuUp ? { top: 'auto', bottom: 40 } : undefined}>
@@ -248,6 +252,7 @@ export function ProfileCvWorkspace() {
     {fileDialog && <ProfileDialog title={fileDialog.kind === 'preview' ? fileDialog.resume.title : t(fileDialog.resume.hasFile ? 'pc.replaceTitle' : 'pc.attachFile')} onClose={() => setFileDialog(null)} busy={busy === 'replace'}>
       {fileDialog.kind === 'preview' ? <div className={s.dialogBody}><div className={s.empty}><ProfileIcon /><h2>{fileDialog.resume.title}</h2>{fileLoading && <p role="status">{t('pc.loadingFile')}</p>}{fileUrl && <a className={s.primary} href={fileUrl} target="_blank" rel="noopener noreferrer">{t('pc.openFile')}<ProfileIcon kind="external" /></a>}</div>{fileError && <div className={s.error} role="alert">{fileError}</div>}<footer className={s.dialogFooter}><button className={s.secondary} type="button" onClick={() => setFileDialog(null)}>{t('pc.done')}</button></footer></div> : <form onSubmit={replaceFile} className={s.form}><p className={s.muted}>{t('pc.replaceHint')}</p><CvFileDrop file={file} disabled={Boolean(busy)} onPick={(file) => { const error = file ? cvFileError(file, t) : null; setFileError(error || ''); setFile(error ? null : file); }} />{fileError && <div className={s.error} role="alert">{fileError}</div>}<footer className={s.dialogFooter}><button className={s.secondary} type="button" disabled={Boolean(busy)} onClick={() => setFileDialog(null)}>{t('cancel')}</button><button className={s.primary} type="submit" disabled={!file || Boolean(busy)}>{busy === 'replace' ? t('saving') : t(fileDialog.resume.hasFile ? 'pc.replaceFile' : 'pc.attachFile')}</button></footer></form>}
     </ProfileDialog>}
+    {evidenceReview?.currentVersionId&&<EmployeeEvidenceReview resumeId={evidenceReview.id} versionId={evidenceReview.currentVersionId} onClose={()=>{setEvidenceReview(null);void load();}}/>}
     {resumeEditor && <ProfileDialog title={t('pc.editCvDetails')} onClose={() => setResumeEditor(null)} busy={busy === 'resume-details'} guardChanges><form className={s.form} onSubmit={saveResumeDetails}><FormField label={t('pc.cvName')} required><input name="title" defaultValue={resumeEditor.title} maxLength={160} required /></FormField>{resumeError && <div className={s.error} role="alert">{resumeError}</div>}<footer className={s.dialogFooter}><button className={s.secondary} type="button" disabled={Boolean(busy)} onClick={() => setResumeEditor(null)}>{t('cancel')}</button><button className={s.primary} type="submit" disabled={Boolean(busy)}>{busy ? t('saving') : t('save')}</button></footer></form></ProfileDialog>}
   </div>;
 }

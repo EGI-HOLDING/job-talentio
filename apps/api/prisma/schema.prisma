@@ -386,6 +386,7 @@ enum CatalogI18nStatus {
 /// re-run on every container start and would otherwise rewrite the name back to
 /// the seed catalog, so they skip curated rows.
 model Skill {
+  matchingKind String @default("UNREVIEWED")
   id              String            @id @default(cuid())
   name            String
   nameUz          String?
@@ -637,6 +638,13 @@ model BenefitAlias {
 
 /// Canonical role title (no seniority — use JobPost.experienceLevel).
 model JobTitle {
+  familyId String?
+  family JobFamily? @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  canonicalRoleId String?
+  canonicalRole JobTitle? @relation("CanonicalEmployeeRole", fields: [canonicalRoleId], references: [id], onDelete: Restrict)
+  equivalentRoles JobTitle[] @relation("CanonicalEmployeeRole")
+  matchingApproved Boolean @default(false)
+  desiredBy EmployeeDesiredRole[]
   id              String            @id @default(cuid())
   name            String
   nameUz          String?
@@ -658,11 +666,15 @@ model JobTitle {
   jobPosts JobPost[]
   resumes  Resume[]
 
+  @@index([familyId, matchingApproved])
+  @@index([canonicalRoleId])
+
   @@index([i18nStatus, createdAt])
   @@index([archivedAt])
 }
 
 model JobTitleAlias {
+  matchingApproved Boolean @default(false)
   id         String   @id @default(cuid())
   jobTitleId String
   alias      String
@@ -1057,6 +1069,9 @@ enum EmployeeOnboardingStatus {
 }
 
 model EmployeeProfile {
+  desiredRoles EmployeeDesiredRole[]
+  matchingPreferencesReviewed Boolean @default(false)
+  preferredWorkModes WorkMode[] @default([])
   id                String            @id @default(cuid())
   userId            String            @unique
   headline          String?
@@ -1275,6 +1290,7 @@ model Resume {
 
 /// A file revision is retained independently of the editable CV library entry.
 model ResumeVersion {
+  employeeEvidence ResumeEmployeeEvidence?
   id String @id @default(cuid())
   resumeId String?
   fileKey String
@@ -1302,6 +1318,44 @@ model ResumeVersion {
   @@index([roleKeys], type: Gin)
   @@index([degreeLevels], type: Gin)
   @@index([parseStatus])
+}
+
+model JobFamily {
+  id String @id
+  code String @unique
+  name String
+  nameId String?
+  nameUz String?
+  nameRu String?
+  source String
+  sourceVersion String
+  archivedAt DateTime?
+  revision Int @default(1)
+  jobTitles JobTitle[]
+}
+
+model EmployeeDesiredRole {
+  profileId String
+  jobTitleId String
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobTitle JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  @@id([profileId, jobTitleId])
+  @@index([jobTitleId])
+}
+
+model ResumeEmployeeEvidence {
+  versionId String @id
+  version ResumeVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  parserVersion String
+  status String @default("PENDING")
+  generation Int
+  facts Json?
+  overrides Json?
+  revision Int @default(0)
+  error String?
+  startedAt DateTime?
+  updatedAt DateTime @updatedAt
+  @@index([status, updatedAt])
 }
 
 model Application {

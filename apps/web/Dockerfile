@@ -9,6 +9,8 @@ ARG NEXT_PUBLIC_ADMIN_URL=http://localhost:3001
 ARG NEXT_PUBLIC_APP_NAME=Job Talentio
 # Privacy jurisdiction follows the deployment image, not the visitor's locale.
 # Indonesia VPS builds pass --build-arg NEXT_PUBLIC_PRIVACY_MARKET=id; Railway uses Uzbek by default.
+ARG NEXT_PUBLIC_EMPLOYEE_INTENT_V3=false
+ENV NEXT_PUBLIC_EMPLOYEE_INTENT_V3=$NEXT_PUBLIC_EMPLOYEE_INTENT_V3
 ARG NEXT_PUBLIC_PRIVACY_MARKET=uz
 # Empty default hides the Google sign-in button
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=

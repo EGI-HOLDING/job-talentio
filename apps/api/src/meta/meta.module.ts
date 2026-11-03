@@ -1,3 +1,4 @@
+import { EmployeePositionController } from '../matching/employee-catalog.controller';
 import { Module } from '@nestjs/common';
 import { MetaController } from './meta.controller';
 import { MetaService } from './meta.service';
@@ -8,7 +9,7 @@ import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [PrismaModule, StorageModule],
-  controllers: [MetaController],
+  controllers: [MetaController,EmployeePositionController],
   providers: [
     MetaService,
     EgiHospitalityDemoBackfillService,

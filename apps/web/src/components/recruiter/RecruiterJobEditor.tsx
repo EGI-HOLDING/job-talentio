@@ -238,10 +238,10 @@ export function RecruiterJobEditor({ companyId, company, job, meta, initialStep 
           <span className={e.previewEyebrow}>{t('rw.candidatePreview')}</span>
           <h3>{values.title || t('rec.createJob')}</h3>
           <strong>{values.isAnonymous ? t('job.confidentialEmployer') : company?.name}</strong>
-          <div className={e.previewMeta}><span>{values.countryId === '__WORLDWIDE__' ? t('geo.worldwide') : shareLocation || job?.country?.name || ''}</span><span>{enumLabel('workMode', values.workMode)}</span><span>{enumLabel('employmentType', values.employmentType)}</span>{(values.salaryMin || values.salaryMax) && <span>{[values.salaryMin, values.salaryMax].filter(Boolean).join('–')} {values.currency} / {t(values.salaryPeriod === 'MONTHLY' ? 'rec.periodMonthly' : values.salaryPeriod === 'YEARLY' ? 'rec.periodYearly' : 'rec.periodHourly')}</span>}</div>
-          <section><h4>{t('rw.aboutRole')}</h4><p>{values.description || '—'}</p></section>
+          <div className={e.previewMeta}><span>{values.countryId === '__WORLDWIDE__' ? t('geo.worldwide') : shareLocation || job?.country?.name || ''}</span><span>{enumLabel('workMode', values.workMode)}</span><span>{enumLabel('employmentType', values.employmentType)}</span>{(values.salaryMin || values.salaryMax) && <span>{[values.salaryMin, values.salaryMax].filter(Boolean).join('\u2013')} {values.currency} / {t(values.salaryPeriod === 'MONTHLY' ? 'rec.periodMonthly' : values.salaryPeriod === 'YEARLY' ? 'rec.periodYearly' : 'rec.periodHourly')}</span>}</div>
+          <section><h4>{t('rw.aboutRole')}</h4><p>{values.description || '\u2014'}</p></section>
           {skills.length > 0 && <section><h4>{t('skills')}</h4><div className={e.previewTags}>{skills.map(skill => <span key={skill.slug || skill.name}>{skill.name}</span>)}</div></section>}
-          {languages.length > 0 && <section><h4>{t('languages')}</h4><p>{languages.map(language => `${language.name} ${language.minLevel}`).join(' · ')}</p></section>}
+          {languages.length > 0 && <section><h4>{t('languages')}</h4><p>{languages.map(language => `${language.name} ${language.minLevel}`).join(' \u00b7 ')}</p></section>}
           <section><h4>{t('rw.applyQuestions')}</h4>{questions.length ? <ol className={e.previewQuestions}>{questions.map((question, index) => <li key={question.id || index}>{question.question}{question.isRequired && <span>{t('required')}</span>}</li>)}</ol> : <p>{t('rw.noApplyQuestions')}</p>}</section>
           <span className={e.previewApply}>{t('rw.previewApply')}</span>
         </section> : <div role="region" aria-label={t('rw.jobSettings')} className={e.settingsSummary}>

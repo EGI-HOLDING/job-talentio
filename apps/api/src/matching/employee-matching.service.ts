@@ -1,5 +1,7 @@
 import { liveJobWhere } from '../benefits/benefit-policy';
-import { Injectable } from '@nestjs/common';
+import { Injectable,Optional,Logger } from '@nestjs/common';
+import { EmployeeIntentService,employeeIntentMode,employeeIntentSelected } from './employee-intent.service';
+import { compareIntent,type IntentEvaluation } from './employee-intent';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,7 +23,11 @@ const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(va
 @Injectable()
 export class EmployeeMatchingService {
   private cache = new Map<string, EmployeeEvaluation>();
-  constructor(private prisma: PrismaService,private legacy:MatchingService = new MatchingService(prisma)) {}
+  constructor(private prisma: PrismaService,private legacy:MatchingService = new MatchingService(prisma),@Optional() private intent?:EmployeeIntentService) {}
+  usesIntent(profileId:string){return employeeIntentMode()==='unavailable'||employeeIntentMode()==='enabled'&&employeeIntentSelected(profileId);}
+  async intentSearchScope(profileId:string){if(!this.usesIntent(profileId))return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.context(profileId);}
+  async intentExplanation(profileId:string,jobId:string){if(!this.usesIntent(profileId))return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.explain(profileId,jobId);}
+  compare(a:unknown,b:unknown){return a&&b&&'tier' in (a as object)&&'tier' in (b as object)?compareIntent(a as IntentEvaluation,b as IntentEvaluation):((b as EmployeeEvaluation)?.score??0)-((a as EmployeeEvaluation)?.score??0);}
 
   private enabled(profileId:string) {
     const percent = Number(process.env.EMPLOYEE_MATCHING_V2_PERCENT ?? 100);
@@ -54,6 +60,7 @@ export class EmployeeMatchingService {
   }
 
   async scoreJobsForProfile(profileId: string, ids: string[]) {
+    if(this.usesIntent(profileId)){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.scoreJobsForProfile(profileId,ids);}
     if (!ids.length) return new Map<string, EmployeeEvaluation>();
     const [context,jobs] = await Promise.all([this.context(profileId),this.prisma.jobPost.findMany({where:{id:{in:ids}},select:employeeJobFeatures})]);
     if(context.profile.cvSource.status!=='READY')return new Map<string,EmployeeEvaluation>();
@@ -66,6 +73,8 @@ export class EmployeeMatchingService {
   }
 
   async recommend(profileId: string, page = 1, limit = 24) {
+    if(this.usesIntent(profileId)){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.recommend(profileId,page,limit);}
+    if(employeeIntentMode()==='shadow'&&this.intent)void this.intent.recommend(profileId,page,limit).then(result=>new Logger('EmployeeIntentShadow').log(JSON.stringify({state:result.state,eligible:result.total}))).catch(error=>new Logger('EmployeeIntentShadow').warn(error.message));
     const now = new Date();
     const context = await this.context(profileId);
     // Retrieve lightweight evidence only. Full posting content is fetched for one page.

@@ -1,3 +1,4 @@
+import { EmployeeCatalogController } from '../matching/employee-catalog.controller';
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -13,7 +14,7 @@ import { JobsModule } from '../jobs/jobs.module';
 
 @Module({
   imports: [AuthModule, UsersModule, NotificationsModule, JobsModule],
-  controllers: [AdminController],
+  controllers: [AdminController,EmployeeCatalogController],
   providers: [
     AdminService,
     AdminListsService,

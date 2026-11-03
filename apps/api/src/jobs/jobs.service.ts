@@ -1073,6 +1073,7 @@ export class JobsService {
     });
     if (!profile) return null;
     try {
+      if(this.employeeMatching.usesIntent(profile.id))return await this.employeeMatching.intentExplanation(profile.id,jobPostId);
       const evaluation = await this.employeeMatching.forJob(profile.id, jobPostId);
       return evaluation ? { matchScore:evaluation.score, matchInsights:evaluation.insights } : null;
     } catch {
@@ -1143,6 +1144,8 @@ export class JobsService {
     const locale = query.locale ?? DEFAULT_LOCALE;
     const now = new Date();
     const and: Prisma.JobPostWhereInput[] = [liveJobWhere(now)];
+    const intentScope=query.sort==='match'&&query.profileId?await this.employeeMatching.intentSearchScope(query.profileId):null;
+    if(intentScope)and.push({jobTitleId:{in:intentScope.allowedIds},applications:{none:{profileId:query.profileId}}});
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (citySlugs.length) and.push({ city: { slug: { in: citySlugs } } });
@@ -1429,13 +1432,14 @@ export class JobsService {
       if (query.profileId) {
         const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, withScore.map(job => job.id));
         withScore = withScore.map(job => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights,
-          employeeCore:scores.get(job.id)?.positiveCore ?? false }));
+          employeeEvaluation:scores.get(job.id), employeeCore:scores.get(job.id)?.positiveCore ?? false }));
       }
 
+      if(sort==='match'&&intentScope)withScore=withScore.filter(job=>(job as typeof job & {employeeCore?:boolean}).employeeCore);
       withScore =
         sort === 'match'
           ? withScore.sort((a, b) => Number((b as typeof b & {employeeCore?:boolean}).employeeCore ?? false) - Number((a as typeof a & {employeeCore?:boolean}).employeeCore ?? false)
-            || ((a as typeof a & {employeeCore?:boolean}).employeeCore ? (b.matchScore ?? 0) - (a.matchScore ?? 0) : 0)
+            || ((a as typeof a & {employeeCore?:boolean}).employeeCore ? this.employeeMatching.compare((a as typeof a & {employeeEvaluation?:unknown}).employeeEvaluation,(b as typeof b & {employeeEvaluation?:unknown}).employeeEvaluation) : 0)
             || (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0) || a.id.localeCompare(b.id))
           : withScore.sort((a, b) => b.rankScore - a.rankScore);
 
@@ -1605,9 +1609,11 @@ export class JobsService {
     }
 
     return {
-      items: sorted.map((job) =>
-        maskAnonymousCompany(this.withContentLocale(this.withResolvedIcons(job), locale), locale),
-      ),
+      items: sorted.map((job) => {
+        const {employeeEvaluation:_evaluation,employeeCore:_core,...publicJob}=job as typeof job & {employeeEvaluation?:unknown;employeeCore?:boolean};
+        return maskAnonymousCompany(this.withContentLocale(this.withResolvedIcons(publicJob), locale), locale);
+      }),
+      ...(intentScope?{state:intentScope.state==='READY'?(total?'READY':'NO_ELIGIBLE_JOBS'):intentScope.state}:{}),
       total,
       matchedTotal,
       truncated,

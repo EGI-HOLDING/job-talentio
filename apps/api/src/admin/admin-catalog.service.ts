@@ -314,6 +314,7 @@ export class AdminCatalogService {
 
     await this.validateMetadata(type,id,patch.matchingMetadata);
     const data: Record<string, unknown> = { curatedAt: new Date() };
+    if(type==='jobTitle'&&(['name','nameId','nameUz','nameRu'] as const).some(field=>patch[field]!==undefined&&(patch[field]?.trim()||null)!==(row[field]||null)))data.matchingApproved=false;
     if (type === 'jobTitle' && patch.matchingMetadata !== undefined) {
       if (patch.matchingMetadata === null) throw new BadRequestException('Use empty sources and relatedRoles to clear metadata');
       data.matchingMetadata = patch.matchingMetadata;

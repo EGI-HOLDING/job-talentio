@@ -1,3 +1,4 @@
+import { employeePreferenceUpdate, desiredRolesInclude } from '../matching/employee-preferences';
 import { liveJobWhere } from '../benefits/benefit-policy';
 import { createHash } from 'node:crypto';
 import { validateOfferFiles } from '../applications/application-offer-files';
@@ -83,6 +84,7 @@ export class ProfilesService {
   ) {}
 
   private profileInclude = {
+    desiredRoles: desiredRolesInclude,
     skills: { include: { skill: true } },
     experiences: { include: { city: { include: { province: { include: { country: true } } } }, country: true } },
     educations: true,
@@ -120,7 +122,7 @@ export class ProfilesService {
   /** Never expose storage object keys to clients. */
   private sanitizeResume<T extends { fileKey?: string | null }>(resume: T) {
     const {fileKey,fileUrl:_url,currentVersion:_version,versions:_versions,parsedData:_parsed,content:_content,...rest}=resume as T & {fileKey?:string|null;fileUrl?:unknown;currentVersion?:unknown;versions?:unknown;parsedData?:unknown;content?:unknown};
-    return { ...rest, ...(_version?{parseStatus:(_version as {parseStatus:string}).parseStatus}:{}),format:typeof fileKey==='string'?fileKey.split('.').pop()?.toLowerCase():null,hasFile: Boolean(fileKey) };
+    return { ...rest, currentVersionId:(_version as {id?:string}|undefined)?.id??null, ...(_version?{parseStatus:(_version as {parseStatus:string}).parseStatus}:{}),format:typeof fileKey==='string'?fileKey.split('.').pop()?.toLowerCase():null,hasFile: Boolean(fileKey) };
   }
 
   private sanitizeProfileResumes<T extends { resumes?: Array<{ fileKey?: string | null }> }>(
@@ -315,6 +317,7 @@ export class ProfilesService {
     const countryIds = [...new Set([...(data.preferredCountryIds as string[] || []), ...(data.residenceCountryId ? [String(data.residenceCountryId)] : [])])];
     if (countryIds.length && await this.prisma.country.count({where:{id:{in:countryIds},isActive:true,archivedAt:null}}) !== countryIds.length) throw new BadRequestException('Select countries from the available list');
     if (data.desiredSalaryCurrency && !Intl.supportedValuesOf('currency').includes(String(data.desiredSalaryCurrency))) throw new BadRequestException('Invalid currency');
+    const intentPreferences = await employeePreferenceUpdate(this.prisma,data as {desiredJobTitleIds?:string[];desiredPositions?:string[];desiredPosition?:string});
     const roleInput = data.desiredPositions === undefined ? (data.desiredPosition === undefined ? undefined : [String(data.desiredPosition)].filter(Boolean)) : data.desiredPositions as string[];
     const roles = roleInput === undefined ? undefined : await canonicalRoleNames(this.prisma, roleInput);
     const headline = data.headline as string | undefined;
@@ -337,6 +340,8 @@ export class ProfilesService {
           visibility: data.visibility as never,
           desiredSalaryMin: data.desiredSalaryMin as number | null | undefined,
           ...(roles ? { desiredPositions: roles, desiredPosition: roles[0] || null } : {}),
+          ...intentPreferences,
+          ...(data.preferredWorkModes ? {preferredWorkModes:data.preferredWorkModes as never} : {}),
           desiredSalaryCurrency: data.desiredSalaryCurrency as string | undefined,
           desiredSalaryPeriod: data.desiredSalaryPeriod as never,
           salaryNegotiable: data.salaryNegotiable as boolean | undefined,
