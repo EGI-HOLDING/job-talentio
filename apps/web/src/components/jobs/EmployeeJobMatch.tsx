@@ -5,6 +5,7 @@ import { api, getSession } from '@/lib/api';
 import { useSessionIdentity } from '@/lib/useSessionIdentity';
 import { useI18n } from '@/lib/i18n';
 import { EmployeeMatchReasons } from './EmployeeRecommendationState';
+import {employeePositionPreferencesEnabled} from '@/lib/employeePositionPreferences';
 export function EmployeeJobMatch({ jobId }: {
     jobId: string;
 }) {
@@ -14,7 +15,7 @@ export function EmployeeJobMatch({ jobId }: {
     useEffect(() => {
         let active = true;
         setData(null);
-        if (process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3 !== 'true' || !identity || getSession()?.user.role !== 'EMPLOYEE')
+        if (!employeePositionPreferencesEnabled || !identity || getSession()?.user.role !== 'EMPLOYEE')
             return;
         api<{
             matchInsights: MatchInsights | null;

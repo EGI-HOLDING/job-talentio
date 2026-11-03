@@ -7,11 +7,11 @@ export type MatchEvidence = {
   required: boolean;
   minimumLevel?:string;
   evidenceRefs: string[];
-  code: 'ROLE_MATCH' | 'PAST_ROLE' | 'RELATED_ROLE' | 'SKILL_MATCH' | 'EXPERIENCE_MATCH' | 'LANGUAGE_MATCH' | 'LOCATION_MATCH' | 'NOT_LISTED' | 'LEVEL_UNCONFIRMED' | 'BELOW_REQUIREMENT' | 'UNVERIFIED_REQUIREMENT' | 'REVIEW_EXPERIENCE';
+  code: 'ROLE_MATCH' | 'PAST_ROLE' | 'RELATED_ROLE' | 'TRANSFERABLE_EXPERIENCE' | 'SKILL_MATCH' | 'EXPERIENCE_MATCH' | 'LANGUAGE_MATCH' | 'LOCATION_MATCH' | 'NOT_LISTED' | 'LEVEL_UNCONFIRMED' | 'BELOW_REQUIREMENT' | 'UNVERIFIED_REQUIREMENT' | 'REVIEW_EXPERIENCE';
 };
 export type MatchInsights = {
   version: string;
-  mode: 'PERSONALIZED' | 'LATEST';
+  mode: 'PERSONALIZED' | 'LATEST' | 'PREFERENCES_BASED';
   evidence: MatchEvidence[];
   reviewExperienceIds: string[];
 };

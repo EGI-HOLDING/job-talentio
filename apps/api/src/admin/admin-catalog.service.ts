@@ -22,6 +22,7 @@ import {
 } from './catalog-registry';
 import type { CatalogRecord, CatalogSpec, CatalogType } from './catalog-registry';
 import type { OccupationMatchingMetadata } from '@job-talentio/shared';
+import {EmployeeOccupationIndex,intentRoleInclude} from '../matching/employee-occupation';
 
 export type CatalogListQuery = {
   q?: string;
@@ -47,6 +48,11 @@ export class AdminCatalogService {
     const targets = metadata.relatedRoles.map(row => row.id);
     if (new Set(targets).size !== targets.length || (id && targets.includes(id))) throw new BadRequestException('Related occupations must be distinct and cannot reference themselves');
     if (targets.length && await this.prisma.jobTitle.count({where:{id:{in:targets},archivedAt:null}}) !== targets.length) throw new BadRequestException('Related occupation not found or archived');
+    if(metadata.relatedRoles.some(r=>r.approved)){
+      const index=new EmployeeOccupationIndex(await this.prisma.jobTitle.findMany({include:intentRoleInclude}));
+      if(!id||index.identity(id)?.canonicalRoleId!==id)throw new BadRequestException('Approve the source as an active canonical occupation before adding reviewed relations');
+      if(metadata.relatedRoles.some(r=>r.approved&&(!r.reference.trim()||index.identity(r.id)?.canonicalRoleId!==r.id)))throw new BadRequestException('Approved relations require active approved canonical targets and a review reference');
+    }
   }
 
   /** Registry the console uses to render forms and columns per catalog. */

@@ -8,6 +8,7 @@ import { RawLocaleNames } from '../common/locale.interceptor';
 import { parseDto } from '../common/utils';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
 import { EmployeeOccupationIndex, intentRoleInclude } from './employee-occupation';
+import { positionSuggestionScore } from './employee-position-suggestions';
 @Controller('meta/employee-positions')
 export class EmployeePositionController {
     constructor(private db: PrismaService, @Optional() private snapshot?:EmployeeCatalogSnapshot) { }
@@ -20,7 +21,8 @@ export class EmployeePositionController {
         const rows = [...catalog.roles].sort((a,b)=>a.name.localeCompare(b.name));
         const index = catalog.index;
         const key = catalogTitleIdentityKey(q.slice(0, 160));
-        const eligible = rows.filter(r => index.identity(r.id) && (!key || [r.name, r.nameId, r.nameUz, r.nameRu, ...r.aliases.filter(a => a.matchingApproved).map(a => a.alias)].some(s => s && catalogTitleIdentityKey(s).includes(key))));
+        const scored=rows.map(r=>({role:r,score:Math.max(0,...[r.name,r.nameId,r.nameUz,r.nameRu,...r.aliases.filter(a=>a.matchingApproved).map(a=>a.alias)].filter((s):s is string=>!!s).map(label=>positionSuggestionScore(key,label)))}));
+        const eligible = scored.filter(r=>index.identity(r.role.id)&&r.score>0).sort((a,b)=>b.score-a.score||a.role.name.localeCompare(b.role.name)).map(r=>r.role);
         const seen = new Set<string>();
         const unique = eligible.filter(r => { const id = index.identity(r.id)!.canonicalRoleId; if (seen.has(id))
             return false; seen.add(id); return true; });

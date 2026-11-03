@@ -29,6 +29,8 @@ import { CompaniesService } from '../companies/companies.service';
 import { MatchingService } from '../matching/matching.service';
 import { EmployeeMatchingService } from '../matching/employee-matching.service';
 import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
+import { publicEmployeeEvaluation } from '../matching/employee-public-evaluation';
+import { employeeRecommendationV32Enabled } from '../matching/employee-recommendation-policy';
 import { employeeIntentMode } from '../matching/employee-intent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
@@ -653,7 +655,7 @@ export class JobsService {
         throw new ConflictException('Job changed. Refresh and try again.');
       }
       if (status === 'PUBLISHED') {
-        if (['enabled','shadow'].includes(employeeIntentMode())) {
+        if (employeeRecommendationV32Enabled() || ['enabled','shadow'].includes(employeeIntentMode())) {
           await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock_shared(742159744)`);
           const role=current.jobTitleId?await tx.jobTitle.findUnique({where:{id:current.jobTitleId},select:currentRoleSelect}):null;
           if(!currentRoleIdentity(role))throw new BadRequestException('Select a reviewed position from the catalog before publishing');
@@ -1152,7 +1154,8 @@ export class JobsService {
     const now = new Date();
     const and: Prisma.JobPostWhereInput[] = [liveJobWhere(now)];
     const intentScope=query.sort==='match'&&query.profileId?await this.employeeMatching.intentSearchScope(query.profileId):null;
-    if(intentScope)and.push({jobTitleId:{in:intentScope.allowedIds},applications:{none:{profileId:query.profileId}}});
+    const intentFilter:Prisma.JobPostWhereInput|null=intentScope?{jobTitleId:{in:intentScope.allowedIds},applications:{none:{profileId:query.profileId}}}:null;
+    if(intentFilter)and.push(intentFilter);
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (citySlugs.length) and.push({ city: { slug: { in: citySlugs } } });
@@ -1406,7 +1409,7 @@ export class JobsService {
 
         if (query.profileId) {
           const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, sorted.map(job => job.id),intentScope);
-          sorted = sorted.map((job) => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights }));
+          sorted = sorted.map((job) => ({ ...job, ...publicEmployeeEvaluation(scores.get(job.id)) }));
         }
       }
 
@@ -1438,7 +1441,7 @@ export class JobsService {
 
       if (query.profileId) {
         const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, withScore.map(job => job.id),intentScope);
-        withScore = withScore.map(job => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights,
+        withScore = withScore.map(job => ({ ...job, ...publicEmployeeEvaluation(scores.get(job.id)),
           employeeEvaluation:scores.get(job.id), employeeCore:scores.get(job.id)?.positiveCore ?? false }));
       }
 
@@ -1615,12 +1618,20 @@ export class JobsService {
       }
     }
 
+    let emptyReason:'UNRECOGNIZED_PREFERENCES'|'NO_ACTIVE_JOBS'|'ALL_APPLIED'|'SERVICE_UNAVAILABLE'|undefined;
+    if(intentScope&&total===0){
+      emptyReason=intentScope.state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':intentScope.state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS';
+      if(intentScope.v32&&intentScope.state==='READY'){
+        const active=await this.prisma.jobPost.count({where:{AND:and.map(clause=>clause===intentFilter?{jobTitleId:{in:intentScope.allowedIds}}:clause)}});
+        if(active)emptyReason='ALL_APPLIED';
+      }
+    }
     return {
       items: sorted.map((job) => {
         const {employeeEvaluation:_evaluation,employeeCore:_core,...publicJob}=job as typeof job & {employeeEvaluation?:unknown;employeeCore?:boolean};
         return maskAnonymousCompany(this.withContentLocale(this.withResolvedIcons(publicJob), locale), locale);
       }),
-      ...(intentScope?{state:intentScope.state==='READY'?(total?'READY':'NO_ELIGIBLE_JOBS'):intentScope.state}:{}),
+      ...(intentScope?{state:intentScope.state==='READY'?(total?'READY':'NO_ELIGIBLE_JOBS'):intentScope.state,evidenceState:intentScope.evidenceState,preferenceWarnings:intentScope.preferenceWarnings,emptyReason,mode:intentScope.preferencesOnly?'PREFERENCES_BASED':'PERSONALIZED'}:{}),
       total,
       matchedTotal,
       truncated,
@@ -1690,7 +1701,7 @@ export class JobsService {
       where: { userId: user.id },
     });
     if (!profile) return page ? { items:[],page:1,limit,total:0,totalPages:1,mode:'LATEST' } : [];
-    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit);
+    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit).catch(error=>{if(employeeRecommendationV32Enabled())throw new ServiceUnavailableException('Recommendations temporarily unavailable');throw error;});
     const items = result.items.map((row) => ({
       ...row,
       job: maskAnonymousCompany(this.withResolvedIcons(row.job), locale),

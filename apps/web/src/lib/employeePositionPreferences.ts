@@ -10,6 +10,6 @@ export function positionPreferenceNames(profile: {
 }) {
   const selected = profile.desiredRoles?.map(role => role.jobTitle.name) || [];
   const legacy = profile.desiredPositions?.length ? profile.desiredPositions : profile.desiredPosition ? [profile.desiredPosition] : [];
-  if (profile.matchingPreferencesReviewed === false) return legacy.length ? legacy : selected;
+  if (profile.matchingPreferencesReviewed === false) return [...selected,...legacy.filter(name=>!selected.includes(name))];
   return selected.length ? selected : legacy;
 }

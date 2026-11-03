@@ -44,7 +44,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   ));
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
-  const [roleIds,setRoleIds]=useState(profile.matchingPreferencesReviewed===false?[]:profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
+  const [roleIds,setRoleIds]=useState(profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
   const [workModes,setWorkModes]=useState(profile.preferredWorkModes||[]);
   const [roles, setRoles] = useState(positionPreferenceNames(profile));
   const [preferredCountries, setPreferredCountries] = useState(profile.preferredCountries?.map(c=>c.id) || []);
@@ -95,7 +95,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      if (employeePositionPreferencesEnabled && (!roleIds.length || roles.length !== roleIds.length)) {
+      if (employeePositionPreferencesEnabled && (!roleIds.length)) {
         setError(intentText(roleIds.length ? 'legacyPositionsHint' : 'state.PREFERENCES_REQUIRED'));
         return;
       }

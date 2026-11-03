@@ -55,7 +55,7 @@ export function evaluateHumanLabels(dataset: ReturnType<typeof makeEmployeeBench
         grades: Record<string, number>;
         eligibleJobIds: string[];
     }>;
-}, performancePassed: boolean) {
+}, performancePassed: boolean, rank = benchmarkRank) {
     const hash = createHash('sha256').update(JSON.stringify(dataset)).digest('hex');
     if (labels.datasetHash !== hash || !labels.reviewedBy?.trim() || !Number.isFinite(Date.parse(labels.reviewedAt)))
         throw new Error('Human review must identify the reviewer, date, and exact locked dataset');
@@ -70,7 +70,7 @@ export function evaluateHumanLabels(dataset: ReturnType<typeof makeEmployeeBench
             throw new Error('Invalid eligible job labels');
         if (profile.split !== 'evaluation')
             continue;
-        const ranked = benchmarkRank(profile.preferences, profile.facts, dataset.jobs);
+        const ranked = rank(profile.preferences, profile.facts, dataset.jobs);
         const top = ranked.slice(0, 10);
         const eligible = new Set(label.eligibleJobIds);
         leaks += ranked.filter(id => !eligible.has(id)).length;

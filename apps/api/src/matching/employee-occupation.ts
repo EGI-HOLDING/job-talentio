@@ -10,6 +10,7 @@ export type IntentRole = {
     familyId: string | null;
     canonicalRoleId: string | null;
     matchingApproved: boolean;
+    matchingMetadata?: unknown;
     archivedAt?: Date | null;
     family?: {
         id: string;
@@ -29,6 +30,15 @@ export function employeeOccupationRevision(roles: IntentRole[]) {
    r.aliases.filter(a=>a.matchingApproved).map(a=>catalogTitleIdentityKey(a.alias)).sort()]);
  return createHash('sha256').update(JSON.stringify(rows)).digest('hex');
 }
+/** Relation edits invalidate ranking, never the CV identity/parser revision. */
+export function employeeRecommendationRevision(roles: IntentRole[]) {
+ return createHash('sha256').update(JSON.stringify([employeeOccupationRevision(roles),
+  [...roles].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>[r.id, reviewedRelatedRoles(r).sort((a,b)=>a.id.localeCompare(b.id))])])).digest('hex');
+}
+export function reviewedRelatedRoles(role: IntentRole) {
+ const metadata=role.matchingMetadata as {relatedRoles?:Array<{id:string;kind:string;reference:string;approved:boolean}>}|null;
+ return (Array.isArray(metadata?.relatedRoles)?metadata.relatedRoles:[]).filter(r=>r && r.kind==='RELATED' && r.approved===true && typeof r.id==='string' && typeof r.reference==='string' && r.reference.trim().length>=3);
+}
 export const currentRoleSelect = {
   id:true,familyId:true,canonicalRoleId:true,matchingApproved:true,archivedAt:true,family:{select:{archivedAt:true}},
   canonicalRole:{select:{id:true,familyId:true,canonicalRoleId:true,matchingApproved:true,archivedAt:true,family:{select:{archivedAt:true}}}},
@@ -43,7 +53,7 @@ export function currentRoleIdentity(role: {id:string;familyId:string|null;canoni
 export class EmployeeOccupationIndex {
     readonly roles: Map<string, IntentRole>;
     private labels = new Map<string, Set<string>>();
-    constructor(roles: IntentRole[]) {
+    constructor(roles: IntentRole[], readonly allowRelated = false) {
         this.roles = new Map(roles.map(role => [role.id, role]));
         for (const role of roles) {
             if (role.archivedAt) continue;
@@ -96,7 +106,14 @@ export class EmployeeOccupationIndex {
         const job = jobTitleId ? this.identity(jobTitleId) : null;
         if (!job)
             return { eligible: false, reason: 'UNREVIEWED_ROLE' };
-        const choices = selectedIds.map(id => this.identity(id)).filter((id): id is NonNullable<typeof id> => Boolean(id));
+        const choices = [...new Set(selectedIds)].sort().map(id => this.identity(id)).filter((id): id is NonNullable<typeof id> => Boolean(id));
+        const exact = choices.find(choice=>choice.canonicalRoleId===job.canonicalRoleId && choice.familyId===job.familyId);
+        if(exact)return {eligible:true,reason:'MATCH',...job,matchType:'EXACT',selectedRoleId:exact.canonicalRoleId,selectedRoleName:this.roles.get(exact.canonicalRoleId)!.name};
+        if(this.allowRelated)for(const choice of choices){
+          const source=this.roles.get(choice.canonicalRoleId)!;
+          const relation=reviewedRelatedRoles(source).find(r=>r.id===job.canonicalRoleId && r.id!==source.id && this.identity(r.id)?.canonicalRoleId===r.id);
+          if(relation)return {eligible:true,reason:'MATCH',...job,matchType:'RELATED',selectedRoleId:source.id,selectedRoleName:source.name,relationReference:relation.reference};
+        }
         if (!choices.some(choice => choice.canonicalRoleId === job.canonicalRoleId))
             return { eligible: false, reason: 'POSITION_MISMATCH', ...job };
         if (!choices.some(choice => choice.canonicalRoleId === job.canonicalRoleId && choice.familyId === job.familyId))

@@ -1,6 +1,19 @@
 'use client';
 import { useI18n } from '@/lib/i18n';
 const en = {
+"transferableExperience":"Experience in a related occupation; transferability needs review.",
+"preferencesBased":"Based on preferences; CV compatibility has not been assessed.",
+"relatedPosition":"Related occupation to: ",
+"partialPreferences":"Some position choices need review. Recommendations use your recognized choices.",
+"evidence.REQUIRED":"Add a CV to improve these recommendations.",
+"evidence.PROCESSING":"Your CV is being processed. These recommendations use your preferences.",
+"evidence.FAILED":"Your CV could not be read. You can retry without losing these recommendations.",
+"evidence.REVIEW_REQUIRED":"Your CV evidence is limited or needs review.",
+"evidence.READY":"CV evidence is ready.",
+"empty.UNRECOGNIZED_PREFERENCES":"Choose a recognized position to receive recommendations.",
+"empty.NO_ACTIVE_JOBS":"There are currently no active jobs for your selected or reviewed related occupations.",
+"empty.ALL_APPLIED":"You have already applied to all active jobs in these occupations.",
+"empty.SERVICE_UNAVAILABLE":"Recommendations are temporarily unavailable. Please retry or explore all jobs.",
     "state.READY": "Jobs matching your selected positions and primary CV.",
     "state.CV_REQUIRED": "Upload a primary CV to see recommendations.",
     "state.CV_PROCESSING": "Your CV is being processed. Recommendations will appear when it is ready.",
@@ -53,6 +66,19 @@ const en = {
     "confirmAndSave": "Confirm and save"
 };
 const id: Record<keyof typeof en, string> = {
+"transferableExperience":"Pengalaman pada profesi terkait; penerapannya perlu ditinjau.",
+"preferencesBased":"Berdasarkan preferensi; kecocokan CV belum dinilai.",
+"relatedPosition":"Profesi terkait dengan: ",
+"partialPreferences":"Sebagian pilihan jabatan perlu ditinjau. Rekomendasi memakai pilihan yang sudah dikenali.",
+"evidence.REQUIRED":"Tambahkan CV untuk meningkatkan rekomendasi ini.",
+"evidence.PROCESSING":"CV sedang dibaca. Rekomendasi ini memakai preferensi Anda.",
+"evidence.FAILED":"CV belum berhasil dibaca. Anda dapat mencoba lagi sambil tetap melihat rekomendasi.",
+"evidence.REVIEW_REQUIRED":"Bukti dari CV masih minim atau perlu ditinjau.",
+"evidence.READY":"Bukti CV sudah siap.",
+"empty.UNRECOGNIZED_PREFERENCES":"Pilih jabatan yang dikenali untuk mendapatkan rekomendasi.",
+"empty.NO_ACTIVE_JOBS":"Saat ini belum ada lowongan aktif untuk jabatan pilihan maupun profesi terkait yang telah ditinjau.",
+"empty.ALL_APPLIED":"Anda sudah melamar semua lowongan aktif dalam cakupan profesi ini.",
+"empty.SERVICE_UNAVAILABLE":"Rekomendasi sementara tidak tersedia. Coba lagi atau jelajahi semua lowongan.",
     "state.READY": "Lowongan sesuai posisi pilihan dan CV utama Anda.",
     "state.CV_REQUIRED": "Unggah CV utama untuk melihat rekomendasi.",
     "state.CV_PROCESSING": "CV sedang dibaca. Rekomendasi akan tersedia setelah selesai.",
@@ -104,4 +130,6 @@ const id: Record<keyof typeof en, string> = {
     "levelYouConfirm": "Level yang Anda konfirmasi",
     "confirmAndSave": "Konfirmasi dan simpan"
 };
-export function useEmployeeIntentText() { const { locale } = useI18n(); return (key: keyof typeof en) => locale === 'id' ? id[key] : en[key]; }
+const ru:Partial<Record<keyof typeof en,string>>={"transferableExperience":"Опыт в смежной профессии; применимость требует проверки.","preferencesBased":"На основе предпочтений; соответствие резюме ещё не оценено.","relatedPosition":"Смежная профессия: ","partialPreferences":"Некоторые выбранные должности требуют проверки. Используются распознанные варианты.","evidence.REQUIRED":"Добавьте резюме для улучшения рекомендаций.","evidence.PROCESSING":"Резюме обрабатывается. Рекомендации основаны на предпочтениях.","evidence.FAILED":"Не удалось прочитать резюме. Повторите попытку; рекомендации остаются доступны.","evidence.REVIEW_REQUIRED":"Данных резюме недостаточно или требуется проверка.","evidence.READY":"Данные резюме готовы.","empty.UNRECOGNIZED_PREFERENCES":"Выберите распознанную должность.","empty.NO_ACTIVE_JOBS":"Нет активных вакансий по выбранным или проверенным смежным профессиям.","empty.ALL_APPLIED":"Вы уже откликнулись на все активные вакансии этих профессий.","empty.SERVICE_UNAVAILABLE":"Рекомендации временно недоступны. Повторите попытку или просмотрите все вакансии.","selectedPositionMatches":"Соответствует выбранной должности","openMyCVs":"Открыть резюме","editPositionPreferences":"Изменить должности","exploreAllJobs":"Все вакансии"};
+const uz:Partial<Record<keyof typeof en,string>>={"transferableExperience":"Yaqin kasbdagi tajriba; qo‘llash imkoniyati tekshirilishi kerak.","preferencesBased":"Afzalliklar asosida; rezyume mosligi hali baholanmagan.","relatedPosition":"Yaqin kasb: ","partialPreferences":"Ayrim lavozimlar tekshirilishi kerak. Tavsiyalar tanilgan lavozimlarga asoslanadi.","evidence.REQUIRED":"Tavsiyalarni yaxshilash uchun rezyume qo‘shing.","evidence.PROCESSING":"Rezyume o‘qilmoqda. Tavsiyalar afzalliklaringizga asoslangan.","evidence.FAILED":"Rezyumeni o‘qib bo‘lmadi. Qayta urinishingiz mumkin; tavsiyalar saqlanadi.","evidence.REVIEW_REQUIRED":"Rezyume dalillari yetarli emas yoki tekshiruv talab etiladi.","evidence.READY":"Rezyume dalillari tayyor.","empty.UNRECOGNIZED_PREFERENCES":"Tavsiyalar uchun tanilgan lavozimni tanlang.","empty.NO_ACTIVE_JOBS":"Tanlangan yoki tekshirilgan yaqin kasblar bo‘yicha faol ish o‘rinlari hozircha yo‘q.","empty.ALL_APPLIED":"Bu kasblardagi barcha faol ish o‘rinlariga ariza yuborgansiz.","empty.SERVICE_UNAVAILABLE":"Tavsiyalar vaqtincha mavjud emas. Qayta urining yoki barcha ish o‘rinlarini ko‘ring.","selectedPositionMatches":"Tanlangan lavozimga mos","openMyCVs":"Rezyumelarimni ochish","editPositionPreferences":"Lavozimlarni o‘zgartirish","exploreAllJobs":"Barcha ish o‘rinlari"};
+export function useEmployeeIntentText() { const { locale } = useI18n(); return (key: keyof typeof en) => locale === 'id' ? id[key] : locale==='ru'?ru[key]??en[key]:locale==='uz'?uz[key]??en[key]:en[key]; }

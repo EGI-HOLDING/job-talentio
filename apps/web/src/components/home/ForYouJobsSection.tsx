@@ -1,6 +1,6 @@
 'use client';
 import { EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
-import type { EmployeeRecommendationState,MatchInsights } from '@job-talentio/shared';
+import type { EmployeeRecommendationState,EmployeeEvidenceState,EmployeeEmptyReason,MatchInsights } from '@job-talentio/shared';
 
 import { Link } from '@/lib/navigation';
 import { useApiResource } from '@/lib/useApiResource';
@@ -48,13 +48,13 @@ export function ForYouJobsSection() {
   const { t, locale } = useI18n();
   const identity=useSessionIdentity();
   const active=!!identity&&getSession()?.user.role==='EMPLOYEE';
-  const feed=useApiResource<{items:RecommendedItem[];state?:EmployeeRecommendationState}>(active?'/jobs/recommended?page=1&limit=6':null);
+  const feed=useApiResource<{items:RecommendedItem[];state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6':null);
   const me=useApiResource<ProfileSignal>(active&&process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3!=='true'?'/profiles/me':null);
   const items=feed.data?.items.slice(0,HOME_FOR_YOU_LIMIT)||[];
   const recommendationState=feed.data?.state||(feed.error?'UNAVAILABLE':undefined);
   const profile=me.data||null;
   const ready=!feed.loading;
-  useMatchingStatus(recommendationState==='CV_PROCESSING',()=>{void feed.reload().catch(()=>{});void me.reload().catch(()=>{});});
+  useMatchingStatus(recommendationState==='CV_PROCESSING'||feed.data?.evidenceState==='PROCESSING',()=>{void feed.reload().catch(()=>{});void me.reload().catch(()=>{});});
   const emptyCopy = hasMatchSignal(profile) ? (
     <>
       {t('emp.recommendedEmptyNoOverlap')}{' '}
@@ -75,9 +75,10 @@ export function ForYouJobsSection() {
       viewAllLabel={t('viewAll')}
       bare
     >
+      {ready&&recommendationState==='READY'&&<EmployeeRecommendationNotice state="READY" evidenceState={feed.data?.evidenceState} preferenceWarnings={feed.data?.preferenceWarnings}/>}
       {!ready ? (
         <div className="muted" style={{ minHeight: '2.5rem' }} />
-      ) : recommendationState&&recommendationState!=='READY' ? (<EmployeeRecommendationNotice state={recommendationState}/>) : items.length === 0 ? (
+      ) : recommendationState&&recommendationState!=='READY' ? (<EmployeeRecommendationNotice state={recommendationState} evidenceState={feed.data?.evidenceState} emptyReason={feed.data?.emptyReason} preferenceWarnings={feed.data?.preferenceWarnings}/>) : items.length === 0 ? (
         <p className="muted">{emptyCopy}</p>
       ) : (
         <div className="grid-2">
@@ -108,6 +109,7 @@ export function ForYouJobsSection() {
                     <PromotionBadge promotion={item.job.promotion} />
                     <span>{localizedJobLocation(item.job, t)}</span>
                   </div>
+                  <EmployeeMatchReasons insights={item.matchInsights}/>
                 </div>
 
               </div>

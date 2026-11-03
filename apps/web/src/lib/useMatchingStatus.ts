@@ -18,10 +18,10 @@ export function useMatchingStatus(processing: boolean, changed: () => void) {
       if(document.visibilityState==='hidden'){arm();return;}
       running=true;
       try{
-        const status=await api<{state:string;revision:string}>('/profiles/me/matching-status',{signal:controller.signal,cacheMode:'no-store'});
+        const status=await api<{state:string;evidenceState?:string;revision:string}>('/profiles/me/matching-status',{signal:controller.signal,cacheMode:'no-store'});
         if(!disposed&&status.revision!==last){
           const initial=last===undefined;last=status.revision;
-          if(!initial||status.state!=='CV_PROCESSING')callback.current();
+          if(!initial||status.state!=='CV_PROCESSING'&&status.evidenceState!=='PROCESSING')callback.current();
         }
       }catch{}finally{running=false;arm();}
     };

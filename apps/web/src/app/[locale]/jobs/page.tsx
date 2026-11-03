@@ -1,6 +1,6 @@
 'use client';
 import { EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
-import type { EmployeeRecommendationState,MatchInsights } from '@job-talentio/shared';
+import type { EmployeeRecommendationState,EmployeeEvidenceState,EmployeeEmptyReason,MatchInsights } from '@job-talentio/shared';
 import { loginForCurrentPage } from '@/lib/authReturn';
 
 import { Link } from '@/lib/navigation';
@@ -38,6 +38,7 @@ import {
 type MetaItem = { id: string; name: string; slug: string; icon?: string | null; code?: string; province?: { country?: { name: string; slug: string } } };
 type LangMeta = { id: string; name: string; code: string };
 type Job = {
+  matchInsights?:MatchInsights;
   promotion?: JobPromotion | null;
   id: string;
   title: string;
@@ -58,6 +59,7 @@ type Job = {
 };
 
 type SearchResponse = {
+state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason;mode?:string;
   items: Job[];
   total: number;
   matchedTotal?: number;
@@ -90,7 +92,7 @@ type EmployeeProfile = {
   resumes?: unknown[];
 };
 type RecommendedItem = { job: Job;matchInsights?:MatchInsights };
-type RecommendationPage = {rankingRevision?:string;items:RecommendedItem[];total:number;totalPages:number;page:number;mode:string;state?:EmployeeRecommendationState};
+type RecommendationPage = {rankingRevision?:string;items:RecommendedItem[];total:number;totalPages:number;page:number;mode:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason};
 
 function hasCareerSignal(profile: EmployeeProfile | null) {
   return Boolean(profile?.cvSource?.status==='READY');
@@ -272,7 +274,7 @@ function JobsInner() {
     setDiscovery({status:cached?'ready':'loading',profile:peekApi<EmployeeProfile>('/profiles/me')||null,rows:cached?.items||[]});
     if(cached)setRecommendationMeta(cached);
   },[authReady,session?.user.id,locale]);
-  const [recommendationMeta,setRecommendationMeta]=useState<{total:number;totalPages:number;mode:string;state?:EmployeeRecommendationState}>(()=>peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')||{total:0,totalPages:1,mode:"LATEST"});
+  const [recommendationMeta,setRecommendationMeta]=useState<{total:number;totalPages:number;mode:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(()=>peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')||{total:0,totalPages:1,mode:"LATEST"});
   const [discovery, setDiscovery] = useState<{ status: 'loading' | 'ready' | 'error'; profile: EmployeeProfile | null; rows: RecommendedItem[] }>(()=>({status:peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')?'ready':'loading',profile:peekApi<EmployeeProfile>('/profiles/me')||null,rows:peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')?.items||[]}));
   const requestedMode = searchParams.get('mode');
   const hasSearchIntent = Object.keys(EMPTY).some((key) => !['limit', 'skillMode'].includes(key) && filterParams.has(key)) || browseCompanies;
@@ -298,7 +300,7 @@ function JobsInner() {
     }).catch(error=>{if(active&&error.name!=='AbortError')setDiscovery(current=>({...current,status:current.rows.length?'ready':'error'}));});
     return()=>{active=false;controller.abort();};
   },[isEmployee,session?.user.id,locale,discoveryRetry,recommendationPage,requestedMode,hasSearchIntent]);
-  useMatchingStatus(recommendationMeta.state==='CV_PROCESSING'||['PENDING','PROCESSING'].includes(discovery.profile?.cvSource?.status||''),()=>{invalidateApi(['/profiles/me','/jobs']);});
+  useMatchingStatus(recommendationMeta.state==='CV_PROCESSING'||recommendationMeta.evidenceState==='PROCESSING'||['PENDING','PROCESSING'].includes(discovery.profile?.cvSource?.status||''),()=>{invalidateApi(['/profiles/me','/jobs']);});
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
@@ -336,6 +338,7 @@ function JobsInner() {
       .then((res) => {
         if (!active) return;
         setData(res);
+        if(filters.sort==='match'&&res.state)setRecommendationMeta({total:res.total,totalPages:res.totalPages,mode:res.mode||'PERSONALIZED',state:res.state,evidenceState:res.evidenceState,preferenceWarnings:res.preferenceWarnings,emptyReason:res.emptyReason});
         // Keep URL in sync when the API clamps an out-of-range page.
         if (requestedMode !== 'for-you' && res.page !== filters.page) {
           router.replace(
@@ -721,17 +724,17 @@ function JobsInner() {
           <button className={s.showResults} type="button" onClick={() => setFiltersOpen(false)}>{t('workspace.showResults')} {data ? `(${data.total})` : ''}</button>
         </aside>}
         <section className={s.results} aria-label={t('jobs')} inert={filtersOpen ? true : undefined}>
-          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}><strong>{t('workspace.personalized')}</strong><p>{profile?.cvSource?.status==='READY'?t('cv.basedOn'):t('cv.preferencesOnly')}</p></div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
+          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}><strong>{t('workspace.personalized')}</strong><p>{recommendationMeta.mode==='PREFERENCES_BASED'?t('cv.preferencesOnly'):profile?.cvSource?.status==='READY'?t('cv.basedOn'):t('cv.preferencesOnly')}</p></div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
           {!personalized && !!activeChips.length && <div className={s.activeChips}>{activeChips.map((chip) => <button key={chip.key} type="button" onClick={chip.remove}>{chip.label}<JobsIcon kind="close" /></button>)}</div>}
           <div ref={listRef} className={s.resultsScroll} aria-busy={resultsLoading}>
-            {isEmployee&&(personalized||filters.sort==='match'||!hasSearchIntent&&requestedMode!=='all')&&recommendationMeta.state&&recommendationMeta.state!=='READY'&&<EmployeeRecommendationNotice state={recommendationMeta.state}/>}
+            {isEmployee&&(personalized||filters.sort==='match'||!hasSearchIntent&&requestedMode!=='all')&&recommendationMeta.state&&<EmployeeRecommendationNotice state={recommendationMeta.state} evidenceState={recommendationMeta.evidenceState} preferenceWarnings={recommendationMeta.preferenceWarnings} emptyReason={recommendationMeta.emptyReason}/>}
             {saveError && <div className={s.error} role="alert">{saveError}</div>}
             {isEmployee && !recommendationMeta.state && !personalized && !decidingMode && discovery.status !== 'loading' && (discovery.status === 'error' || !hasCareerSignal(profile) || !discovery.rows.length) && <div className={s.personalizeBanner}><JobsIcon kind="sparkles" /><div><strong>{t(discovery.status === 'error' ? 'workspace.recommendationError' : !hasCareerSignal(profile) ? 'workspace.unlockTitle' : 'workspace.noMatchesTitle')}</strong>{discovery.status !== 'error' && <p>{t(!hasCareerSignal(profile) ? 'cv.uploadHint' : 'workspace.noMatchesCopy')}</p>}</div>{discovery.status === 'error' ? <button type="button" className={s.textButton} onClick={() => setDiscoveryRetry((value) => value + 1)}>{t('workspace.retry')}</button> : <Link href="/dashboard/employee?tab=profile&section=cvs">{t('pc.myCvs')}<JobsIcon kind="external" /></Link>}</div>}
             {resultsError && <div className={s.message} role="alert"><p>{resultsError}</p><button type="button" className={s.outlineButton} onClick={() => personalized ? setDiscoveryRetry((value) => value + 1) : setRetry((value) => value + 1)}>{t('workspace.retry')}</button></div>}
             {resultsLoading ? <div className={s.listSkeleton} role="status" aria-label={t('ui.loading')}>{Array.from({ length: 6 }, (_, index) => <div key={index}><i /><span /><span /><span /></div>)}</div> : !resultsError && visibleJobs.map((job) => <article key={job.id} data-job-impression={job.id} className={`${s.jobRow} ${selectedId === job.id ? s.selectedRow : ''}`}>
               <div className={s.jobLink}>
                 <span className={s.jobLogo}>{job.company.logoUrl ? <img src={job.company.logoUrl} alt="" loading="lazy" /> : job.company.name.charAt(0)}</span>
-                <div className={s.jobCopy}><div className={s.rowHeading}><h2><Link className={s.jobTitleLink} href={`/jobs/${job.id}`} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>{sanitizeMojibake(job.title)}</Link></h2></div><div className={s.companyMeta}><span>{job.company.name}</span><span className={s.promotionControl}><PromotionBadge promotion={job.promotion} /></span></div><div className={s.jobMeta}>{job.city?.name && <span><JobsIcon kind="pin" />{[job.city.name, countryForCity(job.city.slug)].filter(Boolean).join(', ')}</span>}{job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}{job.employmentType && <span><JobsIcon kind="document" />{enumLabel('employmentType', job.employmentType)}</span>}</div><strong className={s.jobSalary}>{formatJobSalary(job, locale, t)}</strong>{personalized&&<EmployeeMatchReasons insights={discovery.rows.find(row=>row.job.id===job.id)?.matchInsights}/>}</div>
+                <div className={s.jobCopy}><div className={s.rowHeading}><h2><Link className={s.jobTitleLink} href={`/jobs/${job.id}`} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>{sanitizeMojibake(job.title)}</Link></h2></div><div className={s.companyMeta}><span>{job.company.name}</span><span className={s.promotionControl}><PromotionBadge promotion={job.promotion} /></span></div><div className={s.jobMeta}>{job.city?.name && <span><JobsIcon kind="pin" />{[job.city.name, countryForCity(job.city.slug)].filter(Boolean).join(', ')}</span>}{job.workMode && <span><JobsIcon kind="briefcase" />{enumLabel('workMode', job.workMode)}</span>}{job.employmentType && <span><JobsIcon kind="document" />{enumLabel('employmentType', job.employmentType)}</span>}</div><strong className={s.jobSalary}>{formatJobSalary(job, locale, t)}</strong>{(personalized||filters.sort==='match')&&<EmployeeMatchReasons insights={personalized?discovery.rows.find(row=>row.job.id===job.id)?.matchInsights:job.matchInsights}/>}</div>
               </div>
               {(!session || isEmployee) && <button className={s.saveButton} type="button" aria-label={`${t('saveJob')}: ${job.title}`} aria-pressed={savedIds.has(job.id)} disabled={savingIds.has(job.id)} onClick={() => void toggleSaved(job.id)}><JobsIcon kind={savedIds.has(job.id) ? 'check' : 'bookmark'} /></button>}
             </article>)}

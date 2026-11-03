@@ -20,8 +20,10 @@ export async function employeePreferenceUpdate(db: Db, input: {
     if (ids.length > 10 || strict && input.desiredJobTitleIds!.some(id => !index.identity(id)))
         throw new BadRequestException('Select reviewed positions from the catalog');
     const canonical = [...new Set(ids.map(id => index.identity(id)?.canonicalRoleId).filter((id): id is string => Boolean(id)))];
-    const reviewed = resolved.length > 0 && resolved.every(id => id && index.identity(id));
-    const names = strict || reviewed ? canonical.map(id => index.roles.get(id)!.name) : await canonicalRoleNames(db, texts);
+    const unresolved=texts.filter(text=>!index.resolve(text));
+    if(canonical.length+unresolved.length>10)throw new BadRequestException('Select at most ten positions including choices awaiting review');
+    const reviewed = resolved.length > 0 && resolved.every(id => id && index.identity(id)) && !unresolved.length;
+    const names = strict || reviewed ? [...canonical.map(id => index.roles.get(id)!.name),...unresolved] : await canonicalRoleNames(db, texts);
     return { matchingPreferencesReviewed: Boolean(reviewed), desiredPositions: names, desiredPosition: names[0] ?? null,
         desiredRoles: { deleteMany: {}, create: canonical.map(jobTitleId => ({ jobTitle: { connect: { id: jobTitleId } } })) } };
 }

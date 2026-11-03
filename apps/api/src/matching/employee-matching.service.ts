@@ -2,6 +2,7 @@ import { currentRoleSelect,currentRoleIdentity } from './employee-occupation';
 import { liveJobWhere } from '../benefits/benefit-policy';
 import { Injectable,Optional,Logger } from '@nestjs/common';
 import { EmployeeIntentService,employeeIntentMode,employeeIntentSelected } from './employee-intent.service';
+import { employeeRecommendationV32Enabled } from './employee-recommendation-policy';
 import { compareIntent,type IntentEvaluation } from './employee-intent';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -28,7 +29,7 @@ const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(va
 export class EmployeeMatchingService {
   private cache = new Map<string, EmployeeEvaluation>();
   constructor(private prisma: PrismaService,private legacy:MatchingService = new MatchingService(prisma),@Optional() private intent?:EmployeeIntentService,@Optional() private performanceCache?:CandidateCache) {}
-  usesIntent(profileId:string){return employeeIntentMode()==='unavailable'||employeeIntentMode()==='enabled'&&employeeIntentSelected(profileId);}
+  usesIntent(profileId:string){return employeeRecommendationV32Enabled()||employeeIntentMode()==='unavailable'||employeeIntentMode()==='enabled'&&employeeIntentSelected(profileId);}
   async warmCatalog(){if(this.intent?.catalog&&this.performanceCache){const catalog=await this.intent.catalog();await this.performanceCache.memo('legacy-occupation:'+catalog.revision,600,async()=>new OccupationIndex(catalog.roles.filter(r=>!r.archivedAt)));}}
   async intentSearchScope(profileId:string){if(!this.usesIntent(profileId)&&employeeIntentMode()!=='shadow')return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.context(profileId);}
   async intentExplanation(profileId:string,jobId:string){if(!this.usesIntent(profileId))return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.explain(profileId,jobId);}

@@ -86,7 +86,7 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
     let optionalScore = 0;
     if (!eligibility.eligible)
         return { score: 0, positiveCore: false, optionalScore: 0, tier: 2, practical: [], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, mode: 'LATEST', evidence, reviewExperienceIds: [] } };
-    evidence.push({ kind: 'ROLE', label: job.title, status: 'MET', required: false, code: 'ROLE_MATCH', evidenceRefs: [`jobTitle:${eligibility.canonicalRoleId}`, `family:${eligibility.familyId}`] });
+    evidence.push({ kind: 'ROLE', label: eligibility.selectedRoleName || job.title, status: 'MET', required: false, code: eligibility.matchType==='RELATED'?'RELATED_ROLE':'ROLE_MATCH', evidenceRefs: [`jobTitle:${eligibility.canonicalRoleId}`, `family:${eligibility.familyId}`, ...(eligibility.relationReference?[eligibility.relationReference]:[])] });
     const hard = job.jobSkills.filter(s => s.skill.matchingKind === 'PROFESSIONAL');
     const authored = hard.filter(s => s.isRequired);
     const scored = authored.length ? authored : hard;
@@ -115,6 +115,10 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
     if (levelTotal)
         parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.skillLevel, levelValue / levelTotal]);
     const relevant = facts.experiences.filter(e => e.jobTitleId && index.identity(e.jobTitleId)?.canonicalRoleId === eligibility.canonicalRoleId);
+    if(eligibility.matchType==='RELATED'){
+      const transferable=facts.experiences.filter(e=>e.jobTitleId&&index.identity(e.jobTitleId)?.canonicalRoleId===eligibility.selectedRoleId);
+      if(transferable.length)evidence.push({kind:'EXPERIENCE',label:eligibility.selectedRoleName||'',status:'UNKNOWN',required:false,code:'TRANSFERABLE_EXPERIENCE',evidenceRefs:transferable.map(e=>`cvEvidence:${e.key}`)});
+    }
     const duration = yearsUnion(relevant, new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())));
     if (job.experienceYearsMin != null) {
         const minimum = job.experienceYearsMin;
@@ -167,4 +171,4 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
     const tier = required.some(s => s === 'UNMET') ? 2 : required.length > 0 && required.every(s => s === 'MET') ? 0 : 1;
     return { score: weighted(parts), positiveCore: true, optionalScore: Math.min(10, optionalScore), tier, practical: [location, work, salary], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, mode: 'PERSONALIZED', evidence, reviewExperienceIds: facts.experiences.filter(e => !e.jobTitleId || !e.startDate || !e.isCurrent && !e.endDate).map(e => e.key) } };
 }
-export function compareIntent(a: IntentEvaluation, b: IntentEvaluation) { return a.tier - b.tier || b.score - a.score || b.practical[0] - a.practical[0] || b.practical[1] - a.practical[1] || b.practical[2] - a.practical[2] || b.optionalScore - a.optionalScore; }
+export function compareIntent(a: IntentEvaluation, b: IntentEvaluation) { return Number(a.eligibility.matchType==='RELATED')-Number(b.eligibility.matchType==='RELATED') || a.tier - b.tier || b.score - a.score || b.practical[0] - a.practical[0] || b.practical[1] - a.practical[1] || b.practical[2] - a.practical[2] || b.optionalScore - a.optionalScore; }

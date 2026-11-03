@@ -9,6 +9,7 @@ import { employeeQualityGateAccepted } from './employee-quality-gate';
 import { makeEmployeeBenchmark, benchmarkJob, benchmarkRoles, benchmarkIndex, benchmarkSkills, benchmarkRank, evaluateHumanLabels } from './employee-intent.benchmark';
 const EMPLOYEE_EVIDENCE_PARSER = employeeEvidenceParserVersion(benchmarkRoles);
 async function main() {
+    process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='false';
     let assertions = 0;
     const check = (v: unknown, message: string) => { assert.ok(v, message); assertions++; };
     const dataset = makeEmployeeBenchmark();

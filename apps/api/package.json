@@ -42,7 +42,10 @@
     "test:employee-catalog-repair": "tsx src/matching/employee-catalog-repair.smoke.ts",
     "matching:v3:backfill": "tsx src/scripts/employee-intent-backfill.ts",
     "matching:v3:benchmark": "tsx src/matching/employee-intent.benchmark.ts ../../output/employee-intent-v3",
-    "matching:v3:validate": "tsx src/scripts/employee-intent-validate.ts"
+    "matching:v3:validate": "tsx src/scripts/employee-intent-validate.ts",
+    "test:employee-related": "tsx src/matching/employee-related.integration.ts",
+    "test:employee-related:local": "node ../../scripts/employee-related.integration.cjs",
+    "matching:related:review": "tsx src/scripts/employee-related-review.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

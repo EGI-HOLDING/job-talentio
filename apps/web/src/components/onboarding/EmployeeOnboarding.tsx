@@ -165,7 +165,7 @@ export function EmployeeOnboarding() {
           noExperience: p.noExperience,
           ...draft,
           desiredPositions: positionPreferenceNames(p),
-          ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:p.matchingPreferencesReviewed===false?[]:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
+          ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
           resumeId:selectedCv?.id,
           review:null,reviewState:null,manualExperiences:[],
           phoneDraft,
@@ -241,7 +241,7 @@ export function EmployeeOnboarding() {
         setError(t("requiredRoles"));
         return;
       }
-      if (step === 1 && employeePositionPreferencesEnabled && form.desiredPositions.length !== form.desiredJobTitleIds?.length) {
+      if (step === 1 && employeePositionPreferencesEnabled && !form.desiredJobTitleIds?.length) {
         setError(intentText('legacyPositionsHint'));
         return;
       }

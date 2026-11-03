@@ -19,6 +19,7 @@ import { intentRoleInclude } from './employee-occupation';
 import { applyCatalogRepair } from './employee-catalog-repair';
 import { makeEmployeeBenchmark, benchmarkRoles } from './employee-intent.benchmark';
 async function main() {
+    process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='false';
     const url = new URL(process.env.TEST_DATABASE_URL!);
     if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.port !== '5434' || !/^\/talentio_employee_intent_v3_it_\d+$/.test(url.pathname))
         throw Error('Isolated local test DB only');
