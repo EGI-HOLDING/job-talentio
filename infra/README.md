@@ -1,5 +1,7 @@
 # Cloud deploy — Railway + Cloudflare + Hostinger
 
+Staging is prepared on the Hostinger VPS (`212.85.24.238`, `/opt/job-talentio`) but public DNS still points at Railway. Do not delete the Railway project until `staging`, `api-staging`, `admin-staging`, and `files-staging` are proxied A records to that address and the origin certificate is valid. `jobtalent.io` and `www` are a parked Hostinger page and are not part of this app. Compose and nginx: [vps/docker-compose.yml](vps/docker-compose.yml), [vps/nginx-jobtalent.conf](vps/nginx-jobtalent.conf).
+
 Job Talentio deploys as a dual-environment Railway project:
 
 | Environment | Git branch | Purpose |
