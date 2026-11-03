@@ -1,7 +1,7 @@
 import { currentRoleSelect,currentRoleIdentity } from './employee-occupation';
 import { employeeQualityGateAccepted } from './employee-quality-gate';
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { employeeRecommendationV32Enabled, localRecommendationPreview, recommendationGateAccepted } from './employee-recommendation-policy';
+import { employeeRecommendationV32Enabled } from './employee-recommendation-policy';
 import { CandidateCache } from '../common/candidate-cache';
 import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { createHash } from 'node:crypto';
@@ -42,8 +42,8 @@ export class EmployeeIntentService {
         const preferenceWarnings=v32 && (!profile.matchingPreferencesReviewed || selectedIds.length!==rawSelectedIds.length)?['PREFERENCES_REVIEW_REQUIRED']:[];
         const preferences = { ...profile, selectedIds };
         let state: EmployeeRecommendationState = 'READY';
-        const gate = employeeIntentMode() === 'enabled' ? await this.db.featureFlag.findUnique({ where: { key: 'employee_intent_v3_quality_gate' } }) : null;
-        if (employeeIntentMode() === 'unavailable' || employeeIntentMode() === 'enabled' && (!Number.isFinite(Number(process.env.EMPLOYEE_INTENT_V3_PERCENT ?? 100)) || process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION !== 'true' && (!gate?.enabled || !employeeQualityGateAccepted(gate.payload))))
+        const gate = !v32 && employeeIntentMode() === 'enabled' ? await this.db.featureFlag.findUnique({ where: { key: 'employee_intent_v3_quality_gate' } }) : null;
+        if (employeeIntentMode() === 'unavailable' || !v32 && employeeIntentMode() === 'enabled' && (!Number.isFinite(Number(process.env.EMPLOYEE_INTENT_V3_PERCENT ?? 100)) || process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION !== 'true' && (!gate?.enabled || !employeeQualityGateAccepted(gate.payload))))
             state = 'UNAVAILABLE';
         else if (!selectedIds.length)
             state = profile.desiredPositions.length ? 'PREFERENCES_REVIEW_REQUIRED' : 'PREFERENCES_REQUIRED';
@@ -58,27 +58,26 @@ export class EmployeeIntentService {
         else if (stored.status === 'FAILED')
             state = 'CV_FAILED';
         let facts: IntentFacts = { roles: [], skills: [], experiences: [], languages: [] };
-        if (stored?.facts && stored.status === 'READY') {
+        // Only the completed projection of this CV generation may supply ranking facts.
+        // A conflict in one correction must not suppress unrelated evidence.
+        if (stored?.facts && stored.status === 'READY' && (!v32 || version?.parseStatus === 'READY' && stored.generation === version.parseGeneration && stored.parserVersion === employeeEvidenceParserVersion(roles))) {
             const original = stored.facts as unknown as IntentFacts;
             const overrides = (stored.overrides ?? []) as EvidenceOverride[];
-            facts = applyEmployeeOverrides(original, overrides);
-            if (state === 'READY' && (evidenceConflicts(original, overrides).length || !hasEmployeeCareerEvidence(facts)))
+            const conflicts = new Set(evidenceConflicts(original, overrides));
+            facts = applyEmployeeOverrides(original, v32 ? overrides.filter(row => !conflicts.has(row.key)) : overrides);
+            if (state === 'READY' && (conflicts.size || !hasEmployeeCareerEvidence(facts)))
                 state = 'EVIDENCE_REVIEW_REQUIRED';
         }
         if (state === 'READY' && (!stored?.facts || stored.status !== 'READY'))
             state = 'EVIDENCE_REVIEW_REQUIRED';
         let evidenceState:EmployeeEvidenceState=!version?'REQUIRED':version.parseStatus==='FAILED'||stored?.status==='FAILED'?'FAILED':version.parseStatus!=='READY'||!stored||stored.parserVersion!==employeeEvidenceParserVersion(roles)||stored.generation!==version.parseGeneration||['PENDING','PROCESSING'].includes(stored.status)?'PROCESSING':!stored.facts||stored.status!=='READY'||evidenceConflicts(stored.facts as unknown as IntentFacts,(stored.overrides??[]) as EvidenceOverride[]).length||!hasEmployeeCareerEvidence(facts)?'REVIEW_REQUIRED':'READY';
         if(v32){
-          if(evidenceState==='READY'&&!facts.roles.some(r=>index.identity(r.jobTitleId))&&!facts.experiences.some(e=>e.jobTitleId&&index.identity(e.jobTitleId))){
-            const skillIds=[...new Set(facts.skills.map(s=>s.skillId))];
-            if(skillIds.length<3||await this.db.skill.count({where:{id:{in:skillIds},matchingKind:'PROFESSIONAL',archivedAt:null}})<3)evidenceState='REVIEW_REQUIRED';
-          }
-          const quality=localRecommendationPreview()?null:await this.db.featureFlag.findUnique({where:{key:'employee_recommendation_v32_quality_gate'}});
-          state=employeeIntentMode()==='unavailable'||!localRecommendationPreview()&&(!quality?.enabled||!recommendationGateAccepted(quality.payload))?'UNAVAILABLE':!selectedIds.length?(profile.desiredPositions.length||rawSelectedIds.length?'PREFERENCES_REVIEW_REQUIRED':'PREFERENCES_REQUIRED'):'READY';
-          if(evidenceState!=='READY')facts={roles:[],skills:[],experiences:[],languages:[]};
+          // Quality checks are release diagnostics, not a per-request availability gate.
+          state=employeeIntentMode()==='unavailable'?'UNAVAILABLE':!selectedIds.length?(profile.desiredPositions.length||rawSelectedIds.length?'PREFERENCES_REVIEW_REQUIRED':'PREFERENCES_REQUIRED'):'READY';
         }
         const allowedIds = state === 'READY' ? roles.filter(role => index.eligibility(selectedIds, role.id).eligible).map(r => r.id) : [];
-        return { profile, preferences, index, facts, state, allowedIds, v32, evidenceState, preferenceWarnings, preferencesOnly:v32&&evidenceState!=='READY', cvSource: { versionId: version?.id ?? null, status: version?.parseStatus ?? 'NONE', evidenceRevision: stored?.revision ?? null }, fingerprint: digest([EMPLOYEE_INTENT_VERSION, v32?EMPLOYEE_RELATED_RANKING_VERSION:EMPLOYEE_INTENT_RANKING_VERSION, profile, v32?catalog.recommendationRevision:catalog.revision,state,evidenceState]) };
+        const preferencesOnly = v32 && !hasEmployeeCareerEvidence(facts) && !facts.languages.length;
+        return { profile, preferences, index, facts, state, allowedIds, v32, evidenceState, preferenceWarnings, preferencesOnly, cvSource: { versionId: version?.id ?? null, status: version?.parseStatus ?? 'NONE', evidenceRevision: stored?.revision ?? null }, fingerprint: digest([EMPLOYEE_INTENT_VERSION, v32?EMPLOYEE_RELATED_RANKING_VERSION:EMPLOYEE_INTENT_RANKING_VERSION, profile, v32?catalog.recommendationRevision:catalog.revision,state,evidenceState,'partial-evidence-v1']) };
     }
     async status(userId:string) {
         const profile = await this.db.employeeProfile.findUnique({where:{userId},select:{id:true}});

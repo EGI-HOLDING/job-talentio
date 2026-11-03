@@ -141,6 +141,40 @@ async function main() {
     else process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION = oldOperatorActivation;
     process.env.EMPLOYEE_INTENT_V3_MODE = 'unavailable';
     check((await service.recommend('p')).items.length === 0, 'kill switch never falls back to latest');
+    // V3.2 availability must not depend on deployment review records or skill counts.
+    process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED = 'true';
+    process.env.EMPLOYEE_INTENT_V3_MODE = 'enabled';
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    db.featureFlag.findUnique = async () => { throw new Error('Runtime quality gate must not be queried'); };
+    const originalJobRead = db.jobPost.findMany;
+    db.jobPost.findMany = async (query: any) => (await originalJobRead(query)).map((row: any) => ({ ...row, jobTitle: benchmarkRoles.find(role => role.id === row.jobTitleId) }));
+    const oneSkill = { ...presence, skills: [{ ...presence.skills[0] }] };
+    const currentEvidence = { parserVersion: EMPLOYEE_EVIDENCE_PARSER, generation: 1, status: 'READY', revision: 1, facts: oneSkill, overrides: [] as any[] };
+    profile.desiredRoles = [{ jobTitleId: accountant.id }];
+    profile.resumes = [{ currentVersion: { id: 'v', parseStatus: 'READY', parseGeneration: 1, employeeEvidence: currentEvidence } }];
+    let partial = await service.context('p');
+    check(partial.state === 'READY' && !partial.preferencesOnly && partial.facts.skills.length === 1, 'production v3.2 uses one skill without gate records or classification lookup');
+    const baseScore = service.evaluate(partial, job).score;
+    currentEvidence.overrides = [{ kind: 'SKILL', key: oneSkill.skills[0].key, value: { level: 'EXPERT' } }, { kind: 'SKILL', key: 'missing-old-evidence', value: { skillId: 'ghost', level: 'EXPERT' } }];
+    partial = await service.context('p');
+    check(partial.evidenceState === 'REVIEW_REQUIRED' && !partial.preferencesOnly && partial.facts.skills.length === 1 && partial.facts.skills[0].confirmed, 'one conflicting correction retains valid evidence and valid corrections without inventing a missing skill');
+    check(service.evaluate(partial, job).score > baseScore, 'partial evidence and its valid confirmed level still affect ranking');
+    const partialFeed = await service.recommend('p', 1, 5);
+    check(partialFeed.state === 'READY' && partialFeed.items.length === 5 && partialFeed.mode === 'PERSONALIZED', 'partial CV evidence continues to produce personalized recommendations');
+    currentEvidence.generation = 0;
+    partial = await service.context('p');
+    check(partial.state === 'READY' && partial.preferencesOnly && !partial.facts.skills.length, 'an old CV generation is not reused while current evidence is processing');
+    profile.resumes = [];
+    check((await service.recommend('p', 1, 5)).items.length === 5, 'no CV still returns preference-based recommendations without a quality gate');
+    const crossFamilyRoles = structuredClone(benchmarkRoles);
+    crossFamilyRoles[0].matchingMetadata = { relatedRoles: [{ id: crossFamilyRoles[1].id, kind: 'RELATED', approved: true, reference: 'fixture:curated-cross-family' }] };
+    check(crossFamilyRoles[0].familyId !== crossFamilyRoles[1].familyId && new EmployeeOccupationIndex(crossFamilyRoles, true).eligibility([accountant.id], crossFamilyRoles[1].id).matchType === 'RELATED', 'explicit curated cross-family recommendations remain supported');
+    process.env.EMPLOYEE_INTENT_V3_MODE = 'unavailable';
+    check((await service.recommend('p')).state === 'UNAVAILABLE', 'v3.2 retains the explicit operational emergency stop');
+    process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED = 'false';
+    if (oldNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = oldNodeEnv;
     if (oldMode === undefined)
         delete process.env.EMPLOYEE_INTENT_V3_MODE;
     else

@@ -63,12 +63,12 @@ async function main(){
   await db.resumeVersion.update({where:{id:version.id},data:{parseStatus:'FAILED'}});
   result=await service.recommend('v32-profile');check(result.evidenceState==='FAILED'&&result.total===3,'failed CV does not block recommendations');
   await db.resumeVersion.update({where:{id:version.id},data:{parseStatus:'READY',employeeEvidence:{create:{parserVersion:employeeEvidenceParserVersion(roles),generation:1,status:'READY',facts:{roles:[],skills:[{key:'fixture',skillId:'fixture',level:null,confirmed:false,source:'CV'}],experiences:[],languages:[]}}}}});
-  result=await service.recommend('v32-profile');check(result.evidenceState==='REVIEW_REQUIRED'&&result.mode==='PREFERENCES_BASED','minimal CV evidence uses preferences');
+  result=await service.recommend('v32-profile');check(result.evidenceState==='READY'&&result.mode==='PERSONALIZED','one skill remains usable without a professional skill count threshold');
   const facts={roles:[{key:'role',jobTitleId:'v32-chef',title:'V32 Chef',confirmed:false,source:'CV'}],skills:[],experiences:[],languages:[]};
   await db.resumeEmployeeEvidence.update({where:{versionId:version.id},data:{facts}});
   result=await service.recommend('v32-profile');check(result.mode==='PERSONALIZED'&&result.items.every(r=>typeof r.matchScore==='number'),'usable current CV enables professional assessment');
   await db.resumeEmployeeEvidence.update({where:{versionId:version.id},data:{overrides:[{kind:'SKILL',key:'missing',value:{level:'EXPERT'}}]}});
-  result=await service.recommend('v32-profile');check(result.total===3&&result.mode==='PREFERENCES_BASED','conflicting corrections fall back to preferences');
+  result=await service.recommend('v32-profile');check(result.total===3&&result.mode==='PERSONALIZED'&&result.evidenceState==='REVIEW_REQUIRED','conflicting correction preserves unrelated usable evidence');
   await db.resumeEmployeeEvidence.update({where:{versionId:version.id},data:{overrides:[]}});
   let cacheRows:any;const cache={ranked:async(_key:any,compute:any)=>cacheRows??(cacheRows=await compute())};
   const cached=new EmployeeIntentService(db,undefined,cache as any);await cached.recommend('v32-profile');
@@ -94,7 +94,7 @@ async function main(){
   check((await service.recommend('v32-profile')).total===0,'banned companies excluded');
   await db.company.update({where:{id:company.id},data:{isBanned:false}});
   const originalEnv=process.env.NODE_ENV;process.env.NODE_ENV='production';process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION='true';
-  check((await service.recommend('v32-profile')).state==='UNAVAILABLE','old operator override cannot bypass new production quality gate');process.env.NODE_ENV=originalEnv??'development';
+  check((await service.recommend('v32-profile')).state==='READY','production recommendations do not require a runtime quality gate');process.env.NODE_ENV=originalEnv??'development';
   check(!recommendationGateAccepted({humanValidated:true}), 'incomplete human review cannot activate production');
   const originalQuery=db.jobPost.findMany.bind(db.jobPost);(db.jobPost as any).findMany=async()=>{throw Error('Database unavailable fixture');};
   await assert.rejects(()=>service.recommend('v32-profile'),/Database unavailable/);passed++;cases.push('database error propagates instead of false empty');db.jobPost.findMany=originalQuery;
