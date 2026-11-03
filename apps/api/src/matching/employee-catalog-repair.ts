@@ -121,6 +121,13 @@ export async function applyCatalogRepair(tx: Prisma.TransactionClient,plan:Catal
    const sources=Array.isArray(metadata.sources)?metadata.sources:[];
    const reviewedSources=sources.some(s=>s&&typeof s==='object'&&!Array.isArray(s)&&s.provider===receipt.provider&&s.version===VERSION)?sources:[...sources,receipt];
    await tx.jobTitle.update({where:{id},data:{...data,...(archive?{archivedAt:new Date()}:{}),matchingMetadata:{...metadata,sources:reviewedSources.slice(-10),relatedRoles:metadata.relatedRoles||[]} as Prisma.InputJsonValue}});
+   // The database deliberately revokes approval on a label edit, even if the
+   // same UPDATE asks for approval. Approve the reviewed, final label only in
+   // a separate guarded statement inside this transaction.
+   if(data.matchingApproved&&data.name!==undefined&&data.name!==expectedName){
+     const approved=await tx.jobTitle.updateMany({where:{id,name:data.name,archivedAt:null,familyId:data.familyId},data:{matchingApproved:true}});
+     if(approved.count!==1)throw new Error('Reviewed renamed position changed: '+id);
+   }
  }
  let aliasChanges=0;
  const storedAliases=await tx.jobTitleAlias.findMany();
@@ -139,6 +146,10 @@ export async function applyCatalogRepair(tx: Prisma.TransactionClient,plan:Catal
  if(approve.length)aliasChanges+=(await tx.jobTitleAlias.updateMany({where:{id:{in:approve}},data:{matchingApproved:true}})).count;
  if(reject.length)aliasChanges+=(await tx.jobTitleAlias.updateMany({where:{id:{in:reject}},data:{matchingApproved:false}})).count;
  if(newAliases.length)aliasChanges+=(await tx.jobTitleAlias.createMany({data:newAliases})).count;
+ const actualRoles=await tx.jobTitle.findMany({include:intentRoleInclude});
+ const actualIndex=new EmployeeOccupationIndex(actualRoles);
+ const invalid=actualRoles.filter(r=>!r.archivedAt&&!actualIndex.identity(r.id));
+ if(invalid.length)throw new Error('Persisted catalog validation failed: '+invalid.map(r=>r.name).join(', '));
  return {positionsCreated:plan.creates.length,positionsChanged:plan.updates.length,aliasChanges};
 }
 

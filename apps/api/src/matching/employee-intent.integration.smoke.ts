@@ -16,6 +16,7 @@ import { EmployeeCatalogController } from './employee-catalog.controller';
 import { employeePreferenceUpdate } from './employee-preferences';
 import { employeeEvidenceParserVersion } from './employee-intent-evidence';
 import { intentRoleInclude } from './employee-occupation';
+import { applyCatalogRepair } from './employee-catalog-repair';
 import { makeEmployeeBenchmark, benchmarkRoles } from './employee-intent.benchmark';
 async function main() {
     const url = new URL(process.env.TEST_DATABASE_URL!);
@@ -32,6 +33,15 @@ async function main() {
             await db.jobTitle.create({ data: { id: role.id, name: role.name, nameId: role.nameId, slug: role.id.replace(':', '-'), normalizedKey: role.id, familyId: role.familyId, matchingApproved: true } });
         }
         const company = await db.company.create({ data: { name: 'Integration Company', slug: 'integration-company' } });
+        const renamedRole=benchmarkRoles[0];
+        await db.jobTitle.update({where:{id:renamedRole.id},data:{name:'Previous occupation label',matchingApproved:true}});
+        check(!(await db.jobTitle.findUniqueOrThrow({where:{id:renamedRole.id}})).matchingApproved,'database label trigger revokes approval even in an update requesting approval');
+        const renamePlan={creates:[],updates:[{id:renamedRole.id,expectedName:'Previous occupation label',name:renamedRole.name,familyId:renamedRole.familyId,matchingApproved:true,reason:'Explicit test of reviewed official label restoration'}],aliasDecisions:[],errors:[]};
+        await db.$transaction(tx=>applyCatalogRepair(tx,renamePlan as never));
+        check((await db.jobTitle.findUniqueOrThrow({where:{id:renamedRole.id}})).matchingApproved,'reviewed rename is approved after the database trigger runs');
+        await assert.rejects(()=>db.$transaction(tx=>applyCatalogRepair(tx,{...renamePlan,updates:[{id:renamedRole.id,expectedName:renamedRole.name,matchingApproved:false,reason:'Deliberately invalid test plan'}]} as never)),/Persisted catalog validation failed/);
+        passed++;
+        check((await db.jobTitle.findUniqueOrThrow({where:{id:renamedRole.id}})).matchingApproved,'failed persisted-catalog verification rolls back the transaction');
         const EMPLOYEE_EVIDENCE_PARSER = employeeEvidenceParserVersion(await db.jobTitle.findMany({include:intentRoleInclude}));
         for (let r = 0; r < 10; r++)
             await db.skill.create({ data: { id: 'skill:' + r, name: fixture.jobs[r * 12].jobSkills[0].skill.name, slug: 'skill-' + r, matchingKind: 'PROFESSIONAL' } });
