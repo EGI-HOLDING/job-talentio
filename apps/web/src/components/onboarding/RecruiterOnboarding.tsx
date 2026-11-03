@@ -138,7 +138,7 @@ export function RecruiterOnboarding() {
     }
   };
   if (!loaded || !progress || !meta) return <div className={s.page}>{error ? <div role="alert" className={s.error}>{error}<br/><button className={s.text} onClick={() => setRetry(n => n + 1)}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>}</div>;
-  if (editor) return <RecruiterJobEditor companyId={companyId} company={company} job={job} meta={meta} initialStep={job && progress.step === 3 ? 3 : 0}
+  if (editor) return <RecruiterJobEditor companyId={companyId} company={company} job={job} meta={meta} initialStep={job && progress.step === 3 ? 3 : 0} onboardingMode
     onClose={() => {setEditor(false); setRetry(n => n + 1);}} onSaved={async () => {}} onDraftSaved={rememberJob} onChoosePackage={choosePackage}
     onPublished={() => void run(() => finish(false))}/>;
   return <div className={s.page}><div className={s.onboarding}>
@@ -173,7 +173,7 @@ export function RecruiterOnboarding() {
           await api('/jobs/' + job.id + '/status', {method: 'POST', body: JSON.stringify({status: 'PUBLISHED', ...(linkedinApproval ? {linkedinPreviewId: linkedinApproval} : {})})});
           await finish(false);
         })}>{t('commerce.publish')} →</button>}</div>
-      <div style={{textAlign: 'center', marginTop: 18}}><button className={s.text} disabled={busy} onClick={() => void run(() => finish(true))}>{t('commerce.later')}</button></div>
+      <div className={s.laterAction}><button className={s.text} disabled={busy} onClick={() => void run(() => finish(true))}>{t('commerce.later')}</button></div>
     </>}
   </div></div>;
 }
