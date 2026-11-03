@@ -11,3 +11,38 @@ test('job evidence discards a delayed response after navigation or account chang
  host.render(component,{jobId:'old'});host.render(component,{jobId:'new'});requests[1].resolve({matchInsights:{version:'employee-intent-v3',marker:'new'}});await settle();assert.equal(host.render(component,{jobId:'new'}).props.insights.marker,'new');requests[0].resolve({matchInsights:{version:'employee-intent-v3',marker:'old'}});await settle();assert.equal(host.render(component,{jobId:'new'}).props.insights.marker,'new');
  listeners.get('employee-matching-updated')();host.render(component,{jobId:'new'});const oldAccount=requests.at(-1);identity='employee-b';host.render(component,{jobId:'new'});oldAccount.resolve({matchInsights:{marker:'private-a'}});await settle();assert.equal(host.render(component,{jobId:'new'}).props.insights,null);
 });
+
+test('catalog picker supports five positions, duplicates, removal, the ten-position limit and legacy review', () => {
+ const host=hooks(); let names=[],ids=[];
+ function Input(){return null;}
+ const picker=load('apps/web/src/components/onboarding/EmployeePositionPicker.tsx',{
+  react:{...host.react,useId:()=> 'positions'}, '@/components/ui/JobTitleInput':{JobTitleInput:Input},
+  '@/lib/i18n/employeeIntent':copy('id'), './Onboarding.module.css':{}
+ },{document:{getElementById:()=>({focus(){}})}}).EmployeePositionPicker;
+ function flatten(tree){return Array.isArray(tree)?tree.flatMap(flatten):React.isValidElement(tree)?[tree,...flatten(tree.props.children)]:[];}
+ const render=()=>flatten(host.render(picker,{value:names,selectedIds:ids,onChange:(n,i)=>{names=n;ids=i;}}));
+ const input=()=>render().find(el=>el.type===Input).props;
+ for(let i=0;i<5;i++)input().onPickPosition({id:'role-'+i,name:'Position '+i});
+ assert.equal(input().matchingOnly,true); assert.deepEqual(Array.from(ids),Array.from({length:5},(_,i)=>'role-'+i));
+ input().onPickPosition({id:'role-0',name:'Duplicate'}); assert.equal(ids.length,5);
+ render().find(el=>el.type==='button').props.onClick(); assert.equal(ids.length,4); assert.equal(names[0],'Position 1');
+ for(let i=5;i<11;i++)input().onPickPosition({id:'role-'+i,name:'Position '+i});
+ assert.equal(ids.length,10); assert.equal(input().disabled,true);
+ input().onPickPosition({id:'overflow',name:'Overflow'}); assert.equal(ids.length,10);
+ names=['Unmapped legacy'];ids=[];
+ input().onPickPosition({id:'reviewed',name:'Reviewed position'});
+ assert.deepEqual(Array.from(names),['Reviewed position','Unmapped legacy']); assert.deepEqual(Array.from(ids),['reviewed']);
+ assert.ok(render().some(el=>el.props.role==='status'));
+ names=['Legacy A','Legacy B'];ids=[];
+ render().find(el=>el.props['aria-pressed']===false).props.onClick();
+ input().onPickPosition({id:'replacement',name:'Catalog replacement'});
+ assert.deepEqual(Array.from(names),['Catalog replacement','Legacy B']);
+});
+
+test('v3 always uses the ID picker and preserves unreviewed legacy choices without multiplying them',()=>{
+ const helper=load('apps/web/src/lib/employeePositionPreferences.ts',{}, {process:{env:{NEXT_PUBLIC_EMPLOYEE_INTENT_V3:'true',NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES:'false'}}});
+ assert.equal(helper.employeePositionPreferencesEnabled,true);
+ const old=Array.from({length:10},(_,i)=>'Old '+i);
+ const names=helper.positionPreferenceNames({matchingPreferencesReviewed:false,desiredPositions:old,desiredRoles:[{jobTitle:{name:'Translated name'}}]});
+ assert.deepEqual(Array.from(names),old);
+});

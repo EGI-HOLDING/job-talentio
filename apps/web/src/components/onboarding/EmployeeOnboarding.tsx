@@ -1,4 +1,6 @@
-"use client";
+'use client';
+import { employeePositionPreferencesEnabled, positionPreferenceNames } from '@/lib/employeePositionPreferences';
+
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -13,6 +15,7 @@ import { safeAuthNext } from "@/lib/authReturn";
 import { useRouter } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useOnboardingText } from "@/lib/i18n/onboarding";
+import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { WorkspaceLoading } from "@/components/employee/WorkspacePrimitives";
 import { PhoneNumberField, phoneErrorText } from "@/components/ui/PhoneNumberField";
 import { CV_ACCEPT, cvFileError } from "@/components/profile/types";
@@ -41,6 +44,7 @@ type State = {
     resumes: { id: string; title: string;isPrimary:boolean;hasFile:boolean }[];
     desiredPositions: string[];
     desiredRoles?:Array<{jobTitleId:string;jobTitle:{name:string}}>;
+    matchingPreferencesReviewed?: boolean;
     preferredCountries: Country[];
     residenceCountryId: string | null;
     desiredSalaryMin: number | null;
@@ -88,6 +92,7 @@ function Badge({ step }: { step: number }) {
   );
 }
 export function EmployeeOnboarding() {
+  const intentText = useEmployeeIntentText();
   const router = useRouter(),
     params = useSearchParams(),
     t = useOnboardingText(),
@@ -147,8 +152,6 @@ export function EmployeeOnboarding() {
         setCountries(options);
         setStep(state.step);
         setForm({
-          desiredPositions: p.desiredRoles?.length?p.desiredRoles.map(r=>r.jobTitle.name):p.desiredPositions || [],
-          ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
           preferredCountryIds: p.preferredCountries.map((c) => c.id),
           fullName: p.user.fullName,
           residenceCountryId: p.residenceCountryId,
@@ -161,6 +164,8 @@ export function EmployeeOnboarding() {
           visibility: p.visibility,
           noExperience: p.noExperience,
           ...draft,
+          desiredPositions: positionPreferenceNames(p),
+          ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:p.matchingPreferencesReviewed===false?[]:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
           resumeId:selectedCv?.id,
           review:null,reviewState:null,manualExperiences:[],
           phoneDraft,
@@ -189,6 +194,9 @@ export function EmployeeOnboarding() {
       // Persist the editable draft independently of strict import validation.
       review: null,
     };
+    // Retain unresolved legacy choices in the draft until the candidate reviews them.
+    if (employeePositionPreferencesEnabled && value.desiredPositions.length !== value.desiredJobTitleIds?.length)
+      delete payload.desiredJobTitleIds;
     const task = queue.current
       .catch(() => {})
       .then(() =>
@@ -229,8 +237,12 @@ export function EmployeeOnboarding() {
     if (!form || busy) return;
     let normalizedPhone = form.phone;
     if (targetStep > step) {
-      if (step === 1 && !(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
+      if (step === 1 && !(employeePositionPreferencesEnabled?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
         setError(t("requiredRoles"));
+        return;
+      }
+      if (step === 1 && employeePositionPreferencesEnabled && form.desiredPositions.length !== form.desiredJobTitleIds?.length) {
+        setError(intentText('legacyPositionsHint'));
         return;
       }
       if (step === 2 && !form.preferredCountryIds.length) {

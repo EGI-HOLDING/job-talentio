@@ -3,7 +3,9 @@ import { EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/
 import type { EmployeeRecommendationState,MatchInsights } from '@job-talentio/shared';
 
 import { Link } from '@/lib/navigation';
-import { useEffect, useState } from 'react';
+import { useApiResource } from '@/lib/useApiResource';
+import { useSessionIdentity } from '@/lib/useSessionIdentity';
+import { useMatchingStatus } from '@/lib/useMatchingStatus';
 import { api, getSession } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { localizedJobLocation } from '@/lib/location';
@@ -44,36 +46,15 @@ const HOME_FOR_YOU_LIMIT = 6;
 
 export function ForYouJobsSection() {
   const { t, locale } = useI18n();
-  const [recommendationState,setRecommendationState]=useState<EmployeeRecommendationState|undefined>();
-  const [items, setItems] = useState<RecommendedItem[]>([]);
-  const [profile, setProfile] = useState<ProfileSignal | null>(null);
-  const [ready, setReady] = useState(false);
-  const [retry, setRetry] = useState(0);
-  const [identity, setIdentity] = useState(() => getSession()?.user.id);
-  useEffect(() => {
-    const changed = () => { setIdentity(getSession()?.user.id); setItems([]); setProfile(null); setReady(false); setRetry(value => value + 1); };
-    window.addEventListener('jt-session-updated', changed); window.addEventListener('storage', changed);
-    return () => { window.removeEventListener('jt-session-updated', changed); window.removeEventListener('storage', changed); };
-  }, []);
-  usePromotionRefresh(items.map(item => item.job), () => setRetry(value => value + 1));
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      api<{items:RecommendedItem[];state?:EmployeeRecommendationState}>('/jobs/recommended?page=1&limit=6').catch(() => ({items:[] as RecommendedItem[],state:'UNAVAILABLE' as const})),
-      api<ProfileSignal>('/profiles/me').catch(() => null),
-    ]).then(([rows, me]) => {
-      if (cancelled) return;
-      setItems(rows.items.slice(0, HOME_FOR_YOU_LIMIT)); setRecommendationState(rows.state);
-      setProfile(me);
-      setReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [locale, retry, identity]);
-
-  useEffect(()=>{if(recommendationState!=='CV_PROCESSING')return;const timer=setInterval(()=>setRetry(n=>n+1),5000);return()=>clearInterval(timer);},[recommendationState]);
+  const identity=useSessionIdentity();
+  const active=!!identity&&getSession()?.user.role==='EMPLOYEE';
+  const feed=useApiResource<{items:RecommendedItem[];state?:EmployeeRecommendationState}>(active?'/jobs/recommended?page=1&limit=6':null);
+  const me=useApiResource<ProfileSignal>(active&&process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3!=='true'?'/profiles/me':null);
+  const items=feed.data?.items.slice(0,HOME_FOR_YOU_LIMIT)||[];
+  const recommendationState=feed.data?.state||(feed.error?'UNAVAILABLE':undefined);
+  const profile=me.data||null;
+  const ready=!feed.loading;
+  useMatchingStatus(recommendationState==='CV_PROCESSING',()=>{void feed.reload().catch(()=>{});void me.reload().catch(()=>{});});
   const emptyCopy = hasMatchSignal(profile) ? (
     <>
       {t('emp.recommendedEmptyNoOverlap')}{' '}

@@ -7,9 +7,9 @@ import { useI18n } from '@/lib/i18n';
 import { floatingPanelPosition, type FloatingPanelPosition } from './floatingPanelPosition';
 import s from './JobTitleInput.module.css';
 
-type Suggestion = { id: string; name: string; label: string; slug: string; usageCount?: number };
+type Suggestion = { id: string; name: string; label: string; slug?: string; usageCount?: number; family?: string };
 type JobTitleCatalog = {
-  items: Array<{ id: string; name: string; canonicalName?: string; slug: string; count?: number }>;
+  items: Array<{ id: string; name: string; canonicalName?: string; slug?: string; count?: number; family?: { name: string } | null }>;
   totalPages: number;
 };
 
@@ -35,6 +35,9 @@ type JobTitleInputProps = {
   autoFocus?: boolean;
   disabled?: boolean;
   onSubmitValue?: (value: string) => void;
+  matchingOnly?: boolean;
+  selectedIds?: string[];
+  onPickPosition?: (position: { id: string; name: string; label: string }) => void;
 };
 
 const SENIORITY_TOKEN_RE =
@@ -116,6 +119,9 @@ export function JobTitleInput({
   autoFocus,
   disabled,
   onSubmitValue,
+  matchingOnly = false,
+  selectedIds = [],
+  onPickPosition,
 }: JobTitleInputProps) {
   const { t, locale } = useI18n();
   const listId = useId();
@@ -141,6 +147,14 @@ export function JobTitleInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const selectedKey = selectedIds.join('|');
+  const catalogUrl = (q: string, page: number) => matchingOnly
+    ? `/meta/employee-positions?limit=${PAGE_SIZE}&page=${page}&q=${encodeURIComponent(q)}`
+    : `/meta/job-titles?limit=${PAGE_SIZE}&page=${page}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+  const mapSuggestions = (items: JobTitleCatalog['items']): Suggestion[] => items
+    .filter(item => !matchingOnly || !selectedIds.includes(item.id))
+    .map(item => ({ id: item.id, name: item.canonicalName || item.name, label: item.name,
+      slug: item.slug, usageCount: item.count, family: item.family?.name }));
   useLayoutEffect(() => {
     if (!showPanel) { setPosition(null); return; }
     const place = () => {
@@ -183,18 +197,12 @@ export function JobTitleInput({
     debounceRef.current = setTimeout(() => {
       const q = value.trim();
       api<JobTitleCatalog>(
-        `/meta/job-titles?limit=${PAGE_SIZE}&page=1${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+        catalogUrl(q, 1),
         { auth: false },
       )
         .then((result) => {
           if (requestId !== requestIdRef.current) return;
-          setSuggestions((result?.items || []).map((item) => ({
-            id: item.id,
-            name: item.canonicalName || item.name,
-            label: item.name,
-            slug: item.slug,
-            usageCount: item.count,
-          })));
+          setSuggestions(mapSuggestions(result?.items || []));
           setTotalPages(result?.totalPages || 1);
           setHighlight(-1);
         })
@@ -212,7 +220,7 @@ export function JobTitleInput({
       requestIdRef.current += 1;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [value, focusSuggestions, isOpen, locale, disabled]);
+  }, [value, focusSuggestions, isOpen, locale, disabled, matchingOnly, selectedKey]);
 
   async function loadNextPage() {
     if (loadingMoreRef.current || loading || page >= totalPages) return;
@@ -223,19 +231,13 @@ export function JobTitleInput({
     const q = value.trim();
     try {
       const result = await api<JobTitleCatalog>(
-        `/meta/job-titles?limit=${PAGE_SIZE}&page=${nextPage}${q ? `&q=${encodeURIComponent(q)}` : ''}`,
+        catalogUrl(q, nextPage),
         { auth: false },
       );
       if (requestId !== requestIdRef.current) return;
       setSuggestions((current) => [
         ...current,
-        ...(result?.items || []).map((item) => ({
-          id: item.id,
-          name: item.canonicalName || item.name,
-          label: item.name,
-          slug: item.slug,
-          usageCount: item.count,
-        })),
+        ...mapSuggestions(result?.items || []),
       ]);
       setPage(nextPage);
       setTotalPages(result?.totalPages || 1);
@@ -252,6 +254,7 @@ export function JobTitleInput({
   function pick(s: Suggestion) {
     setValue(s.name);
     onPick?.(s.name);
+    onPickPosition?.({ id: s.id, name: s.name, label: s.label });
     setSuggestions([]);
     if (focusSuggestions) setIsOpen(false);
   }
@@ -325,9 +328,11 @@ export function JobTitleInput({
           } else if (e.key === 'Enter' && highlight >= 0 && suggestions[highlight]) {
             e.preventDefault();
             pick(suggestions[highlight]);
-          } else if (e.key === 'Enter' && !e.nativeEvent.isComposing && onSubmitValue) {
+          } else if (e.key === 'Enter' && !e.nativeEvent.isComposing && onSubmitValue && !matchingOnly) {
             e.preventDefault();
             onSubmitValue(value);
+          } else if (e.key === 'Enter' && matchingOnly && !e.nativeEvent.isComposing) {
+            e.preventDefault();
           } else if (e.key === 'Escape') {
             if (focusSuggestions) { e.preventDefault(); e.stopPropagation(); setIsOpen(false); }
             setSuggestions([]);
@@ -385,7 +390,8 @@ export function JobTitleInput({
                 onClick={() => pick(suggestion)}
               >
                 <span className={s.label}>{suggestion.label}
-                {suggestion.label !== suggestion.name && <small className={s.canonical}>{suggestion.name}</small>}</span>
+                {suggestion.label !== suggestion.name && <small className={s.canonical}>{suggestion.name}</small>}
+                {matchingOnly && suggestion.family && <small className={s.canonical}>{suggestion.family}</small>}</span>
                 {typeof suggestion.usageCount === 'number' ? (
                   <span className={s.count}>
                     {suggestion.usageCount}

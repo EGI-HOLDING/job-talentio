@@ -28,12 +28,14 @@ import { HealthController } from './health.controller';
 import { SeedService } from './seed.service';
 import { BenefitsModule } from './benefits/benefits.module';
 import { LiveUpdatesModule } from './common/live-updates';
+import { CandidateCacheModule } from './common/candidate-cache';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     RateLimitModule,
     LiveUpdatesModule,
+    CandidateCacheModule,
     SearchModule,
     PresenceModule,
     TranslationModule,

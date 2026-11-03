@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, localeFromPathname } from '@/lib/locale';
+import { resourceCache } from './resourceCache';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
@@ -69,6 +70,7 @@ export function saveSession(session: AuthSession) {
     localStorage.setItem('jt_refresh', session.refreshToken);
   }
   localStorage.setItem('jt_session', JSON.stringify(session));
+  ensureCacheIdentity();
   window.dispatchEvent?.(new Event('jt-session-updated'));
 }
 
@@ -76,6 +78,7 @@ export function clearSession() {
   localStorage.removeItem('jt_token');
   localStorage.removeItem('jt_refresh');
   localStorage.removeItem('jt_session');
+  ensureCacheIdentity();
   window.dispatchEvent?.(new Event('jt-session-updated'));
 }
 
@@ -186,7 +189,7 @@ export function formatApiError(data: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function api<T>(
+async function apiNetwork<T>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
@@ -231,6 +234,63 @@ export async function api<T>(
   return data as T;
 }
 
+export type ApiOptions = RequestInit & { auth?: boolean; cacheMode?: 'reload' | 'no-store' };
+let cacheIdentity: string | undefined;
+let cacheChannel: BroadcastChannel | undefined;
+let cacheListening = false;
+function scope() { const user = getSession()?.user; return user ? `${user.id}:${user.role}` : 'anonymous'; }
+function ensureCacheIdentity() {
+  if (typeof window === 'undefined') return;
+  const next = scope();
+  if (cacheIdentity !== next) { cacheIdentity = next; resourceCache.invalidate(key => JSON.parse(key)[0] !== 'public'); }
+  if (!cacheListening && window.addEventListener) {
+    cacheListening = true; window.addEventListener('storage', ensureCacheIdentity);
+    if (typeof BroadcastChannel !== 'undefined') {
+      cacheChannel = new BroadcastChannel('talentio-candidate-cache');
+      cacheChannel.onmessage = event => { if (event.data?.type === 'invalidate') invalidateApi(event.data.prefixes, false, event.data.scope); };
+    }
+  }
+}
+function canonicalPath(path: string) { const [pathname, query] = path.split('?'); const params = new URLSearchParams(query); params.sort(); return pathname + (params.size ? '?' + params : ''); }
+export function apiResourceKey(path: string, options: ApiOptions = {}) {
+  return JSON.stringify([options.auth === false ? 'public' : scope(), new Headers(options.headers).get('X-Locale') || activeLocale(), canonicalPath(path)]);
+}
+function ttlFor(path: string) {
+  if (path.startsWith('/meta/')) return 600_000;
+  if (path === '/profiles/me/matching-status') return 0;
+  return /^\/(profiles\/me(?:\b|\/)|jobs(?:\b|\/)|applications(?:\b|\/)|alerts(?:\b|\/)|auth\/me$)/.test(path) ? 30_000 : 0;
+}
+export function peekApi<T>(path: string, options: ApiOptions = {}) {
+  if (typeof window === 'undefined') return undefined;
+  ensureCacheIdentity(); return resourceCache.peek<T>(apiResourceKey(path, options));
+}
+export function subscribeApi(path: string, options: ApiOptions, fn: () => void) { return resourceCache.subscribe(apiResourceKey(path, options), fn); }
+export function invalidateApi(prefixes = ['/profiles/me', '/jobs', '/applications', '/alerts'], broadcast = true, actor = scope()) {
+  resourceCache.invalidate(key => { const [owner, , path] = JSON.parse(key); return (owner === actor || owner === 'public') && prefixes.some(prefix => path.startsWith(prefix)); });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent?.(new CustomEvent('candidate-resource-changed', { detail: { prefixes, scope: actor } }));
+    if (broadcast) cacheChannel?.postMessage({ type: 'invalidate', prefixes, scope: actor });
+  }
+}
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const { cacheMode, ...networkOptions } = options;
+  const method = (options.method || 'GET').toUpperCase();
+  if (typeof window === 'undefined') return apiNetwork<T>(path, networkOptions);
+  ensureCacheIdentity();
+  const ttl = method === 'GET' && cacheMode !== 'no-store' ? ttlFor(path) : 0;
+  if (ttl) {
+    const actor=scope();
+    const value=await resourceCache.read(apiResourceKey(path, options), signal => apiNetwork<T>(path, { ...networkOptions, signal }), ttl, options.signal || undefined, cacheMode === 'reload');
+    if(options.auth!==false&&actor!==scope())throw new ApiError('Account changed. Please retry.',409);
+    return value;
+  }
+  const value = await apiNetwork<T>(path, networkOptions);
+  if (!['GET','HEAD'].includes(method) && /^\/(profiles|jobs|applications|alerts|admin\/(catalog|employee-matching)|companies)/.test(path)) {
+    invalidateApi(path.startsWith('/admin/') ? ['/meta/', '/jobs', '/profiles/me'] : undefined);
+  }
+  return value;
+}
+
 /** Multipart upload with upload progress and the same account/locale protections as api(). */
 export async function apiUpload<T>(path: string, body: FormData, onProgress?: (percent: number) => void): Promise<T> {
   const actor = getSession()?.user.id;
@@ -269,6 +329,7 @@ export async function apiUpload<T>(path: string, body: FormData, onProgress?: (p
     throw new ApiError(formatApiError(data, 'Upload failed'), response.status);
   }
   onProgress?.(100);
+  invalidateApi();
   return data as T;
 }
 

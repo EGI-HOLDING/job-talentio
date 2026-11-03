@@ -6,9 +6,10 @@ import { EgiHospitalityDemoBackfillService } from './egi-hospitality-demo-backfi
 import { CompanyLogoBackfillService } from './company-logo-backfill.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
+import { MatchingModule } from '../matching/matching.module';
 
 @Module({
-  imports: [PrismaModule, StorageModule],
+  imports: [PrismaModule, StorageModule,MatchingModule],
   controllers: [MetaController,EmployeePositionController],
   providers: [
     MetaService,

@@ -2,7 +2,7 @@ import type { JobPlacement } from '@job-talentio/shared';
 import type { EmployeeEvaluation, EmployeeMatchJob } from './employee-matching';
 
 /** Compose before pagination. Never change evidence, scores, or organic relative order. */
-export function placeEmployeeBoosts<T extends { job: EmployeeMatchJob; evaluation: EmployeeEvaluation }>(
+export function placeEmployeeBoosts<T extends { job: Pick<EmployeeMatchJob,'id'|'companyId'>; evaluation: EmployeeEvaluation }>(
   organic: readonly T[], activeBoostIds: ReadonlySet<string>,
 ): Array<T & { placement: JobPlacement }> {
   type Queue = { company: string; indices: number[]; offset: number };

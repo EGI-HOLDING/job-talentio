@@ -4,6 +4,7 @@ import { EmployeeOccupationIndex, type IntentRole } from './employee-occupation'
 import { evaluateIntent, compareIntent } from './employee-intent';
 import { applyEmployeeOverrides, evidenceConflicts, parseEmployeeEvidence, EMPLOYEE_EVIDENCE_PARSER, type IntentFacts } from './employee-intent-evidence';
 import { EmployeeIntentService } from './employee-intent.service';
+import { employeePreferenceUpdate } from './employee-preferences';
 import { employeeQualityGateAccepted } from './employee-quality-gate';
 import { makeEmployeeBenchmark, benchmarkJob, benchmarkRoles, benchmarkIndex, benchmarkSkills, benchmarkRank, evaluateHumanLabels } from './employee-intent.benchmark';
 async function main() {
@@ -89,6 +90,18 @@ async function main() {
     const db: any = { employeeProfile: { findUniqueOrThrow: async () => profile }, jobTitle: { findMany: async () => benchmarkRoles }, featureFlag: { findMany: async () => [], findUnique: async () => null }, jobPost: { findMany: async (q: any) => { calls.push(q); if (q.where.id?.in)
                 return fullJobs.filter(j => q.where.id.in.includes(j.id)); return fullJobs; } } };
     const service = new EmployeeIntentService(db);
+    const fiveIds = benchmarkRoles.slice(0, 5).map(role => role.id);
+    const fivePreferences = await employeePreferenceUpdate(db, { desiredJobTitleIds: fiveIds });
+    check(fivePreferences.matchingPreferencesReviewed && fivePreferences.desiredRoles.create.length === 5, 'five selected positions retain five canonical identities');
+    profile.desiredRoles = fiveIds.map(jobTitleId => ({ jobTitleId }));
+    const fiveResult = await service.recommend('p', 1, 100);
+    check(fiveResult.total === 61 && fiveResult.items.every(item => fiveIds.includes(item.eligibility.canonicalRoleId!) && index.identity(item.eligibility.canonicalRoleId!)?.familyId === item.eligibility.familyId), 'five families remain eligible without admitting an unselected position or mismatched family');
+    profile.desiredRoles.reverse();
+    check((await service.recommend('p', 1, 100)).items.map(item => item.job.id).join() === fiveResult.items.map(item => item.job.id).join(), 'selection order gives no position priority');
+    const rejected = { ...benchmarkRoles[0], id: 'unreviewed', matchingApproved: false };
+    await assert.rejects(() => employeePreferenceUpdate({ jobTitle: { findMany: async () => [...benchmarkRoles, rejected] } } as any, { desiredJobTitleIds: [rejected.id] }), /reviewed positions/);
+    assertions++;
+    profile.desiredRoles = [{ jobTitleId: accountant.id }];
     const result = await service.recommend('p', 1, 5);
     check(result.state === 'READY' && result.total === 12 && result.items.every(i => i.eligibility.eligible && i.eligibility.canonicalRoleId === accountant.id), 'service filters before pagination even when DB returns an out-of-scope row');
     const second = await service.recommend('p', 2, 5);

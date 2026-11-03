@@ -1,4 +1,7 @@
 'use client';
+import { useApiResource } from '@/lib/useApiResource';
+import { useSessionIdentity } from '@/lib/useSessionIdentity';
+import { useMatchingStatus } from '@/lib/useMatchingStatus';
 import { EmployeeEvidenceReview } from './EmployeeEvidenceReview';
 import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { DatabaseCvPermission } from './DatabaseCvPermission';
@@ -39,13 +42,24 @@ export function ProfileCvWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const showCvs = searchParams.get('section') === 'cvs';
-  const [profile, setProfile] = useState<CareerProfile | null>(null);
+  const identity=useSessionIdentity();
+  const profileResource=useApiResource<CareerProfile>(identity?'/profiles/me':null);
+  const profile=profileResource.data||null;
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const loading=profileResource.loading;
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [editor, setEditor] = useState<ProfileEditor | null>(null);
+  const preferenceEditorOpened = useRef(false);
+  const requestedSection = searchParams.get('section');
+  useEffect(() => {
+    if (requestedSection !== 'preferences') { preferenceEditorOpened.current = false; return; }
+    if (profile && !preferenceEditorOpened.current) {
+      preferenceEditorOpened.current = true;
+      setEditor({ kind: 'basics' });
+    }
+  }, [requestedSection, profile?.id]);
   const [importing, setImporting] = useState<{ resumeId?: string } | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [menuUp, setMenuUp] = useState(false);
@@ -56,6 +70,7 @@ export function ProfileCvWorkspace() {
   const [busy, setBusy] = useState<string | null>(null);
   const actionInFlight = useRef(false);
   const mounted = useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const [removing, setRemoving] = useState<{ kind: string; id: string; name: string } | null>(null);
   const [removeError, setRemoveError] = useState('');
   const [fileDialog, setFileDialog] = useState<{ kind: 'preview' | 'replace'; resume: Resume } | null>(null);
@@ -68,34 +83,15 @@ export function ProfileCvWorkspace() {
   const [resumeEditor, setResumeEditor] = useState<Resume | null>(null);
   const [resumeError, setResumeError] = useState('');
 
-  const loadVersion=useRef(0);
-  const load = useCallback(async () => {
-    const version=++loadVersion.current;
-    const actor=getSession()?.user.id;
-    const data = await api<CareerProfile>('/profiles/me');
-    if (mounted.current && version===loadVersion.current&&getSession()?.user.id===actor) setProfile(data);
-    return data;
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    const current = getSession();
-    if (!current) {
-      window.location.href = localeHref(authLink('/login', `${window.location.pathname}${window.location.search}`, 'EMPLOYEE'));
-      return;
-    }
-    if (current.user.role !== 'EMPLOYEE') {
-      window.location.href = localeHref(current.user.role === 'RECRUITER' ? '/dashboard/recruiter?tab=jobs' : '/');
-      return;
-    }
-    setSession(current); setLoading(true); setError('');
-    load().catch((error) => { if (mounted.current) setError(error.message); }).finally(() => { if (mounted.current) setLoading(false); });
-    api<AuthSession>('/auth/me').then((fresh) => { if (mounted.current) { saveSession(fresh); setSession(fresh); } }).catch(() => undefined);
-    return () => { mounted.current = false; ++loadVersion.current; };
-  }, [load, locale]);
-
-  const processing=profile?.resumes.some(row=>['PENDING','PROCESSING','NONE'].includes(row.parseStatus||'')&&row.hasFile);
-  useEffect(()=>{if(!processing)return;const timer=setInterval(()=>{void load().catch(()=>undefined);},5000);return()=>clearInterval(timer);},[processing,load]);
+  const load=useCallback(async()=>profileResource.reload(),[profileResource.reload]);
+  useEffect(()=>{
+    let active=true;setSession(getSession());
+    api<AuthSession>('/auth/me').then(fresh=>{if(active){saveSession(fresh);setSession(fresh);}}).catch(()=>{});
+    return()=>{active=false;};
+  },[identity]);
+  useEffect(()=>{if(profileResource.error)setError(profileResource.error);},[profileResource.error]);
+  const processing=Boolean(profile?.resumes.some(row=>['PENDING','PROCESSING'].includes(row.parseStatus||'')&&row.hasFile));
+  useMatchingStatus(processing,()=>{void load().catch(()=>{});});
   useEffect(() => { if (profile) setVisibility(profile.visibility); }, [profile?.visibility]);
   useEffect(() => {
     if (showCvs || !profile) return;
@@ -187,7 +183,7 @@ export function ProfileCvWorkspace() {
   return <div className={s.root}>
     <h1 className="sr-only">{t('pc.title')}</h1>
     <nav className={s.tabs} aria-label={t('pc.title')}><Link href={PROFILE_HREF} aria-current={!showCvs ? 'page' : undefined} scroll={false}>{t('pc.myProfile')}</Link><Link href={CVS_HREF} aria-current={showCvs ? 'page' : undefined} scroll={false}>{t('pc.myCvs')}</Link></nav>
-    {error && <div className={s.error} role="alert"><span>{error}</span><button type="button" className={s.textButton} disabled={loading} onClick={() => { setLoading(!profile); setError(''); void refresh().finally(() => setLoading(false)); }}>{t('workspace.retry')}</button></div>}
+    {error && <div className={s.error} role="alert"><span>{error}</span><button type="button" className={s.textButton} disabled={loading} onClick={() => { setError(''); void refresh(); }}>{t('workspace.retry')}</button></div>}
     {message && <div className={s.notice} role="status"><ProfileIcon kind="check" /><span>{message}</span><button type="button" className={s.iconButton} aria-label={t('closeDialog')} onClick={() => setMessage('')}><ProfileIcon kind="close" /></button></div>}
     {loading ? <div className={s.loading} role="status" aria-label={t('ui.loading')}><i /><i /><i /></div> : profile && (showCvs ? <section className={s.library} aria-label={t('pc.myCvs')}>
       <header className={s.libraryHeading}><div className={s.libraryActions}><small>{t('pc.cvCount').replace('{n}', String(profile.resumes.length)).replace('{max}', String(MAX_RESUMES_PER_PROFILE))}</small><button className={s.secondary} type="button" onClick={() => openImport()}><ProfileIcon kind="upload" />{t('cv.upload')}</button></div></header><p className={s.profileHint}>{t('cv.primaryHint')}</p>

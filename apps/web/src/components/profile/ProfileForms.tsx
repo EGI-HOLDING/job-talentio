@@ -1,4 +1,6 @@
 'use client';
+import { employeePositionPreferencesEnabled, positionPreferenceNames } from '@/lib/employeePositionPreferences';
+
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from '@/lib/navigation';
@@ -9,6 +11,7 @@ import { LocationFields } from '@/components/ui/LocationFields';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { RoleInput, CountryPicker, SalaryFields, type Country, type SalaryValue } from '@/components/onboarding/PreferenceFields';
 import { useOnboardingText } from '@/lib/i18n/onboarding';
+import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
@@ -32,6 +35,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   const { t } = useI18n();
   const enumLabel = useEnumLabel();
   const onboardingText = useOnboardingText();
+  const intentText = useEmployeeIntentText();
   const marketPhoneCountry = process.env.NEXT_PUBLIC_DEFAULT_LOCALE === 'id' ? 'ID' : 'UZ';
   const [phoneDraft, setPhoneDraft] = useState(() => phoneDraftFromE164(
     profile.phone,
@@ -40,9 +44,9 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   ));
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
-  const [roleIds,setRoleIds]=useState(profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
+  const [roleIds,setRoleIds]=useState(profile.matchingPreferencesReviewed===false?[]:profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
   const [workModes,setWorkModes]=useState(profile.preferredWorkModes||[]);
-  const [roles, setRoles] = useState(profile.desiredRoles?.length?profile.desiredRoles.map(r=>r.jobTitle.name):profile.desiredPositions?.length ? profile.desiredPositions : profile.desiredPosition ? [profile.desiredPosition] : []);
+  const [roles, setRoles] = useState(positionPreferenceNames(profile));
   const [preferredCountries, setPreferredCountries] = useState(profile.preferredCountries?.map(c=>c.id) || []);
   const [residence, setResidence] = useState(profile.residenceCountryId ? [profile.residenceCountryId] : profile.city?.province?.country?.id ? [profile.city.province.country.id] : []);
   const [homeCity, setHomeCity] = useState(profile.city?.slug || '');
@@ -91,7 +95,11 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      if (employeePositionPreferencesEnabled && (!roleIds.length || roles.length !== roleIds.length)) {
+        setError(intentText(roleIds.length ? 'legacyPositionsHint' : 'state.PREFERENCES_REQUIRED'));
+        return;
+      }
+      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -136,7 +144,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
         {editor.kind === 'basics' && <>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
           <RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />
-          {process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
+          {employeePositionPreferencesEnabled&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
 
           <SalaryFields countries={countries} value={salary} onChange={setSalary} />

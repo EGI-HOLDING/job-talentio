@@ -21,7 +21,17 @@ export type IntentRole = {
         matchingApproved: boolean;
     }>;
 };
-export const intentRoleInclude = { family: true, aliases: { select: { alias: true, matchingApproved: true } } } as const;
+export const intentRoleInclude = { family: true, aliases: { select: { alias: true, aliasKey:true, matchingApproved: true } } } as const;
+export const currentRoleSelect = {
+  id:true,familyId:true,canonicalRoleId:true,matchingApproved:true,archivedAt:true,family:{select:{archivedAt:true}},
+  canonicalRole:{select:{id:true,familyId:true,canonicalRoleId:true,matchingApproved:true,archivedAt:true,family:{select:{archivedAt:true}}}},
+} as const;
+export function currentRoleIdentity(role: {id:string;familyId:string|null;canonicalRoleId:string|null;matchingApproved:boolean;archivedAt:Date|null;family:{archivedAt:Date|null}|null;canonicalRole?:{id:string;familyId:string|null;canonicalRoleId:string|null;matchingApproved:boolean;archivedAt:Date|null;family:{archivedAt:Date|null}|null}|null}|null) {
+  if(!role||!role.matchingApproved||role.archivedAt||!role.familyId||!role.family||role.family.archivedAt)return null;
+  const root=role.canonicalRoleId?role.canonicalRole:role;
+  if(!root||!root.matchingApproved||root.archivedAt||root.canonicalRoleId||root.familyId!==role.familyId||!root.family||root.family.archivedAt)return null;
+  return {canonicalRoleId:root.id,familyId:role.familyId};
+}
 /** Strict identities for employee intent. Never infer equivalence from shared skills or ISCO. */
 export class EmployeeOccupationIndex {
     readonly roles: Map<string, IntentRole>;

@@ -274,6 +274,14 @@
   line-height: 1;
   padding: 0 2px;
 }
+.chips .legacyPosition {
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+}
+.chips .legacyPosition[aria-pressed=true] {
+  text-decoration: underline;
+}
 .pickerButton {
   width: 100%;
   justify-content: space-between;

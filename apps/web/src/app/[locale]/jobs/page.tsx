@@ -12,18 +12,20 @@ import { NumberInput } from '@/components/ui/NumberInput';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { JobListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
-import { api, getSession, type AuthSession } from '@/lib/api';
+import { api, peekApi, invalidateApi, getSession, type AuthSession } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { CatalogRoleFilter } from '@/components/ui/CatalogRoleFilter';
 import { useRoleCatalog } from '@/lib/roleCatalog';
 import { HeroLocationPicker } from '@/components/home/HeroLocationPicker';
-import { JobDetailClient } from './[id]/JobDetailClient';
+import dynamic from 'next/dynamic';
+const JobDetailClient=dynamic(()=>import('./[id]/JobDetailClient').then(module=>module.JobDetailClient));
 import { JobsIcon } from '@/components/jobs/JobsIcon';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { formatJobSalary } from '@/components/jobs/formatJobSalary';
 import s from '@/components/jobs/JobsWorkspace.module.css';
 import { PromotionBadge } from '@/components/jobs/PromotionBadge';
+import { useMatchingStatus } from '@/lib/useMatchingStatus';
 import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
 import type { JobPromotion } from '@job-talentio/shared';
 import {
@@ -245,7 +247,7 @@ function JobsInner() {
     [filterKey, implicitSort],
   );
   const browseCompanies = searchParams.get('view') === 'companies';
-  const [data, setData] = useState<SearchResponse | null>(null);
+  const [data, setData] = useState<SearchResponse | null>(()=>peekApi<SearchResponse>('/jobs?'+toParams(filters,null,implicitSort).toString())||null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cities, setCities] = useState<MetaItem[]>([]);
@@ -260,60 +262,53 @@ function JobsInner() {
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [recommendationPage,setRecommendationPage]=useState(1);
   const recommendationRevision = useRef<string | undefined>(undefined);
-  useEffect(() => { recommendationRevision.current = undefined; setRecommendationPage(1); setDiscovery({status:'loading',profile:null,rows:[]}); }, [session?.user.id, locale]);
-  const [recommendationMeta,setRecommendationMeta]=useState<{total:number;totalPages:number;mode:string;state?:EmployeeRecommendationState}>({total:0,totalPages:1,mode:"LATEST"});
-  const [discovery, setDiscovery] = useState<{ status: 'loading' | 'ready' | 'error'; profile: EmployeeProfile | null; rows: RecommendedItem[] }>({ status: 'loading', profile: null, rows: [] });
+  const discoveryContext=useRef('');
+  useEffect(()=>{
+    if(!authReady)return;
+    const key=session?.user.id+':'+locale;
+    if(discoveryContext.current===key)return;
+    discoveryContext.current=key;recommendationRevision.current=undefined;setRecommendationPage(1);
+    const cached=peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24');
+    setDiscovery({status:cached?'ready':'loading',profile:peekApi<EmployeeProfile>('/profiles/me')||null,rows:cached?.items||[]});
+    if(cached)setRecommendationMeta(cached);
+  },[authReady,session?.user.id,locale]);
+  const [recommendationMeta,setRecommendationMeta]=useState<{total:number;totalPages:number;mode:string;state?:EmployeeRecommendationState}>(()=>peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')||{total:0,totalPages:1,mode:"LATEST"});
+  const [discovery, setDiscovery] = useState<{ status: 'loading' | 'ready' | 'error'; profile: EmployeeProfile | null; rows: RecommendedItem[] }>(()=>({status:peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')?'ready':'loading',profile:peekApi<EmployeeProfile>('/profiles/me')||null,rows:peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')?.items||[]}));
   const requestedMode = searchParams.get('mode');
   const hasSearchIntent = Object.keys(EMPTY).some((key) => !['limit', 'skillMode'].includes(key) && filterParams.has(key)) || browseCompanies;
   const personalized = Boolean(isEmployee && (requestedMode === 'for-you' || (requestedMode !== 'all' && !hasSearchIntent && (recommendationMeta.state || hasCareerSignal(discovery.profile) && discovery.rows.length > 0))));
   const decidingMode = !authReady || Boolean(isEmployee && !['all', 'for-you'].includes(requestedMode || '') && !hasSearchIntent && !discovery.profile && discovery.status === 'loading');
 
-  useEffect(() => {
-    if (!isEmployee) return;
-    let active = true;
-    setDiscovery((current) => ({ ...current, status: 'loading' }));
-    Promise.all([api<EmployeeProfile>('/profiles/me'), api<RecommendationPage>(`/jobs/recommended?page=${recommendationPage}&limit=24`)])
-      .then(([profile, result]) => { if (active) {
-        if (recommendationPage > 1 && recommendationRevision.current && result.rankingRevision !== recommendationRevision.current) { setRecommendationPage(1); return; }
-        recommendationRevision.current = result.rankingRevision;
-        setDiscovery({ status: 'ready', profile, rows:result.items }); setRecommendationMeta(result); setRecommendationPage(result.page);
-      } })
-      .catch(() => { if (active) setDiscovery((current) => ({ ...current, status: 'error' })); });
-    return () => { active = false; };
-  }, [isEmployee, session?.user.id, locale, discoveryRetry,recommendationPage]);
-  useEffect(()=>{if(recommendationMeta.state!=='CV_PROCESSING')return;const timer=setInterval(()=>setDiscoveryRetry(n=>n+1),5000);return()=>clearInterval(timer);},[recommendationMeta.state]);
-  useEffect(()=>{if(!['PENDING','PROCESSING'].includes(discovery.profile?.cvSource?.status||''))return;const timer=setInterval(()=>{setRecommendationPage(1);setDiscoveryRetry(v=>v+1);},5000);return()=>clearInterval(timer);},[discovery.profile?.cvSource?.versionId,discovery.profile?.cvSource?.status]);
-  useEffect(()=>{if(!isEmployee)return;const refresh=()=>{setRecommendationPage(1);setDiscoveryRetry(value=>value+1);setRetry(value=>value+1);};window.addEventListener('focus',refresh);return()=>window.removeEventListener('focus',refresh);},[isEmployee,session?.user.id]);
+  const discoveryRequest=useRef(''),lastDiscoveryRetry=useRef(0);
+  useEffect(()=>{
+    if(!isEmployee||requestedMode==='all'||hasSearchIntent&&requestedMode!=='for-you')return;
+    const controller=new AbortController();let active=true;
+    const path='/jobs/recommended?page='+recommendationPage+'&limit=24';
+    const context=session?.user.id+':'+locale+':'+path;
+    const cached=peekApi<RecommendationPage>(path);
+    if(cached){setDiscovery(current=>({...current,status:'ready',rows:cached.items}));setRecommendationMeta(cached);}
+    else if(discoveryRequest.current!==context)setDiscovery(current=>({...current,status:'loading',rows:[]}));
+    discoveryRequest.current=context;
+    const force=lastDiscoveryRetry.current!==discoveryRetry;lastDiscoveryRetry.current=discoveryRetry;
+    void api<EmployeeProfile>('/profiles/me',{signal:controller.signal}).then(profile=>{if(active)setDiscovery(current=>({...current,profile}));}).catch(()=>{});
+    void api<RecommendationPage>(path,{signal:controller.signal,cacheMode:force?'reload':undefined}).then(result=>{
+      if(!active)return;
+      if(recommendationPage>1&&recommendationRevision.current&&result.rankingRevision!==recommendationRevision.current){setRecommendationPage(1);return;}
+      recommendationRevision.current=result.rankingRevision;setDiscovery(current=>({...current,status:'ready',rows:result.items}));setRecommendationMeta(result);setRecommendationPage(result.page);
+    }).catch(error=>{if(active&&error.name!=='AbortError')setDiscovery(current=>({...current,status:current.rows.length?'ready':'error'}));});
+    return()=>{active=false;controller.abort();};
+  },[isEmployee,session?.user.id,locale,discoveryRetry,recommendationPage,requestedMode,hasSearchIntent]);
+  useMatchingStatus(recommendationMeta.state==='CV_PROCESSING'||['PENDING','PROCESSING'].includes(discovery.profile?.cvSource?.status||''),()=>{invalidateApi(['/profiles/me','/jobs']);});
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
   >([]);
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      api<MetaItem[]>('/meta/cities', { auth: false }),
-      api<MetaItem[]>('/meta/categories', { auth: false }),
-      api<MetaItem[]>('/meta/skills?sort=popular&take=120', { auth: false }),
-      api<MetaItem[]>('/meta/benefits', { auth: false }),
-      api<LangMeta[]>('/meta/languages', { auth: false }),
-      api<MetaItem[]>('/meta/countries', { auth: false }),
-    ])
-      .then(([c, cat, sk, b, langs, countryRows]) => {
-        if (!active) return;
-        setCities(c);
-        setCountries(countryRows);
-        setCategories(cat);
-        setSkills(sk);
-        setBenefits(b);
-        setLanguages(langs || []);
-      })
-      .catch(() => undefined);
-    api<SearchResponse>('/jobs?limit=1&sort=newest', { auth: false })
-      .then((r) => { if (active) { setHiringCompanies(r.facets?.companies || []); } })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, [locale]);
-
+  useEffect(()=>{
+    if(!filtersOpen&&!browseCompanies)return;
+    let active=true;const controller=new AbortController(),options={auth:false,signal:controller.signal};
+    Promise.all([api<MetaItem[]>('/meta/cities',options),api<MetaItem[]>('/meta/categories',options),api<MetaItem[]>('/meta/skills?sort=popular&take=120',options),api<MetaItem[]>('/meta/benefits',options),api<LangMeta[]>('/meta/languages',options),api<MetaItem[]>('/meta/countries',options)]).then(([c,cat,sk,b,langs,countryRows])=>{if(active){setCities(c);setCategories(cat);setSkills(sk);setBenefits(b);setLanguages(langs||[]);setCountries(countryRows);}}).catch(()=>{});
+    return()=>{active=false;controller.abort();};
+  },[locale,filtersOpen,browseCompanies]);
   const apply = useCallback(
     (patch: Partial<Filters>, opts?: { keepBrowse?: boolean }) => {
       listScroll.current = 0;
@@ -330,13 +325,14 @@ function JobsInner() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError('');
+    if(!authReady||requestedMode==='for-you'||decidingMode||personalized)return;
+    const controller=new AbortController();
+    setLoading(!data);setError('');
     const p = toParams(filters, null, implicitSort);
     // All jobs keeps its own explicit search sorting; For you uses /jobs/recommended.
     p.set('sort', filters.sort);
     // Send auth when logged in so sort=match can use the employee profile
-    api<SearchResponse>(`/jobs?${p.toString()}`)
+    api<SearchResponse>(`/jobs?${p.toString()}`,{signal:controller.signal})
       .then((res) => {
         if (!active) return;
         setData(res);
@@ -349,8 +345,8 @@ function JobsInner() {
       })
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [filters, router, browseCompanies, implicitSort, retry, requestedMode, locale, session?.user.id]);
+    return () => { active = false; controller.abort(); };
+  }, [filters, router, browseCompanies, implicitSort, retry, requestedMode, locale, session?.user.id,authReady,decidingMode,personalized]);
 
   const selectedSkills = filters.skills.split(',').filter(Boolean);
   const selectedCities = filters.city.split(',').filter(Boolean);
@@ -385,7 +381,7 @@ function JobsInner() {
     : data?.facets?.companies || [];
   const expFacet = data?.facets?.experienceLevels || {};
 
-  const { roles: titleCatalog } = useRoleCatalog();
+  const titleCatalog = data?.facets?.jobTitles || [];
   const titleFacetList = titleCatalog;
   const singleJobTitleSlug =
     filters.jobTitle && !filters.jobTitle.includes(',') ? filters.jobTitle : '';
@@ -547,7 +543,7 @@ function JobsInner() {
   const recommendations = discovery.rows.map((item) => item.job);
   const visibleJobs = personalized ? recommendations : data?.items || [];
   usePromotionRefresh(visibleJobs, () => {
-    if (personalized) { setRecommendationPage(1); setDiscoveryRetry(value => value + 1); }
+    if (personalized) { setDiscoveryRetry(value => value + 1); }
     else if (filters.page > 1) apply({page:1});
     else setRetry(value => value + 1);
   });
@@ -607,7 +603,7 @@ function JobsInner() {
             <details className={s.moreFilters} open={forceAdvancedOpen || undefined}><summary><JobsIcon kind="filter" />{t('workspace.moreFilters')}{advancedActiveCount > 0 && <span>{advancedActiveCount}</span>}<JobsIcon kind="chevron" /></summary>
 
 
-          <CatalogRoleFilter value={filters.jobTitle} onChange={jobTitle => apply({ jobTitle })} />
+          <CatalogRoleFilter enabled={filtersOpen} value={filters.jobTitle} onChange={jobTitle => apply({ jobTitle })} />
           <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
             <FormField label={t('matchMode')} optional>
               <select

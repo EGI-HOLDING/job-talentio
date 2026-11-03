@@ -6,11 +6,11 @@ import type { JobPromotion } from '@job-talentio/shared';
 export function usePromotionRefresh(rows: ReadonlyArray<{ promotion?: JobPromotion | null }>, refresh: () => void) {
   const callback = useRef(refresh);
   callback.current = refresh;
-  const last = useRef(0);
+  const last = useRef(Date.now());
   const transition = rows.map(row => Date.parse(row.promotion?.revalidateAt ?? '')).filter(Number.isFinite).sort((a,b) => a-b)[0];
   useEffect(() => {
     const run = (deadline = false) => {
-      if (document.visibilityState !== 'visible' || (!deadline && Date.now() - last.current < 750)) return;
+      if (document.visibilityState !== 'visible' || (!deadline && Date.now() - last.current < 30_000)) return;
       last.current = Date.now(); callback.current();
     };
     const focus = () => run();
@@ -22,6 +22,8 @@ export function usePromotionRefresh(rows: ReadonlyArray<{ promotion?: JobPromoti
     arm();
     window.addEventListener('focus', focus);
     document.addEventListener('visibilitychange', focus);
-    return () => { if (timer !== undefined) window.clearTimeout(timer); window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); };
+    const invalidated=()=>run(true);
+    window.addEventListener('candidate-resource-changed',invalidated);
+    return () => { if (timer !== undefined) window.clearTimeout(timer); window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); window.removeEventListener('candidate-resource-changed',invalidated); };
   }, [transition]);
 }

@@ -1398,7 +1398,7 @@ export class JobsService {
         }));
 
         if (query.profileId) {
-          const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, sorted.map(job => job.id));
+          const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, sorted.map(job => job.id),intentScope);
           sorted = sorted.map((job) => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights }));
         }
       }
@@ -1430,7 +1430,7 @@ export class JobsService {
       }));
 
       if (query.profileId) {
-        const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, withScore.map(job => job.id));
+        const scores = await this.employeeMatching.scoreJobsForProfile(query.profileId, withScore.map(job => job.id),intentScope);
         withScore = withScore.map(job => ({ ...job, matchScore: scores.get(job.id)?.score ?? null, matchInsights:scores.get(job.id)?.insights,
           employeeEvaluation:scores.get(job.id), employeeCore:scores.get(job.id)?.positiveCore ?? false }));
       }

@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, ConflictException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards, Optional } from '@nestjs/common';
+import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,22 +10,23 @@ import { catalogTitleIdentityKey } from '../common/title-resolve';
 import { EmployeeOccupationIndex, intentRoleInclude } from './employee-occupation';
 @Controller('meta/employee-positions')
 export class EmployeePositionController {
-    constructor(private db: PrismaService) { }
+    constructor(private db: PrismaService, @Optional() private snapshot?:EmployeeCatalogSnapshot) { }
     @Get()
     async list(
     @Query()
     query: unknown) {
-        const { q, page } = parseDto(z.object({ q: z.string().max(160).default(''), page: z.coerce.number().int().min(1).max(100000).default(1) }), query);
-        const rows = await this.db.jobTitle.findMany({ include: intentRoleInclude, orderBy: { name: 'asc' } });
-        const index = new EmployeeOccupationIndex(rows);
+        const { q, page, limit } = parseDto(z.object({ q: z.string().max(160).default(''), page: z.coerce.number().int().min(1).max(100000).default(1), limit: z.coerce.number().int().min(1).max(100).default(100) }), query);
+        const catalog=await (this.snapshot || new EmployeeCatalogSnapshot(this.db)).get();
+        const rows = [...catalog.roles].sort((a,b)=>a.name.localeCompare(b.name));
+        const index = catalog.index;
         const key = catalogTitleIdentityKey(q.slice(0, 160));
         const eligible = rows.filter(r => index.identity(r.id) && (!key || [r.name, r.nameId, r.nameUz, r.nameRu, ...r.aliases.filter(a => a.matchingApproved).map(a => a.alias)].some(s => s && catalogTitleIdentityKey(s).includes(key))));
         const seen = new Set<string>();
         const unique = eligible.filter(r => { const id = index.identity(r.id)!.canonicalRoleId; if (seen.has(id))
             return false; seen.add(id); return true; });
-        const total = unique.length, totalPages = Math.max(1, Math.ceil(total / 100));
+        const total = unique.length, totalPages = Math.max(1, Math.ceil(total / limit));
         const current = Math.min(totalPages, Math.max(1, page || 1));
-        return { items: unique.slice((current - 1) * 100, current * 100).map(r => { const identity = index.identity(r.id)!; const root = index.roles.get(identity.canonicalRoleId)!; return { id: root.id, name: root.name, nameId: root.nameId, nameUz: root.nameUz, nameRu: root.nameRu, canonicalRoleId: root.id, family: root.family, matchingEligible: true }; }), page: current, totalPages, total };
+        return { items: unique.slice((current - 1) * limit, current * limit).map(r => { const identity = index.identity(r.id)!; const root = index.roles.get(identity.canonicalRoleId)!; return { id: root.id, name: root.name, nameId: root.nameId, nameUz: root.nameUz, nameRu: root.nameRu, canonicalRoleId: root.id, family: root.family, matchingEligible: true }; }), page: current, totalPages, total };
     }
 }
 const familySchema = z.object({ code: z.string().regex(/^\d{3}$/), name: z.string().min(1).max(160), nameId: z.string().max(160).nullable().optional(), nameUz: z.string().max(160).nullable().optional(), nameRu: z.string().max(160).nullable().optional(), source: z.string().min(1).max(500), sourceVersion: z.string().min(1).max(100) }).strict();

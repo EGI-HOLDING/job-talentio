@@ -3,6 +3,8 @@ import 'reflect-metadata';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { CandidateCache } from '../common/candidate-cache';
 import { employeePreferenceUpdate } from '../matching/employee-preferences';
 import { EmployeeOccupationIndex, intentRoleInclude } from '../matching/employee-occupation';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
@@ -121,6 +123,7 @@ async function main() {
             report.queuedEvidence++;
         }
     }
+    if(apply){const cache=new CandidateCache(new ConfigService());try{await cache.invalidateAndWait(true);}finally{cache.onModuleDestroy();}}
     console.log(JSON.stringify(report, null, 2));
 }
 void main().catch(e => { console.error(e.message); process.exitCode = 1; }).finally(() => db.$disconnect());

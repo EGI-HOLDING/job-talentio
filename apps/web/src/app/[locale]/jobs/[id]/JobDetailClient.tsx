@@ -10,7 +10,7 @@ import type { JobPromotion } from '@job-talentio/shared';
 import { useParams, useSearchParams } from 'next/navigation';
 import { jobBackHref, jobDetailHref } from '@/lib/accountNavigation';
 import { trackJobEvent,jobAttribution } from '@/lib/hr-events';
-import { api, getSession } from '@/lib/api';
+import { peekApi, api, getSession } from '@/lib/api';
 import { readSource, rememberSource } from '@/lib/acquisition';
 
 import { sanitizeMojibake } from '@/lib/text';
@@ -110,7 +110,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const searchParams = useSearchParams();
   const id = jobId || params.id || '';
   const { t, locale } = useI18n();
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJob] = useState<Job | null>(()=>peekApi<Job>('/jobs/'+id)||null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showApply, setShowApply] = useState(false);
@@ -172,7 +172,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   useEffect(() => {
     let active = true;
     setError('');
-    setJob(null);
+    setJob(peekApi<Job>('/jobs/'+id)||null);
     setFollowing(false);
     setMyApplication(null);
     // Keep the utm source from the link (Telegram, PWA, share) for the apply call.
@@ -202,7 +202,7 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
       })
       .catch((e) => { if (active) setError(e.message); });
     return () => { active = false; };
-  }, [id, locale, retry]);
+  }, [id, locale, retry, session?.user.id]);
 
   useEffect(() => {
     ++submittedCvRequest.current;

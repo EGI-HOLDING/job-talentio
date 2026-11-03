@@ -32,9 +32,14 @@ function loadClient(fetch) {
     module, exports: module.exports, localStorage,
     window: { location: { pathname: '/en/settings' } },
     process: { env: { NEXT_PUBLIC_API_URL: 'http://localhost:4000' } },
-    fetch, Headers, FormData, URLSearchParams,
+    fetch, Headers, FormData, URLSearchParams, AbortController, DOMException, CustomEvent,
     require: (name) => {
       if (name === '@/lib/locale') return { DEFAULT_LOCALE: 'en', localeFromPathname: () => 'en' };
+      if(name==='./resourceCache') {
+        const sub={exports:{}};
+        vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(repo,'apps/web/src/lib/resourceCache.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:sub,exports:sub.exports,AbortController,DOMException});
+        return sub.exports;
+      }
       throw new Error(`Unexpected dependency: ${name}`);
     },
   });
@@ -116,7 +121,7 @@ test(`${client}: concurrent requests share one refresh`, async () => {
   const { api } = loadClient(async (url, options) => {
     if (url.endsWith('/auth/refresh')) {
       refreshes += 1;
-      return response(200, { accessToken: 'new-access', refreshToken: 'new-refresh', user: {} });
+      return response(200, { accessToken: 'new-access', refreshToken: 'new-refresh', user: {role:'RECRUITER'} });
     }
     return options.headers.get('Authorization') === 'Bearer new-access'
       ? response(200, { ok: true }) : response(401, { message: 'Unauthorized' });
