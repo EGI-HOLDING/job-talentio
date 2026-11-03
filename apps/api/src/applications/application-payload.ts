@@ -33,6 +33,8 @@ export function safeApplication<T extends object>(application: T) {
     }
   }
   delete result.resumeVersion;
+  delete result.hrSubmissionSnapshot;
+  delete result.recruiterEvaluations;
   if (source.resume && typeof source.resume === 'object') {
     const resume = source.resume as Record<string, unknown>;
     result.resume = { id: resume.id, title: resume.title, templateKey: resume.templateKey, hasFile: Boolean(resume.fileKey) };

@@ -343,6 +343,8 @@ export class MatchingService {
   constructor(private prisma: PrismaService) { this.recruiter = new RecruiterMatchingService(prisma); }
 
   scoreInputs(...args: Parameters<RecruiterMatchingService['scoreInputs']>) { return this.recruiter.scoreInputs(...args); }
+  scoreHistoricalInputs(...args:Parameters<RecruiterMatchingService['historicalInputs']>){return this.recruiter.historicalInputs(...args);}
+  hrDatabaseInputs(...args:Parameters<RecruiterMatchingService['databaseInputs']>){return this.recruiter.databaseInputs(...args);}
   scoreEvidenceProfiles(...args:Parameters<RecruiterMatchingService['forEvidence']>){return this.recruiter.forEvidence(...args);}
 
   /** Profiles without skills or a role title are not matchable for discovery. */

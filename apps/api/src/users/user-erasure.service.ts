@@ -141,6 +141,8 @@ export class UserErasureService {
             ...(withdraw ? { status: 'WITHDRAWN' as const } : {}),
             coverLetter: null,
             resumeSnapshot: { anonymized: true },
+            hrSubmissionSnapshot: Prisma.DbNull,
+            recruiterEvaluations: { deleteMany: {} },
             resumeVersionId:null,
             matchScore: null,
             matchBreakdown: Prisma.DbNull,

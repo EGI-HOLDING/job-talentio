@@ -12,6 +12,7 @@ import { ResourceError, WorkspaceEmpty, WorkspaceLoading } from '@/components/em
 import s from './JobWorkspace.module.css';
 import { Applicant, ApplicationCvAction, KanbanAction } from './ApplicationActions';
 import { ApplicationDetail } from './ApplicationDetail';
+import { HrMatchSummary, type HrAssessment } from './HrMatchSummary';
 
 const PAGE_SIZE = 10;
 
@@ -26,7 +27,7 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
   const [status,setStatus]=useState(''),[detail,setDetail]=useState<string|null>(applicationId||null);
   useEffect(()=>{setDetail(applicationId||null);},[applicationId]);
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0);
-  const [result, setResult] = useState<{ items: Applicant[]; total: number; page: number }>({ items: [], total: 0, page: 1 });
+  const [result, setResult] = useState<{ items: (Applicant&Partial<HrAssessment>&{matchBreakdown?:HrAssessment})[]; total: number; page: number;state?:string;rankingVersion?:string;rankingAvailable?:boolean }>({ items: [], total: 0, page: 1 });
   const [loading, setLoading] = useState(true), [error, setError] = useState('');
   const filterKey = JSON.stringify(filters);
   const activeFilters = Object.values(filters).filter(value => value && value !== 'false').length;
@@ -36,6 +37,7 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
 
   useEffect(() => {
     let alive = true; const sequence = ++reads.current;
+    const controller=new AbortController();
     const identity = JSON.stringify([jobId, companyId, query, filterKey, sort, status, page, locale]);
     setLoading(loaded.current !== identity); setError('');
     const params = new URLSearchParams({
@@ -44,13 +46,14 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
       page: String(page), limit: String(PAGE_SIZE),
     });
     const timer = setTimeout(() => {
-      api<typeof result>('/applications/jobs/'+encodeURIComponent(jobId)+'/search?' + params, {signal:AbortSignal.timeout(15000)})
+      api<typeof result>('/applications/jobs/'+encodeURIComponent(jobId)+'/search?' + params, {signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15000)])})
         .then(data => { if (alive && sequence===reads.current) { loaded.current=identity; setResult(data); if (data.page !== page) setPage(data.page); } })
         .catch(reason => { if (alive && sequence===reads.current) setError(reason.message); })
-        .finally(() => { if (alive) setLoading(false); });
+        .finally(() => { if (alive&&sequence===reads.current) setLoading(false); });
     }, 200);
-    return () => { alive = false; clearTimeout(timer); };
+    return () => { alive = false; clearTimeout(timer);controller.abort(); };
   }, [jobId, companyId, query, filterKey, sort, status, page, retry, locale, revision]);
+  useEffect(()=>{if(loading||!result.items.some(row=>row.state==='CV_PROCESSING'))return;const timer=setTimeout(()=>{if(!document.hidden)setRetry(v=>v+1);},5000);return()=>clearTimeout(timer);},[result,loading]);
 
   const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
   const firstPage = Math.max(1, Math.min(page - 2, pageCount - 4));
@@ -68,6 +71,8 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
       </div>
     </div>
     <p className={s.rankingNote}>{t(sort === 'match' ? 'applicants.orderExplanation' : 'applicants.newestExplanation')}</p>
+    {result.state==='JOB_REQUIREMENTS_REQUIRED'&&<p role="status">{t('hrV2.state.JOB_REQUIREMENTS_REQUIRED')}</p>}
+    {result.rankingAvailable===false&&<p role="status">{t('hrV2.unavailable')}</p>}
     <div id="job-candidate-filters" className={s.filterPanel} hidden={!filtersOpen}><ApplicantFilters embedded meta={meta} onApply={value => { setPage(1); setFilters(value); setFiltersOpen(false); }}/></div>
     {error ? <ResourceError message={error} onRetry={() => setRetry(n => n + 1)}/> : loading ? <WorkspaceLoading/> : !result.items.length ? <WorkspaceEmpty title={t('applicants.empty')} hint={t('applicants.emptyHint')}/> : <div className={s.tableScroll}>
       <table className={s.table+' '+s.applicantsTable}><colgroup><col className={s.rankColumn}/><col className={s.candidateColumn}/><col className={s.roleColumn}/><col className={s.locationColumn}/><col className={s.statusColumn}/><col className={s.actionColumn}/></colgroup>
@@ -76,10 +81,10 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
           const profile=item.profile;
           const location = profile.city?.name || profile.residenceCountry?.name;
           return <tr key={item.id}>
-            <td className={s.rank}>{number((page - 1) * PAGE_SIZE + index + 1)}</td>
+            <td className={s.rank}>{sort==='match'&&item.rankingVersion?(item.rank??'—'):number((page - 1) * PAGE_SIZE + index + 1)}</td>
             <td><div className={s.identity}><RecruiterAvatar className={s.avatar} name={profile.user.fullName} src={profile.user.avatarUrl}/><button className={s.name} onClick={()=>setDetail(item.id)}>{profile.user.fullName}</button></div></td>
-            <td className={s.position}>{profile.headline || t('ranking.noHeadline')}</td>
-            <td><span className={s.location}>{location && <WorkspaceIcon kind="pin"/>}{location || t('ranking.notProvided')}</span></td>
+            <td className={s.position}>{profile.headline || t('ranking.noHeadline')}<HrMatchSummary assessment={item.matchBreakdown}/></td>
+            <td><span className={s.location} title={t('hrV2.location')}>{location && <WorkspaceIcon kind="pin"/>}{location || t('ranking.notProvided')}</span></td>
             <td><span className={s.applicationStatus} data-status={item.status}>{enumLabel('applicationStatus',item.status)}</span></td>
             <td><div className={s.rowActions}><KanbanAction application={item} jobId={jobId} companyId={companyId} onChanged={value=>{setResult(current=>({...current,items:current.items.map(row=>row.id===item.id?{...row,...value}:row)}));changed();}}/><ApplicationCvAction application={item}/><button className={s.profileButton} onClick={()=>setDetail(item.id)}>{t('applicants.details')}</button></div></td>
           </tr>;

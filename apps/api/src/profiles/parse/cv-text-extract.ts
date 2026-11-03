@@ -151,7 +151,7 @@ async function ocrPdf(
     await loadingTask.destroy();
   }
 }
-export async function extractCvText(
+async function extractCvTextInternal(
   input: { buffer: Buffer; filename: string; mimeType: string },
   config?: ConfigService,
 ): Promise<CvTextExtractResult> {
@@ -185,4 +185,14 @@ export async function extractCvText(
       "No readable CV text found. Try another file or enter your experience manually.",
     );
   return { kind, text, ocrUsed };
+}
+
+// All consumers share one heavy extraction budget, including OCR and the HR worker.
+let activeExtractions = 0;
+const extractionWaiters:Array<()=>void> = [];
+export async function extractCvText(...args:Parameters<typeof extractCvTextInternal>):Promise<CvTextExtractResult> {
+  if(activeExtractions>=2)await new Promise<void>(resolve=>extractionWaiters.push(resolve));
+  else activeExtractions++;
+  try{return await extractCvTextInternal(...args);}
+  finally{const next=extractionWaiters.shift();if(next)next();else activeExtractions--;}
 }

@@ -1,4 +1,5 @@
 import { Module,OnModuleInit,OnModuleDestroy,Logger } from '@nestjs/common';
+import { RecruiterEvidenceWorker } from './recruiter-evidence.worker';
 import { StorageModule } from '../storage/storage.module';
 import { EmployeeEvidenceService } from './employee-evidence.service';
 import { EmployeeEvidenceController } from './employee-evidence.controller';
@@ -12,7 +13,7 @@ import { EmployeeMatchingStatusController } from './employee-status.controller';
 @Module({
   imports: [PrismaModule,StorageModule],
   controllers:[EmployeeEvidenceController,EmployeeMatchingStatusController],
-  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot],
+  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker],
   exports: [MatchingService, EmployeeMatchingService,EmployeeCatalogSnapshot],
 })
 export class MatchingModule implements OnModuleInit,OnModuleDestroy {

@@ -141,5 +141,6 @@ export function evaluateRecruiter(profile: RecruiterProfile, job: RecruiterJob, 
 }
 
 export function compareRecruiterMatches(a: RecruiterBreakdown,b: RecruiterBreakdown):number {
+  if('requirementGroup' in a&&'requirementGroup' in b){const x=a as RecruiterBreakdown&{requirementGroup:string;roleFit:number;complementary:number},y=b as typeof x;const order=['MET','INCOMPLETE','UNMET','UNASSESSABLE'];return order.indexOf(x.requirementGroup)-order.indexOf(y.requirementGroup)||y.total-x.total||y.roleFit-x.roleFit||y.complementary-x.complementary;}
   return Number(b.positiveCore)-Number(a.positiveCore) || b.total-a.total || b.optionalScore-a.optionalScore || b.evidenceCoverage-a.evidenceCoverage;
 }

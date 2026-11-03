@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Observable } from 'rxjs';
 import type { Response } from 'express';
+import { invalidateHrRanking } from '../matching/recruiter-ranking.service';
 import { mergeMap } from 'rxjs/operators';
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -86,7 +87,7 @@ class CandidateInvalidationInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<{method:string;originalUrl?:string;url:string}>();
     const path = request.originalUrl || request.url;
     const handler=()=>['GET','HEAD','OPTIONS'].includes(request.method) || !/\/api\/(profiles|jobs|applications|companies|admin)\b/.test(path)
-      ?next.handle():next.handle().pipe(mergeMap(async value => { await this.cache.invalidate(/\/admin\/(catalog|employee-matching)/.test(path)); return value; }));
+      ?next.handle():next.handle().pipe(mergeMap(async value => { const catalogChanged=/\/admin\/(catalog|employee-matching)/.test(path);invalidateHrRanking(catalogChanged);await this.cache.invalidate(catalogChanged); return value; }));
     return this.cache.inRequest(context.switchToHttp().getResponse<Response>(),handler);
   }
 }

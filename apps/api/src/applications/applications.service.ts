@@ -17,6 +17,9 @@ import { recruiterProfileInclude } from '../matching/recruiter-matching.service'
 import { registerCvVersion, withCvFacts } from '../profiles/cv-evidence';
 import { applicationCvProfile } from '../profiles/cv-source';
 import { compareRecruiterMatches, type RecruiterBreakdown } from '../matching/recruiter-matching';
+import { hrEnabled, HR_VERSION, type HrProfile, type HrBreakdown } from '../matching/recruiter-ranking';
+import { freezeHrSubmission } from '../matching/recruiter-evidence';
+import { rankHrApplications, type HrWindow } from '../matching/recruiter-ranking.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CompaniesService } from '../companies/companies.service';
@@ -41,7 +44,7 @@ function isTransactionConflict(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   return error.code === 'P2034' || (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code)));
 }
-type ApplicationWindow = { ids:string[]; scores:Map<string,RecruiterBreakdown>;total:number;page:number;totalPages:number };
+type ApplicationWindow = { ids:string[]; scores:Map<string,RecruiterBreakdown>;total:number;page:number;totalPages:number;profiles?:Map<string,HrProfile>;rankingVersion?:string;rankingRevision?:string;state?:string;rankingAvailable?:boolean };
 
 function safeOfferPacket<T extends {
   kind?: string;
@@ -208,7 +211,9 @@ export class ApplicationsService {
     if(!selectedResume?.fileKey)throw new BadRequestException('Upload a CV before applying');
     const version=await registerCvVersion(tx,selectedResume.id,selectedResume.fileKey);
     const cvInput=withCvFacts(profile,version);
-    const breakdown = await this.matching.scoreInputs(cvInput, job, tx);
+    const breakdown = await this.matching.scoreHistoricalInputs(cvInput, job, tx);
+    const submittedAt=new Date();
+    const hrVersion=hrEnabled()?await tx.resumeVersion.findUniqueOrThrow({where:{id:version.id},include:{employeeEvidence:true}}):null;
     if(cvInput.cvSource.status!=='READY'){breakdown.assessable=false;breakdown.total=0;breakdown.positiveCore=false;breakdown.evidence=[];}
 
     const resumeSnapshot = {
@@ -246,6 +251,7 @@ export class ApplicationsService {
           coverLetter,
           source: source ? source.toLowerCase().slice(0, 40) : null,
           resumeSnapshot,
+          ...(hrVersion?{hrSubmissionSnapshot:JSON.parse(JSON.stringify(freezeHrSubmission(hrVersion,{languages:profile.languages,certifications:profile.certifications},submittedAt))),createdAt:submittedAt}:{}),
           matchScore: cvInput.cvSource.status==='READY'?breakdown.total:null,
           matchBreakdown: cvInput.cvSource.status==='READY'?breakdown:Prisma.DbNull,
           status: 'NEW',
@@ -514,9 +520,9 @@ export class ApplicationsService {
     const where: Record<string, unknown> = { jobPostId };
     if (opts?.kanbanOnly) where.kanbanEnteredAt = { not: null };
     if (opts?.applicationId) where.id = opts.applicationId;
-    if (opts?.filters) where.AND = [await applicantFilter(this.prisma, opts.filters)];
+    if (opts?.filters&&!hrEnabled()) where.AND = [await applicantFilter(this.prisma, opts.filters)];
     if (opts?.status) where.status = opts.status;
-    const window = opts?.window ?? await this.applicationWindow(where as Prisma.ApplicationWhereInput,jobPostId,opts);
+    const window = opts?.window ?? await this.applicationWindow(where as Prisma.ApplicationWhereInput,jobPostId,{...opts,...opts?.filters});
 
     const rows = await this.prisma.application.findMany({
       where: {jobPostId,id:{in:window.ids}},
@@ -565,7 +571,7 @@ export class ApplicationsService {
       const hasResumeFile = Boolean(submitted.fileKey);
       const safeSnapshot = safeApplication({ resumeSnapshot }).resumeSnapshot;
       const evidence=(resumeSnapshot as {cvEvidence?:unknown}|null)?.cvEvidence;
-      const cvProfile=withCvFacts(profile,evidence?{id:row.resumeVersionId??'submitted',parseStatus:'READY',matchingData:evidence}:null);
+      const cvProfile=window.profiles?.get(row.id)??withCvFacts(profile,evidence?{id:row.resumeVersionId??'submitted',parseStatus:'READY',matchingData:evidence}:null);
       const profileRest={id:profile.id,headline:cvProfile.headline,skills:cvProfile.skills.map(s=>({id:s.id,skill:s.skill})),city:profile.city,residenceCountry:profile.residenceCountry,user:{id:profile.user.id,fullName:profile.user.fullName,avatarUrl:profile.user.avatarUrl},contentLocale:null};
       const translations: Array<{locale:string;headline:string|null;isMachine:boolean}>=[];
       const resolvedHeadline = resolveUgcContent(
@@ -586,6 +592,7 @@ export class ApplicationsService {
         matchSnapshot: {score:row.matchScore,breakdown:row.matchBreakdown},
         matchScore: window.scores.get(row.id)?.assessable ? window.scores.get(row.id)!.total : null,
         matchBreakdown: window.scores.get(row.id) ?? null,
+        ...(window.rankingVersion?{rankingVersion:window.rankingVersion,rankingRevision:window.rankingRevision,state:(window.scores.get(row.id) as HrBreakdown)?.state,requirementGroup:(window.scores.get(row.id) as HrBreakdown)?.requirementGroup,rank:(window.scores.get(row.id) as HrBreakdown)?.rank,reasons:(window.scores.get(row.id) as HrBreakdown)?.reasons}:{}),
         profile: {
           ...profileRest,
           headline: resolvedHeadline.content.headline || profileRest.headline,
@@ -597,7 +604,16 @@ export class ApplicationsService {
     });
   }
 
-  private async applicationWindow(where:Prisma.ApplicationWhereInput,jobPostId:string,opts?:{sort?:'match'|'newest';minMatch?:number;page?:number;limit?:number;kanbanOnly?:boolean}):Promise<ApplicationWindow> {
+  private async applicationWindow(where:Prisma.ApplicationWhereInput,jobPostId:string,opts?:ApplicantFilters&{sort?:'match'|'newest';minMatch?:number;page?:number;limit?:number;kanbanOnly?:boolean}):Promise<ApplicationWindow> {
+    if(hrEnabled()){
+      try{return {...await rankHrApplications(this.prisma,where,jobPostId,opts),rankingAvailable:true};}
+      catch(error){
+        this.logger.error('HR ranking unavailable; serving applications by submission date: '+(error as Error).message);
+        const rows=await this.prisma.application.findMany({where,select:{id:true},orderBy:[{createdAt:'desc'},{id:'asc'}]});
+        const limit=opts?.limit??12,total=rows.length,totalPages=Math.max(1,Math.ceil(total/limit)),page=Math.min(opts?.page??1,totalPages);
+        return {ids:(opts?.page?rows.slice((page-1)*limit,page*limit):rows).map(r=>r.id),scores:new Map(),total,page,totalPages,rankingVersion:HR_VERSION,state:'EVIDENCE_REVIEW_REQUIRED',rankingAvailable:false};
+      }
+    }
     const newestOnly = opts?.sort==='newest' && opts.minMatch===undefined;
     const count = newestOnly ? await this.prisma.application.count({where}) : 0;
     const limit = opts?.limit ?? 12;
@@ -621,6 +637,11 @@ export class ApplicationsService {
   }
 
   async getForJob(user: AuthUser, jobPostId: string, applicationId: string, locale: Locale) {
+    if(hrEnabled()){
+      const job=await this.prisma.jobPost.findUniqueOrThrow({where:{id:jobPostId}});await this.companies.assertMember(user,job.companyId);
+      const window=await this.applicationWindow({jobPostId},jobPostId);if(!window.ids.includes(applicationId))throw new NotFoundException('Application not found in this job');
+      return (await this.listForJob(user,jobPostId,{locale,window:{...window,ids:[applicationId]}}))[0];
+    }
     const rows = await this.listForJob(user, jobPostId, { applicationId, page: 1, limit: 1, locale });
     if (!rows[0]) throw new NotFoundException('Application not found in this job');
     return rows[0];
@@ -960,10 +981,10 @@ export class ApplicationsService {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobPostId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId);
-    const where: Prisma.ApplicationWhereInput = { jobPostId, AND: [await applicantFilter(this.prisma, input)], ...(input.status ? { status: input.status as never } : {}), ...(input.kanbanOnly ? {kanbanEnteredAt:{not:null}} : {}) };
+    const where: Prisma.ApplicationWhereInput = { jobPostId, ...(!hrEnabled()?{AND:[await applicantFilter(this.prisma,input)]}:{}), ...(input.status ? { status: input.status as never } : {}), ...(input.kanbanOnly ? {kanbanEnteredAt:{not:null}} : {}) };
     const window = await this.applicationWindow(where,jobPostId,input);
     const items = await this.listForJob(user, jobPostId, { ...input, page:window.page, filters: input, locale,window });
-    return { items, total:window.total, page:window.page, limit: input.limit, totalPages:window.totalPages };
+    return { items, total:window.total, page:window.page, limit: input.limit, totalPages:window.totalPages,...(window.rankingVersion?{rankingVersion:window.rankingVersion,rankingRevision:window.rankingRevision,state:window.state,rankingAvailable:window.rankingAvailable}:{}) };
   }
 
   async kanbanForJob(user: AuthUser, jobPostId: string, input: ApplicantFilters & { status?: string; page: number; limit: number }, locale: Locale) {
@@ -1270,6 +1291,10 @@ export class ApplicationsService {
   }
 
   async rescore(user: AuthUser, applicationId: string) {
+    if(hrEnabled()){
+      const row=await this.prisma.application.findUniqueOrThrow({where:{id:applicationId},include:{jobPost:true}});await this.companies.assertMember(user,row.jobPost.companyId);
+      return this.getForJob(user,row.jobPostId,row.id,DEFAULT_LOCALE);
+    }
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
       include: { jobPost: {include:{jobSkills:{include:{skill:{include:{aliases:true}}}},jobLanguages:{include:{language:true}},city:{include:{province:true}}}},profile:{include:recruiterProfileInclude} },

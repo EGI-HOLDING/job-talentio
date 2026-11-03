@@ -15,3 +15,4 @@ export * from './catalog-label';
 export * from './match-insights';
 export * from './job-promotion';
 export * from './employee-intent';
+export * from './hr-ranking';
