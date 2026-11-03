@@ -5,7 +5,7 @@ import { employeeRecommendationV32Enabled } from './employee-recommendation-poli
 import { CandidateCache } from '../common/candidate-cache';
 import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { createHash } from 'node:crypto';
-import { EMPLOYEE_INTENT_VERSION, EMPLOYEE_INTENT_RANKING_VERSION, EMPLOYEE_RELATED_RANKING_VERSION, type EmployeeRecommendationState, type EmployeeEvidenceState } from '@job-talentio/shared';
+import { EMPLOYEE_INTENT_VERSION, EMPLOYEE_INTENT_RANKING_VERSION, EMPLOYEE_RELATED_RANKING_VERSION, type EmployeeRecommendationState, type EmployeeEvidenceState, type EmployeeEligibility } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { liveJobWhere } from '../benefits/benefit-policy';
 import { loadJobPromotions, publicJobPromotion } from '../benefits/job-promotion';
@@ -23,6 +23,10 @@ export const employeeIntentSelected = (profileId: string) => {
 export class EmployeeIntentService {
     constructor(private db: PrismaService, @Optional() private catalogSnapshot?: EmployeeCatalogSnapshot, @Optional() private cache?: CandidateCache) { }
     onModuleInit() {
+        if(employeeRecommendationV32Enabled()){
+            new Logger('EmployeeIntent').log('Employee V3.2 active: exact positions, data-derived related professions, partial CV evidence and labeled exploration.');
+            return;
+        }
         if (employeeIntentMode() === 'enabled' && process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION === 'true')
             new Logger('EmployeeIntent').warn('Ranking v3 activated by operator; independent human quality validation remains pending. Mandatory role-family and CV evidence checks remain enforced.');
     }
@@ -113,7 +117,7 @@ export class EmployeeIntentService {
         const now = new Date();
         const empty = (state: EmployeeRecommendationState,emptyReason: 'NO_ACTIVE_JOBS'|'ALL_APPLIED'|'UNRECOGNIZED_PREFERENCES'|'SERVICE_UNAVAILABLE'=state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS') => ({ items: [], page: 1, limit, total: 0, totalPages: 1, mode: 'UNAVAILABLE' as const, state, emptyReason, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: context.fingerprint, cvSource: context.cvSource });
         if (context.state !== 'READY')
-            return empty(context.state);
+            return context.v32 && context.state !== 'UNAVAILABLE' ? this.explore(profileId,page,limit,context) : empty(context.state);
         const compute=async()=>{
           const jobs = await this.db.jobPost.findMany({ where: { ...liveJobWhere(now), jobTitleId: { in: context.allowedIds }, applications: { none: { profileId } } }, select: employeeIntentJobSelect });
           if(context.v32)new Logger('EmployeeIntent').log(JSON.stringify({policy:'related-roles-v32',stage:'retrieval',allowedTitles:context.allowedIds.length,retrieved:jobs.length,evidenceState:context.evidenceState}));
@@ -128,7 +132,7 @@ export class EmployeeIntentService {
         if (!ranked.length){
             const active=context.v32?await this.db.jobPost.count({where:{...liveJobWhere(now),jobTitleId:{in:context.allowedIds}}}):0;
             if(context.v32)new Logger('EmployeeIntent').log(JSON.stringify({policy:'related-roles-v32',stage:'empty',activeInScope:active,returned:0,reason:active?'ALL_APPLIED':'NO_ACTIVE_JOBS'}));
-            return empty('NO_ELIGIBLE_JOBS',active?'ALL_APPLIED':'NO_ACTIVE_JOBS');
+            return context.v32 ? this.explore(profileId,page,limit,context) : empty('NO_ELIGIBLE_JOBS',active?'ALL_APPLIED':'NO_ACTIVE_JOBS');
         }
         // Interleave companies only inside exactly equivalent professional/practical relevance.
         for (let start = 0; !context.v32 && start < ranked.length;) {
@@ -151,11 +155,21 @@ export class EmployeeIntentService {
         const selected = ranked.slice((page - 1) * limit, page * limit);
         const [full, promotions] = await Promise.all([this.db.jobPost.findMany({ where: { id: { in: selected.map(r => r.job.id) }, ...liveJobWhere(now),applications:{none:{profileId}},jobTitleId:{in:context.allowedIds} }, select: { id: true, title: true, companyId: true, isAnonymous: true, locale: true, createdAt: true, publishedAt: true, employmentType: true, workMode: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { include: { province: true } }, country: true, category: true, company: { select: { id: true, name: true, slug: true, logoUrl: true } } } }), loadJobPromotions(this.db, selected.map(r => r.job.id), now)]);
         const byId = new Map(full.map(j => [j.id, j]));
-        const items = selected.flatMap(row => { const job = byId.get(row.job.id); return job ? [{ job: { ...job, ...publicJobPromotion(promotions, job.id), placement: 'ORGANIC' as const }, matchScore: context.preferencesOnly?null:row.evaluation.score, matchType:row.evaluation.eligibility.matchType,selectedRoleId:row.evaluation.eligibility.selectedRoleId,selectedRoleName:row.evaluation.eligibility.selectedRoleName,relationReference:row.evaluation.eligibility.relationReference, matchInsights: row.evaluation.insights, eligibility: row.evaluation.eligibility }] : []; });
+        const items = selected.flatMap(row => { const job = byId.get(row.job.id); return job ? [{ job: { ...job, ...publicJobPromotion(promotions, job.id), placement: 'ORGANIC' as const }, recommendationType:row.evaluation.eligibility.matchType||'EXACT' as const, matchScore: context.preferencesOnly?null:row.evaluation.score, matchType:row.evaluation.eligibility.matchType,selectedRoleId:row.evaluation.eligibility.selectedRoleId,selectedRoleName:row.evaluation.eligibility.selectedRoleName,relationReference:row.evaluation.eligibility.relationReference, matchInsights: row.evaluation.insights, eligibility: row.evaluation.eligibility }] : []; });
         if (!items.length)
-            return empty('NO_ELIGIBLE_JOBS');
+            return context.v32 ? this.explore(profileId,page,limit,context) : empty('NO_ELIGIBLE_JOBS');
         new Logger('EmployeeIntent').log(JSON.stringify({ version: EMPLOYEE_INTENT_VERSION, state: 'READY', eligible: total, returned: items.length, unknown: items.reduce((n, i) => n + i.matchInsights.evidence.filter(e => e.status === 'UNKNOWN').length, 0) }));
         return { items, page, limit, total, totalPages, mode: context.preferencesOnly?'PREFERENCES_BASED' as const:'PERSONALIZED' as const, state: 'READY' as const, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: digest([context.fingerprint, ranked.map(r => [r.job.id, r.evaluation])]), cvSource: context.cvSource };
+    }
+    private async explore(profileId:string,page:number,limit:number,context:Awaited<ReturnType<EmployeeIntentService['context']>>){
+        const where={...liveJobWhere(),applications:{none:{profileId}}};
+        const total=await this.db.jobPost.count({where}),totalPages=Math.max(1,Math.ceil(total/limit));page=Math.min(Math.max(1,page),totalPages);
+        const jobs=await this.db.jobPost.findMany({where,orderBy:[{publishedAt:'desc'},{id:'asc'}],skip:(page-1)*limit,take:limit,select:{id:true,title:true,companyId:true,isAnonymous:true,locale:true,createdAt:true,publishedAt:true,employmentType:true,workMode:true,salaryMin:true,salaryMax:true,currency:true,salaryPeriod:true,city:{include:{province:true}},country:true,category:true,company:{select:{id:true,name:true,slug:true,logoUrl:true}}}});
+        new Logger('EmployeeIntent').log(JSON.stringify({policy:'related-roles-v32',stage:'exploration',returned:jobs.length,total}));
+        const promotions=await loadJobPromotions(this.db,jobs.map(j=>j.id),new Date());
+        const items=jobs.map(job=>({job:{...job,...publicJobPromotion(promotions,job.id),placement:'ORGANIC' as const},recommendationType:'EXPLORATION' as const,matchType:undefined,selectedRoleId:undefined,selectedRoleName:undefined,relationReference:undefined,matchScore:null,matchInsights:{version:EMPLOYEE_INTENT_VERSION,mode:'EXPLORATION' as const,evidence:[],reviewExperienceIds:[]},eligibility:{eligible:false,reason:'POSITION_MISMATCH'} as EmployeeEligibility}));
+        const remainingReason=total===0&&await this.db.jobPost.count({where:liveJobWhere()})>0?'ALL_APPLIED' as const:'NO_ACTIVE_JOBS' as const;
+        return {items,page,limit,total,totalPages,mode:'EXPLORATION' as const,state:items.length?'READY' as const:'NO_ELIGIBLE_JOBS' as const,emptyReason:items.length?undefined:remainingReason,evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings,version:EMPLOYEE_INTENT_VERSION,rankingRevision:digest([context.fingerprint,'exploration',jobs.map(j=>j.id)]),cvSource:context.cvSource};
     }
     async explain(profileId: string, jobId: string) {
         const context = await this.context(profileId);

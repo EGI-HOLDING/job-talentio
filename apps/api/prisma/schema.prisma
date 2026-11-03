@@ -1335,6 +1335,58 @@ model JobFamily {
   jobTitles JobTitle[]
 }
 
+/// Immutable employee profession graph releases; unrelated to HR evidence snapshots.
+model OccupationRelationRelease {
+  id String @id
+  sourceVersion String
+  algorithmVersion String
+  sourceDigest String
+  catalogRevision String
+  report Json
+  createdAt DateTime @default(now())
+  profiles OccupationProfessionProfile[]
+  relations OccupationProfessionRelation[]
+}
+
+model OccupationRelationState {
+  id String @id @default("employee")
+  activeReleaseId String?
+  pinned Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model OccupationProfessionProfile {
+  releaseId String
+  jobTitleId String
+  sourceUri String?
+  mappingMethod String
+  description String
+  facts Json
+  release OccupationRelationRelease @relation(fields:[releaseId],references:[id],onDelete:Cascade)
+  @@id([releaseId, jobTitleId])
+}
+
+model OccupationProfessionRelation {
+  releaseId String
+  fromRoleId String
+  toRoleId String
+  score Float
+  basis Json
+  release OccupationRelationRelease @relation(fields:[releaseId],references:[id],onDelete:Cascade)
+  @@id([releaseId, fromRoleId, toRoleId])
+  @@index([releaseId, fromRoleId, score])
+}
+
+model OccupationRelationOverride {
+  fromRoleId String
+  toRoleId String
+  enabled Boolean
+  reason String
+  actorId String
+  updatedAt DateTime @updatedAt
+  @@id([fromRoleId,toRoleId])
+}
+
 model EmployeeDesiredRole {
   profileId String
   jobTitleId String

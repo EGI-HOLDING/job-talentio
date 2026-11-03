@@ -901,6 +901,7 @@ export const adminCatalogBrowseSchema = z.object({
 });
 
 export const occupationMatchingMetadataSchema = z.object({
+  professionSourceUri:z.string().url().regex(/^http:\/\/data\.europa\.eu\/esco\/occupation\/[a-f0-9-]+$/).optional(),
   sources:z.array(z.object({provider:z.string().trim().min(1).max(200),uri:z.string().url().max(1000).optional(),
     code:z.string().trim().max(80).optional(),version:z.string().trim().min(1).max(80)}).strict()).max(10),
   isco08:z.string().regex(/^\d{4}$/).optional(),

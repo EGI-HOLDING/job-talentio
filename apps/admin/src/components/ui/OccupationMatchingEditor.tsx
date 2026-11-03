@@ -4,6 +4,8 @@ import { CatalogParentSelect } from './CatalogParentSelect';
 
 export function OccupationMatchingEditor({value,onChange}:{value:OccupationMatchingMetadata;onChange:(value:OccupationMatchingMetadata)=>void}) {
   return <section style={{display:'grid',gap:12}}><h3>Occupation matching references</h3>
+    <p><a href="/occupation-relations">View computed profession relations and corrections</a></p>
+    <label>ESCO profession profile URI (optional)<input value={value.professionSourceUri||''} onChange={e=>onChange({...value,professionSourceUri:e.target.value||undefined})}/></label>
     <p className="muted">Relations run from this canonical occupation to the selected target only. Reverse and chained relations are not inferred. Approve both occupations first and record the review reference. Matching recommendations show exact positions before approved related occupations; sharing a family alone is insufficient.</p>
     <label>ISCO-08 unit group (4 digits)<input value={value.isco08 ?? ''} maxLength={4} pattern="[0-9]{4}" onChange={e=>onChange({...value,isco08:e.target.value || undefined})}/></label>
     {(['id','uz'] as const).map(locale=><label key={locale}>{locale.toUpperCase()} label review<select value={value.labelReview?.[locale] ?? 'UNREVIEWED'} onChange={e=>onChange({...value,labelReview:{...value.labelReview,[locale]:e.target.value}})}><option value="UNREVIEWED">Needs local review</option><option value="LOCAL_STANDARD">Checked against local classification</option><option value="NATIVE_REVIEWED">Reviewed by a native speaker</option></select></label>)}

@@ -1,6 +1,8 @@
 'use client';
 import { useI18n } from '@/lib/i18n';
 const en = {
+"explorationTitle":"Other jobs to explore",
+"explorationCopy":"These are other available jobs, not matches to your selected positions or CV.",
 "transferableExperience":"Experience in a related occupation; transferability needs review.",
 "preferencesBased":"Based on preferences; CV compatibility has not been assessed.",
 "relatedPosition":"Related occupation to: ",
@@ -66,6 +68,8 @@ const en = {
     "confirmAndSave": "Confirm and save"
 };
 const id: Record<keyof typeof en, string> = {
+"explorationTitle":"Lowongan lain untuk dijelajahi",
+"explorationCopy":"Berikut lowongan lain yang tersedia untuk eksplorasi. Lowongan ini belum dinilai cocok dengan posisi pilihan atau CV Anda.",
 "transferableExperience":"Pengalaman pada profesi terkait; penerapannya perlu ditinjau.",
 "preferencesBased":"Berdasarkan preferensi; kecocokan CV belum dinilai.",
 "relatedPosition":"Profesi terkait dengan: ",

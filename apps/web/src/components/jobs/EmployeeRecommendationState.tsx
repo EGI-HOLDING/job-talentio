@@ -16,6 +16,7 @@ export function EmployeeMatchReasons({ insights }: {
     insights?: MatchInsights | null;
 }) {
     const m = useEmployeeIntentText();
+    if(insights?.mode==='EXPLORATION')return null;
     if (insights?.version !== 'employee-intent-v3')
         return null;
     const relevant = insights.evidence.filter(e => (e.status === 'MET' && ['ROLE', 'SKILL', 'EXPERIENCE'].includes(e.kind)) || e.code==='TRANSFERABLE_EXPERIENCE');
@@ -23,3 +24,4 @@ export function EmployeeMatchReasons({ insights }: {
     const unmet = insights.evidence.some(e => e.required && e.status === 'UNMET');
     return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12, marginTop: 6 }}>{relevant.slice(0, 2).map((e, i) => <span className="badge" key={i}>{e.kind === 'ROLE' ? e.code==='RELATED_ROLE'?m('relatedPosition')+e.label:m("selectedPositionMatches") : e.kind === 'EXPERIENCE' ? e.code==='TRANSFERABLE_EXPERIENCE'?m('transferableExperience'):(m("relevantExperience")) : (m("skillMatch")) + e.label}</span>)}{insights.mode==='PREFERENCES_BASED'&&<span>{m('preferencesBased')}</span>}{unknown && <span>{m("someEvidenceIsIncomplete")}</span>}{unmet && <span>{m("someRequirementsAreNotYetMet")}</span>}</div>;
 }
+export function EmployeeExplorationNotice(){const m=useEmployeeIntentText();return <div role="status"><strong>{m('explorationTitle')}</strong><p>{m('explorationCopy')}</p></div>;}

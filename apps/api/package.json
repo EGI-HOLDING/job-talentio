@@ -48,7 +48,9 @@
     "matching:v3:validate": "tsx src/scripts/employee-intent-validate.ts",
     "test:employee-related": "tsx src/matching/employee-related.integration.ts",
     "test:employee-related:local": "node ../../scripts/employee-related.integration.cjs",
-    "matching:related:review": "tsx src/scripts/employee-related-review.ts"
+    "matching:related:review": "tsx src/scripts/employee-related-review.ts",
+    "test:profession-relations": "tsx src/matching/occupation-relations.smoke.ts && tsx src/matching/occupation-relations.source.smoke.ts",
+    "matching:professions": "tsx src/scripts/occupation-relations.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

@@ -1,0 +1,9 @@
+{
+  "source": "European Commission ESCO",
+  "sourceVersion": "v1.2.1",
+  "sourceUrl": "https://esco.ec.europa.eu/en/use-esco",
+  "occupations": 3039,
+  "skills": 13939,
+  "sha256": "39a9423dce0fa0ea17f7aaa614bb370244e62e57325f5fe223341ae1716ece5e",
+  "importedAt": "2026-11-03T15:12:21.719Z"
+}

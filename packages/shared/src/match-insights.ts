@@ -11,11 +11,12 @@ export type MatchEvidence = {
 };
 export type MatchInsights = {
   version: string;
-  mode: 'PERSONALIZED' | 'LATEST' | 'PREFERENCES_BASED';
+  mode: 'PERSONALIZED' | 'LATEST' | 'PREFERENCES_BASED' | 'EXPLORATION';
   evidence: MatchEvidence[];
   reviewExperienceIds: string[];
 };
 export type OccupationMatchingMetadata = {
+  professionSourceUri?: string;
   sources: Array<{ provider: string; uri?: string; code?: string; version: string }>;
   isco08?: string;
   labelReview?: { id?: string; uz?: string };

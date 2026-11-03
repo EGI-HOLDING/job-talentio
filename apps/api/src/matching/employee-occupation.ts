@@ -36,7 +36,7 @@ export function employeeRecommendationRevision(roles: IntentRole[]) {
   [...roles].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>[r.id, reviewedRelatedRoles(r).sort((a,b)=>a.id.localeCompare(b.id))])])).digest('hex');
 }
 export function reviewedRelatedRoles(role: IntentRole) {
- const metadata=role.matchingMetadata as {relatedRoles?:Array<{id:string;kind:string;reference:string;approved:boolean}>}|null;
+ const metadata=role.matchingMetadata as {relatedRoles?:Array<{id:string;kind:string;reference:string;approved:boolean;score?:number}>}|null;
  return (Array.isArray(metadata?.relatedRoles)?metadata.relatedRoles:[]).filter(r=>r && r.kind==='RELATED' && r.approved===true && typeof r.id==='string' && typeof r.reference==='string' && r.reference.trim().length>=3);
 }
 export const currentRoleSelect = {
@@ -109,11 +109,13 @@ export class EmployeeOccupationIndex {
         const choices = [...new Set(selectedIds)].sort().map(id => this.identity(id)).filter((id): id is NonNullable<typeof id> => Boolean(id));
         const exact = choices.find(choice=>choice.canonicalRoleId===job.canonicalRoleId && choice.familyId===job.familyId);
         if(exact)return {eligible:true,reason:'MATCH',...job,matchType:'EXACT',selectedRoleId:exact.canonicalRoleId,selectedRoleName:this.roles.get(exact.canonicalRoleId)!.name};
+        const relatedMatches:EmployeeEligibility[]=[];
         if(this.allowRelated)for(const choice of choices){
           const source=this.roles.get(choice.canonicalRoleId)!;
           const relation=reviewedRelatedRoles(source).find(r=>r.id===job.canonicalRoleId && r.id!==source.id && this.identity(r.id)?.canonicalRoleId===r.id);
-          if(relation)return {eligible:true,reason:'MATCH',...job,matchType:'RELATED',selectedRoleId:source.id,selectedRoleName:source.name,relationReference:relation.reference};
+          if(relation)relatedMatches.push({eligible:true,reason:'MATCH',...job,matchType:'RELATED',selectedRoleId:source.id,selectedRoleName:source.name,relationReference:relation.reference,relationScore:relation.score});
         }
+        if(relatedMatches.length)return relatedMatches.sort((a,b)=>(b.relationScore||0)-(a.relationScore||0)||a.selectedRoleId!.localeCompare(b.selectedRoleId!))[0];
         if (!choices.some(choice => choice.canonicalRoleId === job.canonicalRoleId))
             return { eligible: false, reason: 'POSITION_MISMATCH', ...job };
         if (!choices.some(choice => choice.canonicalRoleId === job.canonicalRoleId && choice.familyId === job.familyId))

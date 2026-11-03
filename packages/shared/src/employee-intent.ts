@@ -3,6 +3,7 @@ export const EMPLOYEE_INTENT_VERSION = 'employee-intent-v3';
 export const EMPLOYEE_INTENT_RANKING_VERSION = 'employee-ranking-v3.1';
 export const EMPLOYEE_RELATED_RANKING_VERSION = 'employee-ranking-v3.2';
 export type EmployeeEvidenceState = 'READY' | 'REQUIRED' | 'PROCESSING' | 'FAILED' | 'REVIEW_REQUIRED';
+export type EmployeeRecommendationType = 'EXACT' | 'RELATED' | 'EXPLORATION';
 export type EmployeeEmptyReason = 'UNRECOGNIZED_PREFERENCES' | 'NO_ACTIVE_JOBS' | 'ALL_APPLIED' | 'SERVICE_UNAVAILABLE';
 export const employeeRecommendationStates = ['READY', 'CV_REQUIRED', 'CV_PROCESSING', 'CV_FAILED', 'EVIDENCE_REVIEW_REQUIRED', 'PREFERENCES_REQUIRED', 'PREFERENCES_REVIEW_REQUIRED', 'NO_ELIGIBLE_JOBS', 'UNAVAILABLE'] as const;
 export type EmployeeRecommendationState = typeof employeeRecommendationStates[number];
@@ -29,4 +30,5 @@ export type EmployeeEligibility = {
     selectedRoleId?: string;
     selectedRoleName?: string;
     relationReference?: string;
+    relationScore?: number;
 };

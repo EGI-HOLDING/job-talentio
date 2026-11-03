@@ -9,11 +9,13 @@ import { EmployeeMatchingService } from './employee-matching.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { EmployeeMatchingStatusController } from './employee-status.controller';
+import {OccupationRelationsService} from './occupation-relations.service';
+import {OccupationRelationsController} from './occupation-relations.controller';
 
 @Module({
   imports: [PrismaModule,StorageModule],
-  controllers:[EmployeeEvidenceController,EmployeeMatchingStatusController],
-  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker],
+  controllers:[EmployeeEvidenceController,EmployeeMatchingStatusController,OccupationRelationsController],
+  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker,OccupationRelationsService],
   exports: [MatchingService, EmployeeMatchingService,EmployeeCatalogSnapshot],
 })
 export class MatchingModule implements OnModuleInit,OnModuleDestroy {

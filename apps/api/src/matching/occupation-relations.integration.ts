@@ -1,0 +1,54 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import {PrismaService} from '../prisma/prisma.service';
+import {OccupationRelationsService} from './occupation-relations.service';
+import {EmployeeCatalogSnapshot} from './employee-catalog-snapshot';
+import {EmployeeIntentService} from './employee-intent.service';
+async function main(){
+ const url=new URL(process.env.DATABASE_URL||'');if(!['localhost','127.0.0.1'].includes(url.hostname)||url.port!=='5434'||!/^\/(talentio_mapping_local_20261103|talentio_profession_it_\d+)$/.test(url.pathname))throw Error('Verified local database copy required');
+ const db=new PrismaService(),prefix='profession-it-',memo=new Map<string,unknown>();let epoch=0,passed=0;const check=(v:unknown,m:string)=>{assert.ok(v,m);passed++;};
+ const cache={version:async()=>String(epoch),memo:async(k:string,_ttl:number,f:()=>Promise<unknown>)=>{if(!memo.has(k))memo.set(k,await f());return memo.get(k);},invalidate:async()=>{epoch++;memo.clear();}} as any;
+ const relations=new OccupationRelationsService(db,cache),catalog=new EmployeeCatalogSnapshot(db,cache,relations),matching=new EmployeeIntentService(db,catalog);
+ process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE='enabled';
+ const state=await db.occupationRelationState.findUniqueOrThrow({where:{id:'employee'}});const active=state.activeReleaseId!;
+ try{
+  check((await relations.build(false)).unchanged,'same inputs do not publish duplicate relation releases');
+  check(await db.occupationProfessionRelation.count({where:{releaseId:active}})>0,'real versioned ESCO relations are stored');
+  await db.jobFamily.createMany({data:[{id:prefix+'family-a',code:prefix+'a',name:'Fixture source family',source:'fixture',sourceVersion:'1'},{id:prefix+'family-b',code:prefix+'b',name:'Fixture related family',source:'fixture',sourceVersion:'1'}]});
+  for(const id of ['a','b','c'])await db.jobTitle.create({data:{id:prefix+id,name:'Profession integration '+id,slug:prefix+id,normalizedKey:prefix+id,familyId:prefix+'family-'+(id==='b'?'b':'a'),matchingApproved:true,matchingMetadata:id==='a'?{sources:[],relatedRoles:[{id:prefix+'b',kind:'RELATED',approved:true,reference:'fixture:direct-cross-family'}]}:{sources:[],relatedRoles:[]}}});
+  const company=await db.company.create({data:{id:prefix+'company',name:'Anonymous profession fixture',slug:prefix+'company'}});
+  for(const id of ['a','b','c'])await db.jobPost.create({data:{id:prefix+'job-'+id,title:'Profession fixture '+id,description:'Synthetic integration fixture',companyId:company.id,jobTitleId:prefix+id,status:'PUBLISHED',publishedAt:new Date('2026-11-01')}});
+  await db.user.create({data:{id:prefix+'candidate',email:prefix+'candidate@example.test',fullName:'Synthetic Candidate',role:'EMPLOYEE',employeeProfile:{create:{id:prefix+'profile',matchingPreferencesReviewed:true,desiredPositions:['Profession integration a'],desiredRoles:{create:{jobTitleId:prefix+'a'}}}}}});
+  await db.user.create({data:{id:prefix+'admin',email:prefix+'admin@example.test',fullName:'Synthetic Admin',role:'SUPER_ADMIN'}});
+  let result=await matching.recommend(prefix+'profile');
+  check(result.state==='READY'&&result.total===2&&result.items[0].recommendationType==='EXACT'&&result.items[1].recommendationType==='RELATED','exact matches precede direct cross-family relations in real SQL service');
+  check(result.items.every(r=>r.matchScore===null),'missing CV never fabricates a score');
+  await relations.correct(prefix+'a',prefix+'b',false,'Unrelated tasks in fixture',prefix+'admin');
+  result=await matching.recommend(prefix+'profile');check(result.total===1&&result.items[0].job.id===prefix+'job-a','admin correction invalidates cached graph and applies consistently');
+  check((await matching.explain(prefix+'profile',prefix+'job-b')).matchScore===null,'detail does not claim compatibility for a revoked relation');
+  await db.jobPost.update({where:{id:prefix+'job-a'},data:{status:'CLOSED'}});
+  await db.application.create({data:{profileId:prefix+'profile',jobPostId:prefix+'job-c'}});
+  result=await matching.recommend(prefix+'profile',1,3);
+  check(result.state==='READY'&&result.mode==='EXPLORATION'&&result.items.length===3,'no relevant positions fall back to labeled exploration');
+  check(result.items.every(r=>r.recommendationType==='EXPLORATION'&&r.matchScore===null&&r.matchInsights.mode==='EXPLORATION'&&!r.matchInsights.evidence.length&&!r.eligibility.eligible),'exploration never claims a position or CV match');
+  check(result.items.every(r=>![prefix+'job-a',prefix+'job-c'].includes(r.job.id)),'exploration excludes closed and already applied jobs');
+  const second=await matching.recommend(prefix+'profile',2,3);check(second.items.every(r=>!result.items.some(a=>a.job.id===r.job.id)),'exploration pagination is stable and distinct');
+  await db.occupationRelationRelease.create({data:{id:prefix+'rollback',sourceVersion:'fixture',algorithmVersion:'fixture',sourceDigest:'fixture',catalogRevision:'fixture',report:{fixture:true}}});
+  await relations.activate(prefix+'rollback',prefix+'admin');check((await relations.build(false)).pinned,'restored relation version stays pinned until an explicit deployment resumes enrichment');
+  await relations.activate('none',prefix+'admin');
+  const disabled=await relations.snapshot();check(!disabled.relations.length&&disabled.overrides.some(o=>o.fromRoleId===prefix+'a'&&!o.enabled),'initial-release rollback can clear the graph while retaining admin corrections');
+  await relations.activate(active,prefix+'admin');
+  check((await db.occupationRelationState.findUniqueOrThrow({where:{id:'employee'}})).activeReleaseId===active,'rollback preserves candidate and application data');
+  console.log(JSON.stringify({suite:'profession-relations-real-db',passed,activeReleaseId:active}));
+ }finally{
+  await db.occupationRelationOverride.deleteMany({where:{fromRoleId:{startsWith:prefix}}});
+  await db.auditLog.deleteMany({where:{actorId:prefix+'admin'}});
+  await db.user.deleteMany({where:{id:{in:[prefix+'candidate',prefix+'admin']}}});
+  await db.company.deleteMany({where:{id:prefix+'company'}});
+  await db.jobTitle.deleteMany({where:{id:{in:['a','b','c'].map(id=>prefix+id)}}});
+  await db.jobFamily.deleteMany({where:{id:{startsWith:prefix}}});
+  await db.occupationRelationState.update({where:{id:'employee'},data:{activeReleaseId:active,pinned:false}});
+  await db.occupationRelationRelease.deleteMany({where:{id:prefix+'rollback'}});
+  await db.$disconnect();
+ }
+}void main().catch(e=>{console.error(e);process.exitCode=1});
