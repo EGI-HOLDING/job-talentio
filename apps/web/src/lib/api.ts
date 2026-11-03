@@ -200,12 +200,15 @@ async function apiNetwork<T>(
   }
   if (!headers.has('X-Locale')) headers.set('X-Locale', activeLocale());
   const useAuth = auth;
+  // Authenticated resources use the account-scoped memory cache above. Do not
+  // keep a second browser HTTP cache across token rotation or account changes.
+  const networkOptions = { ...requestOptions, ...(useAuth ? { cache: 'no-store' as const } : {}) };
   const actor = getSession()?.user.id;
   if (useAuth) {
     const token = getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  let res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
+  let res = await fetch(`${API_URL}/api${path}`, { ...networkOptions, headers });
   if (useAuth && actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
 
   // Expired access token: silently rotate once via the refresh token, then retry.
@@ -214,8 +217,17 @@ async function apiNetwork<T>(
     if (actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
     if (rotated) {
       headers.set('Authorization', `Bearer ${rotated}`);
-      res = await fetch(`${API_URL}/api${path}`, { ...requestOptions, headers });
+      res = await fetch(`${API_URL}/api${path}`, { ...networkOptions, headers });
     }
+  }
+
+  // A conditional response has no JSON body. Recover once from an exposed 304
+  // instead of turning a successful token refresh into an empty/error screen.
+  if (res.status === 304 && ['GET', 'HEAD'].includes((requestOptions.method || 'GET').toUpperCase())) {
+    headers.delete('If-None-Match');
+    headers.delete('If-Modified-Since');
+    headers.set('Cache-Control', 'no-cache');
+    res = await fetch(`${API_URL}/api${path}`, { ...networkOptions, cache: 'no-store', headers });
   }
 
   const text = await res.text();

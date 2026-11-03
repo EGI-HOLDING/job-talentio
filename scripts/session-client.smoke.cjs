@@ -52,6 +52,31 @@ function response(status, body) {
 }
 
 if (client==='web') {
+  test('web: profile and recommendations recover from 304 after one shared token refresh',async()=>{
+    const requests=[];let refreshes=0;const reads=new Map();
+    const {api}=loadClient(async(url,options)=>{
+      requests.push({url,authorization:options.headers?.get?.('Authorization'),cache:options.cache});
+      if(url.endsWith('/auth/refresh')){refreshes++;return response(201,{accessToken:'new-access',refreshToken:'new-refresh',user:{role:'RECRUITER'}});}
+      assert.equal(options.cache,'no-store');
+      if(options.headers.get('Authorization')!=='Bearer new-access')return response(401,{message:'Expired'});
+      const count=(reads.get(url)||0)+1;reads.set(url,count);
+      if(count===1)return new Response(null,{status:304});
+      assert.equal(options.headers.get('Cache-Control'),'no-cache');
+      assert.equal(options.headers.has('If-None-Match'),false);
+      return response(200,url.includes('/profiles/me')?{id:'profile',desiredPositions:['Backend Developer']}:{items:[{job:{id:'job'}}],state:'READY'});
+    });
+    const [profile,jobs]=await Promise.all([api('/profiles/me'),api('/jobs/recommended?page=1&limit=24')]);
+    assert.equal(profile.id,'profile');assert.equal(jobs.state,'READY');assert.equal(jobs.items.length,1);assert.equal(refreshes,1);
+    assert.equal(requests.filter(r=>r.url.includes('/profiles/me')).length,3);
+  });
+  test('web: repeated 304 stops after one recovery instead of polling forever',async()=>{
+    let calls=0;const {api}=loadClient(async()=>{calls++;return new Response(null,{status:304});});
+    await assert.rejects(api('/profiles/me'),e=>e.status===304);assert.equal(calls,2);
+  });
+  test('web: 304 never retries a mutation',async()=>{
+    let calls=0;const {api}=loadClient(async()=>{calls++;return new Response(null,{status:304});});
+    await assert.rejects(api('/profiles/me',{method:'PATCH',body:'{}'}),e=>e.status===304);assert.equal(calls,1);
+  });
   test('web: an old account request cannot refresh or retry a mutation under a different login',async()=>{
     let finish;const waiting=new Promise(resolve=>{finish=resolve;});let calls=0;
     const {api,values}=loadClient(async()=>{calls++;await waiting;return response(401,{message:'Expired'});});
