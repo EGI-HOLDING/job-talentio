@@ -91,7 +91,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -136,7 +136,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
         {editor.kind === 'basics' && <>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
           <RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />
-          {process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
+          {process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
 
           <SalaryFields countries={countries} value={salary} onChange={setSalary} />

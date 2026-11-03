@@ -148,7 +148,7 @@ export function EmployeeOnboarding() {
         setStep(state.step);
         setForm({
           desiredPositions: p.desiredRoles?.length?p.desiredRoles.map(r=>r.jobTitle.name):p.desiredPositions || [],
-          ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
+          ...(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
           preferredCountryIds: p.preferredCountries.map((c) => c.id),
           fullName: p.user.fullName,
           residenceCountryId: p.residenceCountryId,
@@ -229,7 +229,7 @@ export function EmployeeOnboarding() {
     if (!form || busy) return;
     let normalizedPhone = form.phone;
     if (targetStep > step) {
-      if (step === 1 && !(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true'?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
+      if (step === 1 && !(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true'?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
         setError(t("requiredRoles"));
         return;
       }

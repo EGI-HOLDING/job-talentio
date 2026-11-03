@@ -25,7 +25,7 @@ export class EmployeeMatchingService {
   private cache = new Map<string, EmployeeEvaluation>();
   constructor(private prisma: PrismaService,private legacy:MatchingService = new MatchingService(prisma),@Optional() private intent?:EmployeeIntentService) {}
   usesIntent(profileId:string){return employeeIntentMode()==='unavailable'||employeeIntentMode()==='enabled'&&employeeIntentSelected(profileId);}
-  async intentSearchScope(profileId:string){if(!this.usesIntent(profileId))return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.context(profileId);}
+  async intentSearchScope(profileId:string){if(!this.usesIntent(profileId)&&employeeIntentMode()!=='shadow')return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.context(profileId);}
   async intentExplanation(profileId:string,jobId:string){if(!this.usesIntent(profileId))return null;if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.explain(profileId,jobId);}
   compare(a:unknown,b:unknown){return a&&b&&'tier' in (a as object)&&'tier' in (b as object)?compareIntent(a as IntentEvaluation,b as IntentEvaluation):((b as EmployeeEvaluation)?.score??0)-((a as EmployeeEvaluation)?.score??0);}
 
@@ -62,7 +62,10 @@ export class EmployeeMatchingService {
   async scoreJobsForProfile(profileId: string, ids: string[]) {
     if(this.usesIntent(profileId)){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.scoreJobsForProfile(profileId,ids);}
     if (!ids.length) return new Map<string, EmployeeEvaluation>();
-    const [context,jobs] = await Promise.all([this.context(profileId),this.prisma.jobPost.findMany({where:{id:{in:ids}},select:employeeJobFeatures})]);
+    const shadowScope=employeeIntentMode()==='shadow'&&this.intent?await this.intent.context(profileId):null;
+    if(shadowScope&&(shadowScope.state!=='READY'||!shadowScope.allowedIds.length))return new Map<string,EmployeeEvaluation>();
+    const allowedIds=shadowScope?new Set(shadowScope.allowedIds):null;
+    const [context,jobs] = await Promise.all([this.context(profileId),this.prisma.jobPost.findMany({where:{id:{in:ids},...(allowedIds?{jobTitleId:{in:[...allowedIds]}}:{})},select:employeeJobFeatures})]);
     if(context.profile.cvSource.status!=='READY')return new Map<string,EmployeeEvaluation>();
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,ids);
     return new Map(jobs.map(job => { const evaluation=this.evaluate(context,job);return [job.id,old ? {...evaluation,score:old.get(job.id)?.total ?? 0,positiveCore:true} : evaluation]; }));
@@ -75,11 +78,13 @@ export class EmployeeMatchingService {
   async recommend(profileId: string, page = 1, limit = 24) {
     if(this.usesIntent(profileId)){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.recommend(profileId,page,limit);}
     if(employeeIntentMode()==='shadow'&&this.intent)void this.intent.recommend(profileId,page,limit).then(result=>new Logger('EmployeeIntentShadow').log(JSON.stringify({state:result.state,eligible:result.total}))).catch(error=>new Logger('EmployeeIntentShadow').warn(error.message));
+    const shadowScope=employeeIntentMode()==='shadow'&&this.intent?await this.intent.context(profileId):null;
+    if(shadowScope&&(shadowScope.state!=='READY'||!shadowScope.allowedIds.length))return {items:[],page:1,limit,total:0,totalPages:1,mode:'UNAVAILABLE' as const,version:EMPLOYEE_MATCH_VERSION,rankingRevision:shadowScope.fingerprint,cvSource:shadowScope.cvSource,state:shadowScope.state==='READY'?'NO_ELIGIBLE_JOBS':shadowScope.state};
     const now = new Date();
     const context = await this.context(profileId);
     // Retrieve lightweight evidence only. Full posting content is fetched for one page.
     const features = await this.prisma.jobPost.findMany({where:{...liveJobWhere(now),
-      applications:{none:{profileId}}},select:employeeJobFeatures});
+      applications:{none:{profileId}},...(shadowScope?{jobTitleId:{in:shadowScope.allowedIds}}:{})},select:employeeJobFeatures});
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,features.map(job=>job.id));
     const scored = features.map(job => {const evaluation=this.evaluate(context,job);return {job,evaluation:old ? {...evaluation,score:old.get(job.id)?.total ?? 0,positiveCore:true} : evaluation};});
     const ready=context.profile.cvSource.status==='READY';
@@ -114,6 +119,6 @@ export class EmployeeMatchingService {
     return { items:rows.flatMap(row => {
       const job = byId.get(row.job.id);
       return job ? [{job:{...job,...publicJobPromotion(promotions,job.id),placement:row.placement},matchScore:ready?row.evaluation.score:null,matchInsights:ready?row.evaluation.insights:null}] : [];
-    }), page,limit,total,totalPages,mode:personal.length ? 'PERSONALIZED' as const : 'LATEST' as const,version:EMPLOYEE_MATCH_VERSION,rankingRevision,cvSource:context.profile.cvSource };
+    }), ...(shadowScope?{state:total?'READY':'NO_ELIGIBLE_JOBS',version:'employee-intent-v3'}:{}),page,limit,total,totalPages,mode:personal.length ? 'PERSONALIZED' as const : 'LATEST' as const,version:shadowScope?'employee-intent-v3':EMPLOYEE_MATCH_VERSION,rankingRevision,cvSource:context.profile.cvSource };
   }
 }

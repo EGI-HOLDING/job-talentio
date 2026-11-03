@@ -44,7 +44,7 @@ function countryPanelPosition(rect: DOMRect): FloatingPanelPosition {
 export function RoleInput({ value, onChange,selectedIds }: { value: string[]; selectedIds?:string[]; onChange: (value: string[],ids?:string[]) => void }) {
   const t = useOnboardingText(), id = useId();
   const [text, setText] = useState("");
-  if(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3==='true')return <EmployeePositionPicker value={value} selectedIds={selectedIds} onChange={onChange}/>;
+  if(process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES==='true')return <EmployeePositionPicker value={value} selectedIds={selectedIds} onChange={onChange}/>;
   function add(input = text) {
     const role = input.trim().replace(/\s+/g, " ");
     if (!role || value.length >= 10) return;

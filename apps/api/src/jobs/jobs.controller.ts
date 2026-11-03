@@ -67,9 +67,9 @@ export class JobsController {
           resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},select:{currentVersion:{select:{parseStatus:true}}}},
         },
       });
-      if(!profile&&data.sort==='match'&&['enabled','unavailable'].includes(employeeIntentMode()))return {items:[],total:0,matchedTotal:0,truncated:false,page:1,limit:data.limit??12,totalPages:1,sort:'match',state:'PREFERENCES_REQUIRED',facets:{cities:[],categories:[],jobTitles:[],companies:[],industries:[],skills:[],languages:[],experienceLevels:{}}};
+      if(!profile&&data.sort==='match'&&['enabled','unavailable','shadow'].includes(employeeIntentMode()))return {items:[],total:0,matchedTotal:0,truncated:false,page:1,limit:data.limit??12,totalPages:1,sort:'match',state:'PREFERENCES_REQUIRED',facets:{cities:[],categories:[],jobTitles:[],companies:[],industries:[],skills:[],languages:[],experienceLevels:{}}};
       // CV readiness gates scores; preferences alone must not claim a CV match.
-      if (profile && (profile.resumes.some(r=>r.currentVersion?.parseStatus==='READY') || employeeIntentMode()==='unavailable' || employeeIntentMode()==='enabled'&&employeeIntentSelected(profile.id))) {
+      if (profile && (profile.resumes.some(r=>r.currentVersion?.parseStatus==='READY') || employeeIntentMode()==='unavailable' || employeeIntentMode()==='shadow' || employeeIntentMode()==='enabled'&&employeeIntentSelected(profile.id))) {
         profileId = profile.id;
       }
     }
