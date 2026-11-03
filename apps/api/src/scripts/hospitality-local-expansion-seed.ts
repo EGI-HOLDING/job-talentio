@@ -106,7 +106,7 @@ const FAMILIES: Record<(typeof TARGET_SLUGS)[number], Family[]> = {
     family('digital-orders', ['Pelayan Pesanan Digital', 'Koordinator Pesanan Online', 'Supervisor Kanal Pemesanan'], 'memastikan pesanan dari kanal digital masuk ke dapur, dibayar, dan diserahkan dengan rincian yang benar.', ['memeriksa pesanan masuk, waktu penyiapan, alamat, dan catatan pelanggan', 'mengoordinasikan ketersediaan menu dengan dapur sebelum menerima perubahan atau substitusi', 'menangani pertanyaan dan meneruskan keluhan platform kepada penanggung jawab outlet'], ['mampu menggunakan perangkat digital dan mencatat pesanan dengan teliti', 'berkomunikasi jelas dengan dapur, kurir, dan pelanggan', 'mampu bekerja pada periode ramai tanpa mengabaikan pemeriksaan ulang'], ['pernah menangani platform pemesanan makanan atau layanan pelanggan', 'mengenal dasar rekonsiliasi pesanan dan pembayaran'], ['customer-support', 'communication', 'problem-solving', 'excel'], ['Bagaimana Anda menangani pesanan digital yang itemnya tidak tersedia setelah pembayaran?', 'Apa yang perlu diperiksa sebelum pesanan diserahkan kepada kurir?'], 6_300_000, 'Jadwal mengikuti periode puncak pemesanan, termasuk malam dan akhir pekan.'),
     family('restaurant-maintenance', ['Teknisi Fasilitas Restoran', 'Teknisi Pemeliharaan Outlet', 'Koordinator Fasilitas Restoran'], 'menjaga peralatan dan fasilitas outlet berfungsi aman agar kegiatan dapur dan layanan tidak terganggu.', ['melakukan pemeriksaan berkala pada lampu, saluran air, ventilasi, dan peralatan ringan', 'mencatat laporan kerusakan, tingkat urgensi, komponen, dan tindakan perbaikan', 'mengatur pekerjaan vendor dan memastikan area diserahkan kembali dalam keadaan aman'], ['memiliki pengalaman pemeliharaan fasilitas atau peralatan komersial', 'memahami penguncian area kerja serta prosedur keselamatan dasar', 'mampu menjelaskan dampak kerusakan dan kebutuhan penghentian alat kepada kepala outlet'], ['memiliki keterampilan listrik, pendingin, atau mekanik sesuai bidangnya', 'pernah membuat jadwal preventive maintenance'], ['problem-solving', 'hospitality-management', 'electrical-engineering', 'communication'], ['Bagaimana Anda menentukan prioritas ketika beberapa peralatan outlet dilaporkan rusak?', 'Apa yang Anda periksa sebelum menyatakan area aman dipakai kembali?'], 7_000_000, 'Jadwal pemeliharaan disesuaikan dengan jam sepi dan kadang dilakukan sebelum outlet buka.'),
     family('service-training', ['Asisten Orientasi Kru Layanan', 'Spesialis Standar Layanan', 'Koordinator Pelatihan Outlet'], 'membantu kru baru memahami menu, alur layanan, kebersihan, dan cara merespons kebutuhan tamu dengan konsisten.', ['menyiapkan materi singkat tentang menu, SOP, keselamatan kerja, dan penggunaan POS', 'mengamati praktik kerja lalu memberi umpan balik berdasarkan perilaku yang dapat dilihat', 'mencatat penyelesaian orientasi dan kebutuhan latihan lanjutan setiap anggota tim'], ['memiliki pengalaman layanan restoran atau pelatihan operasional', 'mampu menjelaskan prosedur dengan sabar dan memberi contoh praktik', 'menjaga catatan pelatihan serta bekerja sama dengan supervisor tiap giliran'], ['pernah menjadi buddy atau trainer untuk kru baru', 'memiliki pengalaman menyusun checklist kompetensi kerja'], ['hospitality-management', 'leadership', 'communication', 'teamwork'], ['Bagaimana Anda memastikan kru baru memahami alasan di balik SOP, bukan hanya menghafalnya?', 'Apa cara Anda memberi koreksi ketika standar layanan terlewat saat outlet ramai?'], 6_800_000, 'Jadwal mengikuti kebutuhan orientasi dan observasi langsung di outlet.'),
-    family('restaurant-operations', ['Asisten Manajer Restoran', 'Manajer Giliran Operasi Restoran', 'Manajer Restoran'], 'menjaga kinerja harian outlet melalui koordinasi tim, pengendalian mutu menu, biaya, kebersihan, dan pengalaman tamu.', ['meninjau penjualan, jadwal kru, ketersediaan bahan, serta keluhan pelanggan per giliran', 'memimpin briefing dan memastikan dapur serta ruang makan memiliki prioritas kerja yang selaras', 'menyusun tindak lanjut untuk selisih biaya, waktu tunggu, atau temuan kebersihan'], ['memiliki pengalaman operasional restoran dan memahami kerja lintas dapur serta layanan', 'mampu membaca laporan sederhana tentang penjualan, stok, biaya, dan umpan balik', 'mampu menangani keluhan dengan tenang serta membuat keputusan dalam batas kewenangan'], ['pernah memimpin satu outlet atau giliran kerja dengan volume tamu tinggi', 'memiliki pengalaman perbaikan proses layanan dan pengendalian food waste'], ['hospitality-management', 'leadership', 'food-safety', 'excel'], ['Indikator apa yang Anda lihat lebih dulu ketika waktu tunggu meningkat?', 'Ceritakan tindakan yang Anda ambil untuk memperbaiki biaya tanpa menurunkan mutu makanan.'], 8_000_000, 'Jadwal mencakup giliran operasional outlet dan kehadiran pada akhir pekan secara bergiliran.'),
+    family('restaurant-operations', ['Asisten Analis Kinerja Outlet', 'Analis Kinerja dan Mutu Outlet', 'Koordinator Peningkatan Kinerja Restoran'], 'mengubah data layanan, penjualan, limbah, dan umpan balik tamu menjadi perbaikan operasional yang dapat diukur.', ['menggabungkan waktu penyajian, penjualan POS, pembatalan, catatan sisa bahan, dan umpan balik tamu', 'membandingkan hasil antar giliran untuk menemukan pola yang dapat ditindaklanjuti tanpa menyalahkan anggota tim', 'mengoordinasikan uji perbaikan bersama dapur dan layanan lalu mencatat dampaknya pada tinjauan mingguan'], ['memiliki pengalaman analisis operasional, administrasi restoran, atau pelaporan layanan', 'mampu menggunakan spreadsheet dan menjaga definisi metrik tetap konsisten', 'mampu menerjemahkan temuan data menjadi langkah praktis yang dapat diuji di outlet'], ['pernah menggunakan laporan POS atau dashboard operasional', 'memiliki pengalaman perbaikan proses layanan atau pengendalian food waste'], ['hospitality-management', 'data-analysis', 'excel', 'problem-solving', 'communication'], ['Bagaimana Anda memastikan kenaikan waktu penyajian bukan hanya akibat perubahan jumlah pesanan?', 'Ceritakan cara Anda menguji apakah suatu perubahan operasional benar-benar memperbaiki hasil.'], 8_000_000, 'Jadwal utama mengikuti tinjauan operasional; observasi lapangan dilakukan pada beberapa giliran.'),
   ],
   'wisata-pesisir-indonesia': [
     family('guest-arrivals', ['Petugas Penerimaan Tamu Wisata', 'Spesialis Layanan Tamu', 'Supervisor Layanan Tamu'], 'memberikan informasi yang akurat dan sambutan yang tertata sejak tamu menghubungi kantor hingga tiba di titik layanan.', ['memeriksa identitas reservasi, jadwal, jumlah peserta, dan catatan kebutuhan tamu', 'menjelaskan titik kumpul, durasi kegiatan, perlengkapan, serta aturan keselamatan dengan bahasa yang mudah dipahami', 'meneruskan kebutuhan aksesibilitas atau kondisi khusus kepada operasi dengan persetujuan tamu'], ['memiliki pengalaman layanan pelanggan, hotel, atau perjalanan wisata', 'mampu menulis pesan dan berkomunikasi lisan secara jelas dalam bahasa Indonesia', 'menjaga kerahasiaan data kontak dan rincian perjalanan tamu'], ['mampu melayani percakapan dasar dalam bahasa Inggris', 'pernah menangani tamu internasional atau kebutuhan aksesibilitas'], ['hospitality-management', 'customer-support', 'communication', 'english'], ['Bagaimana Anda menjelaskan perubahan jadwal kepada tamu yang sudah berada di titik kumpul?', 'Bagaimana Anda mencatat kebutuhan khusus tanpa membagikan informasi pribadi secara berlebihan?'], 6_500_000, 'Jadwal bergiliran mengikuti jam keberangkatan tur dan dapat dimulai pagi hari.'),
@@ -495,6 +495,61 @@ async function applyPlan(db: PrismaClient, plan: Awaited<ReturnType<typeof resol
   return { companiesCreated, jobsCreated };
 }
 
+async function refreshLocalRestaurantOperationsFamily(db: PrismaClient, plan: Awaited<ReturnType<typeof resolvePlan>>) {
+  const expectedJobs = plan.jobs.filter((job) => job.company.company.slug === 'jelajah-rasa-indonesia' && job.family.slug === 'restaurant-operations');
+  const previousTitles = ['Asisten Manajer Restoran', 'Manajer Giliran Operasi Restoran', 'Manajer Restoran'];
+  if (expectedJobs.length !== 3) throw new Error('Expected exactly three Jelajah Rasa operations-family rows for the local title refresh');
+  let updatedJobs = 0;
+  await db.$transaction(async (tx) => {
+    for (let index = 0; index < expectedJobs.length; index += 1) {
+      const job = expectedJobs[index];
+      const existing = await tx.jobPost.findUnique({
+        where: { id: job.id },
+        include: {
+          jobSkills: { select: { skillId: true } },
+          questions: { where: { archivedAt: null }, include: { versions: { select: { id: true } } }, orderBy: { sortOrder: 'asc' } },
+          _count: { select: { applications: true, savedBy: true, views: true } },
+        },
+      });
+      if (!existing) throw new Error(`Local title refresh cannot find its seed row: ${job.id}`);
+      if (existing.title === job.title) {
+        assertSameJob(existing, job);
+        continue;
+      }
+      if (existing.title !== previousTitles[index] || existing.companyId !== job.company.id ||
+          existing.cityId !== job.company.cityId || existing.countryId !== job.company.countryId ||
+          existing.categoryId !== job.company.categoryId || existing.currency !== 'IDR' ||
+          existing.status !== 'PUBLISHED' || existing.locale !== 'id' ||
+          !existing.contentHash || !existing.fingerprint || existing._count.applications || existing._count.savedBy || existing._count.views ||
+          existing.questions.length !== 2 || existing.questions.some((question) => question.versions.length !== 1)) {
+        throw new Error(`Local title refresh found a row that is not the untouched previous seed version: ${job.id}`);
+      }
+      await tx.jobPost.update({
+        where: { id: job.id },
+        data: { title: job.title, description: job.description, fingerprint: job.fingerprint, contentHash: job.contentHash },
+      });
+      await tx.jobPostSkill.deleteMany({ where: { jobPostId: job.id } });
+      await tx.jobPostSkill.createMany({ data: job.skills.map((skill) => ({ jobPostId: job.id, skillId: skill.id })) });
+      const questions = questionsFor(job);
+      for (let questionIndex = 0; questionIndex < existing.questions.length; questionIndex += 1) {
+        const updatedQuestion = await tx.jobQuestion.update({
+          where: { id: existing.questions[questionIndex].id },
+          data: { question: questions[questionIndex], revision: { increment: 1 } },
+        });
+        await tx.jobQuestionVersion.create({
+          data: {
+            questionId: updatedQuestion.id,
+            revision: updatedQuestion.revision,
+            snapshot: JSON.parse(JSON.stringify(updatedQuestion)) as Prisma.InputJsonValue,
+          },
+        });
+      }
+      updatedJobs += 1;
+    }
+  }, { timeout: 30_000, maxWait: 10_000 });
+  return { updatedJobs };
+}
+
 async function verifyPlan(db: PrismaClient, plan: Awaited<ReturnType<typeof resolvePlan>>) {
   const byCompany = [] as Array<{ slug: string; name: string; seededJobs: number; published: number; categoryMatches: number; salaryIdr: number }>;
   for (const resolved of plan.companies) {
@@ -519,7 +574,7 @@ async function verifyPlan(db: PrismaClient, plan: Awaited<ReturnType<typeof reso
 
 async function main() {
   const mode = process.argv.slice(2);
-  const supportedModes = ['--plan-local', '--apply-local', '--verify-local', '--plan-indonesia-vps', '--apply-indonesia-vps', '--verify-indonesia-vps'];
+  const supportedModes = ['--plan-local', '--apply-local', '--verify-local', '--refresh-local-operations-v1', '--plan-indonesia-vps', '--apply-indonesia-vps', '--verify-indonesia-vps'];
   if (mode.length !== 1 || !supportedModes.includes(mode[0])) {
     throw new Error(`Choose exactly one mode: ${supportedModes.join(', ')}`);
   }
@@ -532,6 +587,12 @@ async function main() {
     const expectedDatabase = indonesiaVps ? 'talentio' : 'job_talentio';
     if (databaseRows[0]?.database !== expectedDatabase) throw new Error(`Connected database mismatch; expected ${expectedDatabase}`);
     const plan = await resolvePlan(db);
+    if (mode[0] === '--refresh-local-operations-v1') {
+      const refreshed = await refreshLocalRestaurantOperationsFamily(db, plan);
+      const byCompany = await verifyPlan(db, plan);
+      console.log(JSON.stringify({ target, mode: mode[0], ...refreshed, totalVerified: byCompany.reduce((sum, row) => sum + row.seededJobs, 0) }, null, 2));
+      return;
+    }
     if (mode[0] === '--verify-local' || mode[0] === '--verify-indonesia-vps') {
       const byCompany = await verifyPlan(db, plan);
       console.log(JSON.stringify({ target, mode: mode[0], totalNewJobs: 180, companies: byCompany }, null, 2));
