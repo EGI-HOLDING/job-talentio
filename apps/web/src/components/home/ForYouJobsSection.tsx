@@ -1,5 +1,6 @@
 'use client';
-import { EmployeeRecommendationNotice,EmployeeMatchReasons,EmployeeExplorationNotice } from '@/components/jobs/EmployeeRecommendationState';
+import { EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
+import {useEmployeeIntentText} from '@/lib/i18n/employeeIntent';
 import type { EmployeeRecommendationState,EmployeeEvidenceState,EmployeeEmptyReason,MatchInsights } from '@job-talentio/shared';
 
 import { Link } from '@/lib/navigation';
@@ -46,6 +47,7 @@ const HOME_FOR_YOU_LIMIT = 6;
 
 export function ForYouJobsSection() {
   const { t, locale } = useI18n();
+  const intentText=useEmployeeIntentText();
   const identity=useSessionIdentity();
   const active=!!identity&&getSession()?.user.role==='EMPLOYEE';
   const feed=useApiResource<{items:RecommendedItem[];mode?:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6':null);
@@ -69,13 +71,12 @@ export function ForYouJobsSection() {
 
   return (
     <ExploreSection
-      title={t('home.forYou')}
-      subtitle={t('home.forYouSubtitle')}
+      title={feed.data?.mode==='EXPLORATION'?intentText('explorationTitle'):t('home.forYou')}
+      subtitle={feed.data?.mode==='EXPLORATION'?intentText('explorationCopy'):t('home.forYouSubtitle')}
       viewAllHref="/jobs?mode=for-you&sort=match"
       viewAllLabel={t('viewAll')}
       bare
     >
-      {ready&&feed.data?.mode==='EXPLORATION'&&<EmployeeExplorationNotice/>}
       {ready&&recommendationState==='READY'&&<EmployeeRecommendationNotice state="READY" evidenceState={feed.data?.evidenceState} preferenceWarnings={feed.data?.preferenceWarnings}/>}
       {!ready ? (
         <div className="muted" style={{ minHeight: '2.5rem' }} />
