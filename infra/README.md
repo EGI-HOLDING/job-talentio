@@ -1,8 +1,51 @@
-# Cloud deploy — Railway + Cloudflare + Hostinger
+# Deploy — Hostinger VPS + Cloudflare
 
-Staging is prepared on the Hostinger VPS (`212.85.24.238`, `/opt/job-talentio`) but public DNS still points at Railway. Do not delete the Railway project until `staging`, `api-staging`, `admin-staging`, and `files-staging` are proxied A records to that address and the origin certificate is valid. `jobtalent.io` and `www` are a parked Hostinger page and are not part of this app. Compose and nginx: [vps/docker-compose.yml](vps/docker-compose.yml), [vps/nginx-jobtalent.conf](vps/nginx-jobtalent.conf).
+Staging runs on the Hostinger VPS (`212.85.24.238`, `/opt/job-talentio`). The Railway project `job-talentio` was deleted on 2026-11-03 after the VPS served the same data; everything below the "Historical Railway reference" heading is kept only for the production path that has not been built yet.
 
-Job Talentio deploys as a dual-environment Railway project:
+## Current stack
+
+```
+Browser → Cloudflare (proxied A records, Full strict)
+            ├─ staging.jobtalent.io        → nginx :443 → web :3018
+            ├─ admin-staging.jobtalent.io  → nginx :443 → admin :3019
+            ├─ api-staging.jobtalent.io    → nginx :443 → api :4018
+            └─ files-staging.jobtalent.io  → nginx :443 → MinIO :9102 (127.0.0.1)
+
+Docker Compose project `job-talentio`: postgres:18, redis:7, MinIO, Meilisearch, api, web, admin
+```
+
+`jobtalent.io` and `www.jobtalent.io` are a parked Hostinger page, not this app.
+
+| Surface | URL |
+|---------|-----|
+| Web | https://staging.jobtalent.io |
+| Admin | https://admin-staging.jobtalent.io |
+| API health | https://api-staging.jobtalent.io/api/health |
+| Object storage | https://files-staging.jobtalent.io/job-talentio-staging |
+
+Files: [vps/docker-compose.yml](vps/docker-compose.yml), [vps/nginx-jobtalent.conf](vps/nginx-jobtalent.conf), [vps/deploy.sh](vps/deploy.sh).
+
+## Operating the VPS
+
+| Task | Command |
+|------|---------|
+| Deploy `develop` | `/opt/job-talentio/scripts/deploy.sh develop` |
+| Deploy a branch | `/opt/job-talentio/scripts/deploy.sh <branch>` |
+| Status | `cd /opt/job-talentio && docker compose ps` |
+| API logs | `docker logs -f job-talentio-api-1` |
+| Restart one service | `docker compose restart api` |
+| Manual backup | `/opt/job-talentio/scripts/backup.sh` |
+| Demo reset | `docker compose exec api sh -c 'cd /app/apps/api && ALLOW_DEMO_RESET=1 node dist/scripts/demo-reset.js'` |
+
+- Source is a git clone in `/opt/job-talentio/src`; `.env` sits next to the Compose file with mode `600`. Never commit it.
+- `backups/<UTC stamp>/` holds a `pg_dump -Fc` and a MinIO archive; cron keeps 7 days (`/etc/cron.d/job-talentio-backup`, 02:30 UTC).
+- TLS is Let's Encrypt via the `--webroot` challenge, renewed by `certbot.timer` with a deploy hook that reloads nginx. Renewal works through the Cloudflare proxy because nginx still answers `/.well-known/acme-challenge/` on port 80.
+- `TRUST_PROXY_HOPS=1` is correct here: Cloudflare is the only hop, and nginx forwards `CF-Connecting-IP` as `X-Forwarded-For`.
+- **Do not prune the MinIO image.** `minio/minio` was removed from Docker Hub, and the copy on this host is the only one left. Pruning it makes the object store undeployable.
+
+## Historical Railway reference (retired)
+
+Job Talentio deployed as a dual-environment Railway project:
 
 | Environment | Git branch | Purpose |
 |-------------|------------|---------|
@@ -32,9 +75,11 @@ API → Postgres + Redis + MinIO (staging) / R2 (prod) + Resend (or Hostinger SM
 | Web | https://staging.jobtalent.io |
 | Admin | https://admin-staging.jobtalent.io |
 | API health | https://api-staging.jobtalent.io/api/health |
-| MinIO S3 | https://minio-staging-staging-ba96.up.railway.app |
+| MinIO S3 | https://minio-staging-staging-ba96.up.railway.app (retired) |
 
-Git auto-deploy: `api` / `web` / `admin` watch branch `develop` in Railway environment `staging`.
+MinIO S3 is now served from `https://files-staging.jobtalent.io/job-talentio-staging`.
+
+Git auto-deploy: none. Railway is deleted; deploys are manual through `scripts/deploy.sh`.
 
 ### Hobby plan limits (important)
 
@@ -280,21 +325,19 @@ Railway sets `PORT` automatically; apps already listen on `PORT`.
 
 1. Add `jobtalent.io` to Cloudflare; at Hostinger switch nameservers to Cloudflare.
 2. **Keep Hostinger email DNS** (MX, SPF, DKIM, DMARC) when migrating NS.
-3. In Railway, add custom domains per service (table above). Cloudflare DNS:
+3. Point the staging names at the VPS (proxied A records):
 
 | Type | Name | Content | Proxy |
 |------|------|---------|-------|
-| CNAME/A | `@` | Railway web target | Proxied |
-| CNAME | `admin` | Railway admin target | Proxied |
-| CNAME | `api` | Railway api target | Proxied |
-| CNAME | `staging` | Railway web (staging) | Proxied |
-| CNAME | `admin.staging` | Railway admin (staging) | Proxied |
-| CNAME | `api.staging` | Railway api (staging) | Proxied |
+| A | `staging` | `212.85.24.238` | Proxied |
+| A | `api-staging` | `212.85.24.238` | Proxied |
+| A | `admin-staging` | `212.85.24.238` | Proxied |
+| A | `files-staging` | `212.85.24.238` | Proxied |
 
-4. Cloudflare **Redirect Rule:** `www.jobtalent.io/*` → `https://jobtalent.io/$1` (301). Do not add `www` as a Railway custom domain on Hobby.
-5. SSL/TLS mode: **Full (strict)** once Railway certificates are issued.
+4. Cloudflare **Redirect Rule:** `www.jobtalent.io/*` → `https://jobtalent.io/$1` (301).
+5. SSL/TLS mode: **Full (strict)**. The origin uses a Let's Encrypt certificate that covers all four staging hostnames; anything weaker leaves Cloudflare→origin unverified.
 6. Enable **WebSockets** (Socket.IO chat).
-7. Avoid caching HTML for app routes; cache R2/CDN static assets only.
+7. Avoid caching HTML for app routes; only static assets and object storage are cacheable.
 
 Optional CDN hostnames for R2: `cdn.jobtalent.io`, `cdn-staging.jobtalent.io`.
 
