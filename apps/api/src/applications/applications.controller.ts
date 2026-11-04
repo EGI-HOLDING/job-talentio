@@ -34,6 +34,12 @@ export class ApplicationsController {
     );
   }
 
+  @Post('screening/:sessionId/submit')
+  @Roles('EMPLOYEE','SUPER_ADMIN')
+  finalizeScreening(@CurrentUser() user:AuthUser,@Param('sessionId') id:string,@Req() req:Request){
+    return this.applications.finalizeScreening(user,id,requestLocale(req));
+  }
+
   @Get('mine')
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
   mine(@CurrentUser() user: AuthUser, @Req() req: Request) {

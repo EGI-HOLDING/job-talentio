@@ -16,7 +16,7 @@ function SiteFooterContent() {
   const seekerLandingPreview = searchParams.get('audience') === 'seekers';
   const isRecruiter = isEmployerRole(useAccountRole());
   const jobsHref = isRecruiter ? EMPLOYER_JOBS : '/jobs';
-  if (pathname.startsWith('/onboarding/')) return null;
+  if (pathname.startsWith('/onboarding/') || pathname.startsWith('/apply/')) return null;
   if (pathname === '/jobs' || pathname === '/explore/companies') return null;
   if (pathname === '/dashboard/employee' || pathname === '/dashboard/employee/resume-builder') return null;
   if (pathname === '/messages' || pathname === '/settings' || pathname.startsWith('/dashboard/recruiter') || pathname.startsWith('/billing/') || pathname === '/talent' || pathname.startsWith('/candidates/')) return null;

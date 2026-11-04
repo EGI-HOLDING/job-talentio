@@ -1,0 +1,7 @@
+Assets generated with the built-in imagegen tool from the user-provided TARA Chibi Mascot Design Sheet.png. Transparent PNG output is preserved.
+
+welcome.png: Faithfully recreate the large welcoming full-body Tara character: smiling chibi fox HR assistant, waving open hand, tablet in other hand, lavender-white hair, purple eyes, glasses, navy blazer with gold trim, purple flower and gold bell ornament, fluffy fox tails and pink fox ears. Match the reference character, silhouette, proportions, linework and outfit. One centered full-body transparent cutout, no text, logo, poster or extra characters.
+
+avatar.png: Faithfully recreate Tara as one close-up head-and-shoulders chat avatar: gentle friendly smile, fox ears, lavender-white hair, purple eyes, glasses, purple flower and gold bells. Face large and centered. Transparent background, crisp chibi linework. No text or frame. Preserve the exact character.
+
+celebrate.png: Faithfully recreate Tara full body celebrating: eyes happily closed, warm big smile, both small fists near her cheeks, navy HR blazer with gold trim and skirt, purple ID, lavender-white hair and fox tails, glasses, purple flower and golden bells. Transparent background, a few tiny violet/gold confetti accents. One character, no text or poster.

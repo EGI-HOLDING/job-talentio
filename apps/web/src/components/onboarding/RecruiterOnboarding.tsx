@@ -1,4 +1,5 @@
 'use client';
+import {CompanyProfileDocument} from '../screening/CompanyProfileDocument';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, AuthSession, saveSession } from '@/lib/api';
@@ -159,6 +160,7 @@ export function RecruiterOnboarding() {
         <LocationFields countryId={values.countryId} citySlug={values.citySlug} initialCity={company?.city} required cityRequired onChange={next => setValues(previous => ({...previous, countryId: next.countryId, citySlug: next.citySlug}))}/>
         <label>{t('trustItemWebsite')}<input type="url" value={values.website} maxLength={500} onChange={event => change('website', event.target.value)} placeholder="https://"/></label>
       </fieldset>
+      <CompanyProfileDocument recommendation/>
       <div className={s.actions}><span className={s.muted} style={{fontSize: '.78rem'}} aria-live="polite">{saved && t('commerce.saved')}</span><button className={s.primary} disabled={busy}>{t(busy ? 'saving' : 'commerce.continue')} →</button></div>
     </form> : <>
       <div className={s.jobPrompt}><span className={s.stepIcon}><WorkspaceIcon kind="briefcase"/></span><h2>{job?.title || t('commerce.firstJob')}</h2><p>{company?.name}</p>

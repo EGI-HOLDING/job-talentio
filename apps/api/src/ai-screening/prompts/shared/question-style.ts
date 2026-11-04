@@ -1,0 +1,1 @@
+export const questionStyle = 'Setiap pertanyaan hanya satu fokus, maksimal 45 kata, bisa dijawab dalam 1–3 kalimat selama 60 detik. Gunakan kata kerja konkret dan konteks pekerjaan. Jangan meminta beberapa cerita sekaligus, teori panjang, rahasia perusahaan, data pribadi, atau jawaban yang butuh riset. Tidak ada istilah sesi 1/sesi 2. Tidak menilai kepribadian.';

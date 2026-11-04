@@ -7,6 +7,199 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model AiCompanyDocument {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fileKey String
+  filename String
+  contentType String
+  checksum String
+  status String @default("PENDING")
+  text String?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([companyId, createdAt])
+}
+
+model AiScreeningPackage {
+  id String @id @default(cuid())
+  jobId String
+  job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fingerprint String
+  version Int
+  status String @default("PENDING")
+  jobSnapshot Json
+  companySnapshot Json
+  promptVersion String
+  promptSnapshot Json
+  payload Json?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions AiScreeningSession[]
+  candidatePlans AiCandidatePlan[]
+  @@unique([jobId, fingerprint])
+  @@unique([jobId, version])
+  @@index([status, updatedAt])
+}
+
+model AiScreeningSession {
+  id String @id @default(cuid())
+  jobId String
+  job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  profileId String
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  packageId String?
+  package AiScreeningPackage? @relation(fields: [packageId], references: [id])
+  resumeId String?
+  resumeVersionId String?
+  resumeVersion ResumeVersion? @relation(fields: [resumeVersionId], references: [id], onDelete: SetNull)
+  cvSnapshot Json?
+  currentPlanId String? @unique
+  currentPlan AiCandidatePlan? @relation("CurrentScreeningPlan", fields: [currentPlanId], references: [id], onDelete: SetNull)
+  plans AiCandidatePlan[] @relation("SessionScreeningPlans")
+  coverLetter String?
+  coverFileKey String?
+  coverFilename String?
+  coverContentType String?
+  source String?
+  funnelSession String?
+  status String @default("DRAFT")
+  revision Int @default(0)
+  leaseToken String?
+  leaseExpiresAt DateTime?
+  startedAt DateTime?
+  completedAt DateTime?
+  applicationId String? @unique
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  questions AiScreeningQuestion[]
+  evaluation AiScreeningEvaluation?
+  @@unique([jobId, profileId])
+  @@index([status, updatedAt])
+}
+
+model AiScreeningQuestion {
+  id String @id @default(cuid())
+  sessionId String
+  session AiScreeningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  position Int
+  criterionId String
+  claimId String
+  rootQuestionId String?
+  parentQuestionId String?
+  depth Int @default(0)
+  probeClosed Boolean @default(false)
+  kind String
+  text String
+  draft String @default("")
+  answer String?
+  shownAt DateTime?
+  deadlineAt DateTime?
+  answeredAt DateTime?
+  timedOut Boolean @default(false)
+  @@unique([sessionId, position])
+}
+
+model AiCvSource {
+  versionId String @id
+  version ResumeVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  checksum String
+  status String @default("PENDING")
+  text String?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AiCandidatePlan {
+  id String @id @default(cuid())
+  sessionId String
+  session AiScreeningSession @relation("SessionScreeningPlans", fields: [sessionId], references: [id], onDelete: Cascade)
+  currentFor AiScreeningSession? @relation("CurrentScreeningPlan")
+  packageId String
+  package AiScreeningPackage @relation(fields: [packageId], references: [id])
+  resumeVersionId String
+  resumeVersion ResumeVersion @relation(fields: [resumeVersionId], references: [id], onDelete: Cascade)
+  fingerprint String
+  status String @default("PENDING")
+  promptVersion String
+  payload Json?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([sessionId, fingerprint])
+  @@index([status, updatedAt])
+}
+
+model AiScreeningEvaluation {
+  id String @id @default(cuid())
+  sessionId String @unique
+  session AiScreeningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status String @default("PENDING")
+  inputHash String?
+  promptVersion String
+  model String?
+  cvScore Float?
+  cvBreakdown Json?
+  screeningScore Float?
+  finalScore Float?
+  result Json?
+  pdfKey String?
+  pdfVersion String?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, updatedAt])
+}
+
+/// Durable outbox; Redis is a delivery mechanism, never the source of truth.
+model AiScreeningWork {
+  id String @id @default(cuid())
+  key String @unique
+  kind String
+  subjectId String
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseOwner String?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, availableAt])
+}
+
+model AiScreeningCall {
+  id String @id @default(cuid())
+  key String @unique
+  workId String
+  task String
+  subjectId String
+  model String
+  promptVersion String
+  inputHash String
+  status String @default("PENDING")
+  responseId String?
+  result Json?
+  inputTokens Int @default(0)
+  outputTokens Int @default(0)
+  cachedTokens Int @default(0)
+  reasoningTokens Int @default(0)
+  usage Json?
+  costUsd Float @default(0)
+  pricing Json?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([subjectId, createdAt])
+  @@index([status, updatedAt])
+}
+
 enum LinkedInConnectionStatus {
   CONNECTED
   EXPIRED
@@ -800,6 +993,7 @@ model EmailChangeToken {
 }
 
 model Company {
+  screeningDocuments AiCompanyDocument[]
   id          String       @id @default(cuid())
   name        String
   slug        String       @unique
@@ -938,6 +1132,8 @@ model Payment {
 }
 
 model JobPost {
+  screeningPackages AiScreeningPackage[]
+  screeningSessions AiScreeningSession[]
   id                 String           @id @default(cuid())
   companyId          String
   jobTitleId         String?
@@ -1082,6 +1278,7 @@ enum EmployeeOnboardingStatus {
 }
 
 model EmployeeProfile {
+  screeningSessions AiScreeningSession[]
   desiredRoles EmployeeDesiredRole[]
   matchingPreferencesReviewed Boolean @default(false)
   preferredWorkModes WorkMode[] @default([])
@@ -1303,6 +1500,9 @@ model Resume {
 
 /// A file revision is retained independently of the editable CV library entry.
 model ResumeVersion {
+  screeningSource AiCvSource?
+  candidatePlans AiCandidatePlan[]
+  screeningSessions AiScreeningSession[]
   recruiterEvidence ResumeRecruiterEvidence[]
   employeeEvidence ResumeEmployeeEvidence?
   id String @id @default(cuid())
@@ -1425,6 +1625,7 @@ model ResumeEmployeeEvidence {
 }
 
 model Application {
+  screeningSession AiScreeningSession?
   hrSubmissionSnapshot Json?
   recruiterEvaluations ApplicationRecruiterEvaluation[]
   id             String            @id @default(cuid())

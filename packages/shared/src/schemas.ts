@@ -288,6 +288,8 @@ export const applicationListSchema = z.object({
 });
 
 export const applicantSearchSchema = candidateSearchSchema.omit({ matchJobId: true, jobTitle: true, sort: true }).merge(applicationListSchema).extend({
+  screeningVersion: z.string().max(100).optional(),
+  cvSort: z.enum(['true','false']).optional(),
   experienceYearsMin: z.coerce.number().min(0).max(100).optional(),
   experienceYearsMax: z.coerce.number().min(0).max(100).optional(),
 });

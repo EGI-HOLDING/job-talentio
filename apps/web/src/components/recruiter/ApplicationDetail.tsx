@@ -15,6 +15,7 @@ import {KANBAN_STAGES} from '@job-talentio/shared';
 import {Applicant,ApplicationCvAction,KanbanAction,WhatsAppAction} from './ApplicationActions';
 import {RecruiterAvatar} from './RecruiterPrimitives';
 import s from './JobWorkspace.module.css';
+import {TaraAssessment} from '../screening/TaraAssessment';
 import { HrMatchSummary, type HrAssessment } from './HrMatchSummary';
 
 export function ApplicationDetail({applicationId,jobId,companyId,jobTitle='',from='applicants',onClose,onChanged}: {applicationId:string;jobId:string;companyId:string;jobTitle?:string;from?:'applicants'|'kanban';onClose:()=>void;onChanged:()=>void}) {
@@ -57,6 +58,7 @@ export function ApplicationDetail({applicationId,jobId,companyId,jobTitle='',fro
       {!data&&!error?<WorkspaceLoading/>:data&&<>
         <div className={s.detailIdentity}><RecruiterAvatar name={data.profile.user.fullName} src={data.profile.user.avatarUrl} className={s.avatar}/><div><h2>{data.profile.user.fullName}</h2><p>{data.profile.headline||t('ranking.noHeadline')}</p><small>{t('rw.applied')}: {dateLabel(data.createdAt,locale,true)}</small></div></div>
         <HrMatchSummary assessment={(data as Applicant&{matchBreakdown?:HrAssessment}).matchBreakdown} detail/>
+        {(data as Applicant&{tara?:unknown}).tara&&<TaraAssessment applicationId={data.id}/>}
         <div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('cv.candidateDetails')}</Link>{data.status!=='WITHDRAWN'&&<><Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link><WhatsAppAction profileId={data.profile.id} companyId={companyId} jobPostId={jobId}/></>}</div>
         {data.kanbanEnteredAt&&<>
           <label className={s.stageField}>{t('status')}<select value={data.status} disabled={busy||data.status==='WITHDRAWN'||data.status==='HIRED'||Boolean(data.candidateDecisionRequired)} onChange={event=>void move(event.target.value)}>{KANBAN_STAGES.map(status=><option key={status} value={status}>{label('applicationStatus',status)}</option>)}</select></label>

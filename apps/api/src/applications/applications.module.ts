@@ -5,9 +5,10 @@ import { CompaniesModule } from '../companies/companies.module';
 import { MatchingModule } from '../matching/matching.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { MailModule } from '../mail/mail.module';
+import { ScreeningModule } from '../ai-screening/screening.module';
 
 @Module({
-  imports: [CompaniesModule, MatchingModule, NotificationsModule, MailModule],
+  imports: [CompaniesModule, MatchingModule, NotificationsModule, MailModule, ScreeningModule],
   controllers: [ApplicationsController],
   providers: [ApplicationsService],
   exports: [ApplicationsService],

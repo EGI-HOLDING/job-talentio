@@ -8,9 +8,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { LinkedInModule } from '../linkedin/linkedin.module';
+import { ScreeningModule } from '../ai-screening/screening.module';
 
 @Module({
-  imports: [CompaniesModule, MatchingModule, NotificationsModule, PrismaModule, TelegramModule, LinkedInModule],
+  imports: [CompaniesModule, MatchingModule, NotificationsModule, PrismaModule, TelegramModule, LinkedInModule, ScreeningModule],
   controllers: [JobsController],
   providers: [JobsService, JobTitleBackfillService],
   exports: [JobsService],

@@ -94,6 +94,7 @@ function host(file, exportName, dependencies, globals = {}) {
       module,
       exports: module.exports,
       URLSearchParams,
+      AbortController,
       AbortSignal,
       setTimeout,
       clearTimeout,
@@ -109,6 +110,8 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
         if (name === '@/lib/useLiveRefresh') return { useLiveRefresh() {} };
         if (name === '@/lib/useSessionIdentity') return { useSessionIdentity: () => 'test-user' };
+        if (name === '../screening/TaraAssessment') return { TaraScores:()=>null, TaraAssessment:()=>null };
+        if (name === './HrMatchSummary') return { HrMatchSummary:()=>null };
         if (name === '@/components/applications/OfferComposer') return { OfferComposer: () => null };
         if (name === '@/components/applications/OfferPacketHistory') return { OfferPacketHistory: () => null };
         throw Error('Unexpected dependency: ' + name);
@@ -538,6 +541,7 @@ test('the job editor saves content and questions in one request with its loaded 
     {
       '@/lib/api': {
         api: async (route, options) => {
+          if(route==='/ai-screening/capabilities')return {enabled:false};
           requests.push({ route, ...options });
           return draft;
         },

@@ -13,7 +13,7 @@ export function EmployeeOnboardingGate({ children }: { children: ReactNode }) {
   const [verified, setVerified] = useState(""),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0);
-  const protectedPage = /^\/(dashboard\/employee|settings|messages)(\/|$)/.test(
+  const protectedPage = /^\/(dashboard\/employee|settings|messages|apply)(\/|$)/.test(
     pathname,
   );
   useEffect(() => {

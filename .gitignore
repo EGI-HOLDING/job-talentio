@@ -18,6 +18,7 @@ uploads
 /reports/
 /output/
 /research/
+/tmp/tara-screening/
 /.catalog-sync-private/
 
 # Local-only notes / source copies (not shipped)

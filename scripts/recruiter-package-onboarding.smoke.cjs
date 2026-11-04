@@ -67,6 +67,7 @@ const company = {id: 'company', name: 'EGI IT', description: 'A complete company
 function onboarding(api) {
   function Field() {}
   return {Field, ui: host('apps/web/src/components/onboarding/RecruiterOnboarding.tsx', 'RecruiterOnboarding', {
+    '../screening/CompanyProfileDocument':{CompanyProfileDocument:stub},
     '@/lib/api': {api, saveSession() {}}, '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@/lib/accountNavigation': navigation,
     'next/navigation': {useSearchParams: () => new URLSearchParams()}, '@/lib/navigation': {useRouter: () => ({push() {}, replace() {}})},
     '@/components/ui/Field': {FormField: Field}, '@/components/ui/LocationFields': {LocationFields: stub},

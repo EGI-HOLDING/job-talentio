@@ -661,7 +661,7 @@ export class ProfilesService {
     });
     if (typeof data.fileKey === 'string' && result.previousKey && result.previousKey !== data.fileKey) {
       try {
-        await this.prisma.resumeVersion.deleteMany({where:{resumeId,fileKey:result.previousKey,currentFor:{is:null},applications:{none:{}}}});
+        await this.prisma.resumeVersion.deleteMany({where:{resumeId,fileKey:result.previousKey,currentFor:{is:null},applications:{none:{}},screeningSessions:{none:{}},candidatePlans:{none:{}}}});
         await this.deleteStorageKeyIfOrphan(result.previousKey);
       } catch(error){this.logger.warn('CV updated; previous file cleanup failed: '+(error as Error).message);}
     }
@@ -768,6 +768,7 @@ export class ProfilesService {
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${owner.profileId} FOR UPDATE`);
       const resume = await tx.resume.findUnique({ where: { id: resumeId }, include: { _count: { select: { applications: true } } } });
       if (!resume?.deletedAt || resume._count.applications > 0) return null;
+      if(await tx.aiScreeningSession.count({where:{resumeVersion:{resumeId}}}))return null;
       await tx.resume.update({where:{id:resumeId},data:{currentVersionId:null}});
       const versions=await tx.resumeVersion.findMany({where:{resumeId,applications:{none:{}}},select:{id:true,fileKey:true}});
       await tx.resumeVersion.deleteMany({where:{id:{in:versions.map(v=>v.id)},applications:{none:{}}}});
@@ -822,7 +823,7 @@ export class ProfilesService {
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${profile.id} FOR UPDATE`);
       const resume = await tx.resume.findFirst({ where: { id: resumeId, profileId: profile.id, deletedAt: null } });
       if (!resume) throw new NotFoundException('Resume not found');
-      const used = await tx.application.count({ where: { OR:[{resumeId},{resumeVersion:{resumeId}}] } });
+      const used = await tx.application.count({ where: { OR:[{resumeId},{resumeVersion:{resumeId}}] } }) + await tx.aiScreeningSession.count({where:{resumeVersion:{resumeId}}});
       const versions=used?[]:await tx.resumeVersion.findMany({where:{resumeId,applications:{none:{}}},select:{id:true,fileKey:true}});
       if (used) await tx.resume.update({ where: { id: resumeId }, data: { deletedAt: new Date(), isPrimary: false, parseGeneration: { increment: 1 }, parseStatus: 'NONE', parseStartedAt: null } });
       else {

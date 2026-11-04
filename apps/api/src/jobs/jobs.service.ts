@@ -1,4 +1,6 @@
 import { jobChatPeers } from '../chat/job-chat-peer';
+import { ScreeningPackets } from '../ai-screening/screening-packets.service';
+import { screeningEnabled } from '../ai-screening/screening.policy';
 import { employeeApplicationChatAllowed } from '../chat/application-chat-access';
 import {
   Injectable,
@@ -114,6 +116,7 @@ export class JobsService {
     @Optional() private analytics: HrAnalyticsService = new HrAnalyticsService(prisma,benefits??new BenefitsService(prisma,new OperationsService(prisma))),
     @Optional() private linkedin?: LinkedInService,
     @Optional() private recruiterOnboarding?: RecruiterOnboardingService,
+    @Optional() private screeningPackets?: ScreeningPackets,
   ) {}
 
   private assertSalaryRange(min: number | null | undefined, max: number | null | undefined) {
@@ -359,7 +362,7 @@ export class JobsService {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`);
       return this.createInside(user, companyId, data, db);
     }, { timeout: 30000 });
-    if (created) void this.jobsSearch.syncJob(created.id);
+    if (created) { void this.jobsSearch.syncJob(created.id); void this.screeningPackets?.sync(created.id).catch(()=>undefined); }
     return created;
   }
   private async createInside(user: AuthUser, companyId: string, data: Record<string, unknown>, db: Prisma.TransactionClient) {
@@ -431,7 +434,7 @@ export class JobsService {
       ] as JobBenefitInput[]), db,
     );
     await this.syncLanguages(job.id, (data.languages as JobLanguageInput[]) || [], db);
-    if (data.screeningQuestions !== undefined) await this.syncQuestions(job.id, data.screeningQuestions, db);
+    if (!screeningEnabled() && data.screeningQuestions !== undefined) await this.syncQuestions(job.id, data.screeningQuestions, db);
 
     const created = await db.jobPost.findUnique({
       where: { id: job.id },
@@ -446,7 +449,7 @@ export class JobsService {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${job.companyId} FOR UPDATE`);
       return this.updateInside(user, jobId, data, db);
     }, { timeout: 30000 });
-    if (updated) void this.jobsSearch.syncJob(jobId);
+    if (updated) { void this.jobsSearch.syncJob(jobId); void this.screeningPackets?.sync(jobId).catch(()=>undefined); }
     return updated;
   }
   private async updateInside(user: AuthUser, jobId: string, data: Record<string, unknown>, db: Prisma.TransactionClient) {
@@ -731,6 +734,7 @@ export class JobsService {
     }
 
     void this.jobsSearch.syncJob(jobId);
+    void this.screeningPackets?.sync(jobId).catch(()=>undefined);
     return this.withResolvedIcons(updated);
   }
 

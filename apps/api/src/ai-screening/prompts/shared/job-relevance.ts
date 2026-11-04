@@ -1,0 +1,1 @@
+export const jobRelevance = 'Konteks lowongan menentukan kompetensi dan standar penilaian yang sama untuk semua kandidat pada versi ini. Company profile hanya konteks pendukung, tidak menambah syarat pribadi. Buat 3–5 kompetensi berbobot setara dengan requirementRef kutipan persis dari tugas/persyaratan sumber. Jangan membuat pertanyaan kandidat dalam tugas konteks lowongan.';

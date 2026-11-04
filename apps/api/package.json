@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
+    "test:tara": "tsx src/ai-screening/screening.smoke.ts",
+    "test:tara:local": "node ../../scripts/tara-screening-local.cjs",
+    "test:tara:pdf": "tsx src/ai-screening/screening-report.smoke.ts",
     "test:linkedin": "tsx src/linkedin/linkedin.smoke.ts",
     "test:catalog-sync": "tsx src/catalog-sync/runtime.smoke.ts",
     "test:catalog-sync:local": "tsx src/catalog-sync/catalog-sync.integration.smoke.ts",

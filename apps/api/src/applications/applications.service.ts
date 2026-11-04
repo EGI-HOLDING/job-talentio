@@ -16,6 +16,10 @@ import { OperationsService } from '../benefits/operations.service';
 import { recruiterProfileInclude } from '../matching/recruiter-matching.service';
 import { registerCvVersion, withCvFacts } from '../profiles/cv-evidence';
 import { applicationCvProfile } from '../profiles/cv-source';
+import { screeningEnabled } from '../ai-screening/screening.policy';
+import { enqueueWork } from '../ai-screening/screening-packets.service';
+import { ScreeningSessions } from '../ai-screening/screening-sessions.service';
+import { ScreeningHr, type TaraWindowExtra } from '../ai-screening/screening-hr.service';
 import { compareRecruiterMatches, type RecruiterBreakdown } from '../matching/recruiter-matching';
 import { hrEnabled, HR_VERSION, type HrProfile, type HrBreakdown } from '../matching/recruiter-ranking';
 import { freezeHrSubmission } from '../matching/recruiter-evidence';
@@ -44,7 +48,7 @@ function isTransactionConflict(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   return error.code === 'P2034' || (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code)));
 }
-type ApplicationWindow = { ids:string[]; scores:Map<string,RecruiterBreakdown>;total:number;page:number;totalPages:number;profiles?:Map<string,HrProfile>;rankingVersion?:string;rankingRevision?:string;state?:string;rankingAvailable?:boolean };
+type ApplicationWindow = { ids:string[]; scores:Map<string,RecruiterBreakdown>;total:number;page:number;totalPages:number;profiles?:Map<string,HrProfile>;rankingVersion?:string;rankingRevision?:string;state?:string;rankingAvailable?:boolean } & Partial<TaraWindowExtra>;
 
 function safeOfferPacket<T extends {
   kind?: string;
@@ -76,6 +80,8 @@ export class ApplicationsService {
     @Optional() private operations?: OperationsService,
     @Optional() private hrEvents?: HrEventsService,
     @Optional() private live?: LiveUpdates,
+    @Optional() private screeningSessions?: ScreeningSessions,
+    @Optional() private screeningHr?: ScreeningHr,
   ) {}
 
   private async publishChange(companyId: string, candidateId?: string) {
@@ -109,6 +115,7 @@ export class ApplicationsService {
     source?: string,
     locale: Locale = DEFAULT_LOCALE,
     funnelSession?: string,
+    screeningSessionId?: string,
   ) {
     if (user.role !== 'EMPLOYEE' && user.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Only employees can apply');
@@ -154,6 +161,13 @@ export class ApplicationsService {
       throw new NotFoundException('Job not available');
     }
 
+    if(screeningSessionId)await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${screeningSessionId} FOR UPDATE`);
+    const screening=screeningSessionId?await tx.aiScreeningSession.findFirst({where:{id:screeningSessionId,jobId:jobPostId,profileId:profile.id},include:{package:true,currentPlan:true}}):null;
+    if(screeningEnabled()||screeningSessionId){
+      if(!screening||screening.status!=='COMPLETED'||!screening.currentPlan||!screening.resumeVersionId||!screening.cvSnapshot)throw new BadRequestException('Selesaikan screening bersama Tara sebelum mengirim lamaran.');
+    }
+    const submittedAnswers=screening?[]:answers;
+    const activeQuestions=screening?[]:job.questions;
     // Pre-check: one application per employee per job (also enforced by @@unique)
     const existing = await tx.application.findUnique({
       where: { jobPostId_profileId: { jobPostId, profileId: profile.id } },
@@ -167,9 +181,9 @@ export class ApplicationsService {
 
     // Answers must belong to this job. Without this check, a caller can submit
     // another job's question id and attach the answer to this application.
-    const questionIds = new Set(job.questions.map((question) => question.id));
+    const questionIds = new Set(activeQuestions.map((question) => question.id));
     const suppliedQuestionIds = new Set<string>();
-    for (const answer of answers || []) {
+    for (const answer of submittedAnswers || []) {
       if (!questionIds.has(answer.questionId)) {
         throw new BadRequestException('A screening answer does not belong to this job');
       }
@@ -184,14 +198,14 @@ export class ApplicationsService {
     }
 
     // Validate required screening questions
-    const answerMap = new Map((answers || []).map((a) => [a.questionId, a.answer]));
-    for (const q of job.questions) {
+    const answerMap = new Map((submittedAnswers || []).map((a) => [a.questionId, a.answer]));
+    for (const q of activeQuestions) {
       if (q.isRequired && !answerMap.get(q.id)?.trim()) {
         throw new BadRequestException(`Answer required for: ${q.question}`);
       }
     }
 
-    let selectedResume =
+    let selectedResume = screening ? (screening.cvSnapshot as unknown as {resume:typeof profile.resumes[number]}).resume :
       (resumeId
         ? profile.resumes.find((r) => r.id === resumeId)
         : profile.resumes.find((r) => r.isPrimary) || profile.resumes[0]) || null;
@@ -209,9 +223,10 @@ export class ApplicationsService {
     }
 
     if(!selectedResume?.fileKey)throw new BadRequestException('Upload a CV before applying');
-    const version=await registerCvVersion(tx,selectedResume.id,selectedResume.fileKey);
-    const cvInput=withCvFacts(profile,version);
-    const breakdown = await this.matching.scoreHistoricalInputs(cvInput, job, tx);
+    const version=screening?await tx.resumeVersion.findUniqueOrThrow({where:{id:screening.resumeVersionId!}}):await registerCvVersion(tx,selectedResume.id,selectedResume.fileKey);
+    const frozenSupplement=screening?(screening.cvSnapshot as unknown as {submission:{languages:typeof profile.languages;certifications:typeof profile.certifications}}).submission:null;
+    const cvInput=withCvFacts(frozenSupplement?{...profile,languages:frozenSupplement.languages,certifications:frozenSupplement.certifications}:profile,version);
+    const breakdown = await this.matching.scoreHistoricalInputs(cvInput, (screening?.package?.jobSnapshot??job) as unknown as typeof job, tx);
     const submittedAt=new Date();
     const hrVersion=hrEnabled()?await tx.resumeVersion.findUniqueOrThrow({where:{id:version.id},include:{employeeEvidence:true}}):null;
     if(cvInput.cvSource.status!=='READY'){breakdown.assessable=false;breakdown.total=0;breakdown.positiveCore=false;breakdown.evidence=[];}
@@ -219,7 +234,7 @@ export class ApplicationsService {
     const resumeSnapshot = {
       cvVersionId:version.id,
       cvEvidence:version.parseStatus==='READY'?version.matchingData:null,
-      cvSupplement:{languages:profile.languages,certifications:profile.certifications},
+      cvSupplement:{languages:cvInput.languages,certifications:cvInput.certifications},
       headline: cvInput.headline,
       summary: null,
       skills: cvInput.skills.map((s) => ({
@@ -248,10 +263,10 @@ export class ApplicationsService {
           profileId: profile.id,
           resumeId: selectedResume?.id ?? null,
           resumeVersionId:version.id,
-          coverLetter,
-          source: source ? source.toLowerCase().slice(0, 40) : null,
+          coverLetter:screening?.coverLetter??coverLetter,
+          source: (screening?.source??source)?.toLowerCase().slice(0,40)??null,
           resumeSnapshot,
-          ...(hrVersion?{hrSubmissionSnapshot:JSON.parse(JSON.stringify(freezeHrSubmission(hrVersion,{languages:profile.languages,certifications:profile.certifications},submittedAt))),createdAt:submittedAt}:{}),
+          ...(hrVersion||screening?{hrSubmissionSnapshot:JSON.parse(JSON.stringify(screening?(screening.cvSnapshot as unknown as {submission:unknown}).submission:freezeHrSubmission(hrVersion,{languages:profile.languages,certifications:profile.certifications},submittedAt))),createdAt:submittedAt}:{}),
           matchScore: cvInput.cvSource.status==='READY'?breakdown.total:null,
           matchBreakdown: cvInput.cvSource.status==='READY'?breakdown:Prisma.DbNull,
           status: 'NEW',
@@ -263,7 +278,7 @@ export class ApplicationsService {
             },
           },
           answers: {
-            create: (answers || [])
+            create: (submittedAnswers || [])
               .filter((a) => a.answer?.trim())
               .map((a) => ({
                 questionId: a.questionId,
@@ -280,11 +295,16 @@ export class ApplicationsService {
         },
       });
 
+      if(screening){
+        await tx.aiScreeningSession.update({where:{id:screening.id},data:{applicationId:application.id,status:'SUBMITTED'}});
+        await tx.aiScreeningEvaluation.upsert({where:{sessionId:screening.id},create:{sessionId:screening.id,promptVersion:screening.currentPlan!.promptVersion},update:{}});
+        await enqueueWork(tx,'EVALUATE',screening.id);
+      }
       // Applying fulfills the purpose of a saved-job bookmark. Keep this in the
       // same transaction so a failed application never removes the bookmark.
       await tx.savedJob.deleteMany({ where: { profileId: profile.id, jobPostId } });
 
-        await this.hrEvents?.submitted(tx, application, funnelSession);
+        await this.hrEvents?.submitted(tx, application, screening?.funnelSession??funnelSession);
         return { application, job, breakdown };
       });
       await this.publishChange(job.companyId, user.id);
@@ -316,6 +336,18 @@ export class ApplicationsService {
         throw new ConflictException('You have already applied to this job.');
       }
       throw err;
+    }
+  }
+
+  async finalizeScreening(user:AuthUser,id:string,locale:Locale=DEFAULT_LOCALE) {
+    if(!this.screeningSessions)throw new ServiceUnavailableException();
+    const session=await this.screeningSessions.owned(user,id);
+    if(session.applicationId)return {id:session.applicationId};
+    try {return await this.apply(user,session.jobId,undefined,undefined,undefined,undefined,locale,undefined,id);}
+    catch(error){
+      const current=await this.screeningSessions.owned(user,id);
+      if(current.applicationId)return {id:current.applicationId};
+      throw error;
     }
   }
 
@@ -587,6 +619,7 @@ export class ApplicationsService {
       );
       return {
         ...safeApplication(rest),
+        tara:window.tara?.get(row.id)??null,
         candidateDecisionRequired: row.status === 'OFFER' && decisionRequired.has(row.id),
         canAddToKanban: canAddToKanban(row),
         matchSnapshot: {score:row.matchScore,breakdown:row.matchBreakdown},
@@ -604,7 +637,11 @@ export class ApplicationsService {
     });
   }
 
-  private async applicationWindow(where:Prisma.ApplicationWhereInput,jobPostId:string,opts?:ApplicantFilters&{sort?:'match'|'newest';minMatch?:number;page?:number;limit?:number;kanbanOnly?:boolean}):Promise<ApplicationWindow> {
+  private async applicationWindow(where:Prisma.ApplicationWhereInput,jobPostId:string,opts?:ApplicantFilters&{sort?:'match'|'newest';minMatch?:number;page?:number;limit?:number;kanbanOnly?:boolean;screeningVersion?:string;cvSort?:string},baseOnly=false):Promise<ApplicationWindow> {
+    if(!baseOnly&&!opts?.kanbanOnly&&await this.screeningHr?.hasForJob(jobPostId)){
+      const base=await this.applicationWindow(where,jobPostId,{...opts,page:undefined,minMatch:undefined,sort:'match'},true);
+      return this.screeningHr!.project(base,{...opts,sort:opts?.cvSort==='true'?'cv':opts?.sort});
+    }
     if(hrEnabled()){
       try{return {...await rankHrApplications(this.prisma,where,jobPostId,opts),rankingAvailable:true};}
       catch(error){
@@ -637,7 +674,7 @@ export class ApplicationsService {
   }
 
   async getForJob(user: AuthUser, jobPostId: string, applicationId: string, locale: Locale) {
-    if(hrEnabled()){
+    if(hrEnabled()||await this.screeningHr?.hasForJob(jobPostId)){
       const job=await this.prisma.jobPost.findUniqueOrThrow({where:{id:jobPostId}});await this.companies.assertMember(user,job.companyId);
       const window=await this.applicationWindow({jobPostId},jobPostId);if(!window.ids.includes(applicationId))throw new NotFoundException('Application not found in this job');
       return (await this.listForJob(user,jobPostId,{locale,window:{...window,ids:[applicationId]}}))[0];
@@ -977,14 +1014,14 @@ export class ApplicationsService {
     return { application: safeApplication(result.application), packet: safeOfferPacket(result.packet), changed: result.changed };
   }
 
-  async searchForJob(user: AuthUser, jobPostId: string, input: ApplicantFilters & { status?: string; sort?: 'match' | 'newest'; minMatch?: number; page: number; limit: number; kanbanOnly?: boolean }, locale: Locale) {
+  async searchForJob(user: AuthUser, jobPostId: string, input: ApplicantFilters & { status?: string; sort?: 'match' | 'newest'; minMatch?: number; page: number; limit: number; kanbanOnly?: boolean;screeningVersion?:string;cvSort?:string }, locale: Locale) {
     const job = await this.prisma.jobPost.findUnique({ where: { id: jobPostId } });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId);
     const where: Prisma.ApplicationWhereInput = { jobPostId, ...(!hrEnabled()?{AND:[await applicantFilter(this.prisma,input)]}:{}), ...(input.status ? { status: input.status as never } : {}), ...(input.kanbanOnly ? {kanbanEnteredAt:{not:null}} : {}) };
     const window = await this.applicationWindow(where,jobPostId,input);
     const items = await this.listForJob(user, jobPostId, { ...input, page:window.page, filters: input, locale,window });
-    return { items, total:window.total, page:window.page, limit: input.limit, totalPages:window.totalPages,...(window.rankingVersion?{rankingVersion:window.rankingVersion,rankingRevision:window.rankingRevision,state:window.state,rankingAvailable:window.rankingAvailable}:{}) };
+    return { items, taraGroups:window.taraGroups, total:window.total, page:window.page, limit: input.limit, totalPages:window.totalPages,...(window.rankingVersion?{rankingVersion:window.rankingVersion,rankingRevision:window.rankingRevision,state:window.state,rankingAvailable:window.rankingAvailable}:{}) };
   }
 
   async kanbanForJob(user: AuthUser, jobPostId: string, input: ApplicantFilters & { status?: string; page: number; limit: number }, locale: Locale) {

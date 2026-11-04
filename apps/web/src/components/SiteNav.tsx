@@ -174,7 +174,7 @@ function SiteNavContent() {
   const employeeTab = searchParams.get('tab');
   const recruiterTab = searchParams.get('tab') || 'jobs';
   const recruiterActive = [(pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab)) || pathname.startsWith('/dashboard/recruiter/jobs/') || pathname.startsWith('/jobs/') || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
-  const browseLinks = isOnboarding
+  const browseLinks = isOnboarding || pathname.startsWith('/apply/')
     ? [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']]
     : isRecruiter
     ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]

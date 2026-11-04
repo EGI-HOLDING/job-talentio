@@ -1,0 +1,268 @@
+import { Injectable, ForbiddenException, NotFoundException, ConflictException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { CompaniesService } from '../companies/companies.service';
+import type { AuthUser } from '../common/auth.decorators';
+import { registerCvVersion } from '../profiles/cv-evidence';
+import { freezeHrSubmission } from '../matching/recruiter-evidence';
+import { enqueueWork, ScreeningPackets } from './screening-packets.service';
+import { answerDeadline, isExpired, json, MAX_ANSWER_CHARS, SESSION_LEASE_MS, screeningEnabled } from './screening.policy';
+import type { CandidatePayload } from './screening.schemas';
+import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
+const sessionInclude = { package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: true, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
+type Session = Prisma.AiScreeningSessionGetPayload<{
+    include: typeof sessionInclude;
+}>;
+type Upload = {
+    buffer: Buffer;
+    originalname: string;
+    mimetype: string;
+    size: number;
+};
+export function validateScreeningFile(file: Upload) {
+    if (!file)
+        throw new BadRequestException('Pilih berkas terlebih dahulu.');
+    const pdf = /\.pdf$/i.test(file.originalname) && file.mimetype === 'application/pdf' && file.buffer.subarray(0, 5).toString() === '%PDF-';
+    const docx = /\.docx$/i.test(file.originalname) && file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && file.buffer[0] === 0x50 && file.buffer[1] === 0x4b;
+    if (file.size > 5 * 1024 * 1024 || !file.buffer.length || (!pdf && !docx))
+        throw new BadRequestException('Gunakan PDF atau DOCX yang valid, maksimal 5 MB.');
+}
+@Injectable()
+export class ScreeningSessions {
+    constructor(private db: PrismaService, private storage: StorageService, private companies: CompaniesService, private packets: ScreeningPackets, private config: ConfigService, private plans: ScreeningCandidatePlans) { }
+    private async profile(user: AuthUser) {
+        if (!['EMPLOYEE', 'SUPER_ADMIN'].includes(user.role))
+            throw new ForbiddenException();
+        const profile = await this.db.employeeProfile.findUnique({ where: { userId: user.id }, include: { user: { select: { isBanned: true, anonymizedAt: true } } } });
+        if (profile?.user.isBanned || profile?.user.anonymizedAt)
+            throw new ForbiddenException();
+        if (!profile)
+            throw new BadRequestException('Lengkapi profil kandidat terlebih dahulu.');
+        return profile;
+    }
+    async owned(user: AuthUser, id: string): Promise<Session> {
+        const profile = await this.profile(user);
+        const row = await this.db.aiScreeningSession.findFirst({ where: { id, profileId: profile.id }, include: sessionInclude });
+        if (!row)
+            throw new NotFoundException('Draf lamaran tidak ditemukan.');
+        return row;
+    }
+    private public(row: Session) {
+        const active = row.questions.find(q => q.answer === null);
+        const cv = row.cvSnapshot as {
+            resume?: {
+                id: string;
+                title: string;
+            };
+        } | null;
+        return { id: row.id, status: row.status, startedAt: row.startedAt, completedAt: row.completedAt, applicationId: row.applicationId,
+            resumeId: row.resumeId, cv: cv?.resume ? { id: cv.resume.id, title: cv.resume.title, parseStatus: row.resumeVersion?.parseStatus } : null,
+            coverLetter: row.coverLetter ?? '', coverFilename: row.coverFilename, source: row.source, revision: row.revision, serverTime: new Date().toISOString(),
+            packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
+            preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
+            job: { id: row.job.id, title: row.job.title, companyName: row.job.isAnonymous ? 'Perusahaan dirahasiakan' : row.job.company.name, city: row.job.city?.name ?? '' },
+            questions: row.questions.filter(q => !active || q.position <= active.position).map(q => ({ id: q.id, text: q.text, draft: q.draft, answer: q.answer, shownAt: q.shownAt, deadlineAt: q.deadlineAt, answeredAt: q.answeredAt, timedOut: q.timedOut })),
+            error: row.currentPlan?.error === 'CV_UNREADABLE' ? 'CV belum bisa dibaca. Coba unggah PDF atau DOCX yang teksnya jelas, ya.' : row.error || row.currentPlan?.error ? 'Tara sedang mengalami kendala. Progresmu aman, coba lanjutkan sebentar lagi.' : null };
+    }
+    async draft(user: AuthUser, jobId: string) {
+        const [profile] = await Promise.all([this.profile(user), this.packets.available(jobId)]);
+        const application = await this.db.application.findUnique({ where: { jobPostId_profileId: { jobPostId: jobId, profileId: profile.id } }, select: { id: true } });
+        if (application)
+            return { applicationId: application.id, status: 'SUBMITTED', jobId };
+        if (!screeningEnabled()) {
+            const existing = await this.db.aiScreeningSession.findUnique({ where: { jobId_profileId: { jobId, profileId: profile.id } }, include: sessionInclude });
+            if (!existing?.startedAt)
+                throw new NotFoundException('Screening baru sedang dijeda.');
+            return this.public(existing);
+        }
+        const row = await this.db.$transaction(async (tx) => {
+            await tx.$queryRaw(Prisma.sql `SELECT id FROM "EmployeeProfile" WHERE id=${profile.id} FOR UPDATE`);
+            const account = await tx.user.findUnique({ where: { id: user.id }, select: { isBanned: true, anonymizedAt: true } });
+            if (!account || account.isBanned || account.anonymizedAt)
+                throw new ForbiddenException();
+            return tx.aiScreeningSession.upsert({ where: { jobId_profileId: { jobId, profileId: profile.id } }, create: { jobId, profileId: profile.id }, update: {}, include: sessionInclude });
+        });
+        void this.packets.sync(jobId).catch(() => undefined);
+        return this.public(row);
+    }
+    async state(user: AuthUser, id: string) { return this.public(await this.owned(user, id)); }
+    async save(user: AuthUser, id: string, data: {
+        resumeId?: string;
+        coverLetter?: string;
+        removeCoverFile?: boolean;
+        source?: string;
+        funnelSession?: string;
+    }) {
+        const row = await this.owned(user, id);
+        if (row.status !== 'DRAFT')
+            throw new ConflictException('Dokumen sudah dikunci setelah screening dimulai.');
+        if (data.resumeId) {
+            const cv = await this.db.resume.findFirst({ where: { id: data.resumeId, profileId: row.profileId, deletedAt: null, fileKey: { not: null } } });
+            if (!cv)
+                throw new BadRequestException('CV tidak tersedia.');
+        }
+        const result = await this.db.aiScreeningSession.updateMany({ where: { id, status: 'DRAFT' }, data: { ...(data.resumeId ? { resumeId: data.resumeId } : {}),
+                ...(data.coverLetter !== undefined ? { coverLetter: data.coverLetter } : {}), ...(data.source ? { source: data.source.toLowerCase() } : {}),
+                ...(data.funnelSession ? { funnelSession: data.funnelSession } : {}), ...(data.removeCoverFile ? { coverFileKey: null, coverFilename: null, coverContentType: null } : {}), revision: { increment: 1 } } });
+        if (!result.count)
+            throw new ConflictException('Screening sudah dimulai.');
+        if (data.removeCoverFile && row.coverFileKey)
+            await this.storage.delete(row.coverFileKey).catch(() => undefined);
+        if (data.resumeId)
+            await this.plans.request(id);
+        return this.state(user, id);
+    }
+    async uploadCover(user: AuthUser, id: string, file: Upload) {
+        validateScreeningFile(file);
+        const row = await this.owned(user, id);
+        if (row.status !== 'DRAFT')
+            throw new ConflictException('Dokumen sudah dikunci.');
+        const stored = await this.storage.upload(file.buffer, file.originalname, file.mimetype, 'screening/covers/' + row.profileId);
+        const changed = await this.db.aiScreeningSession.updateMany({ where: { id, status: 'DRAFT' }, data: { coverFileKey: stored.key, coverFilename: file.originalname, coverContentType: file.mimetype, revision: { increment: 1 } } });
+        if (!changed.count) {
+            await this.storage.delete(stored.key).catch(() => undefined);
+            throw new ConflictException('Screening sudah dimulai.');
+        }
+        if (row.coverFileKey)
+            await this.storage.delete(row.coverFileKey).catch(() => undefined);
+        return this.state(user, id);
+    }
+    async coverUrl(user: AuthUser, id: string) {
+        const row = await this.owned(user, id);
+        if (!row.coverFileKey)
+            throw new NotFoundException();
+        return { url: await this.storage.getPresignedGetUrl(row.coverFileKey, 300, { filename: row.coverFilename ?? 'cover-letter.pdf', contentType: row.coverContentType ?? 'application/pdf' }) };
+    }
+    async claim(user: AuthUser, id: string, clientId: string) {
+        const row = await this.owned(user, id), now = new Date();
+        const updated = await this.db.aiScreeningSession.updateMany({ where: { id, profileId: row.profileId, OR: [{ leaseToken: null }, { leaseToken: clientId }, { leaseExpiresAt: { lte: now } }] }, data: { leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS) } });
+        if (!updated.count)
+            throw new ConflictException('Screening sedang terbuka di tab lain. Lanjutkan di tab tersebut atau tutup tab itu sebentar.');
+        return this.state(user, id);
+    }
+    private async lock(tx: Prisma.TransactionClient, id: string, profileId: string, clientId?: string) {
+        await tx.$queryRaw(Prisma.sql `SELECT id FROM "AiScreeningSession" WHERE id=${id} FOR UPDATE`);
+        const row = await tx.aiScreeningSession.findUniqueOrThrow({ where: { id }, include: { questions: { orderBy: { position: 'asc' } } } });
+        if (row.profileId !== profileId)
+            throw new NotFoundException();
+        if (clientId && (row.leaseToken !== clientId || !row.leaseExpiresAt || row.leaseExpiresAt <= new Date()))
+            throw new ConflictException('Tab ini perlu tersambung kembali sebelum mengirim jawaban.');
+        return row;
+    }
+    async start(user: AuthUser, id: string, clientId: string) {
+        const row = await this.owned(user, id);
+        if (row.status !== 'DRAFT')
+            return this.claim(user, id, clientId);
+        if (!screeningEnabled())
+            throw new ServiceUnavailableException('Screening baru sedang dijeda.');
+        await this.packets.available(row.jobId);
+        const plan = await this.plans.request(id);
+        if (!plan || plan.status !== 'READY')
+            throw new ServiceUnavailableException('Tara sedang membaca CV dan menyiapkan pertanyaanmu. Drafmu aman, coba lagi sebentar ya.');
+        const payload = plan.payload as unknown as CandidatePayload;
+        await this.db.$transaction(async (tx) => {
+            await tx.$queryRaw(Prisma.sql `SELECT id FROM "EmployeeProfile" WHERE id=${row.profileId} FOR UPDATE`);
+            const session = await this.lock(tx, id, row.profileId, clientId);
+            if (session.status !== 'DRAFT')
+                return;
+            const resume = await tx.resume.findFirst({ where: { id: session.resumeId ?? '', profileId: row.profileId, deletedAt: null, fileKey: { not: null } } });
+            if (!resume?.fileKey)
+                throw new BadRequestException('Pilih CV sebelum mulai, ya.');
+            if (session.currentPlanId !== plan.id)
+                throw new ConflictException('Pilihan CV berubah. Muat ulang sebelum mulai.');
+            const version = await tx.resumeVersion.findUniqueOrThrow({ where: { id: plan.resumeVersionId }, include: { employeeEvidence: true } });
+            if (version.fileKey !== resume.fileKey)
+                throw new ConflictException('CV berubah. Pilih ulang CV sebelum mulai.');
+            const profile = await tx.employeeProfile.findUniqueOrThrow({ where: { id: row.profileId }, include: { languages: { include: { language: true } }, certifications: true } });
+            const now = new Date(), snapshot = { resume: { id: resume.id, title: resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
+            await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 } } });
+            await tx.aiScreeningQuestion.createMany({ data: payload.claims.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: c.question })) });
+        });
+        return this.state(user, id);
+    }
+    async shown(user: AuthUser, id: string, clientId: string, questionId: string) {
+        const owner = await this.owned(user, id);
+        await this.db.$transaction(async (tx) => {
+            const session = await this.lock(tx, id, owner.profileId, clientId);
+            const q = session.questions.find(q => q.answer === null);
+            if (!q || q.id !== questionId || session.status !== 'ACTIVE')
+                throw new ConflictException('Pertanyaan sudah berganti.');
+            if (!q.shownAt) {
+                const now = new Date();
+                await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { shownAt: now, deadlineAt: answerDeadline(now) } });
+            }
+        });
+        return this.state(user, id);
+    }
+    async answer(user: AuthUser, id: string, clientId: string, questionId: string, answer: string, submit: boolean) {
+        if (answer.length > MAX_ANSWER_CHARS)
+            throw new BadRequestException('Jawab ringkas, maksimal 1.200 karakter ya.');
+        const owner = await this.owned(user, id);
+        await this.recordAnswer(id, owner.profileId, questionId, answer, submit, clientId);
+        return this.state(user, id);
+    }
+    private async recordAnswer(id: string, profileId: string, questionId: string, answer: string, submit: boolean, clientId?: string) {
+        await this.db.$transaction(async (tx) => {
+            const session = await this.lock(tx, id, profileId, clientId);
+            const q = session.questions.find(q => q.id === questionId);
+            if (!q || q.answer !== null)
+                return;
+            const current = session.questions.find(q => q.answer === null);
+            if (current?.id !== questionId || !q.shownAt || session.status !== 'ACTIVE')
+                throw new ConflictException('Pertanyaan belum aktif.');
+            const expired = isExpired(q.deadlineAt);
+            if (!submit && !expired) {
+                await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { draft: answer } });
+                await tx.aiScreeningSession.update({ where: { id }, data: { leaseExpiresAt: new Date(Date.now() + SESSION_LEASE_MS) } });
+                return;
+            }
+            // Requests arriving after the deadline cannot replace the last server-saved draft.
+            await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { draft: expired ? q.draft : answer, answer: (expired ? q.draft : answer).trim(), answeredAt: new Date(), timedOut: expired } });
+            const next = session.questions.find(v => v.position > q.position && v.answer === null), revision = session.revision + 1;
+            await tx.aiScreeningSession.update({ where: { id }, data: { status: next ? 'ACTIVE' : 'GENERATING', revision, error: null, leaseExpiresAt: new Date(Date.now() + SESSION_LEASE_MS) } });
+            if (!next)
+                await enqueueWork(tx, 'ADVANCE', id, 'ADVANCE:' + id + ':' + revision);
+        });
+    }
+    async expireAnswers() {
+        const questions = await this.db.aiScreeningQuestion.findMany({ where: { answer: null, deadlineAt: { lte: new Date() }, session: { status: 'ACTIVE' } }, include: { session: { select: { profileId: true } } }, take: 50 });
+        for (const q of questions)
+            await this.recordAnswer(q.sessionId, q.session.profileId, q.id, q.draft, true).catch(() => undefined);
+    }
+    async retry(user: AuthUser, id: string) {
+        const row = await this.owned(user, id);
+        if (row.status === 'DRAFT')
+            await this.plans.request(id);
+        const fresh = await this.owned(user, id);
+        const subjects = [id, fresh.packageId, fresh.currentPlanId, fresh.resumeVersionId].filter((v): v is string => Boolean(v));
+        const works = await this.db.aiScreeningWork.findMany({ where: { subjectId: { in: subjects }, status: 'FAILED' } });
+        for (const work of works) {
+            const uncertain = await this.db.aiScreeningCall.count({ where: { workId: work.id, status: { in: ['UNCERTAIN', 'ERASED'] } } });
+            if (uncertain || work.attempts >= 3)
+                throw new ServiceUnavailableException('Tara sedang memulihkan percakapanmu. Progres aman; tim kami perlu memeriksa sambungannya.');
+            await this.db.aiScreeningWork.updateMany({ where: { id: work.id, status: 'FAILED' }, data: { status: 'PENDING', availableAt: new Date(), error: null } });
+        }
+        return this.state(user, id);
+    }
+    async companyDocument(user: AuthUser, companyId: string) {
+        await this.companies.assertMember(user, companyId);
+        const row = await this.db.aiCompanyDocument.findFirst({ where: { companyId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, filename: true, status: true, createdAt: true } });
+        return { enabled: screeningEnabled(), document: row };
+    }
+    async uploadCompany(user: AuthUser, companyId: string, file: Upload) {
+        if (!screeningEnabled())
+            throw new NotFoundException();
+        validateScreeningFile(file);
+        await this.companies.assertMember(user, companyId, ['OWNER', 'ADMIN']);
+        const { createHash } = await import('node:crypto');
+        const stored = await this.storage.upload(file.buffer, file.originalname, file.mimetype, 'screening/company/' + companyId);
+        await this.db.$transaction(async (tx) => {
+            const document = await tx.aiCompanyDocument.create({ data: { companyId, fileKey: stored.key, filename: file.originalname, contentType: file.mimetype, checksum: createHash('sha256').update(file.buffer).digest('hex') } });
+            await enqueueWork(tx, 'DOCUMENT', document.id);
+        });
+        return this.companyDocument(user, companyId);
+    }
+}

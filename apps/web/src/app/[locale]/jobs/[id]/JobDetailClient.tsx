@@ -343,6 +343,8 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
                     return;
                   }
                   try {
+                    const capabilities=await api<{enabled:boolean}>('/ai-screening/capabilities');
+                    if(capabilities.enabled){window.location.href=localeHref('/apply/'+id+window.location.search);return;}
                     const list = await loadResumes();
                     if (list.length === 0) {
                       setShowCreateResume(true);
