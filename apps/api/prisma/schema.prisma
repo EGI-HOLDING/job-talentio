@@ -987,6 +987,7 @@ model JobPost {
   translations  JobPostTranslation[]
   benefit       JobBenefit?
   funnelSessions JobFunnelSession[]
+  occupationTaskEvidence JobOccupationTaskEvidence[]
   linkedInPreviews LinkedInPreview[]
   linkedInPosts LinkedInSocialPost[]
 
@@ -999,6 +1000,18 @@ model JobPost {
   @@index([experienceLevel])
   @@index([companyId, fingerprint])
   @@index([companyId, contentHash])
+}
+
+model JobOccupationTaskEvidence {
+  jobId         String
+  version       String
+  jobUpdatedAt  DateTime
+  coreKeys      String[]
+  evidence      Json
+  job           JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, version])
+  @@index([coreKeys], type: Gin)
 }
 
 /// Optional recruiter-authored language version of a posting. The original

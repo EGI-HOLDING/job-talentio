@@ -96,13 +96,14 @@ export class JobsController {
   @Get('recommended')
   @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  recommended(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string, @Query('limit') limit?: string) {
+  recommended(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string, @Query('limit') limit?: string, @Query('feed') feed?: string) {
     const parsed = (value:string | undefined, fallback:number, max:number) => {
       if (value === undefined) return fallback;
       if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > max) throw new BadRequestException('Invalid recommendation pagination');
       return Number(value);
     };
-    return this.jobs.recommendedForUser(user, requestLocale(req), page === undefined ? undefined : parsed(page,1,1000000), parsed(limit,24,50));
+    if(feed!==undefined&&feed!=='exploration'&&feed!=='recommendations')throw new BadRequestException('Invalid recommendation feed');
+    return this.jobs.recommendedForUser(user, requestLocale(req), page === undefined ? undefined : parsed(page,1,1000000), parsed(limit,24,50),feed);
   }
 
   @Get('company/:companyId')

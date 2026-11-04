@@ -11,11 +11,12 @@ import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { EmployeeMatchingStatusController } from './employee-status.controller';
 import {OccupationRelationsService} from './occupation-relations.service';
 import {OccupationRelationsController} from './occupation-relations.controller';
+import { VacancyTasksService } from './vacancy-tasks.service';
 
 @Module({
   imports: [PrismaModule,StorageModule],
   controllers:[EmployeeEvidenceController,EmployeeMatchingStatusController,OccupationRelationsController],
-  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker,OccupationRelationsService],
+  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker,OccupationRelationsService,VacancyTasksService],
   exports: [MatchingService, EmployeeMatchingService,EmployeeCatalogSnapshot],
 })
 export class MatchingModule implements OnModuleInit,OnModuleDestroy {

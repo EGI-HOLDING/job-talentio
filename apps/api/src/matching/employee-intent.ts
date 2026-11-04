@@ -1,6 +1,7 @@
 import { languageLevelRank, EMPLOYEE_PROFESSIONAL_WEIGHTS, EMPLOYEE_INTENT_VERSION, type MatchEvidence, type MatchInsights } from '@job-talentio/shared';
 import { EmployeeOccupationIndex } from './employee-occupation';
 import type { IntentFacts, IntentSkill } from './employee-intent-evidence';
+import type { VacancyEligibility } from './vacancy-tasks';
 export type IntentJob = {
     id: string;
     title: string;
@@ -75,8 +76,8 @@ const weighted = (values: Array<[
     number,
     number
 ]>) => { const sum = values.reduce((n, [w]) => n + w, 0); return sum ? 100 * values.reduce((n, [w, v]) => n + w * v, 0) / sum : 50; };
-export function evaluateIntent(preferences: IntentPreferences, facts: IntentFacts, job: IntentJob, index: EmployeeOccupationIndex, now = new Date()): IntentEvaluation {
-    const eligibility = index.eligibility(preferences.selectedIds, job.jobTitleId);
+export function evaluateIntent(preferences: IntentPreferences, facts: IntentFacts, job: IntentJob, index: EmployeeOccupationIndex, now = new Date(), resolved?:VacancyEligibility): IntentEvaluation {
+    const eligibility = resolved ?? index.eligibility(preferences.selectedIds, job.jobTitleId);
     const evidence: MatchEvidence[] = [];
     const required: Array<'MET' | 'UNKNOWN' | 'UNMET'> = [];
     const parts: Array<[
@@ -169,6 +170,6 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
             salary = clamp(job.salaryMax / desired);
     }
     const tier = required.some(s => s === 'UNMET') ? 2 : required.length > 0 && required.every(s => s === 'MET') ? 0 : 1;
-    return { score: weighted(parts), positiveCore: true, optionalScore: Math.min(10, optionalScore), tier, practical: [location, work, salary], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, mode: 'PERSONALIZED', evidence, reviewExperienceIds: facts.experiences.filter(e => !e.jobTitleId || !e.startDate || !e.isCurrent && !e.endDate).map(e => e.key) } };
+    return { score: weighted(parts), positiveCore: true, optionalScore: Math.min(10, optionalScore), tier, practical: [location, work, salary], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, mode: 'PERSONALIZED', evidence, relatedTasks:resolved?.sharedTasks, reviewExperienceIds: facts.experiences.filter(e => !e.jobTitleId || !e.startDate || !e.isCurrent && !e.endDate).map(e => e.key) } };
 }
 export function compareIntent(a: IntentEvaluation, b: IntentEvaluation) { return Number(a.eligibility.matchType==='RELATED')-Number(b.eligibility.matchType==='RELATED') || a.tier - b.tier || b.score - a.score || (b.eligibility.relationScore||0)-(a.eligibility.relationScore||0) || b.practical[0] - a.practical[0] || b.practical[1] - a.practical[1] || b.practical[2] - a.practical[2] || b.optionalScore - a.optionalScore; }

@@ -88,7 +88,11 @@ export class EmployeeMatchingService {
     return (await this.scoreJobsForProfile(profileId,[jobId])).get(jobId) ?? null;
   }
 
-  async recommend(profileId: string, page = 1, limit = 24) {
+  async recommend(profileId: string, page = 1, limit = 24, feed:'recommendations'|'exploration'='recommendations') {
+    if(feed==='exploration'){
+      if(!this.intent)throw new Error('Employee intent service unavailable');
+      return this.intent.explore(profileId,page,limit);
+    }
     if(this.usesIntent(profileId)){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.recommend(profileId,page,limit);}
     const shadowScope=employeeIntentMode()==='shadow'&&this.intent?await this.intent.context(profileId):null;
     if(shadowScope?.state==='READY'&&this.performanceCache&&this.intent)this.performanceCache.shadow(shadowScope.fingerprint,()=>this.intent!.recommend(profileId,page,limit,shadowScope));

@@ -14,6 +14,7 @@ export type MatchInsights = {
   mode: 'PERSONALIZED' | 'LATEST' | 'PREFERENCES_BASED' | 'EXPLORATION';
   evidence: MatchEvidence[];
   reviewExperienceIds: string[];
+  relatedTasks?: string[];
 };
 export type OccupationMatchingMetadata = {
   professionSourceUri?: string;

@@ -55,7 +55,7 @@ export class OccupationRelationsService implements OnModuleInit,OnModuleDestroy 
  }
  async snapshot(){
   const state=await this.db.occupationRelationState.findUnique({where:{id:'employee'}});
-  if(!state?.activeReleaseId)return {revision:'none:'+state?.updatedAt.toISOString(),relations:[] as Array<{fromRoleId:string;toRoleId:string;score:number;reference:string}>,overrides:await this.db.occupationRelationOverride.findMany({select:{fromRoleId:true,toRoleId:true,enabled:true,reason:true}})};
+  if(!state?.activeReleaseId)return {releaseId:null,revision:'none:'+state?.updatedAt.toISOString(),relations:[] as Array<{fromRoleId:string;toRoleId:string;score:number;reference:string}>,overrides:await this.db.occupationRelationOverride.findMany({select:{fromRoleId:true,toRoleId:true,enabled:true,reason:true}})};
   const revision=state.activeReleaseId+':'+state.updatedAt.toISOString();
   const load=async()=>{
    const [rows,overrides]=await Promise.all([
@@ -67,7 +67,7 @@ export class OccupationRelationsService implements OnModuleInit,OnModuleDestroy 
     `,
     this.db.occupationRelationOverride.findMany({select:{fromRoleId:true,toRoleId:true,enabled:true,reason:true}}),
    ]);
-   return {revision,relations:rows.map(r=>({...r,reference:'talentio:derived-competencies:'+state.activeReleaseId})),overrides};
+   return {releaseId:state.activeReleaseId,revision,relations:rows.map(r=>({...r,reference:'talentio:derived-competencies:'+state.activeReleaseId})),overrides};
   };
   return this.cache?this.cache.memo('profession-relations:'+revision,600,load):load();
  }

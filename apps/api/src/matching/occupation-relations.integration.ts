@@ -31,10 +31,11 @@ async function main(){
   await db.jobPost.update({where:{id:prefix+'job-a'},data:{status:'CLOSED'}});
   await db.application.create({data:{profileId:prefix+'profile',jobPostId:prefix+'job-c'}});
   result=await matching.recommend(prefix+'profile',1,3);
-  check(result.state==='READY'&&result.mode==='EXPLORATION'&&result.items.length===3,'no relevant positions fall back to labeled exploration');
-  check(result.items.every(r=>r.recommendationType==='EXPLORATION'&&r.matchScore===null&&r.matchInsights.mode==='EXPLORATION'&&!r.matchInsights.evidence.length&&!r.eligibility.eligible),'exploration never claims a position or CV match');
-  check(result.items.every(r=>![prefix+'job-a',prefix+'job-c'].includes(r.job.id)),'exploration excludes closed and already applied jobs');
-  const second=await matching.recommend(prefix+'profile',2,3);check(second.items.every(r=>!result.items.some(a=>a.job.id===r.job.id)),'exploration pagination is stable and distinct');
+  check(result.state==='NO_ELIGIBLE_JOBS'&&result.total===0&&!result.items.length,'no relevant positions return an empty recommendation feed');
+  const exploration=await matching.explore(prefix+'profile',1,3);
+  check(exploration.items.length===3&&exploration.items.every(r=>r.recommendationType==='EXPLORATION'&&r.matchScore===null&&r.matchInsights.mode==='EXPLORATION'&&!r.matchInsights.evidence.length&&!r.eligibility.eligible),'explicit exploration never claims a position or CV match');
+  check(exploration.items.every(r=>![prefix+'job-a',prefix+'job-c'].includes(r.job.id)),'exploration excludes closed and already applied jobs');
+  const second=await matching.explore(prefix+'profile',2,3);check(second.rankingRevision===exploration.rankingRevision&&second.items.every(r=>!exploration.items.some(a=>a.job.id===r.job.id)),'exploration pagination is stable and distinct');
   await db.occupationRelationRelease.create({data:{id:prefix+'rollback',sourceVersion:'fixture',algorithmVersion:'fixture',sourceDigest:'fixture',catalogRevision:'fixture',report:{fixture:true}}});
   await relations.activate(prefix+'rollback',prefix+'admin');check((await relations.build(false)).pinned,'restored relation version stays pinned until an explicit deployment resumes enrichment');
   await relations.activate('none',prefix+'admin');

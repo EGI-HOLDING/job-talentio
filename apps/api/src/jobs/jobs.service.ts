@@ -31,7 +31,7 @@ import { EmployeeMatchingService } from '../matching/employee-matching.service';
 import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
 import { publicEmployeeEvaluation } from '../matching/employee-public-evaluation';
 import { employeeRecommendationV32Enabled } from '../matching/employee-recommendation-policy';
-import { employeeIntentMode } from '../matching/employee-intent.service';
+import { employeeIntentMode, intentJobScope } from '../matching/employee-intent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify, parseDto } from '../common/utils';
@@ -1154,7 +1154,7 @@ export class JobsService {
     const now = new Date();
     const and: Prisma.JobPostWhereInput[] = [liveJobWhere(now)];
     const intentScope=query.sort==='match'&&query.profileId?await this.employeeMatching.intentSearchScope(query.profileId):null;
-    const intentFilter:Prisma.JobPostWhereInput|null=intentScope?{jobTitleId:{in:intentScope.allowedIds},applications:{none:{profileId:query.profileId}}}:null;
+    const intentFilter:Prisma.JobPostWhereInput|null=intentScope?{...intentJobScope(intentScope),applications:{none:{profileId:query.profileId}}}:null;
     if(intentFilter)and.push(intentFilter);
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -1622,7 +1622,7 @@ export class JobsService {
     if(intentScope&&total===0){
       emptyReason=intentScope.state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':intentScope.state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS';
       if(intentScope.v32&&intentScope.state==='READY'){
-        const active=await this.prisma.jobPost.count({where:{AND:and.map(clause=>clause===intentFilter?{jobTitleId:{in:intentScope.allowedIds}}:clause)}});
+        const active=await this.prisma.jobPost.count({where:{AND:and.map(clause=>clause===intentFilter?intentJobScope(intentScope):clause)}});
         if(active)emptyReason='ALL_APPLIED';
       }
     }
@@ -1696,12 +1696,12 @@ export class JobsService {
     return this.analytics.summary(user, companyId);
   }
 
-  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24) {
+  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'exploration'='recommendations') {
     const profile = await this.prisma.employeeProfile.findUnique({
       where: { userId: user.id },
     });
     if (!profile) return page ? { items:[],page:1,limit,total:0,totalPages:1,mode:'LATEST' } : [];
-    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit).catch(error=>{if(employeeRecommendationV32Enabled())throw new ServiceUnavailableException('Recommendations temporarily unavailable');throw error;});
+    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit,feed).catch(error=>{if(employeeRecommendationV32Enabled())throw new ServiceUnavailableException('Recommendations temporarily unavailable');throw error;});
     const items = result.items.map((row) => ({
       ...row,
       job: maskAnonymousCompany(this.withResolvedIcons(row.job), locale),
