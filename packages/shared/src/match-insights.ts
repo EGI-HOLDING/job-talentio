@@ -15,6 +15,7 @@ export type MatchInsights = {
   evidence: MatchEvidence[];
   reviewExperienceIds: string[];
   relatedTasks?: string[];
+  practicalFit?: import('./employee-intent').EmployeePracticalFit;
 };
 export type OccupationMatchingMetadata = {
   professionSourceUri?: string;

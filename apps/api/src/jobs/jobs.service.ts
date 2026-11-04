@@ -1696,7 +1696,7 @@ export class JobsService {
     return this.analytics.summary(user, companyId);
   }
 
-  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'exploration'='recommendations') {
+  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'exploration'|'salary-unverified'='recommendations') {
     const profile = await this.prisma.employeeProfile.findUnique({
       where: { userId: user.id },
     });

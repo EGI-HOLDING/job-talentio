@@ -4,7 +4,15 @@ export const EMPLOYEE_INTENT_RANKING_VERSION = 'employee-ranking-v3.1';
 export const EMPLOYEE_RELATED_RANKING_VERSION = 'employee-ranking-v3.2';
 export type EmployeeEvidenceState = 'READY' | 'REQUIRED' | 'PROCESSING' | 'FAILED' | 'REVIEW_REQUIRED';
 export type EmployeeRecommendationType = 'EXACT' | 'RELATED' | 'EXPLORATION';
-export type EmployeeEmptyReason = 'UNRECOGNIZED_PREFERENCES' | 'NO_ACTIVE_JOBS' | 'ALL_APPLIED' | 'SERVICE_UNAVAILABLE';
+export type EmployeeEmptyReason = 'UNRECOGNIZED_PREFERENCES' | 'NO_ACTIVE_JOBS' | 'ALL_APPLIED' | 'SERVICE_UNAVAILABLE' | 'PRACTICAL_PREFERENCES';
+export type EmployeeRecommendationFeed = 'recommendations' | 'exploration' | 'salary-unverified';
+export type EmployeePracticalFit = {
+    version: string; active: boolean;
+    country: 'MET'|'UNMET'|'UNKNOWN'|'NOT_REQUESTED';
+    salary: 'MET'|'UNMET'|'UNKNOWN'|'NOT_REQUESTED';
+    salaryReason: 'NOT_REQUESTED'|'NOT_DISCLOSED'|'INVALID_RANGE'|'CURRENCY_MISMATCH'|'PERIOD_MISMATCH'|'BELOW_TARGET'|'ENTIRE_RANGE_MEETS'|'UPPER_BOUND_MEETS'|'LOWER_BOUND_MEETS'|'UPPER_BOUND_MISSING';
+    group: 'MAIN'|'SALARY_UNVERIFIED'|'EXCLUDED';
+};
 export const employeeRecommendationStates = ['READY', 'CV_REQUIRED', 'CV_PROCESSING', 'CV_FAILED', 'EVIDENCE_REVIEW_REQUIRED', 'PREFERENCES_REQUIRED', 'PREFERENCES_REVIEW_REQUIRED', 'NO_ELIGIBLE_JOBS', 'UNAVAILABLE'] as const;
 export type EmployeeRecommendationState = typeof employeeRecommendationStates[number];
 export const employeeIntentPreferencesSchema = z.object({

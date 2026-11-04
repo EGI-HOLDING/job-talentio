@@ -1,6 +1,19 @@
 'use client';
 import { useI18n } from '@/lib/i18n';
 const en = {
+"salaryUnverifiedTitle":"Relevant positions, salary not yet confirmed",
+"salaryUnverifiedCopy":"These jobs match your position and country preferences, but their salary cannot yet be compared with your target.",
+"salaryUnverifiedView":"View these jobs",
+"salaryUnverifiedEmpty":"No relevant jobs with unconfirmed salary are available.",
+"salaryMeets":"The entire disclosed salary range meets your target.",
+"salaryPossible":"The salary range can reach your target; the final offer may be lower.",
+"salaryUnknown":"Salary cannot yet be compared with your target.",
+"countryOutside":"This job is outside your selected work countries.",
+"countryUnknown":"The work country cannot be confirmed.",
+"salaryBelow":"The disclosed salary is below your target.",
+"countryMissing":"Set your work country preferences to refine these results.",
+"backMain":"Back to recommendations",
+"empty.PRACTICAL_PREFERENCES":"No jobs currently meet your position, country and salary preferences together.",
 "explorationTitle":"Other jobs to explore",
 "explorationCopy":"These are other available jobs, not matches to your selected positions or CV.",
 "transferableExperience":"Experience in a related occupation; transferability needs review.",
@@ -70,6 +83,19 @@ const en = {
     "confirmAndSave": "Confirm and save"
 };
 const id: Record<keyof typeof en, string> = {
+"salaryUnverifiedTitle":"Posisi relevan, gaji belum dapat dipastikan",
+"salaryUnverifiedCopy":"Lowongan ini memenuhi preferensi posisi dan negara, tetapi gajinya belum dapat dibandingkan dengan target Anda.",
+"salaryUnverifiedView":"Lihat lowongan ini",
+"salaryUnverifiedEmpty":"Belum ada posisi relevan dengan gaji yang belum dapat dipastikan.",
+"salaryMeets":"Seluruh rentang gaji yang dicantumkan memenuhi target Anda.",
+"salaryPossible":"Rentang gaji dapat mencapai target Anda; penawaran akhirnya bisa lebih rendah.",
+"salaryUnknown":"Gaji belum dapat dibandingkan dengan target Anda.",
+"countryOutside":"Lowongan ini berada di luar negara tujuan kerja Anda.",
+"countryUnknown":"Negara tempat bekerja belum dapat dipastikan.",
+"salaryBelow":"Gaji yang dicantumkan berada di bawah target Anda.",
+"countryMissing":"Lengkapi negara tujuan kerja untuk menyesuaikan hasil.",
+"backMain":"Kembali ke rekomendasi",
+"empty.PRACTICAL_PREFERENCES":"Belum ada lowongan yang sekaligus memenuhi preferensi posisi, negara, dan gaji Anda.",
 "explorationTitle":"Lowongan lain untuk dijelajahi",
 "explorationCopy":"Berikut lowongan lain yang tersedia untuk eksplorasi. Lowongan ini belum dinilai cocok dengan posisi pilihan atau CV Anda.",
 "transferableExperience":"Pengalaman pada profesi terkait; penerapannya perlu ditinjau.",

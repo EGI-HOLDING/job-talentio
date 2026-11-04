@@ -1,5 +1,6 @@
 'use client';
-import { EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
+import { EmployeeSalaryUnverifiedSection } from '@/components/jobs/EmployeeSalaryUnverifiedSection';
+import { EmployeeCountryPreferenceNotice,EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
 import {useEmployeeIntentText} from '@/lib/i18n/employeeIntent';
 import type { EmployeeRecommendationState,EmployeeEvidenceState,EmployeeEmptyReason,MatchInsights } from '@job-talentio/shared';
 
@@ -50,7 +51,7 @@ export function ForYouJobsSection() {
   const intentText=useEmployeeIntentText();
   const identity=useSessionIdentity();
   const active=!!identity&&getSession()?.user.role==='EMPLOYEE';
-  const feed=useApiResource<{items:RecommendedItem[];mode?:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6':null);
+  const feed=useApiResource<{items:RecommendedItem[];salaryUnverifiedTotal?:number;practicalPolicy?:{active:boolean;countryFilterApplied:boolean};mode?:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6':null);
   const me=useApiResource<ProfileSignal>(active&&process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3!=='true'?'/profiles/me':null);
   const items=feed.data?.items.slice(0,HOME_FOR_YOU_LIMIT)||[];
   const recommendationState=feed.data?.state||(feed.error?'UNAVAILABLE':undefined);
@@ -77,6 +78,7 @@ export function ForYouJobsSection() {
       viewAllLabel={t('viewAll')}
       bare
     >
+      {ready&&<EmployeeCountryPreferenceNotice policy={feed.data?.practicalPolicy}/>}
       {ready&&recommendationState==='READY'&&<EmployeeRecommendationNotice state="READY" evidenceState={feed.data?.evidenceState} preferenceWarnings={feed.data?.preferenceWarnings}/>}
       {!ready ? (
         <div className="muted" style={{ minHeight: '2.5rem' }} />
@@ -119,6 +121,7 @@ export function ForYouJobsSection() {
           })}
         </div>
       )}
+      {ready&&<EmployeeSalaryUnverifiedSection total={feed.data?.salaryUnverifiedTotal||0}/> }
     </ExploreSection>
   );
 }

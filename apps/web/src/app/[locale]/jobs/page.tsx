@@ -1,5 +1,7 @@
 'use client';
-import { EmployeeRecommendationNotice,EmployeeMatchReasons,EmployeeExplorationNotice } from '@/components/jobs/EmployeeRecommendationState';
+import { EmployeeSalaryUnverifiedSection } from '@/components/jobs/EmployeeSalaryUnverifiedSection';
+import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
+import { EmployeeCountryPreferenceNotice,EmployeeRecommendationNotice,EmployeeMatchReasons,EmployeeExplorationNotice } from '@/components/jobs/EmployeeRecommendationState';
 import type { EmployeeRecommendationState,EmployeeEvidenceState,EmployeeEmptyReason,MatchInsights } from '@job-talentio/shared';
 import { loginForCurrentPage } from '@/lib/authReturn';
 
@@ -92,7 +94,7 @@ type EmployeeProfile = {
   resumes?: unknown[];
 };
 type RecommendedItem = { job: Job;matchInsights?:MatchInsights };
-type RecommendationPage = {rankingRevision?:string;items:RecommendedItem[];total:number;totalPages:number;page:number;mode:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason};
+type RecommendationPage = {rankingRevision?:string;items:RecommendedItem[];practicalPolicy?:{active:boolean;countryFilterApplied:boolean};salaryUnverifiedTotal?:number;mainTotal?:number;feed?:string;total:number;totalPages:number;page:number;mode:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason};
 
 function hasCareerSignal(profile: EmployeeProfile | null) {
   return Boolean(profile?.cvSource?.status==='READY');
@@ -228,6 +230,7 @@ function toggleCsv(csv: string, slug: string) {
 }
 
 function JobsInner() {
+  const intentText=useEmployeeIntentText();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t, locale } = useI18n();
@@ -265,28 +268,30 @@ function JobsInner() {
   const [recommendationPage,setRecommendationPage]=useState(1);
   const requestedMode = searchParams.get('mode');
   const exploration = requestedMode === 'exploration';
+  const salaryUnverified = requestedMode === 'salary-unverified';
+  const recommendationFeed=exploration?'exploration':salaryUnverified?'salary-unverified':'recommendations';
   const recommendationRevision = useRef<string | undefined>(undefined);
   const discoveryContext=useRef('');
   useEffect(()=>{
     if(!authReady)return;
-    const key=session?.user.id+':'+locale+':'+exploration;
+    const key=session?.user.id+':'+locale+':'+recommendationFeed;
     if(discoveryContext.current===key)return;
     discoveryContext.current=key;recommendationRevision.current=undefined;setRecommendationPage(1);
-    const cached=peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24'+(exploration?'&feed=exploration':''));
+    const cached=peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24'+(recommendationFeed!=='recommendations'?'&feed='+recommendationFeed:''));
     setDiscovery({status:cached?'ready':'loading',profile:peekApi<EmployeeProfile>('/profiles/me')||null,rows:cached?.items||[]});
     if(cached)setRecommendationMeta(cached);
-  },[authReady,session?.user.id,locale,exploration]);
-  const [recommendationMeta,setRecommendationMeta]=useState<{total:number;totalPages:number;mode:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(()=>peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')||{total:0,totalPages:1,mode:"LATEST"});
+  },[authReady,session?.user.id,locale,recommendationFeed]);
+  const [recommendationMeta,setRecommendationMeta]=useState<{practicalPolicy?:{active:boolean;countryFilterApplied:boolean};salaryUnverifiedTotal?:number;mainTotal?:number;feed?:string;total:number;totalPages:number;mode:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(()=>peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')||{total:0,totalPages:1,mode:"LATEST"});
   const [discovery, setDiscovery] = useState<{ status: 'loading' | 'ready' | 'error'; profile: EmployeeProfile | null; rows: RecommendedItem[] }>(()=>({status:peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')?'ready':'loading',profile:peekApi<EmployeeProfile>('/profiles/me')||null,rows:peekApi<RecommendationPage>('/jobs/recommended?page=1&limit=24')?.items||[]}));
   const hasSearchIntent = Object.keys(EMPTY).some((key) => !['limit', 'skillMode'].includes(key) && filterParams.has(key)) || browseCompanies;
-  const personalized = Boolean(isEmployee && (exploration || requestedMode === 'for-you' || (requestedMode !== 'all' && !hasSearchIntent && (recommendationMeta.state || hasCareerSignal(discovery.profile) && discovery.rows.length > 0))));
+  const personalized = Boolean(isEmployee && (exploration || salaryUnverified || requestedMode === 'for-you' || (requestedMode !== 'all' && !hasSearchIntent && (recommendationMeta.state || hasCareerSignal(discovery.profile) && discovery.rows.length > 0))));
   const decidingMode = !authReady || Boolean(isEmployee && !['all', 'for-you'].includes(requestedMode || '') && !hasSearchIntent && !discovery.profile && discovery.status === 'loading');
 
   const discoveryRequest=useRef(''),lastDiscoveryRetry=useRef(0);
   useEffect(()=>{
-    if(!isEmployee||requestedMode==='all'||hasSearchIntent&&requestedMode!=='for-you'&&!exploration)return;
+    if(!isEmployee||requestedMode==='all'||hasSearchIntent&&requestedMode!=='for-you'&&!exploration&&!salaryUnverified)return;
     const controller=new AbortController();let active=true;
-    const path='/jobs/recommended?page='+recommendationPage+'&limit=24'+(exploration?'&feed=exploration':'');
+    const path='/jobs/recommended?page='+recommendationPage+'&limit=24'+(recommendationFeed!=='recommendations'?'&feed='+recommendationFeed:'');
     const context=session?.user.id+':'+locale+':'+path;
     const cached=peekApi<RecommendationPage>(path);
     if(cached){setDiscovery(current=>({...current,status:'ready',rows:cached.items}));setRecommendationMeta(cached);}
@@ -300,7 +305,7 @@ function JobsInner() {
       recommendationRevision.current=result.rankingRevision;setDiscovery(current=>({...current,status:'ready',rows:result.items}));setRecommendationMeta(result);setRecommendationPage(result.page);
     }).catch(error=>{if(active&&error.name!=='AbortError')setDiscovery(current=>({...current,status:current.rows.length?'ready':'error'}));});
     return()=>{active=false;controller.abort();};
-  },[isEmployee,session?.user.id,locale,discoveryRetry,recommendationPage,requestedMode,hasSearchIntent,exploration]);
+  },[isEmployee,session?.user.id,locale,discoveryRetry,recommendationPage,requestedMode,hasSearchIntent,recommendationFeed]);
   useMatchingStatus(recommendationMeta.state==='CV_PROCESSING'||recommendationMeta.evidenceState==='PROCESSING'||['PENDING','PROCESSING'].includes(discovery.profile?.cvSource?.status||''),()=>{invalidateApi(['/profiles/me','/jobs']);});
   const [hiringCompanies, setHiringCompanies] = useState<
     Array<{ slug: string; name: string; logoUrl?: string | null; count: number }>
@@ -544,7 +549,7 @@ function JobsInner() {
 
   const profile = discovery.profile;
   const completeness = profile ? scoreProfileCompleteness({ ...profile, email: session?.user.email, emailVerified: session?.user.emailVerified, telegramLinked: session?.user.telegramLinked, avatarUrl: session?.user.avatarUrl }).percent : 0;
-  const recommendations = (exploration===(recommendationMeta.mode==='EXPLORATION')?discovery.rows:[]).map((item) => item.job);
+  const recommendations = ((exploration===(recommendationMeta.mode==='EXPLORATION')&&(!recommendationMeta.feed||recommendationMeta.feed===recommendationFeed))?discovery.rows:[]).map((item) => item.job);
   const visibleJobs = personalized ? recommendations : data?.items || [];
   usePromotionRefresh(visibleJobs, () => {
     if (personalized) { setDiscoveryRetry(value => value + 1); }
@@ -576,7 +581,7 @@ function JobsInner() {
         </form>
       </header>
       {isEmployee && <nav className={s.modeBar} aria-label={t('home.findJobs')} inert={filtersOpen ? true : undefined}>
-        <Link href="/jobs?mode=for-you" aria-current={personalized && !exploration ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('for-you'); }}>{t('home.forYou')}{!exploration && discovery.status === 'ready' && discovery.rows.length > 0 && <span>{recommendationMeta.total}</span>}</Link>
+        <Link href="/jobs?mode=for-you" aria-current={personalized && !exploration ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('for-you'); }}>{t('home.forYou')}{!exploration && !salaryUnverified && discovery.status === 'ready' && discovery.rows.length > 0 && <span>{recommendationMeta.total}</span>}</Link>
         <Link href="/jobs?mode=all" aria-current={!personalized && !decidingMode ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('all'); }}>{t('workspace.allJobs')}</Link>
         <Link className={s.profileShortcut} href="/dashboard/employee?tab=profile&section=cvs">{t('workspace.profileCv')}<JobsIcon kind="external" /></Link>
       </nav>}
@@ -725,11 +730,13 @@ function JobsInner() {
           <button className={s.showResults} type="button" onClick={() => setFiltersOpen(false)}>{t('workspace.showResults')} {data ? `(${data.total})` : ''}</button>
         </aside>}
         <section className={s.results} aria-label={t('jobs')} inert={filtersOpen ? true : undefined}>
-          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}>{exploration?<EmployeeExplorationNotice/>:<><strong>{t('workspace.personalized')}</strong><p>{recommendationMeta.mode==='PREFERENCES_BASED'?t('cv.preferencesOnly'):profile?.cvSource?.status==='READY'?t('cv.basedOn'):t('cv.preferencesOnly')}</p></>}</div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
+          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}>{exploration?<EmployeeExplorationNotice/>:salaryUnverified?<div><strong>{intentText('salaryUnverifiedTitle')}</strong><p>{intentText('salaryUnverifiedCopy')}</p><Link href="/jobs?mode=for-you">{intentText('backMain')}</Link></div>:<><strong>{t('workspace.personalized')}</strong><p>{recommendationMeta.mode==='PREFERENCES_BASED'?t('cv.preferencesOnly'):profile?.cvSource?.status==='READY'?t('cv.basedOn'):t('cv.preferencesOnly')}</p></>}</div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
           {!personalized && !!activeChips.length && <div className={s.activeChips}>{activeChips.map((chip) => <button key={chip.key} type="button" onClick={chip.remove}>{chip.label}<JobsIcon kind="close" /></button>)}</div>}
           <div ref={listRef} className={s.resultsScroll} aria-busy={resultsLoading}>
-            {isEmployee&&!exploration&&(personalized||filters.sort==='match'||!hasSearchIntent&&requestedMode!=='all')&&recommendationMeta.state&&<EmployeeRecommendationNotice state={recommendationMeta.state} evidenceState={recommendationMeta.evidenceState} preferenceWarnings={recommendationMeta.preferenceWarnings} emptyReason={recommendationMeta.emptyReason}/>}
+            {isEmployee&&!exploration&&!salaryUnverified&&(personalized||filters.sort==='match'||!hasSearchIntent&&requestedMode!=='all')&&recommendationMeta.state&&<EmployeeRecommendationNotice state={recommendationMeta.state} evidenceState={recommendationMeta.evidenceState} preferenceWarnings={recommendationMeta.preferenceWarnings} emptyReason={recommendationMeta.emptyReason}/>}
             {exploration&&recommendationMeta.mode==='EXPLORATION'&&!resultsLoading&&visibleJobs.length===0&&<p role="status">{t('job.noResults')}</p>}
+            {salaryUnverified&&!resultsLoading&&visibleJobs.length===0&&<p role="status">{intentText('salaryUnverifiedEmpty')}</p>}
+            {personalized&&!exploration&&<EmployeeCountryPreferenceNotice policy={recommendationMeta.practicalPolicy}/>}
             {saveError && <div className={s.error} role="alert">{saveError}</div>}
             {isEmployee && !recommendationMeta.state && !personalized && !decidingMode && discovery.status !== 'loading' && (discovery.status === 'error' || !hasCareerSignal(profile) || !discovery.rows.length) && <div className={s.personalizeBanner}><JobsIcon kind="sparkles" /><div><strong>{t(discovery.status === 'error' ? 'workspace.recommendationError' : !hasCareerSignal(profile) ? 'workspace.unlockTitle' : 'workspace.noMatchesTitle')}</strong>{discovery.status !== 'error' && <p>{t(!hasCareerSignal(profile) ? 'cv.uploadHint' : 'workspace.noMatchesCopy')}</p>}</div>{discovery.status === 'error' ? <button type="button" className={s.textButton} onClick={() => setDiscoveryRetry((value) => value + 1)}>{t('workspace.retry')}</button> : <Link href="/dashboard/employee?tab=profile&section=cvs">{t('pc.myCvs')}<JobsIcon kind="external" /></Link>}</div>}
             {resultsError && <div className={s.message} role="alert"><p>{resultsError}</p><button type="button" className={s.outlineButton} onClick={() => personalized ? setDiscoveryRetry((value) => value + 1) : setRetry((value) => value + 1)}>{t('workspace.retry')}</button></div>}
@@ -741,7 +748,7 @@ function JobsInner() {
               {(!session || isEmployee) && <button className={s.saveButton} type="button" aria-label={`${t('saveJob')}: ${job.title}`} aria-pressed={savedIds.has(job.id)} disabled={savingIds.has(job.id)} onClick={() => void toggleSaved(job.id)}><JobsIcon kind={savedIds.has(job.id) ? 'check' : 'bookmark'} /></button>}
             </article>)}
             {!resultsLoading && !resultsError && visibleJobs.length === 0 && !(recommendationMeta.state && (personalized || filters.sort==='match'&&recommendationMeta.state!=='READY')) && (personalized ? <div className={s.discoveryEmpty}><JobsIcon kind="sparkles" /><h2>{t(hasCareerSignal(profile) ? 'workspace.noMatchesTitle' : 'workspace.unlockTitle')}</h2><p>{t(hasCareerSignal(profile) ? 'workspace.noMatchesCopy' : 'cv.uploadHint')}</p><div><button type="button" className={s.primaryButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')}</button><Link href="/dashboard/employee?tab=profile&section=cvs" className={s.outlineButton}>{t('pc.myCvs')}</Link></div></div> : <div className={s.message}><JobsIcon kind="search" /><h2>{t('job.noResults')}</h2><button className={s.primaryButton} type="button" onClick={() => apply({ ...EMPTY, sort: implicitSort })}>{t('clearFilters')}</button></div>)}
-            {personalized && !resultsLoading && !resultsError && visibleJobs.length > 0 && <div className={s.recommendationEnd}><span>{exploration?String(recommendationMeta.total)+' '+t('jobs'):t('workspace.recommendationCount').replace('{n}', String(recommendationMeta.total))}</span><button type="button" className={s.textButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')} →</button></div>}
+            {personalized && !resultsLoading && !resultsError && visibleJobs.length > 0 && <div className={s.recommendationEnd}><span>{exploration||salaryUnverified?String(recommendationMeta.total)+' '+t('jobs'):t('workspace.recommendationCount').replace('{n}', String(recommendationMeta.total))}</span><button type="button" className={s.textButton} onClick={() => chooseMode('all')}>{t('workspace.allJobs')} →</button></div>}
           </div>
           {personalized && recommendationMeta.total > 0 && <div className={s.pagination}><Pagination page={recommendationPage} totalPages={recommendationMeta.totalPages} total={recommendationMeta.total} limit={24} onPageChange={setRecommendationPage} disabled={resultsLoading} /></div>}
           {!personalized && !decidingMode && data && data.total > 0 && <div className={s.pagination}><WorkspaceSelect className={s.perPage} value={String(filters.limit)} label={t('resultsPerPage')} onChange={(limit) => apply({ limit: Number(limit) })} options={PAGE_SIZE_OPTIONS.map((count) => ({ value: String(count), label: t('job.perPage').replace('{n}', String(count)) }))} /><Pagination page={data.page} totalPages={data.totalPages} total={data.total} limit={data.limit} onPageChange={(page) => { listScroll.current = 0; if (listRef.current) listRef.current.scrollTop = 0; apply({ page }); }} disabled={loading} jumpWhenAbove={1000} truncatedNote={data.truncated ? t('job.truncatedNote').replace('{n}', String(data.total)).replace('{m}', String(data.matchedTotal ?? data.total)) : null} /></div>}

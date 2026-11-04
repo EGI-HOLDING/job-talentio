@@ -88,12 +88,12 @@ export class EmployeeMatchingService {
     return (await this.scoreJobsForProfile(profileId,[jobId])).get(jobId) ?? null;
   }
 
-  async recommend(profileId: string, page = 1, limit = 24, feed:'recommendations'|'exploration'='recommendations') {
+  async recommend(profileId: string, page = 1, limit = 24, feed:'recommendations'|'exploration'|'salary-unverified'='recommendations') {
     if(feed==='exploration'){
       if(!this.intent)throw new Error('Employee intent service unavailable');
       return this.intent.explore(profileId,page,limit);
     }
-    if(this.usesIntent(profileId)){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.recommend(profileId,page,limit);}
+    if(this.usesIntent(profileId)||feed==='salary-unverified'){if(!this.intent)throw new Error('Employee intent service unavailable');return this.intent.recommend(profileId,page,limit,undefined,feed);}
     const shadowScope=employeeIntentMode()==='shadow'&&this.intent?await this.intent.context(profileId):null;
     if(shadowScope?.state==='READY'&&this.performanceCache&&this.intent)this.performanceCache.shadow(shadowScope.fingerprint,()=>this.intent!.recommend(profileId,page,limit,shadowScope));
     if(shadowScope&&(shadowScope.state!=='READY'||!shadowScope.allowedIds.length))return {items:[],page:1,limit,total:0,totalPages:1,mode:'UNAVAILABLE' as const,version:EMPLOYEE_MATCH_VERSION,rankingRevision:shadowScope.fingerprint,cvSource:shadowScope.cvSource,state:shadowScope.state==='READY'?'NO_ELIGIBLE_JOBS':shadowScope.state};

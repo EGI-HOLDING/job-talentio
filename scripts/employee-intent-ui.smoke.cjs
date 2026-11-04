@@ -68,3 +68,16 @@ test('related recommendations explain relationship and incomplete CV in all supp
   for(const emptyReason of ['NO_ACTIVE_JOBS','ALL_APPLIED','UNRECOGNIZED_PREFERENCES','SERVICE_UNAVAILABLE'])assert.match(renderToStaticMarkup(React.createElement(ui.EmployeeRecommendationNotice,{state:'NO_ELIGIBLE_JOBS',emptyReason})),/role="status"/);
  }
 });
+
+test('salary uncertainty is a separate feed with its own count, and practical reasons make no offer guarantee',()=>{
+ const deps={'@/lib/navigation':{Link:link},'@/lib/i18n/employeeIntent':copy('id')};
+ const section=load('apps/web/src/components/jobs/EmployeeSalaryUnverifiedSection.tsx',deps).EmployeeSalaryUnverifiedSection;
+ assert.equal(renderToStaticMarkup(React.createElement(section,{total:0})), '');
+ const html=renderToStaticMarkup(React.createElement(section,{total:3}));assert.match(html,/mode=salary-unverified/);assert.match(html,/gaji belum dapat dipastikan/);assert.match(html,/\(3\)/);
+ const ui=load('apps/web/src/components/jobs/EmployeeRecommendationState.tsx',deps);
+ const insights={version:'employee-intent-v3',mode:'PERSONALIZED',evidence:[],reviewExperienceIds:[],practicalFit:{active:true,country:'MET',salary:'MET',salaryReason:'UPPER_BOUND_MEETS',group:'MAIN'}};
+ const reasons=renderToStaticMarkup(React.createElement(ui.EmployeeMatchReasons,{insights}));assert.match(reasons,/penawaran akhirnya bisa lebih rendah/);assert.doesNotMatch(reasons,/seluruh rentang/i);
+ const unknown=renderToStaticMarkup(React.createElement(ui.EmployeeMatchReasons,{insights:{...insights,practicalFit:{...insights.practicalFit,salary:'UNKNOWN'}}}));assert.match(unknown,/belum dapat dibandingkan/);
+ const outside=renderToStaticMarkup(React.createElement(ui.EmployeeMatchReasons,{insights:{...insights,practicalFit:{...insights.practicalFit,country:'UNMET',salary:'UNMET'}}}));assert.match(outside,/di luar negara/);assert.match(outside,/di bawah target/);
+ const notice=renderToStaticMarkup(React.createElement(ui.EmployeeRecommendationNotice,{state:'NO_ELIGIBLE_JOBS',emptyReason:'PRACTICAL_PREFERENCES'}));assert.match(notice,/posisi, negara, dan gaji/);assert.match(notice,/mode=exploration/);
+});

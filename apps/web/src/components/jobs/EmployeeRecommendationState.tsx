@@ -20,8 +20,15 @@ export function EmployeeMatchReasons({ insights }: {
     if (insights?.version !== 'employee-intent-v3')
         return null;
     const relevant = insights.evidence.filter(e => (e.status === 'MET' && ['ROLE', 'SKILL', 'EXPERIENCE'].includes(e.kind)) || e.code==='TRANSFERABLE_EXPERIENCE');
+    const fit=insights.practicalFit;
+    const practical=fit?.active?[fit.country==='UNMET'?m('countryOutside'):fit.country==='UNKNOWN'?m('countryUnknown'):null,fit.salary==='UNKNOWN'?m('salaryUnknown'):fit.salary==='UNMET'?m('salaryBelow'):fit.salary==='MET'?m(fit.salaryReason==='UPPER_BOUND_MEETS'?'salaryPossible':'salaryMeets'):null].filter(Boolean):[];
     const unknown = insights.evidence.some(e => e.required && e.status === 'UNKNOWN');
     const unmet = insights.evidence.some(e => e.required && e.status === 'UNMET');
-    return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12, marginTop: 6 }}>{relevant.slice(0, 2).map((e, i) => <span className="badge" key={i}>{e.kind === 'ROLE' ? e.code==='RELATED_ROLE'?m('relatedPosition')+e.label:m("selectedPositionMatches") : e.kind === 'EXPERIENCE' ? e.code==='TRANSFERABLE_EXPERIENCE'?m('transferableExperience'):(m("relevantExperience")) : (m("skillMatch")) + e.label}</span>)}{insights.relatedTasks?.[0]&&<span>{m('sharedTask')} · {insights.relatedTasks[0]}</span>}{insights.mode==='PREFERENCES_BASED'&&<span>{m('preferencesBased')}</span>}{unknown && <span>{m("someEvidenceIsIncomplete")}</span>}{unmet && <span>{m("someRequirementsAreNotYetMet")}</span>}</div>;
+    return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12, marginTop: 6 }}>{practical.map((text,i)=><span key={'practical-'+i}>{text}</span>)}{relevant.slice(0, 2).map((e, i) => <span className="badge" key={i}>{e.kind === 'ROLE' ? e.code==='RELATED_ROLE'?m('relatedPosition')+e.label:m("selectedPositionMatches") : e.kind === 'EXPERIENCE' ? e.code==='TRANSFERABLE_EXPERIENCE'?m('transferableExperience'):(m("relevantExperience")) : (m("skillMatch")) + e.label}</span>)}{insights.relatedTasks?.[0]&&<span>{m('sharedTask')} · {insights.relatedTasks[0]}</span>}{insights.mode==='PREFERENCES_BASED'&&<span>{m('preferencesBased')}</span>}{unknown && <span>{m("someEvidenceIsIncomplete")}</span>}{unmet && <span>{m("someRequirementsAreNotYetMet")}</span>}</div>;
 }
 export function EmployeeExplorationNotice(){const m=useEmployeeIntentText();return <div role="status"><strong>{m('explorationTitle')}</strong><p>{m('explorationCopy')}</p></div>;}
+
+export function EmployeeCountryPreferenceNotice({policy}:{policy?:{active:boolean;countryFilterApplied:boolean}}){
+ const m=useEmployeeIntentText();
+ return policy?.active&&!policy.countryFilterApplied?<p><Link href="/dashboard/employee?tab=profile&section=preferences">{m('countryMissing')}</Link></p>:null;
+}

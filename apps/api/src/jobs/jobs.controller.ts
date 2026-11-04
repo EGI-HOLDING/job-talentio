@@ -102,7 +102,7 @@ export class JobsController {
       if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > max) throw new BadRequestException('Invalid recommendation pagination');
       return Number(value);
     };
-    if(feed!==undefined&&feed!=='exploration'&&feed!=='recommendations')throw new BadRequestException('Invalid recommendation feed');
+    if(feed!==undefined&&feed!=='exploration'&&feed!=='recommendations'&&feed!=='salary-unverified')throw new BadRequestException('Invalid recommendation feed');
     return this.jobs.recommendedForUser(user, requestLocale(req), page === undefined ? undefined : parsed(page,1,1000000), parsed(limit,24,50),feed);
   }
 
