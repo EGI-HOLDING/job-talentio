@@ -1,6 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-6-luna';
 const DEFAULT_TIMEOUT_MS = 45_000;
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -44,9 +44,10 @@ export class OpenAiClient {
       },
       body: JSON.stringify({
         model: this.model,
+        reasoning_effort: 'none',
         temperature: 0,
         response_format: { type: 'json_object' },
-        max_tokens: input.maxTokens ?? 2_048,
+        max_completion_tokens: input.maxTokens ?? 2_048,
         messages: [
           { role: 'system', content: input.system },
           { role: 'user', content: input.user },

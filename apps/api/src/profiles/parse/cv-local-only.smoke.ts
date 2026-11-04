@@ -83,7 +83,7 @@ async function main() {
       const config = new ConfigService({
         CV_PARSE_PROVIDER: legacyProvider,
         OPENAI_API_KEY: "dummy-key-must-never-be-used",
-        OPENAI_MODEL: "gpt-4o-mini",
+        OPENAI_MODEL: "gpt-6-luna",
         CV_PARSE_OCR: false,
       });
       const get = config.get.bind(config);
