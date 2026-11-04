@@ -17,6 +17,7 @@ export type MatchInsights = {
 };
 export type OccupationMatchingMetadata = {
   professionSourceUri?: string;
+  professionTaskProfile?: { scope: string; evidence: string; skillUris: string[] };
   sources: Array<{ provider: string; uri?: string; code?: string; version: string }>;
   isco08?: string;
   labelReview?: { id?: string; uz?: string };

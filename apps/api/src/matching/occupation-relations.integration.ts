@@ -14,6 +14,8 @@ async function main(){
  try{
   check((await relations.build(false)).unchanged,'same inputs do not publish duplicate relation releases');
   check(await db.occupationProfessionRelation.count({where:{releaseId:active}})>0,'real versioned ESCO relations are stored');
+  const careerPath=await db.occupationProfessionRelation.findFirstOrThrow({where:{releaseId:active,basis:{path:['kind'],equals:'CAREER_PATH'}}});
+  check(!(await relations.snapshot()).relations.some(row=>row.fromRoleId===careerPath.fromRoleId&&row.toRoleId===careerPath.toRoleId),'stored career paths are excluded from the recommendation snapshot');
   await db.jobFamily.createMany({data:[{id:prefix+'family-a',code:prefix+'a',name:'Fixture source family',source:'fixture',sourceVersion:'1'},{id:prefix+'family-b',code:prefix+'b',name:'Fixture related family',source:'fixture',sourceVersion:'1'}]});
   for(const id of ['a','b','c'])await db.jobTitle.create({data:{id:prefix+id,name:'Profession integration '+id,slug:prefix+id,normalizedKey:prefix+id,familyId:prefix+'family-'+(id==='b'?'b':'a'),matchingApproved:true,matchingMetadata:id==='a'?{sources:[],relatedRoles:[{id:prefix+'b',kind:'RELATED',approved:true,reference:'fixture:direct-cross-family'}]}:{sources:[],relatedRoles:[]}}});
   const company=await db.company.create({data:{id:prefix+'company',name:'Anonymous profession fixture',slug:prefix+'company'}});

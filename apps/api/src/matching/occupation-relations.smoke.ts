@@ -20,4 +20,14 @@ const asymmetric=structuredClone(source);asymmetric.skills.push({uri:'extra',lab
 const missing=structuredClone(roles);missing[0].name='Local profession without a source';missing[0].matchingMetadata={};const incomplete=buildProfessionGraph(missing,source);check(incomplete.report.positionsProcessed===20&&incomplete.report.sourceMissing.some(r=>r.id==='0a'),'missing source is reported without dropping the profession from coverage');
 const canonical={...roles[0],id:'alias',canonicalRoleId:roles[0].id,name:'Official synonym',aliases:[]};check(buildProfessionGraph([...roles,canonical],source).profiles.find(p=>p.jobTitleId==='alias')?.sourceUri===graph.profiles.find(p=>p.jobTitleId==='0a')?.sourceUri,'canonical synonym reuses the same occupational profile without changing historical IDs');
 const unavailable=structuredClone(roles);unavailable[0].matchingMetadata={professionSourceUri:'http://data.europa.eu/esco/occupation/unavailable'};check(buildProfessionGraph(unavailable,source).profiles[0].sourceUri===null,'an explicit source binding is never silently replaced by a title guess');
+const newRole:IntentRole={...roles[0],id:'new-local-title',name:'New regional occupation',matchingMetadata:{
+  professionSourceUri:source.occupations[0].uri,
+  professionTaskProfile:{scope:'Carry out the defined specific work task.',evidence:'Verified occupational description',skillUris:['task:0']},
+}};
+const added=buildProfessionGraph([...roles,newRole],source);
+const scopedProfile=added.profiles.find(row=>row.jobTitleId===newRole.id);
+check(scopedProfile?.mappingMethod==='ADMIN_TASK_PROFILE'&&scopedProfile.facts.essential.length===1,'new titles use the same graph with a scoped source profile');
+check(added.relations.some(row=>row.fromRoleId==='0a'&&row.toRoleId===newRole.id&&row.basis.kind==='RELATED'),'new sourced roles gain relations without pair approvals');
+const invalid={...newRole,matchingMetadata:{...newRole.matchingMetadata as object,professionTaskProfile:{scope:'Incompatible task outside the source reference',evidence:'Fixture',skillUris:['task:9']}}};
+check(buildProfessionGraph([...roles,invalid],source).profiles.find(row=>row.jobTitleId===newRole.id)?.sourceUri===null,'a mismatched skill cannot be borrowed from an unrelated occupation');
 console.log(JSON.stringify({suite:'profession-relations',passed,families:families.length}));

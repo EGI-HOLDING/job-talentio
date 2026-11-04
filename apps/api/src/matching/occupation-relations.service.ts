@@ -9,6 +9,7 @@ import {CandidateCache} from '../common/candidate-cache';
 import {employeeRecommendationV32Enabled} from './employee-recommendation-policy';
 import {intentRoleInclude,EmployeeOccupationIndex} from './employee-occupation';
 import {buildProfessionGraph,professionCatalogRevision,professionDigest,PROFESSION_RELATION_ALGORITHM,type ProfessionSource} from './occupation-relations';
+import {indonesiaProfessionDefinitions,professionWorkScopes} from './indonesia-profession-definitions';
 
 @Injectable()
 export class OccupationRelationsService implements OnModuleInit,OnModuleDestroy {
@@ -16,7 +17,7 @@ export class OccupationRelationsService implements OnModuleInit,OnModuleDestroy 
  constructor(private db:PrismaService,@Optional()private cache?:CandidateCache){}
  onModuleInit(){if(!employeeRecommendationV32Enabled())return;const work=()=>{if(this.busy)return;this.busy=true;void this.build(false).catch(e=>new Logger('OccupationRelations').warn('Background enrichment failed; exact and exploration remain available: '+e.message)).finally(()=>this.busy=false);};this.startup=setTimeout(work,10000);this.startup.unref();this.timer=setInterval(work,60000);this.timer.unref();}
  onModuleDestroy(){if(this.timer)clearInterval(this.timer);if(this.startup)clearTimeout(this.startup);}
- loadSource(){if(!this.source){const directory=join(__dirname,'../../prisma/data/occupation-profiles');const source=JSON.parse(gunzipSync(readFileSync(join(directory,'esco-v1.2.1.json.gz'))).toString('utf8')) as ProfessionSource;const manifest=JSON.parse(readFileSync(join(directory,'manifest.json'),'utf8'));if(source.sourceVersion!=='v1.2.1'||professionDigest(source)!==manifest.sha256)throw new Error('ESCO source snapshot checksum/version mismatch');this.source=source;}return this.source;}
+ loadSource(){if(!this.source){const directory=join(__dirname,'../../prisma/data/occupation-profiles');const source=JSON.parse(gunzipSync(readFileSync(join(directory,'esco-v1.2.1.json.gz'))).toString('utf8')) as ProfessionSource;const manifest=JSON.parse(readFileSync(join(directory,'manifest.json'),'utf8'));if(source.sourceVersion!=='v1.2.1'||professionDigest(source)!==manifest.sha256)throw new Error('ESCO source snapshot checksum/version mismatch');this.source={...source,localDefinitions:indonesiaProfessionDefinitions,workScopes:professionWorkScopes};}return this.source;}
  private compute(roles:Parameters<typeof buildProfessionGraph>[0],source:ProfessionSource):Promise<ReturnType<typeof buildProfessionGraph>>{
   const file=join(__dirname,'occupation-relations.worker.js');
   // Source-mode CLI runs offline; production always executes the compiled worker.
@@ -56,7 +57,18 @@ export class OccupationRelationsService implements OnModuleInit,OnModuleDestroy 
   const state=await this.db.occupationRelationState.findUnique({where:{id:'employee'}});
   if(!state?.activeReleaseId)return {revision:'none:'+state?.updatedAt.toISOString(),relations:[] as Array<{fromRoleId:string;toRoleId:string;score:number;reference:string}>,overrides:await this.db.occupationRelationOverride.findMany({select:{fromRoleId:true,toRoleId:true,enabled:true,reason:true}})};
   const revision=state.activeReleaseId+':'+state.updatedAt.toISOString();
-  const load=async()=>{const [rows,overrides]=await Promise.all([this.db.occupationProfessionRelation.findMany({where:{releaseId:state.activeReleaseId!},select:{fromRoleId:true,toRoleId:true,score:true}}),this.db.occupationRelationOverride.findMany({select:{fromRoleId:true,toRoleId:true,enabled:true,reason:true}})]);return {revision,relations:rows.map(r=>({...r,reference:'talentio:derived-competencies:'+state.activeReleaseId})),overrides};};
+  const load=async()=>{
+   const [rows,overrides]=await Promise.all([
+    this.db.$queryRaw<Array<{fromRoleId:string;toRoleId:string;score:number}>>`
+      SELECT "fromRoleId", "toRoleId", "score"
+      FROM "OccupationProfessionRelation"
+      WHERE "releaseId" = ${state.activeReleaseId}
+        AND COALESCE("basis"->>'kind', 'RELATED') = 'RELATED'
+    `,
+    this.db.occupationRelationOverride.findMany({select:{fromRoleId:true,toRoleId:true,enabled:true,reason:true}}),
+   ]);
+   return {revision,relations:rows.map(r=>({...r,reference:'talentio:derived-competencies:'+state.activeReleaseId})),overrides};
+  };
   return this.cache?this.cache.memo('profession-relations:'+revision,600,load):load();
  }
  async correct(fromRoleId:string,toRoleId:string,enabled:boolean,reason:string,actorId:string){

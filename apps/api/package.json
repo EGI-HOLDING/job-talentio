@@ -49,7 +49,7 @@
     "test:employee-related": "tsx src/matching/employee-related.integration.ts",
     "test:employee-related:local": "node ../../scripts/employee-related.integration.cjs",
     "matching:related:review": "tsx src/scripts/employee-related-review.ts",
-    "test:profession-relations": "tsx src/matching/occupation-relations.smoke.ts && tsx src/matching/occupation-relations.source.smoke.ts",
+    "test:profession-relations": "tsx src/matching/occupation-relations.smoke.ts && tsx src/matching/occupation-relations.source.smoke.ts && tsx src/matching/occupation-relations.local.smoke.ts",
     "matching:professions": "tsx src/scripts/occupation-relations.ts"
   },
   "dependencies": {

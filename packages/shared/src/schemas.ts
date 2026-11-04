@@ -902,13 +902,21 @@ export const adminCatalogBrowseSchema = z.object({
 
 export const occupationMatchingMetadataSchema = z.object({
   professionSourceUri:z.string().url().regex(/^http:\/\/data\.europa\.eu\/esco\/occupation\/[a-f0-9-]+$/).optional(),
+  professionTaskProfile: z.object({
+    scope: z.string().trim().min(12).max(1200),
+    evidence: z.string().trim().min(3).max(1000),
+    skillUris: z.array(z.string().url().regex(/^http:\/\/data\.europa\.eu\/esco\/skill\/[a-f0-9-]+$/)).min(1).max(40),
+  }).strict().optional(),
   sources:z.array(z.object({provider:z.string().trim().min(1).max(200),uri:z.string().url().max(1000).optional(),
     code:z.string().trim().max(80).optional(),version:z.string().trim().min(1).max(80)}).strict()).max(10),
   isco08:z.string().regex(/^\d{4}$/).optional(),
   labelReview:z.object({id:z.enum(['UNREVIEWED','LOCAL_STANDARD','NATIVE_REVIEWED']).optional(),
     uz:z.enum(['UNREVIEWED','LOCAL_STANDARD','NATIVE_REVIEWED']).optional()}).optional(),
   relatedRoles:z.array(z.object({id:z.string().min(1).max(100),kind:z.literal('RELATED'),reference:z.string().trim().min(3).max(1000),approved:z.boolean()}).strict()).max(100),
-}).strict();
+}).strict().refine(value => !value.professionTaskProfile || Boolean(value.professionSourceUri), {
+  message: 'A scoped task profile requires an ESCO profession source URI',
+  path: ['professionSourceUri'],
+});
 
 export const adminCatalogCreateSchema = z.object({
   matchingMetadata:occupationMatchingMetadataSchema.optional(),
