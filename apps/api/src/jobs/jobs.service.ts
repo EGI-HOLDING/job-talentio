@@ -1618,12 +1618,13 @@ export class JobsService {
       }
     }
 
-    let emptyReason:'UNRECOGNIZED_PREFERENCES'|'NO_ACTIVE_JOBS'|'ALL_APPLIED'|'SERVICE_UNAVAILABLE'|undefined;
+    let emptyReason:import('@job-talentio/shared').EmployeeEmptyReason|undefined;
     if(intentScope&&total===0){
       emptyReason=intentScope.state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':intentScope.state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS';
       if(intentScope.v32&&intentScope.state==='READY'){
         const active=await this.prisma.jobPost.count({where:{AND:and.map(clause=>clause===intentFilter?intentJobScope(intentScope):clause)}});
         if(active)emptyReason='ALL_APPLIED';
+        if(intentScope.practicalEnabled&&intentScope.practicalSelection?.roleCandidateCount&&!intentScope.practicalSelection.mainIds.length)emptyReason='PRACTICAL_PREFERENCES';
       }
     }
     return {

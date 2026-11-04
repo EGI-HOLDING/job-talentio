@@ -104,10 +104,10 @@ export class EmployeeIntentService {
           });
         }
         const practicalEnabled = v32 && employeePracticalEnabled();
-        let practicalSelection:{mainIds:string[];unknownIds:string[]}|undefined;
+        let practicalSelection:{mainIds:string[];unknownIds:string[];roleCandidateCount:number}|undefined;
         if (practicalEnabled && includeVacancies && state === 'READY') {
           const candidates=await this.db.jobPost.findMany({where:{...liveJobWhere(),...intentRoleScope({allowedIds,vacancies}),applications:{none:{profileId}}},select:{id:true,...practicalJobSelect}});
-          practicalSelection={mainIds:[],unknownIds:[]};
+          practicalSelection={mainIds:[],unknownIds:[],roleCandidateCount:candidates.length};
           for (const job of candidates) {
             const fit=practicalFit(preferences,job);
             if(fit.group==='MAIN')practicalSelection.mainIds.push(job.id);
