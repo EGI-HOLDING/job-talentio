@@ -48,7 +48,7 @@ async function main() {
                 return { claims: input.cvLines.filter((l: any) => l.text.includes('Membantu')).slice(0, 3).map((l: any, i: number) => ({ id: 'claim' + i, criterionId: 'c' + i, statement: l.text, quote: l.text, lineStart: l.line, lineEnd: l.line, question: 'Di CV kamu menyebut ' + l.text + '. Bagian apa yang kamu kerjakan sendiri?' })), limitations: [] };
             if (task === 'follow-up')
                 return { stop: false, question: input.targetDepth === 1 ? 'Kamu menyebut ' + input.chain[0].answer + '. Bagaimana urutan tindakanmu?' : 'Tadi kamu menjelaskan ' + input.chain[1].answer + '. Bagaimana kamu mengukur hasilnya?' };
-            return { summary: 'Kandidat menjelaskan kontribusi dengan contoh konkret.', strengths: ['Kontribusi pribadi dijelaskan.'], gaps: ['Konfirmasikan hasil saat wawancara.'], interviewQuestions: ['Bagaimana kamu mengukur hasil pekerjaanmu?'], criteria: rubric.criteria.map(c => ({ criterionId: c.id, score: 3, reason: 'Menjelaskan langkah dan kontribusi pribadi.', evidence: [{ questionId: input.answers.find((a: any) => a.criterionId === c.id).id, quote: input.answers.find((a: any) => a.criterionId === c.id).answer }] })), claims: input.claims.map((c: any) => ({ claimId: c.id, status: 'SUPPORTED', reason: 'Jawaban menjelaskan peran kandidat.', evidence: [{ questionId: input.answers.find((a: any) => a.claimId === c.id).id, quote: input.answers.find((a: any) => a.claimId === c.id).answer }], contradictions: [] })) };
+            return { summary: 'Kandidat menjelaskan kontribusi dengan contoh konkret.', strengths: ['Kontribusi pribadi dijelaskan.'], gaps: ['Konfirmasikan hasil saat wawancara.'], interviewQuestions: ['Bagaimana kamu mengukur hasil pekerjaanmu?'], claims: input.claims.map((c: any) => ({ claimId: c.id, score: 3, status: 'SUPPORTED', reason: 'Jawaban menjelaskan peran kandidat.', evidence: [{ questionId: input.answers.find((a: any) => a.claimId === c.id).id, quoteRef: input.evidenceCatalog.find((s: any) => s.source === 'ANSWER' && s.ref === input.answers.find((a: any) => a.claimId === c.id).id).id }], contradictions: [] })) };
         } };
     const worker = new ScreeningWorker(db, config, storage as never, matching, packets, sessions, plans, provider as never);
     const job = await db.jobPost.create({ data: { id: 'job', companyId: company.id, title: 'Customer Service', description: 'Menangani layanan pelanggan, mencatat proses dan mengukur hasil layanan pelanggan.', status: 'PUBLISHED' } });
@@ -199,6 +199,22 @@ async function main() {
         checks++;
         const group = await hr.project({ ids: [submitted.id], scores: new Map(), total: 1, page: 1, totalPages: 1 }, { page: 1, limit: 10 });
         check(group.tara.has(submitted.id), 'HR projection includes screening metadata');
+        objects.set('reports/legacy-fixture.pdf', Buffer.from('legacy fixture'));
+        await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { promptVersion: 'tara-cv-claims-v2.0.0', inputHash: 'legacy-fixture', pdfKey: 'reports/legacy-fixture.pdf' } });
+        await db.aiScreeningWork.create({ data: { key: 'reassess-test', kind: 'EVALUATE', subjectId: a.id } });
+        await deliver('EVALUATE', a.id);
+        const reassessed = await db.aiScreeningEvaluation.findUniqueOrThrow({ where: { id: evaluation.id } });
+        check(reassessed.promptVersion === 'tara-cv-claims-v3.0.0' && reassessed.screeningScore === 75, 'old assessment promoted to claim methodology');
+        check(await db.aiScreeningEvaluationRevision.count({ where: { evaluationId: evaluation.id } }) === 2, 'old and current assessments retained');
+        const legacyRevision = await db.aiScreeningEvaluationRevision.findFirstOrThrow({ where: { evaluationId: evaluation.id, inputHash: 'legacy-fixture' } });
+        const historical = await hr.revision(hrUser, submitted.id, legacyRevision.id);
+        check(historical.pdfUrl?.includes('legacy-fixture.pdf') && !('snapshot' in historical), 'authorized revision exposes report without private prompt snapshot');
+        await assert.rejects(() => hr.revision({ id: 'outsider', role: 'RECRUITER' } as any, submitted.id, legacyRevision.id)); checks++;
+        const repeatedCalls = calls.length;
+        await db.aiScreeningWork.create({ data: { key: 'duplicate-reassess-test', kind: 'EVALUATE', subjectId: a.id } });
+        await deliver('EVALUATE', a.id);
+        check(calls.length === repeatedCalls, 'current methodology is not reevaluated on duplicate delivery');
+        await deliver('PDF', a.id);
         const ranks = rankScreening([{ id: 'x', createdAt: new Date(0), packageId: 'v1', finalScore: 80, status: 'READY' }, { id: 'y', createdAt: new Date(1), packageId: 'v1', finalScore: 80, status: 'READY' }, { id: 'z', createdAt: new Date(0), packageId: 'v2', finalScore: 70, status: 'READY' }]);
         check(ranks.ranks.get('x') === 1 && ranks.ranks.get('y') === 1 && ranks.ranks.get('z') === 1, 'ties and versions ranked independently');
         check(combineScores(null, 75) === null && scoreScreening([{ score: null }]) === null, 'missing evidence never becomes zero');
@@ -239,6 +255,7 @@ async function main() {
         check(await db.aiScreeningSession.count({ where: { profileId: a.user.id } }) === 0, 'erasure clears sessions and answers');
         check(await db.aiScreeningCall.count({ where: { subjectId: a.id, status: 'ERASED' } }) === 1, 'erasure clears private provider results but retains accounting');
         check(!objects.has(report.pdfKey!), 'private PDF removed');
+        check(!objects.has('reports/legacy-fixture.pdf') && await db.aiScreeningEvaluationRevision.count({ where: { evaluationId: evaluation.id } }) === 0, 'erasure removes historic PDF and revision data');
         process.env.TARA_SCREENING_ENABLED = 'false';
         await assert.rejects(() => sessions.draft({ id: 'new', role: 'EMPLOYEE' } as any, job.id));
         checks++;

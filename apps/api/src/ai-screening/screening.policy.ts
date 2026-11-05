@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
-export const SCREENING_PROMPT_VERSION = 'tara-cv-claims-v2.0.0';
-export const SCREENING_RANKING_VERSION = 'tara-cv-claims-composite-v2';
-export const PDF_TEMPLATE_VERSION = 'tara-report-v1';
+export const SCREENING_PROMPT_VERSION = 'tara-cv-claims-v3.0.0';
+export const SCREENING_RANKING_VERSION = 'tara-cv-claims-composite-v3';
+export const PDF_TEMPLATE_VERSION = 'tara-report-v3';
 export const QUESTION_SECONDS = 60;
 export const MAX_CORE = 5;
 export const MAX_FOLLOW_UP = 10;
@@ -41,6 +41,7 @@ export type RankedScreening = {
     packageId: string | null;
     finalScore: number | null;
     status: string;
+    methodology?: string;
 };
 export type ProbeQuestion = {
     id: string;
@@ -70,12 +71,13 @@ export function nextProbeTarget(questions: ProbeQuestion[]) {
     return null;
 }
 export function rankScreening<T extends RankedScreening>(items: T[]) {
-    const sorted = [...items].sort((a, b) => (a.packageId ?? '~').localeCompare(b.packageId ?? '~') || (b.finalScore ?? -1) - (a.finalScore ?? -1) || +a.createdAt - +b.createdAt || a.id.localeCompare(b.id));
+    const sorted = [...items].sort((a, b) => (a.packageId ?? '~').localeCompare(b.packageId ?? '~') || (a.methodology ?? 'legacy').localeCompare(b.methodology ?? 'legacy') || (b.finalScore ?? -1) - (a.finalScore ?? -1) || +a.createdAt - +b.createdAt || a.id.localeCompare(b.id));
     const ranks = new Map<string, number>();
     let group = '', previous: number | null = null, rank = 0, index = 0;
     for (const row of sorted) {
-        if ((row.packageId ?? 'legacy') !== group) {
-            group = row.packageId ?? 'legacy';
+        const key = (row.packageId ?? 'legacy') + ':' + (row.methodology ?? 'legacy');
+        if (key !== group) {
+            group = key;
             previous = null;
             index = 0;
         }

@@ -48,6 +48,7 @@ export type SourceQuote = {
 };
 export type ClaimResult = {
     claimId: string;
+    score?: number;
     status: 'SUPPORTED' | 'INSUFFICIENT' | 'CLARIFY';
     reason: string;
     evidence: Evidence[];
@@ -69,8 +70,14 @@ export type AnswerSource = {
     answer: string | null;
     criterionId: string;
     claimId: string;
+    kind?: string;
+    shownAt?: Date | string | null;
+    answeredAt?: Date | string | null;
+    timedOut?: boolean;
 };
 export type JsonSchema = {
+    maxLength?: number;
+    maxItems?: number;
     type?: string;
     properties?: Record<string, JsonSchema>;
     required?: string[];
@@ -107,6 +114,8 @@ export function assertSchema(schema: JsonSchema, value: unknown, path = 'result'
     }
     if (schema.enum && !schema.enum.includes(value))
         throw new Error('Invalid ' + path);
+    if (typeof value === 'string' && schema.maxLength !== undefined && value.length > schema.maxLength) throw new Error('Too long ' + path);
+    if (Array.isArray(value) && schema.maxItems !== undefined && value.length > schema.maxItems) throw new Error('Too many ' + path);
     if (schema.type === 'null') {
         if (value !== null)
             throw new Error('Invalid ' + path);
@@ -152,14 +161,30 @@ export function validatePackage(value: unknown, requirements?: string): PackageP
 }
 export function validateCandidate(value: unknown, p: PackagePayload, cvText: string): CandidatePayload {
     assertSchema(CANDIDATE_SCHEMA, value);
-    const plan = value as CandidatePayload, lines = cvText.split('\n');
+    const plan = structuredClone(value) as CandidatePayload, lines = cvText.split('\n');
     if (plan.claims.length < 1 || plan.claims.length > 5 || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
         throw new Error('Invalid candidate plan');
     for (const c of plan.claims) {
         if (!idOk(c.id) || !p.criteria.some(x => x.id === c.criterionId) || !c.statement.trim() || c.statement.length > 300 || !c.quote.trim() || c.quote.length > 500 || !validQuestion(c.question))
             throw new Error('Invalid CV claim');
-        if (c.lineStart < 1 || c.lineEnd < c.lineStart || c.lineEnd > lines.length || !lines.slice(c.lineStart - 1, c.lineEnd).join('\n').includes(c.quote))
-            throw new Error('Ungrounded CV claim');
+        if (c.lineStart < 1 || c.lineEnd < c.lineStart || c.lineEnd > lines.length || !lines.slice(c.lineStart - 1, c.lineEnd).join('\n').includes(c.quote)) {
+            // PDF line wrapping is not a factual difference. Resolve only a unique
+            // literal match with whitespace collapsed; no fuzzy words/punctuation.
+            let normalized = ''; const offsets: number[] = [];
+            for (let i=0;i<cvText.length;i++) {
+                const char = /\s/.test(cvText[i]) ? ' ' : cvText[i];
+                if (char === ' ' && normalized.endsWith(' ')) continue;
+                normalized += char; offsets.push(i);
+            }
+            const quote = c.quote.replace(/\s+/g,' ').trim();
+            const start = normalized.indexOf(quote);
+            if (!quote || start < 0 || normalized.indexOf(quote,start+1) >= 0) throw new Error('Ungrounded CV claim');
+            const from = offsets[start], to = offsets[start+quote.length-1]+1;
+            c.quote = cvText.slice(from,to);
+            c.lineStart = cvText.slice(0,from).split('\n').length;
+            c.lineEnd = cvText.slice(0,to).split('\n').length;
+            if (c.quote.length > 500) throw new Error('Ungrounded CV claim');
+        }
     }
     return plan;
 }

@@ -55,7 +55,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     y += text(data.job + ' · ' + data.company, 44, y, width, 10.5, false, muted) + 5;
     y += text('Lamaran ' + data.submittedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ' · Kebutuhan lowongan v' + data.jobVersion, 44, y, width, 9, false, muted) + 20;
     const gap = 12, card = (width - 2 * gap) / 3;
-    for (const [i, [label, n]] of [['Skor akhir', data.finalScore], ['Kecocokan CV', data.cvScore], ['Screening Tara', data.screeningScore]].entries()) {
+    for (const [i, [label, n]] of [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]].entries()) {
         const x = 44 + i * (card + gap);
         doc.roundedRect(x, y, card, 78, 7).fill(i === 0 ? '#f1edff' : '#f8fafd');
         text(String(label), x + 12, y + 12, card - 24, 9, true, muted);
@@ -63,7 +63,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     y += 98;
     if (data.finalScore === null)
-        y += text('Penilaian perlu tinjauan: skor akhir belum tersedia karena sebagian bukti belum dapat dinilai.', 44, y, width, 10, false, muted) + 12;
+        y += text('Skor gabungan belum tersedia. Periksa status pemrosesan CV dan evaluasi pada detail lamaran.', 44, y, width, 10, false, muted) + 12;
     heading('Yang perlu diketahui HR', y);
     y += 24;
     y += text(data.result.summary, 44, y, width, 10.5) + 22;
@@ -80,30 +80,26 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     rule(y);
     y += 17;
     y += text('Cara membaca hasil', 44, y, width, 10.5, true) + 8;
-    text('Skor akhir menggabungkan kecocokan CV dan bukti screening dengan bobot 50:50. Jawaban membantu menilai dukungan klaim, bukan membuktikan kebenaran faktual. Keputusan rekrutmen tetap dilakukan HR.', 44, y, width, 9.5, false, muted);
+    text('Skor gabungan: 50% kecocokan CV + 50% dukungan klaim yang diperiksa. Nilai 0 berarti penjelasan belum mendukung klaim; bukan vonis kebohongan. Cakupan screening terbatas pada klaim terpilih. Keputusan rekrutmen tetap dilakukan HR.', 44, y, width, 9.5, false, muted);
     doc.addPage();
     header('Bukti dan tindak lanjut');
     y = 119;
-    for (const c of data.rubric.criteria) {
-        const result = data.result.criteria.find(r => r.criterionId === c.id)!;
-        const claims = data.result.claims.filter(r => data.plan.claims.find(cl => cl.id === r.claimId)?.criterionId === c.id);
-        const excerpt = (value: string, n = 80) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
-        const evidence = result.evidence[0];
-        const lines = [result.reason, ...claims.map(cl => {
-                const source = data.plan.claims.find(v => v.id === cl.claimId)!;
-                if (cl.status === 'CLARIFY' && cl.contradictions[0]) {
-                    const pair = cl.contradictions[0], label = (ref: typeof pair.left) => ref.source === 'CV' ? 'CV' : data.questionLabels?.[ref.ref] ?? 'Jawaban';
-                    return claimLabels[cl.status] + ': ' + label(pair.left) + ' “' + excerpt(pair.left.quote, 70) + '” / ' + label(pair.right) + ' “' + excerpt(pair.right.quote, 70) + '”';
-                }
-                return 'CV: “' + excerpt(source.quote) + '” · ' + claimLabels[cl.status];
-            }), !claims.length ? 'Tidak ada klaim CV terpilih untuk kompetensi ini.' : null,
-            evidence ? 'Jawaban ' + (data.questionLabels?.[evidence.questionId] ?? '[' + evidence.questionId.slice(-6) + ']') + ': “' + excerpt(evidence.quote) + '”' : null].filter(Boolean).join('\n');
-        const titleHeight = doc.font('Bold').fontSize(10).heightOfString(c.name, { width: width - 64 });
+    const excerpt = (value: string, n = 90) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
+    const modern = data.result.claims.every(c => typeof c.score === 'number');
+    const records = modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null, reason: result.reason,
+        quote: data.plan.claims.find(c => c.id === result.claimId)?.quote, evidence: result.evidence[0], status: claimLabels[result.status], pair: result.contradictions[0] })) :
+        data.result.criteria.map(c => ({ title: data.rubric.criteria.find(r => r.id === c.criterionId)?.name ?? 'Kompetensi', score: c.score, reason: c.reason, quote: undefined as string | undefined, evidence: c.evidence[0], status: 'Metodologi sebelumnya', pair: undefined as EvaluationPayload['claims'][number]['contradictions'][number] | undefined }));
+    for (const result of records) {
+        const label = (ref: { source: string; ref: string }) => ref.source === 'CV' ? 'CV' : data.questionLabels?.[ref.ref] ?? 'Jawaban';
+        const lines = [result.status + ' · ' + result.reason,
+            result.quote ? 'CV: “' + excerpt(result.quote) + '”' : null,
+            result.evidence ? (data.questionLabels?.[result.evidence.questionId] ?? 'Jawaban') + ': “' + excerpt(result.evidence.quote) + '”' : modern ? 'Tidak ada jawaban yang dapat dikutip.' : null,
+            result.pair ? label(result.pair.left) + ': “' + excerpt(result.pair.left.quote, 65) + '” / ' + label(result.pair.right) + ': “' + excerpt(result.pair.right.quote, 65) + '”' : null].filter(Boolean).join('\n');
+        const titleHeight = doc.font('Bold').fontSize(10).heightOfString(result.title, { width: width - 64 });
         const rowHeight = titleHeight + doc.font('Body').fontSize(9.5).heightOfString(lines, { width: width - 20, lineGap: 2 }) + 20;
-        if (y + rowHeight > 650)
-            throw new Error('REPORT_LAYOUT_OVERFLOW');
+        if (y + rowHeight > 650) throw new Error('REPORT_LAYOUT_OVERFLOW');
         doc.roundedRect(44, y, width, rowHeight, 5).fill('#f8fafd');
-        text(c.name, 54, y + 8, width - 64, 10, true);
+        text(result.title, 54, y + 8, width - 64, 10, true);
         text(result.score === null ? '—' : String(result.score) + '/4', doc.page.width - 91, y + 8, 37, 10, true, purple);
         text(lines, 54, y + titleHeight + 12, width - 20, 9.5);
         y += rowHeight + 5;

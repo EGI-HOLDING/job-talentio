@@ -1,0 +1,5 @@
+export const claimStatus = `Pisahkan skor kualitas penjelasan dari status kesesuaian klaim CV.
+CLARIFY: ada perubahan fakta penting antara CV dan jawaban atau antarjawaban, misalnya memimpin versus menerima tugas. Ini termasuk koreksi yang diakui kandidat; catat koreksinya tanpa tuduhan berbohong. Wajib satu pasangan sumber yang benar-benar berbeda secara fakta. Skor mengikuti kontribusi aktual yang dijelaskan, tanpa penalti tambahan karena mengakui koreksi.
+SUPPORTED: penjelasan mendukung cakupan CV, skor 3–4, dan tidak ada perubahan fakta penting. contradictions harus kosong.
+INSUFFICIENT: penjelasan belum mendukung klaim, skor 0–2, tanpa perbedaan fakta yang dapat dipasangkan. contradictions harus kosong.
+Jika mengeluarkan pasangan contradictions, status wajib CLARIFY. Jika tidak ada pasangan yang valid, jangan gunakan CLARIFY. Membantu tim mencapai hasil tim tidak sama dengan mengaku menghasilkan semuanya sendiri. Lupa detail atau perbedaan redaksi saja bukan perubahan fakta penting.`;

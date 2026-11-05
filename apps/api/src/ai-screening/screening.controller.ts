@@ -144,6 +144,10 @@ export class ScreeningController {
     user: AuthUser,
     @Param('id')
     id: string) { return this.hr.assessment(user, id); }
+    @Get('applications/:id/assessment/revisions/:revisionId')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('RECRUITER', 'SUPER_ADMIN')
+    revision(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('revisionId') revisionId: string) { return this.hr.revision(user, id, revisionId); }
     @Get('applications/:id/report')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('RECRUITER', 'SUPER_ADMIN')

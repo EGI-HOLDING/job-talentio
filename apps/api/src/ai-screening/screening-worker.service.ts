@@ -20,6 +20,10 @@ import { hash, json, nextProbeTarget, screeningEnabled, WORK_LEASE_MS, scoreScre
 import { validatePackage, validateCandidate, validateFollowUp, validateEvaluation, type PackagePayload, type CandidatePayload, type EvaluationPayload } from './screening.schemas';
 import { renderScreeningReport } from './screening-report';
 import type { PromptRegistry } from './prompts/registry';
+import { composePrompt } from './prompts/compose';
+import { assertAnswerOpportunities, unansweredEvaluation, validateClaimEvaluation } from './claim-assessment';
+import { enqueueWork } from './screening-packets.service';
+import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -32,6 +36,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private workerRedis?: IORedis;
     private lastReconcile = 0;
     private active = new Set<string>();
+    private evaluationCursor: string | undefined;
     constructor(private db: PrismaService, private config: ConfigService, private storage: StorageService, private matching: MatchingService, private packets: ScreeningPackets, private sessions: ScreeningSessions, private candidates: ScreeningCandidatePlans, private client: ScreeningClient) { }
     async onModuleInit() {
         const exists = await this.db.$queryRaw<Array<{
@@ -79,6 +84,14 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         this.ticking = true;
         try {
             await this.sessions.expireAnswers();
+            if (screeningEnabled()) {
+                const completed = await this.db.aiScreeningSession.findMany({ where: { applicationId: { not: null },
+                    OR: [{ evaluation: null }, { evaluation: { promptVersion: { not: SCREENING_PROMPT_VERSION } } }] },
+                    select: { id: true }, orderBy: { id: 'asc' }, take: 25,
+                    ...(this.evaluationCursor ? { cursor: { id: this.evaluationCursor }, skip: 1 } : {}) });
+                this.evaluationCursor = completed.length === 25 ? completed.at(-1)!.id : undefined;
+                for (const row of completed) await enqueueWork(this.db, 'EVALUATE', row.id, 'EVALUATE:' + row.id + ':' + SCREENING_PROMPT_VERSION);
+            }
             if (screeningEnabled() && Date.now() - this.lastReconcile > 60000 && !this.reconciling) {
                 this.reconciling = true;
                 this.lastReconcile = Date.now();
@@ -160,7 +173,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (kind === 'ADVANCE')
             await this.db.aiScreeningSession.updateMany({ where: { id }, data: { error } });
         if (kind === 'EVALUATE')
-            await this.db.aiScreeningEvaluation.updateMany({ where: { sessionId: id }, data: { status: 'FAILED', error } });
+            await this.db.aiScreeningEvaluation.updateMany({ where: { sessionId: id, result: { equals: Prisma.DbNull } }, data: { status: 'FAILED', error } });
         if (kind === 'DOCUMENT')
             await this.db.aiCompanyDocument.updateMany({ where: { id }, data: { status: 'FAILED', error } });
         if (kind === 'CV_SOURCE') {
@@ -303,32 +316,51 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { package: true, currentPlan: true, evaluation: true, questions: { orderBy: { position: 'asc' } } } });
         if (!session?.applicationId || !session.currentPlan || !session.package)
             return;
-        if (session.evaluation?.result) {
+        if (session.evaluation?.result && session.evaluation.promptVersion === SCREENING_PROMPT_VERSION) {
             await this.ensurePdfWork(id);
             return;
         }
         const rubric = session.package.payload as unknown as PackagePayload, plan = session.currentPlan.payload as unknown as CandidatePayload;
         const cv = await this.cvAssessment(session, session.package.jobSnapshot);
-        const answers = session.questions.map(q => ({ id: q.id, claimId: q.claimId, criterionId: q.criterionId, rootQuestionId: q.rootQuestionId, parentQuestionId: q.parentQuestionId, depth: q.depth, question: q.text, answer: q.answer }));
+        const answers = session.questions.map(q => ({ id: q.id, claimId: q.claimId, criterionId: q.criterionId, rootQuestionId: q.rootQuestionId, parentQuestionId: q.parentQuestionId, depth: q.depth, kind: q.kind, question: q.text, answer: q.answer, shownAt: q.shownAt, answeredAt: q.answeredAt, timedOut: q.timedOut }));
+        assertAnswerOpportunities(plan, answers);
+        const { input: _input, ...preset } = composePrompt('evaluate', {});
+        const model = process.env.TARA_SCREENING_MODEL ?? 'gpt-6-luna';
+        const fingerprint = hash([SCREENING_PROMPT_VERSION, model, preset, session.currentPlan.fingerprint, answers, cv?.total]);
         let result: EvaluationPayload;
         if (!answers.some(a => a.answer?.trim())) {
-            result = { summary: 'Belum ada jawaban yang dapat digunakan untuk menilai dukungan klaim CV.', strengths: [], gaps: ['Konfirmasikan pengalaman dan kontribusi kandidat melalui wawancara.'], interviewQuestions: [],
-                criteria: rubric.criteria.map(c => ({ criterionId: c.id, score: null, reason: 'Belum cukup bukti jawaban.', evidence: [] })),
-                claims: plan.claims.map(c => ({ claimId: c.id, status: 'INSUFFICIENT', reason: 'Tidak ada jawaban substantif.', evidence: [], contradictions: [] })) };
+            result = unansweredEvaluation(rubric, plan, answers);
         }
-        else
-            result = validateEvaluation(await this.client.run(workId, id, 'evaluate', { rubric, claims: plan.claims, limitations: plan.limitations, answers }, (session.package.promptSnapshot as unknown as PromptRegistry).evaluate), rubric, plan, answers);
-        const screening = scoreScreening(result.criteria), cvScore = cv?.assessable ? cv.total : null, final = combineScores(cvScore, screening);
+        else {
+            const catalog = evidenceCatalog(plan, answers);
+            result = validateClaimEvaluation(resolveEvidence(await this.client.run(workId, id, 'evaluate', { context: rubric.context, claims: plan.claims, limitations: plan.limitations, answers, evidenceCatalog: catalog }, { ...preset, model }), catalog), rubric, plan, answers);
+        }
+        const screening = scoreScreening(result.claims.map(c => ({ score: c.score! }))), cvScore = cv?.assessable ? cv.total : null, final = combineScores(cvScore, screening);
         const retained = await this.db.aiScreeningSession.count({ where: { id, applicationId: session.applicationId } });
         if (!retained)
             return;
-        await this.db.aiScreeningEvaluation.upsert({ where: { sessionId: id }, create: { sessionId: id, promptVersion: SCREENING_PROMPT_VERSION, status: final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: hash([session.currentPlan.fingerprint, answers]), model: process.env.TARA_SCREENING_MODEL ?? 'gpt-6-luna', result: json(result), cvScore, cvBreakdown: cv ? json(cv) : Prisma.DbNull, screeningScore: screening, finalScore: final },
-            update: { status: final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: hash([session.currentPlan.fingerprint, answers]), model: (session.package.promptSnapshot as unknown as PromptRegistry).evaluate.model, promptVersion: session.package.promptVersion, result: json(result), cvScore, cvBreakdown: cv ? json(cv) : Prisma.DbNull, screeningScore: screening, finalScore: final, error: null } });
+        await this.db.$transaction(async tx => {
+            await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${id} FOR UPDATE`);
+            const retained = await tx.aiScreeningSession.findUnique({ where: { id } });
+            if (!retained?.applicationId) return;
+            const previous = await tx.aiScreeningEvaluation.findUnique({ where: { sessionId: id } });
+            if (previous?.inputHash === fingerprint) return;
+            if (previous?.result) await tx.aiScreeningEvaluationRevision.upsert({
+                where: { evaluationId_inputHash: { evaluationId: previous.id, inputHash: previous.inputHash ?? hash(previous.result) } },
+                create: { evaluationId: previous.id, inputHash: previous.inputHash ?? hash(previous.result), promptVersion: previous.promptVersion, snapshot: json(previous) }, update: {} });
+            const data = { promptVersion: SCREENING_PROMPT_VERSION, status: final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: fingerprint, model,
+                result: json(result), cvScore, cvBreakdown: cv ? json(cv) : Prisma.DbNull, screeningScore: screening, finalScore: final, error: null, pdfKey: null, pdfVersion: null };
+            const current = await tx.aiScreeningEvaluation.upsert({ where: { sessionId: id }, create: { sessionId: id, ...data }, update: data });
+            await tx.aiScreeningEvaluationRevision.upsert({ where: { evaluationId_inputHash: { evaluationId: current.id, inputHash: fingerprint } },
+                create: { evaluationId: current.id, inputHash: fingerprint, promptVersion: SCREENING_PROMPT_VERSION, snapshot: json({ ...current, promptSnapshot: preset }) }, update: {} });
+        });
         invalidateHrRanking();
         await this.ensurePdfWork(id);
     }
     private async ensurePdfWork(id: string) {
-        await this.db.aiScreeningWork.upsert({ where: { key: 'PDF:' + id + ':' + PDF_TEMPLATE_VERSION }, create: { key: 'PDF:' + id + ':' + PDF_TEMPLATE_VERSION, subjectId: id, kind: 'PDF' }, update: {} });
+        const evaluation = await this.db.aiScreeningEvaluation.findUnique({ where: { sessionId: id } });
+        const work = await enqueueWork(this.db, 'PDF', id, 'PDF:' + id + ':' + (evaluation?.inputHash ?? 'legacy') + ':' + PDF_TEMPLATE_VERSION);
+        if (!evaluation?.pdfKey && work.status === 'DONE') await this.db.aiScreeningWork.updateMany({ where: { id: work.id, status: 'DONE' }, data: { status: 'PENDING', availableAt: new Date() } });
     }
     private async pdf(id: string) {
         const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { package: true, currentPlan: true, evaluation: true, questions: { select: { id: true, position: true } }, profile: { select: { user: { select: { fullName: true } } } }, application: { select: { createdAt: true } } } });
@@ -343,12 +375,16 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             };
         };
         const buffer = await renderScreeningReport({ name: session.profile.user.fullName, job: job.title, company: job.company.name, submittedAt: session.application!.createdAt,
-            methodology: session.package.promptVersion, jobVersion: session.package.version, cvScore: session.evaluation.cvScore, screeningScore: session.evaluation.screeningScore, finalScore: session.evaluation.finalScore,
+            methodology: session.evaluation.promptVersion, jobVersion: session.package.version, cvScore: session.evaluation.cvScore, screeningScore: session.evaluation.screeningScore, finalScore: session.evaluation.finalScore,
             questionLabels: Object.fromEntries(session.questions.map(q => [q.id, 'Q' + (q.position + 1)])), result: session.evaluation.result as unknown as EvaluationPayload, rubric: session.package.payload as unknown as PackagePayload, plan: session.currentPlan.payload as unknown as CandidatePayload });
-        const key = 'screening/reports/' + session.evaluation.id + '/' + PDF_TEMPLATE_VERSION + '.pdf';
+        const key = 'screening/reports/' + session.evaluation.id + '/' + session.evaluation.inputHash + '/' + PDF_TEMPLATE_VERSION + '.pdf';
         await this.storage.putObject(key, buffer, 'application/pdf');
-        const kept = await this.db.aiScreeningEvaluation.updateMany({ where: { id: session.evaluation.id }, data: { pdfKey: key, pdfVersion: PDF_TEMPLATE_VERSION } });
+        const kept = await this.db.aiScreeningEvaluation.updateMany({ where: { id: session.evaluation.id, inputHash: session.evaluation.inputHash }, data: { pdfKey: key, pdfVersion: PDF_TEMPLATE_VERSION } });
         if (!kept.count)
             await this.storage.delete(key);
+        else if (session.evaluation.inputHash) {
+            const revision = await this.db.aiScreeningEvaluationRevision.findUnique({ where: { evaluationId_inputHash: { evaluationId: session.evaluation.id, inputHash: session.evaluation.inputHash } } });
+            if (revision) await this.db.aiScreeningEvaluationRevision.update({ where: { id: revision.id }, data: { snapshot: json({ ...(revision.snapshot as Record<string, unknown>), pdfKey: key, pdfVersion: PDF_TEMPLATE_VERSION }) } });
+        }
     }
 }

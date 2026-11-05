@@ -17,7 +17,8 @@ const cv = 'Membantu tim menaikkan penjualan 20%.\nBelajar membuat laporan di or
 const plan: CandidatePayload = { claims: [{ id: 'claim', criterionId: 'a', statement: 'Membantu tim menaikkan penjualan 20%.', quote: 'Membantu tim menaikkan penjualan 20%.', lineStart: 1, lineEnd: 1, question: 'Bagian apa yang kamu kerjakan sendiri saat membantu tim menaikkan penjualan?' }], limitations: [] };
 assert.equal(validateCandidate(plan, rubric, cv).claims.length, 1);
 assert.throws(() => validateCandidate({ ...plan, claims: [{ ...plan.claims[0], quote: 'Memimpin tim menaikkan penjualan 20%.' }] }, rubric, cv));
-assert.throws(() => validateCandidate({ ...plan, claims: [{ ...plan.claims[0], lineStart: 2 }] }, rubric, cv));
+assert.equal(validateCandidate({ ...plan, claims: [{ ...plan.claims[0], lineStart: 2 }] }, rubric, cv).claims[0].lineStart, 1);
+assert.equal(validateCandidate({ ...plan, claims: [{ ...plan.claims[0], quote: 'Membantu tim menaikkan penjualan 20%.', lineStart: 1, lineEnd: 1 }] }, rubric, cv.replace('tim menaikkan','tim\nmenaikkan')).claims[0].quote, 'Membantu tim\nmenaikkan penjualan 20%.');
 assert.throws(() => validateCandidate({ ...plan, claims: Array.from({ length: 6 }, (_, i) => ({ ...plan.claims[0], id: 'x' + i })) }, rubric, cv));
 assert.throws(() => validateFollowUp({ stop: false, question: 'Sesi 2: apakah kamu siap?' }));
 assert.equal(validateFollowUp({ stop: true, question: null }).stop, true);

@@ -5,3 +5,9 @@
 @keyframes dot{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-4px);opacity:1}}
 @media(max-width:760px){.compact{flex-direction:column;align-items:stretch;padding:18px;gap:4px}.compact .track{min-width:0;flex:none;width:100%;--size:64px}.copy strong{font-size:17px}.heroTrack{--size:clamp(140px,25dvh,230px)}.waiting{padding:16px}.waiting h2{margin:22px 0 12px}.thinking{gap:8px}.thinking>img{width:34px;height:40px}.bubble{max-width:calc(100% - 42px);padding:14px;font-size:15px}.bubble p{font-size:15px}.bubble small{font-size:12px}.bubble .track{--size:60px}}
 @media(prefers-reduced-motion:reduce){.preparation *,.thinking *{animation:none!important;transition:none!important}.runner{left:45%}.highlight{left:30%}.sprite{background-position:0 0}}
+.runner .highlight{left:auto;right:50%;bottom:-7px;width:clamp(55px,14vw,180px);animation:none;background:linear-gradient(90deg,transparent,#8a54fa);box-shadow:none}
+.runner[data-determinate=true]{animation:none;transition:left .18s linear,transform .18s linear}
+.smallTrack{--size:42px;min-width:0;width:100%;flex:none;border-bottom-width:6px;height:50px;margin:5px 0 12px}
+.smallTrack .highlight{height:6px;bottom:-3px}
+.smallTrack .runner{bottom:-3px}
+@media(prefers-reduced-motion:reduce){.track *{animation:none!important;transition:none!important}.runner{left:45%;transform:translateX(-45%)}.runner .highlight{left:auto;right:50%}}

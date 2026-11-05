@@ -127,6 +127,14 @@ button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 .paginationFooter svg{width:16px;height:16px;}
 .notice { padding:13px 20px; border:1px solid #ded7f4; border-radius:8px; background:#f5f2ff; margin-bottom:18px; }
 .details { padding:26px; line-height:1.7; }.details h2{font-size:20px;}.details h3{font-size:15px;margin-top:26px;}.description{white-space:pre-wrap;overflow-wrap:anywhere;}
+.applicationDetail{padding:20px 28px 0;background:#fff;position:relative}
+.detailIdentity{padding:20px;border:1px solid #eee7ff;background:#faf7ff;border-radius:12px;margin-bottom:20px}
+.detailIdentity .avatar{width:64px;height:64px;flex-shrink:0;background:#eee6ff;color:#6540df;display:inline-grid;place-items:center}
+.detailIdentity h2{font-size:23px}.detailIdentity small{font-size:12px;color:#71809a}
+.detailActions{position:sticky;bottom:0;z-index:3;background:#fff;border-top:1px solid #e3e6ef;padding:16px 24px;margin:24px -28px 0;box-shadow:0 -5px 15px #17213a06}
+.detailActions .addKanban{background:#5933ee;color:#fff;border-color:#5933ee;min-height:38px;padding:8px 18px}
+.applicationDetail:has(~ *){min-width:0}
+@media(max-width:760px){.applicationDetail{padding:16px 16px 0}.detailActions{margin-inline:-16px;padding:12px 16px;gap:10px}.detailIdentity{padding:14px;gap:12px}.detailIdentity h2{font-size:20px}.detailIdentity .avatar{width:48px;height:48px}}
 @media(max-width:1100px){.rankingHeader{grid-template-columns:1fr;}.controls{justify-content:flex-start;flex-wrap:wrap;}.search{flex:1;width:auto;min-width:200px;}.table{min-width:1000px;}}
 @media(max-width:1400px){.rankingHeader{grid-template-columns:1fr;}.controls{justify-content:flex-start;flex-wrap:wrap;}.search{flex:1;width:auto;}}
 @media(max-width:760px){.interviewForm{grid-template-columns:1fr;}.interviewFormActions{grid-column:1;}.interviewHead{flex-wrap:wrap;}.interviewHead .secondary{width:100%;}.interviewItemHead{align-items:flex-start;}.applicationDetail{padding-inline:16px;}}

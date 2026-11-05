@@ -45,7 +45,9 @@ export class ScreeningPackets {
         if (!screeningEnabled())
             return;
         // Bounded discovery also repairs outbox creation after a process restart.
-        const jobs = await this.db.jobPost.findMany({ where: { status: 'PUBLISHED' }, select: { id: true }, orderBy: { id: 'asc' }, take: 100, ...(this.cursor ? { cursor: { id: this.cursor }, skip: 1 } : {}) });
+        // Existing jobs refresh lazily on candidate selection. A prompt release must
+        // not regenerate every old context in the background.
+        const jobs = await this.db.jobPost.findMany({ where: { status: 'PUBLISHED', screeningPackages: { none: {} } }, select: { id: true }, orderBy: { id: 'asc' }, take: 100, ...(this.cursor ? { cursor: { id: this.cursor }, skip: 1 } : {}) });
         this.cursor = jobs.length === 100 ? jobs[jobs.length - 1].id : undefined;
         for (const job of jobs)
             await this.sync(job.id);

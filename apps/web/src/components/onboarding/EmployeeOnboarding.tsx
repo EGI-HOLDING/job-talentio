@@ -1,4 +1,5 @@
 'use client';
+import { TaraRunner } from '@/components/screening/TaraPreparation';
 import { employeePositionPreferencesEnabled, positionPreferenceNames } from '@/lib/employeePositionPreferences';
 
 import { useEffect, useRef, useState } from "react";
@@ -529,7 +530,7 @@ export function EmployeeOnboarding() {
               <p>{form.resumeId?appText('cv.saved'):appText('cv.noManual')}</p>
               <button className={s.secondary} type="button" disabled={uploading} onClick={()=>fileInput.current?.click()}>{t(form.resumeId?'changeCv':'chooseFile')}</button>
               <p>{t('fileHint')}</p>
-              {uploading&&<div role="status"><progress aria-label={appText('cv.uploading')} /><p>{appText('cv.uploading')}</p></div>}
+              {uploading&&<div role="status"><TaraRunner small/><p>{appText('cv.uploading')}</p></div>}
             </div>
           </>}
         </fieldset>

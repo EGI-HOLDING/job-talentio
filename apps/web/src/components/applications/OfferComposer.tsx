@@ -1,4 +1,5 @@
 'use client';
+import { TaraRunner } from '@/components/screening/TaraPreparation';
 
 import { useRef, useState } from 'react';
 import { apiUpload } from '@/lib/api';
@@ -91,7 +92,7 @@ export function OfferComposer({ applicationId, candidateName, jobTitle, mode = '
           const itemProgress = busy ? Math.round(uploaded / file.size * 100) : 0;
           return <div className={s.fileRow} key={file.name + ':' + file.size + ':' + file.lastModified + ':' + index}>
             <span className={s.fileType} aria-hidden="true">{extension}</span>
-            <div className={s.fileInfo}><strong title={file.name}>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(2)} MB{fileError ? ' | ' + fileError : busy ? ' | ' + t('offer.uploadProgress').replace('{percent}', String(itemProgress)) : ''}</span>{busy && <i><b style={{ width: itemProgress + '%' }}/></i>}</div>
+            <div className={s.fileInfo}><strong title={file.name}>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(2)} MB{fileError ? ' | ' + fileError : busy ? ' | ' + t('offer.uploadProgress').replace('{percent}', String(itemProgress)) : ''}</span>{busy && <TaraRunner progress={itemProgress} small/>}</div>
             <button type="button" className={s.removeFile} aria-label={t('offer.removeFile').replace('{name}', file.name)} disabled={busy} onClick={() => setFiles(current => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>
           </div>;
         })}

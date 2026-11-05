@@ -1,4 +1,5 @@
 'use client';
+import { TaraRunner } from '@/components/screening/TaraPreparation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api,getSession } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -19,7 +20,7 @@ export function CvUploadDialog({onClose,onUploaded}:{onClose:()=>void;onUploaded
   return <ProfileDialog title={t('cv.upload')} subtitle={t('cv.uploadHint')} onClose={onClose} busy={busy}><form className={s.form} onSubmit={upload} aria-busy={busy}>
     <CvFileDrop file={file} disabled={busy} onPick={value=>{const invalid=value?cvFileError(value,t):null;setError(invalid||'');setFile(invalid?null:value);}} />
     <p className={s.inlineNote}><ProfileIcon kind="info" />{t('pc.newPrimary')}</p>
-    {busy&&<div role="status"><progress aria-label={t('cv.uploading')} /><p>{t('cv.uploading')}</p></div>}
+    {busy&&<div role="status"><TaraRunner small/><p>{t('cv.uploading')}</p></div>}
     {error&&<p className={s.formError} role="alert">{error}</p>}
     <footer className={s.dialogFooter}><button type="button" className={s.secondary} disabled={busy} onClick={onClose}>{t('cancel')}</button><button type="submit" className={s.primary} disabled={!file||busy}><ProfileIcon kind="upload" />{t(busy?'cv.uploading':'cv.upload')}</button></footer>
   </form></ProfileDialog>;

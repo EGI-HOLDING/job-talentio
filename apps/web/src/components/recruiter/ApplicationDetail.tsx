@@ -15,7 +15,7 @@ import {KANBAN_STAGES} from '@job-talentio/shared';
 import {Applicant,ApplicationCvAction,KanbanAction,WhatsAppAction} from './ApplicationActions';
 import {RecruiterAvatar} from './RecruiterPrimitives';
 import s from './JobWorkspace.module.css';
-import {TaraAssessment} from '../screening/TaraAssessment';
+import {TaraAssessment, type TaraSummary} from '../screening/TaraAssessment';
 import { HrMatchSummary, type HrAssessment } from './HrMatchSummary';
 
 export function ApplicationDetail({applicationId,jobId,companyId,jobTitle='',from='applicants',onClose,onChanged}: {applicationId:string;jobId:string;companyId:string;jobTitle?:string;from?:'applicants'|'kanban';onClose:()=>void;onChanged:()=>void}) {
@@ -52,14 +52,14 @@ export function ApplicationDetail({applicationId,jobId,companyId,jobTitle='',fro
   const interviewHistory=[...(data?.interviews||[])].sort((a,b)=>Date.parse(a.scheduledAt)-Date.parse(b.scheduledAt));
   const hasUpcomingInterview=interviewHistory.some(item=>item.status==='SCHEDULED'&&Date.parse(item.scheduledAt)>=Date.now());
   useEffect(()=>()=>{context.current='';},[]);
-  return <>{!composerMode&&<ProfileDialog title={data?.profile.user.fullName||t('applicants.details')} wide onClose={onClose} busy={busy}>
-    <div className={s.applicationDetail}>
+  const tara = (data as (Applicant & {tara?:TaraSummary}) | null)?.tara;
+  return <>{!composerMode&&<ProfileDialog title={locale==='id'?'Detail lamaran':t('applicants.details')} subtitle={jobTitle} wide onClose={onClose} busy={busy}>
+    <div className={s.applicationDetail} data-application-detail>
       {error&&<ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/>}
       {!data&&!error?<WorkspaceLoading/>:data&&<>
-        <div className={s.detailIdentity}><RecruiterAvatar name={data.profile.user.fullName} src={data.profile.user.avatarUrl} className={s.avatar}/><div><h2>{data.profile.user.fullName}</h2><p>{data.profile.headline||t('ranking.noHeadline')}</p><small>{t('rw.applied')}: {dateLabel(data.createdAt,locale,true)}</small></div></div>
-        <HrMatchSummary assessment={(data as Applicant&{matchBreakdown?:HrAssessment}).matchBreakdown} detail/>
-        {(data as Applicant&{tara?:unknown}).tara&&<TaraAssessment applicationId={data.id}/>}
-        <div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('cv.candidateDetails')}</Link>{data.status!=='WITHDRAWN'&&<><Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link><WhatsAppAction profileId={data.profile.id} companyId={companyId} jobPostId={jobId}/></>}</div>
+        <div className={s.detailIdentity}><RecruiterAvatar name={data.profile.user.fullName} src={data.profile.user.avatarUrl} className={s.avatar}/><div><h2>{data.profile.user.fullName}</h2><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><p>{data.profile.headline||t('ranking.noHeadline')}</p><small>{t('rw.applied')}: {dateLabel(data.createdAt,locale,true)}</small></div></div>
+        {tara && tara.status !== 'LEGACY' ? <TaraAssessment applicationId={data.id} requirements={<HrMatchSummary assessment={(data as Applicant&{matchBreakdown?:HrAssessment}).matchBreakdown} detail/>}/> : <HrMatchSummary assessment={(data as Applicant&{matchBreakdown?:HrAssessment}).matchBreakdown} detail/>}
+
         {data.kanbanEnteredAt&&<>
           <label className={s.stageField}>{t('status')}<select value={data.status} disabled={busy||data.status==='WITHDRAWN'||data.status==='HIRED'||Boolean(data.candidateDecisionRequired)} onChange={event=>void move(event.target.value)}>{KANBAN_STAGES.map(status=><option key={status} value={status}>{label('applicationStatus',status)}</option>)}</select></label>
           {data.candidateDecisionRequired&&<div className={s.offerStageNotice} role="status"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="4" y="8.5" width="12" height="8.5" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M6.5 8.5V6a3.5 3.5 0 1 1 7 0v2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M10 11.5v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg><span>{t('offer.stageLocked')}</span></div>}
@@ -76,6 +76,7 @@ export function ApplicationDetail({applicationId,jobId,companyId,jobTitle='',fro
             <label>{t('rec.interviewTime')}<input name="scheduledAt" type="datetime-local" required min={(()=>{const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());return now.toISOString().slice(0,16);})()}/></label><label>{t('duration')}<select name="durationMins" defaultValue="60">{[15,30,45,60,90,120].map(value=><option key={value} value={value}>{value} {t('minutes')}</option>)}</select></label><label>{t('rec.meetingUrl')}<input name="meetingUrl" type="url"/></label><label>{t('rec.interviewVenue')}<input name="location" maxLength={300}/></label><label>{t('note')}<textarea name="note" maxLength={2000}/></label><small>{t('rw.timezone')}: {Intl.DateTimeFormat().resolvedOptions().timeZone}</small><div className={s.interviewFormActions}><button type="button" className={s.secondary} disabled={busy} onClick={()=>setScheduleOpen(false)}>{t('cancel')}</button><button type="submit" className={s.primary} disabled={busy||schedulePending.current}>{t(interviewHistory.length?'rec.scheduleNextInterview':'rec.scheduleInterview')}</button></div>
           </form></div>}
         </section>}
+<div className={s.detailActions}><span className={s.applicationStatus} data-status={data.status}>{label('applicationStatus',data.status)}</span><KanbanAction application={data} jobId={jobId} companyId={companyId} onChanged={changed}/><ApplicationCvAction application={data}/><Link className={s.profileButton} href={'/candidates/'+encodeURIComponent(data.profile.id)+'?'+new URLSearchParams({matchJobId:jobId,company:companyId,application:data.id,from})}>{t('cv.candidateDetails')}</Link>{data.status!=='WITHDRAWN'&&<><Link className={s.cvLink} href={'/messages?'+new URLSearchParams({peer:data.profile.user.id,job:jobId,role:'RECRUITER'})}>{t('rec.chat')}</Link><WhatsAppAction profileId={data.profile.id} companyId={companyId} jobPostId={jobId}/></>}</div>
       </>}
     </div>
   </ProfileDialog>}{data&&composerMode&&<OfferComposer applicationId={data.id} candidateName={data.profile.user.fullName} jobTitle={jobTitle} mode={composerMode} onClose={()=>setComposerMode(null)} onSent={result=>{const mode=composerMode;setComposerMode(null);setRetry(value=>value+1);if(mode==='offer')setData(current=>current?{...current,status:'OFFER',candidateDecisionRequired:Boolean(result.packet?.requiresCandidateDecision)}:null);onChanged();}}/>}</>;

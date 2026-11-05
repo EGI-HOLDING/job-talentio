@@ -29,7 +29,7 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
   const [status,setStatus]=useState(''),[detail,setDetail]=useState<string|null>(applicationId||null);
   useEffect(()=>{setDetail(applicationId||null);},[applicationId]);
   const [page, setPage] = useState(1), [retry, setRetry] = useState(0);
-  const [result, setResult] = useState<{ items: (Applicant&Partial<HrAssessment>&{matchBreakdown?:HrAssessment;tara?:TaraSummary|null})[]; total: number; page: number;state?:string;rankingVersion?:string;rankingAvailable?:boolean;taraGroups?:{id:string;version:number|null;count:number}[] }>({ items: [], total: 0, page: 1 });
+  const [result, setResult] = useState<{ items: (Applicant&Partial<HrAssessment>&{matchBreakdown?:HrAssessment;tara?:TaraSummary|null})[]; total: number; page: number;state?:string;rankingVersion?:string;rankingAvailable?:boolean;taraGroups?:{id:string;version:number|null;count:number;methodology?:string}[] }>({ items: [], total: 0, page: 1 });
   const [loading, setLoading] = useState(true), [error, setError] = useState('');
   const filterKey = JSON.stringify(filters);
   const activeFilters = Object.values(filters).filter(value => value && value !== 'false').length;
@@ -72,8 +72,8 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
         <label className={s.sort}><WorkspaceIcon kind="sort"/><span className="sr-only">{t('sortBy')}</span><select aria-label={t('sortBy')} value={sort} onChange={event => { setPage(1); setSort(event.target.value); }}><option value="match">{t('ranking.sortMatch')}</option>{result.taraGroups&&<option value="cv">Kecocokan CV</option>}<option value="newest">{t('applicants.sortNewest')}</option></select></label>
       </div>
     </div>
-    {result.taraGroups&&<label className={s.sort}>Versi kebutuhan <select value={version} onChange={e=>{setVersion(e.target.value);setPage(1);}}><option value="all">Semua versi (peringkat terpisah)</option>{result.taraGroups.map(g=><option key={g.id} value={g.id}>{g.version?'Lowongan v'+g.version:'Lamaran sebelum Tara'} · {g.count}</option>)}</select></label>}
-    <p className={s.rankingNote}>{result.taraGroups?'Skor akhir: 50% kecocokan CV + 50% bukti screening. Peringkat terpisah untuk setiap versi kebutuhan; hasil yang belum lengkap tetap dapat ditinjau.':t(sort === 'match' ? 'applicants.orderExplanation' : 'applicants.newestExplanation')}</p>
+    {result.taraGroups&&<label className={s.sort}>Versi kebutuhan <select value={version} onChange={e=>{setVersion(e.target.value);setPage(1);}}><option value="all">Semua versi (peringkat terpisah)</option>{result.taraGroups.map(g=><option key={g.id} value={g.id}>{g.version?'Lowongan v'+g.version:'Lamaran sebelum Tara'}{g.methodology ? (g.methodology.includes('v3.') ? ' · Penilaian klaim CV' : ' · Metodologi sebelumnya') : ''} · {g.count}</option>)}</select></label>}
+    <p className={s.rankingNote}>{result.taraGroups?'Skor akhir: 50% kecocokan CV + 50% dukungan klaim CV. Peringkat terpisah untuk setiap versi kebutuhan; hasil yang belum lengkap tetap dapat ditinjau.':t(sort === 'match' ? 'applicants.orderExplanation' : 'applicants.newestExplanation')}</p>
     {result.state==='JOB_REQUIREMENTS_REQUIRED'&&<p role="status">{t('hrV2.state.JOB_REQUIREMENTS_REQUIRED')}</p>}
     {result.rankingAvailable===false&&<p role="status">{t('hrV2.unavailable')}</p>}
     <div id="job-candidate-filters" className={s.filterPanel} hidden={!filtersOpen}><ApplicantFilters embedded meta={meta} onApply={value => { setPage(1); setFilters(value); setFiltersOpen(false); }}/></div>

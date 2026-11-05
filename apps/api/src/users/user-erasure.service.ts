@@ -72,9 +72,9 @@ export class UserErasureService {
         })
       : [];
     const cvVersions=profile?await this.prisma.resumeVersion.findMany({where:{OR:[{resumeId:{in:resumes.map(r=>r.id)}},{applications:{some:{profileId:profile.id}}}]},select:{id:true,fileKey:true}}):[];
-    const taraSessions=profile?await this.prisma.aiScreeningSession.findMany({where:{profileId:profile.id},select:{id:true,coverFileKey:true,plans:{select:{id:true}},evaluation:{select:{pdfKey:true}}}}):[];
+    const taraSessions=profile?await this.prisma.aiScreeningSession.findMany({where:{profileId:profile.id},select:{id:true,coverFileKey:true,plans:{select:{id:true}},evaluation:{select:{pdfKey:true,revisions:{select:{snapshot:true}}}}}}):[];
     const taraSubjects=taraSessions.flatMap(s=>[s.id,...s.plans.map(p=>p.id)]).concat(cvVersions.map(v=>v.id));
-    let taraKeys=taraSessions.flatMap(s=>[s.coverFileKey,s.evaluation?.pdfKey]).filter((key):key is string=>Boolean(key));
+    let taraKeys=taraSessions.flatMap(s=>[s.coverFileKey,s.evaluation?.pdfKey,...(s.evaluation?.revisions??[]).map(r=>(r.snapshot as {pdfKey?:string}).pdfKey)]).filter((key):key is string=>Boolean(key));
     const offerDocuments = profile
       ? await this.prisma.applicationOfferDocument.findMany({
           where: { packet: { application: { profileId: profile.id } } },
@@ -130,9 +130,9 @@ export class UserErasureService {
 
       if (!profile) return;
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${profile.id} FOR UPDATE`);
-      const latestTara=await tx.aiScreeningSession.findMany({where:{profileId:profile.id},select:{id:true,coverFileKey:true,resumeVersionId:true,plans:{select:{id:true,resumeVersionId:true}},evaluation:{select:{pdfKey:true}}}});
+      const latestTara=await tx.aiScreeningSession.findMany({where:{profileId:profile.id},select:{id:true,coverFileKey:true,resumeVersionId:true,plans:{select:{id:true,resumeVersionId:true}},evaluation:{select:{pdfKey:true,revisions:{select:{snapshot:true}}}}}});
       const latestSubjects=[...taraSubjects,...latestTara.flatMap(s=>[s.id,s.resumeVersionId,...s.plans.flatMap(p=>[p.id,p.resumeVersionId])]).filter((id):id is string=>Boolean(id))];
-      taraKeys=[...new Set([...taraKeys,...latestTara.flatMap(s=>[s.coverFileKey,s.evaluation?.pdfKey]).filter((key):key is string=>Boolean(key))])];
+      taraKeys=[...new Set([...taraKeys,...latestTara.flatMap(s=>[s.coverFileKey,s.evaluation?.pdfKey,...(s.evaluation?.revisions??[]).map(r=>(r.snapshot as {pdfKey?:string}).pdfKey)]).filter((key):key is string=>Boolean(key))])];
       await tx.aiScreeningWork.updateMany({where:{subjectId:{in:latestSubjects}},data:{status:'CANCELLED',leaseOwner:null,leaseUntil:null,error:'ACCOUNT_ERASED'}});
       await tx.aiScreeningCall.updateMany({where:{subjectId:{in:latestSubjects}},data:{status:'ERASED',result:Prisma.DbNull,error:null}});
       await tx.aiScreeningSession.deleteMany({where:{profileId:profile.id}});
