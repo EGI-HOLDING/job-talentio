@@ -35,10 +35,10 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     doc.registerFont('Body', f.regular);
     doc.registerFont('Bold', f.bold);
     const navy = '#17213a', purple = '#5635e8', muted = '#697b99', line = '#e7ebf3', width = doc.page.width - 88;
-    const text = (value: string, x: number, y: number, w: number, size = 10.5, bold = false, color = navy) => {
+    const text = (value: string, x: number, y: number, w: number, size = 10.5, bold = false, color = navy, lineGap = 2) => {
         doc.font(bold ? 'Bold' : 'Body').fontSize(size).fillColor(color);
-        const h = doc.heightOfString(value, { width: w, lineGap: 2 });
-        doc.text(value, x, y, { width: w, lineGap: 2 });
+        const h = doc.heightOfString(value, { width: w, lineGap });
+        doc.text(value, x, y, { width: w, lineGap });
         return h;
     };
     const heading = (value: string, y: number) => text(value, 44, y, width, 11, true);
@@ -102,7 +102,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
                 !result.pair && result.evidence ? (data.questionLabels?.[result.evidence.questionId] ?? 'Jawaban') + ': “' + excerpt(result.evidence.quote, 70) + '”' : !result.pair && modern ? 'Tidak ada jawaban yang dapat dikutip.' : null,
                 result.pair ? label(result.pair.left) + ': “' + excerpt(result.pair.left.quote, 65) + '”\n' + label(result.pair.right) + ': “' + excerpt(result.pair.right.quote, 65) + '”' : null].filter(Boolean).join('\n');
             const titleHeight = doc.font('Bold').fontSize(10).heightOfString(result.title, { width: cardWidth - 64 });
-            const rowHeight = titleHeight + doc.font('Body').fontSize(9.5).heightOfString(lines, { width: cardWidth - 20, lineGap: 2 }) + 20;
+            const rowHeight = titleHeight + doc.font('Body').fontSize(9.5).heightOfString(lines, { width: cardWidth - 20, lineGap: 0 }) + 20;
             return { result, lines, titleHeight, rowHeight };
         });
         const rowHeight = Math.max(...layouts.map(layout => layout.rowHeight));
@@ -112,15 +112,15 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
             doc.roundedRect(x, y, cardWidth, rowHeight, 5).fill('#f8fafd');
             text(result.title, x + 10, y + 8, cardWidth - 64, 10, true);
             text(result.score === null ? '—' : String(result.score) + '/4', x + cardWidth - 47, y + 8, 37, 10, true, purple);
-            text(lines, x + 10, y + titleHeight + 12, cardWidth - 20, 9.5);
+            text(lines, x + 10, y + titleHeight + 12, cardWidth - 20, 9.5, false, navy, 0);
         });
         y += rowHeight + 8;
     }
     heading('Pertanyaan lanjutan untuk HR', y + 5);
     y += 25;
-    for (const q of data.result.interviewQuestions.length ? data.result.interviewQuestions : ['Konfirmasikan pengalaman yang belum memiliki bukti cukup melalui wawancara.']) {
-        y += text('• ' + q, 44, y, width, 10) + 8;
-    }
+    const followUps = data.result.interviewQuestions.length ? data.result.interviewQuestions : ['Konfirmasikan pengalaman yang belum memiliki bukti cukup melalui wawancara.'];
+    const followUpWidth = (width - 12 * (followUps.length - 1)) / followUps.length;
+    y += Math.max(...followUps.map((q, i) => text((i + 1) + '. ' + q, 44 + i * (followUpWidth + 12), y, followUpWidth, 9.5))) + 8;
     if (y > 760 || doc.bufferedPageRange().count !== 2)
         throw new Error('REPORT_LAYOUT_OVERFLOW:' + Math.ceil(y) + ':' + doc.bufferedPageRange().count);
     for (let page = 0; page < 2; page++) {
