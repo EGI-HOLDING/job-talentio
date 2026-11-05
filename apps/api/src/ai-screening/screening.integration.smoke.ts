@@ -67,6 +67,28 @@ async function main() {
         const resume = await db.resume.create({ data: { id: 'r' + id, profileId: id, title: 'CV ' + id, fileKey: 'fixture/' + id + '.pdf', parseStatus: 'READY', parseGeneration: 1, parsedData: { headline: 'Customer Service', skills: [], experiences: [], educations: [] } } });
         const d = await sessions.draft(user, job.id) as any;
         await sessions.save(user, d.id, { resumeId: resume.id });
+        await sessions.claim(user, d.id, 'preparation-tab');
+        const callsBeforeStart = calls.length;
+        const waiting = await sessions.start(user, d.id, 'preparation-tab');
+        check(waiting.status === 'DRAFT' && waiting.preparation.status === 'PROCESSING', 'start before readiness returns a normal draft');
+        check(!waiting.startedAt && !waiting.questions.length && calls.length === callsBeforeStart, 'waiting never starts a timer, creates questions or calls AI');
+        await assert.rejects(() => sessions.start(user, d.id, 'other-tab'));
+        checks++;
+        await db.aiScreeningSession.update({ where: { id: d.id }, data: { leaseToken: null, leaseExpiresAt: null } });
+        if (id === 'a') {
+            const current = await db.aiScreeningSession.findUniqueOrThrow({ where: { id: d.id } });
+            const work = await db.aiScreeningWork.findUniqueOrThrow({ where: { key: 'CANDIDATE:' + current.currentPlanId } });
+            await db.aiCandidatePlan.update({ where: { id: current.currentPlanId! }, data: { status: 'FAILED', error: 'SYNTHETIC_TRANSIENT' } });
+            await db.aiScreeningWork.update({ where: { id: work.id }, data: { status: 'FAILED', attempts: 1, error: 'SYNTHETIC_TRANSIENT' } });
+            check((await sessions.state(user, d.id)).preparation.reason === 'PREPARATION_FAILED', 'recoverable preparation failures expose a safe UI reason');
+            check((await sessions.retry(user, d.id)).preparation.status === 'PROCESSING', 'retry atomically clears failed dependency state');
+            await db.aiCandidatePlan.update({ where: { id: current.currentPlanId! }, data: { status: 'FAILED', error: 'SYNTHETIC_INVALID' } });
+            await db.aiScreeningWork.update({ where: { id: work.id }, data: { status: 'FAILED', attempts: 3 } });
+            check((await sessions.state(user, d.id)).preparation.reason === 'RECOVERY_REQUIRED', 'exhausted recovery budget does not offer futile retries');
+            await assert.rejects(() => sessions.retry(user, d.id)); checks++;
+            await db.aiCandidatePlan.update({ where: { id: current.currentPlanId! }, data: { status: 'PENDING', error: null } });
+            await db.aiScreeningWork.update({ where: { id: work.id }, data: { status: 'PENDING', attempts: 0, error: null } });
+        }
         const row = await db.aiScreeningSession.findUniqueOrThrow({ where: { id: d.id } });
         const text = [claimText, 'Membantu mencatat proses layanan', 'Membantu tim menilai hasil layanan'].join('\n');
         const pdf = new PDFDocument(), chunks: Buffer[] = [];

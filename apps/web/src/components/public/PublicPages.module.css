@@ -4,6 +4,7 @@
 .appPage > :global(.shell.dash-grid) { overflow: auto; overscroll-behavior: contain; }
 .appPage :global(.dash-grid .dash-nav) { top: 0; align-self: start; }
 .appFlowPage { position: relative; flex: 0 0 auto; height: calc(100dvh - var(--app-nav-height, 65px)); min-height: 0; overflow: auto; overscroll-behavior: contain; background: #fff; }
+.focusFlowPage { height:100dvh; min-height:0; overflow:hidden; flex:1 1 auto; background:#fff; }
 .publicPage { background: #fff; }
 .auth { background: #fff; min-height: calc(100dvh - 148px); color: #17213a; }
 .auth :global(.auth-wrap) { min-height: 0; padding: 36px 20px 48px; display: flex; justify-content: center; align-items: flex-start; }

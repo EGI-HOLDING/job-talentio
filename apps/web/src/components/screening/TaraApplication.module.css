@@ -1,3 +1,18 @@
+.page.focusPage {
+  max-width:none;width:100%;height:var(--tara-viewport-height,100%);min-height:0;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;
+  padding:calc(20px + env(safe-area-inset-top)) max(24px,calc((100vw - 1320px)/2)) calc(12px + env(safe-area-inset-bottom));
+}
+.focusPage .progress{margin:0 0 20px;flex-shrink:0}
+.focusChat{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.focusChat .chatIdentity{flex-shrink:0;margin:0 0 18px;padding:8px 0 18px;border-bottom:1px solid #dfe5ef;gap:16px}
+.focusChat .chatIdentity strong{font-size:23px;display:block}
+.focusChat .chatIdentity span{display:block;font-size:15px;margin-top:3px}
+.focusChat .messages{flex:1;min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain;padding:12px 4px 24px}
+.focusChat .composer{position:relative;flex-shrink:0;border:0;border-top:1px solid #e1e5ee;border-radius:0;padding:14px 0 0;margin:0;bottom:auto}
+.focusChat .inputRow textarea{resize:none;max-height:140px}
+.focusChat .inputRow textarea:disabled{border-color:#d7deeb;background:#f3f5f9;color:#7e8aa3}
+.focusPage>.alert,.focusPage>.hint{flex-shrink:0;margin:0 0 12px}
+@media(max-width:760px){.page.focusPage{padding:calc(12px + env(safe-area-inset-top)) 12px calc(8px + env(safe-area-inset-bottom))}.focusPage .progress{margin:0 0 10px}.focusChat .chatIdentity{padding:4px 0 12px;margin:0 0 10px}.focusChat .chatIdentity strong{font-size:20px}.focusChat .messages{min-height:0;max-height:none}.focusChat .composer{padding:10px 0 0;bottom:auto}.focusChat .composer .hint{font-size:12px;margin-top:8px}}
 .page {
   max-width:1248px;
   margin:0 auto;

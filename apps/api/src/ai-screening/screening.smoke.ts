@@ -3,6 +3,14 @@ import { nextProbeTarget, combineScores, scoreScreening, rankScreening } from '.
 import { validateCandidate, validateEvaluation, validateFollowUp, type CandidatePayload, type EvaluationPayload, type PackagePayload } from './screening.schemas';
 import { composePrompt } from './prompts/compose';
 import { freezePromptRegistry } from './prompts/registry';
+import { screeningPreparation } from './screening-preparation';
+const pendingPreparation = { resumeId: 'cv', package: { status: 'READY' }, currentPlan: { id: 'plan', status: 'PENDING' }, resumeVersion: { screeningSource: { status: 'READY' } } };
+assert.equal(screeningPreparation({ ...pendingPreparation, resumeId: null }).status, 'WAITING_CV');
+assert.equal(screeningPreparation(pendingPreparation).status, 'PROCESSING');
+assert.equal(screeningPreparation({ ...pendingPreparation, currentPlan: { id: 'plan', status: 'READY' } }).status, 'READY');
+assert.equal(screeningPreparation({ ...pendingPreparation, package: { status: 'FAILED', error: 'TARA_CALL_UNCERTAIN' } }).reason, 'RECOVERY_REQUIRED');
+assert.equal(screeningPreparation({ ...pendingPreparation, resumeVersion: { screeningSource: { status: 'FAILED', error: 'CV_UNREADABLE' } } }).reason, 'CV_UNREADABLE');
+assert.equal(screeningPreparation({ ...pendingPreparation, package: { status: 'FAILED', error: 'INVALID_PROVIDER_OUTPUT' } }).reason, 'PREPARATION_FAILED');
 import { projectScreeningCost } from './screening-cost';
 const rubric: PackagePayload = { context: 'Layanan pelanggan', criteria: ['a', 'b', 'c'].map(id => ({ id, name: id, requirementRef: 'Melayani pelanggan', anchors: ['0', '1', '2', '3', '4'] })) };
 const cv = 'Membantu tim menaikkan penjualan 20%.\nBelajar membuat laporan di organisasi kampus.';

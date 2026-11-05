@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { useApplicationPresentation } from '../screening/ApplicationPresentation';
 
 const DISMISS_KEY = 'jt.installPrompt.dismissedAt';
 const DISMISS_DAYS = 14;
@@ -37,6 +38,7 @@ function isIos(): boolean {
  * beforeinstallprompt; iOS Safari has no API, so it gets a short hint instead.
  */
 export function InstallPrompt() {
+  const { focused } = useApplicationPresentation();
   const { t } = useI18n();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [mode, setMode] = useState<'hidden' | 'native' | 'ios'>('hidden');
@@ -82,7 +84,7 @@ export function InstallPrompt() {
     setDeferred(null);
   }
 
-  if (mode === 'hidden') return null;
+  if (mode === 'hidden' || focused) return null;
 
   return (
     <div className="install-bar" role="region" aria-label={t('pwa.installTitle')}>

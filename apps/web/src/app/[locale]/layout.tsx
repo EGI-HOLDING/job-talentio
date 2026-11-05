@@ -5,6 +5,7 @@ import { EmployeeOnboardingGate } from '@/components/auth/EmployeeOnboardingGate
 import { RecruiterOnboardingGate } from '@/components/auth/RecruiterOnboardingGate';
 import { AccountRouteGate } from '@/components/auth/AccountRouteGate';
 import { SiteNav } from '@/components/SiteNav';
+import { ApplicationPresentationProvider } from '@/components/screening/ApplicationPresentation';
 import { SiteFooter } from '@/components/SiteFooter';
 import { I18nProvider } from '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
@@ -75,14 +76,14 @@ export default async function RootLayout({
       </head>
       <body><JobImpressions/>
         <I18nProvider locale={locale}>
-          <ConfirmProvider>
+          <ApplicationPresentationProvider><ConfirmProvider>
             <PresenceConnection />
             <PwaRegister />
             <SiteNav />
             <AccountRouteGate><EmployeeOnboardingGate><RecruiterOnboardingGate><PublicShell>{children}</PublicShell></RecruiterOnboardingGate></EmployeeOnboardingGate></AccountRouteGate>
             <SiteFooter />
             <InstallPrompt />
-          </ConfirmProvider>
+          </ConfirmProvider></ApplicationPresentationProvider>
         </I18nProvider>
       </body>
     </html>

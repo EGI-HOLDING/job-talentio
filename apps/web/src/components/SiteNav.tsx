@@ -1,5 +1,6 @@
 'use client';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
+import { useApplicationPresentation } from './screening/ApplicationPresentation';
 
 import { Link, localeHref, usePathname, useRouter } from '@/lib/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -375,5 +376,7 @@ function SiteNavContent() {
 }
 
 export function SiteNav() {
+  const { focused } = useApplicationPresentation();
+  if (focused) return null;
   return <Suspense fallback={<div className="nav-wrap" style={{ minHeight: 80 }} />}><SiteNavContent /></Suspense>;
 }

@@ -12,7 +12,8 @@ import { enqueueWork, ScreeningPackets } from './screening-packets.service';
 import { answerDeadline, isExpired, json, MAX_ANSWER_CHARS, SESSION_LEASE_MS, screeningEnabled } from './screening.policy';
 import type { CandidatePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
-const sessionInclude = { package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: true, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
+import { screeningPreparation } from './screening-preparation';
+const sessionInclude = { package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
 }>;
@@ -50,8 +51,14 @@ export class ScreeningSessions {
             throw new NotFoundException('Draf lamaran tidak ditemukan.');
         return row;
     }
-    private public(row: Session) {
+    private async public(row: Session) {
         const active = row.questions.find(q => q.answer === null);
+        const preparation = screeningPreparation(row);
+        const requiresRecovery = /UNCERTAIN|REQUIRES_REVIEW|UNCONFIRMED|RETRY_LIMIT/.test([row.error, row.package?.error, row.currentPlan?.error].join(' ')) ||
+            Boolean((preparation.status === 'FAILED' || row.error) && await this.db.aiScreeningWork.count({ where: {
+                subjectId: { in: [row.id, row.packageId, row.currentPlanId, row.resumeVersionId].filter((v): v is string => Boolean(v)) }, status: 'FAILED', attempts: { gte: 3 },
+            } }));
+        if (preparation.status === 'FAILED' && requiresRecovery && preparation.reason !== 'CV_UNREADABLE') preparation.reason = 'RECOVERY_REQUIRED';
         const cv = row.cvSnapshot as {
             resume?: {
                 id: string;
@@ -63,6 +70,8 @@ export class ScreeningSessions {
             coverLetter: row.coverLetter ?? '', coverFilename: row.coverFilename, source: row.source, revision: row.revision, serverTime: new Date().toISOString(),
             packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
             preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
+            preparation,
+            recoveryRequired: requiresRecovery,
             job: { id: row.job.id, title: row.job.title, companyName: row.job.isAnonymous ? 'Perusahaan dirahasiakan' : row.job.company.name, city: row.job.city?.name ?? '' },
             questions: row.questions.filter(q => !active || q.position <= active.position).map(q => ({ id: q.id, text: q.text, draft: q.draft, answer: q.answer, shownAt: q.shownAt, deadlineAt: q.deadlineAt, answeredAt: q.answeredAt, timedOut: q.timedOut })),
             error: row.currentPlan?.error === 'CV_UNREADABLE' ? 'CV belum bisa dibaca. Coba unggah PDF atau DOCX yang teksnya jelas, ya.' : row.error || row.currentPlan?.error ? 'Tara sedang mengalami kendala. Progresmu aman, coba lanjutkan sebentar lagi.' : null };
@@ -159,9 +168,19 @@ export class ScreeningSessions {
         if (!screeningEnabled())
             throw new ServiceUnavailableException('Screening baru sedang dijeda.');
         await this.packets.available(row.jobId);
+        // Validate ownership, lease and CV even when preparation is still pending.
+        await this.db.$transaction(async tx => {
+            const current = await this.lock(tx, id, row.profileId, clientId);
+            const resume = await tx.resume.findFirst({ where: { id: current.resumeId ?? '', profileId: row.profileId, deletedAt: null, fileKey: { not: null } } });
+            if (!resume) throw new BadRequestException('Pilih CV sebelum mulai, ya.');
+        });
         const plan = await this.plans.request(id);
-        if (!plan || plan.status !== 'READY')
-            throw new ServiceUnavailableException('Tara sedang membaca CV dan menyiapkan pertanyaanmu. Drafmu aman, coba lagi sebentar ya.');
+        const fresh = await this.owned(user, id);
+        const preparation = screeningPreparation(fresh);
+        if (preparation.status === 'FAILED')
+            throw new ServiceUnavailableException('Tara sedang mengalami kendala. Progresmu aman; periksa status persiapan untuk melanjutkan.');
+        if (!plan || plan.status !== 'READY' || preparation.status !== 'READY')
+            return this.public(fresh);
         const payload = plan.payload as unknown as CandidatePayload;
         await this.db.$transaction(async (tx) => {
             await tx.$queryRaw(Prisma.sql `SELECT id FROM "EmployeeProfile" WHERE id=${row.profileId} FOR UPDATE`);
@@ -243,7 +262,14 @@ export class ScreeningSessions {
             const uncertain = await this.db.aiScreeningCall.count({ where: { workId: work.id, status: { in: ['UNCERTAIN', 'ERASED'] } } });
             if (uncertain || work.attempts >= 3)
                 throw new ServiceUnavailableException('Tara sedang memulihkan percakapanmu. Progres aman; tim kami perlu memeriksa sambungannya.');
-            await this.db.aiScreeningWork.updateMany({ where: { id: work.id, status: 'FAILED' }, data: { status: 'PENDING', availableAt: new Date(), error: null } });
+            await this.db.$transaction(async tx => {
+                const changed = await tx.aiScreeningWork.updateMany({ where: { id: work.id, status: 'FAILED' }, data: { status: 'PENDING', availableAt: new Date(), error: null } });
+                if (!changed.count) return;
+                if (work.kind === 'PREPARE') await tx.aiScreeningPackage.updateMany({ where: { id: work.subjectId, status: 'FAILED' }, data: { status: 'PENDING', error: null } });
+                if (work.kind === 'CANDIDATE') await tx.aiCandidatePlan.updateMany({ where: { id: work.subjectId, status: 'FAILED' }, data: { status: 'PENDING', error: null } });
+                if (work.kind === 'CV_SOURCE') await tx.aiCvSource.updateMany({ where: { versionId: work.subjectId, status: 'FAILED' }, data: { status: 'PENDING', error: null } });
+                if (work.kind === 'ADVANCE') await tx.aiScreeningSession.updateMany({ where: { id }, data: { error: null } });
+            });
         }
         return this.state(user, id);
     }
