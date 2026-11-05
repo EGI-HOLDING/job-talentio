@@ -3,6 +3,7 @@ import { validateClaimEvaluation, unansweredEvaluation } from './claim-assessmen
 import { combineScores, rankScreening, scoreScreening } from './screening.policy';
 import type { AnswerSource, PackagePayload, CandidatePayload } from './screening.schemas';
 import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
+import { frozenCvAssessment } from './frozen-cv';
 const rubric: PackagePayload = { context: 'Tugas', criteria: ['a','b','c'].map(id => ({ id, name:id, requirementRef:'Tugas', anchors:['0','1','2','3','4'] })) };
 const plan: CandidatePayload = { claims:[{id:'x',criterionId:'a',statement:'Membantu tim',quote:'Membantu tim',lineStart:1,lineEnd:1,question:'Bagian apa yang kamu kerjakan?'}], limitations:[] };
 const question: AnswerSource = { id:'q',claimId:'x',criterionId:'a',kind:'CORE',shownAt:new Date(0),answeredAt:new Date(60000),answer:'',timedOut:true };
@@ -27,4 +28,9 @@ assert.throws(()=>validateClaimEvaluation({...result,claims:[{...result.claims[0
 assert.throws(()=>validateClaimEvaluation({...result,claims:[{...result.claims[0],status:'CLARIFY'}]},rubric,plan,[answer]),/Discrepancies/);
 const ranked=rankScreening(['v2','v3'].flatMap(methodology=>[80,60].map((finalScore,i)=>({id:methodology+i,methodology,packageId:'same',status:'READY',finalScore,createdAt:new Date(i)}))));
 assert.equal(ranked.ranks.get('v20'),1);assert.equal(ranked.ranks.get('v30'),1);
+const priorCv = { cvScore: 58.75, cvBreakdown: { total: 58.75, assessable: true } };
+assert.equal(frozenCvAssessment(priorCv, [])?.total, 58.75);
+assert.equal(frozenCvAssessment({ cvScore: null, cvBreakdown: { total: 0, assessable: false } }, [{ snapshot: priorCv }])?.total, 58.75);
+assert.equal(frozenCvAssessment({ cvScore: 0, cvBreakdown: { total: 0, assessable: true } }, [])?.total, 0);
+assert.equal(frozenCvAssessment(null, [{ snapshot: { cvScore: 80, cvBreakdown: { total: 0, assessable: false } } }]), null);
 console.log('Claim scores, empty answers, opportunity guards, citations, discrepancies, sampled denominator and methodology ranking passed.');

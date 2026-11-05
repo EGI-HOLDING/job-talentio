@@ -24,6 +24,7 @@ import { composePrompt } from './prompts/compose';
 import { assertAnswerOpportunities, unansweredEvaluation, validateClaimEvaluation } from './claim-assessment';
 import { enqueueWork } from './screening-packets.service';
 import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
+import { frozenCvAssessment } from './frozen-cv';
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -86,11 +87,12 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             await this.sessions.expireAnswers();
             if (screeningEnabled()) {
                 const completed = await this.db.aiScreeningSession.findMany({ where: { applicationId: { not: null },
-                    OR: [{ evaluation: null }, { evaluation: { promptVersion: { not: SCREENING_PROMPT_VERSION } } }] },
-                    select: { id: true }, orderBy: { id: 'asc' }, take: 25,
+                    OR: [{ evaluation: null }, { evaluation: { promptVersion: { not: SCREENING_PROMPT_VERSION } } },
+                        { evaluation: { cvScore: null, revisions: { some: {} } } }] },
+                    select: { id: true, evaluation: { select: { promptVersion: true } } }, orderBy: { id: 'asc' }, take: 25,
                     ...(this.evaluationCursor ? { cursor: { id: this.evaluationCursor }, skip: 1 } : {}) });
                 this.evaluationCursor = completed.length === 25 ? completed.at(-1)!.id : undefined;
-                for (const row of completed) await enqueueWork(this.db, 'EVALUATE', row.id, 'EVALUATE:' + row.id + ':' + SCREENING_PROMPT_VERSION);
+                for (const row of completed) await enqueueWork(this.db, 'EVALUATE', row.id, 'EVALUATE:' + row.id + ':' + SCREENING_PROMPT_VERSION + (row.evaluation?.promptVersion === SCREENING_PROMPT_VERSION ? ':restore-cv' : ''));
             }
             if (screeningEnabled() && Date.now() - this.lastReconcile > 60000 && !this.reconciling) {
                 this.reconciling = true;
@@ -316,19 +318,26 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { package: true, currentPlan: true, evaluation: true, questions: { orderBy: { position: 'asc' } } } });
         if (!session?.applicationId || !session.currentPlan || !session.package)
             return;
-        if (session.evaluation?.result && session.evaluation.promptVersion === SCREENING_PROMPT_VERSION) {
+        const revisions = session.evaluation && session.evaluation.cvScore === null ? await this.db.aiScreeningEvaluationRevision.findMany({ where: { evaluationId: session.evaluation.id }, select: { snapshot: true }, orderBy: { createdAt: 'asc' } }) : [];
+        const frozenCv = frozenCvAssessment(session.evaluation, revisions);
+        const currentResult = session.evaluation?.result && session.evaluation.promptVersion === SCREENING_PROMPT_VERSION ? session.evaluation.result as unknown as EvaluationPayload : null;
+        if (currentResult && (session.evaluation!.cvScore !== null || !frozenCv)) {
             await this.ensurePdfWork(id);
             return;
         }
         const rubric = session.package.payload as unknown as PackagePayload, plan = session.currentPlan.payload as unknown as CandidatePayload;
-        const cv = await this.cvAssessment(session, session.package.jobSnapshot);
+        const cv = frozenCv ?? await this.cvAssessment(session, session.package.jobSnapshot);
         const answers = session.questions.map(q => ({ id: q.id, claimId: q.claimId, criterionId: q.criterionId, rootQuestionId: q.rootQuestionId, parentQuestionId: q.parentQuestionId, depth: q.depth, kind: q.kind, question: q.text, answer: q.answer, shownAt: q.shownAt, answeredAt: q.answeredAt, timedOut: q.timedOut }));
         assertAnswerOpportunities(plan, answers);
         const { input: _input, ...preset } = composePrompt('evaluate', {});
         const model = process.env.TARA_SCREENING_MODEL ?? 'gpt-6-luna';
         const fingerprint = hash([SCREENING_PROMPT_VERSION, model, preset, session.currentPlan.fingerprint, answers, cv?.total]);
         let result: EvaluationPayload;
-        if (!answers.some(a => a.answer?.trim())) {
+        if (currentResult) {
+            // Restore CV/composite deterministically; the accepted Tara result is unchanged.
+            result = currentResult;
+        }
+        else if (!answers.some(a => a.answer?.trim())) {
             result = unansweredEvaluation(rubric, plan, answers);
         }
         else {

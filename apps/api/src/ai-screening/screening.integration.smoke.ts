@@ -14,7 +14,7 @@ import { ScreeningWorker } from './screening-worker.service';
 import { ScreeningHr } from './screening-hr.service';
 import { ScreeningClient, AiPending } from './screening.client';
 import { validateCandidate, validateEvaluation, type CandidatePayload, type PackagePayload, type EvaluationPayload } from './screening.schemas';
-import { combineScores, rankScreening, scoreScreening } from './screening.policy';
+import { combineScores, rankScreening, scoreScreening, json } from './screening.policy';
 async function main() {
     const url = new URL(process.env.DATABASE_URL!);
     assert.equal(url.hostname, '127.0.0.1');
@@ -199,13 +199,15 @@ async function main() {
         checks++;
         const group = await hr.project({ ids: [submitted.id], scores: new Map(), total: 1, page: 1, totalPages: 1 }, { page: 1, limit: 10 });
         check(group.tara.has(submitted.id), 'HR projection includes screening metadata');
+        const frozenScore = 80; // Simulate a previously assessed CV on the legacy evaluation.
         objects.set('reports/legacy-fixture.pdf', Buffer.from('legacy fixture'));
-        await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { promptVersion: 'tara-cv-claims-v2.0.0', inputHash: 'legacy-fixture', pdfKey: 'reports/legacy-fixture.pdf' } });
+        await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { promptVersion: 'tara-cv-claims-v2.0.0', inputHash: 'legacy-fixture', pdfKey: 'reports/legacy-fixture.pdf', cvScore: frozenScore, cvBreakdown: json({ ...(report.cvBreakdown as object), total: frozenScore, assessable: true }) } });
         await db.aiScreeningWork.create({ data: { key: 'reassess-test', kind: 'EVALUATE', subjectId: a.id } });
         await deliver('EVALUATE', a.id);
         const reassessed = await db.aiScreeningEvaluation.findUniqueOrThrow({ where: { id: evaluation.id } });
         check(reassessed.promptVersion === 'tara-cv-claims-v3.0.0' && reassessed.screeningScore === 75, 'old assessment promoted to claim methodology');
-        check(await db.aiScreeningEvaluationRevision.count({ where: { evaluationId: evaluation.id } }) === 2, 'old and current assessments retained');
+        check(reassessed.cvScore === frozenScore && reassessed.finalScore === combineScores(frozenScore, 75), 'Tara revision preserves frozen CV score');
+        check(await db.aiScreeningEvaluationRevision.count({ where: { evaluationId: evaluation.id } }) === 3, 'initial, legacy and current assessments retained');
         const legacyRevision = await db.aiScreeningEvaluationRevision.findFirstOrThrow({ where: { evaluationId: evaluation.id, inputHash: 'legacy-fixture' } });
         const historical = await hr.revision(hrUser, submitted.id, legacyRevision.id);
         check(historical.pdfUrl?.includes('legacy-fixture.pdf') && !('snapshot' in historical), 'authorized revision exposes report without private prompt snapshot');
@@ -214,6 +216,12 @@ async function main() {
         await db.aiScreeningWork.create({ data: { key: 'duplicate-reassess-test', kind: 'EVALUATE', subjectId: a.id } });
         await deliver('EVALUATE', a.id);
         check(calls.length === repeatedCalls, 'current methodology is not reevaluated on duplicate delivery');
+        await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { cvScore: null, cvBreakdown: json({ total: 0, assessable: false }), finalScore: null, inputHash: 'damaged-v3-fixture' } });
+        await db.aiScreeningWork.create({ data: { key: 'restore-cv-test', kind: 'EVALUATE', subjectId: a.id } });
+        await deliver('EVALUATE', a.id);
+        const restored = await db.aiScreeningEvaluation.findUniqueOrThrow({ where: { id: evaluation.id } });
+        check(restored.cvScore === frozenScore && restored.finalScore === combineScores(frozenScore, 75) && restored.screeningScore === 75, 'historical CV snapshot restores composite without changing Tara');
+        check(calls.length === repeatedCalls, 'CV restoration uses no AI calls');
         await deliver('PDF', a.id);
         const ranks = rankScreening([{ id: 'x', createdAt: new Date(0), packageId: 'v1', finalScore: 80, status: 'READY' }, { id: 'y', createdAt: new Date(1), packageId: 'v1', finalScore: 80, status: 'READY' }, { id: 'z', createdAt: new Date(0), packageId: 'v2', finalScore: 70, status: 'READY' }]);
         check(ranks.ranks.get('x') === 1 && ranks.ranks.get('y') === 1 && ranks.ranks.get('z') === 1, 'ties and versions ranked independently');
