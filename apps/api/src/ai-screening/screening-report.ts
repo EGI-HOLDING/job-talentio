@@ -89,20 +89,32 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     const records = modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null, reason: result.reason,
         quote: data.plan.claims.find(c => c.id === result.claimId)?.quote, evidence: result.evidence[0], status: claimLabels[result.status], pair: result.contradictions[0] })) :
         data.result.criteria.map(c => ({ title: data.rubric.criteria.find(r => r.id === c.criterionId)?.name ?? 'Kompetensi', score: c.score, reason: c.reason, quote: undefined as string | undefined, evidence: c.evidence[0], status: 'Metodologi sebelumnya', pair: undefined as EvaluationPayload['claims'][number]['contradictions'][number] | undefined }));
-    for (const result of records) {
-        const label = (ref: { source: string; ref: string }) => ref.source === 'CV' ? 'CV' : data.questionLabels?.[ref.ref] ?? 'Jawaban';
-        const lines = [result.status + ' · ' + result.reason,
-            result.quote ? 'CV: “' + excerpt(result.quote) + '”' : null,
-            result.evidence ? (data.questionLabels?.[result.evidence.questionId] ?? 'Jawaban') + ': “' + excerpt(result.evidence.quote) + '”' : modern ? 'Tidak ada jawaban yang dapat dikutip.' : null,
-            result.pair ? label(result.pair.left) + ': “' + excerpt(result.pair.left.quote, 65) + '” / ' + label(result.pair.right) + ': “' + excerpt(result.pair.right.quote, 65) + '”' : null].filter(Boolean).join('\n');
-        const titleHeight = doc.font('Bold').fontSize(10).heightOfString(result.title, { width: width - 64 });
-        const rowHeight = titleHeight + doc.font('Body').fontSize(9.5).heightOfString(lines, { width: width - 20, lineGap: 2 }) + 20;
+    const columns = records.length > 3 ? 2 : 1;
+    for (let index = 0; index < records.length; index += columns) {
+        const group = records.slice(index, index + columns), cardWidth = group.length === 1 ? width : (width - 12) / 2;
+        const layouts = group.map(result => {
+            const label = (ref: { source: string; ref: string }) => ref.source === 'CV' ? 'CV' : data.questionLabels?.[ref.ref] ?? 'Jawaban';
+            // A discrepancy already contains its source evidence. Do not repeat the
+            // same CV/answer excerpts and crowd out other claims on the report.
+            const pairHasCv = result.pair && [result.pair.left, result.pair.right].some(s => s.source === 'CV');
+            const lines = [result.status + ' · ' + result.reason,
+                result.quote && !pairHasCv ? 'CV: “' + excerpt(result.quote, 70) + '”' : null,
+                !result.pair && result.evidence ? (data.questionLabels?.[result.evidence.questionId] ?? 'Jawaban') + ': “' + excerpt(result.evidence.quote, 70) + '”' : !result.pair && modern ? 'Tidak ada jawaban yang dapat dikutip.' : null,
+                result.pair ? label(result.pair.left) + ': “' + excerpt(result.pair.left.quote, 65) + '”\n' + label(result.pair.right) + ': “' + excerpt(result.pair.right.quote, 65) + '”' : null].filter(Boolean).join('\n');
+            const titleHeight = doc.font('Bold').fontSize(10).heightOfString(result.title, { width: cardWidth - 64 });
+            const rowHeight = titleHeight + doc.font('Body').fontSize(9.5).heightOfString(lines, { width: cardWidth - 20, lineGap: 2 }) + 20;
+            return { result, lines, titleHeight, rowHeight };
+        });
+        const rowHeight = Math.max(...layouts.map(layout => layout.rowHeight));
         if (y + rowHeight > 650) throw new Error('REPORT_LAYOUT_OVERFLOW');
-        doc.roundedRect(44, y, width, rowHeight, 5).fill('#f8fafd');
-        text(result.title, 54, y + 8, width - 64, 10, true);
-        text(result.score === null ? '—' : String(result.score) + '/4', doc.page.width - 91, y + 8, 37, 10, true, purple);
-        text(lines, 54, y + titleHeight + 12, width - 20, 9.5);
-        y += rowHeight + 5;
+        layouts.forEach(({ result, lines, titleHeight }, column) => {
+            const x = 44 + column * (cardWidth + 12);
+            doc.roundedRect(x, y, cardWidth, rowHeight, 5).fill('#f8fafd');
+            text(result.title, x + 10, y + 8, cardWidth - 64, 10, true);
+            text(result.score === null ? '—' : String(result.score) + '/4', x + cardWidth - 47, y + 8, 37, 10, true, purple);
+            text(lines, x + 10, y + titleHeight + 12, cardWidth - 20, 9.5);
+        });
+        y += rowHeight + 8;
     }
     heading('Pertanyaan lanjutan untuk HR', y + 5);
     y += 25;
