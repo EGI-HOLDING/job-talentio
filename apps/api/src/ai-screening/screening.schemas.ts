@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizedText } from './screening.policy';
 import { CURRENT_CONVERSATION, type ConversationPolicy } from './conversation.policy';
+import { openConversation } from './prompts/shared/conversation-opening';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
 export const answerSchema = leaseSchema.extend({ questionId: z.string().min(1), answer: z.string().max(1200) }).strict();
@@ -181,6 +182,8 @@ export function validatePackage(value: unknown, requirements?: string): PackageP
 export function validateCandidate(value: unknown, p: PackagePayload, cvText: string, policy: ConversationPolicy = CURRENT_CONVERSATION): CandidatePayload {
     assertSchema(CANDIDATE_SCHEMA, value);
     const plan = structuredClone(value) as CandidatePayload, lines = cvText.split('\n');
+    if (policy.version.startsWith('tara-conversation-v5.') && plan.claims[0])
+        plan.claims[0].question = openConversation(plan.claims[0].question);
     if (plan.claims.length < 1 || plan.claims.length > policy.maxCore || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
         throw new Error('Invalid candidate plan');
     for (const c of plan.claims) {

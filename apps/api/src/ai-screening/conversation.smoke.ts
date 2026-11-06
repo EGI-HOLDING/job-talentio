@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { CURRENT_CONVERSATION as current, LEGACY_CONVERSATION as legacy, conversationPolicy, conversationTone, repeatsQuestion } from './conversation.policy';
+import { CURRENT_CONVERSATION as current, V4_CONVERSATION as v4, LEGACY_CONVERSATION as legacy, conversationPolicy, conversationTone, repeatsQuestion } from './conversation.policy';
 import { answerDeadline, nextProbeTarget, type ProbeQuestion } from './screening.policy';
 import { assertSchema, conversationSchemas, validateCandidate, validateFollowUp, validQuestion, type CandidatePayload, type PackagePayload } from './screening.schemas';
 import { composePrompt } from './prompts/compose';
@@ -23,9 +23,9 @@ assert.ok(repeatsQuestion('Pas ngecek keterbacaan harga, lu mulai dari bagian ma
 assert.equal(repeatsQuestion('Kenapa lu memilih urutan itu?', ['Bagaimana lu menjalankan urutan itu?']), false);
 assert.equal(conversationPolicy(null), legacy);
 assert.deepEqual(conversationPolicy(JSON.parse(JSON.stringify(current))), current);
-assert.equal(conversationPolicy({ ...current, version: 'tara-conversation-v4.0.0' }).version, 'tara-conversation-v4.0.0');
+assert.equal(conversationPolicy({ ...v4, version: 'tara-conversation-v4.0.0' }).version, 'tara-conversation-v4.0.0');
 assert.throws(() => conversationPolicy({ ...current, questionSeconds: 1 }));
-assert.equal(+answerDeadline(new Date(0), current), 30000);
+assert.equal(+answerDeadline(new Date(0), current), 60000);
 assert.equal(+answerDeadline(new Date(0), legacy), 60000);
 const rubric: PackagePayload = { context: 'Layanan', criteria: [{ id: 'a', name: 'Kontribusi', requirementRef: 'Layanan', anchors: ['0', '1', '2', '3', '4'] }] };
 const cv = 'Membantu tim menangani pelanggan.';
@@ -85,3 +85,16 @@ assert.equal(composePrompt('evaluate', {}, undefined, legacy).version, 'tara-cv-
 assert.ok(!composePrompt('evaluate', {}, undefined, legacy).instructions.includes('Urutan keputusan tetap'));
 assert.ok(!assessment.instructions.includes('Ngobrol pakai gue/lu'));
 console.log('Conversation policy: schema limits, 30/60-second deadlines, legacy compatibility, ' + combinations + ' probe matrices, message format and prompt separation passed.');
+
+assert.equal(+answerDeadline(new Date(0), v4), 30000);
+assert.throws(() => conversationPolicy({ ...v4, questionSeconds: 60 }));
+const opened = validateCandidate({ claims: [claim], limitations: [] }, rubric, cv, current);
+assert.match(opened.claims[0].question, /^Oke, kita mulai ya 😄 /);
+assert.deepEqual(validateCandidate(opened, rubric, cv, current), opened);
+for (const question of ['', 'Oke, kita mulai ya 😄', 'Gue lihat ada proyek di CV lu.'])
+    assert.throws(() => validateCandidate({ claims: [{ ...claim, question }], limitations: [] }, rubric, cv, current));
+assert.equal(validateCandidate({ claims: [claim], limitations: [] }, rubric, cv, v4).claims[0].question, claim.question);
+assert.throws(() => validateCandidate({ claims: [{ ...claim, question: 'Eh bentar, bagian mana yang lu pegang?' }], limitations: [] }, rubric, cv, current));
+assert.throws(() => validateCandidate({ claims: [{ ...claim, question: 'Bagian apa yang lu kerjakan 👀?' }], limitations: [] }, rubric, cv, current));
+assert.throws(() => validateCandidate({ claims: [{ ...claim, question: 'kata '.repeat(32) + 'apa?' }], limitations: [] }, rubric, cv, current));
+console.log('v5 opening stored once; v4 snapshots and 30-second deadlines retained; v5 uses 60 seconds.');

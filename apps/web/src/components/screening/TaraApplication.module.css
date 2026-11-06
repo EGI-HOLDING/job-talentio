@@ -47,14 +47,14 @@
   color:#5a6d91;
   font-size:14px
 }
-.progress li>span {
+.progress li>span:first-child {
   display:block;
   height:10px;
   border-radius:20px;
   background:#ede8ff;
   margin-bottom:11px
 }
-.progress li[data-done=true]>span {
+.progress li[data-done=true]>span:first-child {
   background:#5930ef
 }
 .progress li[aria-current] {
@@ -542,7 +542,7 @@
 .progress li {
   font-size:11px
 }
-.progress li>span {
+.progress li>span:first-child {
   height:7px
 }
 .job {
@@ -655,4 +655,109 @@
   transition:none!important
 }
 
+}
+
+/* Approved focused-chat mockup. Keep the composer focus halo inside its gutter. */
+.page.focusPage { padding:20px 28px 16px; }
+.focusPage>nav { flex-shrink:0; }
+.focusPage .progress { max-width:1320px; margin:0 auto 24px; gap:0; }
+.focusPage .progress li { position:relative; font-size:18px; color:#52617f; }
+.focusPage .progress li::after { content:""; position:absolute; height:3px; background:#d7deeb; left:calc(50% + 25px); right:calc(-50% + 25px); top:17px; }
+.focusPage .progress li:last-child::after { display:none; }
+.focusPage .progress li[data-done=true]::after { background:#592df0; }
+.focusPage .progress li[aria-current]::after { background:#d7deeb; }
+.focusPage .progress li>span:first-child { box-sizing:border-box; width:35px; height:35px; border:2px solid #b6c1d4; border-radius:50%; background:white; margin:0 auto 10px; display:grid; place-items:center; }
+.focusPage .progress li[data-done=true]>span:first-child { background:#592df0; border-color:#592df0; color:white; }
+.focusPage .progress li[aria-current]>span:first-child { box-shadow:inset 0 0 0 8px #592df0; background:#fff; }
+.focusPage .progress li[aria-current] { color:#592df0; }
+.focusPage .progress svg { width:23px; height:23px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+.stepLabel { display:block; }
+.focusChat { overflow:visible; }
+.focusChat .chatIdentity { padding:8px 18px 24px; margin-bottom:20px; gap:20px; }
+.focusChat .chatIdentity img { width:64px; height:64px; }
+.focusChat .chatIdentity strong { font-size:28px; }
+.focusChat .chatIdentity span { font-size:19px; }
+.focusChat .messages { padding:12px 18px 24px; }
+.focusChat .taraMessage { gap:12px; }
+.focusChat .taraMessage img { width:40px; height:52px; }
+.focusChat .taraMessage p,.focusChat .candidateMessage p { font-size:22px; line-height:1.5; padding:20px 28px; border-radius:24px; max-width:75%; }
+.focusChat .composer { padding:18px 12px 0; }
+.focusChat .timer { display:flex; align-items:center; gap:12px; font-size:18px; margin:0 8px 20px; }
+.timer svg { width:26px; height:26px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.focusChat .timer strong { font-size:27px; color:#592df0; margin:0; font-variant-numeric:tabular-nums; }
+.answerBox { position:relative; border:1px solid #cbd4e7; border-radius:24px; background:#fff; }
+.answerBox:focus-within { border-color:#592df0; box-shadow:0 0 0 4px #592df012; }
+.focusChat .answerBox textarea { display:block; box-sizing:border-box; width:100%; min-height:206px; max-height:calc(var(--tara-viewport-height,100dvh) * .3); padding:24px 96px 80px 28px; resize:none; border:0; outline:none; box-shadow:none; background:transparent; border-radius:24px; font:inherit; font-size:24px; line-height:1.45; color:#101630; overflow-y:auto; }
+.page .answerBox textarea:focus-visible { outline:none; }
+.page .sendButton { position:absolute; right:24px; bottom:24px; width:60px; height:60px; min-width:44px; min-height:44px; padding:0; display:grid; place-items:center; border:0; border-radius:50%; background:#592df0; color:#fff; box-shadow:none; flex-shrink:0; }
+.page .sendButton:hover:not(:disabled) { background:#4820d5; }
+.page .sendButton:disabled { opacity:1; background:#e5e7ef; color:#929db2; cursor:default; }
+.sendButton svg { width:30px; height:30px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.page .sendButton:focus-visible { outline:3px solid #9e88f3; outline-offset:3px; }
+.answerBox[data-disabled=true] { background:#f7f8fb; border-color:#d7deeb; }
+.composerHelp { display:flex; justify-content:space-between; flex-wrap:wrap; align-items:center; gap:8px 20px; margin:16px 8px 0; font-size:15px; color:#536582; }
+.keyboardHint { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.keyboardHint kbd { font:inherit; font-weight:600; color:#15203a; padding:3px 10px; border:1px solid #cbd4e7; border-radius:7px; background:#f8f9fc; }
+.saveStatus { min-height:22px; }
+@media(max-width:760px) {
+ .page.focusPage { padding:calc(10px + env(safe-area-inset-top)) 12px calc(8px + env(safe-area-inset-bottom)); }
+ .focusPage .progress { margin-bottom:12px; }
+ .focusPage .progress li { font-size:10px; }
+ .focusPage .progress li>span:first-child { width:24px; height:24px; margin-bottom:6px; }
+ .focusPage .progress li::after { top:11px; left:calc(50% + 16px); right:calc(-50% + 16px); height:2px; }
+ .focusPage .progress li[aria-current]>span:first-child { box-shadow:inset 0 0 0 5px #592df0; }
+ .focusPage .progress svg { width:16px; height:16px; }
+ .focusChat .chatIdentity { padding:2px 4px 12px; gap:12px; margin-bottom:8px; }
+ .focusChat .chatIdentity img { width:40px; height:44px; }
+ .focusChat .chatIdentity strong { font-size:20px; }
+ .focusChat .chatIdentity span { font-size:13px; }
+ .focusChat .messages { padding:8px 4px 12px; }
+ .focusChat .taraMessage p,.focusChat .candidateMessage p { font-size:16px; padding:12px 14px; border-radius:18px; max-width:90%; }
+ .focusChat .taraMessage img { width:28px; height:36px; }
+ .focusChat .composer { padding:10px 4px 0; }
+ .focusChat .timer { font-size:13px; gap:8px; margin:0 4px 10px; }
+ .focusChat .timer strong { font-size:20px; }
+ .timer svg { width:20px; height:20px; }
+ .answerBox { border-radius:18px; }
+ .focusChat .answerBox textarea { min-height:118px; font-size:16px; padding:14px 70px 60px 16px; border-radius:18px; }
+ .page .sendButton { width:44px; height:44px; right:12px; bottom:12px; }
+ .sendButton svg { width:24px; height:24px; }
+ .composerHelp { font-size:11px; margin:9px 3px 0; gap:6px; }
+ .keyboardHint { gap:4px; }
+ .keyboardHint kbd { padding:2px 5px; }
+}
+@media(max-height:600px) {
+ .focusPage .progress { margin-bottom:8px; }
+ .focusChat .chatIdentity { padding-bottom:8px; margin-bottom:4px; }
+ .focusChat .chatIdentity img { width:32px; height:32px; }
+ .focusChat .chatIdentity strong { font-size:18px; }
+ .focusChat .chatIdentity span { font-size:12px; }
+ .focusChat .composer { padding-top:8px; }
+ .focusChat .timer { margin-bottom:8px; }
+ .focusChat .answerBox textarea { min-height:82px; padding-top:12px; padding-bottom:14px; }
+ .composerHelp { margin-top:6px; font-size:11px; }
+}
+
+@media(min-width:761px) {
+ .focusPage .progress li { font-size:20px; }
+ .focusChat .chatIdentity { padding-bottom:28px; }
+ .focusChat .chatIdentity strong { font-size:30px; }
+ .focusChat .chatIdentity span { font-size:21px; }
+ .focusChat .taraMessage p,.focusChat .candidateMessage p { font-size:28px; line-height:1.4; max-width:70%; }
+ .focusChat .answerBox textarea { font-size:28px; padding-left:32px; padding-right:max(96px,calc(100% - 940px)); }
+ .composerHelp { font-size:18px; }
+}
+.focusChat .taraMessage img { display:none; }
+@media(max-height:600px) {
+ .focusChat .taraMessage p,.focusChat .candidateMessage p { font-size:16px; padding:12px 14px; }
+ .focusChat .answerBox textarea { font-size:16px; }
+ .composerHelp { font-size:11px; }
+}
+
+.focusChat .answerBox textarea { min-height:min(206px,calc(var(--tara-viewport-height,100dvh) * .3)); }
+@media(max-width:760px) { .focusChat .answerBox textarea { min-height:min(118px,calc(var(--tara-viewport-height,100dvh) * .3)); } }
+@media(max-height:600px) {
+ .focusChat .answerBox textarea { min-height:82px; }
+ .page .sendButton { width:44px; height:44px; right:12px; bottom:12px; }
+ .sendButton svg { width:24px; height:24px; }
 }

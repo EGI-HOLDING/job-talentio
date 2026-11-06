@@ -64,7 +64,9 @@ export function TaraApplication({ jobId }: {
     const starting = useRef(false), finishing = useRef(false), issued = useRef(0), applied = useRef(0), cvSelection = useRef('');
     const messages = useRef<HTMLDivElement>(null), nearBottom = useRef(true), shownRequests = useRef(new Set<string>());
     const pageRef = useRef<HTMLElement>(null);
-    const questionRef = useRef<HTMLDivElement>(null);
+    const questionRef = useRef<HTMLDivElement>(null), textareaRef = useRef<HTMLTextAreaElement>(null);
+    const composing = useRef(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
     const focused = step === 4;
     useScreeningFocus(focused);
     useEffect(() => {
@@ -250,6 +252,7 @@ export function TaraApplication({ jobId }: {
             answerQuestion.current = current.id;
             answerRef.current = current.draft;
             setAnswer(current.draft);
+            setSaveStatus(current.draft ? 'saved' : 'idle');
         }
         if (step === 4 && !current.shownAt && tabReady && state?.status === 'ACTIVE' && !shownRequests.current.has(current.id)) {
             const frame = requestAnimationFrame(() => {
@@ -271,7 +274,7 @@ export function TaraApplication({ jobId }: {
     }, [state?.questions.length, state?.status, current?.id]);
     useEffect(() => { const clock = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(clock); }, []);
     const policy = state?.conversationPolicy ?? { version: 'legacy', questionSeconds: 60, maxQuestions: 15 };
-    const casual = policy.version.startsWith('tara-conversation-v4.');
+    const casual = /^tara-conversation-v[45]\./.test(policy.version);
     const remaining = current?.deadlineAt ? Math.max(0, Math.ceil((Date.parse(current.deadlineAt) - now - offset.current) / 1000)) : policy.questionSeconds;
     const saveAnswer = useCallback((value: string, questionId: string) => {
         const id = sessionRef.current?.id;
@@ -284,19 +287,31 @@ export function TaraApplication({ jobId }: {
     useEffect(() => {
         if (!current?.shownAt || !tabReady || state?.status !== 'ACTIVE' || remaining === 0)
             return;
-        const timer = setTimeout(() => void saveAnswer(answer, current.id).catch(e => setNotice(e.message)), 450);
+        const questionId = current.id, value = answer;
+        const timer = setTimeout(() => {
+            setSaveStatus('saving');
+            void saveAnswer(value, questionId).then(() => {
+                if (answerQuestion.current === questionId && answerRef.current === value) setSaveStatus('saved');
+            }).catch(e => {
+                if (answerQuestion.current === questionId && answerRef.current === value) { setSaveStatus('failed'); setNotice(e.message); }
+            });
+        }, 450);
         return () => clearTimeout(timer);
     }, [answer, current?.id, current?.shownAt, tabReady, state?.status, saveAnswer]);
-    const send = useCallback(async () => {
-        const q = sessionRef.current?.questions.find(q => q.answer === null), id = sessionRef.current?.id;
-        if (!q || !id || sending.current || !tabReady)
-            return;
+    const send = useCallback(async (reason: 'manual' | 'timeout' = 'manual') => {
+        const session = sessionRef.current, q = session?.questions.find(q => q.answer === null), id = session?.id;
+        const value = answerRef.current;
+        if (!q || !id || sending.current || !tabReady || session.status !== 'ACTIVE' || !q.shownAt) return;
+        const expired = Boolean(q.deadlineAt && Date.parse(q.deadlineAt) <= Date.now() + offset.current);
+        if (reason === 'manual' && (!value.trim() || expired)) return;
         sending.current = true;
         setBusy(true);
         setError('');
         try {
             await writing.current.catch(() => undefined);
-            accept(await requestState('/ai-screening/sessions/' + id + '/answer', { method: 'POST', body: JSON.stringify({ clientId: client.current, questionId: q.id, answer: answerRef.current }) }));
+            const fresh = sessionRef.current;
+            if (fresh?.id !== id || fresh.status !== 'ACTIVE' || fresh.questions.find(v => v.answer === null)?.id !== q.id) return;
+            accept(await requestState('/ai-screening/sessions/' + id + '/answer', { method: 'POST', body: JSON.stringify({ clientId: client.current, questionId: q.id, answer: value }) }));
             setNotice('');
         }
         catch (e) {
@@ -309,8 +324,21 @@ export function TaraApplication({ jobId }: {
     }, [tabReady, accept]);
     useEffect(() => {
         if (current?.deadlineAt && remaining === 0 && tabReady)
-            void send();
+            void send('timeout');
     }, [current?.id, remaining, tabReady, send]);
+    const canSend = state?.status === 'ACTIVE' && tabReady && Boolean(current?.shownAt) && remaining > 0 && !busy && Boolean(answer.trim());
+    useEffect(() => {
+        const el = textareaRef.current;
+        if (!focused || !el) return;
+        const resize = () => {
+            el.style.height = '0px';
+            el.style.height = `${el.scrollHeight}px`;
+        };
+        resize();
+        window.visualViewport?.addEventListener('resize', resize);
+        window.addEventListener('resize', resize);
+        return () => { window.visualViewport?.removeEventListener('resize', resize); window.removeEventListener('resize', resize); };
+    }, [answer, focused, state?.status]);
     async function run(action: () => Promise<void>) {
         if (busy)
             return;
@@ -419,7 +447,7 @@ export function TaraApplication({ jobId }: {
         }}/>;
     return <section ref={pageRef} className={`${s.page} ${focused ? s.focusPage : ""}`} aria-busy={busy} data-tara-focus={focused || undefined}>
   {!focused && <header className={s.title}><h1>Melamar lowongan</h1><span>Langkah {step + 1} dari 6</span></header>}
-  <nav aria-label="Progres lamaran"><ol className={s.progress}>{labels.map((label, i) => <li key={label} aria-current={step === i ? 'step' : undefined} data-done={i <= step}><span />{label}</li>)}</ol></nav>
+  <nav aria-label="Progres lamaran"><ol className={s.progress}>{labels.map((label, i) => <li key={label} aria-current={step === i ? 'step' : undefined} data-done={i <= step}><span aria-hidden="true">{focused && i < step ? <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg> : null}</span><span className={s.stepLabel}>{label}</span></li>)}</ol></nav>
   {!focused && state?.job && <div className={s.job}><div className={s.companyMark}>{state.job.companyName.slice(0, 2).toUpperCase()}</div><div><strong>{state.job.title}</strong><p>{state.job.companyName}{state.job.city ? ' · ' + state.job.city : ''}</p></div></div>}
   {error && <div className={s.alert} role="alert">{error}{state && !state.recoveryRequired && !['RECOVERY_REQUIRED', 'CV_UNREADABLE'].includes(preparation.reason ?? '') && <button type="button" disabled={busy} onClick={() => void retry()}>Coba lanjutkan</button>}</div>}
   {(notice || leaseNotice) && <p className={s.hint} role="status">{leaseNotice || notice}</p>}
@@ -440,13 +468,21 @@ export function TaraApplication({ jobId }: {
       {state.status === 'COMPLETED' && <div className={s.callout} role="status"><p>{busy ? 'Mengirim lamaranmu…' : error ? 'Progresmu tersimpan. Coba kirim kembali, ya.' : 'Obrolan selesai! Menyiapkan pengiriman lamaranmu…'}</p></div>}
       <div ref={chatEnd}/>
      </div>
-     <form className={s.composer} onSubmit={e => { e.preventDefault(); if (state.status === 'ACTIVE') void send(); }}>
-      {current?.shownAt && state.status === 'ACTIVE' && <div className={s.timer} role="timer" aria-label={'Sisa waktu ' + remaining + ' detik'}>◷ Waktu menjawab <strong>{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</strong></div>}
-      <label className={s.srOnly} htmlFor="tara-answer">Jawabanmu</label><div className={s.inputRow}>
-       <textarea id="tara-answer" maxLength={1200} rows={2} value={state.status === 'ACTIVE' ? answer : ''} disabled={state.status !== 'ACTIVE' || !tabReady || !current?.shownAt || remaining === 0 || busy} placeholder={state.status === 'ACTIVE' ? 'Ceritakan singkat di sini…' : state.status === 'COMPLETED' ? 'Obrolanmu sudah selesai.' : 'Tunggu pertanyaan Tara berikutnya, ya…'} onFocus={() => { nearBottom.current = true; }} onChange={e => { answerRef.current = e.target.value; setAnswer(e.target.value); }}/>
-       <button className={s.primary} disabled={state.status !== 'ACTIVE' || !tabReady || !current?.shownAt || busy || remaining === 0} type="submit">Kirim ↗</button>
+     <form className={s.composer} onSubmit={e => { e.preventDefault(); if (canSend) void send('manual'); }}>
+      {current?.shownAt && state.status === 'ACTIVE' && <div className={s.timer} role="timer" aria-label={'Sisa waktu ' + remaining + ' detik'}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Waktu menjawab</span><strong>{String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}</strong></div>}
+      <label className={s.srOnly} htmlFor="tara-answer">Jawabanmu</label>
+      <div className={s.answerBox} data-disabled={state.status !== 'ACTIVE' || !tabReady || !current?.shownAt || remaining === 0 || busy}>
+       <textarea ref={textareaRef} id="tara-answer" maxLength={1200} rows={2} value={state.status === 'ACTIVE' ? answer : ''} disabled={state.status !== 'ACTIVE' || !tabReady || !current?.shownAt || remaining === 0 || busy} placeholder={state.status === 'ACTIVE' ? 'Ceritakan singkat di sini…' : state.status === 'COMPLETED' ? 'Obrolanmu sudah selesai.' : 'Tunggu pertanyaan Tara berikutnya, ya…'} onFocus={() => { nearBottom.current = true; }} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onKeyDown={e => {
+           if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || composing.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+           e.preventDefault();
+           if (!e.repeat && canSend) void send('manual');
+       }} onChange={e => { answerRef.current = e.target.value; setAnswer(e.target.value); setSaveStatus('idle'); }}/>
+       <button className={s.sendButton} disabled={!canSend} type="submit" aria-label="Kirim jawaban" title="Kirim jawaban"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-7 7 7-7 7 7"/></svg></button>
       </div>
-      {state.status === 'ACTIVE' && <p className={s.hint}>{tabReady ? 'Jawab ringkas dengan pengalamanmu sendiri. Draf tersimpan otomatis.' : 'Percakapan sedang tersambung kembali…'}</p>}
+      <div className={s.composerHelp}>
+       <span className={s.keyboardHint}><kbd>Enter</kbd> untuk kirim <span aria-hidden="true">·</span> <kbd>Shift + Enter</kbd> untuk baris baru</span>
+       <span className={s.saveStatus} role="status">{state.status === 'ACTIVE' ? !tabReady ? 'Menyambungkan kembali…' : saveStatus === 'saved' ? '✓ Draf tersimpan otomatis' : saveStatus === 'saving' ? 'Menyimpan draf…' : saveStatus === 'failed' ? 'Draf belum tersimpan. Periksa koneksi.' : answer ? 'Perubahan belum tersimpan' : '' : ''}</span>
+      </div>
      </form>
     </div>}
    </>}

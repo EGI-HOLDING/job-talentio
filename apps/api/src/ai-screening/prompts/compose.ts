@@ -1,5 +1,6 @@
 import { taraVoice } from './shared/tara-voice';
 import { taraHumor } from './shared/tara-humor';
+import { conversationOpening } from './shared/conversation-opening';
 import { CURRENT_CONVERSATION, CONVERSATION_VERSION, assessmentVersion, type ConversationPolicy } from '../conversation.policy';
 import { questionStyle } from './shared/question-style';
 import { inputTrust } from './shared/input-trust';
@@ -36,7 +37,7 @@ export function composePrompt(task: ScreeningTask, input: unknown, preset?: Prom
     if (preset)
         return { ...preset, input: [{ role: 'user', content: 'DATA_INPUT\n' + JSON.stringify(input) }] };
     const modules = task === 'prepare' ? [inputTrust, jobRelevance, prepareJob] :
-        task === 'candidate' ? [inputTrust, cvSource, taraVoice, taraHumor, questionStyle, questionExample, prepareCandidate] :
+        task === 'candidate' ? [inputTrust, cvSource, taraVoice, taraHumor, questionStyle, questionExample, prepareCandidate, conversationOpening] :
             task === 'follow-up' ? [inputTrust, taraVoice, taraHumor, questionStyle, questionExample, followUp] :
                 [inputTrust, evidenceRules, claimScoring, claimScoreExamples, evaluationExample, evaluateCandidate, evidenceReferences, claimStatus];
     if (task === 'evaluate' && policy.probeOrder === 'breadth-first') modules.push(assessmentConsistency, claimJudgement);

@@ -14,7 +14,7 @@ import { ScreeningWorker } from './screening-worker.service';
 import { ScreeningHr } from './screening-hr.service';
 import { ScreeningClient, AiPending } from './screening.client';
 import { validateCandidate, validateEvaluation, type CandidatePayload, type PackagePayload, type EvaluationPayload } from './screening.schemas';
-import { CURRENT_CONVERSATION, LEGACY_CONVERSATION } from './conversation.policy';
+import { CURRENT_CONVERSATION, V4_CONVERSATION, LEGACY_CONVERSATION } from './conversation.policy';
 import { Prisma } from '@prisma/client';
 import { combineScores, rankScreening, scoreScreening, json } from './screening.policy';
 async function main() {
@@ -160,6 +160,16 @@ async function main() {
         await deliver('ADVANCE', legacy.id);
         check(calls.filter(c => c.task === 'follow-up' && c.preset?.instructions === 'LEGACY_VOICE_FIXTURE').length === 2, 'legacy followups use the exact frozen voice preset');
         check((await db.aiScreeningQuestion.count({ where: { sessionId: legacy.id } })) === 3, 'legacy per-root second followup is preserved');
+        const v4job = await db.jobPost.create({ data: { companyId: company.id, title: 'v4 customer service', description: job.description, status: 'PUBLISHED' } });
+        const v4packet = await db.aiScreeningPackage.create({ data: { jobId: v4job.id, fingerprint: 'v4-policy-fixture', version: 1, status: 'READY', jobSnapshot: basePacket.jobSnapshot!, companySnapshot: basePacket.companySnapshot!, promptSnapshot: json(legacyPrompts), promptVersion: V4_CONVERSATION.version, payload: json(rubric), conversationPolicy: json(V4_CONVERSATION) } });
+        const v4session = await db.aiScreeningSession.create({ data: { jobId: v4job.id, profileId: b.user.id, packageId: v4packet.id, status: 'ACTIVE', startedAt: new Date() } });
+        const v4question = await db.aiScreeningQuestion.create({ data: { sessionId: v4session.id, position: 0, criterionId: 'c0', claimId: plan.claims[0].id, kind: 'CORE', text: 'Bagian apa yang lu kerjakan?' } });
+        await sessions.claim(b.user, v4session.id, 'v4-tab-unique');
+        await sessions.shown(b.user, v4session.id, 'v4-tab-unique', v4question.id);
+        const v4state = await sessions.state(b.user, v4session.id);
+        check(v4state.conversationPolicy.questionSeconds === 30 && +v4state.questions[0].deadlineAt! - +v4state.questions[0].shownAt! === 30000, 'active v4 session keeps 30-second policy');
+        await sessions.draft(b.user, v4job.id);
+        check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: v4session.id } })).packageId === v4packet.id, 'active v4 session never upgrades its packet');
         const legacyDraft = await db.aiScreeningSession.create({ data: { jobId: legacyJob.id, profileId: a.user.id, resumeId: a.resume.id, packageId: legacyPacket.id, resumeVersionId: pa.resumeVersionId } });
         const reopened = await sessions.draft(a.user, legacyJob.id) as any;
         check(reopened.id === legacyDraft.id && reopened.conversationPolicy.version === CURRENT_CONVERSATION.version && reopened.preparation.status === 'PROCESSING', 'old draft gets new preparation on reopen');
@@ -185,8 +195,8 @@ async function main() {
         let q = state.questions[0];
         await sessions.shown(a.user, a.id, 'tab-one-unique', q.id);
         const first = await sessions.state(a.user, a.id);
-        check(first.conversationPolicy.questionSeconds === 30 && first.conversationPolicy.maxQuestions === 8, 'new public policy is 30 seconds and eight questions');
-        check(+first.questions[0].deadlineAt! - +first.questions[0].shownAt! === 30000, 'new timer uses the pinned policy');
+        check(first.conversationPolicy.questionSeconds === 60 && first.conversationPolicy.maxQuestions === 8, 'new public policy is 60 seconds and eight questions');
+        check(+first.questions[0].deadlineAt! - +first.questions[0].shownAt! === 60000, 'new timer uses the pinned policy');
         await sessions.shown(a.user, a.id, 'tab-one-unique', q.id);
         check((await sessions.state(a.user, a.id)).questions[0].deadlineAt?.getTime() === first.questions[0].deadlineAt?.getTime(), 'refresh acknowledgment does not reset timer');
         await sessions.answer(a.user, a.id, 'tab-one-unique', q.id, 'Saya menghubungi pelanggan.', false);

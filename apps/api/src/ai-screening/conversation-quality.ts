@@ -56,6 +56,7 @@ async function main() {
     const jobs = families.flatMap((f, family) => [0, 1].flatMap(profile => [0, 1, 2].map(repeat => ({ family, profile, repeat, holdout: false }))));
     jobs.push(...families.map((_, family) => ({ family, profile: 2, repeat: 0, holdout: true })));
     const selected = process.env.TARA_CONVERSATION_CASE;
+    const openingOnly = process.env.TARA_OPENING_QUALITY === 'true';
     const replayPath = process.env.TARA_CONVERSATION_REPLAY;
     if (replayPath && !/^output[\\/]tara-conversation[\\/]\d+[\\/]report\.json$/.test(replayPath)) throw Error('Local transcript replay guard');
     const replay = replayPath ? JSON.parse(fs.readFileSync(replayPath, 'utf8')) : null;
@@ -67,7 +68,7 @@ async function main() {
     const reuse = reuseRuns.length ? { transcripts: reuseRuns.flatMap(r => r.transcripts) } : null;
     if (reuse) { report.reuseSources = reusePaths; report.notes.push('Revalidates successful assessments from identical prompt fingerprints. Failed/uncertain original attempts remain in their source reports. Reused results are not new AI calls.'); }
     const persisted = (value: any) => { const { criteria: _projection, ...assessment } = value; return assessment; };
-    const queue: any[] = replay ? [...replay.transcripts] : jobs.filter(j => !selected || `${j.family}-${j.profile}-${j.repeat}` === selected);
+    const queue: any[] = replay ? [...replay.transcripts] : jobs.filter(j => openingOnly ? !j.holdout && j.repeat === 0 && (!selected || `${j.family}-${j.profile}-${j.repeat}` === selected) : !selected || `${j.family}-${j.profile}-${j.repeat}` === selected);
     try {
         await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) {
             const test = queue.shift()!, f = families[test.family], label = `${test.family}-${test.profile}-${test.repeat}`;
@@ -86,6 +87,12 @@ async function main() {
                 const claims = test.holdout ? [f.holdout] : [...f.claims];
                 const cv = [test.profile === 1 ? 'Proyek belajar dan kontribusi bersama tim' : 'Pengalaman kerja', ...claims].join('\n');
                 const plan = await run('candidate', { job: { ...rubric, context: f.role + '. ' + rubric.context }, cvLines: cv.split('\n').map((text, i) => ({ line: i + 1, text })) }, label + '-plan', raw => validateCandidate(raw, rubric, cv, policy));
+                if (openingOnly) {
+                    assert.ok(plan.claims[0].question.startsWith('Oke, kita mulai ya 😄 '));
+                    assert.equal(plan.claims[0].question.split('Oke, kita mulai ya 😄').length, 2);
+                    plan.claims.forEach(c => checkQuestion(c.question));
+                    report.transcripts.push({ ...test, label, role: f.role, cv, plan }); save(); console.log('Opening', label, 'passed'); continue;
+                }
                 const reply = (claim: string, depth: number) => {
                     if (test.holdout) return f.holdoutAnswer;
                     const index = Math.max(0, claims.findIndex(c => c.includes(claim) || claim.includes(c)));
@@ -114,7 +121,7 @@ async function main() {
                 save(); console.log('Conversation', label, 'passed', answers.length, 'questions');
             } catch (error) { report.failures.push({ label, error: String(error) }); save(); }
         } }));
-        if (!selected) {
+        if (!selected && !openingOnly) {
         const pairs = await Promise.allSettled(families.map(async (f, family) => {
             const saved = reuseRuns.flatMap(r => r.pairs).find(p => p.family === family && ['formal', 'slang', 'humor', 'identity', 'length'].every(key => p.scores[key]?.length === 3 && p.scores[key].every((n: number) => Number.isFinite(n) && n >= 0 && n <= 100)));
             if (saved) { const reference = saved.scores.formal.reduce((sum: number, n: number) => sum + n, 0) / 3; report.pairs.push({ ...saved, reference, deltas: Object.values(saved.scores).flat().map(n => Math.abs(Number(n) - reference)), reused: true }); save(); return; }
@@ -133,7 +140,7 @@ async function main() {
         }));
         pairs.forEach((result, family) => { if (result.status === 'rejected') report.failures.push({ family, error: String(result.reason) }); });
         }
-        if (!selected) await Promise.all([
+        if (!selected && !openingOnly) await Promise.all([
             { id: 'method-detail', cv: 'Membantu menata materi komunikasi.', answer: 'Sebenarnya saya memakai aset yang sudah tersedia. Saya menyusun ulang informasi agar judul dan kontak terbaca; keputusan isi tetap pada koordinator.', min: 3, max: 4, clarify: false },
             { id: 'role-correction', cv: 'Memimpin enam anggota tim.', answer: 'Saya perlu mengoreksi, saya menerima tugas dari pemimpin, bukan memimpin enam orang. Saya memeriksa daftar tugas dan melaporkan yang belum lengkap; keputusan tetap pada pemimpin.', min: 3, max: 4, clarify: true },
             { id: 'novice', cv: 'Belajar menata halaman buletin organisasi.', answer: 'Saya mencoba grid dua kolom dan mengecek ukuran huruf pada cetakan contoh. Saya mengubah jarak agar mudah dibaca; isi disetujui pengurus.', min: 3, max: 4, clarify: false },
@@ -156,7 +163,7 @@ async function main() {
         }));
         const deltas: number[] = report.pairs.flatMap((p: any) => p.deltas);
         report.metrics = { transcripts: report.transcripts.length, holdouts: report.transcripts.filter((t: any) => t.holdout).length, pairedMeanDelta: deltas.length ? deltas.reduce((s, n) => s + n, 0) / deltas.length : null, pairedMaxDelta: deltas.length ? Math.max(...deltas) : null };
-        report.passed = !report.failures.length && (selected ? report.transcripts.length === 1 : report.transcripts.length === 42 && report.pairs.length === 6 && report.edgeCases.length === 6 && report.metrics.pairedMeanDelta <= 3 && report.metrics.pairedMaxDelta <= 5);
+        report.passed = !report.failures.length && (openingOnly ? report.transcripts.length === (selected ? 1 : 12) : selected ? report.transcripts.length === 1 : report.transcripts.length === 42 && report.pairs.length === 6 && report.edgeCases.length === 6 && report.metrics.pairedMeanDelta <= 3 && report.metrics.pairedMaxDelta <= 5);
     } finally {
         report.calls = await db.aiScreeningCall.findMany({ where: { subjectId: runId }, select: { task: true, status: true, responseId: true, inputTokens: true, outputTokens: true, cachedTokens: true, reasoningTokens: true, usage: true, costUsd: true, error: true } });
         for (const call of report.calls.filter((c: any) => c.status === 'RUNNING' && c.responseId)) {

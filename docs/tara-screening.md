@@ -72,3 +72,10 @@ Each job package stores a nullable `conversationPolicy` snapshot. Missing snapsh
 The candidate/follow-up composer includes modular Gen Z voice and humor; the assessment composer does not. Generated chat uses gue/lu, one focus, no colon/list/speaker labels, and at most one emoji. Explicit discomfort reduces humor on subsequent generated follow-ups through `tonePreference`; pre-generated initial questions remain grounded and stable. Prior candidate slang, humor or formality never changes scoring rules.
 
 Local checks include `conversation.smoke.ts`, `screening.smoke.ts`, `claim-assessment.smoke.ts`, the disposable integration runner, mocked browser checks, and `node scripts/tara-screening-local.cjs --conversation-quality`. Live quality evaluation uses synthetic profiles only, records all attempts and provider usage in `output/tara-conversation/`, and keeps held-out fixtures out of prompt modules. No VPS deployment is part of this change.
+
+
+## Conversation v5 and approved chat composer
+
+New packages use `tara-conversation-v5.0.0`: 3 initial claims, 5 total probes, breadth-first, 60 seconds. Historical v4 snapshots retain 30 seconds; v3/missing snapshots retain 5+10 at 60 seconds. The backend adds “Oke, kita mulai ya 😄” once to the first stored question. The contextual body remains generated from grounded CV claims; the complete message is validated against 35 words/280 characters. No assessment version or old result changes.
+
+Focused chat follows the approved circular-stepper mockup with the original Tara avatar, unified growing composer and circular SVG up-arrow button. Enter sends, Shift+Enter inserts a newline; IME and repeated keys do not submit. Manual blank submissions are disabled while timeout still locks the last saved draft, including empty drafts. Autosave status acknowledges persistence only after success. `TARA_OPENING_QUALITY=true` runs 12 live candidate plans across six professions through the disposable local conversation-quality harness, intentionally skipping unrelated assessment pairs. Provider calls, validation failures, usage and costs remain recorded. Work remains local until delivery is requested.
