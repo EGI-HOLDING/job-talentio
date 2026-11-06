@@ -223,6 +223,7 @@ The index self-heals on boot when it is empty, so a plain redeploy is usually en
 **Machine translation (optional, costs money):** off by default (`TRANSLATION_PROVIDER=none`). When enabled, a signed-in reader can translate a posting that has no human version in their language; the result is cached as a machine row in `JobPostTranslation`, so each text is paid for once and later readers get it free. A human translation always wins and is never overwritten, and cached machine output expires when the source text changes (`sourceHash`).
 
 - `OPENAI_API_KEY` and `OPENAI_MODEL` are used only when OpenAI machine translation is explicitly configured; they are not part of CV parsing.
+- `OPENAI_REASONING_EFFORT`: leave empty for legacy chat models (`gpt-4o-mini`), which reject the parameter with a 400. Set `none` for reasoning models (`gpt-5`/`gpt-6`/o-series) so `temperature: 0` is accepted and output stays deterministic; with any other value the client omits `temperature` because those models only allow the default.
 
 - `TRANSLATION_PROVIDER`: `none` | `openai` | `google` | `deepl`. `openai` and `google` support Uzbek; `deepl` is ru/en only.
 - `TRANSLATION_API_KEY`: required for `google`/`deepl`. For `openai`, use `OPENAI_API_KEY` (`TRANSLATION_API_KEY` accepted as fallback).
