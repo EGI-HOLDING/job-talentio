@@ -65,7 +65,9 @@ export function RecruiterOnboardingV2(){
       if(input.profileSource==='MANUAL'&&input.description.trim().length<20)throw Error(c("Deskripsi perusahaan minimal 20 karakter."));
       if(companyId&&canManage)await api('/companies/'+companyId,{method:'PATCH',body:JSON.stringify(input)});
       const result=await api<any>('/recruiter-onboarding',{method:'PATCH',body:JSON.stringify({step:2,companyId:companyId||null,flowVersion:2,phase:'INTRO',companyDraft:input,expectedRevision:progressRef.current.revision})});
-      const fresh=await api<any>('/recruiter-onboarding',{cache:'no-store'});progressRef.current=fresh;setProgress(fresh);setCompanyId(result.companyId);setPhase('INTRO');window.scrollTo({top:0});
+      const fresh=await api<any>('/recruiter-onboarding',{cache:'no-store'});progressRef.current=fresh;setProgress(fresh);setCompanyId(result.companyId);
+      if(fresh.jobId&&!fresh.creationSessionId){setLegacyJob(await api('/jobs/'+fresh.jobId,{cache:'no-store'}));setPhase('LEGACY');}else setPhase('INTRO');
+      window.scrollTo({top:0});
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}finally{setBusy(false);}
   }
   async function published(jobId:string){
