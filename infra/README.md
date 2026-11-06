@@ -23,7 +23,9 @@ Docker Compose project `job-talentio`: postgres:18, redis:7, MinIO, Meilisearch,
 | API health | https://api-staging.jobtalent.io/api/health |
 | Object storage | https://files-staging.jobtalent.io/job-talentio-staging |
 
-Files: [vps/docker-compose.yml](vps/docker-compose.yml), [vps/nginx-jobtalent.conf](vps/nginx-jobtalent.conf), [vps/deploy.sh](vps/deploy.sh).
+Files: [vps/docker-compose.yml](vps/docker-compose.yml), [vps/nginx-jobtalent.conf](vps/nginx-jobtalent.conf), [vps/deploy.sh](vps/deploy.sh), [vps/backup.sh](vps/backup.sh).
+
+Install on a fresh host by copying `deploy.sh` and `backup.sh` to `/opt/job-talentio/scripts/` and the nginx site to `/etc/nginx/sites-available/jobtalent.conf`. The nginx site reads the Let's Encrypt certificate at `/etc/letsencrypt/live/staging.jobtalent.io/`, so issue it before reloading nginx.
 
 ## Operating the VPS
 
