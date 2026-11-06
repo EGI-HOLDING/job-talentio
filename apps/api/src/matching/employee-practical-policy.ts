@@ -2,7 +2,7 @@ import type { EmployeePracticalFit } from '@job-talentio/shared';
 import type { IntentPreferences, IntentJob } from './employee-intent';
 
 export const EMPLOYEE_PRACTICAL_POLICY_VERSION = 'employee-practical-v1';
-export const employeePracticalEnabled = () => process.env.EMPLOYEE_PRACTICAL_POLICY_ENABLED === 'true';
+export const employeePracticalEnabled = () => true;
 export type PracticalJob = Pick<IntentJob, 'countryId'|'city'|'salaryMin'|'salaryMax'|'currency'|'salaryPeriod'>;
 
 // Decimal amounts are compared as integer hundredths; no exchange rate or working-hour assumption.

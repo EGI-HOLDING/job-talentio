@@ -1,7 +1,7 @@
 import type { EmployeeEligibility } from '@job-talentio/shared';
 import { createHash } from 'node:crypto';
 
-export const VACANCY_TASK_VERSION = process.env.EMPLOYEE_VACANCY_TASK_VERSION==='vacancy-tasks-v3'?'vacancy-tasks-v3':'vacancy-tasks-v2';
+export const VACANCY_TASK_VERSION = 'vacancy-tasks-v3';
 export const vacancyTaskText=(posting:{description:string;responsibilities?:readonly string[]})=>posting.responsibilities?.length?[posting.description,'Responsibilities',...posting.responsibilities].join('\n'):posting.description;
 
 // Concepts describe work products and responsibility. A domain name or a

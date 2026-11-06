@@ -6,7 +6,6 @@ import {join} from 'node:path';
 import {gunzipSync} from 'node:zlib';
 import {PrismaService} from '../prisma/prisma.service';
 import {CandidateCache} from '../common/candidate-cache';
-import {employeeRecommendationV32Enabled} from './employee-recommendation-policy';
 import {intentRoleInclude,EmployeeOccupationIndex} from './employee-occupation';
 import {buildProfessionGraph,professionCatalogRevision,professionDigest,PROFESSION_RELATION_ALGORITHM,type ProfessionSource} from './occupation-relations';
 import {indonesiaProfessionDefinitions,professionWorkScopes} from './indonesia-profession-definitions';
@@ -15,7 +14,7 @@ import {indonesiaProfessionDefinitions,professionWorkScopes} from './indonesia-p
 export class OccupationRelationsService implements OnModuleInit,OnModuleDestroy {
  private source?:ProfessionSource; private busy=false;private timer?:ReturnType<typeof setInterval>;private startup?:ReturnType<typeof setTimeout>;
  constructor(private db:PrismaService,@Optional()private cache?:CandidateCache){}
- onModuleInit(){if(!employeeRecommendationV32Enabled())return;const work=()=>{if(this.busy)return;this.busy=true;void this.build(false).catch(e=>new Logger('OccupationRelations').warn('Background enrichment failed; exact and exploration remain available: '+e.message)).finally(()=>this.busy=false);};this.startup=setTimeout(work,10000);this.startup.unref();this.timer=setInterval(work,60000);this.timer.unref();}
+ onModuleInit(){const work=()=>{if(this.busy)return;this.busy=true;void this.build(false).catch(e=>new Logger('OccupationRelations').warn('Background enrichment failed; exact and exploration remain available: '+e.message)).finally(()=>this.busy=false);};this.startup=setTimeout(work,10000);this.startup.unref();this.timer=setInterval(work,60000);this.timer.unref();}
  onModuleDestroy(){if(this.timer)clearInterval(this.timer);if(this.startup)clearTimeout(this.startup);}
  loadSource(){if(!this.source){const directory=join(__dirname,'../../prisma/data/occupation-profiles');const source=JSON.parse(gunzipSync(readFileSync(join(directory,'esco-v1.2.1.json.gz'))).toString('utf8')) as ProfessionSource;const manifest=JSON.parse(readFileSync(join(directory,'manifest.json'),'utf8'));if(source.sourceVersion!=='v1.2.1'||professionDigest(source)!==manifest.sha256)throw new Error('ESCO source snapshot checksum/version mismatch');this.source={...source,localDefinitions:indonesiaProfessionDefinitions,workScopes:professionWorkScopes};}return this.source;}
  private compute(roles:Parameters<typeof buildProfessionGraph>[0],source:ProfessionSource):Promise<ReturnType<typeof buildProfessionGraph>>{

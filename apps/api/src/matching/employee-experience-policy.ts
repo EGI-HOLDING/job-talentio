@@ -1,7 +1,7 @@
 export const EMPLOYEE_EXPERIENCE_POLICY_VERSION = 'employee-experience-v2';
 // Explicit activation, separate from HR and employee occupation selection.
-export const employeeExperiencePolicyEnabled=()=>process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED==='true';
-export const employeeExperienceRevision=()=>employeeExperiencePolicyEnabled()?EMPLOYEE_EXPERIENCE_POLICY_VERSION:'legacy-experience';
+export const employeeExperiencePolicyEnabled=()=>true;
+export const employeeExperienceRevision=()=>EMPLOYEE_EXPERIENCE_POLICY_VERSION;
 export const candidateExperienceSelect={seniorityLevelCode:true,seniorityVersion:true,seniorityYearsMin:true,seniorityYearsMax:true,experienceRangeMin:true,experienceRangeMax:true,experienceRangeSource:true} as const;
 export type CandidateExperienceInput={experienceYearsMin:number|null;seniorityLevelCode?:string|null;seniorityVersion?:string|null;seniorityYearsMin?:number|null;seniorityYearsMax?:number|null;experienceRangeMin?:number|null;experienceRangeMax?:number|null;experienceRangeSource?:string|null};
 const employerReference=(minimum:number|null)=>Object.freeze({source:'EMPLOYER_REQUIREMENT' as const,minimum,maximum:null,version:null,levelCode:null,required:true});

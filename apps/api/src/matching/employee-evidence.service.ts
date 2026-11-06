@@ -22,7 +22,7 @@ export class EmployeeEvidenceService {
     constructor(private db: PrismaService, private storage: StorageService, private config: ConfigService, @Optional() private catalog?: EmployeeCatalogSnapshot) { }
     private snapshot() { return (this.catalog || new EmployeeCatalogSnapshot(this.db)).get(); }
     async recover() {
-        if (this.working || !['shadow', 'enabled'].includes(process.env.EMPLOYEE_INTENT_V3_MODE ?? 'off'))
+        if (this.working)
             return;
         this.working = true;
         try {

@@ -145,7 +145,7 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
         const known = candidate >= 0 && target >= 0;
         const status = !known ? 'UNKNOWN' : candidate >= target ? 'MET' : 'UNMET';
         required.push(status);
-        parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.seniority, !known ? 0.5 : 1 - Math.min(1, (experiencePolicyEnabled?Math.max(0,target-candidate):Math.abs(candidate-target)) / 3)]);
+        parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.seniority, !known ? 0.5 : 1 - Math.min(1, Math.max(0,target-candidate) / 3)]);
         evidence.push({ kind: 'EXPERIENCE', label: job.experienceLevel, status, required: true, code: status === 'MET' ? 'EXPERIENCE_MATCH' : status === 'UNMET' ? 'BELOW_REQUIREMENT' : 'NOT_LISTED', evidenceRefs: relevant.map(e => `cvEvidence:${e.key}`) });
     }
     const langs = job.jobLanguages.filter(l => l.provenance === 'EMPLOYER_CONFIRMED');

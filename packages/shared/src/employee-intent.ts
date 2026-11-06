@@ -1,6 +1,5 @@
 import { z } from 'zod';
-export const EMPLOYEE_INTENT_VERSION = 'employee-intent-v3';
-export const EMPLOYEE_INTENT_RANKING_VERSION = 'employee-ranking-v3.1';
+export const EMPLOYEE_INTENT_VERSION = 'employee-intent-v3.2';
 export const EMPLOYEE_RELATED_RANKING_VERSION = 'employee-ranking-v3.2';
 export type EmployeeEvidenceState = 'READY' | 'REQUIRED' | 'PROCESSING' | 'FAILED' | 'REVIEW_REQUIRED';
 export type EmployeeRecommendationType = 'EXACT' | 'RELATED' | 'EXPLORATION';

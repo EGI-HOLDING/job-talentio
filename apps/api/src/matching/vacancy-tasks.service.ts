@@ -3,10 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmployeeOccupationIndex } from './employee-occupation';
 import { escoTaskDictionary, primaryTaskScope, professionTaskKeys, taskCompatibility, taskDigest, taskEvidence, vacancyTaskText, VACANCY_TASK_VERSION, type EscoTaskDictionary, type TaskEvidence, type VacancyEligibility } from './vacancy-tasks';
-import { employeeRecommendationV32Enabled } from './employee-recommendation-policy';
 import { OccupationRelationsService } from './occupation-relations.service';
 
-export const vacancyTaskMode = () => process.env.EMPLOYEE_VACANCY_TASK_MODE ?? 'off';
 export type VacancySelection = {
   decisions: Map<string,{ roleId:string; updatedAt:Date; eligibility:VacancyEligibility }>;
   revision: string;
@@ -24,12 +22,11 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
   private concepts() { return this.dictionary??=escoTaskDictionary(this.relations.loadSource().skills); }
 
   project(posting:{id:string;jobTitleId:string|null;description:string;responsibilities?:readonly string[];updatedAt:Date}):TaskRow {
-    const evidence=taskEvidence(VACANCY_TASK_VERSION==='vacancy-tasks-v3'?vacancyTaskText(posting):posting.description,this.concepts());
+    const evidence=taskEvidence(vacancyTaskText(posting),this.concepts());
     return {id:posting.id,jobTitleId:posting.jobTitleId,updatedAt:posting.updatedAt,keys:evidence.map(task=>task.key),evidence};
   }
 
   onModuleInit() {
-    if (!employeeRecommendationV32Enabled() || !['shadow','enabled'].includes(vacancyTaskMode())) return;
     const recover=()=>void this.refresh().catch(error=>this.logger.warn('Vacancy evidence refresh failed: '+error.message));
     recover();
     this.timer=setInterval(recover,5000);
