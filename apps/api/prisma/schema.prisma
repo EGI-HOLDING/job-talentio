@@ -34,6 +34,7 @@ model AiScreeningPackage {
   companySnapshot Json
   promptVersion String
   promptSnapshot Json
+  conversationPolicy Json?
   payload Json?
   error String?
   createdAt DateTime @default(now())

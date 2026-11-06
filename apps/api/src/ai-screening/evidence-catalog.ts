@@ -29,9 +29,29 @@ for (const side of ['left','right']) {
     object.properties!.quoteRef = { type: 'string' };
     object.required = ['source','ref','quoteRef'];
 }
+export const JUDGED_CLAIM_PROVIDER_SCHEMA: JsonSchema = structuredClone(CLAIM_PROVIDER_SCHEMA);
+const judgedClaim = JUDGED_CLAIM_PROVIDER_SCHEMA.properties!.claims.items!;
+delete judgedClaim.properties!.score;
+judgedClaim.required = [...judgedClaim.required!.filter(k => k !== 'score'), 'judgement'];
+judgedClaim.properties!.judgement = { type: 'object', additionalProperties: false, required: ['level', 'detail', 'detailRef'], properties: {
+    level: { type: 'string', enum: ['NONE', 'GENERAL', 'PARTIAL', 'CONCRETE'] },
+    detail: { type: 'string', enum: ['NONE', 'REASON', 'RESULT', 'BOUNDARY'] },
+    detailRef: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+} };
+export function judgementScore(level: string, detail: string) {
+    if (!['NONE', 'GENERAL', 'PARTIAL', 'CONCRETE'].includes(level) || !['NONE', 'REASON', 'RESULT', 'BOUNDARY'].includes(detail)) throw Error('INVALID_CLAIM_JUDGEMENT');
+    return level === 'NONE' ? 0 : level === 'GENERAL' ? 1 : level === 'PARTIAL' ? 2 : detail === 'NONE' ? 3 : 4;
+}
 export function resolveEvidence(value: unknown, catalog: EvidenceSnippet[]): Omit<EvaluationPayload, 'criteria'> {
     const raw = structuredClone(value) as any;
     for (const claim of raw.claims ?? []) {
+        if (claim.judgement) {
+            if ('score' in claim) throw Error('AMBIGUOUS_CLAIM_SCORE');
+            const { level, detail, detailRef } = claim.judgement;
+            if (detail === 'NONE' ? detailRef !== null : !claim.evidence?.some((e: any) => e.quoteRef === detailRef && catalog.some(s => s.id === detailRef && s.source === 'ANSWER' && s.ref === e.questionId))) throw Error('UNGROUNDED_JUDGEMENT_DETAIL');
+            claim.score = judgementScore(level, detail);
+            delete claim.judgement;
+        }
         for (const e of claim.evidence ?? []) {
             const source = catalog.find(s => s.id === e.quoteRef && s.source === 'ANSWER' && s.ref === e.questionId);
             if (!source) throw Error('UNKNOWN_EVIDENCE_REFERENCE');

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { LEGACY_CONVERSATION } from './conversation.policy';
 import { nextProbeTarget, combineScores, scoreScreening, rankScreening } from './screening.policy';
 import { validateCandidate, validateEvaluation, validateFollowUp, type CandidatePayload, type EvaluationPayload, type PackagePayload } from './screening.schemas';
 import { composePrompt } from './prompts/compose';
@@ -34,14 +35,14 @@ assert.equal(combineScores(82, 75), 78.5);
 const roots = Array.from({ length: 5 }, (_, i) => ({ id: 'r' + i, position: i, kind: 'CORE', claimId: 'cl' + i, criterionId: 'c', answer: 'Kontribusi nyata.', rootQuestionId: null as string | null, depth: 0, probeClosed: false }));
 const questions: import('./screening.policy').ProbeQuestion[] = [...roots];
 for (let i = 0; i < 10; i++) {
-    const target = nextProbeTarget(questions)!;
+    const target = nextProbeTarget(questions, LEGACY_CONVERSATION)!;
     assert.ok(target);
     assert.equal(target.depth, i % 2 + 1);
     if (target.depth === 2)
         assert.equal(target.parent.depth, 1);
     questions.push({ ...target.root, id: 'p' + i, kind: 'FOLLOW_UP', position: 5 + i, depth: target.depth, rootQuestionId: target.root.id });
 }
-assert.equal(nextProbeTarget(questions), null);
+assert.equal(nextProbeTarget(questions, LEGACY_CONVERSATION), null);
 assert.equal(nextProbeTarget(roots.map(q => ({ ...q, answer: '' }))), null);
 for (const n of [50, 100, 200, 300, 400, 500, 750, 1000]) {
     const ranked = rankScreening(Array.from({ length: n }, (_, i) => ({ id: String(i), createdAt: new Date(i), packageId: 'v' + (i % 2), finalScore: Math.round((i % n) / n * 1000) / 10, status: 'READY' })));

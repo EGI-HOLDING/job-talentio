@@ -5,6 +5,7 @@ import { CompaniesService } from '../companies/companies.service';
 import { StorageService } from '../storage/storage.service';
 import type { AuthUser } from '../common/auth.decorators';
 import type { RecruiterBreakdown } from '../matching/recruiter-matching';
+import { conversationPolicy, assessmentVersion } from './conversation.policy';
 import { rankScreening, SCREENING_PROMPT_VERSION, SCREENING_RANKING_VERSION, hash } from './screening.policy';
 export type TaraSummary = {
     methodology: string;
@@ -112,7 +113,7 @@ export class ScreeningHr {
     }
     async assessment(user: AuthUser, id: string) {
         const s = await this.access(user, id), e = s.evaluation;
-        const reevaluation = await this.db.aiScreeningWork.findUnique({ where: { key: 'EVALUATE:' + s.id + ':' + SCREENING_PROMPT_VERSION }, select: { status: true } });
+        const reevaluation = await this.db.aiScreeningWork.findUnique({ where: { key: 'EVALUATE:' + s.id + ':' + assessmentVersion(conversationPolicy(s.package?.conversationPolicy)) }, select: { status: true } });
         const revisions = e ? await this.db.aiScreeningEvaluationRevision.findMany({ where: { evaluationId: e.id }, select: { id: true, promptVersion: true, createdAt: true }, orderBy: { createdAt: 'desc' } }) : [];
         return { status: e?.status ?? 'PENDING', cvScore: e?.cvScore ?? null, screeningScore: e?.screeningScore ?? null, finalScore: e?.finalScore ?? null, result: e?.result ?? null,
             methodology: e?.promptVersion ?? null, reevaluationStatus: reevaluation?.status ?? null, assessedClaims: (e?.result as { claims?: unknown[] } | null)?.claims?.length ?? 0,

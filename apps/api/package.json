@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
-    "test:tara": "tsx src/ai-screening/screening.smoke.ts",
+    "test:tara": "tsx src/ai-screening/conversation.smoke.ts && tsx src/ai-screening/screening.smoke.ts && tsx src/ai-screening/claim-assessment.smoke.ts",
+    "test:tara:conversation:live": "node ../../scripts/tara-screening-local.cjs --conversation-quality",
     "test:tara:local": "node ../../scripts/tara-screening-local.cjs",
     "test:tara:pdf": "tsx src/ai-screening/screening-report.smoke.ts",
     "test:linkedin": "tsx src/linkedin/linkedin.smoke.ts",

@@ -4,7 +4,7 @@
 
 Indonesia only, all packages; `TARA_SCREENING_ENABLED=false` by default. No deployment is performed by this change. The six candidate pages use the approved Talentio layout. Tara appears from the introduction onward. Company profile and cover letter uploads are optional and private.
 
-Initial questions come from the selected immutable CV version. The job context provides common competencies and anchors, not universal questions. Every claim has an exact quote and source line range. There are at most five initial questions and two connected follow-ups for each root, at most ten follow-ups altogether. A follow-up at depth two uses the depth-one answer. The result describes support or a need for confirmation; it is not a lie detector.
+Initial questions come from the selected immutable CV version. The job context provides common competencies and anchors, not universal questions. Every claim has an exact quote and source line range. New conversations have at most three initial questions and five follow-ups altogether, with at most two per root. First follow-ups cover all eligible roots before second follow-ups use the remaining budget in claim-priority order. A follow-up at depth two uses the depth-one answer. The result describes support or a need for confirmation; it is not a lie detector.
 
 Prompt modules live only under `apps/api/src/ai-screening/prompts`: shared rules, task instructions, and examples are separate small files. `compose.ts` selects modules; schemas and session policy remain separate. Each context persists the assembled task instructions, output schemas, model, reasoning policy and output limits. Resuming a started session uses those frozen presets, including after a later prompt deployment. Change the prompt version when changing behavior. Job fingerprints include the methodology version and preset digest, so results from different requirements/methodologies are not ranked together.
 
@@ -19,9 +19,9 @@ Job publication and substantive changes enqueue context preparation. A bounded r
 
 ## Reliability and recovery
 
-The database stores the active question, server deadline, last saved draft, locked answer, tab lease and revision. Acknowledging display starts the 60-second timer. Refresh does not reset it. AI waiting time creates no deadline. A different tab cannot submit while the current lease is active. Autosave makes no model calls.
+The database stores the active question, server deadline, last saved draft, locked answer, tab lease and revision. Acknowledging display starts the pinned timer: 30 seconds for new conversations, 60 seconds for pre-v4 conversations. Refresh does not reset it. AI waiting time creates no deadline. A different tab cannot submit while the current lease is active. Autosave makes no model calls.
 
-Application finalization links the screening session, creates the unique application and queues evaluation in one transaction. Evaluation may finish afterward. Provider failures never create zero scores. Missing evidence remains null, with HR review required. Existing CV matching supplies the CV score; backend arithmetic combines complete scores 50:50. Ranking happens before pagination and remains separate by source version.
+Application finalization links the screening session, creates the unique application and queues evaluation in one transaction. Evaluation may finish afterward. Provider failures never create zero scores. After an answer opportunity, empty answers score zero on sampled claims. A provider failure never produces a score. Missing CV scores remain unavailable, with HR review required. Existing CV matching supplies the CV score; backend arithmetic combines complete scores 50:50. Ranking happens before pagination and remains separate by source version.
 
 `GET /api/ai-screening/operations` is Super Admin only. It lists failed outbox jobs and uncertain provider calls. Inspect the provider response ID/billing before retrying an uncertain create request. A missing provider response, authorization error during polling, or a response pending beyond 15 minutes is sent to operational review rather than blindly creating another charge.
 
@@ -63,3 +63,12 @@ An explicit `node scripts/tara-screening-local.cjs --live` runs a synthetic samp
 - [OPM structured interviews](https://www.opm.gov/policy-data-oversight/assessment-and-selection/other-assessment-methods/structured-interviews/)
 
 Personalized CV questions are not automatically equivalent to a fully standardized interview. The shared rubric and equal competency weights require human quality/comparability validation; the 50:50 composite is the initial product policy.
+
+
+## Conversation enhancement v4
+
+Each job package stores a nullable `conversationPolicy` snapshot. Missing snapshots resolve to legacy limits (5 + 10, 60 seconds, per-claim probing). New packages freeze 3 + 5, 30 seconds, breadth-first probing, 35 words and 280 characters per question. `conversationPolicy` in the session response exposes only version, questionSeconds and maxQuestions. Active sessions keep their frozen policy and prompt; unstarted drafts refresh on reopen, CV selection or Start. New prompt fingerprints do not re-evaluate existing results or regenerate PDFs. The 0–4 claim methodology stays v3. New conversations use a separately versioned v3.0.3 clarification of score boundaries and factual contradictions. The AI supplies evidence-grounded level and detail categories; backend mapping derives 0–4 without extra AI calls. Accepted historical v3 results are retained without automatic re-evaluation.
+
+The candidate/follow-up composer includes modular Gen Z voice and humor; the assessment composer does not. Generated chat uses gue/lu, one focus, no colon/list/speaker labels, and at most one emoji. Explicit discomfort reduces humor on subsequent generated follow-ups through `tonePreference`; pre-generated initial questions remain grounded and stable. Prior candidate slang, humor or formality never changes scoring rules.
+
+Local checks include `conversation.smoke.ts`, `screening.smoke.ts`, `claim-assessment.smoke.ts`, the disposable integration runner, mocked browser checks, and `node scripts/tara-screening-local.cjs --conversation-quality`. Live quality evaluation uses synthetic profiles only, records all attempts and provider usage in `output/tara-conversation/`, and keeps held-out fixtures out of prompt modules. No VPS deployment is part of this change.

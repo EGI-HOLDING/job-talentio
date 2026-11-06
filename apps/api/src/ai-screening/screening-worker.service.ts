@@ -16,7 +16,7 @@ import { ScreeningPackets } from './screening-packets.service';
 import { ScreeningSessions } from './screening-sessions.service';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { ScreeningClient, AiPending, AiUncertain } from './screening.client';
-import { hash, json, nextProbeTarget, screeningEnabled, WORK_LEASE_MS, scoreScreening, combineScores, SCREENING_PROMPT_VERSION, PDF_TEMPLATE_VERSION } from './screening.policy';
+import { hash, json, nextProbeTarget, screeningEnabled, screeningModel, WORK_LEASE_MS, scoreScreening, combineScores, SCREENING_PROMPT_VERSION, PDF_TEMPLATE_VERSION } from './screening.policy';
 import { validatePackage, validateCandidate, validateFollowUp, validateEvaluation, type PackagePayload, type CandidatePayload, type EvaluationPayload } from './screening.schemas';
 import { renderScreeningReport } from './screening-report';
 import type { PromptRegistry } from './prompts/registry';
@@ -25,6 +25,7 @@ import { assertAnswerOpportunities, unansweredEvaluation, validateClaimEvaluatio
 import { enqueueWork } from './screening-packets.service';
 import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
 import { frozenCvAssessment } from './frozen-cv';
+import { conversationPolicy, conversationTone, isClaimAssessmentVersion, repeatsQuestion } from './conversation.policy';
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -248,15 +249,23 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             throw new AiPending();
         const name = plan.session.profile.user.fullName.toLocaleLowerCase().trim();
         const cvLines = source.text.split('\n').map((text, i) => ({ line: i + 1, text })).filter(r => r.text.trim().toLocaleLowerCase() !== name && !/@/.test(r.text) && !/^\s*[+\d ()-]{8,}\s*$/.test(r.text));
-        const payload = validateCandidate(await this.client.run(workId, plan.sessionId, 'candidate', { job: plan.package.payload, cvLines }, (plan.package.promptSnapshot as unknown as PromptRegistry).candidate), plan.package.payload as unknown as PackagePayload, source.text);
-        await this.db.aiCandidatePlan.update({ where: { id }, data: { status: 'READY', payload: json(payload), error: null } });
+        const payload = validateCandidate(await this.client.run(workId, plan.sessionId, 'candidate', { job: plan.package.payload, cvLines }, (plan.package.promptSnapshot as unknown as PromptRegistry).candidate), plan.package.payload as unknown as PackagePayload, source.text, conversationPolicy(plan.package.conversationPolicy));
+        await this.db.$transaction(async tx => {
+            await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${plan.sessionId} FOR UPDATE`);
+            const current = await tx.aiScreeningSession.findUnique({ where: { id: plan.sessionId } });
+            if (current?.status !== 'DRAFT' || current.currentPlanId !== id) {
+                await tx.aiCandidatePlan.update({ where: { id }, data: { status: 'SUPERSEDED' } });
+                return;
+            }
+            await tx.aiCandidatePlan.update({ where: { id }, data: { status: 'READY', payload: json(payload), error: null } });
+        });
     }
     private async advance(workId: string, id: string) {
         for (let turn = 0; turn < 5; turn++) {
             const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { package: true, currentPlan: true, questions: { orderBy: { position: 'asc' } } } });
             if (!session || session.status !== 'GENERATING' || session.questions.some(q => q.answer === null))
                 return;
-            const target = nextProbeTarget(session.questions);
+            const target = nextProbeTarget(session.questions, conversationPolicy(session.package?.conversationPolicy));
             if (!target) {
                 await this.db.aiScreeningSession.updateMany({ where: { id, status: 'GENERATING', revision: session.revision }, data: { status: 'COMPLETED', completedAt: new Date(), error: null } });
                 return;
@@ -265,8 +274,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             const claim = plan.claims.find(c => c.id === target.root.claimId)!;
             const rubric = session.package!.payload as unknown as PackagePayload;
             const chain = session.questions.filter(q => q.id === target.root.id || q.rootQuestionId === target.root.id).map(q => ({ id: q.id, depth: q.depth, question: q.text, answer: q.answer }));
-            const response = validateFollowUp(await this.client.run(workId, id, 'follow-up', { context: rubric.context, criterion: rubric.criteria.find(c => c.id === claim.criterionId), claim, targetDepth: target.depth, rootQuestionId: target.root.id, chain }, (session.package!.promptSnapshot as unknown as PromptRegistry)['follow-up']));
-            if (response.stop) {
+            const response = validateFollowUp(await this.client.run(workId, id, 'follow-up', { context: rubric.context, criterion: rubric.criteria.find(c => c.id === claim.criterionId), claim, targetDepth: target.depth, rootQuestionId: target.root.id, chain, tonePreference: conversationTone(session.questions), recentTaraMessages: session.questions.slice(-2).map(q => q.text) }, (session.package!.promptSnapshot as unknown as PromptRegistry)['follow-up']), conversationPolicy(session.package?.conversationPolicy));
+            if (response.stop || conversationPolicy(session.package?.conversationPolicy).probeOrder === 'breadth-first' && response.question && repeatsQuestion(response.question, chain.map(q => q.question))) {
                 await this.db.aiScreeningQuestion.update({ where: { id: target.root.id }, data: { probeClosed: true } });
                 continue;
             }
@@ -320,7 +329,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             return;
         const revisions = session.evaluation && session.evaluation.cvScore === null ? await this.db.aiScreeningEvaluationRevision.findMany({ where: { evaluationId: session.evaluation.id }, select: { snapshot: true }, orderBy: { createdAt: 'asc' } }) : [];
         const frozenCv = frozenCvAssessment(session.evaluation, revisions);
-        const currentResult = session.evaluation?.result && session.evaluation.promptVersion === SCREENING_PROMPT_VERSION ? session.evaluation.result as unknown as EvaluationPayload : null;
+        const currentResult = session.evaluation?.result && isClaimAssessmentVersion(session.evaluation.promptVersion) ? session.evaluation.result as unknown as EvaluationPayload : null;
         if (currentResult && (session.evaluation!.cvScore !== null || !frozenCv)) {
             await this.ensurePdfWork(id);
             return;
@@ -329,9 +338,12 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const cv = frozenCv ?? await this.cvAssessment(session, session.package.jobSnapshot);
         const answers = session.questions.map(q => ({ id: q.id, claimId: q.claimId, criterionId: q.criterionId, rootQuestionId: q.rootQuestionId, parentQuestionId: q.parentQuestionId, depth: q.depth, kind: q.kind, question: q.text, answer: q.answer, shownAt: q.shownAt, answeredAt: q.answeredAt, timedOut: q.timedOut }));
         assertAnswerOpportunities(plan, answers);
-        const { input: _input, ...preset } = composePrompt('evaluate', {});
-        const model = process.env.TARA_SCREENING_MODEL ?? 'gpt-6-luna';
-        const fingerprint = hash([SCREENING_PROMPT_VERSION, model, preset, session.currentPlan.fingerprint, answers, cv?.total]);
+        const policy = conversationPolicy(session.package.conversationPolicy);
+        const frozen = policy.probeOrder === 'breadth-first' ? (session.package.promptSnapshot as unknown as PromptRegistry).evaluate : undefined;
+        const { input: _input, ...preset } = composePrompt('evaluate', {}, frozen, policy);
+        const assessmentVersion = currentResult ? session.evaluation!.promptVersion : preset.version;
+        const model = preset.model ?? screeningModel();
+        const fingerprint = hash([assessmentVersion, model, preset, session.currentPlan.fingerprint, answers, cv?.total]);
         let result: EvaluationPayload;
         if (currentResult) {
             // Restore CV/composite deterministically; the accepted Tara result is unchanged.
@@ -357,11 +369,11 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             if (previous?.result) await tx.aiScreeningEvaluationRevision.upsert({
                 where: { evaluationId_inputHash: { evaluationId: previous.id, inputHash: previous.inputHash ?? hash(previous.result) } },
                 create: { evaluationId: previous.id, inputHash: previous.inputHash ?? hash(previous.result), promptVersion: previous.promptVersion, snapshot: json(previous) }, update: {} });
-            const data = { promptVersion: SCREENING_PROMPT_VERSION, status: final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: fingerprint, model,
+            const data = { promptVersion: assessmentVersion, status: final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: fingerprint, model,
                 result: json(result), cvScore, cvBreakdown: cv ? json(cv) : Prisma.DbNull, screeningScore: screening, finalScore: final, error: null, pdfKey: null, pdfVersion: null };
             const current = await tx.aiScreeningEvaluation.upsert({ where: { sessionId: id }, create: { sessionId: id, ...data }, update: data });
             await tx.aiScreeningEvaluationRevision.upsert({ where: { evaluationId_inputHash: { evaluationId: current.id, inputHash: fingerprint } },
-                create: { evaluationId: current.id, inputHash: fingerprint, promptVersion: SCREENING_PROMPT_VERSION, snapshot: json({ ...current, promptSnapshot: preset }) }, update: {} });
+                create: { evaluationId: current.id, inputHash: fingerprint, promptVersion: assessmentVersion, snapshot: json({ ...current, promptSnapshot: preset }) }, update: {} });
         });
         invalidateHrRanking();
         await this.ensurePdfWork(id);

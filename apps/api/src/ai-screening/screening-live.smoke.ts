@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScreeningClient, AiPending } from './screening.client';
 import { validatePackage, validateCandidate, validateFollowUp, validateEvaluation, type CandidatePayload, type PackagePayload } from './screening.schemas';
+import { nextProbeTarget } from './screening.policy';
+import { CURRENT_CONVERSATION as policy, conversationTone } from './conversation.policy';
 import { projectScreeningCost } from './screening-cost';
 import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
 import { validateClaimEvaluation } from './claim-assessment';
@@ -56,15 +58,16 @@ async function main() {
         const cvText = ['Membantu tim meningkatkan penjualan sebesar 20%.', 'Membantu menangani 100 pertanyaan pelanggan setiap hari.', 'Membuat catatan tindak lanjut layanan pelanggan.', 'Menggunakan spreadsheet untuk memantau waktu tanggapan.', 'Berkolaborasi dengan tim operasional untuk menyelesaikan keluhan.', repeat('Pengalaman pendukung: mencatat permintaan pelanggan, menyusun daftar tindak lanjut, memantau hasil dan berkoordinasi dengan rekan satu tim.', 200)].join('\n');
         const rubric = validatePackage(await run('prepare', { job, company }));
         const plan = validateCandidate(await run('candidate', { job: rubric, cvLines: cvText.split('\n').map((text, i) => ({ line: i + 1, text })) }), rubric, cvText);
-        const answers: any[] = plan.claims.map((c, i) => ({ id: 'q' + i, claimId: c.id, criterionId: c.criterionId, rootQuestionId: null, parentQuestionId: null, depth: 0, kind: 'CORE', shownAt: new Date(0), answeredAt: new Date(60000), question: c.question, answer: 'Saya mencatat pelanggan yang perlu dihubungi, menghubungi mereka melalui pesan, lalu mencatat respons dan hasilnya di spreadsheet tim.' }));
-        for (const root of [...answers])
-            for (let depth = 1; depth <= 2; depth++) {
-                const chain = answers.filter(a => a.id === root.id || a.rootQuestionId === root.id), claim = plan.claims.find(c => c.id === root.claimId)!;
-                const follow = validateFollowUp(await run('follow-up', { context: rubric.context, criterion: rubric.criteria.find(c => c.id === claim.criterionId), claim, targetDepth: depth, rootQuestionId: root.id, chain }, answers.length));
-                if (follow.stop)
-                    break;
-                answers.push({ id: 'q' + answers.length, claimId: claim.id, criterionId: claim.criterionId, rootQuestionId: root.id, parentQuestionId: chain.at(-1).id, depth, kind: 'FOLLOW_UP', shownAt: new Date(0), answeredAt: new Date(60000), question: follow.question, answer: depth === 1 ? 'Saya memprioritaskan pesanan yang paling lama menunggu, lalu meminta persetujuan supervisor untuk tindak lanjut yang memerlukan keputusan.' : 'Saya membandingkan catatan minggu ini dengan minggu sebelumnya; hasil keseluruhan adalah hasil tim, sedangkan kontribusi saya hanya pencatatan dan tindak lanjut.' });
-            }
+        const answers: any[] = plan.claims.map((c, i) => ({ id: 'q' + i, position: i, probeClosed: false, claimId: c.id, criterionId: c.criterionId, rootQuestionId: null, parentQuestionId: null, depth: 0, kind: 'CORE', shownAt: new Date(0), answeredAt: new Date(policy.questionSeconds * 1000), question: c.question, answer: 'Saya mencatat pelanggan yang perlu dihubungi, menghubungi mereka melalui pesan, lalu mencatat respons dan hasilnya di spreadsheet tim.' }));
+        for (let i = 0; i < 10; i++) {
+            const target = nextProbeTarget(answers, policy);
+            if (!target) break;
+            const root = target.root, depth = target.depth;
+            const chain = answers.filter(a => a.id === root.id || a.rootQuestionId === root.id), claim = plan.claims.find(c => c.id === root.claimId)!;
+            const follow = validateFollowUp(await run('follow-up', { context: rubric.context, criterion: rubric.criteria.find(c => c.id === claim.criterionId), claim, targetDepth: depth, rootQuestionId: root.id, chain, tonePreference: conversationTone(answers), recentTaraMessages: answers.slice(-2).map(a => a.question) }, answers.length));
+            if (follow.stop) { answers.find(a => a.id === root.id).probeClosed = true; continue; }
+            answers.push({ id: 'q' + answers.length, position: answers.length, probeClosed: false, claimId: claim.id, criterionId: claim.criterionId, rootQuestionId: root.id, parentQuestionId: target.parent.id, depth, kind: 'FOLLOW_UP', shownAt: new Date(0), answeredAt: new Date(policy.questionSeconds * 1000), question: follow.question, answer: depth === 1 ? 'Saya memprioritaskan pesanan yang paling lama menunggu, lalu meminta persetujuan supervisor untuk tindak lanjut yang memerlukan keputusan.' : 'Saya membandingkan catatan minggu ini dengan minggu sebelumnya; hasil keseluruhan adalah hasil tim, sedangkan kontribusi saya hanya pencatatan dan tindak lanjut.' });
+        }
         const catalog = evidenceCatalog(plan,answers);
         validateClaimEvaluation(resolveEvidence(await run('evaluate', { context: rubric.context, claims: plan.claims, limitations: plan.limitations, answers, evidenceCatalog: catalog }),catalog),rubric,plan,answers);
         report.completed = 1;

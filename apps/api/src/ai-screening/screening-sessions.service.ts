@@ -13,6 +13,7 @@ import { answerDeadline, isExpired, json, MAX_ANSWER_CHARS, SESSION_LEASE_MS, sc
 import type { CandidatePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
+import { CURRENT_CONVERSATION, conversationPolicy, publicConversationPolicy } from './conversation.policy';
 const sessionInclude = { package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
@@ -71,6 +72,7 @@ export class ScreeningSessions {
             packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
             preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
             preparation,
+            conversationPolicy: publicConversationPolicy(row.package ? conversationPolicy(row.package.conversationPolicy) : CURRENT_CONVERSATION),
             recoveryRequired: requiresRecovery,
             job: { id: row.job.id, title: row.job.title, companyName: row.job.isAnonymous ? 'Perusahaan dirahasiakan' : row.job.company.name, city: row.job.city?.name ?? '' },
             questions: row.questions.filter(q => !active || q.position <= active.position).map(q => ({ id: q.id, text: q.text, draft: q.draft, answer: q.answer, shownAt: q.shownAt, deadlineAt: q.deadlineAt, answeredAt: q.answeredAt, timedOut: q.timedOut })),
@@ -94,6 +96,10 @@ export class ScreeningSessions {
                 throw new ForbiddenException();
             return tx.aiScreeningSession.upsert({ where: { jobId_profileId: { jobId, profileId: profile.id } }, create: { jobId, profileId: profile.id }, update: {}, include: sessionInclude });
         });
+        if (row.status === 'DRAFT' && row.resumeId) {
+            await this.plans.request(row.id);
+            return this.state(user, row.id);
+        }
         void this.packets.sync(jobId).catch(() => undefined);
         return this.public(row);
     }
@@ -154,7 +160,7 @@ export class ScreeningSessions {
     }
     private async lock(tx: Prisma.TransactionClient, id: string, profileId: string, clientId?: string) {
         await tx.$queryRaw(Prisma.sql `SELECT id FROM "AiScreeningSession" WHERE id=${id} FOR UPDATE`);
-        const row = await tx.aiScreeningSession.findUniqueOrThrow({ where: { id }, include: { questions: { orderBy: { position: 'asc' } } } });
+        const row = await tx.aiScreeningSession.findUniqueOrThrow({ where: { id }, include: { package: { select: { conversationPolicy: true } }, questions: { orderBy: { position: 'asc' } } } });
         if (row.profileId !== profileId)
             throw new NotFoundException();
         if (clientId && (row.leaseToken !== clientId || !row.leaseExpiresAt || row.leaseExpiresAt <= new Date()))
@@ -211,7 +217,7 @@ export class ScreeningSessions {
                 throw new ConflictException('Pertanyaan sudah berganti.');
             if (!q.shownAt) {
                 const now = new Date();
-                await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { shownAt: now, deadlineAt: answerDeadline(now) } });
+                await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { shownAt: now, deadlineAt: answerDeadline(now, conversationPolicy(session.package?.conversationPolicy)) } });
             }
         });
         return this.state(user, id);

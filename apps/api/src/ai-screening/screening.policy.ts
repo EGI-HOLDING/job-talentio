@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
+import { CURRENT_CONVERSATION, type ConversationPolicy } from './conversation.policy';
 export const SCREENING_PROMPT_VERSION = 'tara-cv-claims-v3.0.0';
 export const SCREENING_RANKING_VERSION = 'tara-cv-claims-composite-v3';
 export const PDF_TEMPLATE_VERSION = 'tara-report-v3';
-export const QUESTION_SECONDS = 60;
-export const MAX_CORE = 5;
-export const MAX_FOLLOW_UP = 10;
-export const MAX_PROBES_PER_ROOT = 2;
+export const QUESTION_SECONDS = CURRENT_CONVERSATION.questionSeconds;
+export const MAX_CORE = CURRENT_CONVERSATION.maxCore;
+export const MAX_FOLLOW_UP = CURRENT_CONVERSATION.maxFollowUp;
+export const MAX_PROBES_PER_ROOT = CURRENT_CONVERSATION.maxPerRoot;
 export const MAX_ANSWER_CHARS = 1200;
 export const SESSION_LEASE_MS = 20000;
 export const WORK_LEASE_MS = 90000;
@@ -26,14 +27,14 @@ export function scoreScreening(rows: Array<{
 export function combineScores(cv: number | null, screening: number | null): number | null {
     return cv !== null && screening !== null && Number.isFinite(cv) && Number.isFinite(screening) ? Math.round((cv + screening) * 5) / 10 : null;
 }
-export function answerDeadline(shownAt: Date) { return new Date(shownAt.getTime() + QUESTION_SECONDS * 1000); }
+export function answerDeadline(shownAt: Date, policy: ConversationPolicy = CURRENT_CONVERSATION) { return new Date(shownAt.getTime() + policy.questionSeconds * 1000); }
 export function isExpired(deadline: Date | null, now = new Date()) { return Boolean(deadline && deadline <= now); }
 export function canProbe(questions: Array<{
     kind: string;
     rootQuestionId?: string | null;
-}>, rootId: string) {
-    return questions.filter(q => q.kind === 'FOLLOW_UP').length < MAX_FOLLOW_UP &&
-        questions.filter(q => q.kind === 'FOLLOW_UP' && q.rootQuestionId === rootId).length < MAX_PROBES_PER_ROOT;
+}>, rootId: string, policy: ConversationPolicy = CURRENT_CONVERSATION) {
+    return questions.filter(q => q.kind === 'FOLLOW_UP').length < policy.maxFollowUp &&
+        questions.filter(q => q.kind === 'FOLLOW_UP' && q.rootQuestionId === rootId).length < policy.maxPerRoot;
 }
 export type RankedScreening = {
     id: string;
@@ -54,14 +55,16 @@ export type ProbeQuestion = {
     depth: number;
     probeClosed: boolean;
 };
-export function nextProbeTarget(questions: ProbeQuestion[]) {
-    if (questions.filter(q => q.kind === 'FOLLOW_UP').length >= MAX_FOLLOW_UP)
+export function nextProbeTarget(questions: ProbeQuestion[], policy: ConversationPolicy = CURRENT_CONVERSATION) {
+    if (questions.some(q => q.answer === null) || questions.filter(q => q.kind === 'FOLLOW_UP').length >= policy.maxFollowUp)
         return null;
-    for (const root of questions.filter(q => q.kind === 'CORE').sort((a, b) => a.position - b.position)) {
+    const roots = questions.filter(q => q.kind === 'CORE').sort((a, b) => a.position - b.position);
+    if (policy.probeOrder === 'breadth-first') roots.sort((a, b) => questions.filter(q => q.rootQuestionId === a.id).length - questions.filter(q => q.rootQuestionId === b.id).length || a.position - b.position);
+    for (const root of roots) {
         if (root.probeClosed || !root.answer?.trim())
             continue;
         const children = questions.filter(q => q.rootQuestionId === root.id).sort((a, b) => a.depth - b.depth);
-        if (children.length >= MAX_PROBES_PER_ROOT)
+        if (children.length >= policy.maxPerRoot)
             continue;
         const parent = children.at(-1) ?? root;
         if (!parent.answer?.trim())

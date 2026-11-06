@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizedText } from './screening.policy';
+import { CURRENT_CONVERSATION, type ConversationPolicy } from './conversation.policy';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
 export const answerSchema = leaseSchema.extend({ questionId: z.string().min(1), answer: z.string().max(1200) }).strict();
@@ -77,6 +78,7 @@ export type AnswerSource = {
 };
 export type JsonSchema = {
     maxLength?: number;
+    pattern?: string;
     maxItems?: number;
     type?: string;
     properties?: Record<string, JsonSchema>;
@@ -94,6 +96,14 @@ const evidence = obj({ questionId: str, quote: str });
 const sourceQuote = obj({ source: { type: 'string', enum: ['CV', 'ANSWER'] }, ref: str, quote: str });
 export const PACKAGE_SCHEMA = obj({ context: str, criteria: arr(obj({ id: str, name: str, requirementRef: str, anchors: arr(str) })) });
 export const CANDIDATE_SCHEMA = obj({ claims: arr(obj({ id: str, criterionId: str, statement: str, quote: str, lineStart: integer, lineEnd: integer, question: str })), limitations: arr(str) });
+export function conversationSchemas(policy: ConversationPolicy) {
+    const question: JsonSchema = { type: 'string', maxLength: policy.maxCharacters, pattern: `^[^\\s:]+(?:[ \\t]+[^\\s:]+){0,${policy.maxWords - 1}}$` };
+    const candidate = structuredClone(CANDIDATE_SCHEMA);
+    candidate.properties!.claims.maxItems = policy.maxCore;
+    candidate.properties!.claims.items!.properties!.question = question;
+    candidate.properties!.limitations.maxItems = 3;
+    return { candidate, followUp: obj({ stop: { type: 'boolean' }, question: nullable(question) }) };
+}
 export const FOLLOW_UP_SCHEMA = obj({ stop: { type: 'boolean' }, question: nullable(str) });
 export const EVALUATION_SCHEMA = obj({ summary: str, strengths: arr(str), gaps: arr(str), interviewQuestions: arr(str),
     criteria: arr(obj({ criterionId: str, score: nullable({ type: 'integer', enum: [0, 1, 2, 3, 4] }), reason: str, evidence: arr(evidence) })),
@@ -114,6 +124,7 @@ export function assertSchema(schema: JsonSchema, value: unknown, path = 'result'
     }
     if (schema.enum && !schema.enum.includes(value))
         throw new Error('Invalid ' + path);
+    if (typeof value === 'string' && schema.pattern && !new RegExp(schema.pattern, 'u').test(value)) throw new Error('Invalid ' + path);
     if (typeof value === 'string' && schema.maxLength !== undefined && value.length > schema.maxLength) throw new Error('Too long ' + path);
     if (Array.isArray(value) && schema.maxItems !== undefined && value.length > schema.maxItems) throw new Error('Too many ' + path);
     if (schema.type === 'null') {
@@ -145,7 +156,15 @@ export function assertSchema(schema: JsonSchema, value: unknown, path = 'result'
         throw new Error('Invalid ' + path);
 }
 const idOk = (id: string) => /^[a-z0-9_-]{1,40}$/.test(id);
-export function validQuestion(text: string) { return text.trim().length >= 12 && text.length <= 360 && !/sesi\s*[12]|session\s*[12]/i.test(text) && (text.match(/\?/g) || []).length <= 1; }
+function questionEmojiCount(text: string) {
+    const segments = new Intl.Segmenter('id', { granularity: 'grapheme' }).segment(text);
+    return [...segments].filter(({ segment }) => /\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3/u.test(segment)).length;
+}
+export function validQuestion(text: string, policy?: ConversationPolicy) {
+    const modern = policy?.probeOrder === 'breadth-first';
+    if (modern && (text.includes(':') || /[\r\n]/.test(text) || /^\s*(?:[-*•]|\d+[.)])/.test(text) || text.trim().split(/\s+/u).length > policy.maxWords || questionEmojiCount(text) > 1 || /(?:gue|gw) (?:gak|nggak|ga|tidak) percaya|pembohong|lu bohong|ngaku aja|pasti lolos|skor lu|nilai lu/i.test(text))) return false;
+    return text.trim().length >= 12 && (modern ? [...text].length : text.length) <= (policy?.maxCharacters ?? 360) && !/sesi\s*[12]|session\s*[12]/i.test(text) && (text.match(/\?/g) || []).length <= 1;
+}
 export function validatePackage(value: unknown, requirements?: string): PackagePayload {
     assertSchema(PACKAGE_SCHEMA, value);
     const p = value as PackagePayload;
@@ -159,13 +178,13 @@ export function validatePackage(value: unknown, requirements?: string): PackageP
     }
     return p;
 }
-export function validateCandidate(value: unknown, p: PackagePayload, cvText: string): CandidatePayload {
+export function validateCandidate(value: unknown, p: PackagePayload, cvText: string, policy: ConversationPolicy = CURRENT_CONVERSATION): CandidatePayload {
     assertSchema(CANDIDATE_SCHEMA, value);
     const plan = structuredClone(value) as CandidatePayload, lines = cvText.split('\n');
-    if (plan.claims.length < 1 || plan.claims.length > 5 || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
+    if (plan.claims.length < 1 || plan.claims.length > policy.maxCore || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
         throw new Error('Invalid candidate plan');
     for (const c of plan.claims) {
-        if (!idOk(c.id) || !p.criteria.some(x => x.id === c.criterionId) || !c.statement.trim() || c.statement.length > 300 || !c.quote.trim() || c.quote.length > 500 || !validQuestion(c.question))
+        if (!idOk(c.id) || !p.criteria.some(x => x.id === c.criterionId) || !c.statement.trim() || c.statement.length > 300 || !c.quote.trim() || c.quote.length > 500 || !validQuestion(c.question, policy))
             throw new Error('Invalid CV claim');
         if (c.lineStart < 1 || c.lineEnd < c.lineStart || c.lineEnd > lines.length || !lines.slice(c.lineStart - 1, c.lineEnd).join('\n').includes(c.quote)) {
             // PDF line wrapping is not a factual difference. Resolve only a unique
@@ -188,10 +207,10 @@ export function validateCandidate(value: unknown, p: PackagePayload, cvText: str
     }
     return plan;
 }
-export function validateFollowUp(value: unknown): FollowUpPayload {
+export function validateFollowUp(value: unknown, policy: ConversationPolicy = CURRENT_CONVERSATION): FollowUpPayload {
     assertSchema(FOLLOW_UP_SCHEMA, value);
     const f = value as FollowUpPayload;
-    if (f.stop && f.question !== null || !f.stop && (!f.question || !validQuestion(f.question)))
+    if (f.stop && f.question !== null || !f.stop && (!f.question || !validQuestion(f.question, policy)))
         throw new Error('Invalid follow-up');
     return f;
 }
