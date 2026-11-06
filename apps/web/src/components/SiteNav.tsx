@@ -13,6 +13,7 @@ import { authRoleFrom } from '@/lib/authReturn';
 import { preferredCompany, rememberCompany } from './recruiter/RecruiterPrimitives';
 import { WorkspaceIcon } from './employee/WorkspaceIcon';
 import { allowEmployerContextChange } from './recruiter/useEmployerUnsaved';
+import { useHrFlowContext } from './recruiter/HrFlowPresentation';
 
 type Notif = {
   id: string;
@@ -32,6 +33,7 @@ const AUDIENCE_LABELS: Record<Locale, { group: string; seekers: string; employer
 };
 
 function SiteNavContent() {
+  const hrCompany = useHrFlowContext();
   const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
@@ -162,6 +164,7 @@ function SiteNavContent() {
   const companyHref = '/dashboard/recruiter?tab=company' + (activeCompany ? '&company=' + encodeURIComponent(activeCompany.companyId) : '');
 
   const isOnboarding = pathname.startsWith('/onboarding/');
+  const hrFlow = hrCompany !== null || process.env.NEXT_PUBLIC_HR_CREATION_V2 === 'true' && pathname === '/onboarding/recruiter';
   const isRecruiter = session?.user.role === 'RECRUITER';
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const isJobs = pathname === '/jobs' || pathname.startsWith('/jobs/');
@@ -192,19 +195,21 @@ function SiteNavContent() {
         : null;
 
   return (
-    <div ref={navWrapRef} className={`nav-wrap ${isLanding ? styles.landing : ''} ${isDiscovery ? styles.jobs : ''} ${isEmployee ? styles.employee : ''} ${isRecruiter ? styles.recruiter : ''}`}>
+    <div ref={navWrapRef} data-hr-header={hrFlow || undefined} className={`nav-wrap ${hrFlow ? styles.hrFlow : ''} ${isLanding ? styles.landing : ''} ${isDiscovery ? styles.jobs : ''} ${isEmployee ? styles.employee : ''} ${isRecruiter ? styles.recruiter : ''}`}>
       <nav className={`nav shell ${isLanding ? styles.landingNav : ''}`}>
         <div className={isLanding ? styles.primary : undefined}>
         <Link href={isRecruiter ? '/dashboard/recruiter?tab=jobs' : isEmployee ? '/jobs' : isEmployerContext ? '/employers' : '/'} className={`brand ${styles.logoLink} ${isLanding ? styles.brand : ''} ${(isRecruiter || isEmployerContext) && !isEmployee ? styles.employerBrand : ''}`}>
           <img className={styles.logo} src="/brand/talentio-logo.webp" alt="Talentio" />{(isRecruiter || isEmployerContext) && !isEmployee && <small>{t('employers.badge')}</small>}
         </Link>
-        {isLanding && (
+        {hrFlow && <span className={styles.hrCompany}><WorkspaceIcon kind="building"/><span>{hrCompany || activeCompany?.company.name || t('employers.badge')}</span></span>}
+        {isLanding && !hrFlow && (
           <div className={styles.browse}>
             {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={(isRecruiter ? recruiterActive[index] : isEmployee ? [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'][index] : !isEmployerContext && [isJobs, isCompanies, isInsights][index]) ? 'page' : undefined}>{t(key)}</Link>)}
           </div>
         )}
         </div>
         <div className={`nav-links ${isLanding ? styles.landingLinks : ''} ${isLanding && session ? styles.signedIn : ''}`}>
+          {hrFlow && <Link className={styles.hrHelp} href={'/dashboard/recruiter/support' + (activeCompany ? '?company=' + encodeURIComponent(activeCompany.companyId) : '')}><span aria-hidden="true">ⓘ</span>{t('hr.support')}</Link>}
           {!isLanding && <><Link href="/jobs">{t('jobs')}</Link>{dash && <Link href={dash}>{t('dashboard')}</Link>}</>}
           {!isLanding && <Link href="/news">{t('news')}</Link>}
           {isLanding && !session && <div className={styles.audienceToggle} role="group" aria-label={AUDIENCE_LABELS[locale].group}>
@@ -229,7 +234,7 @@ function SiteNavContent() {
                 setLangOpen((v) => !v);
               }}
             >
-              {isOnboarding && locale === 'id' ? 'Indonesia' : LOCALE_LABELS[locale]}
+              {hrFlow ? <><span className={styles.hrLanguageFlag} data-locale={locale} aria-hidden="true"/>{LOCALE_LABELS[locale]}</> : isOnboarding && locale === 'id' ? 'Indonesia' : LOCALE_LABELS[locale]}
             </button>
             {langOpen && (
               <div
@@ -332,7 +337,7 @@ function SiteNavContent() {
               {isEmployee || isRecruiter ? <div className={styles.account} ref={accountRef}>
                 <button ref={accountButtonRef} type="button" className={styles.accountButton} aria-label={t('workspace.accountMenu')} aria-expanded={accountOpen} aria-controls="workspace-account-menu" onClick={() => { setAccountOpen((value) => !value); setOpen(false); setLangOpen(false); }}>
                   {session.user.avatarUrl ? <img className="avatar" src={session.user.avatarUrl} alt="" /> : <span className={styles.initial}>{session.user.fullName.charAt(0)}</span>}
-                  <span className={styles.accountName}>{isRecruiter && activeCompany ? activeCompany.company.name : session.user.fullName.split(' ')[0]}</span>{isRecruiter && (!session.user.email || session.user.emailVerified === false) && <i className={styles.accountAttention} title={t(session.user.email ? 'emailUnverifiedBadge' : 'addEmailTitle')} />}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                  <span className={styles.accountName}>{!hrFlow && isRecruiter && activeCompany ? activeCompany.company.name : session.user.fullName.split(' ')[0]}</span>{isRecruiter && (!session.user.email || session.user.emailVerified === false) && <i className={styles.accountAttention} title={t(session.user.email ? 'emailUnverifiedBadge' : 'addEmailTitle')} />}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                 </button>
                 {accountOpen && <div id="workspace-account-menu" className={styles.accountMenu}>
                   <div className={styles.accountIdentity}><strong>{session.user.fullName}</strong><span>{session.user.email}</span>{isRecruiter && (!session.user.email || session.user.emailVerified === false) && <Link className={styles.verificationLink} href="/settings?role=RECRUITER"><i />{t(session.user.email ? 'emailUnverifiedBadge' : 'addEmailTitle')}<WorkspaceIcon kind="right" /></Link>}</div>

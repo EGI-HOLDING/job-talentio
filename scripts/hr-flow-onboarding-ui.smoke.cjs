@@ -16,6 +16,7 @@ test('legacy onboarding keeps its job and checkout after editing company, and co
   '@/components/recruiter/HrCreationFlow':{HrCreationFlow:stub,HrFlowHeader:stub},
   '@/components/recruiter/RecruiterJobEditorV2':{RecruiterJobEditorV2:Editor},
   '@/components/recruiter/useEmployerUnsaved':{useEmployerUnsaved(){}},
+  '@/components/recruiter/HrFlowPresentation':{useHrFlowSurface(){},HrIcon:stub,HrIntroIllustration:stub},
  },{document:{addEventListener(){},removeEventListener(){}},window:{scrollTo(){}}});
  let tree=await ui.render({});assert.equal(tree.type,Editor);assert.equal(tree.props.job.id,'existing-job');
  tree.props.onClose();tree=await ui.render();const form=nodes(tree,n=>n.type==='form')[0];

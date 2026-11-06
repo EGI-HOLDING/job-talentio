@@ -1,4 +1,19 @@
 .landing { border-bottom-color: transparent; background: rgba(255, 255, 255, .96); }
+.hrFlow { background:#fff; border-bottom:1px solid #e1e2ef; }
+.hrFlow.landing .landingNav { width:min(1440px,calc(100% - 64px)); min-height:80px; padding:14px 0; }
+.hrFlow .primary { gap:28px; min-width:0; }
+.hrFlow .employerBrand small { display:none; }
+.hrFlow .logo { width:164px; }
+.hrCompany { display:flex; gap:12px; align-items:center; padding-left:28px; border-left:1px solid #d5d5e6; color:#171536; font-size:15px; font-weight:650; min-width:0; }
+.hrCompany > span { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hrHelp { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+.hrHelp > span { font-size:22px; }
+.hrFlow :global(.lang-switch) { padding:0 20px; border-left:1px solid #dedeea; border-right:1px solid #dedeea; }
+.hrFlow :global(.lang-switch .chip) { display:flex; align-items:center; gap:9px; border:0; background:transparent; font-weight:600; padding:6px 0; }
+.hrLanguageFlag[data-locale=id] { width:25px; height:17px; border-radius:3px; background:linear-gradient(#ef233c 50%,#fff 50%); box-shadow:0 0 0 1px #e6e6ec; }
+.hrFlow .menuButton { display:none; }
+@media(max-width:1000px) { .hrFlow .hrHelp { display:none; } .hrCompany > span { max-width:190px; } .hrFlow.landing .landingLinks { gap:14px; } }
+@media(max-width:760px) { .hrFlow.landing .landingNav { width:calc(100% - 32px); min-height:68px; gap:12px; } .hrFlow .logo { width:127px; } .hrFlow .hrCompany { display:none; } .hrFlow :global(.lang-switch) { padding:0 8px; border:0; } .hrFlow.landing .landingLinks { gap:8px; } .hrFlow .accountName { display:none; } }
 .landing .landingNav { width: min(1560px, calc(100% - 3rem)); padding: 1.15rem 0; min-height: 80px; gap: 1.75rem; }
 .primary { display: flex; align-items: center; gap: clamp(1.5rem, 4vw, 4rem); }
 .logoLink { display: inline-flex; align-items: center; flex: 0 0 auto; }

@@ -2,6 +2,9 @@
 .root:has([data-job-editor]) { flex:0 0 auto; min-height:100%; overflow:visible; background:#f7f8fc; }
 .root:has([data-job-editor]) > .context { display:none; }
 .root:has([data-job-editor]) > .body { flex:0 0 auto; overflow:visible; }
+.root:has([data-hr-surface]) { flex:0 0 auto; min-height:100%; overflow:visible; background:#f5f5fc; }
+.root:has([data-hr-surface]) > .context { display:none; }
+.root:has([data-hr-surface]) > .body { flex:0 0 auto; overflow:visible; }
 .root *, .editor *, .drawer * { box-sizing:border-box; }
 .root button, .editor button, .drawer button { font:inherit; }
 .root button:focus-visible, .root a:focus-visible, .editor button:focus-visible { outline:2px solid #a48cf2; outline-offset:3px; }
