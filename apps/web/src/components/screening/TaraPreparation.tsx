@@ -7,7 +7,17 @@ export type Preparation = { status: 'WAITING_CV' | 'PROCESSING' | 'READY' | 'FAI
 export function TaraRunner({ hero = false, progress, small = false }: { hero?: boolean; progress?: number; small?: boolean }) {
     const { t } = useI18n();
     const value = progress === undefined ? undefined : Math.min(100, Math.max(0, progress));
-    return <div className={`${s.track} ${hero ? s.heroTrack : ''} ${small ? s.smallTrack : ''}`} role={value === undefined ? undefined : 'progressbar'} aria-label={value === undefined ? undefined : t('uploading')} aria-valuenow={value} aria-valuemin={value === undefined ? undefined : 0} aria-valuemax={value === undefined ? undefined : 100} aria-hidden={value === undefined ? true : undefined}><span aria-hidden="true" className={s.runner} data-determinate={value !== undefined} style={value === undefined ? undefined : { left: value + '%', transform: `translateX(-${value}%)` } as CSSProperties}><span className={s.highlight}/><span className={s.sprite} data-tara="runner"/></span></div>;
+    const position = value === undefined ? undefined : { left: value + '%', transform: `translateX(-${value}%)` } as CSSProperties;
+    return <div className={`${s.track} ${hero ? s.heroTrack : ''} ${small ? s.smallTrack : ''}`} role={value === undefined ? undefined : 'progressbar'} aria-label={value === undefined ? undefined : t('uploading')} aria-valuenow={value} aria-valuemin={value === undefined ? undefined : 0} aria-valuemax={value === undefined ? undefined : 100} aria-hidden={value === undefined ? true : undefined} data-tara-track>
+        <span className={s.highlightClip} aria-hidden="true" data-tara-highlight-clip>
+            <span className={s.highlightPosition} data-determinate={value !== undefined} style={position}>
+                <span className={s.highlight} data-tara-highlight/>
+            </span>
+        </span>
+        <span aria-hidden="true" className={s.runner} data-determinate={value !== undefined} style={position}>
+            <span className={s.sprite} data-tara="runner"/>
+        </span>
+    </div>;
 }
 export function TaraPreparation({ preparation, variant = 'compact', rules = false, onRetry, onChangeCv, busy = false }: {
     preparation: Preparation; variant?: 'compact' | 'waiting'; rules?: boolean; onRetry: () => void; onChangeCv: () => void; busy?: boolean;
