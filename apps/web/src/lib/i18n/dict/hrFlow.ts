@@ -1,5 +1,6 @@
 /** Indonesia HR flow; English is also the fallback for other UI languages. */
 const english:Record<string,string>={
+ "Tambah":"Add",
  "1 lowongan":"1 job",
  "Anda akan diarahkan ke Midtrans untuk menyelesaikan pembayaran.":"You will be redirected to Midtrans to complete payment.",
  "Belum dipilih":"Not selected",

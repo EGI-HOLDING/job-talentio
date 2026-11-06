@@ -1,6 +1,7 @@
 'use client';
 import { useId, useLayoutEffect, useSyncExternalStore } from 'react';
-import type { CSSProperties } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties } from 'react';
+import s from './HrFlow.module.css';
 
 // Presentation only. Nested onboarding/creation screens restore their parent context.
 const surfaces = new Map<string, string>();
@@ -17,8 +18,13 @@ export function useHrFlowSurface(companyName = '') {
 }
 export function useHrFlowContext() { return useSyncExternalStore(subscribe, snapshot, () => null); }
 
-export function HrIcon({ kind, size = 20, style }: { kind: 'building'|'upload'|'file'|'image'|'check'|'arrow'|'back'|'info'|'chevron'|'briefcase'|'shield'; size?: number; style?: CSSProperties }) {
+export function HrAddItemButton({ children, fullWidth=false, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {fullWidth?:boolean}) {
+  return <button {...props} type="button" className={fullWidth?s.addRow:s.addItem} data-hr-add-item><HrIcon kind="plus" size={16}/><span>{children}</span></button>;
+}
+
+export function HrIcon({ kind, size = 20, style }: { kind: 'building'|'upload'|'file'|'image'|'check'|'arrow'|'back'|'info'|'chevron'|'briefcase'|'shield'|'plus'; size?: number; style?: CSSProperties }) {
   const paths: Record<string, React.ReactNode> = {
+    plus: <path d="M12 5v14M5 12h14"/>,
     building: <><path d="M4 21V5l9-2v18M13 9h7v12M2 21h20M7 7h2M7 11h2M7 15h2M16 12h1M16 16h1M8 21v-3"/></>,
     upload: <><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></>,
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8M8 17h6"/></>,
