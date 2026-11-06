@@ -1,6 +1,4 @@
-export const employeePositionPreferencesEnabled =
-  process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3 === 'true' ||
-  process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3_PREFERENCES === 'true';
+export const employeePositionPreferencesEnabled = true;
 
 export function positionPreferenceNames(profile: {
   desiredRoles?: Array<{ jobTitle: { name: string } }>;

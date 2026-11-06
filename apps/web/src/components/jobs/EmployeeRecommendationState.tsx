@@ -17,7 +17,7 @@ export function EmployeeMatchReasons({ insights }: {
 }) {
     const m = useEmployeeIntentText();
     if(insights?.mode==='EXPLORATION')return null;
-    if (insights?.version !== 'employee-intent-v3')
+    if (insights?.version !== 'employee-intent-v3.2')
         return null;
     const relevant = insights.evidence.filter(e => (e.status === 'MET' && ['ROLE', 'SKILL', 'EXPERIENCE'].includes(e.kind)) || e.code==='TRANSFERABLE_EXPERIENCE');
     const fit=insights.practicalFit;

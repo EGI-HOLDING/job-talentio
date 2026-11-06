@@ -30,20 +30,6 @@ type RecommendedItem = {
   job: RecommendedJob;matchInsights?:MatchInsights;
 };
 
-type ProfileSignal = {
-  headline?: string | null;
-  desiredPosition?: string | null;
-  skills?: unknown[];
-  experiences?: Array<{ title?: string | null }>;
-};
-
-function hasMatchSignal(profile: ProfileSignal | null): boolean {
-  if (!profile) return false;
-  if ((profile.skills?.length ?? 0) > 0) return true;
-  if (profile.headline?.trim() || profile.desiredPosition?.trim()) return true;
-  return (profile.experiences ?? []).some((row) => Boolean(row.title?.trim()));
-}
-
 const HOME_FOR_YOU_LIMIT = 6;
 
 export function ForYouJobsSection() {
@@ -52,23 +38,10 @@ export function ForYouJobsSection() {
   const identity=useSessionIdentity();
   const active=!!identity&&getSession()?.user.role==='EMPLOYEE';
   const feed=useApiResource<{items:RecommendedItem[];salaryUnverifiedTotal?:number;practicalPolicy?:{active:boolean;countryFilterApplied:boolean};mode?:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6':null);
-  const me=useApiResource<ProfileSignal>(active&&process.env.NEXT_PUBLIC_EMPLOYEE_INTENT_V3!=='true'?'/profiles/me':null);
   const items=feed.data?.items.slice(0,HOME_FOR_YOU_LIMIT)||[];
   const recommendationState=feed.data?.state||(feed.error?'UNAVAILABLE':undefined);
-  const profile=me.data||null;
   const ready=!feed.loading;
-  useMatchingStatus(recommendationState==='CV_PROCESSING'||feed.data?.evidenceState==='PROCESSING',()=>{void feed.reload().catch(()=>{});void me.reload().catch(()=>{});});
-  const emptyCopy = hasMatchSignal(profile) ? (
-    <>
-      {t('emp.recommendedEmptyNoOverlap')}{' '}
-      <Link href="/jobs">{t('jobs')}</Link>
-    </>
-  ) : (
-    <>
-      {t('emp.recommendedEmpty')}{' '}
-      <Link href="/dashboard/employee?tab=profile">{t('profile')}</Link>
-    </>
-  );
+  useMatchingStatus(recommendationState==='CV_PROCESSING'||feed.data?.evidenceState==='PROCESSING',()=>{void feed.reload().catch(()=>{});});
 
   return (
     <ExploreSection
@@ -83,7 +56,7 @@ export function ForYouJobsSection() {
       {!ready ? (
         <div className="muted" style={{ minHeight: '2.5rem' }} />
       ) : recommendationState&&recommendationState!=='READY' ? (<EmployeeRecommendationNotice state={recommendationState} evidenceState={feed.data?.evidenceState} emptyReason={feed.data?.emptyReason} preferenceWarnings={feed.data?.preferenceWarnings}/>) : items.length === 0 ? (
-        <p className="muted">{emptyCopy}</p>
+        <EmployeeRecommendationNotice state="NO_ELIGIBLE_JOBS"/>
       ) : (
         <div className="grid-2">
           {items.map((item) => {

@@ -386,15 +386,6 @@ export class MatchingService {
     return this.recruiter.forProfiles(profiles,jobPostId);
   }
 
-  async scoreJobsForProfile(profileId: string, jobIds: string[]) {
-    const [profile, jobs] = await Promise.all([
-      this.prisma.employeeProfile.findUniqueOrThrow({ where: { id: profileId }, include: this.scoringProfileInclude }),
-      this.prisma.jobPost.findMany({ where: { id: { in: jobIds } }, include: this.scoringJobInclude }),
-    ]);
-    const source=withCvFacts(profile,profile.resumes[0]?.currentVersion);
-    return new Map(jobs.map(job => [job.id, this.compute(source, job)]));
-  }
-
   compute(profile: MatchProfile, job: MatchJob): MatchBreakdown {
     const matchedSkills: string[] = [];
     const missingRequiredSkills: string[] = [];

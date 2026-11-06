@@ -900,7 +900,7 @@ async function main() {
     const translation = new TranslationService(db, config, new NoopTranslationProvider(), null);
     const companies = new CompaniesService(db, storage, translation, new MailService(config), config, search);
     const matching = new MatchingService(db);
-    const employeeMatching = new EmployeeMatchingService(db, matching);
+    const employeeMatching = new EmployeeMatchingService(db);
     const notifications = new NotificationsService(db);
     const telegram = new TelegramService(db, config, notifications, employeeMatching);
     const onboarding = new RecruiterOnboardingService(db, benefits);

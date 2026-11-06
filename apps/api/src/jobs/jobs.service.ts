@@ -33,8 +33,7 @@ import { MatchingService } from '../matching/matching.service';
 import { EmployeeMatchingService } from '../matching/employee-matching.service';
 import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
 import { publicEmployeeEvaluation } from '../matching/employee-public-evaluation';
-import { employeeRecommendationV32Enabled } from '../matching/employee-recommendation-policy';
-import { employeeIntentMode, intentJobScope } from '../matching/employee-intent.service';
+import { intentJobScope } from '../matching/employee-intent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify, parseDto } from '../common/utils';
@@ -696,7 +695,7 @@ export class JobsService {
         throw new ConflictException('Job changed. Refresh and try again.');
       }
       if (status === 'PUBLISHED') {
-        if (employeeRecommendationV32Enabled() || ['enabled','shadow'].includes(employeeIntentMode())) {
+        if (true) {
           await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock_shared(742159744)`);
           const role=current.jobTitleId?await tx.jobTitle.findUnique({where:{id:current.jobTitleId},select:currentRoleSelect}):null;
           if(!currentRoleIdentity(role)&&current.positionEntryMode!=='MANUAL')throw new BadRequestException('Select a reviewed position from the catalog before publishing');
@@ -1124,9 +1123,7 @@ export class JobsService {
     });
     if (!profile) return null;
     try {
-      if(this.employeeMatching.usesIntent(profile.id))return await this.employeeMatching.intentExplanation(profile.id,jobPostId);
-      const evaluation = await this.employeeMatching.forJob(profile.id, jobPostId);
-      return evaluation ? { matchScore:evaluation.score, matchInsights:evaluation.insights } : null;
+      return await this.employeeMatching.intentExplanation(profile.id,jobPostId);
     } catch {
       return null;
     }
@@ -1688,7 +1685,7 @@ export class JobsService {
     let emptyReason:import('@job-talentio/shared').EmployeeEmptyReason|undefined;
     if(intentScope&&total===0){
       emptyReason=intentScope.state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':intentScope.state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS';
-      if(intentScope.v32&&intentScope.state==='READY'){
+      if(intentScope.state==='READY'){
         const active=await this.prisma.jobPost.count({where:{AND:and.map(clause=>clause===intentFilter?intentJobScope(intentScope):clause)}});
         if(active)emptyReason='ALL_APPLIED';
         if(intentScope.practicalEnabled&&intentScope.practicalSelection?.roleCandidateCount&&!intentScope.practicalSelection.mainIds.length)emptyReason='PRACTICAL_PREFERENCES';
@@ -1769,8 +1766,8 @@ export class JobsService {
     const profile = await this.prisma.employeeProfile.findUnique({
       where: { userId: user.id },
     });
-    if (!profile) return page ? { items:[],page:1,limit,total:0,totalPages:1,mode:'LATEST' } : [];
-    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit,feed).catch(error=>{if(employeeRecommendationV32Enabled())throw new ServiceUnavailableException('Recommendations temporarily unavailable');throw error;});
+    if (!profile) return page ? { items:[],page:1,limit,total:0,totalPages:1,mode:'UNAVAILABLE',state:'PREFERENCES_REQUIRED',version:'employee-intent-v3.2' } : [];
+    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit,feed).catch(error=>{throw new ServiceUnavailableException('Recommendations temporarily unavailable');});
     const items = result.items.map((row) => ({
       ...row,
       job: maskAnonymousCompany(this.withResolvedIcons(row.job), locale),

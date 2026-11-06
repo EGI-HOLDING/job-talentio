@@ -36,7 +36,6 @@ import {
 import { parseDto } from '../common/utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchRateLimitGuard } from '../rate-limit/search-rate-limit.guard';
-import { employeeIntentMode,employeeIntentSelected } from '../matching/employee-intent.service';
 
 function assertLocale(value: string): Locale {
   if (!isLocale(value)) throw new BadRequestException('Unsupported locale');
@@ -62,14 +61,11 @@ export class JobsController {
     if (user?.role === 'EMPLOYEE') {
       const profile = await this.prisma.employeeProfile.findUnique({
         where: { userId: user.id },
-        select: {
-          id: true,
-          resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},select:{currentVersion:{select:{parseStatus:true}}}},
-        },
+        select: { id: true },
       });
-      if(!profile&&data.sort==='match'&&['enabled','unavailable','shadow'].includes(employeeIntentMode()))return {items:[],total:0,matchedTotal:0,truncated:false,page:1,limit:data.limit??12,totalPages:1,sort:'match',state:'PREFERENCES_REQUIRED',facets:{cities:[],categories:[],jobTitles:[],companies:[],industries:[],skills:[],languages:[],experienceLevels:{}}};
-      // CV readiness gates scores; preferences alone must not claim a CV match.
-      if (profile && (profile.resumes.some(r=>r.currentVersion?.parseStatus==='READY') || employeeIntentMode()==='unavailable' || employeeIntentMode()==='shadow' || employeeIntentMode()==='enabled'&&employeeIntentSelected(profile.id))) {
+      if(!profile&&data.sort==='match')return {items:[],total:0,matchedTotal:0,truncated:false,page:1,limit:data.limit??12,totalPages:1,sort:'match',state:'PREFERENCES_REQUIRED',facets:{cities:[],categories:[],jobTitles:[],companies:[],industries:[],skills:[],languages:[],experienceLevels:{}}};
+      // V3.2 handles CV readiness as evidence metadata; it never selects an older engine.
+      if (profile) {
         profileId = profile.id;
       }
     }

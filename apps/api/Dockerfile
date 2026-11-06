@@ -13,6 +13,9 @@ RUN pnpm --filter @job-talentio/api prisma:generate
 RUN pnpm --filter @job-talentio/api build
 # Fail the image build if Nest emitted the wrong layout (e.g. dist/src/main.js).
 RUN test -f /app/apps/api/dist/main.js
+RUN test ! -e /app/apps/api/dist/matching/employee-boost-placement.js && test ! -e /app/apps/api/dist/matching/employee-quality-gate.js && test ! -e /app/apps/api/dist/matching/employee-recommendation-policy.js
+RUN node -e "if(require('/app/packages/shared/dist').EMPLOYEE_INTENT_VERSION!=='employee-intent-v3.2') process.exit(1)"
+RUN node -e "const x=require('/app/apps/api/dist/matching/employee-matching'); if(x.evaluateEmployee||x.rankEmployeeJobs||x.EMPLOYEE_MATCH_VERSION) process.exit(1)"
 RUN test -f /app/apps/api/dist/scripts/backfill-job-titles.js
 RUN test -f /app/apps/api/dist/scripts/backfill-geo.js
 RUN test -f /app/apps/api/dist/scripts/catalog-sync.js
