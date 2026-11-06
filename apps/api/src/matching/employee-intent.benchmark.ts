@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { EMPLOYEE_INTENT_VERSION, EMPLOYEE_INTENT_RANKING_VERSION, EMPLOYEE_PROFESSIONAL_WEIGHTS } from '@job-talentio/shared';
+import { EMPLOYEE_INTENT_VERSION, EMPLOYEE_RELATED_RANKING_VERSION, EMPLOYEE_PROFESSIONAL_WEIGHTS } from '@job-talentio/shared';
 import { EmployeeOccupationIndex, type IntentRole } from './employee-occupation';
 import { parseEmployeeEvidence, EMPLOYEE_EVIDENCE_PARSER, type IntentFacts } from './employee-intent-evidence';
 import { evaluateIntent, compareIntent, type IntentJob, type IntentPreferences } from './employee-intent';
@@ -43,7 +43,7 @@ export function makeEmployeeBenchmark() {
         }
         return { id: `profile:${role}:${scenario}`, family: occupation[2], scenario, split: (role + n) % 2 === 0 ? 'tuning' : 'evaluation', cv, preferences, facts };
     }));
-    return { version: EMPLOYEE_INTENT_VERSION, rankingVersion: EMPLOYEE_INTENT_RANKING_VERSION, weights: EMPLOYEE_PROFESSIONAL_WEIGHTS, parserVersion: EMPLOYEE_EVIDENCE_PARSER, catalog: [...benchmarkRoles, ...benchmarkNeighbors], profiles, jobs };
+    return { version: EMPLOYEE_INTENT_VERSION, rankingVersion: EMPLOYEE_RELATED_RANKING_VERSION, weights: EMPLOYEE_PROFESSIONAL_WEIGHTS, parserVersion: EMPLOYEE_EVIDENCE_PARSER, catalog: [...benchmarkRoles, ...benchmarkNeighbors], profiles, jobs };
 }
 export function benchmarkRank(preferences: IntentPreferences, facts: IntentFacts, jobs: IntentJob[]) { return jobs.map(job => ({ job, evaluation: evaluateIntent(preferences, facts, job, benchmarkIndex, new Date('2026-11-03')) })).filter(row => row.evaluation.eligibility.eligible).sort((a, b) => compareIntent(a.evaluation, b.evaluation) || (b.job.publishedAt?.getTime() ?? 0) - (a.job.publishedAt?.getTime() ?? 0) || a.job.id.localeCompare(b.job.id)).map(row => row.job.id); }
 export function evaluateHumanLabels(dataset: ReturnType<typeof makeEmployeeBenchmark>, labels: {

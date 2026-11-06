@@ -93,7 +93,7 @@ async function main(){
  const anotherRole={...yearsJob,jobTitleId:benchmarkRoles[1].id,title:benchmarkRoles[1].name};
  check(evaluateIntent({...preferences,selectedIds:[benchmarkRoles[1].id]},currentCareer,anotherRole,benchmarkIndex,now,undefined,true,careerCache).insights.evidence.some(row=>row.kind==='EXPERIENCE'&&row.status==='UNKNOWN'),'another canonical profession cannot inherit experience');
  process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED='false';
- check(evaluateIntent(preferences,seniorFacts,seniorJob,benchmarkIndex,now).score<100,'legacy mode retains baseline formula');
+ check(evaluateIntent(preferences,seniorFacts,seniorJob,benchmarkIndex,now).score===100,'stale experience flag cannot restore the retired seniority penalty');
  process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED='true';
  const dataset=makeEmployeeBenchmark();
  for(const profile of dataset.profiles){

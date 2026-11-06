@@ -40,7 +40,7 @@ async function main(){
    const onboarding=new RecruiterOnboardingService(adapter,benefits);
    const legacy=new MatchingService(adapter);
    const intent=new EmployeeIntentService(adapter);
-   const employee=new EmployeeMatchingService(adapter,legacy,intent);
+   const employee=new EmployeeMatchingService(adapter,intent);
    const jobs=new JobsService(adapter,companies,legacy,{} as any,search,{} as any,employee,benefits,undefined,undefined,onboarding);
    const meta=new MetaService(adapter);
    const tag='catalog-test-'+randomUUID();
@@ -136,7 +136,7 @@ async function main(){
    check((await tx.jobPost.findUniqueOrThrow({where:{id:frozen.id}})).seniorityYearsMin===5,'catalog activation cannot rewrite existing snapshot');
    await jobs.update(actor,frozen.id,{seniorityLevelCode:'L4'});check((await tx.jobPost.findUniqueOrThrow({where:{id:frozen.id}})).seniorityYearsMin===6,'explicit reselect takes active mapping');
    // Candidate cache context: use the same real services for recommendations and detail.
-   process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE='enabled';process.env.EMPLOYEE_PRACTICAL_POLICY_ENABLED='false';
+
    const candidate=await tx.user.create({data:{fullName:'Matching fixture',employeeProfile:{create:{desiredRoles:{create:roles.slice(0,5).map(row=>({jobTitleId:row.id}))},matchingPreferencesReviewed:true}}},include:{employeeProfile:true}});
    const profileId=candidate.employeeProfile!.id;
    const context=await intent.context(profileId);

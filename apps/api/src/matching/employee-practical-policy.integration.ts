@@ -10,8 +10,8 @@ import type { CandidateCache } from '../common/candidate-cache';
 
 async function main(){
   const url=new URL(process.env.DATABASE_URL??'');
-  assert.ok(['localhost','127.0.0.1'].includes(url.hostname)&&url.port==='5434'&&url.pathname==='/talentio_mapping_local_20261103','Prepared local copy only');
-  process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE='enabled';
+  assert.ok(['localhost','127.0.0.1'].includes(url.hostname)&&url.port==='5434'&&['/talentio_mapping_local_20261103','/talentio_business_catalog_20261105'].includes(url.pathname),'Prepared local copy only');
+
   const db=new PrismaService(),prefix='practical-it-'+Date.now(),profileId=prefix+'-profile',userId=prefix+'-user',companyId=prefix+'-company';
   const memory=new Map<string,Promise<unknown>>();let computations=0;
   const cache={version:async()=> 'test-epoch',ranked:async(key:unknown,load:()=>Promise<unknown>)=>{const k=JSON.stringify(key);if(!memory.has(k)){computations++;memory.set(k,load());}return memory.get(k);}} as unknown as CandidateCache;
@@ -26,9 +26,9 @@ async function main(){
     await db.user.create({data:{id:userId,email:prefix+'@example.test',fullName:'Integration',role:'EMPLOYEE',employeeProfile:{create:{id:profileId,matchingPreferencesReviewed:true,desiredRoles:{create:roles.map(jobTitleId=>({jobTitleId}))}}}}});
     const create=(suffix:string,role:number,extra:any={})=>db.jobPost.create({data:{id:prefix+'-'+suffix,title:suffix,jobTitleId:roles[role],companyId,description:'Integration responsibilities',status:'PUBLISHED',publishedAt:new Date(),countryId:home,currency:'IDR',salaryPeriod:'MONTHLY',salaryMin:200,salaryMax:300,...extra}});
     const [a,b,unknown,wrong,low]=await Promise.all([create('main-a',0),create('main-b',1),create('unknown',2,{salaryMin:null,salaryMax:null}),create('abroad',3,{countryId:abroad}),create('below',4,{salaryMin:100,salaryMax:200})]);
-    process.env.EMPLOYEE_PRACTICAL_POLICY_ENABLED='false';
+
     let started=performance.now();const baseline=await service.recommend(profileId,1,1000);report.baselineMs=performance.now()-started;
-    process.env.EMPLOYEE_PRACTICAL_POLICY_ENABLED='true';
+
     const noFilters=await service.recommend(profileId,1,1000);
     assert.deepEqual(noFilters.items.map(r=>r.job.id),baseline.items.map(r=>r.job.id),'No active filters preserve existing IDs and order');
     await db.employeeProfile.update({where:{id:profileId},data:{residenceCountryId:home,desiredSalaryMin:'257.50',desiredSalaryCurrency:'IDR',desiredSalaryPeriod:'MONTHLY'}});

@@ -9,7 +9,7 @@ async function main(){
  const db=new PrismaService(),prefix='profession-it-',memo=new Map<string,unknown>();let epoch=0,passed=0;const check=(v:unknown,m:string)=>{assert.ok(v,m);passed++;};
  const cache={version:async()=>String(epoch),memo:async(k:string,_ttl:number,f:()=>Promise<unknown>)=>{if(!memo.has(k))memo.set(k,await f());return memo.get(k);},invalidate:async()=>{epoch++;memo.clear();}} as any;
  const relations=new OccupationRelationsService(db,cache),catalog=new EmployeeCatalogSnapshot(db,cache,relations),matching=new EmployeeIntentService(db,catalog);
- process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE='enabled';
+
  const state=await db.occupationRelationState.findUniqueOrThrow({where:{id:'employee'}});const active=state.activeReleaseId!;
  try{
   check((await relations.build(false)).unchanged,'same inputs do not publish duplicate relation releases');

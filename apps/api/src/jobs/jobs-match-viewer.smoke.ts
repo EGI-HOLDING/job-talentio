@@ -18,15 +18,14 @@ async function main() {
     const profile = Object.assign({ id: 'profile',resumes:[], desiredPositions: [], desiredPosition: null, headline: null, experiences: [], _count: { skills: 0 } }, fields);
     const controller = new JobsController({ search: async (query: unknown) => { received = query; return query; } } as never, {
       employeeProfile: { findUnique: async (args: any) => {
-        assert.equal(args.select.resumes.where.isPrimary, true);
-        assert.equal(args.select.resumes.select.currentVersion.select.parseStatus, true);
+        assert.equal(args.select.id, true);
         return profile;
       } },
     } as never);
     await controller.search({ sort: 'match' }, { headers: {} } as never, { id: 'employee', role: 'EMPLOYEE' } as never);
-    assert.equal(received.profileId, hasSignal ? 'profile' : undefined);
-    assert.equal(received.sort, hasSignal ? 'match' : 'relevance');
+    assert.equal(received.profileId, 'profile');
+    assert.equal(received.sort, 'match');
   }
-  console.log('PASS: job list matching uses the primary CV; pending/failed CVs and manual career fields cannot produce a match badge');
+  console.log('PASS: Best Match always reaches V3.2; CV readiness never falls back to relevance or another engine');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

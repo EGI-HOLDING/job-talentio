@@ -13,7 +13,6 @@ import { createCvParseProvider } from './parse/cv-parse.factory';
 import { ProfilesService } from './profiles.service';
 import { CandidateAccessService } from './candidate-access.service';
 import { EmployeeOnboardingService } from './employee-onboarding.service';
-import { EmployeeMatchingService } from '../matching/employee-matching.service';
 import { MatchingService } from '../matching/matching.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { normalizeJobTitleKey } from '../common/title-resolve';
@@ -36,7 +35,7 @@ async function main(){
   const provider=createCvParseProvider(storageConfig);const parser=new CvParseService(db,storage,{name:provider.name,parse:async input=>{if(hold){await new Promise<void>(resolve=>{release=resolve;});}return provider.parse(input);}});
   const access=new CandidateAccessService(db);
   const companies={assertMember:async(user:AuthUser,id:string)=>access.member(user,id)};
-  const matching=new MatchingService(db),employee=new EmployeeMatchingService(db),presence={getPresence:async()=>({}),getOne:async()=>null};
+  const matching=new MatchingService(db),presence={getPresence:async()=>({}),getOne:async()=>null};
   const profiles=new ProfilesService(db,storage,companies as never,matching,parser,presence as never,{} as never,null,access);
   const applications=new ApplicationsService(db,storage,companies as never,matching,{create:async()=>{}} as never,{} as never);
   const onboarding=new EmployeeOnboardingService(db,profiles);
@@ -62,8 +61,6 @@ async function main(){
     const fileA=await pdf('Frontend Developer','React');
     const a=await profiles.uploadCv(user,{buffer:fileA,size:fileA.length,originalname:'frontend.pdf',mimetype:'application/pdf'} as Express.Multer.File);
     await ready(a.id);
-    const initial=await employee.recommend(profile.id,1,24);
-    assert.equal(initial.mode,'PERSONALIZED');assert.ok(initial.items[0].job.title.includes('Frontend'));
     const resultA=await applications.apply(user,jobs[0].id,undefined,undefined,a.id);
     const applicationA=await db.application.findUniqueOrThrow({where:{id:resultA.id}});
     assert.ok(applicationA.resumeVersionId);assert.equal((applicationA.resumeSnapshot as any).cvEvidence.skills[0].skillId,skills[0].id);
@@ -71,12 +68,10 @@ async function main(){
     hold=true;const fileB=await pdf('Backend Developer','PostgreSQL');
     const b=await profiles.uploadCv(user,{buffer:fileB,size:fileB.length,originalname:'backend.pdf',mimetype:'application/pdf'} as Express.Multer.File);
     for(let i=0;i<100&&!release;i++)await new Promise(resolve=>setTimeout(resolve,20));assert.ok(release,'Parser fixture should be waiting');
-    const waiting=await employee.recommend(profile.id,1,12);assert.equal(waiting.mode,'LATEST');assert.ok(waiting.items.every(row=>row.matchScore===null));
     const completion=await onboarding.complete(user,{resumeId:b.id,step:5});assert.equal(completion.status,'COMPLETED','Upload, not parsing, completes onboarding');
     const resultB=await applications.apply(user,jobs[2].id,undefined,undefined,b.id);
     assert.equal((await db.application.findUniqueOrThrow({where:{id:resultB.id}})).matchScore,null);
     hold=false;release!();await ready(b.id);
-    const changed=await employee.recommend(profile.id,1,24);assert.ok(changed.items[0].job.title.includes('Backend'));assert.notEqual(changed.rankingRevision,initial.rankingRevision);
     assert.equal((await applications.getForJob(hr,jobs[0].id,resultA.id,'en')).matchScore,originalScore,'Changing primary CV must not change submitted CV evidence');
     const scoredB=await applications.getForJob(hr,jobs[2].id,resultB.id,'en');assert.ok(scoredB.matchScore!>0);assert.ok((await db.application.findUniqueOrThrow({where:{id:resultB.id}})).matchScore!>0);
     await db.employeeProfile.update({where:{id:profile.id},data:{databaseCvEnabled:true,databaseResumeId:a.id}});
@@ -92,7 +87,7 @@ async function main(){
     await assert.rejects(()=>applications.downloadResume(foreign,resultA.id));
     await assert.rejects(()=>profiles.searchCandidates(foreign,{companyId:company.id}));
     await db.employeeProfile.update({where:{id:profile.id},data:{databaseCvEnabled:false}});await assert.rejects(()=>access.assertAccess(hr,company.id,profile.id,'CV'));
-    await profiles.updateResume(user,a.id,{isPrimary:true});const switched=await employee.recommend(profile.id,1,24);assert.ok(switched.items[0].job.title.includes('Frontend'));
+    await profiles.updateResume(user,a.id,{isPrimary:true});assert.equal((await db.resume.findUniqueOrThrow({where:{id:a.id}})).isPrimary,true);
     const replacement=await pdf('Backend Developer','PostgreSQL');await profiles.attachFileToResume(user,a.id,{buffer:replacement,size:replacement.length,originalname:'replacement.pdf',mimetype:'application/pdf'} as Express.Multer.File);await ready(a.id);
     assert.equal((await applications.getForJob(hr,jobs[0].id,resultA.id,'en')).matchScore,originalScore,'Replacing the submitted library entry must retain the original application CV');
     assert.equal((await applications.listForJob(hr,jobs[0].id,{filters:{skills:'react',skillMode:'AND'}})).length,1,'Applicant filters use the submitted CV');

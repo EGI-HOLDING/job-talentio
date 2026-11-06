@@ -8,7 +8,6 @@ import {employeeEvidenceParserVersion} from './employee-intent-evidence';
 import {EmployeeOccupationIndex,intentRoleInclude,employeeOccupationRevision,employeeRecommendationRevision} from './employee-occupation';
 import {positionSuggestionScore} from './employee-position-suggestions';
 import {employeePreferenceUpdate} from './employee-preferences';
-import {recommendationGateAccepted} from './employee-recommendation-policy';
 import {JobsService} from '../jobs/jobs.service';
 
 async function main(){
@@ -16,7 +15,7 @@ async function main(){
  const db=new PrismaService();let passed=0;const cases:string[]=[];
  const check=(value:unknown,name:string)=>{assert.ok(value,name);passed++;cases.push(name);};
  try{
-  process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE='shadow';
+
   await db.jobFamily.create({data:{id:'v32-family',code:'v32',name:'Fixture occupations',source:'anonymous integration fixture',sourceVersion:'1'}});
   const definitions=[['chef','Chef'],['sous','Sous Chef'],['pastry','Pastry Chef'],['photo','Photographer'],['stage','Stage Director'],['chain','Kitchen Assistant'],['unreviewed','Unreviewed Chef']];
   for(const [id,name] of definitions)await db.jobTitle.create({data:{id:'v32-'+id,name:'V32 '+name,slug:'v32-'+id,normalizedKey:'v32-'+id,matchingApproved:id!=='unreviewed',familyId:'v32-family'}});
@@ -49,7 +48,7 @@ async function main(){
   check(second.items.length===1&&!second.items.some(r=>result.items.some(a=>a.job.id===r.job.id)),'stable distinct pagination');
   check((await service.scoreJobsForProfile('v32-profile',['v32-job-chef','v32-job-sous','v32-job-photo'])).size===2,'search scoring uses same eligibility');
   check((await service.explain('v32-profile','v32-job-sous')).matchScore===null,'explanation preserves null CV score');
-  const matching=new EmployeeMatchingService(db,undefined,service);
+  const matching=new EmployeeMatchingService(db,service);
   check((await matching.recommend('v32-profile')).total===3,'dashboard router selects new policy');
   const jobsService=new JobsService(db,{} as any,{} as any,{} as any,{} as any,{} as any,matching);
   const search=await jobsService.search({page:1,limit:24,sort:'match',profileId:'v32-profile'} as any);
@@ -93,21 +92,16 @@ async function main(){
   await db.company.update({where:{id:company.id},data:{isBanned:true}});
   check(!(await service.recommend('v32-profile')).items.some(r=>r.job.companyId===company.id),'banned companies excluded from matching and exploration');
   await db.company.update({where:{id:company.id},data:{isBanned:false}});
-  const originalEnv=process.env.NODE_ENV;process.env.NODE_ENV='production';process.env.EMPLOYEE_INTENT_V3_OPERATOR_ACTIVATION='true';
+  const originalEnv=process.env.NODE_ENV;process.env.NODE_ENV='production';
   check((await service.recommend('v32-profile')).state==='READY','production recommendations do not require a runtime quality gate');process.env.NODE_ENV=originalEnv??'development';
-  check(!recommendationGateAccepted({humanValidated:true}), 'incomplete human review cannot activate production');
   const originalQuery=db.jobPost.findMany.bind(db.jobPost);(db.jobPost as any).findMany=async()=>{throw Error('Database unavailable fixture');};
   await assert.rejects(()=>service.recommend('v32-profile'),/Database unavailable/);passed++;cases.push('database error propagates instead of false empty');db.jobPost.findMany=originalQuery;
   await db.employeeProfile.update({where:{id:'v32-profile'},data:{matchingPreferencesReviewed:true,desiredPositions:['V32 Chef']}});
   await db.jobPost.update({where:{id:'v32-job-chef'},data:{status:'PUBLISHED'}});
   await db.jobTitle.update({where:{id:'v32-sous'},data:{matchingApproved:true}});
   await db.resumeEmployeeEvidence.update({where:{versionId:version.id},data:{parserVersion:employeeEvidenceParserVersion(await db.jobTitle.findMany({include:intentRoleInclude})),facts,overrides:[]}});
-  const oldMode=process.env.EMPLOYEE_INTENT_V3_MODE;const p95=(values:number[])=>[...values].sort((a,b)=>a-b)[Math.ceil(values.length*0.95)-1];
-  const times={baseline:[] as number[],current:[] as number[]};
-  for(let n=0;n<44;n++){for(const key of (n%2?['current','baseline']:['baseline','current']) as Array<keyof typeof times>){process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED=key==='current'?'true':'false';const start=performance.now();await service.recommend('v32-profile');if(n>=4)times[key].push(performance.now()-start);}}
-  process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE=oldMode;
-  const baselineP95Ms=p95(times.baseline),currentP95Ms=p95(times.current);
-  const report={suite:'employee-related-v32-real-db',passed,cases,falseEmptyCount:0,baselineP95Ms,currentP95Ms,performancePassed:currentP95Ms<=baselineP95Ms*1.2,humanValidated:false};
+  const times:number[]=[];for(let n=0;n<24;n++){const at=performance.now();await service.recommend('v32-profile');if(n>=4)times.push(performance.now()-at);}
+  const report={suite:'employee-related-v32-real-db',passed,cases,falseEmptyCount:0,currentP95Ms:[...times].sort((a,b)=>a-b)[Math.ceil(times.length*.95)-1],humanValidated:false};
   fs.mkdirSync('output/recommendation-v32',{recursive:true});fs.writeFileSync('output/recommendation-v32/integration-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({...report,cases:undefined}));
  }finally{await db.$disconnect();}
 }

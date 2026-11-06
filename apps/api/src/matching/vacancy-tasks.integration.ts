@@ -9,10 +9,10 @@ import { FEATURED_COMPANIES } from '../scripts/featured-company-carousel-manifes
 
 async function main() {
   const url=new URL(process.env.DATABASE_URL??'');
-  assert.ok(['127.0.0.1','localhost'].includes(url.hostname)&&url.port==='5434'&&url.pathname==='/talentio_mapping_local_20261103','Prepared local copy required');
-  process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';
-  process.env.EMPLOYEE_INTENT_V3_MODE='enabled';
-  process.env.EMPLOYEE_VACANCY_TASK_MODE='enabled';
+  assert.ok(['127.0.0.1','localhost'].includes(url.hostname)&&url.port==='5434'&&['/talentio_mapping_local_20261103','/talentio_business_catalog_20261105'].includes(url.pathname),'Prepared local copy required');
+
+
+
   const db=new PrismaService(), prefix='vacancy-it-'+Date.now()+'-';
   const companyId=prefix+'company', userId=prefix+'user', profileId=prefix+'profile';
   const relations=new OccupationRelationsService(db);

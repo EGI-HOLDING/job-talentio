@@ -8,7 +8,6 @@ import { candidateExperienceReference } from '../matching/employee-experience-po
 import { vacancyTaskText } from '../matching/vacancy-tasks';
 import { creationDraftSchema } from './hr-flow.controller';
 import { isDocxPackage } from './document-upload';
-import { evaluateEmployee,OccupationIndex } from '../matching/employee-matching';
 let assertions=0;
 const equal=(actual:unknown,expected:unknown)=>{assert.deepEqual(actual,expected);assertions++;};
 async function run(){
@@ -19,19 +18,6 @@ async function run(){
  const packageBytes=await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
  equal(isDocxPackage(packageBytes),true);equal(isDocxPackage(packageBytes.subarray(0,packageBytes.length-5)),false);
  const ordinaryZip=new Zip();ordinaryZip.file('other.txt','Not a Word document');equal(isDocxPackage(await ordinaryZip.generateAsync({type:'nodebuffer'})),false);
- const oldExperienceFlag=process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED;
- try{
-  const index=new OccupationIndex([{id:'role',name:'Developer',normalizedKey:'developer',aliases:[]}]);
-  const candidate={id:'fixture',headline:'Developer',skills:[],languages:[],experiences:[{title:'Developer',startDate:new Date('2010-01-01'),endDate:new Date('2025-01-01'),isCurrent:false}]};
-  const posting={id:'job',companyId:'company',title:'Developer',jobTitleId:'role',workMode:'REMOTE',jobSkills:[],jobLanguages:[],experienceYearsMin:50,seniorityLevelCode:'L6',seniorityVersion:'test',seniorityYearsMin:10,seniorityYearsMax:15,experienceRangeMin:3,experienceRangeMax:5,experienceRangeSource:'EMPLOYER_ADJUSTED'};
-  process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED='false';const legacy=evaluateEmployee(candidate,posting,index,new Date('2026-01-01'));
-  process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED='true';const active=evaluateEmployee(candidate,posting,index,new Date('2026-01-01'));
-  equal(active.positiveCore,legacy.positiveCore);equal(active.score>legacy.score,true);
-  const evidence=active.insights.evidence.find(e=>e.kind==='EXPERIENCE')!;equal(evidence.status,'MET');equal(evidence.required,false);equal(evidence.experienceReference?.source,'EMPLOYER_ADJUSTED');
-  const unknown=evaluateEmployee({...candidate,experiences:[]},posting,index);equal(unknown.insights.evidence.find(e=>e.kind==='EXPERIENCE')?.status,'UNKNOWN');equal(unknown.positiveCore,true);
-  equal(evaluateEmployee(candidate,{...posting,experienceRangeMax:50},index).score,active.score);
-  const unreviewed=evaluateEmployee(candidate,{...posting,positionEntryMode:'MANUAL',jobTitleId:null},index);equal(unreviewed.positiveCore,false);equal(unreviewed.score,0);
- }finally{if(oldExperienceFlag===undefined)delete process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED;else process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED=oldExperienceFlag;}
  for(const level of SENIORITY_LEVELS){
   const snapshot={seniorityLevelCode:level.code,seniorityYearsMin:level.yearsMin,seniorityYearsMax:level.yearsMax,seniorityVersion:level.version};
   const range=effectiveExperience({seniorityLevelCode:level.code},snapshot);

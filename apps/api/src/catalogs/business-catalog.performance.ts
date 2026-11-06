@@ -30,7 +30,7 @@ async function main(){
   const args=[db,{}, {},{},new ConfigService(),search] as const;
   const oldCompanies=new (legacy('companies.service.ts').CompaniesService)(...args);
   const companies=new CurrentCompanies(db as any,{} as any,{} as any,{} as any,new ConfigService(),search);
-  const matching=new MatchingService(db as any),employee=new EmployeeMatchingService(db as any,matching);
+  const matching=new MatchingService(db as any),employee=new EmployeeMatchingService(db as any);
   const jobArgs=[db,companies,matching,{},search,{},employee] as const;
   const oldJobs=new (legacy('jobs.service.ts').JobsService)(...jobArgs);
   const jobs=new CurrentJobs(db as any,companies,matching,{} as any,search,{} as any,employee,undefined,undefined,undefined,undefined,undefined,cache);
