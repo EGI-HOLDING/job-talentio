@@ -1,0 +1,210 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { PrismaClient,Prisma } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { MetaService } from '../meta/meta.service';
+import { CompaniesService } from '../companies/companies.service';
+import { JobsService } from '../jobs/jobs.service';
+import { MatchingService } from '../matching/matching.service';
+import { BenefitsService } from '../benefits/benefits.service';
+import { OperationsService } from '../benefits/operations.service';
+import { RecruiterOnboardingService } from '../benefits/recruiter-onboarding.service';
+import { EmployeeIntentService } from '../matching/employee-intent.service';
+import { EmployeeMatchingService } from '../matching/employee-matching.service';
+import { CandidateCache } from '../common/candidate-cache';
+import { INDUSTRY_GROUPS,SENIORITY_LEVELS } from './business-catalog.data';
+import { businessIndustryGroupIndex } from './business-catalog';
+import { installBusinessCatalog } from './business-catalog.backfill';
+import { employeeEvidenceParserVersion } from '../matching/employee-intent-evidence';
+import { employeeIntentJobSelect } from '../matching/employee-intent.service';
+import { employeeExperienceRevision } from '../matching/employee-experience-policy';
+import type { AuthUser } from '../common/auth.decorators';
+import { runBusinessCatalogHttp } from './business-catalog.http';
+import { AdminCatalogService } from '../admin/admin-catalog.service';
+
+async function main(){
+ const url=new URL(process.env.DATABASE_URL||'');
+ assert.ok(['localhost','127.0.0.1'].includes(url.hostname)&&url.port==='5434'&&url.pathname==='/talentio_business_catalog_20261105','isolated local database only');
+ const db=new PrismaClient();let assertions=0;const metrics:Record<string,unknown>={};let cache:CandidateCache|undefined;
+ const check=(value:unknown,message:string)=>{assert.ok(value,message);assertions++;};
+ try{
+  const before=await db.businessIndustryGroup.count();await installBusinessCatalog(db,false);await installBusinessCatalog(db,false);
+  check(before===29&&await db.businessIndustryGroup.count()===29&&await db.seniorityLevel.count()===14,'idempotent catalog install');
+  await db.$transaction(async tx=>{
+   const adapter=new Proxy(tx,{get(target,key){if(key==='$transaction')return (fn:Function)=>fn(tx);return (target as any)[key];}}) as any;
+   const search:any={rankedIds:async()=>null,syncJob:async()=>{},enabled:false};
+   const companies=new CompaniesService(adapter,{} as any,{} as any,{} as any,new ConfigService(),search);
+   const benefits=new BenefitsService(adapter,new OperationsService(adapter));
+   const onboarding=new RecruiterOnboardingService(adapter,benefits);
+   const legacy=new MatchingService(adapter);
+   const intent=new EmployeeIntentService(adapter);
+   const employee=new EmployeeMatchingService(adapter,legacy,intent);
+   const jobs=new JobsService(adapter,companies,legacy,{} as any,search,{} as any,employee,benefits,undefined,undefined,onboarding);
+   const meta=new MetaService(adapter);
+   const tag='catalog-test-'+randomUUID();
+   const user=await tx.user.create({data:{fullName:'Catalog test recruiter',role:'RECRUITER'}});
+   const actor:AuthUser={id:user.id,email:null,fullName:user.fullName,role:'RECRUITER',isBanned:false};
+   const other=await tx.user.create({data:{fullName:'Unrelated recruiter',role:'RECRUITER'}});
+   const outsider:AuthUser={id:other.id,email:null,fullName:other.fullName,role:'RECRUITER',isBanned:false};
+   const roles=await tx.jobTitle.findMany({where:{archivedAt:null,matchingApproved:true,canonicalRoleId:null,familyId:{not:null}},orderBy:{id:'asc'},take:10});
+   check(roles.length>=5,'fixtures use real canonical catalog without modifying it');
+   const country=await tx.country.findFirstOrThrow({where:{isActive:true}});
+   const city=await tx.city.findFirstOrThrow({where:{archivedAt:null,kind:'CITY',province:{country:{isActive:true}}},include:{province:true}});
+   const companyIds:string[]=[];const jobIds:string[]=[];
+   for(const group of INDUSTRY_GROUPS){
+    const company=await tx.company.create({data:{name:`${tag} ${group.code}`,slug:`${tag}-${group.code.toLowerCase()}`,industryGroupId:group.id,description:'A real-length description for catalog integration testing.',size:'SIZE_1_10',cityId:city.id,members:{create:{userId:user.id,role:'OWNER'}}}});
+    companyIds.push(company.id);
+    const job=await tx.jobPost.create({data:{companyId:company.id,jobTitleId:roles[0].id,title:roles[0].name,description:`${tag} published test ${group.code}`,status:'PUBLISHED',publishedAt:new Date(),workMode:'REMOTE',countryId:country.id}});
+    jobIds.push(job.id);
+   }
+   const metadata=await meta.industryGroups();check(metadata.groups.length===29,'all groups exposed');
+   const seniority=await meta.seniorityLevels();check(seniority.levels.length===14,'all levels exposed');
+   const legacyMeta=await meta.industries('1');check('groups' in legacyMeta&&legacyMeta.groups.length===4,'legacy metadata contract retains four groups');
+   check(Array.isArray(await meta.industries()),'legacy flat contract unchanged');
+   const unusedMapped=await tx.industry.findFirstOrThrow({where:{archivedAt:null,companies:{none:{}},businessMappings:{some:{}}}});
+   const admin=new AdminCatalogService(adapter);
+   const archived=await admin.archive('industry',unusedMapped.id);
+   check(archived.outcome==='archived'&&await tx.industryGroupMapping.count({where:{industryId:unusedMapped.id}})>0,'admin archives referenced mappings instead of breaking foreign keys');
+   const times:number[]=[];
+   for(const [i,group] of INDUSTRY_GROUPS.entries()){
+    for(const sort of ['jobs','name','featured'] as const){
+     const start=performance.now();const result=await companies.browse({q:tag,industryGroupCode:group.code,sort,page:1,limit:2});times.push(performance.now()-start);
+     check(result.total===1&&result.items[0]?.slug.endsWith(group.code.toLowerCase()),'directory group filter works with text search and every sort');
+     check(result.items[0]?.industryGroupId===group.id,'group-only company has a catalog reference without redundant joins');
+    }
+    const result=await jobs.search({company:tag,industryGroupCode:group.code,sort:'newest',page:1,limit:2});
+    check(result.total===1&&result.items[0]?.id===jobIds[i],'job group filter across all groups');
+    check(result.facets.industryGroups.length===1&&result.facets.industryGroups[0].count===1,'group facets counted before pagination');
+   }
+   times.sort((a,b)=>a-b);metrics.directoryP95Ms=times[Math.floor(times.length*.95)];
+   assertions+=await runBusinessCatalogHttp({db:adapter,meta,companies,jobs,onboarding,actor,outsider,companyId:companyIds[0],jobId:jobIds[0],tag});
+   const company=await tx.company.findUniqueOrThrow({where:{id:companyIds[3]}});
+   await tx.company.update({where:{id:company.id},data:{website:'https://example.com'}});
+   await companies.update(actor,company.id,{industryGroupCode:'TECHNOLOGY_DIGITAL'});
+   check((await tx.company.findUniqueOrThrow({where:{id:company.id}})).website==='https://example.com','industry-only patch preserves existing website');
+   check((await companies.get(company.id)).industryGroup?.code==='TECHNOLOGY_DIGITAL','company group change available on read');
+   await assert.rejects(companies.update(outsider,company.id,{industryGroupCode:'MANUFACTURING'}),/member/);assertions++;
+   await assert.rejects(companies.update(actor,company.id,{industrySlug:'does-not-exist'}),/INDUSTRY_UNAVAILABLE/);assertions++;
+   const it=await tx.industry.findFirstOrThrow({where:{slug:'it'}});
+   await companies.update(actor,company.id,{industrySlug:it.slug});
+   const classified=await tx.company.findUniqueOrThrow({where:{id:company.id}});
+   check(classified.industryId===it.id&&classified.industryGroupId?.endsWith('TECHNOLOGY_DIGITAL'),'legacy slug resolves group automatically');
+   await assert.rejects(companies.update(actor,company.id,{industryGroupCode:'MANUFACTURING'}),/CONFLICT/);assertions++;
+   const conflict=await tx.company.findUniqueOrThrow({where:{id:company.id}});check(conflict.industryGroupId===classified.industryGroupId&&conflict.industryId===it.id,'failed group change retains both fields');
+   await companies.update(actor,company.id,{industryGroupCode:'MANUFACTURING',industrySlug:''});
+   check((await tx.company.findUniqueOrThrow({where:{id:company.id}})).industryId===null,'explicit detail clearing');
+   const intersection=await companies.browse({q:tag,industryGroupCode:'MANUFACTURING',industrySlug:'it',sort:'featured',page:1,limit:10});check(intersection.total===0&&intersection.items.length===0,'group and detail intersection in SQL path');
+   await tx.recruiterOnboarding.create({data:{userId:other.id}});
+   await onboarding.save(outsider,{step:2,companyDraft:{name:tag+' onboarding',description:'This company chooses only a high-level industry group.',website:'',countryId:city.province.countryId,citySlug:city.slug,size:'SIZE_1_10',industryGroupCode:'MANUFACTURING'}});
+   const progress=await tx.recruiterOnboarding.findUniqueOrThrow({where:{userId:other.id}});
+   const onboarded=await onboarding.assertCompany(outsider,progress.companyId!);check(onboarded.industryId===null&&!!onboarded.industryGroupId,'group-only onboarding is publish-ready');
+   const unclassifiedLegacy=await tx.company.update({where:{id:companyIds[1]},data:{industryGroupId:null,industryId:(await tx.industry.findFirstOrThrow({where:{slug:'other'}})).id}});
+   await onboarding.assertCompany(actor,unclassifiedLegacy.id);assertions++;
+   const newJobs:string[]=[];
+   for(const level of SENIORITY_LEVELS){
+    const co=await tx.company.create({data:{name:`${tag} ${level.code}`,slug:`${tag}-${level.code.toLowerCase()}`,members:{create:{userId:user.id,role:'OWNER'}}}});
+    const created=await jobs.create(actor,co.id,{title:roles[1].name,jobTitleSlug:roles[1].slug,description:`${tag} automatic snapshot for ${level.code} with distinct responsibilities.`,workMode:'REMOTE',seniorityLevelCode:level.code});
+    check(created?.seniorityLevelCode===level.code&&created.seniorityYearsMin===level.yearsMin&&created.seniorityYearsMax===level.yearsMax,'job API creates server-owned range');
+    check(created?.experienceYearsMin===null,'HR legacy experience field not rewritten');
+    newJobs.push(created!.id);
+   }
+   const original=await tx.jobPost.findUniqueOrThrow({where:{id:newJobs[6]}});
+   await jobs.update(actor,original.id,{description:original.description+' Updated description.'});
+   const updated=await tx.jobPost.findUniqueOrThrow({where:{id:original.id}});
+   check(updated.seniorityVersion===original.seniorityVersion&&updated.seniorityYearsMin===original.seniorityYearsMin,'unrelated edit retains snapshot');
+   await assert.rejects(jobs.update(actor,original.id,{expectedUpdatedAt:original.updatedAt.toISOString(),seniorityLevelCode:'L1'}),/changed/);assertions++;
+   await assert.rejects(jobs.update(outsider,original.id,{seniorityLevelCode:'L1'}),/member/);assertions++;
+   await assert.rejects(jobs.update(actor,original.id,{experienceYearsMin:1}),/AUTOMATIC/);assertions++;
+   await jobs.update(actor,original.id,{seniorityLevelCode:'L1'});check((await tx.jobPost.findUniqueOrThrow({where:{id:original.id}})).seniorityYearsMin===0,'explicit seniority change refreshes range');
+   await jobs.update(actor,original.id,{seniorityLevelCode:null});const cleared=await tx.jobPost.findUniqueOrThrow({where:{id:original.id}});check(cleared.seniorityVersion===null&&cleared.seniorityYearsMin===null&&cleared.seniorityYearsMax===null,'clear snapshot atomically');
+   await jobs.update(actor,original.id,{experienceYearsMin:3});check((await tx.jobPost.findUniqueOrThrow({where:{id:original.id}})).experienceYearsMin===3,'legacy write remains supported after explicit clear');
+   // Savepoints recover PostgreSQL's aborted transaction after intentional DB failures.
+   const rejectSql=async(fn:()=>Promise<unknown>)=>{await tx.$executeRawUnsafe('SAVEPOINT expected_failure');await assert.rejects(fn);assertions++;await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT expected_failure');};
+   await rejectSql(()=>tx.industryTaxonomy.create({data:{version:'competing-version',active:true}}));
+   await rejectSql(()=>tx.seniorityCatalog.create({data:{version:'competing-version',active:true}}));
+   await rejectSql(()=>tx.jobPost.update({where:{id:newJobs[4]},data:{seniorityYearsMin:1}}));
+   await rejectSql(()=>tx.seniorityLevel.update({where:{code_version:{code:'L4',version:SENIORITY_LEVELS[0].version}},data:{yearsMin:1}}));
+   await rejectSql(()=>tx.company.update({where:{id:company.id},data:{industryId:it.id}}));
+   // Version upgrade preserves historical snapshots and unrelated edits.
+   const next='seniority-test-next';await tx.seniorityCatalog.updateMany({data:{active:false}});
+   await tx.seniorityCatalog.create({data:{version:next,active:true}});
+   await tx.seniorityLevel.create({data:{...SENIORITY_LEVELS[4],version:next,yearsMin:6,yearsMax:9}});
+   const frozen=await tx.jobPost.findUniqueOrThrow({where:{id:newJobs[4]}});
+   await jobs.update(actor,frozen.id,{description:frozen.description+' Second revision.'});
+   check((await tx.jobPost.findUniqueOrThrow({where:{id:frozen.id}})).seniorityYearsMin===5,'catalog activation cannot rewrite existing snapshot');
+   await jobs.update(actor,frozen.id,{seniorityLevelCode:'L4'});check((await tx.jobPost.findUniqueOrThrow({where:{id:frozen.id}})).seniorityYearsMin===6,'explicit reselect takes active mapping');
+   // Candidate cache context: use the same real services for recommendations and detail.
+   process.env.EMPLOYEE_RECOMMENDATION_V32_ENABLED='true';process.env.EMPLOYEE_INTENT_V3_MODE='enabled';process.env.EMPLOYEE_PRACTICAL_POLICY_ENABLED='false';
+   const candidate=await tx.user.create({data:{fullName:'Matching fixture',employeeProfile:{create:{desiredRoles:{create:roles.slice(0,5).map(row=>({jobTitleId:row.id}))},matchingPreferencesReviewed:true}}},include:{employeeProfile:true}});
+   const profileId=candidate.employeeProfile!.id;
+   const context=await intent.context(profileId);
+   const result=await intent.recommend(profileId,1,5,context);
+   check(result.state==='READY'&&result.items.length>0,'five choices work with no CV');
+   const page2=await intent.recommend(profileId,2,5,context);check(page2.items.every(row=>!result.items.some(first=>first.job.id===row.job.id)),'stable pagination');
+   const first=result.items[0];const detail=await intent.explain(profileId,first.job.id);check(detail.matchScore===first.matchScore&&detail.state==='READY','detail and list agree');
+   cache=new CandidateCache(new ConfigService({DATABASE_URL:url.toString(),REDIS_URL:process.env.REDIS_URL}));
+   await cache.invalidateAndWait();
+   let catalogReads=0;
+   const countedCatalog={$queryRaw:async()=>{catalogReads++;return[];}} as any;
+   await businessIndustryGroupIndex(countedCatalog,cache);await businessIndustryGroupIndex(countedCatalog,cache);
+   check(catalogReads===1,'group index is built once rather than per result');
+   await cache.invalidate();await businessIndustryGroupIndex(countedCatalog,cache);
+   check(catalogReads===1,'job mutations preserve the unchanged catalog index');
+   await cache.invalidate(true);await businessIndustryGroupIndex(countedCatalog,cache);
+   check(catalogReads===2,'catalog revision invalidates the shared group index');
+   const cachedIntent=new EmployeeIntentService(adapter,undefined,cache);
+   const warm=await cachedIntent.recommend(profileId,1,5);
+   assert.deepEqual(warm.items.map(row=>row.job.id),result.items.map(row=>row.job.id));assertions++;
+   const duplicates=await Promise.all([cachedIntent.recommend(profileId,1,5),cachedIntent.recommend(profileId,1,5)]);
+   assert.deepEqual(duplicates[0].rankingRevision,duplicates[1].rankingRevision);assertions++;
+   let loads=0;await Promise.all(Array.from({length:5},()=>cache!.ranked(['dedup',profileId],async()=>{loads++;return {ok:true};})));check(loads===1,'Redis/in-memory request deduplication');
+   const candidateResume=await tx.resume.create({data:{profileId,title:'Versioned evidence fixture',fileKey:`private/${tag}/cv`,isPrimary:true}});
+   const parserVersion=employeeEvidenceParserVersion((await cachedIntent.catalog()).roles);
+   const version=await tx.resumeVersion.create({data:{resumeId:candidateResume.id,fileKey:`private/${tag}/cv`,parseStatus:'READY',parseGeneration:1}});
+   await tx.resume.update({where:{id:candidateResume.id},data:{currentVersionId:version.id}});
+   await tx.resumeEmployeeEvidence.create({data:{versionId:version.id,parserVersion,status:'READY',generation:1,facts:{roles:[],skills:[],languages:[],experiences:[{key:'e',title:roles[0].name,jobTitleId:roles[0].id,startDate:'2010-01-01',endDate:'2025-01-01',isCurrent:false,seniority:'SENIOR',source:'CV',confirmed:false}]}}});
+   const ready=await cachedIntent.recommend(profileId,1,5);
+   check(ready.rankingRevision!==warm.rankingRevision&&ready.mode==='PERSONALIZED','new evidence changes cache revision');
+   const visible=(await cachedIntent.recommend(profileId,1,1000)).items.find(row=>row.job.id===jobIds[0])!;
+   check(!!visible,'owned fixture is present for cache mutation checks');
+   const beforeChange=await tx.jobPost.findUniqueOrThrow({where:{id:visible.job.id}});
+   await jobs.update(actor,visible.job.id,{seniorityLevelCode:'L4'});
+   const afterChange=await cachedIntent.recommend(profileId,1,1000);
+   const edited=afterChange.items.find(row=>row.job.id===visible.job.id);
+   check(edited?.matchInsights.evidence.some(row=>row.experienceReference?.source==='CATALOG_DERIVED'),'warm cache reranks revised seniority');
+   await tx.application.create({data:{profileId,jobPostId:visible.job.id}});
+   check(!(await cachedIntent.recommend(profileId,1,1000)).items.some(row=>row.job.id===visible.job.id),'applied job excluded from warm cache');
+   await tx.resume.update({where:{id:candidateResume.id},data:{isPrimary:false}});
+   const oldIndustry=await tx.company.findUniqueOrThrow({where:{id:companyIds[0]}});await companies.update(actor,oldIndustry.id,{industryGroupCode:'TECHNOLOGY_DIGITAL'});
+   const industryBaseline=await intent.recommend(profileId,1,5);
+   await companies.update(actor,oldIndustry.id,{industryGroupCode:'MANUFACTURING'});
+   const unchanged=await intent.recommend(profileId,1,5);assert.deepEqual(unchanged.items.map(row=>[row.job.id,row.matchScore]),industryBaseline.items.map(row=>[row.job.id,row.matchScore]));assertions++;
+   const revisions=[employeeExperienceRevision()];process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED='false';revisions.push(employeeExperienceRevision());check(revisions[0]!==revisions[1],'policy change versions cache');process.env.EMPLOYEE_EXPERIENCE_POLICY_ENABLED='true';
+   // Private data never escapes company filtering or anonymous posting facets.
+   await tx.jobPost.update({where:{id:jobIds[0]},data:{isAnonymous:true}});
+   const anon=await jobs.search({company:tag,industryGroupCode:'TECHNOLOGY_DIGITAL',sort:'newest',page:1,limit:50});check(anon.items.every(row=>row.id!==jobIds[0]),'anonymous employer cannot be inferred through group filters');
+   await cachedIntent.recommend(profileId,1,1000);
+   const cachedMeta=new MetaService(adapter,cache);
+   const countBeforeClose=(await cachedMeta.industryGroups()).groups.find(group=>group.code==='ENERGY_UTILITIES')!.companyCount;
+   await tx.jobPost.update({where:{id:jobIds[2]},data:{status:'CLOSED'}});
+   check(!(await cachedIntent.recommend(profileId,1,1000)).items.some(row=>row.job.id===jobIds[2]),'closed jobs disappear from warm cache');
+   await cache.invalidate();
+   check((await cachedMeta.industryGroups()).groups.find(group=>group.code==='ENERGY_UTILITIES')!.companyCount===countBeforeClose-1,'metadata cache invalidates public counts after closure');
+   const secondCache=new CandidateCache(new ConfigService({DATABASE_URL:url.toString(),REDIS_URL:process.env.REDIS_URL}));
+   try{
+    await secondCache.invalidateAndWait();
+    const secondMeta=new MetaService(adapter,secondCache);
+    const counts=await secondMeta.industryGroups();
+    await tx.jobPost.update({where:{id:jobIds[2]},data:{status:'PUBLISHED'}});await cache.invalidate();
+    check((await secondMeta.industryGroups()).groups.find(group=>group.code==='ENERGY_UTILITIES')!.companyCount===counts.groups.find(group=>group.code==='ENERGY_UTILITIES')!.companyCount+1,'Redis epoch refreshes metadata across process-local caches');
+   }finally{secondCache.onModuleDestroy();}
+   metrics.fixtureCompanies=companyIds.length;metrics.fixtureSeniorityJobs=newJobs.length;
+   throw Error('FIXTURES_ROLLBACK');
+  },{timeout:300000}).catch(error=>{if(error.message!=='FIXTURES_ROLLBACK')throw error;});
+  fs.mkdirSync('output/business-catalog',{recursive:true});fs.writeFileSync('output/business-catalog/integration.json',JSON.stringify({assertions,...metrics},null,2));
+  console.log(JSON.stringify({suite:'business-catalog-integration',assertions,...metrics,fixturesRolledBack:true}));
+ }finally{if(cache){await cache.invalidate();cache.onModuleDestroy();}await db.$disconnect();}
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

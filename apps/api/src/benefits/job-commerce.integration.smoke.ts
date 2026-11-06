@@ -120,6 +120,11 @@ async function main() {
     const candidateUsers = Array.from({length: 105}, (_, i) => ({id: 'recommendation-user-' + i, role: 'EMPLOYEE' as const, fullName: 'Qualified candidate ' + i}));
     await db.user.createMany({data: candidateUsers});
     await db.employeeProfile.createMany({data: candidateUsers.map((user, i) => ({id: 'recommendation-profile-' + i, userId: user.id, desiredPosition: job.title, desiredPositions: [job.title], visibility: 'PUBLIC' as const}))});
+    // Discovery has used submitted CV evidence since the CV-source refactor;
+    // profile preferences alone no longer make these fixtures qualified.
+    await db.resume.createMany({data:candidateUsers.map((_,i)=>({id:'commerce-cv-'+i,profileId:'recommendation-profile-'+i,title:'CV fixture',fileKey:'commerce-fixtures/'+i+'.pdf',isPrimary:true,parseStatus:'READY'}))});
+    await db.resumeVersion.createMany({data:candidateUsers.map((_,i)=>({id:'commerce-cv-version-'+i,resumeId:'commerce-cv-'+i,fileKey:'commerce-fixtures/'+i+'.pdf',parseStatus:'READY',matchingData:{headline:job.title,roleTitles:[job.title],skills:[],experiences:[],educations:[]}}))});
+    for(let i=0;i<candidateUsers.length;i++)await db.resume.update({where:{id:'commerce-cv-'+i},data:{currentVersionId:'commerce-cv-version-'+i}});
     const matching = new MatchingService(db), freeResults = await matching.recommendCandidates(job.id, 105);
     assert.equal(freeResults.length, 105); assert.ok(freeResults.every(row => row.matchBreakdown));
     assert.deepEqual(Object.keys(freeResults[0]).sort(), ['matchBreakdown', 'matchScore', 'profile']);
@@ -147,6 +152,8 @@ async function main() {
     const attempts = await Promise.allSettled([connected.paymentSession(hr, paymentOrder.id), connected.paymentSession(hr, paymentOrder.id)]);
     assert.ok(attempts.some(value => value.status === 'fulfilled')); assert.equal(checkoutCalls, 1);
     assert.equal((await connected.paymentSession(hr, paymentOrder.id)).reference, paymentOrder.id); assert.equal(checkoutCalls, 1);
+    await assert.rejects(()=>commerce.create(hr, {...input, jobId: fourth.id}, randomUUID()), /existing checkout/);
+    await connected.settle('synthetic-checkout',{orderId:paymentOrder.id,eventId:'cancel-'+paymentOrder.id,reference:paymentOrder.id,amount:paymentOrder.amount,currency:'IDR',status:'CANCELLED'});
     await commerce.create(hr, {...input, jobId: fourth.id}, randomUUID());
     await assert.rejects(() => connected.paymentSession(hr, paymentOrder.id), /cannot be paid/);
     assert.equal(checkoutCalls, 1);

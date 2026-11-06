@@ -40,6 +40,8 @@
     "test:monetization-removal": "tsx src/common/monetization-removal.smoke.ts",
     "test:recruiter-matching": "tsx src/matching/recruiter-matching.smoke.ts",
     "test:hr-ranking": "tsx src/matching/recruiter-ranking.smoke.ts",
+    "test:business-catalog": "tsx src/catalogs/business-catalog.smoke.ts",
+    "test:business-catalog:local": "node ../../scripts/business-catalog-run.cjs apps/api/src/catalogs/business-catalog.integration.ts",
     "test:hr-ranking:local": "node ../../scripts/hr-ranking-local.cjs",
     "hr-ranking:benchmark": "tsx src/matching/recruiter-ranking.benchmark.ts ../../output/hr-ranking-benchmark",
     "test:cv-source:local": "node ../../scripts/cv-source-local.smoke.cjs",
@@ -53,7 +55,10 @@
     "test:employee-related:local": "node ../../scripts/employee-related.integration.cjs",
     "matching:related:review": "tsx src/scripts/employee-related-review.ts",
     "test:profession-relations": "tsx src/matching/occupation-relations.smoke.ts && tsx src/matching/occupation-relations.source.smoke.ts && tsx src/matching/occupation-relations.local.smoke.ts",
-    "matching:professions": "tsx src/scripts/occupation-relations.ts"
+    "matching:professions": "tsx src/scripts/occupation-relations.ts",
+    "test:hr-flow": "tsx src/hr-flow/hr-flow.smoke.ts",
+    "test:hr-flow:local": "node ../../scripts/business-catalog-run.cjs apps/api/src/hr-flow/hr-flow.integration.ts",
+    "test:hr-flow:concurrency": "node ../../scripts/business-catalog-run.cjs apps/api/src/hr-flow/hr-flow.concurrency.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

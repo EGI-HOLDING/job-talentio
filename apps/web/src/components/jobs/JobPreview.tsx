@@ -1,4 +1,5 @@
 'use client';
+import { StructuredJobContent,jobExperienceLabel,type StructuredJobFields } from './StructuredJobContent';
 
 import type { ReactNode } from 'react';
 import { Link } from '@/lib/navigation';
@@ -17,6 +18,7 @@ type PreviewJob = {
   promotion?: JobPromotion | null;
   country?: { name: string } | null;
   id: string; title: string; description: string; contentLocale?: string | null;
+  responsibilities?:string[];kpis?:string[];specificExpectations?:string|null;locale?:string;seniorityLevelCode?:string|null;seniorityYearsMin?:number|null;seniorityYearsMax?:number|null;experienceRangeMin?:number|null;experienceRangeMax?:number|null;experienceRangeSource?:string|null;
   salaryMin?: number | null; salaryMax?: number | null; currency?: string | null;
   salaryPeriod?: string | null; workMode?: string; employmentType?: string; experienceLevel?: string | null;
   experienceYearsMin?: number | null; city?: { name: string } | null; category?: { name: string } | null;
@@ -70,7 +72,7 @@ export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs
       </div>
       <p className={s.previewSalary}>{formatJobSalary(job, locale, t)}</p>
       <dl className={s.facts}>
-        {(job.experienceLevel || job.experienceYearsMin != null) && <div><dt>{t('experience')}</dt><dd>{[enumLabel('experienceLevel', job.experienceLevel), job.experienceYearsMin != null ? t('job.yearsPreferred').replace('{n}', String(job.experienceYearsMin)) : ''].filter(Boolean).join(', ')}</dd></div>}
+        {(jobExperienceLabel(job)||job.experienceLevel || job.experienceYearsMin != null) && <div><dt>{t('experience')}</dt><dd>{jobExperienceLabel(job)?`${jobExperienceLabel(job)} ${t('years')}`:[enumLabel('experienceLevel', job.experienceLevel), job.experienceYearsMin != null ? t('job.yearsPreferred').replace('{n}', String(job.experienceYearsMin)) : ''].filter(Boolean).join(', ')}</dd></div>}
         {job.category && <div><dt>{t('category')}</dt><dd>{job.category.name}</dd></div>}
       </dl>
       {success && <p className={s.success} role="status">{success}</p>}
@@ -78,6 +80,7 @@ export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs
       <section className={s.description}><h3>{t('job.aboutTheRole')}</h3>
         <UgcText text={job.description} contentLocale={job.contentLocale} preserveLineBreaks />
       </section>
+      <StructuredJobContent job={job} className={s.detailSection}/>
       {!!job.jobSkills?.length && <section className={s.detailSection}><h3>{t('skills')}</h3><div className={s.tags}>{job.jobSkills.map((item, index) => <span key={index} title={item.isRequired ? t('workspace.required') : undefined}>{item.skill.name}{item.isRequired ? ' *' : ''}</span>)}</div></section>}
       {!!job.benefits?.length && <section className={s.detailSection}><h3>{t('benefits')}</h3><div className={s.tags}>{job.benefits.map((item, index) => <span key={index}>{item.benefit.name}</span>)}</div></section>}
       {!!job.jobLanguages?.filter(item=>item.provenance === 'EMPLOYER_CONFIRMED').length && <section className={s.detailSection}><h3>{t('languages')}</h3><div className={s.tags}>{job.jobLanguages.filter(item=>item.provenance === 'EMPLOYER_CONFIRMED').map((item, index) => <span key={index}>{item.language.name} {item.minLevel}+{item.isRequired ? ' *' : ''}</span>)}</div></section>}

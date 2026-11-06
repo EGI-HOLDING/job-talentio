@@ -17,6 +17,7 @@ uploads
 *.tsbuildinfo
 /reports/
 /output/
+/.codex-remote-attachments/
 /research/
 /tmp/tara-screening/
 /tmp/tara-*/

@@ -23,6 +23,7 @@ function editor(api, extra = {}) {
     '@/components/employee/WorkspaceIcon': {WorkspaceIcon: stub}, '@/components/employee/WorkspacePrimitives': {CompanyMark: stub},
     './ScreeningQuestionsEditor': {ScreeningQuestionsEditor: stub, screeningDraftsFromJob: () => []},
     './JobLanguageVersions': {JobLanguageVersions: stub}, './LinkedInSharePreview': {LinkedInSharePreview: stub},
+    './HrCreationFlow':{hrFlowV2Enabled:false,HrCreationFlow:stub},'./RecruiterJobEditorV2':{RecruiterJobEditorV2:stub},
     './useEmployerUnsaved': {useEmployerUnsaved: () => () => {}}, ...extra,
   });
 }
@@ -67,6 +68,7 @@ const company = {id: 'company', name: 'EGI IT', description: 'A complete company
 function onboarding(api) {
   function Field() {}
   return {Field, ui: host('apps/web/src/components/onboarding/RecruiterOnboarding.tsx', 'RecruiterOnboarding', {
+    './RecruiterOnboardingV2':{RecruiterOnboardingV2:stub},'../recruiter/HrCreationFlow':{hrFlowV2Enabled:false},
     '../screening/CompanyProfileDocument':{CompanyProfileDocument:stub},
     '@/lib/api': {api, saveSession() {}}, '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@/lib/accountNavigation': navigation,
     'next/navigation': {useSearchParams: () => new URLSearchParams()}, '@/lib/navigation': {useRouter: () => ({push() {}, replace() {}})},

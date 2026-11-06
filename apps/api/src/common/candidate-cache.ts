@@ -30,7 +30,7 @@ export class CandidateCache implements OnModuleDestroy {
   }
   async invalidate(catalog = false) {
     this.localEpoch++;
-    for(const key of this.memory.keys())if(catalog||!key.startsWith('occupation-catalog:')&&!key.startsWith('legacy-occupation:'))this.memory.delete(key);
+    for(const key of this.memory.keys())if(catalog||!key.startsWith('occupation-catalog:')&&!key.startsWith('legacy-occupation:')&&!key.startsWith('industry-group-index-v1:'))this.memory.delete(key);
     this.shadowRuns.clear();
     try { if (this.redis.status === 'ready') { await this.redis.incr(`${this.namespace}:epoch:jobs`); if (catalog) await this.redis.incr(`${this.namespace}:epoch:catalog`); } } catch {}
   }

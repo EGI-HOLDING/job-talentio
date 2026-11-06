@@ -16,6 +16,8 @@ import { LinkedInSharePreview } from './LinkedInSharePreview';
 import { localeUrl } from '@/lib/navigation';
 import { employerJobHref } from '@/lib/accountNavigation';
 import { PackageCode, packagePreference, packageHref } from '@/lib/jobCommerce';
+import { HrCreationFlow,hrFlowV2Enabled } from './HrCreationFlow';
+import { RecruiterJobEditorV2 } from './RecruiterJobEditorV2';
 import s from './RecruiterWorkspace.module.css';
 import e from './RecruiterJobEditor.module.css';
 import { useEmployerUnsaved } from './useEmployerUnsaved';
@@ -24,7 +26,12 @@ type Pick = { slug: string; name: string; isRequired?: boolean; weight?: number;
 type JobLanguage = { code: string; name: string; minLevel: string; isRequired: boolean; confirmed?: boolean };
 type Props = { companyId: string; company: any; job: any | null; meta: any; initialStep?: number; onboardingMode?: boolean; onClose: () => void; onPublished?: (id:string) => void; onDraftSaved?: (id:string) => Promise<void>; onChoosePackage?: (id:string) => Promise<void>; onSaved: (message: string) => Promise<void> };
 
-export function RecruiterJobEditor({ companyId, company, job, meta, initialStep = 0, onboardingMode = false, onClose, onPublished, onDraftSaved, onChoosePackage, onSaved }: Props) {
+export const RecruiterJobEditor=hrFlowV2Enabled?NewRecruiterJobEditor:LegacyRecruiterJobEditor;
+function NewRecruiterJobEditor(props:Props){
+  if(props.job&&!props.job._creationSessionId)return <RecruiterJobEditorV2 companyId={props.companyId} company={props.company} job={props.job} onClose={props.onClose} onSaved={props.onSaved} onPublished={props.onboardingMode?props.onPublished:()=>props.onClose()}/>;
+  return <HrCreationFlow companyId={props.companyId} company={props.company} sessionId={props.job?._creationSessionId} onClose={props.onClose} onPublished={id=>{void props.onSaved('Lowongan berhasil dipublikasikan.').finally(()=>props.onClose()).catch(()=>undefined);}}/>;
+}
+function LegacyRecruiterJobEditor({ companyId, company, job, meta, initialStep = 0, onboardingMode = false, onClose, onPublished, onDraftSaved, onChoosePackage, onSaved }: Props) {
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const confirm = useConfirm();

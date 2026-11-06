@@ -7,6 +7,7 @@ import { OperationsService } from './operations.service';
 import { PACKAGE_ORDER, BenefitPolicy } from './benefit-policy';
 import { localCheckoutEnabled, PACKAGE_CATALOG_VERSION, PACKAGE_PRICES, packageAmount, PurchaseIntent } from './package-catalog';
 import { JobPaymentProvider, VerifiedJobPayment } from './job-payment.provider';
+import { assertHrFlowEnabled, hrFlowEnabled } from '../hr-flow/hr-flow.policy';
 
 @Injectable()
 export class JobCommerceService {
@@ -19,7 +20,7 @@ export class JobCommerceService {
       linkedin: code === 'PREMIUM',
       instagram: code === 'PREMIUM' ? 'COMING_SOON' : 'NOT_INCLUDED', candidateSearch: true, cvDatabase: true,
     })));
-    return { version: PACKAGE_CATALOG_VERSION, perJob: true, packages, enabled: await this.benefits.enabled(),
+    return { version: PACKAGE_CATALOG_VERSION, hrFlowV2:hrFlowEnabled(),perJob: true, packages, enabled: await this.benefits.enabled(),
       testMode: localCheckoutEnabled(), paymentAvailable: this.provider.available };
   }
   private async job(actor: AuthUser, id: string, db: Prisma.TransactionClient = this.db) {
@@ -40,12 +41,14 @@ export class JobCommerceService {
       throw new ConflictException('This job already has a package. Choose an upgrade or renewal');
     }
   }
-  async create(actor: AuthUser, input: {jobId: string; code: JobPackageCode; intent: PurchaseIntent}, key?: string) {
+  async create(actor: AuthUser, input: {jobId?: string; creationSessionId?:string; code: JobPackageCode; intent: PurchaseIntent}, key?: string) {
     await this.benefits.assertEnabled();
+    if(input.creationSessionId)return this.createForSession(actor,input.creationSessionId,input.code,key);
+    if(!input.jobId)throw new BadRequestException('A job or creation session is required');
     const before = await this.job(actor, input.jobId);
     return (await this.operations.transaction('job-order:' + actor.id, key, input, async db => {
       await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
-      const job = await this.job(actor, input.jobId, db);
+      const job = await this.job(actor, before.id, db);
       this.validate(input.intent, input.code, job.benefit);
       const policy = await this.benefits.policy(input.code, db);
       const amount = packageAmount(input.code, input.intent, job.benefit?.code ?? 'FREE');
@@ -55,14 +58,42 @@ export class JobCommerceService {
         expectedBenefitVersion: job.benefit?.updatedAt.toISOString() ?? null, expiresAt: {gt: new Date()},
       }, orderBy: {createdAt: 'desc'}}) : null;
       if (pending) return pending;
+      const active=await db.$queryRaw<Array<{id:string}>>`
+        SELECT o.id FROM "JobPurchaseOrder" o WHERE o."jobId"=${job.id} AND o.status IN ('PENDING','REVIEW')
+          AND (o.provider IS NOT NULL OR EXISTS(SELECT 1 FROM "OperationKey" k WHERE k.scope='job-payment-session' AND k.key=o.id)) LIMIT 1`;
+      if(active.length)throw new ConflictException('Reconcile or cancel the existing checkout before changing the package');
       const order = await db.jobPurchaseOrder.create({ data: {
-        ...input, companyId: job.companyId, createdById: actor.id,
+        jobId:job.id,code:input.code,intent:input.intent,companyId: job.companyId, createdById: actor.id,
         jobTitle: job.title, companyName: job.company.name, amount,
         catalogVersion: PACKAGE_CATALOG_VERSION, policyVersion: policy.version,
         policySnapshot: policy.settings, expectedBenefitVersion: job.benefit?.updatedAt.toISOString() ?? null,
         expiresAt: new Date(Date.now() + 24 * 3600000),
       } });
       if (amount === 0) return this.fulfill(db, actor, order, 'free', 'free:' + order.id);
+      return order;
+    })).value;
+  }
+  private async createForSession(actor:AuthUser,sessionId:string,code:JobPackageCode,key?:string){
+    assertHrFlowEnabled();
+    const before=await this.db.jobCreationSession.findUnique({where:{id:sessionId}});
+    if(!before)throw new NotFoundException('Draft not found');
+    return (await this.operations.transaction('creation-order:'+actor.id,key,{sessionId,code},async db=>{
+      await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
+      const company=await this.benefits.member(actor,before.companyId,db);
+      const session=await db.jobCreationSession.findUniqueOrThrow({where:{id:sessionId}});
+      if(session.jobId)throw new ConflictException('This job is already published');
+      const previous=session.orderId?await db.jobPurchaseOrder.findUnique({where:{id:session.orderId}}):null;
+      if(previous?.status==='PAID'){
+        if(previous.code!==code)throw new ConflictException('This draft already has a confirmed package');
+        return previous;
+      }
+      if(previous?.status==='REVIEW')throw new ConflictException('The existing payment needs reconciliation');
+      if(previous?.status==='PENDING'&&previous.expiresAt>new Date()&&previous.code===code)return previous;
+      if(previous?.status==='PENDING'&&(previous.paymentRedirectUrl||await db.operationKey.findUnique({where:{scope_key:{scope:'job-payment-session',key:previous.id}}})))throw new ConflictException('Cancel or finish the existing checkout before choosing another package');
+      if(previous?.status==='PENDING')await db.jobPurchaseOrder.update({where:{id:previous.id},data:{status:'CANCELLED'}});
+      const policy=await this.benefits.policy(code,db),amount=PACKAGE_PRICES[code];
+      const order=await db.jobPurchaseOrder.create({data:{creationSessionId:sessionId,companyId:company.id,createdById:actor.id,code,intent:'PURCHASE',amount,catalogVersion:PACKAGE_CATALOG_VERSION,policyVersion:policy.version,policySnapshot:policy.settings,companyName:company.name,jobTitle:'Lowongan baru',expiresAt:new Date(Date.now()+86400000),...(amount===0?{status:'PAID',provider:'free',providerReference:'free:'+sessionId,paidAt:new Date()}:{})}});
+      await db.jobCreationSession.update({where:{id:sessionId},data:{orderId:order.id,phase:amount===0?'JOB':'CHECKOUT',revision:{increment:1}}});
       return order;
     })).value;
   }
@@ -89,16 +120,23 @@ export class JobCommerceService {
   }
   async cancel(actor: AuthUser, id: string) {
     const before = await this.get(actor, id);
+    if(before.status==='PENDING'&&before.paymentRedirectUrl){
+      const confirmed=await this.settle(this.provider.name,await this.provider.cancel(id));
+      if(confirmed.status==='PAID'||confirmed.status==='REVIEW')throw new ConflictException('Payment received. Review the existing order.');
+      return confirmed;
+    }
     return this.db.$transaction(async db => {
       await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
       await this.benefits.member(actor, before.companyId, db);
       const order = await db.jobPurchaseOrder.findUniqueOrThrow({ where: {id} });
       if (order.status === 'CANCELLED') return order;
       if (order.status !== 'PENDING') throw new ConflictException('Only pending orders can be cancelled');
+      if(await db.operationKey.findUnique({where:{scope_key:{scope:'job-payment-session',key:id}}}))throw new ConflictException('A provider transaction exists or needs reconciliation. Check its status before cancelling.');
       return db.jobPurchaseOrder.update({ where: {id}, data: {status: 'CANCELLED'} });
     });
   }
   private async fulfill(db: Prisma.TransactionClient, actor: AuthUser, order: JobPurchaseOrder, provider: string, reference: string) {
+    if(!order.jobId)throw new ConflictException('This order is bound to a creation session');
     const job = await this.job(actor, order.jobId, db);
     if ((job.benefit?.updatedAt.toISOString() ?? null) !== order.expectedBenefitVersion)
       throw new ConflictException('Job package changed. Review this order before continuing');
@@ -119,6 +157,8 @@ export class JobCommerceService {
     if (!event.eventId || !event.reference || !Number.isSafeInteger(event.amount)) throw new BadRequestException('Invalid payment event');
     const before = await this.db.jobPurchaseOrder.findUnique({ where: {id: event.orderId} });
     if (!before) throw new NotFoundException('Order not found');
+    if(before.creationSessionId)return this.settleCreation(provider,event,before);
+    if(event.status&&event.status!=='PAID')return this.nonPaid(provider,event,before);
     return this.db.$transaction(async db => {
       await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
       const order = await db.jobPurchaseOrder.findUniqueOrThrow({ where: {id: event.orderId} });
@@ -138,7 +178,7 @@ export class JobCommerceService {
       if (referenceOrder && referenceOrder.id !== order.id) throw new ConflictException('Payment reference already used');
       await db.jobPaymentEvent.create({data: {orderId: order.id, provider, eventId: event.eventId, amount: event.amount, currency: event.currency}});
       const actor = await db.user.findUnique({where: {id: order.createdById}});
-      const job = await db.jobPost.findUnique({where: {id: order.jobId}, include: {benefit: true, company: true}});
+      const job = order.jobId?await db.jobPost.findUnique({where: {id: order.jobId}, include: {benefit: true, company: true}}):null;
       let eligible = Boolean(actor && !actor.isBanned && !actor.anonymizedAt && job && !job.company.isBanned && !job.company.anonymizedAt
         && (await db.companyMember.count({where: {companyId: order.companyId, userId: actor.id}}) || actor.role === 'SUPER_ADMIN')
         && (job.benefit?.updatedAt.toISOString() ?? null) === order.expectedBenefitVersion);
@@ -150,6 +190,53 @@ export class JobCommerceService {
       return this.fulfill(db, actor!, order, provider, provider + ':' + event.reference);
     }, {maxWait: 15000, timeout: 30000});
   }
+  private async nonPaid(provider:string,event:VerifiedJobPayment,before:JobPurchaseOrder){
+    return this.db.$transaction(async db=>{
+      await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
+      const order=await db.jobPurchaseOrder.findUniqueOrThrow({where:{id:before.id}});
+      if(order.amount!==event.amount||order.currency!==event.currency)throw new BadRequestException('Payment amount or currency mismatch');
+      if(order.status==='PAID'&&event.status!=='REVIEW')return order;
+      if(['REVIEW','CANCELLED','EXPIRED','FAILED'].includes(order.status)&&event.status==='PENDING')return order;
+      return db.jobPurchaseOrder.update({where:{id:order.id},data:{status:event.status,provider,providerTransactionId:event.reference}});
+    });
+  }
+  private async settleCreation(provider:string,event:VerifiedJobPayment,before:JobPurchaseOrder){
+    return this.db.$transaction(async db=>{
+      await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
+      const order=await db.jobPurchaseOrder.findUniqueOrThrow({where:{id:before.id}});
+      if(order.provider&&order.provider!==provider)throw new BadRequestException('Payment environment mismatch');
+      const old=await db.jobPaymentEvent.findUnique({where:{provider_eventId:{provider,eventId:event.eventId}}});
+      if(old){if(old.orderId!==order.id)throw new ConflictException('Payment event belongs to another order');return order;}
+      await db.jobPaymentEvent.create({data:{orderId:order.id,provider,eventId:event.eventId,amount:event.amount,currency:event.currency}});
+      const mismatch=order.amount!==event.amount||order.currency!==event.currency;
+      if(mismatch){
+        await db.auditLog.create({data:{action:'JOB_PAYMENT_AMOUNT_REVIEW',entityType:'JobPurchaseOrder',entityId:order.id}});
+        return db.jobPurchaseOrder.update({where:{id:order.id},data:{status:'REVIEW',provider,providerTransactionId:event.reference}});
+      }
+      if(order.status==='PAID'&&event.status!=='REVIEW'){
+        if(order.providerTransactionId&&order.providerTransactionId!==event.reference)return db.jobPurchaseOrder.update({where:{id:order.id},data:{status:'REVIEW'}});
+        return order;
+      }
+      const session=await db.jobCreationSession.findUnique({where:{id:order.creationSessionId!}});
+      if(event.status&&event.status!=='PAID'){
+        if(order.status!=='PENDING'&&event.status==='PENDING')return order;
+        return db.jobPurchaseOrder.update({where:{id:order.id},data:{status:event.status,provider,providerTransactionId:event.reference}});
+      }
+      const actor=await db.user.findUnique({where:{id:order.createdById}});
+      const company=await db.company.findUnique({where:{id:order.companyId}});
+      const member=actor&&await db.companyMember.count({where:{companyId:order.companyId,userId:actor.id}});
+      const eligible=order.status==='PENDING'&&order.expiresAt>new Date()&&session?.orderId===order.id&&!session.jobId&&actor&&!actor.isBanned&&!actor.anonymizedAt&&company&&!company.isBanned&&!company.anonymizedAt&&(member||actor.role==='SUPER_ADMIN');
+      const paid=await db.jobPurchaseOrder.update({where:{id:order.id},data:{status:eligible?'PAID':'REVIEW',paidAt:new Date(),provider,providerReference:provider+':'+event.reference,providerTransactionId:event.reference}});
+      if(eligible)await db.jobCreationSession.update({where:{id:session!.id},data:{phase:'JOB',revision:{increment:1}}});
+      await db.auditLog.create({data:{action:eligible?'JOB_CREATION_PAYMENT_CONFIRMED':'JOB_PAYMENT_REVIEW_REQUIRED',entityType:'JobPurchaseOrder',entityId:order.id}});
+      return paid;
+    });
+  }
+  async reconcile(actor:AuthUser,id:string){
+    const order=await this.get(actor,id);
+    if(order.provider==='free')return order;
+    return this.settle(this.provider.name,await this.provider.queryStatus(id));
+  }
   async completeTest(actor: AuthUser, id: string) {
     if (!localCheckoutEnabled()) throw new ForbiddenException('Local test checkout is disabled');
     const order = await this.get(actor, id);
@@ -158,15 +245,29 @@ export class JobCommerceService {
     return this.settle('local-test', {orderId: id, eventId: 'local:' + id, reference: id, amount: order.amount, currency: order.currency});
   }
   async paymentSession(actor: AuthUser, id: string) {
-    const order = await this.get(actor, id);
-    if (order.status !== 'PENDING') throw new ConflictException('This order cannot be paid');
-    const job = await this.job(actor, order.jobId);
-    if ((job.benefit?.updatedAt.toISOString() ?? null) !== order.expectedBenefitVersion)
-      throw new ConflictException('Job package changed. Choose a new package before payment');
-    this.validate(order.intent as PurchaseIntent, order.code, job.benefit);
-    if (!this.provider.available) return this.provider.checkout(order);
-    return this.operations.external('job-payment-session', order.id,
-      {orderId: order.id, amount: order.amount, currency: order.currency, provider: this.provider.name},
-      () => this.provider.checkout(order));
+    const before=await this.get(actor,id);
+    if(!this.provider.available)throw new ConflictException('Payment gateway is not connected');
+    return this.db.$transaction(async db=>{
+      await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
+      await this.benefits.member(actor,before.companyId,db);
+      const order=await db.jobPurchaseOrder.findUniqueOrThrow({where:{id}});
+      if(order.status!=='PENDING'||order.expiresAt<=new Date())throw new ConflictException('This order cannot be paid');
+      if(order.paymentRedirectUrl)return {redirectUrl:order.paymentRedirectUrl,reference:order.id};
+      if(!order.creationSessionId){
+        if(!order.jobId)throw new ConflictException('Missing order subject');
+        const job=await this.job(actor,order.jobId,db);
+        if((job.benefit?.updatedAt.toISOString()??null)!==order.expectedBenefitVersion)throw new ConflictException('Job package changed. Choose a new package before payment');
+        this.validate(order.intent as PurchaseIntent,order.code,job.benefit);
+      }
+      // Keep cancellation/package changes behind the same company lock. The
+      // operation claim survives an ambiguous network failure, preventing a
+      // replacement transaction until the existing one has been reconciled.
+      const value=await this.operations.external('job-payment-session',order.id,{orderId:order.id,amount:order.amount,currency:order.currency,provider:this.provider.name},async()=>{
+        await this.db.jobPurchaseOrder.updateMany({where:{id:order.id,status:'PENDING'},data:{provider:this.provider.name}});
+        return this.provider.checkout(order);
+      });
+      await db.jobPurchaseOrder.update({where:{id},data:{paymentRedirectUrl:value.redirectUrl,provider:this.provider.name}});
+      return value;
+    },{maxWait:15000,timeout:30000});
   }
 }

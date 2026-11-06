@@ -152,7 +152,10 @@ export const CATALOG_SPECS: Record<CatalogType, CatalogSpec> = {
     hasSortOrder: true,
     hasIcon: false,
     parent: { type: 'industryGroup', field: 'groupId', label: 'Industry group', required: true },
-    usage: [{ model: 'company', field: 'industryId', label: 'companies' }],
+    usage: [
+      { model: 'company', field: 'industryId', label: 'companies' },
+      { model: 'industryGroupMapping', field: 'industryId', label: 'industry group mappings' },
+    ],
     seedManaged: false,
     supportsMerge: false,
   },

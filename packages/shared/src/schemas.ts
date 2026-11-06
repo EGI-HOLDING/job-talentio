@@ -115,6 +115,11 @@ export const companySchema = z.object({
   countryId: z.string().max(100).nullable().optional(),
   citySlug: z.string().max(120).optional(),
   industrySlug: z.string().max(120).optional(),
+  industryGroupCode: z.string().min(1).max(80).nullable().optional(),
+  industryGroupCodes: z.array(z.string().min(1).max(80)).min(1).max(29).refine(v => new Set(v).size === v.length, 'Duplicate industry groups').optional(),
+  profileSource: z.enum(['MANUAL', 'DOCUMENT']).optional(),
+  profileDocumentId: z.string().min(1).max(100).nullable().optional(),
+  logoAssetId:z.string().min(1).max(100).optional(),
   size: z
     .enum(['SIZE_1_10', 'SIZE_11_50', 'SIZE_51_200', 'SIZE_201_1000', 'SIZE_1000_PLUS'])
     .optional(),
@@ -139,6 +144,14 @@ export const jobScreeningQuestionSchema = z.object({
 });
 
 export const jobPostSchema = z.object({
+  positionEntryMode: z.enum(['CATALOG', 'MANUAL']).optional(),
+  jobTitleId: z.string().min(1).max(100).nullable().optional(),
+  responsibilities: z.array(z.string().trim().min(1).max(1000)).max(30).optional(),
+  kpis: z.array(z.string().trim().min(1).max(1000)).max(30).optional(),
+  specificExpectations: z.string().trim().max(5000).nullable().optional(),
+  experienceRangeMin: z.number().int().min(0).max(50).nullable().optional(),
+  experienceRangeMax: z.number().int().min(0).max(50).nullable().optional(),
+  experienceRangeSource: z.never().optional(),
   title: z.string().trim().min(3).max(200),
   jobTitleSlug: z.string().max(120).optional(),
   description: z.string().trim().min(20).max(20000),
@@ -156,6 +169,11 @@ export const jobPostSchema = z.object({
   salaryPeriod: z.enum(['MONTHLY', 'YEARLY', 'HOURLY']).default('MONTHLY'),
   currency: z.string().default('UZS'),
   experienceYearsMin: z.number().int().min(0).max(50).optional().nullable(),
+  seniorityLevelCode: z.string().regex(/^L(?:[0-9]|1[0-3])$/).nullable().optional(),
+  seniorityVersion: z.never().optional(),
+  seniorityYearsMin: z.never().optional(),
+  seniorityYearsMax: z.never().optional(),
+  seniorityLevelId: z.never().optional(),
   experienceLevel: z
     .enum(['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'])
     .optional()
@@ -217,6 +235,7 @@ export const jobSearchSchema = z.object({
   companySlug: z.string().optional(), // exact company slug (comma-separated ok)
   /** Company Industry slug (comma-separated ok) */
   industrySlug: z.string().optional(),
+  industryGroupCode: z.string().max(1000).optional(),
   /** Canonical JobTitle slug (comma-separated ok) */
   jobTitle: z.string().optional(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY']).optional(),
@@ -351,6 +370,7 @@ export const chatConversationSchema = z.object({
 export const companyBrowseSchema = z.object({
   q: z.string().optional(),
   industrySlug: z.string().optional(),
+  industryGroupCode: z.string().max(80).optional(),
   /** Deprecated; accepted and ignored for saved URLs. */
   plan: z.enum(['VIP', 'PREMIUM', 'STANDARD', 'FREE']).optional(),
   sort: z.enum(['jobs', 'name', 'featured']).default('jobs'),

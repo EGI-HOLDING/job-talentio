@@ -1,5 +1,7 @@
 'use client';
 import {CompanyProfileDocument} from '../screening/CompanyProfileDocument';
+import { RecruiterOnboardingV2 } from './RecruiterOnboardingV2';
+import { hrFlowV2Enabled } from '../recruiter/HrCreationFlow';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, AuthSession, saveSession } from '@/lib/api';
@@ -18,7 +20,8 @@ import s from '@/components/recruiter/JobCommerce.module.css';
 type CompanyDraft = {name: string; description: string; website: string; countryId: string; citySlug: string; industrySlug: string; size: string};
 type Progress = {status: string; step: number; companyId: string|null; jobId: string|null; companyDraft: CompanyDraft|null; preferredPackage?: PackageCode|null; memberships: any[]};
 function draft(company: any): CompanyDraft {return {name: company?.name || '', description: company?.description || '', website: company?.website || '', countryId: company?.city?.province?.country?.id || '', citySlug: company?.city?.slug || '', industrySlug: company?.industry?.slug || '', size: company?.size || ''};}
-export function RecruiterOnboarding() {
+export const RecruiterOnboarding=hrFlowV2Enabled?RecruiterOnboardingV2:LegacyRecruiterOnboarding;
+function LegacyRecruiterOnboarding() {
   const {t, locale} = useI18n(), enumLabel = useEnumLabel(), router = useRouter(), params = useSearchParams();
   const [progress, setProgress] = useState<Progress|null>(null), [companyId, setCompanyId] = useState(''), [values, setValues] = useState<CompanyDraft>(draft(null));
   const [meta, setMeta] = useState<any>(null), [industries, setIndustries] = useState<any[]>([]), [job, setJob] = useState<any>(null), [benefit, setBenefit] = useState<any>(null);

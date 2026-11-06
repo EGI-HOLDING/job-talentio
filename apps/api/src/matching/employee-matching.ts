@@ -2,8 +2,10 @@ import type { MatchEvidence, MatchInsights, OccupationMatchingMetadata } from '@
 import { languageLevelRank } from '@job-talentio/shared';
 import { normalizeJobTitleKey } from '../common/title-resolve';
 import { normalizeSkillKey } from '../common/skill-resolve';
+import { candidateExperienceReference,employeeExperiencePolicyEnabled,EMPLOYEE_EXPERIENCE_POLICY_VERSION,type CandidateExperienceInput } from './employee-experience-policy';
 
 export const EMPLOYEE_MATCH_VERSION = 'employee-evidence-v2';
+export const candidateManualPositionScope={NOT:{positionEntryMode:'MANUAL',jobTitleId:null}} as const;
 export type CatalogRole = {
   id: string; name: string; nameId?: string | null; nameUz?: string | null; nameRu?: string | null;
   normalizedKey: string; aliases: Array<{ alias: string; aliasKey: string }>; matchingMetadata?: unknown;
@@ -19,7 +21,8 @@ export type EmployeeMatchProfile = {
   experiences: Array<{ id?: string; title: string; startDate: Date; endDate: Date | null; isCurrent: boolean }>;
   languages: Array<{ id?: string; languageId?: string; level: string; language: { code: string } }>;
 };
-export type EmployeeMatchJob = {
+export type EmployeeMatchJob = Partial<Omit<CandidateExperienceInput,'experienceYearsMin'>> & {
+  positionEntryMode?:string;
   id: string; title: string; jobTitleId?: string | null; companyId: string; publishedAt?: Date | null;
   countryId?: string | null; cityId?: string | null; workMode: string; experienceYearsMin?: number | null; experienceLevel?:string | null;
   city?: { provinceId?: string; province?: { countryId: string } } | null;
@@ -125,15 +128,18 @@ export function evaluateEmployee(profile: EmployeeMatchProfile, job: EmployeeMat
   }
   // Evidence coverage of job requirements; unrelated profile skills never form a denominator.
   if (totalWeight) score += 40 * matchedWeight / totalWeight;
-  const positiveCore = matchingRole || direct || related || matchingHistory || matchedWeight > 0;
+  const unresolvedManual=job.positionEntryMode==='MANUAL'&&!job.jobTitleId;
+  const positiveCore = !unresolvedManual&&(matchingRole || direct || related || matchingHistory || matchedWeight > 0);
   const relevantExperience = validExperiences.filter(e => overlap(index.resolve(e.title), jobRoles));
   const years = unionYears(relevantExperience.map(e => [new Date(e.startDate).getTime(), e.isCurrent ? now.getTime() : new Date(e.endDate!).getTime()]));
-  const minimum = job.experienceYearsMin;
-  if (minimum != null && minimum > 0) {
+  const reference=candidateExperienceReference({...job,experienceYearsMin:job.experienceYearsMin??null});
+  const minimum = reference.minimum;
+  if (minimum != null && (minimum > 0||!reference.required)) {
     const known = relevantExperience.length > 0 || profile.noExperience === true;
     const status = !known ? 'UNKNOWN' : years >= minimum ? 'MET' : 'UNMET';
-    if (known) score += 15 * Math.min(1, years / minimum);
-    evidence.push({ kind:'EXPERIENCE', label:String(minimum), status, required:true,
+    if (known) score += 15 * (minimum===0?1:Math.min(1, years / minimum));
+    else if(!reference.required)score+=7.5;
+    evidence.push({ kind:'EXPERIENCE', label:String(minimum), status, required:reference.required,...(!reference.required?{experienceReference:reference}:{}),
       code:status === 'MET' ? 'EXPERIENCE_MATCH' : status === 'UNMET' ? 'BELOW_REQUIREMENT' : 'NOT_LISTED',
       evidenceRefs:relevantExperience.map(e => `experience:${e.id ?? e.title}`) });
   }
@@ -164,8 +170,8 @@ export function evaluateEmployee(profile: EmployeeMatchProfile, job: EmployeeMat
   }
   if (verifiedCount) score += 10 * languageMet / verifiedCount;
   // No degree, certificate or inferred-language bonus without an authored requirement.
-  return { score, optionalScore:Math.min(1, optionalScore), positiveCore,
-    insights:{ version:EMPLOYEE_MATCH_VERSION, mode:positiveCore ? 'PERSONALIZED' : 'LATEST', evidence,
+  return { score:unresolvedManual?0:score, optionalScore:Math.min(1, optionalScore), positiveCore,
+    insights:{ version:EMPLOYEE_MATCH_VERSION,experiencePolicyVersion:employeeExperiencePolicyEnabled()?EMPLOYEE_EXPERIENCE_POLICY_VERSION:undefined, mode:positiveCore ? 'PERSONALIZED' : 'LATEST', evidence,
       reviewExperienceIds:review.map((e,i) => e.id ?? `unidentified:${i}`) } };
 }
 

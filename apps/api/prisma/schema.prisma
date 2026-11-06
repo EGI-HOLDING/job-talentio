@@ -765,9 +765,75 @@ model Industry {
 
   group     IndustryGroup @relation(fields: [groupId], references: [id])
   companies Company[]
+  businessMappings IndustryGroupMapping[]
 
   @@index([groupId])
   @@index([archivedAt])
+}
+
+/// Additive taxonomy. Legacy IndustryGroup and Industry identities stay intact.
+model IndustryTaxonomy {
+  version String @id
+  active Boolean @default(false)
+  createdAt DateTime @default(now())
+  groups BusinessIndustryGroup[]
+}
+
+model BusinessIndustryGroup {
+  classifiedCompanies Company[] @relation("CompanyIndustryGroups")
+  id String @id
+  code String
+  version String
+  name String
+  nameId String
+  nameUz String
+  nameRu String
+  definition String
+  boundaries String
+  sortOrder Int
+  archivedAt DateTime?
+  taxonomy IndustryTaxonomy @relation(fields: [version], references: [version], onDelete: Restrict)
+  mappings IndustryGroupMapping[]
+  companies Company[]
+  @@unique([code, version])
+  @@index([version, archivedAt, sortOrder])
+}
+
+model IndustryGroupMapping {
+  industryId String
+  version String
+  groupId String
+  source String
+  reason String
+  createdAt DateTime @default(now())
+  industry Industry @relation(fields: [industryId], references: [id], onDelete: Restrict)
+  group BusinessIndustryGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@id([industryId, version])
+  @@index([groupId])
+}
+
+model SeniorityCatalog {
+  version String @id
+  active Boolean @default(false)
+  createdAt DateTime @default(now())
+  levels SeniorityLevel[]
+}
+
+model SeniorityLevel {
+  code String
+  version String
+  name String
+  nameId String
+  nameUz String
+  nameRu String
+  yearsMin Int
+  yearsMax Int?
+  sortOrder Int
+  archivedAt DateTime?
+  catalog SeniorityCatalog @relation(fields: [version], references: [version], onDelete: Restrict)
+  jobs JobPost[]
+  @@id([code, version])
+  @@index([version, archivedAt, sortOrder])
 }
 
 model Language {
@@ -1006,6 +1072,9 @@ model EmailChangeToken {
 }
 
 model Company {
+  industryGroups BusinessIndustryGroup[] @relation("CompanyIndustryGroups")
+  profileSource String @default("MANUAL")
+  profileDocumentId String? @unique
   screeningDocuments AiCompanyDocument[]
   id          String       @id @default(cuid())
   name        String
@@ -1016,6 +1085,7 @@ model Company {
   website     String?
   cityId      String?
   industryId  String?
+  industryGroupId String?
   size        CompanySize?
   logoUrl     String?
   isVerified  Boolean      @default(false)
@@ -1027,6 +1097,7 @@ model Company {
 
   city             City?                @relation(fields: [cityId], references: [id])
   industry         Industry?            @relation(fields: [industryId], references: [id])
+  industryGroup BusinessIndustryGroup? @relation(fields: [industryGroupId], references: [id], onDelete: Restrict)
   members          CompanyMember[]
   jobPosts         JobPost[]
   subscription     Subscription?
@@ -1047,6 +1118,7 @@ model Company {
 
   @@index([cityId])
   @@index([industryId])
+  @@index([industryGroupId])
 }
 
 /// Request for the verified badge: legal identity plus an optional document, reviewed by an admin.
@@ -1145,6 +1217,13 @@ model Payment {
 }
 
 model JobPost {
+  positionEntryMode String @default("LEGACY")
+  responsibilities String[] @default([])
+  kpis String[] @default([])
+  specificExpectations String?
+  experienceRangeMin Int?
+  experienceRangeMax Int?
+  experienceRangeSource String?
   screeningPackages AiScreeningPackage[]
   screeningSessions AiScreeningSession[]
   id                 String           @id @default(cuid())
@@ -1165,6 +1244,11 @@ model JobPost {
   currency           String           @default("UZS")
   experienceYearsMin Int?
   experienceLevel    ExperienceLevel?
+  seniorityLevelCode String?
+  seniorityVersion String?
+  seniorityYearsMin Int?
+  seniorityYearsMax Int?
+  seniorityLevel SeniorityLevel? @relation(fields: [seniorityLevelCode, seniorityVersion], references: [code, version], onDelete: Restrict)
   /// Confidential posting: company hidden from candidates until INTERVIEW stage.
   isAnonymous        Boolean          @default(false)
   locale             String           @default("uz")
@@ -2046,7 +2130,11 @@ model JobBenefit {
 model JobPurchaseOrder {
   id String @id @default(cuid())
   companyId String
-  jobId String
+  jobId String?
+  creationSessionId String?
+  paymentRedirectUrl String?
+  providerTransactionId String?
+  nextReconcileAt DateTime?
   createdById String
   code JobPackageCode
   intent String
@@ -2070,10 +2158,41 @@ model JobPurchaseOrder {
   @@index([companyId, createdAt])
   @@index([jobId, status])
   @@index([status, expiresAt])
+  @@index([status, nextReconcileAt])
 }
 
 /// Only verified provider adapters may settle an order. Raw payment credentials
 /// and client-supplied "paid" statuses never enter this table.
+model JobCreationSession {
+  id String @id @default(cuid())
+  companyId String
+  createdById String
+  phase String @default("PACKAGE")
+  revision Int @default(0)
+  draft Json @default("{}")
+  orderId String? @unique
+  jobId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([companyId, updatedAt])
+}
+
+model CompanyProfileDocument {
+  id String @id @default(cuid())
+  ownerId String
+  companyId String?
+  kind String @default("DOCUMENT")
+  fileKey String @unique
+  filename String
+  contentType String
+  checksum String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  retiredAt DateTime?
+  @@index([ownerId, createdAt])
+  @@index([companyId])
+}
+
 model JobPaymentEvent {
   id String @id @default(cuid())
   orderId String
@@ -2087,6 +2206,10 @@ model JobPaymentEvent {
 }
 
 model RecruiterOnboarding {
+  flowVersion Int @default(1)
+  phase String @default("COMPANY")
+  creationSessionId String?
+  revision Int @default(0)
   userId String @id
   status String @default("IN_PROGRESS")
   step Int @default(1)

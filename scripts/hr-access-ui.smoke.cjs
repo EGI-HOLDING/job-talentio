@@ -114,6 +114,10 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name === './HrMatchSummary') return { HrMatchSummary:()=>null };
         if (name === '@/components/applications/OfferComposer') return { OfferComposer: () => null };
         if (name === '@/components/applications/OfferPacketHistory') return { OfferPacketHistory: () => null };
+        if(name==='@/components/screening/TaraPreparation')return {TaraRunner:()=>null};
+        if(name==='./HrCreationFlow')return {hrFlowV2Enabled:false,HrCreationFlow:()=>null};
+        if(name==='./RecruiterJobEditorV2')return {RecruiterJobEditorV2:()=>null};
+        if(name.endsWith('/StructuredJobContent'))return {StructuredJobContent:()=>null,jobExperienceLabel:()=>null};
         throw Error('Unexpected dependency: ' + name);
       },
     },

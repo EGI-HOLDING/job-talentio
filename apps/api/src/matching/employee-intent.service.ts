@@ -1,4 +1,5 @@
 import { practicalFit, employeePracticalEnabled, EMPLOYEE_PRACTICAL_POLICY_VERSION } from './employee-practical-policy';
+import { candidateExperienceSelect,employeeExperienceRevision,employeeExperiencePolicyEnabled } from './employee-experience-policy';
 import { currentRoleSelect,currentRoleIdentity } from './employee-occupation';
 import { employeeQualityGateAccepted } from './employee-quality-gate';
 import { Injectable, Logger, Optional } from '@nestjs/common';
@@ -12,9 +13,9 @@ import { liveJobWhere } from '../benefits/benefit-policy';
 import { loadJobPromotions, publicJobPromotion } from '../benefits/job-promotion';
 import { EmployeeOccupationIndex, intentRoleInclude } from './employee-occupation';
 import { applyEmployeeOverrides, evidenceConflicts, hasEmployeeCareerEvidence, type IntentFacts, type EvidenceOverride, employeeEvidenceParserVersion } from './employee-intent-evidence';
-import { evaluateIntent, compareIntent, type IntentEvaluation } from './employee-intent';
+import { evaluateIntent, compareIntent, type IntentEvaluation, type IntentExperienceCache } from './employee-intent';
 import { VacancyTasksService, vacancyTaskMode, type VacancySelection } from './vacancy-tasks.service';
-export const employeeIntentJobSelect = { id: true, updatedAt:true, title: true, jobTitleId: true, jobTitle:{select:currentRoleSelect}, companyId: true, publishedAt: true, countryId: true, cityId: true, workMode: true, experienceYearsMin: true, experienceLevel: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { select: { province: { select: { countryId: true } } } }, jobSkills: { include: { skill: { select: { name: true, matchingKind: true } } } }, jobLanguages: { include: { language: { select: { code: true, name: true } } } } } as const;
+export const employeeIntentJobSelect = { ...candidateExperienceSelect, id: true, updatedAt:true, title: true, jobTitleId: true, jobTitle:{select:currentRoleSelect}, companyId: true, publishedAt: true, countryId: true, cityId: true, workMode: true, experienceYearsMin: true, experienceLevel: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { select: { province: { select: { countryId: true } } } }, jobSkills: { include: { skill: { select: { name: true, matchingKind: true } } } }, jobLanguages: { include: { language: { select: { code: true, name: true } } } } } as const;
 export const intentRoleScope = (context:{allowedIds:string[];vacancies?:VacancySelection}) =>
   context.vacancies ? {id:{in:[...context.vacancies.decisions.keys()]}} : {jobTitleId:{in:context.allowedIds}};
 export const intentJobScope = (context:{allowedIds:string[];vacancies?:VacancySelection;practicalSelection?:{mainIds:string[]}}) =>
@@ -44,6 +45,8 @@ export class EmployeeIntentService {
             this.catalog(),
         ]);
         const v32=employeeRecommendationV32Enabled();
+        const experiencePolicyEnabled=employeeExperiencePolicyEnabled();
+        const experienceCache:IntentExperienceCache=new Map();
         const {roles} = catalog;
         const index=v32&&!catalog.index.allowRelated?new EmployeeOccupationIndex(roles,true):catalog.index;
         const version = profile.resumes[0]?.currentVersion;
@@ -115,7 +118,7 @@ export class EmployeeIntentService {
           }
         }
         const preferencesOnly = v32 && !hasEmployeeCareerEvidence(facts) && !facts.languages.length;
-        return { profile, preferences, index, facts, state, allowedIds, vacancies, practicalEnabled, practicalSelection, v32, evidenceState, preferenceWarnings, preferencesOnly, cvSource: { versionId: version?.id ?? null, status: version?.parseStatus ?? 'NONE', evidenceRevision: stored?.revision ?? null }, fingerprint: digest([EMPLOYEE_INTENT_VERSION, v32?EMPLOYEE_RELATED_RANKING_VERSION:EMPLOYEE_INTENT_RANKING_VERSION, profile, v32?catalog.recommendationRevision:catalog.revision,state,evidenceState,'partial-evidence-v1',vacancies?.revision,practicalEnabled?EMPLOYEE_PRACTICAL_POLICY_VERSION:'practical-off']) };
+        return { experienceCache, experiencePolicyEnabled, profile, preferences, index, facts, state, allowedIds, vacancies, practicalEnabled, practicalSelection, v32, evidenceState, preferenceWarnings, preferencesOnly, cvSource: { versionId: version?.id ?? null, status: version?.parseStatus ?? 'NONE', evidenceRevision: stored?.revision ?? null }, fingerprint: digest([employeeExperienceRevision(),EMPLOYEE_INTENT_VERSION, v32?EMPLOYEE_RELATED_RANKING_VERSION:EMPLOYEE_INTENT_RANKING_VERSION, profile, v32?catalog.recommendationRevision:catalog.revision,state,evidenceState,'partial-evidence-v1',vacancies?.revision,practicalEnabled?EMPLOYEE_PRACTICAL_POLICY_VERSION:'practical-off']) };
     }
     async status(userId:string) {
         const profile = await this.db.employeeProfile.findUnique({where:{userId},select:{id:true}});
@@ -152,7 +155,7 @@ export class EmployeeIntentService {
         return row&&row.roleId===job.jobTitleId&&row.updatedAt.getTime()===job.updatedAt?.getTime()?row.eligibility:{eligible:false,reason:'POSITION_MISMATCH'} as const;
     }
     evaluate(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:Parameters<typeof evaluateIntent>[2]&{updatedAt?:Date},now=new Date()) {
-        const evaluation=evaluateIntent(context.preferences,context.facts,job,context.index,now,this.eligibility(context,job));
+        const evaluation=evaluateIntent(context.preferences,context.facts,job,context.index,now,this.eligibility(context,job),context.experiencePolicyEnabled,context.experienceCache);
         if(context.preferencesOnly){evaluation.tier=1;evaluation.score=0;evaluation.optionalScore=0;evaluation.insights={...evaluation.insights,mode:'PREFERENCES_BASED',evidence:evaluation.insights.evidence.filter(e=>e.kind==='ROLE')};}
         if(context.practicalEnabled)evaluation.insights={...evaluation.insights,practicalFit:practicalFit(context.preferences,job)};
         return evaluation;

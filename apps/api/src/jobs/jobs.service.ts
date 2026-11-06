@@ -1,4 +1,5 @@
 import { jobChatPeers } from '../chat/job-chat-peer';
+import { resolveHrPosition, effectiveExperience, structuredJobFields } from '../hr-flow/job-input';
 import { ScreeningPackets } from '../ai-screening/screening-packets.service';
 import { screeningEnabled } from '../ai-screening/screening.policy';
 import { employeeApplicationChatAllowed } from '../chat/application-chat-access';
@@ -62,6 +63,8 @@ import {
 } from './featured-job-order';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { resolveJobLocation } from '../common/geo-selection';
+import { industryGroupWhere, resolveSeniority,businessIndustryGroupIndex } from '../catalogs/business-catalog';
+import { CandidateCache } from '../common/candidate-cache';
 import {
   displayCompanyName,
   maskAnonymousCompany,
@@ -117,6 +120,7 @@ export class JobsService {
     @Optional() private linkedin?: LinkedInService,
     @Optional() private recruiterOnboarding?: RecruiterOnboardingService,
     @Optional() private screeningPackets?: ScreeningPackets,
+    @Optional() private candidateCache?:CandidateCache,
   ) {}
 
   private assertSalaryRange(min: number | null | undefined, max: number | null | undefined) {
@@ -365,13 +369,14 @@ export class JobsService {
     if (created) { void this.jobsSearch.syncJob(created.id); void this.screeningPackets?.sync(created.id).catch(()=>undefined); }
     return created;
   }
-  private async createInside(user: AuthUser, companyId: string, data: Record<string, unknown>, db: Prisma.TransactionClient) {
+  async createInside(user: AuthUser, companyId: string, data: Record<string, unknown>, db: Prisma.TransactionClient, frozenSeniorityVersion?:string) {
     const { company } = await this.companies.assertMember(user, companyId, [
       'OWNER',
       'ADMIN',
       'RECRUITER',
     ]);
     this.companies.assertOpen(company);
+    const seniority=await resolveSeniority(db,data,undefined,frozenSeniorityVersion);
     // Release partial unique indexes for expired openings even if the worker is late.
     await db.jobPost.updateMany({where:{companyId,status:{in:['PUBLISHED','PAUSED']},benefit:{expiresAt:{lte:new Date()}}},data:{status:'EXPIRED'}});
     this.assertSalaryRange(data.salaryMin as number | null | undefined, data.salaryMax as number | null | undefined);
@@ -379,7 +384,8 @@ export class JobsService {
     // Remote: city is optional hub/region — never invent a fake "Remote" city
     const { cityId, countryId } = await resolveJobLocation(db, data);
     const categoryId = await this.resolveCategoryId(data.categorySlug as string | undefined, db);
-    const resolvedTitle = await resolveJobTitle(db, {
+    const explicitPosition=['CATALOG','MANUAL'].includes(String(data.positionEntryMode))?await resolveHrPosition(db,data):null;
+    const resolvedTitle = explicitPosition?{jobTitle:{id:explicitPosition.jobTitleId,name:explicitPosition.title},inferredLevel:null}:await resolveJobTitle(db, {
       name: String(data.title).trim(),
       slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
     });
@@ -413,6 +419,10 @@ export class JobsService {
         salaryPeriod: (data.salaryPeriod as never) || 'MONTHLY',
         currency: (data.currency as string) || 'UZS',
         experienceYearsMin: (data.experienceYearsMin as number) ?? null,
+        ...seniority,
+        ...effectiveExperience(data,seniority),
+        ...structuredJobFields(data),
+        positionEntryMode:explicitPosition?.positionEntryMode,
         experienceLevel,
         isAnonymous: data.isAnonymous === true,
         locale: pickStoredLocale({
@@ -443,6 +453,27 @@ export class JobsService {
     return created ? this.withResolvedIcons(created) : created;
   }
 
+  async assertCreationPublication(user:AuthUser,jobId:string,db:Prisma.TransactionClient){
+    const job=await db.jobPost.findUniqueOrThrow({where:{id:jobId}});
+    await this.recruiterOnboarding?.beforePublish(user,job.companyId,db);
+    this.assertLocationRules(job.workMode,job.cityId,true);
+    if(job.positionEntryMode!=='MANUAL'){
+      const role=job.jobTitleId?await db.jobTitle.findUnique({where:{id:job.jobTitleId},select:currentRoleSelect}):null;
+      if(!currentRoleIdentity(role))throw new BadRequestException('POSITION_UNAVAILABLE');
+    }
+  }
+
+  async creationPublished(jobId:string){
+    await this.candidateCache?.invalidate(false);
+    await this.jobsSearch.syncJob(jobId).catch(()=>this.logger.warn('Published job search synchronization will retry: '+jobId));
+    await this.screeningPackets?.sync(jobId).catch(()=>undefined);
+    const job=await this.prisma.jobPost.findUniqueOrThrow({where:{id:jobId},include:{company:{include:{followers:true}},city:true,country:true,jobSkills:{include:{skill:true}}}});
+    for(const follower of job.isAnonymous?[]:job.company.followers){
+      await this.notifications.create({userId:follower.userId,type:'NEW_JOB_MATCH',title:`New job at ${job.company.name}`,body:job.title,titleKey:'notify.newJobAtCompany.title',params:{company:job.company.name},linkUrl:`/jobs/${job.id}`}).catch(()=>undefined);
+    }
+    void this.telegram.announceJob({id:job.id,title:job.title,locale:job.locale,companyName:job.company.name,cityName:job.city?.name??job.country?.name??null,workMode:job.workMode,employmentType:job.employmentType,salaryMin:job.salaryMin,salaryMax:job.salaryMax,currency:job.currency,skills:job.jobSkills.map(s=>s.skill.name)}).catch(()=>undefined);
+  }
+
   async update(user: AuthUser, jobId: string, data: Record<string, unknown>) {
     const job = await this.prisma.jobPost.findUniqueOrThrow({ where: { id: jobId } });
     const updated = await this.prisma.$transaction(async db => {
@@ -462,6 +493,7 @@ export class JobsService {
     this.companies.assertOpen(job.company);
     if (data.expectedUpdatedAt && data.expectedUpdatedAt !== job.updatedAt.toISOString())
       throw new ConflictException('Job changed. Refresh before saving your changes.');
+    const seniority=await resolveSeniority(db,data,job);
     this.assertSalaryRange(
       data.salaryMin === undefined ? job.salaryMin : data.salaryMin as number | null,
       data.salaryMax === undefined ? job.salaryMax : data.salaryMax as number | null,
@@ -473,7 +505,9 @@ export class JobsService {
     let title = job.title;
     let jobTitleId = job.jobTitleId;
     let inferredLevel: typeof job.experienceLevel = null;
-    if (data.title !== undefined || data.jobTitleSlug !== undefined) {
+    const explicitPosition=['CATALOG','MANUAL'].includes(String(data.positionEntryMode))?await resolveHrPosition(db,{...data,title:data.title??job.title}):null;
+    if(explicitPosition){title=explicitPosition.title;jobTitleId=explicitPosition.jobTitleId;}
+    else if (data.title !== undefined || data.jobTitleSlug !== undefined) {
       const resolvedTitle = await resolveJobTitle(db, {
         name: data.title !== undefined ? String(data.title).trim() : job.title,
         slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
@@ -528,9 +562,13 @@ export class JobsService {
         salaryPeriod: data.salaryPeriod as never,
         currency: data.currency as string | undefined,
         experienceYearsMin: data.experienceYearsMin as number | null | undefined,
+        ...seniority,
+        ...effectiveExperience(data,seniority,job),
+        ...structuredJobFields(data),
+        positionEntryMode:explicitPosition?.positionEntryMode,
         experienceLevel: nextExperienceLevel as never,
         isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : undefined,
-        locale:
+        locale: data.locale===undefined?undefined:
           pickStoredLocale({
             text: `${title}\n${description}`,
             explicit: typeof data.locale === 'string' ? data.locale : null,
@@ -661,7 +699,7 @@ export class JobsService {
         if (employeeRecommendationV32Enabled() || ['enabled','shadow'].includes(employeeIntentMode())) {
           await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock_shared(742159744)`);
           const role=current.jobTitleId?await tx.jobTitle.findUnique({where:{id:current.jobTitleId},select:currentRoleSelect}):null;
-          if(!currentRoleIdentity(role))throw new BadRequestException('Select a reviewed position from the catalog before publishing');
+          if(!currentRoleIdentity(role)&&current.positionEntryMode!=='MANUAL')throw new BadRequestException('Select a reviewed position from the catalog before publishing');
         }
         await this.recruiterOnboarding?.beforePublish(user, current.companyId, tx);
         this.assertLocationRules(current.workMode, current.cityId, true);
@@ -1135,6 +1173,7 @@ export class JobsService {
     company?: string;
     companySlug?: string;
     industrySlug?: string;
+    industryGroupCode?: string;
     jobTitle?: string;
     employmentType?: string;
     workMode?: string;
@@ -1195,8 +1234,10 @@ export class JobsService {
       .map((s) => s.trim())
       .filter(Boolean);
     if (industrySlugs.length) {
-      and.push({ company: { industry: { slug: { in: industrySlugs } } } });
+      and.push({ isAnonymous:false,company: { industry: { slug: { in: industrySlugs } } } });
     }
+    const industryGroupCodes=(query.industryGroupCode||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if(industryGroupCodes.length)and.push({isAnonymous:false,company:industryGroupWhere(industryGroupCodes)});
     if (query.employmentType) and.push({ employmentType: query.employmentType as never });
     if (query.workMode) and.push({ workMode: query.workMode as never });
 
@@ -1224,8 +1265,8 @@ export class JobsService {
     if (query.experienceYearsMax !== undefined) {
       and.push({
         OR: [
-          { experienceYearsMin: null },
-          { experienceYearsMin: { lte: query.experienceYearsMax } },
+          {seniorityLevelCode:{not:null},seniorityYearsMin:{lte:query.experienceYearsMax}},
+          {seniorityLevelCode:null,OR:[{experienceYearsMin:null},{experienceYearsMin:{lte:query.experienceYearsMax}}]},
         ],
       });
     }
@@ -1487,11 +1528,14 @@ export class JobsService {
         },
         company: {
           select: {
+            id:true,
             slug: true,
             name: true,
             logoUrl: true,
+            industryGroupId:true,
             industry: {
               select: {
+                id:true,
                 slug: true,
                 name: true,
                 nameUz: true,
@@ -1520,6 +1564,18 @@ export class JobsService {
       },
     });
 
+    const groupIds=[...new Set(facetJobs.flatMap(job=>job.isAnonymous?[]:job.company.industryGroupId?[job.company.industryGroupId]:[]))];
+    const industryIds=[...new Set(facetJobs.flatMap(job=>job.isAnonymous||job.company.industryGroupId||!job.company.industry?[]:[job.company.industry.id]))];
+    const companyIds=[...new Set(facetJobs.flatMap(job=>job.isAnonymous?[]:[job.company.id]))];
+    // Load membership once per company, rather than serializing the same group
+    // metadata into every vacancy in the facet scan.
+    const [links,businessGroups]=await Promise.all([
+      companyIds.length?this.prisma.$queryRaw<Array<{companyId:string;groupId:string}>>`SELECT "B" AS "companyId","A" AS "groupId" FROM "_CompanyIndustryGroups" WHERE "B"=ANY(${companyIds}::text[])`:Promise.resolve([]),
+      companyIds.length||groupIds.length||industryIds.length?businessIndustryGroupIndex(this.prisma,this.candidateCache):Promise.resolve([]),
+    ]);
+    const memberships=new Map<string,string[]>();for(const link of links){const ids=memberships.get(link.companyId)??[];ids.push(link.groupId);memberships.set(link.companyId,ids);}
+    const groupById=new Map(businessGroups.map(group=>[group.id,group]));
+    const groupByIndustry=new Map(businessGroups.flatMap(group=>group.industryId?[[group.industryId,group] as const]:[]));
     type Facet = {
       slug: string;
       name: string;
@@ -1540,6 +1596,7 @@ export class JobsService {
       Facet & { groupSlug?: string; groupName?: string }
     > = {};
     const skillFacets: Record<string, Facet> = {};
+    const industryGroupFacets:Record<string,Facet&{code:string;version:string}>={};
     const languageFacets: Record<
       string,
       { code: string; name: string; nameUz?: string | null; nameRu?: string | null; nameId?: string | null; count: number }
@@ -1578,6 +1635,12 @@ export class JobsService {
       }
       // A company facet on a confidential posting would name the employer.
       if (j.company && !j.isAnonymous) {
+        const selected=memberships.get(j.company.id);
+        const groups=(selected?.length?selected.map(id=>groupById.get(id)):[j.company.industryGroupId?groupById.get(j.company.industryGroupId):groupByIndustry.get(j.company.industry?.id??'')]).filter(Boolean);
+        for(const group of groups){if(!group)continue;
+          const key=group.code;
+          industryGroupFacets[key]=industryGroupFacets[key]?{...industryGroupFacets[key],count:industryGroupFacets[key].count+1}:{slug:group.code,code:group.code,version:group.version,name:group.name,nameId:group.nameId,nameUz:group.nameUz,nameRu:group.nameRu,count:1};
+        }
         const key = j.company.slug;
         companyFacets[key] = companyFacets[key]
           ? { ...companyFacets[key], count: companyFacets[key].count + 1 }
@@ -1650,6 +1713,7 @@ export class JobsService {
         jobTitles: Object.values(jobTitleFacets).sort((a, b) => b.count - a.count),
         companies: Object.values(companyFacets).sort((a, b) => b.count - a.count),
         industries: Object.values(industryFacets).sort((a, b) => b.count - a.count),
+        industryGroups:Object.values(industryGroupFacets).sort((a,b)=>b.count-a.count||a.code.localeCompare(b.code)),
         skills: Object.values(skillFacets).sort((a, b) => b.count - a.count),
         languages: Object.values(languageFacets).sort((a, b) => b.count - a.count),
         experienceLevels: experienceFacets,
@@ -1730,7 +1794,8 @@ export class JobsService {
     if (!['CLOSED','EXPIRED'].includes(source.status) && !(benefit?.expiresAt && benefit.expiresAt <= new Date())) throw new ConflictException('Close the original job before copying it');
     const job = await this.prisma.$transaction(async db => {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id=${source.companyId} FOR UPDATE`);
-      const created = await this.createInside(user,source.companyId,{ ...source, citySlug: source.city?.slug, categorySlug: source.category?.slug, skills: source.jobSkills.map(row=>({name:row.skill.name,isRequired:row.isRequired,weight:row.weight,minLevel:row.minLevel})), benefits: source.benefits.map(row=>({name:row.benefit.name})), languages:source.jobLanguages.map(row=>({code:row.language.code,minLevel:row.minLevel,isRequired:row.isRequired,confirmed:row.provenance==='EMPLOYER_CONFIRMED'})) },db);
+      const {seniorityVersion,seniorityYearsMin,seniorityYearsMax,experienceRangeSource,...copy}=source;
+      const created = await this.createInside(user,source.companyId,{ ...copy, citySlug: source.city?.slug, categorySlug: source.category?.slug, skills: source.jobSkills.map(row=>({name:row.skill.name,isRequired:row.isRequired,weight:row.weight,minLevel:row.minLevel})), benefits: source.benefits.map(row=>({name:row.benefit.name})), languages:source.jobLanguages.map(row=>({code:row.language.code,minLevel:row.minLevel,isRequired:row.isRequired,confirmed:row.provenance==='EMPLOYER_CONFIRMED'})) },db);
       if (!created) throw new NotFoundException();
       await this.syncQuestions(created.id,source.questions.map(({question,type,isRequired,sortOrder})=>({question,type,isRequired,sortOrder})),db);
       return this.withResolvedIcons(await db.jobPost.findUniqueOrThrow({ where: { id: created.id }, include: this.jobInclude }));

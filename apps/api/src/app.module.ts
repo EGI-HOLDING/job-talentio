@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { HrFlowModule } from './hr-flow/hr-flow.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LocaleInterceptor } from './common/locale.interceptor';
@@ -32,6 +33,7 @@ import { CandidateCacheModule } from './common/candidate-cache';
 
 @Module({
   imports: [
+    HrFlowModule,
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     RateLimitModule,
     LiveUpdatesModule,

@@ -56,6 +56,7 @@ export class CompaniesController {
     return this.companies.browse({
       q: data.q,
       industrySlug: data.industrySlug,
+      industryGroupCode: data.industryGroupCode,
       plan: data.plan,
       sort: data.sort ?? 'jobs',
       page: data.page ?? 1,

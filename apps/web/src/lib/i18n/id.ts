@@ -1,4 +1,5 @@
 import type { DictKey } from './dict';
+import { hrFlowId } from './dict/hrFlow';
 import { jobCommerce } from './dict/jobCommerce';
 import { hrRanking } from './dict/hrRanking';
 import { linkedin } from './dict/linkedin';
@@ -8,6 +9,7 @@ import { cvSourceId } from './dict/cvSource';
 
 /** Indonesian translations for the complete web interface. */
 export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
+  ...hrFlowId,
   ...cvSourceId,
   ...applicationOfferId,
   "jr.package": "Paket",

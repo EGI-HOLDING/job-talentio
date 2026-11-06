@@ -35,7 +35,7 @@ import { JobCommerceAdminController } from './job-commerce-admin.controller';
     HrSupportService,
     BenefitsWorker,
   ],
-  exports: [BenefitsService, OperationsService, HrEventsService, HrAnalyticsService, RecruiterOnboardingService],
+  exports: [BenefitsService, OperationsService, HrEventsService, HrAnalyticsService, RecruiterOnboardingService, JobCommerceService, JobPaymentProvider],
   controllers: [
     BenefitsController,
     JobCommerceController,

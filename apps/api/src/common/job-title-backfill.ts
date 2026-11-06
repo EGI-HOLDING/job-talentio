@@ -46,7 +46,7 @@ export type JobTitleBackfillResult = {
 /** True when posts/catalog still need seniority purge or missing jobTitleId. */
 export async function needsJobTitleBackfill(db: Db): Promise<boolean> {
   if (catalogMaintenance() || databaseCatalogs()) return false;
-  const nullLinks = await db.jobPost.count({ where: { jobTitleId: null } });
+  const nullLinks = await db.jobPost.count({ where: { jobTitleId: null,positionEntryMode:'LEGACY' } });
   if (nullLinks > 0) return true;
 
   const imported = await importedCatalogIds(db);
@@ -229,6 +229,7 @@ export async function backfillJobTitles(
   );
 
   const posts = await db.jobPost.findMany({
+    where:{positionEntryMode:'LEGACY'},
     select: {
       id: true,
       companyId: true,

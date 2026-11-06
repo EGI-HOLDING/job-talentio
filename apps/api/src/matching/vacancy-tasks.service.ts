@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmployeeOccupationIndex } from './employee-occupation';
-import { escoTaskDictionary, primaryTaskScope, professionTaskKeys, taskCompatibility, taskDigest, taskEvidence, VACANCY_TASK_VERSION, type EscoTaskDictionary, type TaskEvidence, type VacancyEligibility } from './vacancy-tasks';
+import { escoTaskDictionary, primaryTaskScope, professionTaskKeys, taskCompatibility, taskDigest, taskEvidence, vacancyTaskText, VACANCY_TASK_VERSION, type EscoTaskDictionary, type TaskEvidence, type VacancyEligibility } from './vacancy-tasks';
 import { employeeRecommendationV32Enabled } from './employee-recommendation-policy';
 import { OccupationRelationsService } from './occupation-relations.service';
 
@@ -23,8 +23,8 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
 
   private concepts() { return this.dictionary??=escoTaskDictionary(this.relations.loadSource().skills); }
 
-  project(posting:{id:string;jobTitleId:string|null;description:string;updatedAt:Date}):TaskRow {
-    const evidence=taskEvidence(posting.description,this.concepts());
+  project(posting:{id:string;jobTitleId:string|null;description:string;responsibilities?:readonly string[];updatedAt:Date}):TaskRow {
+    const evidence=taskEvidence(VACANCY_TASK_VERSION==='vacancy-tasks-v3'?vacancyTaskText(posting):posting.description,this.concepts());
     return {id:posting.id,jobTitleId:posting.jobTitleId,updatedAt:posting.updatedAt,keys:evidence.map(task=>task.key),evidence};
   }
 
@@ -42,8 +42,8 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
     if(this.working)return 0;
     this.working=true;
     try {
-      const rows=await this.db.$queryRaw<Array<{id:string;description:string;updatedAt:Date}>>`
-        SELECT job."id",job."description",job."updatedAt"
+      const rows=await this.db.$queryRaw<Array<{id:string;description:string;responsibilities:string[];updatedAt:Date}>>`
+        SELECT job."id",job."description",job."responsibilities",job."updatedAt"
         FROM "JobPost" job
         LEFT JOIN "JobOccupationTaskEvidence" evidence
           ON evidence."jobId"=job."id" AND evidence."version"=${VACANCY_TASK_VERSION}
@@ -53,7 +53,7 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
         LIMIT ${limit}
       `;
       for(const row of rows){
-        const evidence=taskEvidence(row.description,this.concepts());
+        const evidence=taskEvidence(VACANCY_TASK_VERSION==='vacancy-tasks-v3'?vacancyTaskText(row):row.description,this.concepts());
         const keys=evidence.map(task=>task.key);
         await this.db.$executeRaw`
           INSERT INTO "JobOccupationTaskEvidence" ("jobId","version","jobUpdatedAt","coreKeys","evidence")

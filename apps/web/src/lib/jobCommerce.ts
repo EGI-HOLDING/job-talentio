@@ -5,8 +5,9 @@ export type PurchaseIntent = 'PURCHASE'|'UPGRADE'|'RENEW';
 export type JobPackage = {code: PackageCode; amount: number; currency: string; version: number;
   settings: {durationDays: number; boostDays: number; featuredDays: number; conversions: boolean; reports: boolean; prioritySupport: boolean};
   linkedin: boolean; instagram: string};
-export type PackageCatalog = {version: number; packages: JobPackage[]; enabled: boolean; testMode: boolean; paymentAvailable: boolean};
-export type JobOrder = {id: string; jobId: string; companyId: string; jobTitle: string; companyName: string; code: PackageCode;
+export type PackageCatalog = {version: number; packages: JobPackage[]; enabled: boolean; testMode: boolean; paymentAvailable: boolean;hrFlowV2?:boolean};
+export type JobOrder = {id: string; jobId: string|null; companyId: string; jobTitle: string; companyName: string; code: PackageCode;
+  creationSessionId?:string|null;
   intent: PurchaseIntent; status: string; amount: number; currency: string; expiresAt: string; createdAt: string;
   fulfilledAt: string|null; provider: string|null};
 export function money(amount: number, locale: string, currency = 'IDR') {

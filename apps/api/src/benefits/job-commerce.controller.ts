@@ -18,14 +18,14 @@ export class JobCommerceCatalogController {
 @Roles('RECRUITER', 'SUPER_ADMIN')
 export class JobCommerceController {
   constructor(private commerce: JobCommerceService, private search: JobsSearchService) {}
-  private async sync<T extends {jobId: string}>(order: T) {
-    await this.search.syncJob(order.jobId);
+  private async sync<T extends {jobId: string|null}>(order: T) {
+    if(order.jobId)await this.search.syncJob(order.jobId);
     return order;
   }
   @Post()
   async create(@CurrentUser() user: AuthUser, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
-    const input = parseDto(z.object({jobId: z.string().min(1).max(100), code: z.enum(['FREE','STANDARD','PREMIUM']),
-      intent: z.enum(['PURCHASE','UPGRADE','RENEW'])}).strict(), body);
+    const input = parseDto(z.object({jobId: z.string().min(1).max(100).optional(),creationSessionId:z.string().min(1).max(100).optional(),code: z.enum(['FREE','STANDARD','PREMIUM']),
+      intent: z.enum(['PURCHASE','UPGRADE','RENEW'])}).strict().refine(v=>Boolean(v.jobId)!==Boolean(v.creationSessionId),'Choose exactly one order subject').refine(v=>!v.creationSessionId||v.intent==='PURCHASE','Creation sessions only support purchase'), body);
     return this.sync(await this.commerce.create(user, input, key));
   }
   @Get() list(@CurrentUser() user: AuthUser, @Query('companyId') companyId: string) {
@@ -38,6 +38,7 @@ export class JobCommerceController {
   @Get(':id') get(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.commerce.get(user, id); }
   @Post(':id/cancel') cancel(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.commerce.cancel(user, id); }
   @Post(':id/payment-session') payment(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.commerce.paymentSession(user, id); }
+  @Post(':id/reconcile') async reconcile(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.sync(await this.commerce.reconcile(user,id));}
   @Post(':id/complete-test') async test(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.sync(await this.commerce.completeTest(user, id)); }
 }
 
@@ -50,7 +51,7 @@ export class JobPaymentWebhookController {
   async event(@Req() request: Request & {rawBody?: Buffer}) {
     const verified = await this.provider.verify(request.headers, request.rawBody ?? Buffer.alloc(0));
     const order = await this.commerce.settle(this.provider.name, verified);
-    await this.search.syncJob(order.jobId);
+    if(order.jobId)await this.search.syncJob(order.jobId);
     return {received: true, orderId: order.id, status: order.status};
   }
 }

@@ -21,6 +21,7 @@ export class CompanyLogoBackfillService implements OnApplicationBootstrap {
   }
 
   async onApplicationBootstrap() {
+    if(process.env.DEMO_LOGO_BACKFILL_ENABLED==='false')return;
     try {
       const uploader = this.uploader();
       const needs = await needsCompanyLogoBackfill(this.prisma, uploader);

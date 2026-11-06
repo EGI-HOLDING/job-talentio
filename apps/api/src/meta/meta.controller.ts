@@ -60,6 +60,12 @@ export class MetaController {
     return this.meta.industries(group);
   }
 
+  @Get('industry-groups')
+  industryGroups() { return this.meta.industryGroups(); }
+
+  @Get('seniority-levels')
+  seniorityLevels() { return this.meta.seniorityLevels(); }
+
   @Get('benefits/suggest')
   suggestBenefits(@Query('q') q?: string, @Query('take') take?: string) {
     return this.meta.suggestBenefits(q, take ? Number(take) : 10);

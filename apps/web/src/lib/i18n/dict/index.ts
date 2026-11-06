@@ -1,4 +1,5 @@
 import { hrBenefits } from './hrBenefits';
+import { hrFlow } from './hrFlow';
 import { jobCommerce } from './jobCommerce';
 import { hrRanking } from './hrRanking';
 import { core } from './core';
@@ -24,6 +25,7 @@ import { cvSource } from './cvSource';
 
 /** Namespaces are merged into one flat lookup so `t('key')` stays unchanged. */
 export const DICT = {
+  ...hrFlow,
   ...cvSource,
   ...jobCommerce,
   ...core,

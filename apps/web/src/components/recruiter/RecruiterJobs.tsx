@@ -11,13 +11,14 @@ import { SearchField, WorkspaceEmpty, WorkspaceLoading, Pagination } from '@/com
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { RecruiterJobEditor } from './RecruiterJobEditor';
+import { hrFlowV2Enabled } from './HrCreationFlow';
 import s from './RecruiterWorkspace.module.css';
 import { RecruiterJobRow } from './RecruiterJobRow';
 import table from './RecruiterJobTable.module.css';
 import bar from './RecruiterJobsToolbar.module.css';
 
 type Props = { companyId: string; company: any; jobs: any[]; loading: boolean; meta: any; createRequested: boolean; onCloseCreate: () => void; onReload: (quiet?:boolean) => Promise<void>; onApplicants: (id: string) => void; onStatus: (id: string, status: string, message: string) => Promise<void>; onFlash: (message: string, tone?: 'success' | 'error') => void };
-export function RecruiterJobs({ companyId, company, jobs, loading, meta, createRequested, onCloseCreate, onReload, onApplicants, onStatus, onFlash }: Props) {
+export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, meta, createRequested, onCloseCreate, onReload, onApplicants, onStatus, onFlash }: Props) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const confirm = useConfirm();
@@ -27,6 +28,13 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
   const [packageFilter, setPackageFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<any | 'new' | null>(createRequested ? 'new' : null);
+  const [sessions,setSessions]=useState<any[]>([]);
+  useEffect(()=>{
+    if(!hrFlowV2Enabled)return;const abort=new AbortController();setSessions([]);
+    api<any[]>('/hr-flow/sessions?companyId='+encodeURIComponent(companyId),{signal:abort.signal,cache:'no-store'}).then(setSessions).catch(()=>undefined);
+    return()=>abort.abort();
+  },[companyId,actualJobs,editing]);
+  const jobs=useMemo(()=>[...actualJobs,...sessions.map(session=>({id:'creation:'+session.id,_creationSessionId:session.id,title:session.draft?.title||'Lowongan baru',status:'DRAFT',createdAt:session.createdAt,updatedAt:session.updatedAt,city:company?.city,benefit:session.order?.status==='PAID'?{code:session.order.code,selectionConfirmedAt:session.updatedAt}:null,_count:{applications:0,views:0}}))],[actualJobs,sessions,company]);
   const [busyId, setBusyId] = useState('');
   useLiveRefresh('applications', async()=>{await onReload(true);}, !loading && !busyId && !editing, companyId);
   const actionLock = useRef(false);
@@ -57,6 +65,8 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
     finally { if (alive.current && contextVersion.current === requested) setOpening(false); }
   }
   useEffect(() => { if (createRequested) setEditing('new'); }, [createRequested]);
+  const sessionCompany=useRef(companyId);
+  useEffect(()=>{if(!hrFlowV2Enabled)return;const url=new URL(window.location.href);if(sessionCompany.current!==companyId){sessionCompany.current=companyId;url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);return;}const id=url.searchParams.get('creationSession');if(id)setEditing({id:'creation:'+id,_creationSessionId:id});},[companyId]);
   useEffect(() => { setPage(1); }, [query, status, sort, packageFilter]);
   const filtered = useMemo(() => jobs.filter((job) =>
     (status === 'ALL' || job.status === status) &&
@@ -88,7 +98,7 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
     } catch (error) { if (alive.current && contextVersion.current === requested) onFlash(error instanceof Error ? error.message : t('ew.loadFailed'), 'error'); }
     finally { if (alive.current && contextVersion.current === requested) { actionLock.current = false; setBusyId(''); } }
   }
-  function closeEditor() { setEditing(null); onCloseCreate(); }
+  function closeEditor() { setEditing(null);if(hrFlowV2Enabled){const url=new URL(window.location.href);url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);} onCloseCreate(); }
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>
@@ -103,7 +113,7 @@ export function RecruiterJobs({ companyId, company, jobs, loading, meta, createR
     {loading ? <WorkspaceLoading /> : !filtered.length ? <WorkspaceEmpty title={t(jobs.length ? 'rw.noResults' : 'rw.noJobs')} hint={jobs.length ? undefined : t('rw.noJobsHint')}>{jobs.length ? <button className={s.secondary} onClick={() => { setQuery(''); setStatus('ALL'); setPackageFilter('ALL'); }}>{t('clearFilters')}</button> : <button className={s.primary} onClick={() => setEditing('new')}>{t('postAJob')}</button>}</WorkspaceEmpty> : <div className={table.wrap} data-jobs-table><table className={table.table}>
       <colgroup><col className={table.titleCol} /><col className={table.statusCol} /><col className={table.packageCol} /><col className={table.locationCol} /><col className={table.performanceCol} /><col className={table.periodCol} /><col className={table.boostCol} /><col className={table.actionsCol} /></colgroup>
       <thead><tr>{['jobTitleFilter', 'status', 'jr.package', 'city', 'jr.performance', 'jr.period', 'jr.boost', 'rw.actions'].map(key => <th key={key} scope="col">{t(key)}</th>)}</tr></thead>
-      <tbody>{filtered.slice((safePage - 1) * 10, safePage * 10).map(job => <RecruiterJobRow key={companyId + ':' + job.id} job={job} companyId={companyId} companyOpen={!company?.anonymizedAt && !company?.isBanned} busy={Boolean(busyId)} onEdit={() => void openEditor(job)} onReviewPublish={() => void openEditor(job, 3)} onDuplicate={() => void duplicate(job)} onStatus={next => void change(job, next)} onApplicants={() => onApplicants(job.id)} onPeriodExpired={refreshRows} onFlash={onFlash} />)}</tbody>
+      <tbody>{filtered.slice((safePage - 1) * 10, safePage * 10).map(job => job._creationSessionId?<tr className={table.row} key={job.id} data-creation-session={job._creationSessionId}><td><button type="button" className={table.jobTitle} style={{border:0,background:'transparent',textAlign:'left'}} onClick={()=>setEditing(job)}>{job.title}</button></td><td><span className={table.status} data-status="DRAFT">Draf</span></td><td>{job.benefit?.code??t('jr.unselected')}</td><td>{company?.city?.name??'\u2014'}</td><td>{'\u2014'}</td><td>{t('jr.notPublished')}</td><td>{'\u2014'}</td><td><button type="button" className={s.secondary} onClick={()=>setEditing(job)}>{t('commerce.continue')}</button></td></tr>:<RecruiterJobRow key={companyId + ':' + job.id} job={job} companyId={companyId} companyOpen={!company?.anonymizedAt && !company?.isBanned} busy={Boolean(busyId)} onEdit={() => void openEditor(job)} onReviewPublish={() => void openEditor(job, 3)} onDuplicate={() => void duplicate(job)} onStatus={next => void change(job, next)} onApplicants={() => onApplicants(job.id)} onPeriodExpired={refreshRows} onFlash={onFlash} />)}</tbody>
     </table></div>}
 
     {!loading && filtered.length > 0 && <Pagination page={safePage} total={filtered.length} onChange={setPage} />}

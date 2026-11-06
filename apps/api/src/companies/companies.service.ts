@@ -1,4 +1,6 @@
 import { liveJobWhere } from '../benefits/benefit-policy';
+import { resolveCompanyProfile,attachCompanyLogo } from '../hr-flow/company-profile';
+import { industryGroupWhere, industryGroupSql, industryGroupSelect, resolveCompanyIndustry } from '../catalogs/business-catalog';
 import {
   Injectable,
   NotFoundException,
@@ -115,6 +117,7 @@ export class CompaniesService {
           include: {
             city: { include: { province: { include: { country: true } } } },
             industry: true,
+            industryGroup:{select:industryGroupSelect},industryGroups:{select:industryGroupSelect},
             _count: { select: { jobPosts: true, members: true, followers: true } },
           },
         },
@@ -126,6 +129,7 @@ export class CompaniesService {
   async browse(query: {
     q?: string;
     industrySlug?: string;
+    industryGroupCode?: string;
     plan?: PlanCode;
     sort: 'jobs' | 'name' | 'featured';
     page: number;
@@ -143,6 +147,7 @@ export class CompaniesService {
       jobPosts: { some: { ...liveJobWhere(), isAnonymous: false } },
       // Legacy plan filters no longer restrict directory membership.
       ...(query.industrySlug ? { industry: { slug: query.industrySlug } } : {}),
+      ...(query.industryGroupCode ? {AND:[industryGroupWhere([query.industryGroupCode])]} : {}),
       ...(q
         ? {
             OR: [
@@ -153,11 +158,12 @@ export class CompaniesService {
         : {}),
     };
 
-    const total = await this.prisma.company.count({ where });
-    const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
-    const safePage = Math.min(page, total === 0 ? 1 : totalPages);
+    const totalRead = this.prisma.company.count({ where });
 
     if (query.sort === 'featured') {
+      const total=await totalRead;
+      const totalPages=Math.max(1,Math.ceil(total/limit)||1);
+      const safePage=Math.min(page,total===0?1:totalPages);
       const featured = await this.prisma.$queryRaw<Array<{
         id: string;
         slug: string;
@@ -184,6 +190,7 @@ export class CompaniesService {
           ${query.industrySlug ? Prisma.sql`AND EXISTS (
             SELECT 1 FROM "Industry" i WHERE i."id" = c."industryId" AND i."slug" = ${query.industrySlug}
           )` : Prisma.empty}
+          ${query.industryGroupCode ? industryGroupSql(query.industryGroupCode) : Prisma.empty}
           ${q ? Prisma.sql`AND (
             c."name" ILIKE ${`%${q}%`}
             OR c."slug" ILIKE ${`%${q.toLowerCase().replace(/\s+/g, '-')}%`}
@@ -201,6 +208,7 @@ export class CompaniesService {
               name: true,
               logoUrl: true,
               industry: { select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true } },
+              industryGroupId:true,industryGroups:{select:industryGroupSelect},
               _count: {
                 select: { jobPosts: { where: { ...liveJobWhere(), isAnonymous: false } } },
               },
@@ -214,6 +222,7 @@ export class CompaniesService {
           name: c.name,
           logoUrl: c.logoUrl,
           industry: c.industry,
+          industryGroupId:c.industryGroupId,industryGroups:c.industryGroups,
           openJobsCount: c._count.jobPosts,
         })),
         total,
@@ -223,13 +232,14 @@ export class CompaniesService {
       };
     }
 
-    const rows = await this.prisma.company.findMany({
+    const readRows=(requestedPage:number)=>this.prisma.company.findMany({
       where,
       select: {
         slug: true,
         name: true,
         logoUrl: true,
         industry: { select: { slug: true, name: true, nameUz: true, nameRu: true, nameId: true } },
+        industryGroupId:true,industryGroups:{select:industryGroupSelect},
         _count: {
           select: { jobPosts: { where: { ...liveJobWhere(), isAnonymous: false } } },
         },
@@ -238,9 +248,13 @@ export class CompaniesService {
         query.sort === 'name'
           ? [{ name: 'asc' }]
           : [{ jobPosts: { _count: 'desc' } }, { name: 'asc' }],
-      skip: (safePage - 1) * limit,
+      skip: (requestedPage - 1) * limit,
       take: limit,
     });
+    const [total,requestedRows]=await Promise.all([totalRead,readRows(page)]);
+    const totalPages=Math.max(1,Math.ceil(total/limit)||1);
+    const safePage=Math.min(page,total===0?1:totalPages);
+    const rows=safePage===page?requestedRows:await readRows(safePage);
 
     return {
       items: rows.map((c) => ({
@@ -248,6 +262,7 @@ export class CompaniesService {
         name: c.name,
         logoUrl: c.logoUrl,
         industry: c.industry,
+        industryGroupId:c.industryGroupId,industryGroups:c.industryGroups,
         openJobsCount: c._count.jobPosts,
       })),
       total,
@@ -263,6 +278,7 @@ export class CompaniesService {
       include: {
         city: { include: { province: { include: { country: true } } } },
         industry: true,
+        industryGroup:{select:industryGroupSelect},industryGroups:{select:industryGroupSelect},
         members: {
           include: {
             user: { select: { id: true, email: true, fullName: true, avatarUrl: true } },
@@ -281,6 +297,7 @@ export class CompaniesService {
       include: {
         city: { include: { province: { include: { country: true } } } },
         industry: true,
+        industryGroup:{select:industryGroupSelect},industryGroups:{select:industryGroupSelect},
         translations: { select: { locale: true, description: true, isMachine: true } },
         jobPosts: {
           // Confidential postings never appear on the company's own public page.
@@ -460,6 +477,11 @@ export class CompaniesService {
       citySlug?: string;
       countryId?: string | null;
       industrySlug?: string;
+      industryGroupCode?: string | null;
+      industryGroupCodes?: string[];
+      profileSource?: 'MANUAL'|'DOCUMENT';
+      profileDocumentId?: string|null;
+      logoAssetId?:string;
       size?: string;
       locale?: string;
     },
@@ -469,7 +491,6 @@ export class CompaniesService {
       await this.assertCompanyNameAvailable(data.name, companyId);
     }
     let cityId: string | undefined | null = undefined;
-    let industryId: string | undefined | null = undefined;
     if (data.citySlug !== undefined || data.countryId !== undefined) {
       const location = await resolveJobLocation(this.prisma, data);
       if (data.countryId && !location.cityId) {
@@ -477,20 +498,19 @@ export class CompaniesService {
       }
       cityId = location.cityId;
     }
-    if (data.industrySlug !== undefined) {
-      if (!data.industrySlug) industryId = null;
-      else {
-        const ind = await this.prisma.industry.findFirst({
-          where: { slug: data.industrySlug, ...ACTIVE_CATALOG },
-        });
-        industryId = ind?.id ?? null;
-      }
-    }
     const description =
       data.description !== undefined ? sanitizeStoredText(data.description) : undefined;
-    const nextDescription = description !== undefined ? description : company.description;
-
-    return this.prisma.company.update({
+    return this.prisma.$transaction(async db => {
+    await db.$queryRaw`SELECT id FROM "Company" WHERE id=${companyId} FOR UPDATE`;
+    const current=await db.company.findUniqueOrThrow({where:{id:companyId}});
+    this.assertOpen(current);
+    const membership=await db.companyMember.findUnique({where:{companyId_userId:{companyId,userId:user.id}}});
+    if(user.role!=='SUPER_ADMIN'&&(!membership||!['OWNER','ADMIN'].includes(membership.role)))throw new ForbiddenException();
+    const classification=await resolveCompanyIndustry(db,data,current);
+    const profile=await resolveCompanyProfile(db,user,data,current);
+    if(data.logoAssetId)await attachCompanyLogo(db,this.storage,user,companyId,data.logoAssetId);
+    const nextDescription=description!==undefined?description:current.description;
+    return db.company.update({
       where: { id: companyId },
       data: {
         name: data.name !== undefined ? sanitizeStoredText(data.name) : undefined,
@@ -500,14 +520,16 @@ export class CompaniesService {
           pickStoredLocale({
             text: nextDescription,
             explicit: data.locale,
-            existing: company.locale,
+            existing: current.locale,
           }) ?? undefined,
-        website: data.website || null,
+        website: data.website === undefined ? undefined : data.website || null,
         cityId,
-        industryId,
+        ...classification,
+        ...profile,
         size: data.size as never,
       },
-      include: { city: { include: { province: { include: { country: true } } } }, industry: true },
+      include: { city: { include: { province: { include: { country: true } } } }, industry: true,industryGroup:{select:industryGroupSelect},industryGroups:{select:industryGroupSelect} },
+    });
     });
   }
 

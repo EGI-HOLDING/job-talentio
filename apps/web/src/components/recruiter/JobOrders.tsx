@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Link, useRouter } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
+import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { JobOrder, money, packageHref } from '@/lib/jobCommerce';
 import { employerWorkspaceHref } from '@/lib/accountNavigation';
 import { Pagination, WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
@@ -11,6 +12,7 @@ import { JobBenefits } from './HrBenefits';
 import s from './JobCommerce.module.css';
 
 export function JobOrders() {
+  const c=useHrCopy();
   const {t, locale} = useI18n(), router = useRouter(), params = useSearchParams();
   const [memberships, setMemberships] = useState<any[]|null>(null), [companyId, setCompanyId] = useState(params.get('company') || ''), [orders, setOrders] = useState<JobOrder[]|null>(null), [jobs, setJobs] = useState<any[]>([]), [error, setError] = useState(''), [retry, setRetry] = useState(0);
   const [page,setPage]=useState(1),[total,setTotal]=useState(0);
@@ -35,7 +37,7 @@ export function JobOrders() {
       {!companyId && <p>{t('rw.noCompanyHint')}</p>}
       <div className={s.orders}>{jobs.map(job => <article className={s.order} key={job.id}><div><h2>{job.title}</h2><JobBenefits jobId={job.id} status={job.status}/></div><Link className={s.secondary} href={packageHref(job.id)}>{t('commerce.pricing')} →</Link></article>)}</div>
       <h2 style={{fontSize: '1.1rem', margin: '36px 0 20px'}}>{t('commerce.orderHistory')}</h2>
-      {!orders?.length ? <p className={s.notice}>{t('commerce.noOrders')}</p> : <div className={s.orders}>{orders.map(order => <article className={s.order} key={order.id}><div><h2>{order.jobTitle}</h2><p>{t('commerce.' + order.code)} | {money(order.amount, locale, order.currency)}<br/>{new Date(order.createdAt).toLocaleDateString(locale)}{order.provider === 'local-test' && ' | ' + t('commerce.testMode')}</p></div><span className={s.status} data-status={order.status}>{t('commerce.' + order.status)}</span><Link className={s.text} href={'/checkout/' + order.id}>{t('commerce.continue')} →</Link></article>)}</div>}
+      {!orders?.length ? <p className={s.notice}>{t('commerce.noOrders')}</p> : <div className={s.orders}>{orders.map(order => <article className={s.order} key={order.id}><div><h2>{order.jobTitle}</h2><p>{t('commerce.' + order.code)} | {money(order.amount, locale, order.currency)}<br/>{new Date(order.createdAt).toLocaleDateString(locale)}{order.provider === 'local-test' && ' | ' + t('commerce.testMode')}</p></div><span className={s.status} data-status={order.status}>{order.status==='PAID'&&order.amount===0?c('Paket Free dikonfirmasi'):t('commerce.' + order.status)}</span><Link className={s.text} href={'/checkout/' + order.id}>{t('commerce.continue')} →</Link></article>)}</div>}
       {total>20&&<Pagination page={page} total={total} size={20} onChange={setPage}/>}
     </>}
   </div>;

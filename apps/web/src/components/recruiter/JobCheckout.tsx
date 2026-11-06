@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { commerceReturn, JobOrder, PackageCatalog, money, packageHref } from '@/lib/jobCommerce';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
 import s from './JobCommerce.module.css';
+import { CreationCheckoutReturn } from './CreationCheckoutReturn';
 
 export function JobCheckout() {
   const {orderId} = useParams<{orderId: string}>(), params = useSearchParams(), router = useRouter(), {t, locale} = useI18n();
@@ -34,6 +35,8 @@ export function JobCheckout() {
     return () => {clearTimeout(timer); abort.abort();};
   }, [order?.id, order?.status, orderId]);
   if (!order || order.id !== orderId || !catalog) return <div className={s.page}>{error ? <div className={s.error} role="alert">{error}<br/><button className={s.text} onClick={() => setRetry(n => n + 1)}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>}</div>;
+  if(order.creationSessionId)return <CreationCheckoutReturn order={order}/>;
+  if(!order.jobId)return <div className={s.page}><p role="alert">{t('ew.loadFailed')}</p></div>;
   const returnTo = commerceReturn(params.get('returnTo'), order.jobId);
   async function pay() {
     if (busy || !order) return; const requestedOrder = orderId; setBusy(true); setError('');

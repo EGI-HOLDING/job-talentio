@@ -20,6 +20,7 @@ function load(file, dependencies = {}, globals = {}) {
     require: (name) => {
       if (name in dependencies) return dependencies[name];
       if (name === 'react' || name === 'react/jsx-runtime') return webRequire(name);
+      if(name==='./StructuredJobContent')return {StructuredJobContent:()=>null,jobExperienceLabel:()=>null};
       throw Error('Unexpected dependency ' + name + ' in ' + file);
     },
   }, { filename: file });

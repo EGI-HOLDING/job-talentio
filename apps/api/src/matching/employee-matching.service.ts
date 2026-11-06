@@ -7,17 +7,18 @@ import { compareIntent,type IntentEvaluation } from './employee-intent';
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { EmployeeEvaluation, EmployeeMatchJob, EmployeeMatchProfile, OccupationIndex, evaluateEmployee, rankEmployeeJobs, EMPLOYEE_MATCH_VERSION } from './employee-matching';
+import { EmployeeEvaluation, EmployeeMatchJob, EmployeeMatchProfile, OccupationIndex, evaluateEmployee, rankEmployeeJobs, EMPLOYEE_MATCH_VERSION,candidateManualPositionScope } from './employee-matching';
 import { MatchingService } from './matching.service';
 import { loadJobPromotions, publicJobPromotion } from '../benefits/job-promotion';
 import { placeEmployeeBoosts } from './employee-boost-placement';
 import { withCvFacts,cvVersionSelect } from '../profiles/cv-evidence';
 import { CandidateCache } from '../common/candidate-cache';
+import {candidateExperienceSelect,employeeExperienceRevision} from './employee-experience-policy';
 type IntentContext=Awaited<ReturnType<EmployeeIntentService['context']>>;
 
 export const employeeJobFeatures = {
   id:true, title:true, jobTitleId:true, companyId:true, publishedAt:true, countryId:true, cityId:true,
-  workMode:true, experienceYearsMin:true,experienceLevel:true,
+  workMode:true, experienceYearsMin:true,experienceLevel:true,positionEntryMode:true,...candidateExperienceSelect,
   city:{select:{provinceId:true,province:{select:{countryId:true}}}},
   jobSkills:{include:{skill:{include:{aliases:{select:{aliasKey:true}}}}}},
   jobLanguages:{include:{language:true}},
@@ -55,7 +56,7 @@ export class EmployeeMatchingService {
     const profile=withCvFacts(stored,stored.resumes[0]?.currentVersion);
     const makeIndex=async()=>new OccupationIndex(roles);
     const index=this.performanceCache&&catalog?await this.performanceCache.memo('legacy-occupation:'+catalog.revision,600,makeIndex):await makeIndex();
-    return { profile, index, fingerprint:digest([EMPLOYEE_MATCH_VERSION,profile,catalog?.revision||roles,new Date().toISOString().slice(0,10)]) };
+    return { profile, index, fingerprint:digest([EMPLOYEE_MATCH_VERSION,employeeExperienceRevision(),profile,catalog?.revision||roles,new Date().toISOString().slice(0,10)]) };
   }
 
   private evaluate(context: {profile:EmployeeMatchProfile;index:OccupationIndex;fingerprint:string}, job:EmployeeMatchJob) {
@@ -74,7 +75,7 @@ export class EmployeeMatchingService {
     const shadowScope=provided||(employeeIntentMode()==='shadow'&&this.intent?await this.intent.context(profileId):null);
     if(shadowScope&&(shadowScope.state!=='READY'||!shadowScope.allowedIds.length))return new Map<string,EmployeeEvaluation>();
     const allowedIds=shadowScope?new Set(shadowScope.allowedIds):null;
-    const [context,jobs] = await Promise.all([this.context(profileId,shadowScope||undefined),this.prisma.jobPost.findMany({where:{id:{in:ids},...(allowedIds?{jobTitleId:{in:[...allowedIds]}}:{})},select:employeeJobFeatures})]);
+    const [context,jobs] = await Promise.all([this.context(profileId,shadowScope||undefined),this.prisma.jobPost.findMany({where:{id:{in:ids},...candidateManualPositionScope,...(allowedIds?{jobTitleId:{in:[...allowedIds]}}:{})},select:employeeJobFeatures})]);
     if(context.profile.cvSource.status!=='READY')return new Map<string,EmployeeEvaluation>();
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,ids);
     return new Map(jobs.filter(job=>{
@@ -102,7 +103,7 @@ export class EmployeeMatchingService {
     const ready=context.profile.cvSource.status==='READY';
     const compute=async()=>{
     // Retrieve lightweight evidence only. Full posting content is fetched for one page.
-    const features = await this.prisma.jobPost.findMany({where:{...liveJobWhere(now),
+    const features = await this.prisma.jobPost.findMany({where:{...liveJobWhere(now),...candidateManualPositionScope,
       applications:{none:{profileId}},...(shadowScope?{jobTitleId:{in:shadowScope.allowedIds}}:{})},select:employeeJobFeatures});
     const old = this.enabled(profileId) ? null : await this.legacy.scoreJobsForProfile(profileId,features.map(job=>job.id));
     const scored = features.map(job => {const evaluation=this.evaluate(context,job);return {job,evaluation:old ? {...evaluation,score:old.get(job.id)?.total ?? 0,positiveCore:true} : evaluation};});
@@ -122,7 +123,7 @@ export class EmployeeMatchingService {
     const result=this.performanceCache?await this.performanceCache.ranked(['employee-ranking',profileId,context.fingerprint,shadowScope?.fingerprint,employeeIntentMode(),process.env.EMPLOYEE_MATCHING_V2_PERCENT],compute):await compute();
     let organic=[...result.organic];
     if(this.performanceCache){
-      const live=await this.prisma.jobPost.findMany({where:{...liveJobWhere(now),id:{in:organic.map(row=>row.job.id)},applications:{none:{profileId}},...(shadowScope?{jobTitleId:{in:shadowScope.allowedIds}}:{})},select:{id:true,jobTitleId:true,jobTitle:{select:currentRoleSelect}}});
+      const live=await this.prisma.jobPost.findMany({where:{...liveJobWhere(now),...candidateManualPositionScope,id:{in:organic.map(row=>row.job.id)},applications:{none:{profileId}},...(shadowScope?{jobTitleId:{in:shadowScope.allowedIds}}:{})},select:{id:true,jobTitleId:true,jobTitle:{select:currentRoleSelect}}});
       const allowed=new Set(live.filter(job=>{if(!shadowScope)return true;const current=currentRoleIdentity(job.jobTitle);return current&&shadowScope.preferences.selectedIds.some(id=>{const selected=shadowScope.index.identity(id);return selected?.canonicalRoleId===current.canonicalRoleId&&selected.familyId===current.familyId;});}).map(job=>job.id));
       organic=organic.filter(row=>allowed.has(row.job.id));
     }
@@ -137,7 +138,7 @@ export class EmployeeMatchingService {
     const totalPages = Math.max(1,Math.ceil(total/limit));
     page = Math.min(page,totalPages);
     const rows = ranked.slice((page-1)*limit,page*limit);
-    const jobs = await this.prisma.jobPost.findMany({where:{id:{in:rows.map(row => row.job.id)},...liveJobWhere(now),applications:{none:{profileId}},...(shadowScope?{jobTitleId:{in:shadowScope.allowedIds}}:{})},
+    const jobs = await this.prisma.jobPost.findMany({where:{id:{in:rows.map(row => row.job.id)},...liveJobWhere(now),...candidateManualPositionScope,applications:{none:{profileId}},...(shadowScope?{jobTitleId:{in:shadowScope.allowedIds}}:{})},
       select:{id:true,title:true,companyId:true,isAnonymous:true,locale:true,createdAt:true,publishedAt:true,
         employmentType:true,workMode:true,salaryMin:true,salaryMax:true,currency:true,salaryPeriod:true,
         city:{include:{province:true}},country:true,category:true,

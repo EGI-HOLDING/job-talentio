@@ -1,5 +1,7 @@
 import { liveJobWhere } from '../benefits/benefit-policy';
-import { Injectable } from '@nestjs/common';
+import { publicCompanyWhere } from '../catalogs/business-catalog';
+import { Injectable, Optional } from '@nestjs/common';
+import { CandidateCache } from '../common/candidate-cache';
 import { Prisma } from '@prisma/client';
 import { resolveBenefitIcon, resolveCategoryIcon } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,7 +23,7 @@ const PLATFORM_STATS_TTL_MS = 60_000;
 export class MetaService {
   private platformStatsCache: { at: number; value: PlatformStats } | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService,@Optional() private cache?:CandidateCache) {}
 
   async skills(q?: string, category?: string, sort?: string, take = 100) {
     const limit = Math.min(Math.max(take || 100, 1), 200);
@@ -309,7 +311,40 @@ export class MetaService {
     }));
   }
 
+  async industryGroups() {
+    return this.cachedIndustryMetadata('groups-v1',()=>this.loadIndustryGroups());
+  }
+  private async loadIndustryGroups() {
+    const taxonomy=await this.prisma.industryTaxonomy.findFirst({where:{active:true},include:{groups:{where:{archivedAt:null},orderBy:{sortOrder:'asc'}}}});
+    if(!taxonomy)return {version:null,groups:[]};
+    // One aggregate for the whole taxonomy, with exactly the public directory scope.
+    const counts=await this.prisma.$queryRaw<Array<{code:string;count:number}>>(Prisma.sql`
+      SELECT g.code,COUNT(DISTINCT c.id)::int count FROM "BusinessIndustryGroup" g
+      LEFT JOIN "Company" c ON (EXISTS(SELECT 1 FROM "_CompanyIndustryGroups" x WHERE x."A"=g.id AND x."B"=c.id) OR
+        (NOT EXISTS(SELECT 1 FROM "_CompanyIndustryGroups" x WHERE x."B"=c.id) AND (c."industryGroupId"=g.id OR (c."industryGroupId" IS NULL AND EXISTS
+        (SELECT 1 FROM "IndustryGroupMapping" m WHERE m."industryId"=c."industryId" AND m."groupId"=g.id)))))
+        AND c."isBanned"=false AND c."anonymizedAt" IS NULL
+        AND EXISTS (SELECT 1 FROM "JobPost" j LEFT JOIN "JobBenefit" b ON b."jobId"=j.id
+          WHERE j."companyId"=c.id AND j.status='PUBLISHED' AND j."isAnonymous"=false AND (b."expiresAt" IS NULL OR b."expiresAt">${new Date()}))
+      WHERE g.version=${taxonomy.version} AND g."archivedAt" IS NULL GROUP BY g.code`);
+    const byCode=new Map(counts.map(row=>[row.code,row.count]));
+    return {version:taxonomy.version,groups:taxonomy.groups.map(row=>({...row,companyCount:byCode.get(row.code)??0}))};
+  }
+
+  async seniorityLevels() {
+    const catalog=await this.prisma.seniorityCatalog.findFirst({where:{active:true},include:{levels:{where:{archivedAt:null},orderBy:{sortOrder:'asc'}}}});
+    return {version:catalog?.version??null,levels:catalog?.levels??[]};
+  }
+
+  private async cachedIndustryMetadata<T>(key:string,load:()=>Promise<T>):Promise<T>{
+    if(!this.cache)return load();
+    const epoch=await this.cache.version('jobs');
+    return this.cache.memo(`public-industry-metadata:${key}:${epoch}`,30,load);
+  }
   async industries(group?: string) {
+    return this.cachedIndustryMetadata(group||'flat',()=>this.loadIndustries(group));
+  }
+  private async loadIndustries(group?: string) {
     if (group === '1' || group === 'true' || group === 'group') {
       const groups = await this.prisma.industryGroup.findMany({
         where: ACTIVE_CATALOG,
@@ -321,7 +356,7 @@ export class MetaService {
             include: {
               _count: {
                 select: {
-                  companies: { where: { isBanned: false } },
+                  companies: { where: publicCompanyWhere() },
                 },
               },
             },
@@ -364,7 +399,7 @@ export class MetaService {
         },
         _count: {
           select: {
-            companies: { where: { isBanned: false } },
+            companies: { where: publicCompanyWhere() },
           },
         },
       },

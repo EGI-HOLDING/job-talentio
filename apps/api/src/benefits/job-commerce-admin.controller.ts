@@ -12,7 +12,7 @@ export class JobCommerceAdminController {
   @Get()
   async list(@Query() query: unknown) {
     const input = parseDto(z.object({page: z.coerce.number().int().min(1).max(100000).default(1),
-      status: z.enum(['PENDING','PAID','CANCELLED','EXPIRED','REVIEW']).optional(), q: z.string().trim().max(160).optional()}), query);
+      status: z.enum(['PENDING','PAID','CANCELLED','EXPIRED','FAILED','REVIEW']).optional(), q: z.string().trim().max(160).optional()}), query);
     const where: Prisma.JobPurchaseOrderWhereInput = {...(input.status ? {status: input.status} : {}), ...(input.q ? {OR: [
       {id: {contains: input.q, mode: 'insensitive'}}, {companyName: {contains: input.q, mode: 'insensitive'}}, {jobTitle: {contains: input.q, mode: 'insensitive'}},
     ]} : {})};

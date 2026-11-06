@@ -2,7 +2,8 @@ import { languageLevelRank, EMPLOYEE_PROFESSIONAL_WEIGHTS, EMPLOYEE_INTENT_VERSI
 import { EmployeeOccupationIndex } from './employee-occupation';
 import type { IntentFacts, IntentSkill } from './employee-intent-evidence';
 import type { VacancyEligibility } from './vacancy-tasks';
-export type IntentJob = {
+import { candidateExperienceReference, employeeExperiencePolicyEnabled, EMPLOYEE_EXPERIENCE_POLICY_VERSION, type CandidateExperienceInput } from './employee-experience-policy';
+export type IntentJob = CandidateExperienceInput & {
     id: string;
     title: string;
     jobTitleId: string | null;
@@ -62,6 +63,9 @@ export type IntentEvaluation = {
 };
 const levels = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
 const grades = ['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'];
+/** Request-local only: never shared between CV revisions, profiles or requests. */
+export type IntentExperienceCache=Map<string,{facts:IntentFacts;index:EmployeeOccupationIndex;day:number;relevant:IntentFacts['experiences'];duration?:{years:number;known:boolean}}>;
+const unknownDuration={years:0,known:false};
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 function yearsUnion(rows: IntentFacts['experiences'], now: Date) {
     const intervals = rows.map(e => [e.startDate ? +new Date(e.startDate) : NaN, e.isCurrent ? +now : e.endDate ? +new Date(e.endDate) : NaN]).filter(([s, e]) => Number.isFinite(s) && Number.isFinite(e) && s <= e && e <= +now).sort((a, b) => a[0] - b[0]);
@@ -76,7 +80,7 @@ const weighted = (values: Array<[
     number,
     number
 ]>) => { const sum = values.reduce((n, [w]) => n + w, 0); return sum ? 100 * values.reduce((n, [w, v]) => n + w * v, 0) / sum : 50; };
-export function evaluateIntent(preferences: IntentPreferences, facts: IntentFacts, job: IntentJob, index: EmployeeOccupationIndex, now = new Date(), resolved?:VacancyEligibility): IntentEvaluation {
+export function evaluateIntent(preferences: IntentPreferences, facts: IntentFacts, job: IntentJob, index: EmployeeOccupationIndex, now = new Date(), resolved?:VacancyEligibility,experiencePolicyEnabled=employeeExperiencePolicyEnabled(),experienceCache?:IntentExperienceCache): IntentEvaluation {
     const eligibility = resolved ?? index.eligibility(preferences.selectedIds, job.jobTitleId);
     const evidence: MatchEvidence[] = [];
     const required: Array<'MET' | 'UNKNOWN' | 'UNMET'> = [];
@@ -115,18 +119,25 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
         parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.skillPresence, presence / total]);
     if (levelTotal)
         parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.skillLevel, levelValue / levelTotal]);
-    const relevant = facts.experiences.filter(e => e.jobTitleId && index.identity(e.jobTitleId)?.canonicalRoleId === eligibility.canonicalRoleId);
+    const day=Math.floor(now.getTime()/86400000),roleKey=eligibility.canonicalRoleId??job.jobTitleId??job.id;
+    let career=experienceCache?.get(roleKey);
+    if(!career||career.facts!==facts||career.index!==index||career.day!==day){
+      career={facts,index,day,relevant:facts.experiences.filter(e => e.jobTitleId && index.identity(e.jobTitleId)?.canonicalRoleId === eligibility.canonicalRoleId)};
+      experienceCache?.set(roleKey,career);
+    }
+    const relevant=career.relevant;
     if(eligibility.matchType==='RELATED'){
       const transferable=facts.experiences.filter(e=>e.jobTitleId&&index.identity(e.jobTitleId)?.canonicalRoleId===eligibility.selectedRoleId);
       if(transferable.length)evidence.push({kind:'EXPERIENCE',label:eligibility.selectedRoleName||'',status:'UNKNOWN',required:false,code:'TRANSFERABLE_EXPERIENCE',evidenceRefs:transferable.map(e=>`cvEvidence:${e.key}`)});
     }
-    const duration = yearsUnion(relevant, new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())));
-    if (job.experienceYearsMin != null) {
-        const minimum = job.experienceYearsMin;
+    const reference=candidateExperienceReference(job,experiencePolicyEnabled);
+    const duration=reference.minimum!=null&&reference.minimum>0?(career.duration??=yearsUnion(relevant,new Date(day*86400000))):unknownDuration;
+    if (reference.minimum != null) {
+        const minimum = reference.minimum;
         const status = minimum === 0 ? 'MET' : !duration.known ? 'UNKNOWN' : duration.years >= minimum ? 'MET' : 'UNMET';
-        required.push(status);
+        if(reference.required)required.push(status);
         parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.experience, status === 'UNKNOWN' ? 0.5 : minimum === 0 ? 1 : clamp(duration.years / minimum)]);
-        evidence.push({ kind: 'EXPERIENCE', label: String(minimum), status, required: true, code: status === 'MET' ? 'EXPERIENCE_MATCH' : status === 'UNMET' ? 'BELOW_REQUIREMENT' : 'NOT_LISTED', evidenceRefs: relevant.map(e => `cvEvidence:${e.key}`) });
+        evidence.push({ kind: 'EXPERIENCE', label: String(minimum), status, required: reference.required, experienceReference:experiencePolicyEnabled?reference:undefined, code: status === 'MET' ? 'EXPERIENCE_MATCH' : status === 'UNMET' ? 'BELOW_REQUIREMENT' : 'NOT_LISTED', evidenceRefs: relevant.map(e => `cvEvidence:${e.key}`) });
     }
     if (job.experienceLevel) {
         const candidate = Math.max(-1, ...relevant.map(e => grades.indexOf(e.seniority ?? '')));
@@ -134,7 +145,7 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
         const known = candidate >= 0 && target >= 0;
         const status = !known ? 'UNKNOWN' : candidate >= target ? 'MET' : 'UNMET';
         required.push(status);
-        parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.seniority, !known ? 0.5 : 1 - Math.min(1, Math.abs(candidate - target) / 3)]);
+        parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.seniority, !known ? 0.5 : 1 - Math.min(1, (experiencePolicyEnabled?Math.max(0,target-candidate):Math.abs(candidate-target)) / 3)]);
         evidence.push({ kind: 'EXPERIENCE', label: job.experienceLevel, status, required: true, code: status === 'MET' ? 'EXPERIENCE_MATCH' : status === 'UNMET' ? 'BELOW_REQUIREMENT' : 'NOT_LISTED', evidenceRefs: relevant.map(e => `cvEvidence:${e.key}`) });
     }
     const langs = job.jobLanguages.filter(l => l.provenance === 'EMPLOYER_CONFIRMED');
@@ -170,6 +181,6 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
             salary = clamp(job.salaryMax / desired);
     }
     const tier = required.some(s => s === 'UNMET') ? 2 : required.length > 0 && required.every(s => s === 'MET') ? 0 : 1;
-    return { score: weighted(parts), positiveCore: true, optionalScore: Math.min(10, optionalScore), tier, practical: [location, work, salary], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, mode: 'PERSONALIZED', evidence, relatedTasks:resolved?.sharedTasks, reviewExperienceIds: facts.experiences.filter(e => !e.jobTitleId || !e.startDate || !e.isCurrent && !e.endDate).map(e => e.key) } };
+    return { score: weighted(parts), positiveCore: true, optionalScore: Math.min(10, optionalScore), tier, practical: [location, work, salary], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, experiencePolicyVersion:experiencePolicyEnabled?EMPLOYEE_EXPERIENCE_POLICY_VERSION:undefined, mode: 'PERSONALIZED', evidence, relatedTasks:resolved?.sharedTasks, reviewExperienceIds: facts.experiences.filter(e => !e.jobTitleId || !e.startDate || !e.isCurrent && !e.endDate).map(e => e.key) } };
 }
 export function compareIntent(a: IntentEvaluation, b: IntentEvaluation) { return Number(a.eligibility.matchType==='RELATED')-Number(b.eligibility.matchType==='RELATED') || a.tier - b.tier || b.score - a.score || (b.eligibility.relationScore||0)-(a.eligibility.relationScore||0) || b.practical[0] - a.practical[0] || b.practical[1] - a.practical[1] || b.practical[2] - a.practical[2] || b.optionalScore - a.optionalScore; }

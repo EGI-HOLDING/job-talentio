@@ -10,6 +10,7 @@ import { localizedJobLocation } from '@/lib/location';
 import { formatJobSalary } from '@/components/jobs/formatJobSalary';
 import { ResourceError, WorkspaceLoading, WorkspaceEmpty } from '@/components/employee/WorkspacePrimitives';
 import { RecruiterJobEditor } from './RecruiterJobEditor';
+import { StructuredJobContent,jobExperienceLabel } from '@/components/jobs/StructuredJobContent';
 import { LinkedInSharePreview } from './LinkedInSharePreview';
 import { LinkedInJobSummary } from './LinkedInPostStatus';
 import { RecruiterPipeline } from './RecruiterPipeline';
@@ -88,7 +89,8 @@ export function RecruiterJobWorkspace() {
       <p>{[enumLabel('workMode',job.workMode),enumLabel('employmentType',job.employmentType),localizedJobLocation(job,t)].filter(Boolean).join(' | ')}</p>
       <p>{formatJobSalary(job,locale,t)}</p>
       <h3>{t('rec.description')}</h3><p className={s.description}>{job.description||'-'}</p>
-      <h3>{t('experience')}</h3><p>{[enumLabel('experienceLevel',job.experienceLevel),job.experienceYearsMin!=null?t('talent.expYears').replace('{n}',String(job.experienceYearsMin)):null].filter(Boolean).join(' | ')||t('ranking.noSkillRequirements')}</p>
+      <StructuredJobContent job={job}/>
+      <h3>{t('experience')}</h3><p>{jobExperienceLabel(job)?t('talent.expYears').replace('{n}',jobExperienceLabel(job)!):[enumLabel('experienceLevel',job.experienceLevel),job.experienceYearsMin!=null?t('talent.expYears').replace('{n}',String(job.experienceYearsMin)):null].filter(Boolean).join(' | ')||t('ranking.noSkillRequirements')}</p>
       <h3>{t('ranking.skills')}</h3>{job.jobSkills?.length?<ul>{job.jobSkills.map((row:any)=><li key={row.id||row.skillId}>{row.skill?.name}{row.minLevel?' | '+enumLabel('skillLevel',row.minLevel):''}{row.isRequired?' *':''}</li>)}</ul>:<p>{t('ranking.noSkillRequirements')}</p>}
       <h3>{t('languages')}</h3>{job.jobLanguages?.length?<ul>{job.jobLanguages.map((row:any)=><li key={row.id||row.language?.code}>{row.language?.name} {row.minLevel}{row.isRequired?' *':''}{row.provenance!=='EMPLOYER_CONFIRMED'?' | '+t('ranking.unknown'):''}</li>)}</ul>:<p>{t('ranking.noSkillRequirements')}</p>}
       {job.benefits?.length>0&&<><h3>{t('benefits')}</h3><ul>{job.benefits.map((row:any)=><li key={row.id||row.benefit?.id}>{row.benefit?.name}</li>)}</ul></>}
