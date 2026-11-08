@@ -18,6 +18,18 @@ export function useHrFlowSurface(companyName = '') {
 }
 export function useHrFlowContext() { return useSyncExternalStore(subscribe, snapshot, () => null); }
 
+type AssistantSurface = { companyId: string; companyName: string };
+const assistantSurfaces = new Map<string, AssistantSurface>();
+const assistantSnapshot = () => assistantSurfaces.size ? [...assistantSurfaces.values()].at(-1)! : null;
+export function useHrAssistantSurface(companyId: string, companyName: string) {
+  const id = useId();
+  useLayoutEffect(() => {
+    assistantSurfaces.set(id, { companyId, companyName }); notify();
+    return () => { assistantSurfaces.delete(id); notify(); };
+  }, [id, companyId, companyName]);
+}
+export function useHrAssistantContext() { return useSyncExternalStore(subscribe, assistantSnapshot, () => null); }
+
 export function HrAddItemButton({ children, fullWidth=false, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {fullWidth?:boolean}) {
   return <button {...props} type="button" className={fullWidth?s.addRow:s.addItem} data-hr-add-item><HrIcon kind="plus" size={16}/><span>{children}</span></button>;
 }

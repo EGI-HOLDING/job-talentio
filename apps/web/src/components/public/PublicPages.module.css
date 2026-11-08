@@ -6,6 +6,7 @@
 .appFlowPage { position: relative; flex: 0 0 auto; height: calc(100dvh - var(--app-nav-height, 65px)); min-height: 0; overflow: auto; overscroll-behavior: contain; background: #fff; }
 .appFlowPage:has(:global([data-hr-surface])),.appPage:has(:global([data-hr-surface])) { background:#f5f5fc; overflow-y:auto; overscroll-behavior:contain; scroll-padding-block:24px 180px; }
 .focusFlowPage { height:100dvh; min-height:0; overflow:hidden; flex:1 1 auto; background:#fff; }
+.appFlowPage:has(:global([data-hr-assistant])) { overflow:hidden; background:#f5f0ff; }
 .publicPage { background: #fff; }
 .auth { background: #fff; min-height: calc(100dvh - 148px); color: #17213a; }
 .auth :global(.auth-wrap) { min-height: 0; padding: 36px 20px 48px; display: flex; justify-content: center; align-items: flex-start; }

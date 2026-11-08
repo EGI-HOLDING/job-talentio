@@ -1,0 +1,597 @@
+[
+  {
+    "name": "arrow-left",
+    "generator": "built-in image-gen",
+    "png": "arrow-left.png",
+    "webp": "arrow-left.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      1070,
+      301
+    ],
+    "trimmedTransparentBounds": [
+      50,
+      66,
+      2056,
+      631
+    ],
+    "webBytes": 54910
+  },
+  {
+    "name": "arrow-right",
+    "generator": "built-in image-gen",
+    "png": "arrow-right.png",
+    "webp": "arrow-right.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      1070,
+      336
+    ],
+    "trimmedTransparentBounds": [
+      55,
+      38,
+      2112,
+      684
+    ],
+    "webBytes": 60160
+  },
+  {
+    "name": "candidate-1",
+    "generator": "built-in image-gen",
+    "png": "candidate-1.png",
+    "webp": "candidate-1.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      321,
+      360
+    ],
+    "trimmedTransparentBounds": [
+      132,
+      99,
+      1098,
+      1182
+    ],
+    "webBytes": 101974,
+    "browserPng": "candidate-1.browser.png"
+  },
+  {
+    "name": "candidate-2",
+    "generator": "built-in image-gen",
+    "png": "candidate-2.png",
+    "webp": "candidate-2.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      299,
+      360
+    ],
+    "trimmedTransparentBounds": [
+      144,
+      95,
+      1054,
+      1191
+    ],
+    "webBytes": 84926,
+    "browserPng": "candidate-2.browser.png"
+  },
+  {
+    "name": "candidate-3",
+    "generator": "built-in image-gen",
+    "png": "candidate-3.png",
+    "webp": "candidate-3.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      314,
+      360
+    ],
+    "trimmedTransparentBounds": [
+      95,
+      27,
+      1143,
+      1227
+    ],
+    "webBytes": 85364,
+    "browserPng": "candidate-3.browser.png"
+  },
+  {
+    "name": "candidate-chat",
+    "generator": "built-in image-gen",
+    "png": "candidate-chat.png",
+    "webp": "candidate-chat.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      257,
+      360
+    ],
+    "trimmedTransparentBounds": [
+      270,
+      157,
+      975,
+      1145
+    ],
+    "webBytes": 72966,
+    "browserPng": "candidate-chat.browser.png"
+  },
+  {
+    "name": "cv-sheet",
+    "generator": "built-in image-gen",
+    "png": "cv-sheet.png",
+    "webp": "cv-sheet.webp",
+    "originalSize": [
+      1086,
+      1448
+    ],
+    "webSize": [
+      140,
+      173
+    ],
+    "trimmedTransparentBounds": [
+      244,
+      366,
+      843,
+      1108
+    ],
+    "webBytes": 19526
+  },
+  {
+    "name": "cv-stack",
+    "generator": "built-in image-gen",
+    "png": "cv-stack.png",
+    "webp": "cv-stack.webp",
+    "originalSize": [
+      1448,
+      1086
+    ],
+    "webSize": [
+      390,
+      304
+    ],
+    "trimmedTransparentBounds": [
+      173,
+      115,
+      1266,
+      967
+    ],
+    "webBytes": 89122
+  },
+  {
+    "name": "logo-dealls",
+    "generator": "built-in image-gen",
+    "png": "logo-dealls.png",
+    "webp": "logo-dealls.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      195,
+      190
+    ],
+    "trimmedTransparentBounds": [
+      182,
+      210,
+      1046,
+      1051
+    ],
+    "webBytes": 27238
+  },
+  {
+    "name": "logo-glints",
+    "generator": "built-in image-gen",
+    "png": "logo-glints.png",
+    "webp": "logo-glints.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      440,
+      131
+    ],
+    "trimmedTransparentBounds": [
+      297,
+      128,
+      1874,
+      598
+    ],
+    "webBytes": 20506
+  },
+  {
+    "name": "logo-jobstreet",
+    "generator": "built-in image-gen",
+    "png": "logo-jobstreet.png",
+    "webp": "logo-jobstreet.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      440,
+      114
+    ],
+    "trimmedTransparentBounds": [
+      223,
+      141,
+      1957,
+      590
+    ],
+    "webBytes": 30352
+  },
+  {
+    "name": "logo-kalibrr",
+    "generator": "built-in image-gen",
+    "png": "logo-kalibrr.png",
+    "webp": "logo-kalibrr.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      440,
+      124
+    ],
+    "trimmedTransparentBounds": [
+      246,
+      126,
+      1927,
+      598
+    ],
+    "webBytes": 26948
+  },
+  {
+    "name": "logo-kitalulus",
+    "generator": "built-in image-gen",
+    "png": "logo-kitalulus.png",
+    "webp": "logo-kitalulus.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      440,
+      189
+    ],
+    "trimmedTransparentBounds": [
+      431,
+      61,
+      1812,
+      654
+    ],
+    "webBytes": 53552
+  },
+  {
+    "name": "logo-linkedin",
+    "generator": "built-in image-gen",
+    "png": "logo-linkedin.png",
+    "webp": "logo-linkedin.webp",
+    "originalSize": [
+      2172,
+      724
+    ],
+    "webSize": [
+      440,
+      113
+    ],
+    "trimmedTransparentBounds": [
+      244,
+      152,
+      1940,
+      588
+    ],
+    "webBytes": 29436
+  },
+  {
+    "name": "taka-chat",
+    "generator": "built-in image-gen",
+    "png": "taka-chat.png",
+    "webp": "taka-chat.webp",
+    "originalSize": [
+      1312,
+      1199
+    ],
+    "webSize": [
+      1100,
+      1039
+    ],
+    "trimmedTransparentBounds": [
+      70,
+      54,
+      1241,
+      1160
+    ],
+    "webBytes": 835030
+  },
+  {
+    "name": "taka-collect",
+    "generator": "built-in image-gen",
+    "png": "taka-collect.png",
+    "webp": "taka-collect.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      905,
+      1441
+    ],
+    "trimmedTransparentBounds": [
+      60,
+      43,
+      965,
+      1484
+    ],
+    "webBytes": 760400
+  },
+  {
+    "name": "taka-interview",
+    "generator": "built-in image-gen",
+    "png": "taka-interview.png",
+    "webp": "taka-interview.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      923,
+      1423
+    ],
+    "trimmedTransparentBounds": [
+      46,
+      24,
+      969,
+      1447
+    ],
+    "webBytes": 897284
+  },
+  {
+    "name": "taka-proud",
+    "generator": "built-in image-gen",
+    "png": "taka-proud.png",
+    "webp": "taka-proud.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      741,
+      1450
+    ],
+    "trimmedTransparentBounds": [
+      128,
+      19,
+      887,
+      1505
+    ],
+    "webBytes": 809056
+  },
+  {
+    "name": "taka-ranking",
+    "generator": "built-in image-gen",
+    "png": "taka-ranking.png",
+    "webp": "taka-ranking.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      821,
+      1450
+    ],
+    "trimmedTransparentBounds": [
+      82,
+      8,
+      944,
+      1531
+    ],
+    "webBytes": 727432
+  },
+  {
+    "name": "taka-upload",
+    "generator": "built-in image-gen",
+    "png": "taka-upload.png",
+    "webp": "taka-upload.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      759,
+      1391
+    ],
+    "trimmedTransparentBounds": [
+      172,
+      79,
+      931,
+      1470
+    ],
+    "webBytes": 690978
+  },
+  {
+    "name": "taka-wave",
+    "generator": "built-in image-gen",
+    "png": "taka-wave.png",
+    "webp": "taka-wave.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      862,
+      1450
+    ],
+    "trimmedTransparentBounds": [
+      56,
+      19,
+      932,
+      1492
+    ],
+    "webBytes": 961458
+  },
+  {
+    "name": "talentio-tray",
+    "generator": "built-in image-gen",
+    "png": "talentio-tray.png",
+    "webp": "talentio-tray.webp",
+    "originalSize": [
+      1774,
+      887
+    ],
+    "webSize": [
+      800,
+      365
+    ],
+    "trimmedTransparentBounds": [
+      225,
+      143,
+      1550,
+      747
+    ],
+    "webBytes": 219390
+  },
+  {
+    "name": "tara-chat-header",
+    "generator": "built-in image-gen",
+    "png": "tara-chat-header.png",
+    "webp": "tara-chat-header.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      376,
+      410
+    ],
+    "trimmedTransparentBounds": [
+      105,
+      54,
+      1162,
+      1207
+    ],
+    "webBytes": 182978,
+    "browserPng": "tara-chat-header.browser.png"
+  },
+  {
+    "name": "tara-chat-notes",
+    "generator": "built-in image-gen",
+    "png": "tara-chat-notes.png",
+    "webp": "tara-chat-notes.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      372,
+      410
+    ],
+    "trimmedTransparentBounds": [
+      66,
+      12,
+      1179,
+      1240
+    ],
+    "webBytes": 166772,
+    "browserPng": "tara-chat-notes.browser.png"
+  },
+  {
+    "name": "tara-chat-thinking",
+    "generator": "built-in image-gen",
+    "png": "tara-chat-thinking.png",
+    "webp": "tara-chat-thinking.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      355,
+      410
+    ],
+    "trimmedTransparentBounds": [
+      72,
+      28,
+      1117,
+      1236
+    ],
+    "webBytes": 168056,
+    "browserPng": "tara-chat-thinking.browser.png"
+  },
+  {
+    "name": "tara-interviewer",
+    "generator": "built-in image-gen",
+    "png": "tara-interviewer.png",
+    "webp": "tara-interviewer.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      589,
+      620
+    ],
+    "trimmedTransparentBounds": [
+      51,
+      23,
+      1199,
+      1231
+    ],
+    "webBytes": 383820
+  },
+  {
+    "name": "tara-wave",
+    "generator": "built-in image-gen",
+    "png": "tara-wave.png",
+    "webp": "tara-wave.webp",
+    "originalSize": [
+      1024,
+      1536
+    ],
+    "webSize": [
+      905,
+      1450
+    ],
+    "trimmedTransparentBounds": [
+      52,
+      28,
+      980,
+      1515
+    ],
+    "webBytes": 1078628
+  },
+  {
+    "name": "upload-cloud",
+    "generator": "built-in image-gen",
+    "png": "upload-cloud.png",
+    "webp": "upload-cloud.webp",
+    "originalSize": [
+      1254,
+      1254
+    ],
+    "webSize": [
+      200,
+      157
+    ],
+    "trimmedTransparentBounds": [
+      165,
+      266,
+      1086,
+      991
+    ],
+    "webBytes": 12758
+  }
+]

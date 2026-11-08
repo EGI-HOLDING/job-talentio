@@ -133,7 +133,7 @@ test('combined job toolbar retains company totals while filtering and still open
     '@/lib/i18n':i18n,'@/lib/location':{localizedJobLocation:()=>''},'@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},
     '@/components/employee/WorkspacePrimitives':{SearchField,WorkspaceEmpty:stub,WorkspaceLoading:stub,Pagination:stub,dateLabel:()=>''},
     '@/components/jobs/WorkspaceSelect':{WorkspaceSelect},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},
-    './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:JobRow},
+    './HrCreationFlow':{hrFlowV2Enabled:false},'./RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:JobRow},
   });
   const jobs=[{id:'a',title:'Backend Engineer',status:'PUBLISHED',createdAt:'2026-10-29',_count:{applications:3,views:5}},{id:'b',title:'QA Engineer',status:'DRAFT',createdAt:'2026-10-28',_count:{applications:2,views:7}}];
   let tree=await ui.render({companyId:'company-a',company:{name:'Company A'},jobs,loading:false,meta:{},createRequested:false});
@@ -150,7 +150,7 @@ function jobList(api, confirm=async()=>true) {
   const ui=host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
     '@/lib/api':{api},'@/lib/navigation':{useRouter:()=>({push(){}})},'@/lib/accountNavigation':{employerJobHref:id=>'/job/'+id},'@/lib/i18n':i18n,
     '@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,Pagination:Pager},
-    '@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/ui/ConfirmProvider':{useConfirm:()=>confirm},'./RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:Row},
+    '@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/ui/ConfirmProvider':{useConfirm:()=>confirm},'./HrCreationFlow':{hrFlowV2Enabled:false},'./RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:Row},
   });
   const props={companyId:'a',company:{name:'A'},jobs:[{id:'job-a',title:'Platform Engineer',status:'CLOSED',createdAt:'2026-10-29'}],loading:false,meta:{},createRequested:false,onCloseCreate(){},onReload:async()=>{},onApplicants(){},onStatus:async()=>{},onFlash(){}};
   return {ui,Editor,Row,Pager,props};

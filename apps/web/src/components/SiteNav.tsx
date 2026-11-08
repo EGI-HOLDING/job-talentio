@@ -13,7 +13,8 @@ import { authRoleFrom } from '@/lib/authReturn';
 import { preferredCompany, rememberCompany } from './recruiter/RecruiterPrimitives';
 import { WorkspaceIcon } from './employee/WorkspaceIcon';
 import { allowEmployerContextChange } from './recruiter/useEmployerUnsaved';
-import { useHrFlowContext } from './recruiter/HrFlowPresentation';
+import { useHrAssistantContext, useHrFlowContext } from './recruiter/HrFlowPresentation';
+import { HrAssistantHeader } from './recruiter/HrAssistantOnboarding';
 
 type Notif = {
   id: string;
@@ -34,6 +35,7 @@ const AUDIENCE_LABELS: Record<Locale, { group: string; seekers: string; employer
 
 function SiteNavContent() {
   const hrCompany = useHrFlowContext();
+  const assistant = useHrAssistantContext();
   const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
@@ -60,7 +62,7 @@ function SiteNavContent() {
     const observer = new ResizeObserver(() => document.documentElement.style.setProperty('--app-nav-height', element.getBoundingClientRect().height + 'px'));
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [Boolean(assistant)]);
 
   useEffect(() => {
     const refreshSession = () => setSession(getSession());
@@ -193,6 +195,8 @@ function SiteNavContent() {
       : isRecruiter
         ? '/dashboard/recruiter'
         : null;
+
+  if (assistant) return <div ref={navWrapRef} data-hr-header data-hr-assistant-nav><HrAssistantHeader {...assistant} /></div>;
 
   return (
     <div ref={navWrapRef} data-hr-header={hrFlow || undefined} className={`nav-wrap ${hrFlow ? styles.hrFlow : ''} ${isLanding ? styles.landing : ''} ${isDiscovery ? styles.jobs : ''} ${isEmployee ? styles.employee : ''} ${isRecruiter ? styles.recruiter : ''}`}>
