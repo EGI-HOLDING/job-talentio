@@ -18,7 +18,7 @@ async function main(scenario){
    localStorage.setItem('jt_session',JSON.stringify(auth));
    sessionStorage.setItem('talentio:hr-assistant:'+auth.user.id+':onboarding-session',initialScene);
    sessionStorage.setItem('onboarding-fixture-seeded','1');
- },{auth,initialScene:scenario==='navigation'?'taka-intro':'cv-upload'});
+ },{auth,initialScene:['navigation','validation'].includes(scenario)?'taka-intro':'cv-upload'});
  await context.route('https://onboarding-upload.test/**',async route=>{if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'PUT,OPTIONS','access-control-allow-headers':'*'}});report.uploadStarted++;await gate;return route.fulfill({status:200,headers:{'access-control-allow-origin':'*'},body:''});});
  await context.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),p=url.pathname.replace(/^\/api/,''),method=req.method(),headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,OPTIONS'};if(method==='OPTIONS')return route.fulfill({status:204,headers});let body=[];
  if(p==='/auth/me')body={...auth,user:{...auth.user,recruiterOnboarding:{status:completed?'COMPLETE':'IN_PROGRESS',step:completed?3:2}}};
@@ -72,6 +72,28 @@ async function main(scenario){
      await next.click();
      await scene(id).waitFor();
    }
+ }
+ if(scenario==='validation'){
+   await scene('taka-intro').waitFor({timeout:60000});await back.click();
+   await page.getByRole('heading',{name:'Buat lowongan',exact:true}).waitFor();
+   const description=page.locator('textarea[name="description"]');
+   await page.getByRole('button',{name:'Tambah benefit',exact:true}).click();
+   const lookup=page.getByPlaceholder('Cari atau tambahkan benefit',{exact:true});
+   await lookup.fill('Benefit audit manual');
+   await lookup.press('Enter');
+   const dialog=page.getByRole('dialog');await dialog.waitFor();
+   await dialog.getByRole('button',{name:'Tambah benefit',exact:true}).click();
+   await page.getByRole('button',{name:'Hapus benefit Benefit audit manual',exact:true}).waitFor();
+   await description.fill(' '.repeat(30));
+   await page.locator('button[form="hr-job-form"]').click();
+   await page.getByRole('alert').filter({hasText:'Deskripsi posisi: minimal 20 karakter.'}).first().waitFor();
+   await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='description');
+   await description.fill('Membangun layanan digital dengan pengalaman yang relevan.');
+   await page.locator('button[form="hr-job-form"]').click();
+   await scene('taka-intro').waitFor();
+   assert.deepEqual(resumeSession.draft.benefits,[{name:'Benefit audit manual',isNew:true}]);
+   assert.equal(report.publish,0);assert.deepEqual(report.errors,[]);
+   return;
  }
  if(scenario==='navigation'){
    const formHeading=page.getByRole('heading',{name:'Buat lowongan',exact:true});
@@ -210,7 +232,7 @@ async function main(scenario){
  }finally{releaseUploads();fs.writeFileSync(path.join(out,'report-'+scenario+'.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}
 }
 async function run(){
- for(const scenario of ['navigation','skip-empty','skip-selected','upload']){
+ for(const scenario of (process.env.ONBOARDING_SCENARIO?[process.env.ONBOARDING_SCENARIO]:['validation','navigation','skip-empty','skip-selected','upload'])){
    await main(scenario);
    console.log('HR onboarding passed: '+scenario);
  }
