@@ -58,7 +58,7 @@ export function CandidateCvFiles({ files, setFiles, disabled, illustrated }: Pro
         </svg>
         <span className={s.prompt}>
           <strong>{c(dragging ? 'Lepas untuk menambahkan CV' : 'Tarik CV ke sini')}</strong>
-          <small>{c('PDF, DOC, DOCX · Maksimal 5 MB per berkas')}</small>
+          <small>{c('PDF, DOC, DOCX \u00b7 Maksimal 5 MB per berkas')}</small>
         </span>
         <span className={s.action}>{c(files.length ? 'Tambah file' : 'Pilih file')}</span>
       </button>
@@ -80,7 +80,7 @@ export function CandidateCvFiles({ files, setFiles, disabled, illustrated }: Pro
         <p className={s.hint}>{c('Kamu bisa menambah CV dari folder lain.')}</p>
       </>}
       {invalidNames.length > 0 && <p role="alert" className={s.error} title={invalidNames.join(', ')}>
-        {invalidNames.slice(0, 3).join(', ')}{invalidNames.length > 3 && ` (+${invalidNames.length - 3})`} — {c('gunakan PDF, DOC atau DOCX maksimal 5 MB.')}
+        {invalidNames.slice(0, 3).join(', ')}{invalidNames.length > 3 && ` (+${invalidNames.length - 3})`} &#x2014; {c('gunakan PDF, DOC atau DOCX maksimal 5 MB.')}
       </p>}
     </div>
   );

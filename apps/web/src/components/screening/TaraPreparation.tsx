@@ -29,12 +29,12 @@ export function TaraPreparation({ preparation, variant = 'compact', rules = fals
     return <div className={`${s.preparation} ${waiting ? s.waiting : s.compact}`} data-preparation={preparation.status}>
         {waiting && !failed && !ready && <TaraRunner hero/>}
         <div className={s.copy}><div role="status" aria-live="polite" aria-atomic="true">{waiting ? <h2 tabIndex={-1}>{title}</h2> : <strong>{ready ? '✓ ' : failed ? '' : '✦ '}{title}</strong>}<p>{description}</p></div>
-        {failed && <div className={s.actions}>{unreadable ? <button type="button" onClick={onChangeCv}>{invited ? 'Hubungi HR' : 'Ganti CV'}</button> : !recovery && <button type="button" disabled={busy} onClick={onRetry}>{busy ? 'Menyambungkan…' : 'Coba lagi'}</button>}</div>}
+        {failed && <div className={s.actions}>{unreadable ? <button type="button" onClick={onChangeCv}>{invited ? 'Hubungi HR' : 'Ganti CV'}</button> : !recovery && <button type="button" disabled={busy} onClick={onRetry}>{busy ? 'Menyambungkan\u2026' : 'Coba lagi'}</button>}</div>}
         </div>
         {!waiting && !failed && !ready && <TaraRunner/>}
         {waiting && !failed && <><span className={s.dots} aria-hidden="true"><i/><i/><i/></span><p className={s.timer}>◷ Waktu menjawab belum dimulai</p><p className={s.automatic}>Kamu akan masuk otomatis saat pertanyaannya siap.</p></>}
     </div>;
 }
 export function TaraThinking({ casual = false }: { casual?: boolean }) {
-    return <div className={s.thinking} data-testid="tara-thinking"><Image src="/images/tara/thinking.png" width={56} height={56} alt="" data-tara="thinking"/><div className={s.bubble}><span className={s.dots} aria-hidden="true"><i/><i/><i/></span><p>{casual ? 'Bentar, gue lagi nyambungin cerita lu…' : 'Sebentar ya, aku lagi menyusun pertanyaan berikutnya…'}</p><TaraRunner/><small>ⓘ Waktu menjawab mulai saat pertanyaan tampil.</small></div></div>;
+    return <div className={s.thinking} data-testid="tara-thinking"><Image src="/images/tara/thinking.png" width={56} height={56} alt="" data-tara="thinking"/><div className={s.bubble}><span className={s.dots} aria-hidden="true"><i/><i/><i/></span><p>{casual ? 'Bentar, gue lagi nyambungin cerita lu\u2026' : 'Sebentar ya, aku lagi menyusun pertanyaan berikutnya\u2026'}</p><TaraRunner/><small>ⓘ Waktu menjawab mulai saat pertanyaan tampil.</small></div></div>;
 }

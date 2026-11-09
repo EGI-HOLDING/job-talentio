@@ -250,7 +250,7 @@ export function HrAssistantOnboarding({
             <section className={s.uploadPanel} data-has-files={selectedFiles.length > 0}>
               <h1>{c('Upload CV kandidat')}</h1>
               <CandidateCvFiles files={selectedFiles} setFiles={setSelectedFiles} disabled={busy || Boolean(pendingAction)} illustrated/>
-              {busy && <p role="status" className={s.uploadHint}>{c('Menyiapkan dashboard…')}</p>}
+              {busy && <p role="status" className={s.uploadHint}>{c('Menyiapkan dashboard\u2026')}</p>}
               {uploadError && <p role="alert" className={s.uploadHint}>{uploadError}</p>}
             </section>
           </>}

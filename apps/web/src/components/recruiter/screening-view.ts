@@ -4,9 +4,9 @@ export type ScreeningEvaluation={summary?:string;strengths?:string[];gaps?:strin
 export type Invitation={id:string;mode:'TEXT'|'VOICE';status:string;closedByStage?:boolean;expiresAt:string;recipientEmail:string;emailStatus:string;messageStatus:string;error?:string|null;createdAt:string;session:{id:string;status:string;startedAt?:string|null;completedAt:string|null;evaluation:{status:string;screeningScore:number|null;result:ScreeningEvaluation|null}|null}|null};
 export type Turn={id:string;speaker:string;text:string;startMs:number|null;timedOut?:boolean};
 export type Report={pdfStatus?:'NOT_READY'|'PENDING'|'FAILED'|'READY';claims?:Array<{id:string;statement:string;quote:string}>;invitation?:Invitation;voice?:{startedAt?:string;endedAt?:string;closeReason:string;transcriptComplete:boolean;transcript:Array<{id:string;speaker:string;text:string;startMs:number}>}|null;questions:Array<{id:string;text:string;answer:string|null;shownAt?:string|null;answeredAt?:string|null;timedOut:boolean}>;evaluation:{status:string;score:number|null;result:ScreeningEvaluation|null}|null;pdfUrl:string|null};
-export const number=(n:number|null|undefined)=>n==null?'—':n.toLocaleString('id-ID',{maximumFractionDigits:1});
-export const date=(s:string|null|undefined,time=false)=>s?new Date(s).toLocaleString('id-ID',time?{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}:{day:'numeric',month:'short',year:'numeric'}):'—';
-export const clock=(ms:number|null|undefined)=>ms==null?'—':`${Math.floor(ms/60000).toString().padStart(2,'0')}:${Math.floor(ms/1000%60).toString().padStart(2,'0')}`;
+export const number=(n:number|null|undefined)=>n==null?'\u2014':n.toLocaleString('id-ID',{maximumFractionDigits:1});
+export const date=(s:string|null|undefined,time=false)=>s?new Date(s).toLocaleString('id-ID',time?{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}:{day:'numeric',month:'short',year:'numeric'}):'\u2014';
+export const clock=(ms:number|null|undefined)=>ms==null?'\u2014':`${Math.floor(ms/60000).toString().padStart(2,'0')}:${Math.floor(ms/1000%60).toString().padStart(2,'0')}`;
 export const typeName=(i:Invitation)=>i.mode==='VOICE'?'Interview suara':'Interview teks';
 export const active=(i:Invitation)=>!i.closedByStage&&['INVITED','STARTED'].includes(i.status)&&(i.status==='STARTED'||Date.parse(i.expiresAt)>Date.now());
 export function status(i:Invitation){

@@ -1,4 +1,5 @@
 'use client';
+import { useHrCopy } from '@/lib/i18n/hr-flow';
 
 import { useEffect, useState, useRef } from 'react';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
@@ -19,6 +20,7 @@ const PAGE_SIZE = 10;
 
 /** Query the complete authorized pool before server-side ranking/pagination. */
 export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0, applicationId, onChanged }: { jobId: string; jobTitle?:string; companyId: string; meta: any; revision?:number; applicationId?:string; onChanged:()=>void }) {
+ const uiCopy=useHrCopy();
   const { t, locale } = useI18n();
   const enumLabel=useEnumLabel();
   const [query, setQuery] = useState('');
@@ -69,10 +71,10 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
         <label className={s.search}><WorkspaceIcon kind="search"/><input type="search" aria-label={t('ranking.search')} placeholder={t('ranking.search')} value={query} onChange={event => { setPage(1); setQuery(event.target.value); }}/></label>
         <button type="button" className={s.secondary} aria-expanded={filtersOpen} aria-controls="job-candidate-filters" onClick={() => setFiltersOpen(open => !open)}><WorkspaceIcon kind="filter"/>{t('ranking.filter')}{activeFilters > 0 && <span className={s.count}>{activeFilters}</span>}</button>
         <select className={s.statusFilter} aria-label={t('status')} value={status} onChange={event=>{setPage(1);setStatus(event.target.value);}}><option value="">{t('rw.allApplicants')}</option>{DEFAULT_PIPELINE.map(value=><option key={value} value={value}>{enumLabel('applicationStatus',value)}</option>)}</select>
-        <label className={s.sort}><WorkspaceIcon kind="sort"/><span className="sr-only">{t('sortBy')}</span><select aria-label={t('sortBy')} value={sort} onChange={event => { setPage(1); setSort(event.target.value); }}><option value="match">{t('ranking.sortMatch')}</option>{result.taraGroups&&<option value="cv">Kecocokan CV</option>}<option value="newest">{t('applicants.sortNewest')}</option></select></label>
+        <label className={s.sort}><WorkspaceIcon kind="sort"/><span className="sr-only">{t('sortBy')}</span><select aria-label={t('sortBy')} value={sort} onChange={event => { setPage(1); setSort(event.target.value); }}><option value="match">{t('ranking.sortMatch')}</option>{result.taraGroups&&<option value="cv">{uiCopy("Kecocokan CV")}</option>}<option value="newest">{t('applicants.sortNewest')}</option></select></label>
       </div>
     </div>
-    {result.taraGroups&&<label className={s.sort}>Versi kebutuhan <select value={version} onChange={e=>{setVersion(e.target.value);setPage(1);}}><option value="all">Semua versi (peringkat terpisah)</option>{result.taraGroups.map(g=><option key={g.id} value={g.id}>{g.version?'Lowongan v'+g.version:'Lamaran sebelum Tara'}{g.methodology ? (g.methodology.includes('v3.') ? ' · Penilaian klaim CV' : ' · Metodologi sebelumnya') : ''} · {g.count}</option>)}</select></label>}
+    {result.taraGroups&&<label className={s.sort}>{uiCopy("Versi kebutuhan ")}<select value={version} onChange={e=>{setVersion(e.target.value);setPage(1);}}><option value="all">Semua versi (peringkat terpisah)</option>{result.taraGroups.map(g=><option key={g.id} value={g.id}>{g.version?'Lowongan v'+g.version:'Lamaran sebelum Tara'}{g.methodology ? (g.methodology.includes('v3.') ? ' \u00b7 Penilaian klaim CV' : ' \u00b7 Metodologi sebelumnya') : ''} &#xb7; {g.count}</option>)}</select></label>}
     <p className={s.rankingNote}>{result.taraGroups?'Skor akhir: 50% kecocokan CV + 50% dukungan klaim CV. Peringkat terpisah untuk setiap versi kebutuhan; hasil yang belum lengkap tetap dapat ditinjau.':t(sort === 'match' ? 'applicants.orderExplanation' : 'applicants.newestExplanation')}</p>
     {result.state==='JOB_REQUIREMENTS_REQUIRED'&&<p role="status">{t('hrV2.state.JOB_REQUIREMENTS_REQUIRED')}</p>}
     {result.rankingAvailable===false&&<p role="status">{t('hrV2.unavailable')}</p>}
@@ -84,7 +86,7 @@ export function JobApplicants({ jobId, jobTitle='', companyId, meta, revision=0,
           const profile=item.profile;
           const location = profile.city?.name || profile.residenceCountry?.name;
           return <tr key={item.id}>
-            <td className={s.rank}>{sort==='match'&&item.rankingVersion?(item.tara?.rank??item.rank??'—'):number((page - 1) * PAGE_SIZE + index + 1)}</td>
+            <td className={s.rank}>{sort==='match'&&item.rankingVersion?(item.tara?.rank??item.rank??'\u2014'):number((page - 1) * PAGE_SIZE + index + 1)}</td>
             <td><div className={s.identity}><RecruiterAvatar className={s.avatar} name={profile.user.fullName} src={profile.user.avatarUrl}/><button className={s.name} onClick={()=>setDetail(item.id)}>{profile.user.fullName}</button></div></td>
             <td className={s.position}>{profile.headline || t('ranking.noHeadline')}{item.tara?<TaraScores data={item.tara}/>:<HrMatchSummary assessment={item.matchBreakdown}/>}</td>
             <td><span className={s.location} title={t('hrV2.location')}>{location && <WorkspaceIcon kind="pin"/>}{location || t('ranking.notProvided')}</span></td>

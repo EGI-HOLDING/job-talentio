@@ -1,4 +1,5 @@
 'use client';
+import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { CandidateWorkspace } from './CandidateWorkspace';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +21,7 @@ import bar from './RecruiterJobsToolbar.module.css';
 
 type Props = { companyId: string; company: any; jobs: any[]; loading: boolean; meta: any; createRequested: boolean; onCloseCreate: () => void; onReload: (quiet?:boolean) => Promise<void>; onApplicants: (id: string) => void; onStatus: (id: string, status: string, message: string) => Promise<void>; onFlash: (message: string, tone?: 'success' | 'error') => void };
 export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, meta, createRequested, onCloseCreate, onReload, onApplicants, onStatus, onFlash }: Props) {
+ const uiCopy=useHrCopy();
   const { t, locale } = useI18n();
   const router = useRouter();
   const confirm = useConfirm();
@@ -101,7 +103,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
     finally { if (alive.current && contextVersion.current === requested) { actionLock.current = false; setBusyId(''); } }
   }
   function closeEditor() { setEditing(null);if(hrFlowV2Enabled){const url=new URL(window.location.href);url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);} onCloseCreate(); }
-  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}>← Kembali ke lowongan</button><h1>Kumpulan CV perusahaan</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
+  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}>← Kembali ke lowongan</button><h1>{uiCopy("Kumpulan CV perusahaan")}</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>

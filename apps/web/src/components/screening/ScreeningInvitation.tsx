@@ -1,4 +1,5 @@
 'use client';
+import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect, useState } from 'react';
 import { api, getSession, saveSession, type AuthSession } from '@/lib/api';
 import { localeUrl } from '@/lib/navigation';
@@ -15,7 +16,7 @@ function maskEmail(email:string|null|undefined){
  if(!email)return '';
  const [local,domain]=email.split('@');
  if(!local||!domain)return '';
- return local.length<3?local[0]+'•••@'+domain:local.slice(0,2)+'•••@'+domain;
+ return local.length<3?local[0]+'\u2022\u2022\u2022@'+domain:local.slice(0,2)+'\u2022\u2022\u2022@'+domain;
 }
 
 function CalendarIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17"/></svg>;}
@@ -25,6 +26,7 @@ function ClockIcon(){return <svg viewBox="0 0 24 24" aria-hidden="true"><circle 
 function EnvelopeIcon(){return <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="10" width="38" height="28" rx="6"/><path d="m7 14 17 13 17-13"/></svg>;}
 
 export function ScreeningInvitation({token}:{token:string}){
+ const uiCopy=useHrCopy();
  const {locale}=useI18n(),role=useAccountRole();
  const [preview,setPreview]=useState<Preview|null>(null),[claim,setClaim]=useState<Claim|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[auth,setAuth]=useState<AuthSession|null>(null);
  useEffect(()=>{let live=true;void api<Preview>('/recruitment/invitations/open/'+encodeURIComponent(token),{auth:false,cacheMode:'no-store'}).then(value=>{if(live)setPreview(value);}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[token]);
@@ -64,54 +66,54 @@ export function ScreeningInvitation({token}:{token:string}){
  const backHref=auth?'/dashboard/employee?tab=applications':'/login?role=EMPLOYEE&next='+encodeURIComponent(next);
  const message=preview?.mode==='VOICE'?'Tim HR mengundangmu untuk membahas pengalaman di CV dan posisi yang kamu lamar. Percakapan akan direkap untuk membantu penilaian tim HR.':'Tim HR mengundangmu untuk membahas pengalaman di CV dan posisi yang kamu lamar.';
  return <main className={s.page}>
-   <a className={s.backLink} href={localeUrl(locale,backHref)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg>Kembali ke lamaran</a>
+   <a className={s.backLink} href={localeUrl(locale,backHref)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg>{uiCopy("Kembali ke lamaran")}</a>
    {preview&&<>
      <div className={s.pageHeading}>
-       <span className={s.eyebrow}>UNDANGAN SCREENING</span>
-       <h1>Undangan interview dengan Tara</h1>
+       <span className={s.eyebrow}>{uiCopy("UNDANGAN SCREENING")}</span>
+       <h1>{uiCopy("Undangan interview dengan Tara")}</h1>
      </div>
      <div className={s.jobSummary}><span className={s.briefcase} aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="13.5" rx="2.5"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7M3.5 12h17m-11 0v2h5v-2"/></svg></span><div><h2>{preview.jobTitle}</h2><p>{preview.companyName}</p></div></div>
      <div className={s.contentGrid}>
-       <section className={s.inviteDetails} aria-label="Detail interview">
+       <section className={s.inviteDetails} aria-label={uiCopy("Detail interview")}>
          <p className={s.intro}>{message}</p>
          <div className={s.detailsGrid}>
-           <div className={s.detailItem}><span className={s.detailIcon}><MessageIcon/></span><span><strong>{preview.mode==='VOICE'?'Interview suara':'Interview teks'}</strong>{preview.mode==='VOICE'&&<small>Siapkan mikrofon</small>}</span></div>
+           <div className={s.detailItem}><span className={s.detailIcon}><MessageIcon/></span><span><strong>{preview.mode==='VOICE'?'Interview suara':'Interview teks'}</strong>{preview.mode==='VOICE'&&<small>{uiCopy("Siapkan mikrofon")}</small>}</span></div>
            <div className={s.detailItem}><span className={s.detailIcon}>{preview.mode==='VOICE'?<ClockIcon/>:<ListIcon/>}</span><span><strong>{preview.mode==='VOICE'?'Maksimal 15 menit':'Maksimal 25 pertanyaan'}</strong></span></div>
            {preview.mode==='TEXT'&&<div className={s.detailItem}><span className={s.detailIcon}><ClockIcon/></span><span><strong>1 menit per pertanyaan</strong></span></div>}
          </div>
          {preview.mode==='TEXT'&&<p className={s.transcriptNote}>Percakapan akan direkap untuk membantu penilaian tim HR.</p>}
          {expires&&<p className={s.expiry}><CalendarIcon/> Berlaku sampai {expires}</p>}
        </section>
-       <aside className={s.actionPanel} aria-label="Langkah berikutnya">
+       <aside className={s.actionPanel} aria-label={uiCopy("Langkah berikutnya")}>
          <EnvelopeIcon/>
          {!role?<>
-           <h2>Masuk untuk melanjutkan</h2>
+           <h2>{uiCopy("Masuk untuk melanjutkan")}</h2>
            <p>Masuk menggunakan akun kandidat penerima undangan untuk melanjutkan interview.</p>
-           <a className={s.primary} href={localeUrl(locale,'/login?role=EMPLOYEE&next='+encodeURIComponent(next))}>Masuk ke Talentio</a>
+           <a className={s.primary} href={localeUrl(locale,'/login?role=EMPLOYEE&next='+encodeURIComponent(next))}>{uiCopy("Masuk ke Talentio")}</a>
            <a className={s.secondaryLink} href={localeUrl(locale,'/register?role=EMPLOYEE&next='+encodeURIComponent(next))}>Belum punya akun? Daftar</a>
          </>:role!=='EMPLOYEE'?<>
-           <h2>Gunakan akun kandidat</h2>
+           <h2>{uiCopy("Gunakan akun kandidat")}</h2>
            <p>Masuk dengan email penerima undangan yang sudah diverifikasi.</p>
          </>:!auth?.user.emailVerified?<>
-           <h2>Verifikasi email sebelum mulai</h2>
+           <h2>{uiCopy("Verifikasi email sebelum mulai")}</h2>
            <p>Pastikan kamu masuk dengan email penerima undangan dan sudah diverifikasi.</p>
            {maskedEmail&&<span className={s.emailBadge}>{maskedEmail}</span>}
            {notice&&<p role="status" className={s.notice}>{notice}</p>}
            {error&&<p role="alert" className={s.error}>{error}</p>}
-           <button type="button" className={s.primary} disabled={busy} onClick={()=>void verify()}>{busy?'Mengirim email…':'Kirim email verifikasi'}</button>
-           <button type="button" className={s.refreshVerification} disabled={busy} onClick={()=>void checkVerification()}>{busy?'Memeriksa status…':'Saya sudah verifikasi · Cek status'}</button>
+           <button type="button" className={s.primary} disabled={busy} onClick={()=>void verify()}>{busy?'Mengirim email\u2026':'Kirim email verifikasi'}</button>
+           <button type="button" className={s.refreshVerification} disabled={busy} onClick={()=>void checkVerification()}>{busy?'Memeriksa status\u2026':'Saya sudah verifikasi \u00b7 Cek status'}</button>
            <small>Kamu bisa membuka interview setelah email terverifikasi.</small>
          </>:<>
-           <h2>Email siap digunakan</h2>
+           <h2>{uiCopy("Email siap digunakan")}</h2>
            <p>Undangan sudah siap. Kamu bisa mulai interview bersama Tara.</p>
-           {maskedEmail&&<span className={s.emailBadge}>{maskedEmail} · Terverifikasi</span>}
+           {maskedEmail&&<span className={s.emailBadge}>{maskedEmail} &#xb7; Terverifikasi</span>}
            {error&&<p role="alert" className={s.error}>{error}</p>}
-           <button type="button" className={s.primary} disabled={busy} onClick={()=>void open()}>{busy?'Menyiapkan interview…':'Buka interview'}</button>
+           <button type="button" className={s.primary} disabled={busy} onClick={()=>void open()}>{busy?'Menyiapkan interview\u2026':'Buka interview'}</button>
          </>}
        </aside>
      </div>
    </>}
-   {!preview&&!error&&<section className={s.loading} role="status">Memuat undangan…</section>}
+   {!preview&&!error&&<section className={s.loading} role="status">Memuat undangan&#x2026;</section>}
    {error&&!preview&&<section className={s.errorPage}><p role="alert" className={s.error}>{error}</p></section>}
  </main>;
 }

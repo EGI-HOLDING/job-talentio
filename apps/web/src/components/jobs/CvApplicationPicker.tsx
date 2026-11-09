@@ -105,7 +105,7 @@ export function CvApplicationPicker({ resumes, selectedResumeId, loading = false
                 </span>
                 <span className={styles.resumeInfo}>
                   <strong>{resumeName(resume)}{resume.isPrimary && <small className={styles.primaryTag}>{t('job.resumePrimary')}</small>}</strong>
-                  <span>{updated ? `${t('job.cvUpdated')} ${updated}` : t('job.resume')}{format ? ` · ${format}` : ''}</span>
+                  <span>{updated ? `${t('job.cvUpdated')} ${updated}` : t('job.resume')}{format ? ` \u00b7 ${format}` : ''}</span>
                 </span>
               </label>;
             })}

@@ -119,6 +119,7 @@ function host(file, exportName, dependencies, globals = {}) {
         if(name==='./HrCreationFlow')return {hrFlowV2Enabled:false,HrCreationFlow:()=>null};
         if(name==='./RecruiterJobEditorV2')return {RecruiterJobEditorV2:()=>null};
         if(name.endsWith('/StructuredJobContent'))return {StructuredJobContent:()=>null,jobExperienceLabel:()=>null};
+        if (name === '@/lib/i18n/hr-flow') return { useHrCopy: () => value => value };
         throw Error('Unexpected dependency: ' + name);
       },
     },

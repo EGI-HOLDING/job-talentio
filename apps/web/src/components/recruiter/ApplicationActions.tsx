@@ -1,4 +1,5 @@
 'use client';
+import { useHrCopy } from '@/lib/i18n/hr-flow';
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
@@ -20,6 +21,7 @@ export type Applicant = {
 };
 
 export function KanbanAction({application, jobId, companyId, onChanged}: {application: Pick<Applicant,'id'|'kanbanEnteredAt'|'canAddToKanban'>; jobId: string; companyId: string; onChanged: (value: Partial<Applicant>) => void}) {
+ const uiCopy=useHrCopy();
   const {t} = useI18n();
   const [busy,setBusy] = useState(false), [error,setError] = useState('');
   const request = useRef(0), pending = useRef(false);
@@ -33,7 +35,7 @@ export function KanbanAction({application, jobId, companyId, onChanged}: {applic
     } catch(reason) { if(version===request.current) setError(reason instanceof Error?reason.message:t('ew.loadFailed')); }
     finally { if(version===request.current) {pending.current=false;setBusy(false);} }
   }
-  if(application.kanbanEnteredAt) return <Link className={s.kanbanLink} href={employerJobHref(jobId,'applicants',companyId)+'&application='+encodeURIComponent(application.id)}>Lihat proses kandidat</Link>;
+  if(application.kanbanEnteredAt) return <Link className={s.kanbanLink} href={employerJobHref(jobId,'applicants',companyId)+'&application='+encodeURIComponent(application.id)}>{uiCopy("Lihat proses kandidat")}</Link>;
   if(!application.canAddToKanban) return null;
   return <span className={s.actionMessage}><button className={s.addKanban} disabled={busy} onClick={()=>void add()}>{busy?t('saving'):'Masukkan ke proses'}</button>{error&&<span role="alert">{error}</span>}</span>;
 }
