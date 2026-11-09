@@ -27,7 +27,7 @@ import { renderScreeningReport } from './screening-report';
 import type { PromptRegistry } from './prompts/registry';
 import { composePrompt } from './prompts/compose';
 import { assertAnswerOpportunities, unansweredEvaluation, validateClaimEvaluation } from './claim-assessment';
-import { enqueueWork } from './screening-packets.service';
+import { enqueueEvaluationPdf, enqueueWork } from './screening-packets.service';
 import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
 import { frozenCvAssessment } from './frozen-cv';
 import { conversationPolicy, conversationTone, isClaimAssessmentVersion, repeatsQuestion } from './conversation.policy';
@@ -415,7 +415,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     }
     private async ensurePdfWork(id: string) {
         const evaluation = await this.db.aiScreeningEvaluation.findUnique({ where: { sessionId: id } });
-        const work = await enqueueWork(this.db, 'PDF', id, 'PDF:' + id + ':' + (evaluation?.inputHash ?? 'legacy') + ':' + PDF_TEMPLATE_VERSION);
+        const work = await enqueueEvaluationPdf(this.db, id, evaluation?.inputHash ?? null);
         if (!evaluation?.pdfKey && work.status === 'DONE') await this.db.aiScreeningWork.updateMany({ where: { id: work.id, status: 'DONE' }, data: { status: 'PENDING', availableAt: new Date() } });
     }
     private async pdf(id: string) {

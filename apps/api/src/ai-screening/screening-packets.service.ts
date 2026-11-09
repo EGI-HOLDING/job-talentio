@@ -2,12 +2,21 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { recruiterJobInclude } from '../matching/recruiter-matching.service';
-import { hash, json, normalizedText, SCREENING_PROMPT_VERSION, screeningEnabled } from './screening.policy';
+import { hash, json, normalizedText, SCREENING_PROMPT_VERSION, screeningEnabled, PDF_TEMPLATE_VERSION } from './screening.policy';
 import { freezePromptRegistry } from './prompts/registry';
 import { CURRENT_CONVERSATION, CONVERSATION_VERSION } from './conversation.policy';
 export async function enqueueWork(db: Pick<Prisma.TransactionClient, 'aiScreeningWork'>, kind: string, subjectId: string, key = kind + ':' + subjectId) {
     return db.aiScreeningWork.upsert({ where: { key }, create: { key, kind, subjectId }, update: {} });
 }
+export async function enqueueEvaluationPdf(db: Pick<Prisma.TransactionClient, 'aiScreeningWork'>, sessionId: string, inputHash: string | null, legacyKeys: string[] = []) {
+    const key = 'PDF:' + sessionId + ':' + (inputHash ?? 'legacy') + ':' + PDF_TEMPLATE_VERSION;
+    if (legacyKeys.length) {
+        const existing = await db.aiScreeningWork.findFirst({ where: { key: { in: [key, ...legacyKeys] }, status: { not: 'DONE' } }, orderBy: { createdAt: 'asc' } });
+        if (existing) return existing;
+    }
+    return enqueueWork(db, 'PDF', sessionId, key);
+}
+
 @Injectable()
 export class ScreeningPackets {
     private cursor: string | undefined;

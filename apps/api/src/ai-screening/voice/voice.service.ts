@@ -8,7 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthUser } from '../../common/auth.decorators';
 import { ScreeningSessions } from '../screening-sessions.service';
 import { ScreeningClient } from '../screening.client';
-import { enqueueWork } from '../screening-packets.service';
+import { enqueueEvaluationPdf, enqueueWork } from '../screening-packets.service';
 import { json, hash, screeningModel, screeningEnabled } from '../screening.policy';
 import type { CandidatePayload, EvaluationPayload, PackagePayload } from '../screening.schemas';
 import { taraVoice } from '../prompts/shared/tara-voice';
@@ -177,7 +177,10 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
   const tested=judged.filter(c=>c.score!==null),score=tested.length?Math.round(tested.reduce((sum,c)=>sum+(c.score??0),0)/(tested.length*4)*1000)/10:null;
   const result={...raw,claims:judged,criteria:[],voice:{partial,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,durationSeconds:Math.max(0,Math.round(((voice.endedAt?.getTime()??Date.now())-+voice.startedAt)/1000)),testedClaims:tested.length,totalClaims:judged.length},summary:(partial?'Sesi parsial; hasil berdasarkan percakapan yang tersedia. ':'')+raw.summary};
   const frozen=voice.session.invitation.snapshot as {cvScore?:number};
-  await this.db.aiScreeningEvaluation.update({where:{sessionId},data:{status:partial?'NEEDS_REVIEW':'READY',promptVersion:VOICE_VERSION,model:prompt.evaluationModel,inputHash:hash([VOICE_VERSION,turns,raw]),result:json(result),cvScore:frozen.cvScore??null,screeningScore:score,finalScore:null,error:null}});
-  await enqueueWork(this.db,'PDF',sessionId,'PDF:'+sessionId+':'+VOICE_VERSION);
+  const inputHash=hash([VOICE_VERSION,turns,raw]);
+  await this.db.$transaction(async tx=>{
+   await tx.aiScreeningEvaluation.update({where:{sessionId},data:{status:partial?'NEEDS_REVIEW':'READY',promptVersion:VOICE_VERSION,model:prompt.evaluationModel,inputHash,result:json(result),cvScore:frozen.cvScore??null,screeningScore:score,finalScore:null,error:null}});
+   await enqueueEvaluationPdf(tx,sessionId,inputHash);
+  });
  }
 }

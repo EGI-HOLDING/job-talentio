@@ -12,26 +12,30 @@ function playwright() {
   }
 }
 
-module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken }) {
+module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, liveText, textUi, allowed, onboarding, makeToken, makePdf }) {
   const web = process.env.RECRUITMENT_WEB_URL || 'http://127.0.0.1:3035';
   const redact = value => value.replace(/(\/screening\/|\/invitations\/open\/)[^/\s?]+/g, '$1[redacted]').replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
   const isLoopback = url => ['127.0.0.1', 'localhost'].includes(new URL(url).hostname);
   assert.ok(isLoopback(web) && isLoopback(base) && isLoopback(process.env.S3_ENDPOINT));
   const out = process.env.AI_RELIABILITY_OUTPUT || path.resolve('output/ai-reliability');
   fs.mkdirSync(out, { recursive: true });
+  const voiceProbe = liveVoice ? require('./recruitment-voice-live.cjs') : null;
+  const wav = voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
   const browser = await playwright().chromium.launch({ headless: true });
   const contexts = [];
-  const report = { steps: [], exceptions: [], requests: [], provider: 'simulated', test: 'browser-nest-candidate-to-hr' };
+  const test = liveVoice ? 'live-browser-voice' : liveText ? 'live-browser-text' : textUi ? 'browser-text-timing' : onboarding ? 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
+  const report = { steps: [], exceptions: [], requests: [], provider: liveVoice ? 'real voice and screening, simulated CV scoring' : liveText ? 'real text screening, simulated CV scoring' : 'simulated', test };
   const job = await db.jobPost.create({ data: {
     id: 'http-browser-job', companyId: 'http-co', title: 'Backend Engineer Browser Audit',
     description: 'Mengembangkan API dan layanan backend dengan Node.js.', status: 'PUBLISHED',
     workMode: 'REMOTE', publishedAt: new Date(),
   } });
 
-  async function openContext(token) {
+  async function openContext(token, useAudio = false) {
     const session = { ...await call('/auth/me', token), accessToken: token };
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, serviceWorkers: 'block' });
     contexts.push(context);
+    if (useAudio) await voiceProbe.useSyntheticMicrophone(context, wav);
     await context.addInitScript(session => {
       localStorage.setItem('jt_token', session.accessToken);
       localStorage.setItem('jt_session', JSON.stringify(session));
@@ -46,8 +50,8 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
         const headers = { 'access-control-allow-origin': web, 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': '*' };
         if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
         const forwarded = await request.allHeaders();
-        const requestHeaders = Object.fromEntries(['authorization', 'content-type', 'accept-language', 'x-locale'].filter(key => forwarded[key]).map(key => [key, forwarded[key]]));
-        const response = await fetch(endpoint, { method, headers: requestHeaders, body: request.postDataBuffer() ?? undefined, redirect: 'manual', signal: AbortSignal.timeout(20000) });
+        const requestHeaders = Object.fromEntries(['authorization', 'content-type', 'accept-language', 'x-locale', 'idempotency-key'].filter(key => forwarded[key]).map(key => [key, forwarded[key]]));
+        const response = await fetch(endpoint, { method, headers: requestHeaders, body: request.postDataBuffer() ?? undefined, redirect: 'manual', signal: AbortSignal.timeout(liveVoice ? 50000 : 20000) });
         report.requests.push({ method, path: redact(url.pathname), status: response.status });
         const contentType = response.headers.get('content-type');
         if (contentType) headers['content-type'] = contentType;
@@ -62,6 +66,13 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   }
 
   try {
+    if (onboarding) {
+      await db.featureFlag.upsert({ where: { key: 'hr_packages' }, create: { key: 'hr_packages', enabled: true }, update: { enabled: true } });
+      await require('./recruitment-onboarding-real.cjs')({ web, db, openContext, makeToken, makePdf, worker, report });
+      assert.deepEqual(report.exceptions, []);
+      report.passed = true;
+      return;
+    }
     await db.employeeProfile.update({ where: { userId: 'http-employee' }, data: { onboardingStatus: 'COMPLETED', onboardingStep: 3, phone: '+6281234567890' } });
     await db.recruiterOnboarding.upsert({ where: { userId: 'http-hr' }, create: { userId: 'http-hr', status: 'COMPLETE', step: 3, companyId: 'http-co' }, update: { status: 'COMPLETE', step: 3, companyId: 'http-co' } });
     const candidate = await openContext(employee);
@@ -103,7 +114,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     report.steps.push('Durable worker scores once; HR browser displays score and reason; foreign recruiter receives 403.');
     await worker.onModuleDestroy();
 
-    const invitation = await call('/recruitment/candidates/' + row.id + '/invitations', hr, { mode: 'TEXT', requestKey: 'http-browser-invite' });
+    const invitation = await call('/recruitment/candidates/' + row.id + '/invitations', hr, { mode: liveVoice ? 'VOICE' : 'TEXT', requestKey: 'http-browser-invite' });
     await deliver(invitation.id);
     const delivered = await db.screeningInvitation.findUniqueOrThrow({ where: { id: invitation.id } });
     assert.equal(delivered.emailStatus, 'SENT');
@@ -112,7 +123,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     const inviteToken = message.body.match(/\/screening\/([^\s]+)/)?.[1];
     assert.ok(inviteToken);
     await db.user.update({ where: { id: 'http-employee' }, data: { emailVerified: false } });
-    const invitationPage = await openContext(employee);
+    const invitationPage = await openContext(employee, liveVoice);
     await invitationPage.goto(web + '/id/screening/' + inviteToken, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await invitationPage.getByRole('heading', { name: 'Verifikasi email sebelum mulai' }).waitFor({ timeout: 30000 });
     assert.equal(await invitationPage.getByRole('button', { name: 'Buka interview' }).count(), 0);
@@ -135,14 +146,17 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     const invitationWithSession = await db.screeningInvitation.findUniqueOrThrow({ where: { id: invitation.id } });
     assert.ok(invitationWithSession.sessionId);
     assert.equal(invitationWithSession.claimedUserId, 'http-employee');
-    assert.deepEqual(report.exceptions, []);
     report.steps.push('An invitation delivered by SMTP and Talentio opens after verification in a separate browser context with the original tab kept open.');
+    const screening = { page: invitationPage, dashboard, drawer, db, worker, call, hr, foreign, sessionId: invitationWithSession.sessionId, invitationId: invitation.id, report, allowed };
+    if (voiceProbe) await voiceProbe.verifyVoice(screening);
+    if (liveText || textUi) await require('./recruitment-text-live.cjs')({ ...screening, textUi });
+    assert.deepEqual(report.exceptions, []);
     report.passed = true;
   } catch (error) {
     report.failure = redact(error.message);
     throw error;
   } finally {
-    fs.writeFileSync(path.join(out, 'real-browser-candidate-to-hr.json'), JSON.stringify(report, null, 2));
+    fs.writeFileSync(path.join(out, test + '.json'), JSON.stringify(report, null, 2));
     for (const context of contexts) await context.unrouteAll({ behavior: 'ignoreErrors' });
     await browser.close();
   }

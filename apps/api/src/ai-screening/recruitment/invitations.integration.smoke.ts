@@ -100,6 +100,8 @@ async function main(){
  const result=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:state.id}});
  assert.equal(result.cvScore,87.5);assert.equal(result.screeningScore,75);assert.equal(result.finalScore,null,'CV and Tara are never merged for invited screening');assert.equal(result.status,'READY');
  assert.equal(await db.application.count({where:{jobPostId:job.id}}),0,'screening completion does not submit or duplicate an application');
+ assert.equal((await invitations.report(hr,created.id)).pdfStatus,'PENDING');
+ assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:state.id}}),1,'opening the text report reuses the evaluation PDF work');
  const paidBeforePdf=calls;await deliver('PDF',state.id);assert.equal(calls,paidBeforePdf,'PDF rendering never calls AI');
  const rendered=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:state.id}});fs.mkdirSync('output/pdf',{recursive:true});fs.writeFileSync('output/pdf/tara-invited-25-questions.pdf',objects.get(rendered.pdfKey!)!);
  const report=await invitations.report(hr,created.id);assert.equal(report.questions.length,25);assert.equal(report.evaluation!.score,75);assert.ok(report.pdfUrl);assert.ok(!('cvSnapshot' in report.invitation.session!));assert.ok(!('leaseToken' in report.invitation.session!));
@@ -165,6 +167,9 @@ async function main(){
  await db.voiceInterview.update({where:{id:connected.id},data:{closingAt:new Date(+clockNow-9000)}});await voiceService.tick(clockNow);
  assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:connected.id}})).status,'ENDED');assert.equal((await db.aiScreeningSession.findUniqueOrThrow({where:{id:voiceClaim.session.id}})).status,'COMPLETED');
  await voiceService.evaluate('voice-evaluate-mock',voiceClaim.session.id);const voiceResult=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:voiceClaim.session.id}});assert.equal(voiceResult.screeningScore,75,'unasked claims are excluded instead of scored zero');assert.equal(voiceResult.finalScore,null);assert.equal(voiceResult.status,'READY');assert.equal((voiceResult.result as any).voice.testedClaims,1);
+ const voiceReports=await Promise.all([invitations.report(hr,voice.id),invitations.report(hr,voice.id)]);
+ assert.ok(voiceReports.every(report=>report.pdfStatus==='PENDING'));
+ assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:voiceClaim.session.id}}),1,'opening the voice report reuses the evaluation PDF work');
  await deliver('PDF',voiceClaim.session.id);const voicePdf=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:voiceClaim.session.id}});fs.writeFileSync('output/pdf/tara-voice-partial-coverage.pdf',objects.get(voicePdf.pdfKey!)!);
  const voiceReport=await invitations.report(hr,voice.id);assert.equal(voiceReport.questions.length,0);assert.equal(voiceReport.voice!.transcript.length,2);assert.equal(voiceReport.voice!.transcript[1].speaker,'CANDIDATE');assert.ok(!('providerId' in voiceReport.voice!));
  const earlyInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-early-stop'});const earlyRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:earlyInvite.id}}),earlyClaim=await invitations.claim(user,invitationToken(earlyRow.id,earlyRow.tokenNonce,config.get('JWT_SECRET')!));

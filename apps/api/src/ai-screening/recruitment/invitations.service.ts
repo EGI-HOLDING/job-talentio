@@ -15,7 +15,7 @@ import { escapeHtml } from '../../common/utils';
 import { RecruitmentService } from './recruitment.service';
 import { ScreeningCandidatePlans } from '../screening-candidate-plans.service';
 import { ScreeningSessions } from '../screening-sessions.service';
-import { enqueueWork, ScreeningPackets } from '../screening-packets.service';
+import { enqueueEvaluationPdf, enqueueWork, ScreeningPackets } from '../screening-packets.service';
 import { json, screeningEnabled, PDF_TEMPLATE_VERSION } from '../screening.policy';
 import { registerCvVersion } from '../../profiles/cv-evidence';
 import { CV_MAX_BYTES, fileChecksum } from './cv-scoring.policy';
@@ -79,7 +79,12 @@ export class InvitationsService {
   let pdfStatus='NOT_READY';
   if(evaluation?.result&&row.sessionId){
    if(evaluation.pdfKey&&evaluation.pdfVersion===PDF_TEMPLATE_VERSION)pdfStatus='READY';
-   else{const work=await enqueueWork(this.db,'PDF',row.sessionId,'PDF:'+row.sessionId+':'+PDF_TEMPLATE_VERSION);pdfStatus=work.status==='FAILED'?'FAILED':'PENDING';}
+   else{
+    const legacyKeys=['PDF:'+row.sessionId+':'+PDF_TEMPLATE_VERSION];
+    if(row.mode==='VOICE')legacyKeys.push('PDF:'+row.sessionId+':'+evaluation.promptVersion);
+    const work=await enqueueEvaluationPdf(this.db,row.sessionId,evaluation.inputHash,legacyKeys);
+    pdfStatus=work.status==='FAILED'?'FAILED':'PENDING';
+   }
   }
   const voice=row.sessionId?await this.db.voiceInterview.findUnique({where:{sessionId:row.sessionId},include:{fragments:{orderBy:{id:'asc'}}}}):null;
   return {claims,pdfStatus,invitation:this.safe(row),voice:voice?{status:voice.status,startedAt:voice.startedAt,endedAt:voice.endedAt,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,transcript:voiceTurns(voice.fragments)}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
