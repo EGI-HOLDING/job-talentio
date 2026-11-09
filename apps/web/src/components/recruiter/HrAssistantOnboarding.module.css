@@ -121,3 +121,36 @@
  .uploadGuide>.uploadNarrator p{font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.uploadGuide{animation:none}}
+.footer[data-final] {
+  gap: 12px;
+}
+.footer .skip {
+  margin-inline-start: auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: transparent;
+  color: #5928d8;
+}
+.footer .skip:hover:not(:disabled) {
+  background: #f3edff;
+}
+.footer .skip + .next {
+  margin-inline-start: 0;
+}
+.footer > button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+@media (max-width: 540px) {
+  .footer[data-final] {
+    gap: 8px;
+  }
+  .footer[data-final] .next {
+    min-width: 0;
+    padding-inline: 14px;
+  }
+  .footer .skip {
+    padding-inline: 8px;
+  }
+}

@@ -77,7 +77,7 @@ export function CandidateCvFiles({ files, setFiles, disabled, illustrated }: Pro
             }}>×</button>
           </li>)}
         </ol>
-        <p className={s.hint}>{c('Kamu bisa menambah CV dari folder lain. Upload dimulai setelah klik Lanjut.')}</p>
+        <p className={s.hint}>{c('Kamu bisa menambah CV dari folder lain.')}</p>
       </>}
       {invalidNames.length > 0 && <p role="alert" className={s.error} title={invalidNames.join(', ')}>
         {invalidNames.slice(0, 3).join(', ')}{invalidNames.length > 3 && ` (+${invalidNames.length - 3})`} — {c('gunakan PDF, DOC atau DOCX maksimal 5 MB.')}

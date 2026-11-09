@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react';
 import { api, getSession } from '@/lib/api';
 import { restoreCandidateImports, resumeCandidateTransfer, dismissCandidateImport, markCandidateProcessing, refreshCandidateImports, retryCandidateTransfer, useCandidateImports } from '@/lib/candidateImports';
+import { useHrAssistantContext } from './HrFlowPresentation';
 import s from './CandidateImportProgress.module.css';
 export function CandidateImportProgress(){
+  const assistant = useHrAssistantContext();
   const imports=useCandidateImports(),[expanded,setExpanded]=useState(false),[session,setSession]=useState(''),[error,setError]=useState('');
   useEffect(()=>{const sync=()=>{const id=getSession()?.user.id??'';setSession(id);if(id)void restoreCandidateImports(id);};sync();window.addEventListener('jt-session-updated',sync);return()=>window.removeEventListener('jt-session-updated',sync);},[]);
   const batches=imports.filter(b=>b.userId===session),files=batches.flatMap(b=>b.files);
@@ -12,7 +14,7 @@ export function CandidateImportProgress(){
   useEffect(()=>{if(!transferring)return;const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[transferring]);
   const needsRefresh=processing||files.some(f=>f.needsReselect);
   useEffect(()=>{if(!needsRefresh)return;const timer=setInterval(()=>{if(!document.hidden)void refreshCandidateImports();},4000);return()=>clearInterval(timer);},[needsRefresh]);
-  if(!files.length)return null;
+  if (assistant || !files.length) return null;
   const uploaded=files.filter(f=>['processing','done','duplicate'].includes(f.status)).length,done=files.filter(f=>f.status==='done').length,failed=files.filter(f=>f.status==='error').length;
   const totalBytes=files.reduce((n,f)=>n+f.size,0),loadedBytes=files.reduce((n,f)=>n+f.loaded,0);
   async function retryAnalysis(id:string){setError('');try{await api('/recruitment/candidates/'+id+'/retry',{method:'POST',body:'{}'});markCandidateProcessing(id);window.dispatchEvent(new Event('candidate-import-updated'));}catch(e){setError(e instanceof Error?e.message:'Coba lagi.');}}

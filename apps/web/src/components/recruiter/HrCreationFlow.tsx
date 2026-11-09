@@ -11,8 +11,18 @@ import { JobFormV2, cleanHrDraft, initialHrDraft, HrDraft } from './JobFormV2';
 import s from './HrFlow.module.css';
 import { useEmployerUnsaved } from './useEmployerUnsaved';
 import { HrIcon, useHrFlowSurface } from './HrFlowPresentation';
-import { HrAssistantOnboarding } from './HrAssistantOnboarding';
-import { readAssistantProgress, saveAssistantProgress, type AssistantSceneId } from './hrAssistantState';
+import { HrAssistantOnboarding, type AssistantFinishAction } from './HrAssistantOnboarding';
+import { clearAssistantProgress, readAssistantProgress, saveAssistantProgress, type AssistantSceneId } from './hrAssistantState';
+
+type AssistantAttempt = {
+  action: AssistantFinishAction;
+  sessionId: string;
+  revision: number;
+  publishKey: string;
+  files: File[];
+  jobId?: string;
+  importRegistered?: boolean;
+};
 
 export const hrFlowV2Enabled=process.env.NEXT_PUBLIC_HR_CREATION_V2==='true';
 export function HrFlowHeader({companyName,stage,onboarding=false}:{companyName?:string;stage:number;onboarding?:boolean}){
@@ -29,6 +39,8 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   const [draft,setDraft]=useState<HrDraft>(initialHrDraft()),[error,setError]=useState(''),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[retry,setRetry]=useState(0);
   const [details,setDetails]=useState<PackageCode|null>(null);
   const [assistantScene,setAssistantScene]=useState<AssistantSceneId|null>(null);
+  const [assistantFiles, setAssistantFiles] = useState<File[]>([]);
+  const [assistantAttempt, setAssistantAttempt] = useState<AssistantAttempt | null>(null);
   const sessionRef=useRef<any>(null),draftRef=useRef(draft),lastSaved=useRef(''),queue=useRef<Promise<any>>(Promise.resolve()),alive=useRef(false),lock=useRef(false),intentKey=useRef(''),orderKey=useRef<Record<string,string>>({}),publishKeys=useRef<Record<string,string>>({});
   draftRef.current=draft;
   function accept(value:any){if(value.id===sessionRef.current?.id&&value.revision<sessionRef.current.revision)return sessionRef.current;sessionRef.current=value;if(alive.current)setSession(value);return value;}
@@ -37,6 +49,8 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     if(sessionId&&sessionRef.current?.id===sessionId&&catalog&&!retry){alive.current=true;return()=>{alive.current=false;};}
     alive.current=true;const abort=new AbortController();intentKey.current||=crypto.randomUUID();
     setError('');setAssistantScene(null);
+    setAssistantFiles([]);
+    setAssistantAttempt(null);
     (async()=>{
       const packages=await api<PackageCatalog>('/job-commerce/catalog',{auth:false,signal:abort.signal});
       if(!('hrFlowV2' in packages)||!packages.hrFlowV2)throw Error(c("Alur baru belum diaktifkan pada server."));
@@ -123,13 +137,42 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     const result=await api<{jobId:string}>('/hr-flow/sessions/'+value.id+'/publish',{method:'POST',headers:{'Idempotency-Key':publishKeys.current[key]},body:JSON.stringify({revision:value.revision})});
     lastSaved.current=JSON.stringify(cleanHrDraft(draftRef.current));await onPublished(result.jobId);
   }
-  async function finishAssistant(files: File[]) {
-    const value = await saveDraft();
-    const key = String(value.revision); publishKeys.current[key] ??= crypto.randomUUID();
-    const result = await api<{jobId:string}>('/hr-flow/sessions/' + value.id + '/publish', {method:'POST',headers:{'Idempotency-Key':publishKeys.current[key]},body:JSON.stringify({revision:value.revision})});
-    if (files.length) await startCandidateImport(companyId, result.jobId, files);
-    lastSaved.current = JSON.stringify(cleanHrDraft(draftRef.current));
-    await onPublished(result.jobId);
+  async function finishAssistant(action: AssistantFinishAction) {
+    let attempt = assistantAttempt;
+    if (!attempt) {
+      const saved = await saveDraft();
+      attempt = {
+        action,
+        sessionId: saved.id,
+        revision: saved.revision,
+        publishKey: crypto.randomUUID(),
+        files: action === 'upload' ? [...assistantFiles] : [],
+      };
+      setAssistantAttempt(attempt);
+    }
+
+    let jobId = attempt.jobId;
+    if (!jobId) {
+      const published = await api<{ jobId: string }>('/hr-flow/sessions/' + attempt.sessionId + '/publish', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': attempt.publishKey },
+        body: JSON.stringify({ revision: attempt.revision }),
+      });
+      jobId = published.jobId;
+      setAssistantAttempt({ ...attempt, jobId });
+    }
+    if (attempt.action === 'upload' && !attempt.importRegistered) {
+      await startCandidateImport(companyId, jobId, attempt.files);
+      setAssistantAttempt({ ...attempt, jobId, importRegistered: true });
+    }
+    await onPublished(jobId);
+    setAssistantFiles([]);
+  }
+  function returnToJob() {
+    clearAssistantProgress(getSession()?.user.id ?? '', session.id);
+    setAssistantScene(null);
+    setPhase('JOB');
+    window.scrollTo({ top: 0 });
   }
   async function continueToAssistant(){
     const body=cleanHrDraft(draftRef.current);
@@ -144,7 +187,19 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   const packageName=(code:string)=>code==='FREE'?'Free':code==='STANDARD'?'Standard':'Premium';
   const orderState=(state:string)=>c(({PAID:'Paket dikonfirmasi',PENDING:'Menunggu pembayaran',REVIEW:'Sedang diperiksa',EXPIRED:'Pesanan kedaluwarsa',CANCELLED:'Pesanan dibatalkan',FAILED:'Pembayaran gagal',REFUNDED:'Pembayaran dikembalikan'} as Record<string,string>)[state]??'Perlu pemeriksaan status');
   if(!catalog||!session)return <div className={s.page} data-hr-surface>{error?<div className={s.error} role="alert">{error}<br/><button className={s.link} onClick={()=>setRetry(v=>v+1)}>{c("Coba lagi")}</button><button className={s.link} onClick={onClose}>{c("Kembali")}</button></div>:<WorkspaceLoading/>}</div>;
-  if(onboarding&&assistantScene)return <HrAssistantOnboarding key={session.id} companyId={companyId} companyName={company?.name??session.company?.name??''} userId={getSession()?.user.id??''} creationSessionId={session.id} initialScene={assistantScene} onContinue={finishAssistant}/>;
+  if (onboarding && assistantScene) return <HrAssistantOnboarding
+    key={session.id}
+    companyId={companyId}
+    companyName={company?.name ?? session.company?.name ?? ''}
+    userId={getSession()?.user.id ?? ''}
+    creationSessionId={session.id}
+    initialScene={assistantScene}
+    selectedFiles={assistantFiles}
+    setSelectedFiles={setAssistantFiles}
+    pendingAction={assistantAttempt?.action}
+    onBackToJob={returnToJob}
+    onFinish={finishAssistant}
+  />;
   const heading=<><h1 className={s.title}>{phase==='PACKAGE'?c("Pilih paket untuk lowongan ini"):phase==='CHECKOUT'?c("Periksa pesanan Anda"):c("Buat lowongan")}</h1><p className={s.subtitle}>{phase==='PACKAGE'?c("Pembelian berlaku untuk satu lowongan. Tidak berlangganan otomatis."):phase==='CHECKOUT'?c("Pastikan paket dan perusahaan sudah sesuai sebelum melanjutkan."):c("Susun kebutuhan posisi dengan jelas untuk kandidat.")}</p></>;
   return <div className={s.page} data-hr-flow-v2 data-hr-surface>
     <HrFlowHeader companyName={company?.name??session.company?.name} stage={(phase==='PACKAGE'?0:phase==='CHECKOUT'?1:2)+(onboarding?1:0)} onboarding={onboarding}/>

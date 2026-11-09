@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { HrSupport } from './HrSupport';
 import { allowEmployerContextChange } from './useEmployerUnsaved';
@@ -104,24 +105,66 @@ export function HrAssistantHeader({ companyId, companyName }: { companyId: strin
   </>;
 }
 
-type Props = { companyId: string; companyName: string; userId: string; creationSessionId: string; initialScene: AssistantSceneId; onContinue: (files: File[]) => Promise<void> };
-export function HrAssistantOnboarding({ companyId, companyName, userId, creationSessionId, initialScene, onContinue }: Props) {
+export type AssistantFinishAction = 'upload' | 'skip';
+
+type Props = {
+  companyId: string;
+  companyName: string;
+  userId: string;
+  creationSessionId: string;
+  initialScene: AssistantSceneId;
+  selectedFiles: File[];
+  setSelectedFiles: Dispatch<SetStateAction<File[]>>;
+  pendingAction?: AssistantFinishAction;
+  onBackToJob: () => void;
+  onFinish: (action: AssistantFinishAction) => Promise<void>;
+};
+export function HrAssistantOnboarding({
+  companyId, companyName, userId, creationSessionId, initialScene,
+  selectedFiles, setSelectedFiles, pendingAction, onBackToJob, onFinish,
+}: Props) {
   const c = useHrCopy();
   useHrAssistantSurface(companyId, companyName);
   const [scene, setScene] = useState<AssistantSceneId>(initialScene);
   const [leaving, setLeaving] = useState(false), [busy, setBusy] = useState(false);
   const [scale, setScale] = useState(1);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]), [uploadError, setUploadError] = useState('');
-  async function finish() {
-    if (lock.current) return; lock.current = true; setBusy(true); setUploadError('');
-    try { await onContinue(selectedFiles); }
-    catch (error) { setUploadError(error instanceof Error ? error.message : 'Belum bisa melanjutkan. Coba lagi.'); }
-    finally { lock.current = false; setBusy(false); }
-  }
+  const [uploadError, setUploadError] = useState('');
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const stage = useRef<HTMLDivElement>(null), heading = useRef<HTMLDivElement>(null);
   const lock = useRef(false), timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const reducedMotion = useRef(false);
   const index = assistantScenes.indexOf(scene);
+  const isFinalScene = scene === 'cv-upload';
+
+  async function finish(action: AssistantFinishAction) {
+    if (lock.current || (pendingAction && pendingAction !== action)) return;
+    if (action === 'upload' && selectedFiles.length === 0) return;
+    lock.current = true;
+    setBusy(true);
+    setUploadError('');
+    try {
+      await onFinish(action);
+    } catch (error) {
+      const reason = error instanceof Error && error.message ? error.message + ' ' : '';
+      setUploadError(reason + c(action === 'upload' ? 'Klik Upload untuk mencoba lagi.' : 'Klik Lewati untuk mencoba lagi.'));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+
+  function skip() {
+    if (lock.current || showSkipConfirm || pendingAction === 'upload') return;
+    if (selectedFiles.length > 0 && !pendingAction) setShowSkipConfirm(true);
+    else void finish('skip');
+  }
+
+  function back() {
+    if (lock.current || pendingAction) return;
+    if (index === 0) onBackToJob();
+    else navigate(-1);
+  }
+
   useLayoutEffect(() => {
     const element = stage.current;
     if (!element) return;
@@ -206,21 +249,33 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
           {scene === 'cv-upload' && <>
             <section className={s.uploadPanel} data-has-files={selectedFiles.length > 0}>
               <h1>{c('Upload CV kandidat')}</h1>
-              <CandidateCvFiles files={selectedFiles} setFiles={setSelectedFiles} disabled={busy} illustrated/>
+              <CandidateCvFiles files={selectedFiles} setFiles={setSelectedFiles} disabled={busy || Boolean(pendingAction)} illustrated/>
+              {busy && <p role="status" className={s.uploadHint}>{c('Menyiapkan dashboard…')}</p>}
               {uploadError && <p role="alert" className={s.uploadHint}>{uploadError}</p>}
             </section>
           </>}
         </div>
       </div>
       {scene === 'cv-upload' && <div className={s.uploadGuide}>
-        {narrator(<><strong>{c('Yuk, masukin CV kandidat yang udah lu punya.')}</strong><p>{c('Boleh banyak sekaligus. Abis di-upload, gua mulai proses dan bikin rankingnya.')}</p></>,s.uploadNarrator)}
+        {narrator(<><strong>{c('Yuk, masukin CV kandidat yang udah lu punya.')}</strong><p>{c('Pilih atau tarik CV untuk menambahkannya ke daftar. Klik Upload untuk mengirimnya.')}</p></>,s.uploadNarrator)}
         <Art name="taka-upload" alt="Taka" className={s.uploadTaka}/>
       </div>}
     </div>
-    <footer className={s.footer}>
-      {index > 0 && <button type="button" className={s.back} disabled={busy} onClick={()=>navigate(-1)}><Arrow back/>{c('Kembali')}</button>}
-      {index === assistantScenes.length-1 && <button type="button" className={s.next} disabled={busy} onClick={()=>void finish()}>{busy ? c('Menyiapkan dashboard…') : c('Lanjut')}<Arrow/></button>}
-      {index < assistantScenes.length-1 && <button type="button" className={s.next} disabled={busy} onClick={()=>navigate(1)}>{c('Lanjut')}<Arrow/></button>}
+    <footer className={s.footer} data-final={isFinalScene || undefined}>
+      <button type="button" className={s.back} disabled={busy || Boolean(pendingAction)} onClick={back}><Arrow back/>{c('Kembali')}</button>
+      {isFinalScene ? <>
+        <button type="button" className={s.skip} disabled={busy || pendingAction === 'upload'} onClick={skip}>{c('Lewati')}</button>
+        <button type="button" className={s.next} disabled={busy || pendingAction === 'skip' || selectedFiles.length === 0} onClick={() => void finish('upload')}>{c('Upload')}<Arrow/></button>
+      </> : <button type="button" className={s.next} disabled={busy} onClick={() => navigate(1)}>{c('Lanjut')}<Arrow/></button>}
     </footer>
+    {showSkipConfirm && <ConfirmModal
+      tone="danger"
+      title={c('Lewati upload CV?')}
+      message={c('CV yang dipilih belum diunggah. Jika lanjut, file ini tidak akan tersimpan.')}
+      cancelLabel={c('Batal')}
+      confirmLabel={c('Lanjut')}
+      onCancel={() => setShowSkipConfirm(false)}
+      onConfirm={() => { setShowSkipConfirm(false); void finish('skip'); }}
+    />}
   </section>;
 }

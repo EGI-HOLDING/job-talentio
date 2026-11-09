@@ -16,3 +16,8 @@ export function saveAssistantProgress(userId: string, creationSessionId: string,
   if (!userId || !creationSessionId || typeof window === 'undefined') return;
   try { window.sessionStorage.setItem(assistantProgressKey(userId, creationSessionId), scene); } catch { /* The story also works with storage disabled. */ }
 }
+
+export function clearAssistantProgress(userId: string, creationSessionId: string) {
+  if (!userId || !creationSessionId || typeof window === 'undefined') return;
+  try { window.sessionStorage.removeItem(assistantProgressKey(userId, creationSessionId)); } catch { /* Browser storage is optional. */ }
+}
