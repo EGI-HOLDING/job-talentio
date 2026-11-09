@@ -11,6 +11,8 @@ export class AiUncertain extends Error {
 type ResponseBody = {
     id?: string;
     status?: string;
+    created_at?: number;
+    completed_at?: number;
     output?: Array<{
         type: string;
         content?: Array<{
@@ -29,6 +31,16 @@ type ResponseBody = {
     };
     incomplete_details?: unknown;
 };
+type ProviderTiming = { createdAt?: number; acknowledgedAt?: string; firstObservedAt?: string; firstInProgressObservedAt?: string; completedAt?: number; lastStatus?: string; lastObservedAt?: string };
+function responseTiming(previous: unknown, body: ResponseBody): ProviderTiming {
+    const prior = previous && typeof previous === 'object' && !Array.isArray(previous) ? (previous as { providerTiming?: ProviderTiming }).providerTiming ?? {} : {};
+    const observedAt = new Date().toISOString();
+    return { ...prior, ...(typeof body.created_at === 'number' ? { createdAt: body.created_at } : {}),
+        firstObservedAt: prior.firstObservedAt ?? observedAt,
+        ...(body.status === 'in_progress' && !prior.firstInProgressObservedAt ? { firstInProgressObservedAt: observedAt } : {}),
+        ...(typeof body.completed_at === 'number' ? { completedAt: body.completed_at } : {}),
+        lastStatus: body.status ?? 'unknown', lastObservedAt: observedAt };
+}
 @Injectable()
 export class ScreeningClient {
     constructor(private db: PrismaService, private config: ConfigService) { }
@@ -89,7 +101,7 @@ export class ScreeningClient {
                 await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'UNCERTAIN', error: 'MISSING_RESPONSE_ID' } });
                 throw new AiUncertain('TARA_CALL_UNCERTAIN');
             }
-            call = await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { responseId: body.id } });
+            call = await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { responseId: body.id, usage: json({ providerTiming: { acknowledgedAt: new Date().toISOString() } }) } });
             return this.consume(call, body, prompt.schema);
         }
         if (!call.responseId)
@@ -114,9 +126,15 @@ export class ScreeningClient {
     private async consume(call: {
         id: string;
         responseId: string | null;
+        usage?: unknown;
     }, body: ResponseBody, schema: Parameters<typeof assertSchema>[0]) {
-        if (body.status === 'queued' || body.status === 'in_progress')
+        const timing = responseTiming(call.usage, body);
+        if (body.status === 'queued' || body.status === 'in_progress') {
+            const previous = call.usage && typeof call.usage === 'object' ? (call.usage as { providerTiming?: ProviderTiming }).providerTiming : undefined;
+            if (previous?.lastStatus !== body.status)
+                await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { usage: json({ providerTiming: timing }) } });
             throw new AiPending('TARA_RESPONSE_PENDING');
+        }
         const retained = await this.db.aiScreeningCall.findUnique({ where: { id: call.id }, select: { status: true } });
         if (!retained || retained.status === 'ERASED') {
             if (call.responseId)
@@ -131,7 +149,7 @@ export class ScreeningClient {
         const uncached = Math.max(0, input - cached - (writes ?? 0));
         const cost = (cached * 0.01 + (writes ?? 0) * 0.125 + uncached * (writes === undefined ? 0.125 : 0.10) + output * 0.50) / 1000000;
         const accounting = { inputTokens: input, outputTokens: output, cachedTokens: cached, reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
-            usage: json(usage), costUsd: cost, pricing: { input: 0.10, cacheRead: 0.01, cacheWrite: 0.125, output: 0.50, unit: 1000000, conservative: writes === undefined } };
+            usage: json({ ...usage, providerTiming: timing }), costUsd: cost, pricing: { input: 0.10, cacheRead: 0.01, cacheWrite: 0.125, output: 0.50, unit: 1000000, conservative: writes === undefined } };
         if (body.status !== 'completed') {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'FAILED', error: 'PROVIDER_' + (body.status ?? 'FAILED') } });
             throw new Error('TARA_RESPONSE_FAILED');
@@ -142,7 +160,7 @@ export class ScreeningClient {
                 throw new Error('PROVIDER_REFUSAL');
             const result: unknown = JSON.parse(content.filter(c => c.type === 'output_text').map(c => c.text ?? '').join(''));
             assertSchema(schema, result);
-            const saved = await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'COMPLETED', result: json(result) } });
+            const saved = await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'COMPLETED', error: null, result: json(result) } });
             if (!saved.count)
                 throw new Error('SESSION_ERASED');
             if (call.responseId)

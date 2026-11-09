@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, codex/recruiter-job-table]
   pull_request:
     branches: [main, develop]
 
@@ -45,6 +45,13 @@ jobs:
 
       - name: Catalog maintenance and target guards
         run: pnpm --filter @job-talentio/api test:catalog-sync
+
+      - name: AI reliability deterministic regression
+        run: node scripts/ai-reliability-regression.cjs --unit
+        env:
+          OPENAI_API_KEY: ''
+          TELEGRAM_BOT_TOKEN: ''
+          RESEND_API_KEY: ''
 
       - name: Recruiter onboarding and package selection
         run: pnpm --filter @job-talentio/web test:recruiter-packages

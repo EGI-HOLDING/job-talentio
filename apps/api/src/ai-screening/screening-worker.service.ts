@@ -37,6 +37,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private timer?: ReturnType<typeof setInterval>;
     private reconciling = false;
     private ticking = false;
+    private stopping = false;
     private queue?: Queue;
     private worker?: Worker;
     private redis?: IORedis;
@@ -47,6 +48,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private active = new Set<string>();
     constructor(private db: PrismaService, private config: ConfigService, private storage: StorageService, private matching: MatchingService, private packets: ScreeningPackets, private sessions: ScreeningSessions, private candidates: ScreeningCandidatePlans, private client: ScreeningClient, @Optional() private cvScoring?: CvScoringService, @Optional() private recruitment?: RecruitmentService, @Optional() private invitations?: InvitationsService, @Optional() private voice?: VoiceService, @Optional() private actions?: CandidateActions) { }
     async onModuleInit() {
+        this.stopping = false;
         const exists = await this.db.$queryRaw<Array<{
             name: string | null;
         }>>(Prisma.sql `SELECT to_regclass('public."AiScreeningWork"')::text AS name`).catch(() => []);
@@ -79,6 +81,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         void this.tick();
     }
     async onModuleDestroy() {
+        this.stopping = true;
         if (this.timer)
             clearInterval(this.timer);
         await this.worker?.close();
@@ -87,7 +90,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         this.redis?.disconnect();
     }
     async tick() {
-        if (this.ticking)
+        if (this.stopping || this.ticking)
             return;
         this.ticking = true;
         try {
@@ -106,7 +109,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             ]);
             const works = [...interactive, ...imports];
             for (const work of works) {
-                if (this.active.size >= 2)
+                if (this.stopping || this.active.size >= 2)
                     break;
                 if (this.queue) {
                     try {
@@ -117,7 +120,12 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 }
                 if (!this.active.has(work.id)) {
                     this.active.add(work.id);
-                    void this.process(work.id).finally(() => this.active.delete(work.id));
+                    let processed = false;
+                    void this.process(work.id).then(() => { processed = true; }).catch(() => this.logger.warn('Tara dispatch will retry after its durable lease.')).finally(() => {
+                        this.active.delete(work.id);
+                        // Fill a free slot immediately; the periodic timer remains the recovery fallback.
+                        if (processed && !this.stopping) void this.tick().catch(() => this.logger.warn('Tara dispatch refill will retry.'));
+                    });
                 }
             }
         }

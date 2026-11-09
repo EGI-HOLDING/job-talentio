@@ -29,6 +29,7 @@ export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,v
   const c=useHrCopy();
   const fieldErrors=(field:string)=>validationIssues.filter(issue=>issue.field===field).map(issue=><p className={s.error} role="alert" key={issue.path}>{c(issue.message)}</p>);
   const descriptionId=useId();
+  const aiRequestInFlight=useRef(false);
   const [aiBusy,setAiBusy]=useState<JobContentAiTarget|null>(null),[aiError,setAiError]=useState<{target:JobContentAiTarget;message:string}|null>(null),[aiPreview,setAiPreview]=useState<{target:JobContentAiTarget;suggestion:JobContentAiSuggestion}|null>(null);
   const [addingSkill,setAddingSkill]=useState(false),[addingLanguage,setAddingLanguage]=useState(false),[addingBenefit,setAddingBenefit]=useState(false),[currencies,setCurrencies]=useState<string[]>(['IDR','USD','EUR']);
   const skillPicker=useRef<HTMLDivElement>(null),languagePicker=useRef<HTMLDivElement>(null);
@@ -42,7 +43,8 @@ export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,v
   const aiLabels:Record<JobContentAiTarget,string>={description:c('Deskripsi posisi'),responsibilities:c('Tanggung jawab utama'),kpis:c('KPI posisi'),skills:c('Keahlian')};
   const aiFeedback=(target:JobContentAiTarget)=><>{aiBusy===target&&<p className={s.aiFeedback} role="status">{c("AI sedang menyusun saran...")}</p>}{aiError?.target===target&&<p className={s.aiFeedbackError} role="alert">{aiError.message}</p>}</>;
   async function generateWithAi(target:JobContentAiTarget){
-    if(aiBusy||!draft.title?.trim())return;
+    if(aiRequestInFlight.current||aiBusy||!draft.title?.trim())return;
+    aiRequestInFlight.current=true;
     setAiBusy(target);setAiError(null);
     const level=levels.find(item=>item.code===draft.seniorityLevelCode);
     try{
@@ -62,7 +64,7 @@ export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,v
       if(result.target!==target)throw Error(c('Hasil AI tidak sesuai dengan bagian yang dipilih. Silakan coba lagi.'));
       setAiPreview({target,suggestion:result.suggestion});
     }catch(error){setAiError({target,message:error instanceof Error?error.message:c('AI belum tersedia. Coba lagi sebentar.')});}
-    finally{setAiBusy(null);}
+    finally{aiRequestInFlight.current=false;setAiBusy(null);}
   }
   function applyAiSuggestion(){
     if(!aiPreview)return;

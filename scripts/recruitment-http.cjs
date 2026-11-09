@@ -59,7 +59,22 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    await app.get(InvitationsService).deliver(invite.id);const invitation=await db.screeningInvitation.findUniqueOrThrow({where:{id:invite.id}});assert.equal(invitation.emailStatus,'SENT');assert.equal(invitation.messageStatus,'SENT');
    const chat=await db.chatMessage.findUniqueOrThrow({where:{id:invitation.messageId}}),url=chat.body.match(/http:\/\/[^\s]+\/screening\/([^\s]+)/);assert.ok(url);const invitationToken=url[1];
    const publicInvite=await call('/recruitment/invitations/open/'+invitationToken);assert.ok(!('recipientEmail' in publicInvite));
+   await db.user.update({where:{id:'http-employee'},data:{emailVerified:false}});
+   await call('/recruitment/invitations/open/'+invitationToken+'/claim',employee,{},'POST',403);
+   await call('/auth/request-verification',employee,{});
+   const inbox=await fetch(process.env.RECRUITMENT_MAILPIT_URL+'/api/v1/search?query='+encodeURIComponent('to:candidate-http@synthetic.test'));
+   assert.ok(inbox.ok);let verificationToken;
+   for(const message of (await inbox.json()).messages){
+     const mail=await (await fetch(process.env.RECRUITMENT_MAILPIT_URL+'/api/v1/message/'+message.ID)).json();
+     const match=String(mail.HTML||mail.Text||'').match(/verify-email\?token=([a-zA-Z0-9_-]+)/);
+     if(match){verificationToken=match[1];break;}
+   }
+   assert.ok(verificationToken,'actual SMTP verification link reaches local mailbox');
+   const verified=await call('/auth/verify-email',null,{token:verificationToken});assert.equal(verified.user.emailVerified,true);
+   const refreshed=await call('/auth/me',employee);assert.equal(refreshed.user.emailVerified,true,'original invitation tab token sees current server verification');
+   await call('/auth/verify-email',null,{token:verificationToken},'POST',400);
    const claimed=await call('/recruitment/invitations/open/'+invitationToken+'/claim',employee,{});assert.ok(claimed.session.id);
+
    await call('/ai-screening/sessions/'+claimed.session.id+'/voice',hr,null,'GET',403);
    await call('/ai-screening/sessions/'+claimed.session.id+'/voice',employee,null,'GET',403);
    const message=await call('/recruitment/messages',hr,{companyId:'http-co',selection:{ids:[id]},requestKey:'http-message-request',subject:'Tahap rekrutmen',body:'Halo {{name}}, terima kasih.',channels:{email:true,talentio:true}});assert.equal(message.count,1);
@@ -69,7 +84,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const schedules=await call('/recruitment/candidates/'+id+'/interviews',hr);assert.ok(schedules.some(s=>s.id===schedule.id));
    const mail=await fetch(process.env.RECRUITMENT_MAILPIT_URL+'/api/v1/search?query='+encodeURIComponent('to:candidate-http@synthetic.test'));assert.ok(mail.ok);assert.ok((await mail.json()).messages.length>=2,'real SMTP invite and message reach local Mailpit');
    assert.equal(paidMockCalls,1);assert.equal(await db.aiScreeningCall.count(),0);
-   console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. Paid API calls: 0.');
+   console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio, real SMTP verification and stale-token refresh/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. Paid API calls: 0.');
   }finally{
    try{app.get(RATE_LIMIT_REDIS)?.disconnect();}catch{}
    await app.close();

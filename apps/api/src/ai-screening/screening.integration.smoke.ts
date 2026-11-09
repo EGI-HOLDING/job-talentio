@@ -117,7 +117,8 @@ async function main() {
         check(plan.claims[0].quote.startsWith('Membantu tim'), 'scope retained');
         assert.throws(() => validateCandidate({ ...plan, claims: [{ ...plan.claims[0], quote: 'Memimpin perusahaan' }] }, rubric, 'Membantu tim'));
         checks++;
-        await assert.rejects(() => app.apply(a.user, job.id));
+        // Applications are now CV-only; ownership, rather than Tara completion, gates the selected CV.
+        await assert.rejects(() => app.apply(a.user, job.id, undefined, undefined, b.resume.id));
         checks++;
         await assert.rejects(() => sessions.state(b.user, a.id));
         checks++;
@@ -141,7 +142,7 @@ async function main() {
         legacyPrompts['follow-up'].instructions = 'LEGACY_VOICE_FIXTURE';
         legacyPrompts['follow-up'].version = 'tara-cv-claims-v3.0.0';
         const legacyPacket = await db.aiScreeningPackage.create({ data: { jobId: legacyJob.id, fingerprint: 'legacy-policy-fixture', version: 1, status: 'READY', jobSnapshot: basePacket.jobSnapshot!, companySnapshot: basePacket.companySnapshot!, promptSnapshot: json(legacyPrompts), promptVersion: 'tara-cv-claims-v3.0.0', payload: json(rubric), conversationPolicy: Prisma.DbNull } });
-        const legacy = await db.aiScreeningSession.create({ data: { jobId: legacyJob.id, profileId: b.user.id, resumeId: b.resume.id, packageId: legacyPacket.id, resumeVersionId: pb.resumeVersionId, status: 'ACTIVE', startedAt: new Date() } });
+        const legacy = await db.aiScreeningSession.create({ data: { jobId: legacyJob.id, profileId: b.user.id, legacyKey: 'legacy:'+legacyJob.id+':'+b.user.id, resumeId: b.resume.id, packageId: legacyPacket.id, resumeVersionId: pb.resumeVersionId, status: 'ACTIVE', startedAt: new Date() } });
         const legacyPlan = await db.aiCandidatePlan.create({ data: { sessionId: legacy.id, packageId: legacyPacket.id, resumeVersionId: pb.resumeVersionId!, fingerprint: 'legacy-claims', promptVersion: 'tara-cv-claims-v3.0.0', status: 'READY', payload: json({ claims: [plan.claims[0]], limitations: [] }) } });
         await db.aiScreeningSession.update({ where: { id: legacy.id }, data: { currentPlanId: legacyPlan.id } });
         const legacyQuestion = await db.aiScreeningQuestion.create({ data: { sessionId: legacy.id, position: 0, claimId: plan.claims[0].id, criterionId: 'c0', kind: 'CORE', text: 'Bagian apa yang kamu kerjakan sendiri?' } });
@@ -162,7 +163,7 @@ async function main() {
         check((await db.aiScreeningQuestion.count({ where: { sessionId: legacy.id } })) === 3, 'legacy per-root second followup is preserved');
         const v4job = await db.jobPost.create({ data: { companyId: company.id, title: 'v4 customer service', description: job.description, status: 'PUBLISHED' } });
         const v4packet = await db.aiScreeningPackage.create({ data: { jobId: v4job.id, fingerprint: 'v4-policy-fixture', version: 1, status: 'READY', jobSnapshot: basePacket.jobSnapshot!, companySnapshot: basePacket.companySnapshot!, promptSnapshot: json(legacyPrompts), promptVersion: V4_CONVERSATION.version, payload: json(rubric), conversationPolicy: json(V4_CONVERSATION) } });
-        const v4session = await db.aiScreeningSession.create({ data: { jobId: v4job.id, profileId: b.user.id, packageId: v4packet.id, status: 'ACTIVE', startedAt: new Date() } });
+        const v4session = await db.aiScreeningSession.create({ data: { jobId: v4job.id, profileId: b.user.id, legacyKey: 'legacy:'+v4job.id+':'+b.user.id, packageId: v4packet.id, status: 'ACTIVE', startedAt: new Date() } });
         const v4question = await db.aiScreeningQuestion.create({ data: { sessionId: v4session.id, position: 0, criterionId: 'c0', claimId: plan.claims[0].id, kind: 'CORE', text: 'Bagian apa yang lu kerjakan?' } });
         await sessions.claim(b.user, v4session.id, 'v4-tab-unique');
         await sessions.shown(b.user, v4session.id, 'v4-tab-unique', v4question.id);
@@ -170,7 +171,7 @@ async function main() {
         check(v4state.conversationPolicy.questionSeconds === 30 && +v4state.questions[0].deadlineAt! - +v4state.questions[0].shownAt! === 30000, 'active v4 session keeps 30-second policy');
         await sessions.draft(b.user, v4job.id);
         check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: v4session.id } })).packageId === v4packet.id, 'active v4 session never upgrades its packet');
-        const legacyDraft = await db.aiScreeningSession.create({ data: { jobId: legacyJob.id, profileId: a.user.id, resumeId: a.resume.id, packageId: legacyPacket.id, resumeVersionId: pa.resumeVersionId } });
+        const legacyDraft = await db.aiScreeningSession.create({ data: { jobId: legacyJob.id, profileId: a.user.id, legacyKey: 'legacy:'+legacyJob.id+':'+a.user.id, resumeId: a.resume.id, packageId: legacyPacket.id, resumeVersionId: pa.resumeVersionId } });
         const reopened = await sessions.draft(a.user, legacyJob.id) as any;
         check(reopened.id === legacyDraft.id && reopened.conversationPolicy.version === CURRENT_CONVERSATION.version && reopened.preparation.status === 'PROCESSING', 'old draft gets new preparation on reopen');
         check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: legacyDraft.id } })).packageId !== legacyPacket.id, 'old draft is regenerated rather than truncated');
@@ -195,7 +196,7 @@ async function main() {
         let q = state.questions[0];
         await sessions.shown(a.user, a.id, 'tab-one-unique', q.id);
         const first = await sessions.state(a.user, a.id);
-        check(first.conversationPolicy.questionSeconds === 60 && first.conversationPolicy.maxQuestions === 8, 'new public policy is 60 seconds and eight questions');
+        check(first.conversationPolicy.questionSeconds === 60 && first.conversationPolicy.maxQuestions === 25, 'current policy exposes 60 seconds and the twenty-five-question cap');
         check(+first.questions[0].deadlineAt! - +first.questions[0].shownAt! === 60000, 'new timer uses the pinned policy');
         await sessions.shown(a.user, a.id, 'tab-one-unique', q.id);
         check((await sessions.state(a.user, a.id)).questions[0].deadlineAt?.getTime() === first.questions[0].deadlineAt?.getTime(), 'refresh acknowledgment does not reset timer');
@@ -233,7 +234,7 @@ async function main() {
         state = await sessions.state(a.user, a.id);
         check(state.status === 'COMPLETED', 'conversation completes');
         const questions = await db.aiScreeningQuestion.findMany({ where: { sessionId: a.id }, orderBy: { position: 'asc' } });
-        check(questions.length === 8 && questions.filter(q => q.kind === 'CORE').length === 3, 'three roots receive five followups');
+        check(questions.length === 9 && questions.filter(q => q.kind === 'CORE').length === 3, 'three available roots receive two followups each without fabricating extra claims to fill the twenty-five-question cap');
         check(questions.filter(q => q.kind === 'FOLLOW_UP').slice(0, 3).every(q => q.depth === 1), 'breadth-first gives every root a first followup');
         check(new Set(questions.filter(q => q.depth === 1).map(q => q.rootQuestionId)).size === 3, 'all three roots get an opportunity');
         for (const q of questions.filter(q => q.depth === 2)) {

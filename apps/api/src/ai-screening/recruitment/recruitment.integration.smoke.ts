@@ -60,6 +60,11 @@ async function main() {
   await scoring.process('work-1',id);
   row=await db.recruitmentCandidate.findUniqueOrThrow({where:{id}});
   assert.equal(row.cvScore,75);assert.equal(row.scoreStatus,'READY');assert.equal(row.fullName,'Dinda Pramesti');
+  const cvTiming=await db.candidateActivity.findFirstOrThrow({where:{candidateId:id,kind:'CV_ANALYZED'}});
+  assert.equal((cvTiming.detail as any).timing.receivedAt,(await db.candidateActivity.findFirstOrThrow({where:{candidateId:id,kind:'CV_RECEIVED'}})).createdAt.toISOString());
+  assert.ok((cvTiming.detail as any).timing.elapsedMs>=0,'end-to-end CV timing includes the durable queue');
+  assert.equal(await db.candidateActivity.count({where:{candidateId:id,kind:'CV_SCORING_STARTED'}}),1);
+
   await scoring.process('work-1',id);assert.equal(calls,1,'reading processed CV never triggers another AI request');
   await assert.rejects(candidates.download(other,id));
   const list=await candidates.list(hr,candidateListSchema.parse({companyId:'co',jobId:'job'}));

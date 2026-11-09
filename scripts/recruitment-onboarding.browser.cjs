@@ -5,7 +5,7 @@ const origin=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';if(!/^http
 const out=path.resolve('output/recruitment-onboarding');fs.mkdirSync(out,{recursive:true});
 async function main(scenario){
  const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1536,height:960},reducedMotion:'reduce'});
- const report={scenario,errors:[],events:[],publish:0,metadata:0,complete:0,uploadStarted:0,uploadCompleted:0,publishKeys:[],importKeys:[]};
+ const report={scenario,errors:[],events:[],publish:0,metadata:0,complete:0,uploadStarted:0,uploadCompleted:0,publishKeys:[],importKeys:[],aiRequests:[]};
  const company={id:'onboarding-co',name:'Studio Onboarding',slug:'studio-onboarding',description:'Perusahaan pengujian onboarding.',city:{name:'Kota Jakarta',slug:'jakarta',province:{country:{id:'ID'}}}},membership={companyId:'onboarding-co',role:'OWNER',company};
  const auth={accessToken:'onboarding-fixture',user:{id:'onboarding-hr',fullName:'Nadia Onboarding',role:'RECRUITER',email:'onboarding@example.test',emailVerified:true,recruiterOnboarding:{status:'IN_PROGRESS',step:2},memberships:[membership]}};
  let completed=false,scoreReady=false,files=[],resumeSession={id:'onboarding-session',companyId:company.id,company,phase:'JOB',revision:5,jobId:null,order:{id:'free-order',code:'FREE',status:'PAID',amount:0,currency:'IDR'},draft:{title:'API Engineer',description:'Membangun API untuk produk digital.',positionEntryMode:'MANUAL',responsibilities:['Membangun API'],kpis:['Layanan andal'],skills:[],languages:[],benefits:[],workMode:'ONSITE',employmentType:'FULL_TIME',currency:'IDR',salaryPeriod:'MONTHLY',countryId:'ID',citySlug:'jakarta'}};
@@ -18,7 +18,7 @@ async function main(scenario){
    localStorage.setItem('jt_session',JSON.stringify(auth));
    sessionStorage.setItem('talentio:hr-assistant:'+auth.user.id+':onboarding-session',initialScene);
    sessionStorage.setItem('onboarding-fixture-seeded','1');
- },{auth,initialScene:['navigation','validation'].includes(scenario)?'taka-intro':'cv-upload'});
+ },{auth,initialScene:['navigation','validation','ai-drafting'].includes(scenario)?'taka-intro':'cv-upload'});
  await context.route('https://onboarding-upload.test/**',async route=>{if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'PUT,OPTIONS','access-control-allow-headers':'*'}});report.uploadStarted++;await gate;return route.fulfill({status:200,headers:{'access-control-allow-origin':'*'},body:''});});
  await context.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),p=url.pathname.replace(/^\/api/,''),method=req.method(),headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,OPTIONS'};if(method==='OPTIONS')return route.fulfill({status:204,headers});let body=[];
  if(p==='/auth/me')body={...auth,user:{...auth.user,recruiterOnboarding:{status:completed?'COMPLETE':'IN_PROGRESS',step:completed?3:2}}};
@@ -27,6 +27,16 @@ async function main(scenario){
  else if(p==='/meta/seniority-levels')body={levels:[]};
  else if(p==='/meta/countries')body=[{id:'ID',name:'Indonesia',currencyCode:'IDR'}];
  else if(p==='/meta/cities')body=[company.city];
+ else if(p==='/job-content-ai/generate'){
+   const input=req.postDataJSON();report.aiRequests.push(input);
+   assert.equal(input.companyId,company.id);assert.equal(input.job.title,'API Engineer');
+   assert.ok(Array.isArray(input.job.responsibilities)&&Array.isArray(input.job.skills));
+   const attempt=report.aiRequests.filter(r=>r.target===input.target).length;
+   await new Promise(resolve=>setTimeout(resolve,250));
+   if(input.target==='responsibilities'&&attempt===1)return route.fulfill({status:503,headers,json:{message:'Saran AI belum tersedia. Coba lagi.'}});
+   if(input.target==='skills'&&attempt===1)body={target:'kpis',suggestion:{items:['Respons salah bagian']},promptVersion:'synthetic'};
+   else body={target:input.target,promptVersion:'synthetic',suggestion:input.target==='description'?{description:'Mengembangkan API TypeScript yang andal serta mendukung kebutuhan produk digital perusahaan.'}:input.target==='skills'?{items:[{name:'TypeScript',isRequired:true,minLevel:'INTERMEDIATE'}]}:{items:input.target==='responsibilities'?['Mengembangkan layanan API.','Menulis pengujian integrasi.']:['Menjaga tingkat keberhasilan layanan.','Menyelesaikan pengujian sebelum rilis.']}};
+ }
  else if(p==='/companies/mine')body=[membership];else if(p==='/companies/'+company.id)body=company;
  else if(p==='/job-commerce/catalog')body={version:1,hrFlowV2:true,enabled:true,testMode:true,paymentAvailable:false,packages:[{code:'FREE',amount:0,currency:'IDR',version:1,settings:{durationDays:30,boostDays:0,featuredDays:0,conversions:false,reports:false,prioritySupport:false},linkedin:false,instagram:'NONE'}]};
  else if(p==='/hr-flow/sessions/'+resumeSession.id&&method==='PATCH'){const input=req.postDataJSON();resumeSession={...resumeSession,revision:resumeSession.revision+1,draft:input.draft};body=resumeSession;}
@@ -72,6 +82,33 @@ async function main(scenario){
      await next.click();
      await scene(id).waitFor();
    }
+ }
+ if(scenario==='ai-drafting'){
+   await scene('taka-intro').waitFor({timeout:60000});await back.click();
+   await page.getByRole('heading',{name:'Buat lowongan',exact:true}).waitFor();
+   const description=page.locator('textarea[name="description"]'),original=await description.inputValue();
+   const ai=label=>page.getByRole('button',{name:'Buat dengan AI: '+label,exact:true});
+   const dialog=page.getByRole('dialog',{name:/Tinjau hasil AI/});
+   await ai('Deskripsi posisi').evaluate(el=>{el.click();el.click();});
+   await dialog.waitFor();assert.equal(report.aiRequests.length,1,'double click cannot send two AI requests');
+   assert.equal(await description.inputValue(),original,'preview never silently overwrites draft');
+   await dialog.getByRole('button',{name:'Batal',exact:true}).click();assert.equal(await description.inputValue(),original);
+   await ai('Deskripsi posisi').click();await dialog.waitFor();
+   assert.equal(await dialog.getByRole('button',{name:'Batal',exact:true}).evaluate(el=>el===document.activeElement),true);
+   await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();assert.match(await description.inputValue(),/API TypeScript/);
+   await ai('Tanggung jawab utama').click();await page.getByRole('alert').filter({hasText:'Saran AI belum tersedia.'}).waitFor();
+   assert.equal(await page.getByRole('textbox',{name:'Tanggung jawab utama 1',exact:true}).inputValue(),'Membangun API','failed AI preserves existing rows');
+   await ai('Tanggung jawab utama').click();await dialog.waitFor();await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();
+   assert.equal(await page.getByRole('textbox',{name:'Tanggung jawab utama 2',exact:true}).inputValue(),'Menulis pengujian integrasi.');
+   await ai('KPI posisi').click();await dialog.waitFor();await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();
+   assert.equal(await page.getByRole('textbox',{name:'KPI posisi 2',exact:true}).inputValue(),'Menyelesaikan pengujian sebelum rilis.');
+   await ai('Keahlian').click();await page.getByRole('alert').filter({hasText:'Hasil AI tidak sesuai dengan bagian yang dipilih.'}).waitFor();
+   await ai('Keahlian').click();await dialog.waitFor();await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();
+   assert.equal(await page.getByRole('combobox',{name:'Kebutuhan TypeScript',exact:true}).inputValue(),'REQUIRED');
+   await page.locator('button[form="hr-job-form"]').click();await scene('taka-intro').waitFor();
+   assert.match(resumeSession.draft.description,/API TypeScript/);assert.equal(resumeSession.draft.responsibilities.length,2);assert.equal(resumeSession.draft.kpis.length,2);assert.equal(resumeSession.draft.skills[0].name,'TypeScript');
+   assert.equal(report.aiRequests.length,7);assert.equal(report.publish,0);assert.equal(report.metadata,0);assert.deepEqual(report.errors,[]);
+   return;
  }
  if(scenario==='validation'){
    await scene('taka-intro').waitFor({timeout:60000});await back.click();
@@ -232,7 +269,7 @@ async function main(scenario){
  }finally{releaseUploads();fs.writeFileSync(path.join(out,'report-'+scenario+'.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}
 }
 async function run(){
- for(const scenario of (process.env.ONBOARDING_SCENARIO?[process.env.ONBOARDING_SCENARIO]:['validation','navigation','skip-empty','skip-selected','upload'])){
+ for(const scenario of (process.env.ONBOARDING_SCENARIO?[process.env.ONBOARDING_SCENARIO]:['validation','navigation','skip-empty','skip-selected','upload','ai-drafting'])){
    await main(scenario);
    console.log('HR onboarding passed: '+scenario);
  }

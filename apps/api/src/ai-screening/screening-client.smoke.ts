@@ -8,14 +8,14 @@ async function main(){
  const client=new ScreeningClient(db,{get:()=> 'synthetic-key'} as any),preset:any={instructions:'Synthetic',schema:{type:'object',properties:{ok:{type:'boolean'}},required:['ok'],additionalProperties:false},name:'synthetic',version:'test',reasoning:'low',maxOutput:100,model:'gpt-6-luna'};
  try{
   AbortSignal.timeout=(ms:number)=>{lastTimeout=ms;return timeout(ms);};
-  globalThis.fetch=(async(_url:any,init:any)=>{if(init.method==='POST'){creates++;assert.equal(lastTimeout,120000);return new Response(JSON.stringify({id:'resp_synthetic',status:'queued'}));}polls++;throw Error('synthetic polling timeout');}) as any;
-  await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(creates,1);
+  globalThis.fetch=(async(_url:any,init:any)=>{if(init.method==='POST'){creates++;assert.equal(lastTimeout,120000);return new Response(JSON.stringify({id:'resp_synthetic',status:'queued',created_at:1700000000}));}polls++;throw Error('synthetic polling timeout');}) as any;
+  await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(creates,1);assert.equal(row.usage.providerTiming.createdAt,1700000000);assert.equal(row.usage.providerTiming.lastStatus,'queued');
   await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(creates,1,'poll timeout cannot create another billed response');assert.equal(row.status,'RUNNING');
-  row.status='UNCERTAIN';globalThis.fetch=(async()=>new Response(JSON.stringify({id:'resp_synthetic',status:'completed',output:[{type:'message',content:[{type:'output_text',text:'{"ok":true}'}]}]}))) as any;
-  assert.deepEqual(await client.run('w','s','evaluate',{},preset),{ok:true},'known uncertain response resumes by ID');assert.equal(row.status,'COMPLETED');
+  row.status='UNCERTAIN';row.error='PROVIDER_RESPONSE_REQUIRES_REVIEW';globalThis.fetch=(async()=>new Response(JSON.stringify({id:'resp_synthetic',status:'completed',output:[{type:'message',content:[{type:'output_text',text:'{"ok":true}'}]}]}))) as any;
+  assert.deepEqual(await client.run('w','s','evaluate',{},preset),{ok:true},'known uncertain response resumes by ID');assert.equal(row.status,'COMPLETED');assert.equal(row.error,null,'successful recovery clears obsolete failure reason');
   row={...row,status:'RUNNING',responseId:'resp_synthetic',createdAt:new Date(Date.now()-40*60000)};
   globalThis.fetch=(async(_url:any,init:any)=>{assert.notEqual(init.method,'POST','old response only retrieved');return new Response(JSON.stringify({id:'resp_synthetic',status:'in_progress'}));}) as any;
-  await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(row.status,'RUNNING','long background queue stays pollable after fifteen minutes');
+  await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(row.status,'RUNNING','long background queue stays pollable after fifteen minutes');assert.ok(row.usage.providerTiming.firstInProgressObservedAt,'provider processing observation is recorded');
   row.status='UNCERTAIN';
   globalThis.fetch=(async(_url:any,init:any)=>{assert.notEqual(init.method,'POST');return new Response(JSON.stringify({id:'resp_synthetic',status:'completed',output:[{type:'message',content:[{type:'output_text',text:'{"ok":true}'}]}]}));}) as any;
   assert.deepEqual(await client.run('w','s','evaluate',{},preset),{ok:true},'completed result older than local timeout is recovered');assert.equal(creates,1);
