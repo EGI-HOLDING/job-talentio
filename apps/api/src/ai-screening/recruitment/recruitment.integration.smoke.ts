@@ -1,3 +1,4 @@
+import { ScreeningClient, AiPending, AiUncertain } from '../screening.client';
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { ConfigService } from '@nestjs/config';
@@ -123,6 +124,49 @@ async function main() {
   await db.application.update({where:{id:application.id},data:{status:'WITHDRAWN'}});
   await candidates.list(hr,candidateListSchema.parse({companyId:'co',jobId:'job'}));
   assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:native.id}})).stage,'WITHDRAWN','candidate withdrawals propagate to HR table');
+  // Reproduce a provider result completing after the old fifteen-minute cutoff.
+  const recoveryId='cv-recovery',originalFetch=globalThis.fetch;let creates=0,retrieves=0;
+  const source=await db.recruitmentCandidate.findUniqueOrThrow({where:{id}});
+  const recovery=await db.recruitmentCandidate.create({data:{id:recoveryId,fullName:source.fullName,companyId:'co',jobId:'job',filename:source.filename,fileKey:source.fileKey,contentType:source.contentType,sizeBytes:source.sizeBytes,checksum:source.checksum,jobSnapshot:source.jobSnapshot!,scoreStatus:'PENDING'}});
+  const recoveryWork=await db.aiScreeningWork.create({data:{key:'CV_SCORE:'+recoveryId+':0',kind:'CV_SCORE',subjectId:recoveryId}});
+  const realClient=new ScreeningClient(db,new ConfigService({OPENAI_API_KEY:'synthetic-key'}));
+  const recoveryScoring=new CvScoringService(db,storage as never,realClient,new ConfigService({}));
+  try {
+    globalThis.fetch=(async(_url:any,init:any)=>{assert.equal(init.method,'POST');creates++;return new Response(JSON.stringify({id:'resp_cv_recovery',status:'queued'}));}) as any;
+    await assert.rejects(recoveryScoring.process(recoveryWork.id,recoveryId),AiPending);
+    const markFailed=async()=>{
+      await db.recruitmentCandidate.update({where:{id:recoveryId},data:{scoreStatus:'FAILED',error:'Proses AI memerlukan pemeriksaan operator.'}});
+      await db.aiScreeningWork.update({where:{id:recoveryWork.id},data:{status:'FAILED',attempts:1,error:'TARA_RESPONSE_REQUIRES_REVIEW'}});
+      await db.aiScreeningCall.updateMany({where:{workId:recoveryWork.id},data:{status:'UNCERTAIN',createdAt:new Date(Date.now()-40*60000),error:'PROVIDER_RESPONSE_REQUIRES_REVIEW'}});
+    };
+    await markFailed();
+    await db.aiScreeningCall.updateMany({where:{workId:recoveryWork.id},data:{responseId:null}});
+    await assert.rejects(candidates.retry(hr,recoveryId),'unknown creation is not authorized to create another billed response');
+    await assert.rejects(candidates.bulk(hr,{companyId:'co',selection:{ids:[recoveryId]},action:{kind:'rescore'}}));
+    await db.aiScreeningCall.updateMany({where:{workId:recoveryWork.id},data:{responseId:'resp_cv_recovery'}});
+    await db.recruitmentCandidate.update({where:{id:recoveryId},data:{revision:1}});
+    await assert.rejects(candidates.retry(hr,recoveryId),'old revision cannot resume against a changed source');
+    await db.recruitmentCandidate.update({where:{id:recoveryId},data:{revision:0}});
+    const retries=await Promise.allSettled([candidates.retry(hr,recoveryId),candidates.retry(hr,recoveryId)]);
+    assert.equal(retries.filter(r=>r.status==='fulfilled').length,1,'concurrent recovery claims exactly one existing work');
+    assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:recoveryId}})).revision,0);
+    assert.equal(await db.aiScreeningWork.count({where:{subjectId:recoveryId}}),1,'no duplicate work');
+    await markFailed();
+    assert.equal((await candidates.bulk(hr,{companyId:'co',selection:{ids:[recoveryId]},action:{kind:'rescore'}})).count,1,'bulk resumes the same stored response too');
+    globalThis.fetch=(async(url:any,init:any)=>{
+      assert.notEqual(init.method,'POST','recovery never creates a second provider request');
+      if(init.method==='DELETE')return new Response('{}');
+      retrieves++;assert.ok(String(url).endsWith('/resp_cv_recovery'));
+      return new Response(JSON.stringify({id:'resp_cv_recovery',status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({readable:true,fullName:'Dinda Pramesti',email:'dinda@example.test',phone:null,headline:'Backend Developer',summary:'Berpengalaman mengembangkan API.',cvText,criteria:CV_RUBRIC.map(c=>({criterionId:c.id,level:3,reason:'Pengalaman tertulis relevan.',evidence:['Mengembangkan API Node.js selama empat tahun.']})),limitations:[]})}]}]}));
+    }) as any;
+    const changedModelScoring=new CvScoringService(db,storage as never,realClient,new ConfigService({CV_SCORING_MODEL:'synthetic-other-model'}));
+    await assert.rejects(changedModelScoring.process(recoveryWork.id,recoveryId),AiUncertain,'configuration changes cannot create a fresh billed response while recovery is unresolved');
+    await recoveryScoring.process(recoveryWork.id,recoveryId);
+    const restored=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:recoveryId}});
+    assert.equal(restored.scoreStatus,'READY');assert.equal(restored.cvScore,75);assert.equal(creates,1);assert.equal(retrieves,1);
+    assert.equal(await db.aiScreeningCall.count({where:{subjectId:recoveryId}}),1,'existing result recovered without a new paid evaluation');
+    await recoveryScoring.process(recoveryWork.id,recoveryId);assert.equal(retrieves,1,'completed recovery is idempotent');
+  } finally {globalThis.fetch=originalFetch;}
   console.log('Recruitment integration passed: tenancy, upload concurrency, durable worker, native file input, CV-only application with screening enabled, deduplication, pool, retry, global ranking/pagination, 125-result bulk action, HR assignment, stale selection, and withdrawal synchronization. Paid calls: 0.');
 }
 main().finally(()=>db.$disconnect()).catch(error=>{console.error(error);process.exitCode=1;});

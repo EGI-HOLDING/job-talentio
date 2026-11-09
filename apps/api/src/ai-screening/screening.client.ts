@@ -41,6 +41,8 @@ export class ScreeningClient {
             throw new Error('TARA_PROVIDER_NOT_CONFIGURED');
         const prompt = composePrompt(task, input, preset), model = preset?.model ?? screeningModel(), inputHash = hash([prompt, model, files]);
         let call = await this.db.aiScreeningCall.findFirst({ where: { workId, inputHash, status: { not: 'RECOVERED' } }, orderBy: { createdAt: 'desc' } });
+        if (!call && await this.db.aiScreeningCall.count({ where: { workId, status: { in: ['RUNNING', 'UNCERTAIN'] } } }))
+            throw new AiUncertain('TARA_CALL_INPUT_CHANGED_REQUIRES_REVIEW');
         if (call?.status === 'ERASED')
             throw new Error('SESSION_ERASED');
         if (call?.status === 'COMPLETED')
@@ -95,8 +97,10 @@ export class ScreeningClient {
         let response: Response;
         try { response = await this.request('/' + call.responseId); }
         catch { throw new AiPending('TARA_RESPONSE_POLL_RETRY'); }
-        if (!response.ok || Date.now() - +call.createdAt > 15 * 60000) {
-            if ([401, 403, 404, 410].includes(response.status) || Date.now() - +call.createdAt > 15 * 60000) {
+        // A stored background response remains resumable by ID, even after a long queue.
+        // Local elapsed time must never discard a completed provider result.
+        if (!response.ok) {
+            if ([401, 403, 404, 410].includes(response.status)) {
                 await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { status: 'UNCERTAIN', error: 'PROVIDER_RESPONSE_REQUIRES_REVIEW' } });
                 throw new AiUncertain('TARA_RESPONSE_REQUIRES_REVIEW');
             }

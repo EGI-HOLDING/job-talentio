@@ -1,3 +1,4 @@
+import { resumeKnownCvScore } from './cv-score-recovery';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -183,9 +184,8 @@ export class RecruitmentService {
   async retry(user: AuthUser, id: string) {
     const row = await this.owned(user, id);
     if (!row.fileKey || !['FAILED','UNREADABLE','STALE'].includes(row.scoreStatus)) throw new BadRequestException('CV ini belum dapat diproses ulang.');
-    const uncertain = await this.db.aiScreeningCall.count({ where: { subjectId: id, status: 'UNCERTAIN' } });
-    if (uncertain) throw new ConflictException('Proses AI memerlukan pemeriksaan operator sebelum dicoba ulang.');
     return this.db.$transaction(async tx => {
+      if (await resumeKnownCvScore(tx, row, user.id)) return { status: 'PENDING' };
       const job=row.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:row.jobId},include:scoreJobInclude}):null;
       const claim = await tx.recruitmentCandidate.updateMany({ where: { id, revision: row.revision, scoreStatus: row.scoreStatus }, data: { scoreStatus: 'PENDING', cvScore:null, ...(job?{jobSnapshot:json(scoringJob(job))}:{}), error: null, revision: { increment: 1 } } });
       if (!claim.count) throw new ConflictException('Proses ulang sudah dimulai.');
@@ -211,8 +211,8 @@ export class RecruitmentService {
         const sources=await tx.recruitmentCandidate.findMany({where:{id:{in:rows.map(r=>r.id)}}});
         const eligible=sources.filter(r=>r.fileKey&&['STALE','FAILED','UNREADABLE'].includes(r.scoreStatus));
         if(!eligible.length)throw new BadRequestException('Tidak ada CV yang memerlukan penilaian ulang dalam pilihan ini.');
-        if(await tx.aiScreeningCall.count({where:{subjectId:{in:eligible.map(r=>r.id)},status:'UNCERTAIN'}}))throw new ConflictException('Ada proses AI yang memerlukan pemeriksaan operator sebelum dicoba ulang.');
         for(const source of eligible){
+          if (await resumeKnownCvScore(tx, source, user.id)) continue;
           const job=source.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:source.jobId},include:scoreJobInclude}):null;
           const claimed=await tx.recruitmentCandidate.updateMany({where:{id:source.id,revision:source.revision,scoreStatus:source.scoreStatus},data:{scoreStatus:'PENDING',cvScore:null,error:null,revision:{increment:1},...(job?{jobSnapshot:json(scoringJob(job))}:{})}});
           if(!claimed.count)throw new ConflictException('Status penilaian berubah. Perbarui daftar kandidat.');
