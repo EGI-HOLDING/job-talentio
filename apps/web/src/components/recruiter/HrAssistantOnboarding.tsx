@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { HrSupport } from './HrSupport';
@@ -10,7 +10,7 @@ import { assistantScenes, saveAssistantProgress, type AssistantSceneId } from '.
 import s from './HrAssistantOnboarding.module.css';
 
 const asset = (name: string) => `/images/hr-onboarding/generated/${name}.${name.startsWith('tara-chat-') || name.startsWith('candidate-') ? 'browser.png' : 'webp'}`;
-const preload = ['taka-wave', 'taka-collect', 'taka-ranking', 'taka-proud', 'tara-wave', 'taka-chat', 'taka-interview', 'taka-upload', 'tara-chat-header', 'tara-chat-thinking', 'tara-chat-notes', 'tara-interviewer', 'candidate-chat', 'candidate-1', 'candidate-2', 'candidate-3', 'cv-sheet', 'cv-stack', 'talentio-tray', 'arrow-left', 'arrow-right', 'upload-cloud'];
+const preload = ['taka-wave', 'taka-collect', 'taka-ranking', 'taka-proud', 'tara-wave', 'taka-chat', 'taka-interview', 'taka-upload', 'tara-chat-header', 'tara-chat-thinking', 'tara-chat-notes', 'tara-interviewer', 'candidate-chat', 'candidate-1', 'candidate-2', 'candidate-3', 'cv-sheet', 'cv-stack', 'talentio-tray', 'upload-cloud'];
 
 function Arrow({ back = false }: { back?: boolean }) {
   return <svg aria-hidden="true" viewBox="0 0 28 24"><path d={back ? 'M25 12H3m9-9-9 9 9 9' : 'M3 12h22m-9-9 9 9-9 9'} /></svg>;
@@ -18,6 +18,58 @@ function Arrow({ back = false }: { back?: boolean }) {
 function Microphone() {
   return <svg aria-hidden="true" viewBox="0 0 30 36"><rect x="9" y="2" width="12" height="21" rx="6" /><path d="M3 16v3a12 12 0 0 0 24 0v-3M15 31v4M9 35h12" /></svg>;
 }
+const portalRoutes = [
+  'M294 225 C355 225 385 281 443 315 S619 403 751 494',
+  'M294 395 C416 395 492 441 568 474 S673 499 751 517',
+  'M294 565 C436 605 588 565 751 552',
+  'M1394 225 C1317 225 1288 283 1240 318 S1190 390 1131 481',
+  'M1394 395 C1317 395 1275 448 1227 475 S1179 496 1131 517',
+  'M1394 565 C1306 599 1203 571 1131 552',
+];
+
+function CvPortalFlow() {
+  const marker = useId();
+  const leftGradient = marker + '-left';
+  const rightGradient = marker + '-right';
+  return <><svg className={s.sourcesPaths} viewBox="0 0 1672 747" aria-hidden="true">
+    <defs>
+      <linearGradient id={leftGradient}><stop stopColor="#ddc7ff"/><stop offset="1" stopColor="#8c50ff"/></linearGradient>
+      <linearGradient id={rightGradient}><stop stopColor="#8c50ff"/><stop offset="1" stopColor="#ddc7ff"/></linearGradient>
+      <marker id={marker} viewBox="0 0 14 14" markerWidth="24" markerHeight="24" markerUnits="userSpaceOnUse" refX="13" refY="7" orient="auto">
+        <path d="M1 1L13 7L1 13L4 7Z" fill="#813dff"/>
+      </marker>
+    </defs>
+    {portalRoutes.map((route, index) => <path key={route} data-cv-flow-path d={route} stroke={`url(#${index < 3 ? leftGradient : rightGradient})`} markerEnd={`url(#${marker})`}/>)}
+    {portalRoutes.map((route, index) => <MovingCv key={route} route={route} angle={index < 3 ? 16 : -16} delay={0.6 + (index % 3) * 0.42 + (index >= 3 ? 0.24 : 0)}/>)}
+  </svg>
+  <svg className={s.trayFlow} viewBox="0 0 1672 747" aria-hidden="true">
+    <path className={s.trayArrow} d="M879 448Q920 441 951 477" markerEnd={'url(#' + marker + ')'}/>
+    <MovingCv route="M883 445Q924 444 951 482L957 510" angle={-12} delay={1.65} width={49}/>
+  </svg></>;
+}
+
+function MovingCv({ route, angle, delay, width = 60 }: { route: string; angle: number; delay: number; width?: number }) {
+  const height = width * 1.3;
+  const begin = delay.toFixed(2) + 's';
+  return <g className={s.flowDocument}>
+    <image href={asset('cv-sheet')} x={-width / 2} y={-height / 2} width={width} height={height} transform={'rotate(' + angle + ')'}/>
+    <animateMotion path={route} dur="3.2s" begin={begin} repeatCount="indefinite" keyPoints="0;0.12;1;1" keyTimes="0;0.13;0.88;1" calcMode="linear"/>
+    <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.12;0.78;0.88;1" dur="3.2s" begin={begin} repeatCount="indefinite"/>
+  </g>;
+}
+
+function MobileCvFlow() {
+  const route = 'M60 10V66';
+  return <svg className={s.mobileCvFlow} viewBox="0 0 120 78" aria-hidden="true">
+    <path d="M12 5C25 34 95 34 108 5M60 27V66M50 56L60 66L70 56" fill="none" stroke="#9b66ff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+    <MovingCv route={route} angle={12} delay={0.5} width={25}/>
+  </svg>;
+}
+
+function HangUp() {
+  return <svg aria-hidden="true" viewBox="0 0 32 24"><path d="M3.5 17.5v-4.1a2 2 0 0 1 .8-1.6 19 19 0 0 1 23.4 0 2 2 0 0 1 .8 1.6v4.1h-7v-4a12 12 0 0 0-11 0v4z" strokeLinejoin="round"/></svg>;
+}
+
 function Art({ name, className = '', alt = '', style }: { name: string; className?: string; alt?: string; style?: CSSProperties }) {
   return <img src={asset(name)} alt={alt} draggable={false} className={`${s.art} ${className}`} style={style} />;
 }
@@ -110,10 +162,10 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
           </>}
 
           {scene === 'cv-sources' && <>
-            <div className={s.sourcesPaths} aria-hidden="true">{[0,1,2].map(i=><div key={i}><Art name="arrow-left" className={s.flowArrow} style={{left:270,top:225+i*170,width:535,height:[290,160,40][i]}}/><Art name="arrow-right" className={s.flowArrow} style={{left:1105,top:225+i*170,width:310,height:[260,130,30][i]}}/></div>)}</div>
+            <CvPortalFlow/>
             {['jobstreet','glints','kitalulus','dealls','linkedin','kalibrr'].map((name,i) => <div key={name} className={s.portal} style={{ left: i < 3 ? 40 : 1394, top: 168+(i%3)*170, '--enter-delay': `${i*95}ms` } as CSSProperties}><img src={asset('logo-'+name)} alt={['JobStreet by SEEK','glints','kitalulus','Dealls!','LinkedIn','kalibrr'][i]} /></div>)}
+            <MobileCvFlow/>
             <div className={s.collectionArt}><Art name="taka-collect" alt={c('Taka mengumpulkan CV ke Talentio')} className={s.collectTaka}/><Art name="talentio-tray" alt="Talentio" className={s.collectionTray}/><Art name="cv-stack" className={s.heldCvs}/></div>
-            {[0,1,2,3,4,5].map(i => <Art key={i} name="cv-sheet" className={s.cvPaper} style={{ left:i<3?320:1250,top:236+(i%3)*170, '--enter-delay':`${450+i*75}ms`, '--cv-x':`${960-(i<3?320:1250)}px`, '--cv-y':`${500-(236+(i%3)*170)}px` } as CSSProperties}/>)}
             <Bubble className={s.sourcesBubble}><h1>{c('CV kandidat lu masih nyebar di berbagai job portal?')}</h1><p>{c('Upload semuanya ke sini. Biar kandidat lu ngumpul di satu tempat.')}</p></Bubble>
           </>}
 
@@ -142,11 +194,11 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
           </>}
 
           {scene === 'voice-demo' && <>
-            <section className={s.voicePanel}><header><span className={s.micBadge}><Microphone/></span><div><h1>{c('Live interview dengan Tara')}</h1><p>{c('Contoh interview suara')}</p></div></header>
+            <section className={s.voicePanel}><header><span className={s.micBadge}><Microphone/></span><div><h1>{c('Interview suara dengan Tara')}</h1><p>{c('Contoh interview suara')}</p></div></header>
               <div className={s.speakingRings} aria-hidden="true"/><Art name="tara-interviewer" alt={c('Tara, interviewer')} className={s.interviewer}/>
               <strong className={s.voiceName}>Tara</strong><span className={s.speakingStatus}><i/>{c('Sedang berbicara')}</span>
               <div className={s.waveform} aria-hidden="true">{Array.from({length:57},(_,i) => <i key={i} style={{height:6+(Math.sin(i*2.4)**2)*38*(1-Math.abs(i-28)/34),animationDelay:`${i*37}ms`}}/>)}</div>
-              <div className={s.callControls}><button type="button" aria-disabled="true" aria-label={c('Mikrofon contoh interview')}><Microphone/></button><button type="button" aria-disabled="true" aria-label={c('Akhiri contoh interview')}><svg aria-hidden="true" viewBox="0 0 40 25"><path d="M3 18V9C9 0 31 0 37 9v9l-9-1v-7H12v7Z"/></svg></button></div>
+              <div className={s.callControls}><button type="button" aria-disabled="true" aria-label={c('Mikrofon contoh interview')}><Microphone/></button><button type="button" aria-disabled="true" aria-label={c('Akhiri contoh interview')}><HangUp/></button></div>
             </section>
             <Art name="taka-interview" alt="Taka" className={s.voiceTaka}/>
             {narrator(<><span className={s.narratorName}>Taka</span><div><strong>{c('Kandidat juga bisa ngobrol langsung lewat suara.')}</strong><p>{c('Abis interview, gua evaluasi hasilnya.')}</p></div></>,s.voiceNarrator)}
