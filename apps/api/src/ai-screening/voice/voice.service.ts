@@ -64,7 +64,7 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
   }catch(error){
    if(!providerId&&error instanceof Error&&/^VOICE_PROVIDER_HTTP_/.test(error.message)){await this.db.voiceInterview.deleteMany({where:{id:row.id,providerId:null}});throw new ServiceUnavailableException('Koneksi suara belum tersedia. Silakan coba lagi sebentar.');}
    if(providerId){await this.provider.hangup(providerId).catch(()=>undefined);await this.finish(row.id,'CONNECTION_FAILED');}
-   else{await this.db.voiceInterview.update({where:{id:row.id},data:{status:'CREATE_UNCERTAIN',endedAt:new Date(),error:'Pembuatan koneksi belum terkonfirmasi. Hubungi HR; sesi tidak otomatis dibuat ulang.'}});await this.finalize(row.id);}
+   else await this.finalize(row.id,{status:'CREATE_UNCERTAIN',endedAt:new Date(),error:'Pembuatan koneksi belum terkonfirmasi. Hubungi HR; sesi tidak otomatis dibuat ulang.'});
    throw new ServiceUnavailableException('Koneksi interview belum berhasil. Hasil yang tersedia tetap tersimpan; hubungi HR untuk sesi baru.');
   }
  }
@@ -75,8 +75,12 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
    if(event.type==='session.output_audio.fixture.played'&&live.closingPromptPending){this.closingPrompt(live);return;}
    if(event.type==='session.started'&&!live.greeted){live.greeted=true;live.channel.send({type:'session.commentary.append',delegation_id:null,content:live.greeting});return;}
    if(event.type==='session.closed'){
-    live.closed=true;const saved=await this.db.voiceInterview.findUnique({where:{id},select:{closeReason:true,error:true}});await this.db.voiceInterview.updateMany({where:{id},data:{usage:event.usage?json(event.usage):Prisma.DbNull,transcriptComplete:!live.captureFailed&&!saved?.error&&event.reason!=='connection_lost'&&!['SERVER_RESTART','TRANSCRIPT_STORAGE_FAILED','TRANSCRIPT_CONNECTION_LOST','CONNECTION_LOST'].includes(saved?.closeReason??'')}});
-    if(!live.finishing)setTimeout(()=>this.requestFinish(id,event.reason==='connection_lost'?'CONNECTION_LOST':'PROVIDER_ENDED'),0);
+    live.closed=true;
+    const providerDisconnect=event.reason==='connection_lost'?'CONNECTION_LOST':event.reason==='remote_hangup'?'CANDIDATE_DISCONNECTED':null;
+    const saved=await this.db.voiceInterview.findUnique({where:{id},select:{closeReason:true,error:true}});
+    const technicalClose=['SERVER_RESTART','TRANSCRIPT_STORAGE_FAILED','TRANSCRIPT_CONNECTION_LOST','CONNECTION_LOST','CANDIDATE_DISCONNECTED'];
+    await this.db.voiceInterview.updateMany({where:{id},data:{usage:event.usage?json(event.usage):Prisma.DbNull,transcriptComplete:!live.captureFailed&&!saved?.error&&!providerDisconnect&&!technicalClose.includes(saved?.closeReason??'')}});
+    if(!live.finishing)setTimeout(()=>this.requestFinish(id,providerDisconnect??'PROVIDER_ENDED'),0);
     return;
    }
    if(event.type!=='session.input_transcript.delta'&&event.type!=='session.output_transcript.delta')return;
@@ -136,19 +140,18 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
    }
    if(row.providerId&&!live?.closed)await this.provider.hangup(row.providerId);
    if(live)await live.pending;
-   await this.db.voiceInterview.update({where:{id},data:{status:'ENDED',endedAt:new Date(),closeReason:row.closeReason??reason,...(!live?.closed?{transcriptComplete:false}:{} )}});
-   await this.finalize(id);
+   await this.finalize(id,{status:'ENDED',endedAt:new Date(),closeReason:row.closeReason??reason,...(!live?.closed?{transcriptComplete:false}:{})});
   }catch{await this.db.voiceInterview.updateMany({where:{id},data:{error:'Penutupan koneksi sedang dicoba ulang.',leaseUntil:new Date(0)}});if(live)live.finishing=false;}
   finally{if((await this.db.voiceInterview.findUnique({where:{id}}))?.status==='ENDED'){live?.channel.dispose();this.active.delete(id);}}
  }
- private async finalize(id:string){
-  const row=await this.db.voiceInterview.findUnique({where:{id}});if(!row?.sessionId)return;
-  const sessionId=row.sessionId;
+ private async finalize(id:string,change?:Prisma.VoiceInterviewUpdateManyMutationInput){
   await this.db.$transaction(async tx=>{
-   const session=await tx.aiScreeningSession.findUnique({where:{id:sessionId},include:{invitation:true}});if(!session||!session.invitation)return;
+   if(change)await tx.voiceInterview.updateMany({where:{id,status:{notIn:terminal}},data:change});
+   const row=await tx.voiceInterview.findUnique({where:{id},select:{sessionId:true,endedAt:true}});if(!row?.sessionId)return;
+   const session=await tx.aiScreeningSession.findUnique({where:{id:row.sessionId},include:{invitation:true}});if(!session||!session.invitation)return;
    await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${session.invitation.id} FOR UPDATE`);
-   if(!await tx.aiScreeningSession.findUnique({where:{id:sessionId}}))return;
-   await tx.aiScreeningSession.update({where:{id:session.id},data:{status:'COMPLETED',completedAt:row.endedAt??new Date(),leaseToken:null,leaseExpiresAt:null}});
+   if(!await tx.aiScreeningSession.findUnique({where:{id:session.id}}))return;
+   await tx.aiScreeningSession.updateMany({where:{id:session.id,status:{not:'COMPLETED'}},data:{status:'COMPLETED',completedAt:row.endedAt??new Date(),leaseToken:null,leaseExpiresAt:null}});
    await tx.screeningInvitation.update({where:{id:session.invitation.id},data:{status:'COMPLETED'}});
    await tx.aiScreeningEvaluation.upsert({where:{sessionId:session.id},create:{sessionId:session.id,status:'PENDING',promptVersion:VOICE_VERSION},update:{}});
    await enqueueWork(tx,'VOICE_EVALUATE',session.id);

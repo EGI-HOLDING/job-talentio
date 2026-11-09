@@ -62,6 +62,15 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const text='Mengembangkan API Node.js selama empat tahun.';let paidMockCalls=0;
    const candidateEmail = `${process.env.S3_BUCKET}@synthetic.test`;
    const allowedProviderWork = new Set();
+   const voiceEvents = [];
+   if (process.argv.includes('--live-voice')) {
+    const { VoiceProvider } = require(path.join(root,'apps/api/dist/ai-screening/voice/voice.provider.js'));
+    const provider = app.get(VoiceProvider), attach = provider.attach.bind(provider);
+    provider.attach = (id, onEvent, onLost) => attach(id, event => {
+     if (event.type === 'session.closed') voiceEvents.push({ reason: event.reason });
+     onEvent(event);
+    }, onLost);
+   }
    const textUi = process.argv.includes('--text-ui');
    let scoreHook;
    const screeningClient = app.get(ScreeningClient), originalRun = screeningClient.run.bind(screeningClient);
@@ -146,7 +155,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const liveText = process.argv.includes('--live-text');
    const onboarding = process.argv.includes('--onboarding');
    if (process.argv.includes('--browser') || liveVoice || liveText || textUi || onboarding) await require('./recruitment-real-browser.cjs')({
-     base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,liveText,textUi,allowed: allowedProviderWork,onboarding,makeToken: token,makePdf,
+     base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,liveText,textUi,voiceEvents,allowed: allowedProviderWork,onboarding,makeToken: token,makePdf,
    });
    console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio, real SMTP verification and stale-token refresh/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. ' + (liveVoice ? 'Bounded live voice probe.' : liveText ? 'Bounded live text probe.' : liveCvFormats ? 'Bounded real-provider CV formats probe.' : process.argv.includes('--live-draft') ? 'Bounded live drafting probe.' : 'No paid API calls.'));
   }finally{

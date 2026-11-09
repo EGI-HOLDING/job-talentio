@@ -12,7 +12,7 @@ function playwright() {
   }
 }
 
-module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, liveText, textUi, allowed, onboarding, makeToken, makePdf }) {
+module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, liveText, textUi, voiceEvents, allowed, onboarding, makeToken, makePdf }) {
   const web = process.env.RECRUITMENT_WEB_URL || 'http://127.0.0.1:3035';
   const redact = value => value.replace(/(\/screening\/|\/invitations\/open\/)[^/\s?]+/g, '$1[redacted]').replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
   const isLoopback = url => ['127.0.0.1', 'localhost'].includes(new URL(url).hostname);
@@ -23,7 +23,8 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   const wav = voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
   const browser = await playwright().chromium.launch({ headless: true });
   const contexts = [];
-  const test = liveVoice ? 'live-browser-voice' : liveText ? 'live-browser-text' : textUi ? 'browser-text-timing' : onboarding ? 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
+  const interruptedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'interrupted-indonesian';
+  const test = liveVoice ? interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? 'live-browser-text' : textUi ? 'browser-text-timing' : onboarding ? 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
   const report = { steps: [], exceptions: [], requests: [], provider: liveVoice ? 'real voice and screening, simulated CV scoring' : liveText ? 'real text screening, simulated CV scoring' : 'simulated', test };
   const job = await db.jobPost.create({ data: {
     id: 'http-browser-job', companyId: 'http-co', title: 'Backend Engineer Browser Audit',
@@ -35,7 +36,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     const session = { ...await call('/auth/me', token), accessToken: token };
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, serviceWorkers: 'block' });
     contexts.push(context);
-    if (useAudio) await voiceProbe.useSyntheticMicrophone(context, wav);
+    if (useAudio) await voiceProbe.useSyntheticMicrophone(context, wav, interruptedVoice);
     await context.addInitScript(session => {
       localStorage.setItem('jt_token', session.accessToken);
       localStorage.setItem('jt_session', JSON.stringify(session));
@@ -147,8 +148,8 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     assert.ok(invitationWithSession.sessionId);
     assert.equal(invitationWithSession.claimedUserId, 'http-employee');
     report.steps.push('An invitation delivered by SMTP and Talentio opens after verification in a separate browser context with the original tab kept open.');
-    const screening = { page: invitationPage, dashboard, drawer, db, worker, call, hr, foreign, sessionId: invitationWithSession.sessionId, invitationId: invitation.id, report, allowed };
-    if (voiceProbe) await voiceProbe.verifyVoice(screening);
+    const screening = { page: invitationPage, dashboard, drawer, db, worker, call, hr, foreign, sessionId: invitationWithSession.sessionId, invitationId: invitation.id, report, allowed, voiceEvents };
+    if (voiceProbe) await voiceProbe.verifyVoice({ ...screening, interruptedVoice });
     if (liveText || textUi) await require('./recruitment-text-live.cjs')({ ...screening, textUi });
     assert.deepEqual(report.exceptions, []);
     report.passed = true;
