@@ -303,8 +303,22 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     applicationSubmitPending.current = attempt; setSubmittingApplication(true); setResumeLoadError('');
     const reconcile=async()=>{const mine=await api<{applied:boolean;application:MyApplicationState|null}>('/applications/mine/jobs/'+encodeURIComponent(id),{cacheMode:'no-store'});if(current()&&mine.application){setMyApplication(mine.application);setShowCvPicker(false);return true;}return false;};
     try {
-      await api('/applications/jobs/' + encodeURIComponent(id), {method:'POST',body:JSON.stringify({resumeId:selectedResumeId})});
-      if(current())await reconcile();
+      const submitted = await api<MyApplicationState>('/applications/jobs/' + encodeURIComponent(id), {
+        method: 'POST', body: JSON.stringify({ resumeId: selectedResumeId }),
+      });
+      if (!current()) return;
+      if (submitted?.id && submitted.status) {
+        setMyApplication({
+          id: submitted.id,
+          status: submitted.status,
+          createdAt: submitted.createdAt,
+          hasResumeFile: true,
+          resumeTitle: resumes.find(resume => resume.id === selectedResumeId)?.title,
+        });
+        setShowCvPicker(false);
+      } else if (!await reconcile() && current()) {
+        setResumeLoadError(t('job.cvLoadError'));
+      }
     } catch (error) {
       if(current()){let applied=false;try{applied=await reconcile();}catch{}if(!applied&&current())setResumeLoadError(error instanceof Error ? error.message : t('job.cvLoadError'));}
     } finally { if(applicationSubmitPending.current===attempt){applicationSubmitPending.current=null;setSubmittingApplication(false);} }

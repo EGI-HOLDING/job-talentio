@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { HrSupport } from './HrSupport';
 import { allowEmployerContextChange } from './useEmployerUnsaved';
+import { CandidateCvFiles } from './CandidateCvFiles';
 import { useHrAssistantSurface } from './HrFlowPresentation';
 import { assistantScenes, saveAssistantProgress, type AssistantSceneId } from './hrAssistantState';
 import s from './HrAssistantOnboarding.module.css';
@@ -19,33 +20,34 @@ function Microphone() {
   return <svg aria-hidden="true" viewBox="0 0 30 36"><rect x="9" y="2" width="12" height="21" rx="6" /><path d="M3 16v3a12 12 0 0 0 24 0v-3M15 31v4M9 35h12" /></svg>;
 }
 const portalRoutes = [
-  'M294 225 C355 225 385 281 443 315 S619 403 751 494',
-  'M294 395 C416 395 492 441 568 474 S673 499 751 517',
-  'M294 565 C436 605 588 565 751 552',
-  'M1394 225 C1317 225 1288 283 1240 318 S1190 390 1131 481',
-  'M1394 395 C1317 395 1275 448 1227 475 S1179 496 1131 517',
-  'M1394 565 C1306 599 1203 571 1131 552',
+  'M294 221 C406 164 485 297 548 359 S676 416 751 483',
+  'M294 392 C420 337 486 413 554 459 S687 498 751 522',
+  'M294 559 C425 631 564 614 641 583 S709 564 751 566',
+  'M1394 223 C1308 160 1232 285 1182 378 S1154 437 1131 484',
+  'M1394 394 C1296 342 1256 428 1201 469 S1155 508 1131 523',
+  'M1394 558 C1316 618 1240 624 1179 595 S1153 572 1131 566',
 ];
+const ribbons = '/images/hr-onboarding/generated/cv-ribbon-flow.png';
+const voiceControls = '/images/hr-onboarding/generated/voice-preview-controls.png';
+
+function RibbonCrop({ viewBox, x, y, width, height }: { viewBox: string; x: number; y: number; width: number; height: number }) {
+  return <svg viewBox={viewBox} x={x} y={y} width={width} height={height} preserveAspectRatio="none" overflow="hidden">
+    <image data-cv-ribbon href={ribbons} width="2172" height="724"/>
+  </svg>;
+}
 
 function CvPortalFlow() {
-  const marker = useId();
-  const leftGradient = marker + '-left';
-  const rightGradient = marker + '-right';
-  return <><svg className={s.sourcesPaths} viewBox="0 0 1672 747" aria-hidden="true">
-    <defs>
-      <linearGradient id={leftGradient}><stop stopColor="#ddc7ff"/><stop offset="1" stopColor="#8c50ff"/></linearGradient>
-      <linearGradient id={rightGradient}><stop stopColor="#8c50ff"/><stop offset="1" stopColor="#ddc7ff"/></linearGradient>
-      <marker id={marker} viewBox="0 0 14 14" markerWidth="24" markerHeight="24" markerUnits="userSpaceOnUse" refX="13" refY="7" orient="auto">
-        <path d="M1 1L13 7L1 13L4 7Z" fill="#813dff"/>
-      </marker>
-    </defs>
-    {portalRoutes.map((route, index) => <path key={route} data-cv-flow-path d={route} stroke={`url(#${index < 3 ? leftGradient : rightGradient})`} markerEnd={`url(#${marker})`}/>)}
-    {portalRoutes.map((route, index) => <MovingCv key={route} route={route} angle={index < 3 ? 16 : -16} delay={0.6 + (index % 3) * 0.42 + (index >= 3 ? 0.24 : 0)}/>)}
-  </svg>
-  <svg className={s.trayFlow} viewBox="0 0 1672 747" aria-hidden="true">
-    <path className={s.trayArrow} d="M879 448Q920 441 951 477" markerEnd={'url(#' + marker + ')'}/>
-    <MovingCv route="M883 445Q924 444 951 482L957 510" angle={-12} delay={1.65} width={49}/>
-  </svg></>;
+  return <>
+    <svg className={s.sourcesPaths} viewBox="0 0 1672 747" aria-hidden="true">
+      <RibbonCrop viewBox="22 90 913 590" x={270} y={172} width={488} height={457}/>
+      <RibbonCrop viewBox="1447 90 702 590" x={1118} y={172} width={309} height={457}/>
+      {portalRoutes.map((route, index) => <MovingCv key={route} route={route} angle={index < 3 ? 16 : -16} delay={0.6 + (index % 3) * 0.42 + (index >= 3 ? 0.24 : 0)}/>)}
+    </svg>
+    <svg className={s.trayFlow} viewBox="0 0 1672 747" aria-hidden="true">
+      <RibbonCrop viewBox="1080 423 229 114" x={872} y={432} width={108} height={64}/>
+      <MovingCv route="M883 445Q924 444 951 482L957 510" angle={-12} delay={1.65} width={49}/>
+    </svg>
+  </>;
 }
 
 function MovingCv({ route, angle, delay, width = 60 }: { route: string; angle: number; delay: number; width?: number }) {
@@ -61,13 +63,16 @@ function MovingCv({ route, angle, delay, width = 60 }: { route: string; angle: n
 function MobileCvFlow() {
   const route = 'M60 10V66';
   return <svg className={s.mobileCvFlow} viewBox="0 0 120 78" aria-hidden="true">
-    <path d="M12 5C25 34 95 34 108 5M60 27V66M50 56L60 66L70 56" fill="none" stroke="#9b66ff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+    <g transform="rotate(35 60 39)"><RibbonCrop viewBox="1080 423 229 114" x={30} y={19} width={64} height={39}/></g>
     <MovingCv route={route} angle={12} delay={0.5} width={25}/>
   </svg>;
 }
 
-function HangUp() {
-  return <svg aria-hidden="true" viewBox="0 0 32 24"><path d="M3.5 17.5v-4.1a2 2 0 0 1 .8-1.6 19 19 0 0 1 23.4 0 2 2 0 0 1 .8 1.6v4.1h-7v-4a12 12 0 0 0-11 0v4z" strokeLinejoin="round"/></svg>;
+function PreviewCallIcon({ kind }: { kind: 'mic' | 'end' }) {
+  const crop = kind === 'mic' ? '376 166 487 487' : '1047 166 487 487';
+  return <svg aria-hidden="true" viewBox={crop} className={s.previewCallIcon}>
+    <image href={voiceControls} width="1920" height="819"/>
+  </svg>;
 }
 
 function Art({ name, className = '', alt = '', style }: { name: string; className?: string; alt?: string; style?: CSSProperties }) {
@@ -107,12 +112,6 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
   const [leaving, setLeaving] = useState(false), [busy, setBusy] = useState(false);
   const [scale, setScale] = useState(1);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]), [uploadError, setUploadError] = useState('');
-  const fileInput = useRef<HTMLInputElement>(null);
-  function chooseFiles(files: File[]) {
-    const invalid = files.find(file => !/\.(pdf|docx?)$/i.test(file.name) || !file.size || file.size > 5 * 1024 * 1024);
-    if (invalid) { setUploadError(invalid.name + ': gunakan PDF, DOC atau DOCX maksimal 5 MB.'); return; }
-    setUploadError(''); setSelectedFiles(previous => [...previous, ...files.filter(file => !previous.some(value => value.name === file.name && value.size === file.size && value.lastModified === file.lastModified))]);
-  }
   async function finish() {
     if (lock.current) return; lock.current = true; setBusy(true); setUploadError('');
     try { await onContinue(selectedFiles); }
@@ -134,7 +133,7 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const change = () => { reducedMotion.current = media.matches; };
     change(); media.addEventListener('change', change);
-    preload.forEach(name => { const image = new Image(); image.src = asset(name); });
+    [...preload.map(asset), ribbons, voiceControls].forEach(src => { const image = new Image(); image.src = src; });
     return () => { media.removeEventListener('change', change); timers.current.forEach(clearTimeout); };
   }, []);
   useEffect(() => { saveAssistantProgress(userId, creationSessionId, scene); }, [userId, creationSessionId, scene]);
@@ -194,18 +193,22 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
           </>}
 
           {scene === 'voice-demo' && <>
-            <section className={s.voicePanel}><header><span className={s.micBadge}><Microphone/></span><div><h1>{c('Interview suara dengan Tara')}</h1><p>{c('Contoh interview suara')}</p></div></header>
+            <section className={s.voicePanel}><header><span className={s.micBadge}><Microphone/></span><div><h1>{c('Interview suara dengan Tara')}</h1></div></header>
               <div className={s.speakingRings} aria-hidden="true"/><Art name="tara-interviewer" alt={c('Tara, interviewer')} className={s.interviewer}/>
               <strong className={s.voiceName}>Tara</strong><span className={s.speakingStatus}><i/>{c('Sedang berbicara')}</span>
               <div className={s.waveform} aria-hidden="true">{Array.from({length:57},(_,i) => <i key={i} style={{height:6+(Math.sin(i*2.4)**2)*38*(1-Math.abs(i-28)/34),animationDelay:`${i*37}ms`}}/>)}</div>
-              <div className={s.callControls}><button type="button" aria-disabled="true" aria-label={c('Mikrofon contoh interview')}><Microphone/></button><button type="button" aria-disabled="true" aria-label={c('Akhiri contoh interview')}><HangUp/></button></div>
+              <div className={s.callControls}><button type="button" aria-disabled="true" aria-label={c('Mikrofon contoh interview')}><PreviewCallIcon kind="mic"/></button><button type="button" aria-disabled="true" aria-label={c('Akhiri contoh interview')}><PreviewCallIcon kind="end"/></button></div>
             </section>
             <Art name="taka-interview" alt="Taka" className={s.voiceTaka}/>
             {narrator(<><span className={s.narratorName}>Taka</span><div><strong>{c('Kandidat juga bisa ngobrol langsung lewat suara.')}</strong><p>{c('Abis interview, gua evaluasi hasilnya.')}</p></div></>,s.voiceNarrator)}
           </>}
 
           {scene === 'cv-upload' && <>
-            <section className={s.uploadPanel}><h1>{c('Upload CV kandidat')}</h1><div className={s.dropzone} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();event.stopPropagation();chooseFiles(Array.from(event.dataTransfer.files));}} aria-label={c('Area upload CV')}><Art name="upload-cloud" className={s.uploadCloud}/><strong>{c('Tarik CV ke sini')}</strong><span>{c('atau')}</span><input ref={fileInput} hidden type="file" multiple accept=".pdf,.doc,.docx" onChange={event=>{chooseFiles(Array.from(event.target.files??[]));event.target.value='';}}/><button type="button" disabled={busy} onClick={()=>fileInput.current?.click()}>{c('Pilih file')}</button></div><p className={s.uploadHint}>{selectedFiles.length ? selectedFiles.length + ' CV dipilih · PDF, DOC, DOCX' : c('Bisa pilih banyak CV sekaligus')}</p>{uploadError && <p role="alert" className={s.uploadHint}>{uploadError}</p>}</section>
+            <section className={s.uploadPanel} data-has-files={selectedFiles.length > 0}>
+              <h1>{c('Upload CV kandidat')}</h1>
+              <CandidateCvFiles files={selectedFiles} setFiles={setSelectedFiles} disabled={busy} illustrated/>
+              {uploadError && <p role="alert" className={s.uploadHint}>{uploadError}</p>}
+            </section>
             <Art name="taka-upload" alt="Taka" className={s.uploadTaka}/>
             {narrator(<><strong>{c('Yuk, masukin CV kandidat yang udah lu punya.')}</strong><p>{c('Boleh banyak sekaligus. Abis di-upload, gua mulai proses dan bikin rankingnya.')}</p></>,s.uploadNarrator)}
           </>}

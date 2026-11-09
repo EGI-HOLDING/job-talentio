@@ -1,0 +1,37 @@
+.picker { color: #171a32; font-size: 14px; text-align: left; }
+.picker .drop { width: 100%; min-height: 82px; display: flex; align-items: center; gap: 14px; padding: 13px 16px; text-align: left; border: 2px dashed #b494f8; border-radius: 14px; background: #f8f5ff; color: #171a32; cursor: pointer; transition: background .15s, border-color .15s; }
+.picker .drop:hover, .picker .drop[data-dragging=true] { background: #efe6ff; border-color: #7034f0; }
+.picker .drop:disabled { cursor: wait; opacity: .65; }
+.drop > svg { flex: none; width: 33px; height: 33px; color: #6927e9; pointer-events: none; }
+.prompt { display: grid; gap: 4px; flex: 1; min-width: 0; pointer-events: none; }
+.prompt strong { font-size: 15px; line-height: 1.25; }
+.prompt small { color: #605979; font-size: 12px; line-height: 1.35; }
+.action { flex: none; padding: 9px 13px; border-radius: 8px; background: #6530ea; color: #fff; font-weight: 650; white-space: nowrap; pointer-events: none; }
+.picker .summary { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin: 12px 0 7px; font-size: 13px; }
+.summary span { color: #5c398d; }
+.files { max-height: 144px; overflow: auto; overscroll-behavior: contain; padding: 0; margin: 0; list-style: none; border: 1px solid #e3deed; border-radius: 9px; background: #fff; }
+.files li { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 9px 0 12px; }
+.files li + li { border-top: 1px solid #eeeaf4; }
+.files li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.files small { color: #605979; white-space: nowrap; }
+.picker .files button { width: 30px; height: 30px; border: 0; border-radius: 6px; color: #5b5171; background: transparent; font-size: 21px; line-height: 1; cursor: pointer; }
+.files button:hover:not(:disabled) { background: #f0e9fc; color: #6027d2; }
+.picker :focus-visible { outline: 2px solid #7138e9; outline-offset: 2px; }
+.picker .hint, .picker .error { margin: 8px 0 0; line-height: 1.4; font-size: 12px; }
+.hint { color: #605979; }
+.error { color: #a12c43; overflow-wrap: anywhere; }
+.picker[data-illustrated][data-filled=false] .drop { min-height: 294px; flex-direction: column; justify-content: center; gap: 13px; text-align: center; }
+.picker[data-illustrated][data-filled=false] .drop > svg { width: 69px; height: 69px; }
+.picker[data-illustrated][data-filled=false] .prompt { flex: none; }
+.picker[data-illustrated][data-filled=false] .prompt strong { font-size: 24px; }
+.picker[data-illustrated][data-filled=false] .action { min-width: 145px; margin-top: 2px; }
+.picker[data-illustrated][data-filled=false] .summary { justify-content: center; color: #605979; }
+@media (max-width: 640px) {
+  .picker .drop { gap: 8px; padding: 12px 9px; }
+  .drop > svg { width: 25px; height: 25px; }
+  .action { padding: 8px; font-size: 12px; }
+  .prompt strong { font-size: 13px; }
+  .picker[data-illustrated][data-filled=false] .drop { min-height: 170px; }
+  .picker[data-illustrated][data-filled=false] .drop > svg { width: 43px; height: 43px; }
+  .picker[data-illustrated][data-filled=false] .prompt strong { font-size: 19px; }
+}

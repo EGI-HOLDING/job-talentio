@@ -22,7 +22,7 @@ async function main(){
  else if(p==='/hr-flow/sessions/'+resumeSession.id&&method==='PATCH'){const input=req.postDataJSON();resumeSession={...resumeSession,revision:resumeSession.revision+1,draft:input.draft};body=resumeSession;}
  else if(p==='/hr-flow/sessions/'+resumeSession.id)body=resumeSession;
  else if(p==='/hr-flow/sessions/'+resumeSession.id+'/publish'){report.publish++;report.events.push('publish');body={jobId:job.id};}
- else if(p==='/recruitment/imports'&&method==='POST'){report.metadata++;const input=req.postDataJSON();assert.equal(input.jobId,job.id);assert.equal(input.files.length,2);files=input.files.map((f,i)=>({...f,id:'onboarding-cv-'+i,status:'UPLOADING'}));report.events.push('register-import');body={id:'onboarding-import',files};}
+ else if(p==='/recruitment/imports'&&method==='POST'){report.metadata++;const input=req.postDataJSON();assert.equal(input.jobId,job.id);assert.deepEqual(input.files.map(file=>file.filename),['Kandidat-A.pdf','Kandidat-B.pdf','Kandidat-C.pdf','Kandidat-D.pdf']);files=input.files.map((f,i)=>({...f,id:'onboarding-cv-'+i,status:'UPLOADING'}));report.events.push('register-import');body={id:'onboarding-import',files};}
  else if(/^\/recruitment\/candidates\/onboarding-cv-\d+\/upload-url$/.test(p))body={status:'UPLOADING',uploadUrl:'https://onboarding-upload.test/'+p.split('/')[3]};
  else if(/^\/recruitment\/candidates\/onboarding-cv-\d+\/upload-complete$/.test(p)){report.uploadCompleted++;report.events.push('upload-complete');body={scoreStatus:'PENDING'};}
  else if(p==='/recruitment/imports/onboarding-import')body={id:'onboarding-import',files:files.map(f=>({...f,scoreStatus:scoreReady?'READY':'PROCESSING'}))};
@@ -30,10 +30,38 @@ async function main(){
  else if(p==='/jobs/company/'+company.id)body=[job];else if(p.startsWith('/applications/jobs/'))body={items:[],total:0};else if(p.includes('/unread'))body={count:0};
  return route.fulfill({status:200,headers,json:body});});
  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(origin+'/id/onboarding/recruiter',{waitUntil:'domcontentloaded',timeout:120000});
- await page.getByRole('heading',{name:'Upload CV kandidat',exact:true}).waitFor({timeout:60000});await page.locator('input[type=file]').setInputFiles([{name:'Kandidat-1.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 synthetic-one')},{name:'Kandidat-2.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 synthetic-two')}]);await page.getByText('2 CV dipilih · PDF, DOC, DOCX',{exact:true}).waitFor();await page.screenshot({path:path.join(out,'01-selected-cvs.png')});
+ await page.getByRole('heading',{name:'Upload CV kandidat',exact:true}).waitFor({timeout:60000});
+ const cv = name => ({name:'Kandidat-'+name+'.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 synthetic-'+name)});
+ const picker = page.locator('input[type=file]');
+ const drop = page.getByRole('button',{name:/Tarik CV ke sini/});
+ await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(button=>button.textContent.includes('Tarik CV ke sini')&&!button.disabled));
+ assert.equal(await drop.evaluate(el=>getComputedStyle(el).cursor),'pointer');
+ await page.screenshot({path:path.join(out,'00-upload-empty.png')});
+ const chooser = page.waitForEvent('filechooser');
+ await drop.click();
+ await (await chooser).setFiles(['A','B','C'].map(cv));
+ const filesList = page.getByRole('list',{name:'CV yang dipilih'});
+ await page.getByText('3 CV dipilih',{exact:true}).waitFor();
+ await picker.setInputFiles(cv('D'));
+ await page.getByText('4 CV dipilih',{exact:true}).waitFor();
+ assert.deepEqual(await filesList.locator('li > span').allTextContents(),['A','B','C','D'].map(name=>cv(name).name));
+ const transfer = await page.evaluateHandle(()=>{
+   const data = new DataTransfer();
+   data.items.add(new File(['%PDF-1.4 synthetic-E'],'Kandidat-E.pdf',{type:'application/pdf'}));
+   data.items.add(new File(['bad'],'Kandidat.txt',{type:'text/plain'}));
+   return data;
+ });
+ await drop.dispatchEvent('dragover',{dataTransfer:transfer});
+ await page.getByRole('button',{name:/Lepas untuk menambahkan CV/}).waitFor();
+ await page.getByRole('button',{name:/Lepas untuk menambahkan CV/}).dispatchEvent('drop',{dataTransfer:transfer});
+ await page.getByRole('alert').filter({hasText:'Kandidat.txt'}).waitFor();
+ await page.getByText('5 CV dipilih',{exact:true}).waitFor();
+ await filesList.getByRole('button',{name:'Hapus Kandidat-E.pdf'}).click();
+ await page.getByText('4 CV dipilih',{exact:true}).waitFor();
+ await page.screenshot({path:path.join(out,'01-selected-cvs.png')});
  await page.getByRole('button',{name:'Lanjut',exact:true}).click();await page.waitForURL(/\/dashboard\/recruiter/,{timeout:60000});await page.getByRole('complementary',{name:'Progres impor CV'}).waitFor();assert.equal(report.publish,1);assert.equal(report.metadata,1);assert.equal(report.uploadCompleted,0,'dashboard navigation does not await file transfer');assert.ok(report.events.includes('onboarding-complete'));await page.screenshot({path:path.join(out,'02-dashboard-during-upload.png')});
- releaseUploads();await page.waitForFunction(()=>document.querySelector('[aria-label="Progres impor CV"]')?.textContent.includes('Menilai CV'),{timeout:20000});assert.equal(report.uploadCompleted,2);scoreReady=true;await page.getByRole('complementary',{name:'Progres impor CV'}).getByRole('button',{name:/Impor CV selesai/}).waitFor({timeout:15000});assert.deepEqual(report.errors,[]);
- console.log('HR onboarding passed: actual final assistant scene, two selected CVs, one publication, job-scoped import, onboarding completion and dashboard navigation while PUT transfers remain blocked, then uploads and scoring finish. Paid calls: 0.');
+ releaseUploads();await page.waitForFunction(()=>document.querySelector('[aria-label="Progres impor CV"]')?.textContent.includes('Menilai CV'),{timeout:20000});assert.equal(report.uploadCompleted,4);scoreReady=true;await page.getByRole('complementary',{name:'Progres impor CV'}).getByRole('button',{name:/Impor CV selesai/}).waitFor({timeout:15000});assert.deepEqual(report.errors,[]);
+ console.log('HR onboarding passed: actual final assistant scene, four selected CVs across repeated picks and mixed drag-and-drop, one publication, job-scoped import, onboarding completion and dashboard navigation while PUT transfers remain blocked, then uploads and scoring finish. Paid calls: 0.');
  }finally{releaseUploads();fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

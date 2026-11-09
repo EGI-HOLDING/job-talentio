@@ -5,7 +5,7 @@ const out=path.resolve('output/candidate-apply');fs.mkdirSync(out,{recursive:tru
 const auth={accessToken:'synthetic-apply-only',user:{id:'apply-candidate',role:'EMPLOYEE',fullName:'Dinda Pramesti',email:'apply@synthetic.test',emailVerified:true,phone:'+6281234567890',employeeOnboarding:{status:'COMPLETED',step:3}}};
 const job={id:'candidate-apply-job',title:'Product Designer',description:'Mendesain produk digital dan melakukan riset pengguna.',companyId:'apply-company',company:{id:'apply-company',name:'Studio Nusantara',slug:'studio-nusantara',description:'Perusahaan teknologi dan desain.',_count:{jobs:1},city:{name:'Jakarta'}},status:'PUBLISHED',publishedAt:'2026-11-01T00:00:00Z',createdAt:'2026-11-01T00:00:00Z',city:{name:'Jakarta'},workMode:'REMOTE',employmentType:'FULL_TIME',experienceLevel:'MIDDLE',jobSkills:[],jobLanguages:[],questions:[],benefits:[]};
 async function main(){
- const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1440,height:1000}}),report={errors:[],submissions:[],screeningRequests:0};let applied=false,release,attempts=0;
+ const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1917,height:1022}}),report={errors:[],submissions:[],screeningRequests:0};let applied=false,release,attempts=0;
  try{
   await context.addInitScript(auth=>{localStorage.setItem('jt_token',auth.accessToken);localStorage.setItem('jt_session',JSON.stringify(auth));localStorage.setItem('jt_country','ID');},auth);
   await context.route('**/api/**',async route=>{
@@ -14,21 +14,38 @@ async function main(){
    if(p==='/auth/me')body=auth;
    else if(p==='/profiles/me/onboarding')body={status:'COMPLETED',profile:{phone:auth.user.phone}};
    else if(p==='/jobs/'+job.id)body=job;
-   else if(p==='/profiles/me')body={id:'profile',resumes:[{id:'resume-1',title:'CV Product Designer',format:'pdf',hasFile:true,isPrimary:true,updatedAt:'2026-11-02T00:00:00Z'},{id:'resume-2',title:'CV UI-UX General',format:'pdf',hasFile:true,isPrimary:false,updatedAt:'2026-10-21T00:00:00Z'}]};
+   else if(p==='/jobs')body={items:[job],total:1,page:1,totalPages:1};
+   else if(p==='/profiles/me')body={id:'profile',resumes:[{id:'resume-1',title:'CV Product Designer',format:'pdf',hasFile:true,isPrimary:true,updatedAt:'2026-11-02T00:00:00Z'},{id:'resume-2',title:'CV UI-UX General',format:'pdf',hasFile:true,isPrimary:false,updatedAt:'2026-10-21T00:00:00Z'}, ...Array.from({length:4},(_,index)=>({id:'extra-'+index,title:'CV Tambahan '+index,format:'pdf',hasFile:true,updatedAt:'2026-10-20T00:00:00Z'}))]};
+   else if(p==='/applications/mine/jobs/'+job.id && process.argv.includes('--post-result') && applied)return route.fulfill({status:503,headers,json:{message:'Synthetic read unavailable'}});
    else if(p==='/applications/mine/jobs/'+job.id)body={applied,application:applied?{id:'application-applied',status:'NEW',createdAt:new Date().toISOString(),resumeTitle:'CV UI-UX General',hasResumeFile:true}:null};
-   else if(p==='/applications/jobs/'+job.id){attempts++;report.submissions.push(req.postDataJSON());await new Promise(resolve=>release=resolve);if(attempts===1)return route.fulfill({status:503,headers,json:{message:'Gangguan sementara. Silakan coba lagi.'}});applied=true;return route.fulfill({status:503,headers,json:{message:'Synthetic response lost after server commit'}});}
+   else if(p==='/applications/jobs/'+job.id){attempts++;report.submissions.push(req.postDataJSON());await new Promise(resolve=>release=resolve);if(attempts===1)return route.fulfill({status:503,headers,json:{message:'Gangguan sementara. Silakan coba lagi.'}});applied=true;if(process.argv.includes('--post-result'))return route.fulfill({status:201,headers,json:{id:'application-applied',status:'NEW',createdAt:new Date().toISOString()}});return route.fulfill({status:503,headers,json:{message:'Synthetic response lost after server commit'}});}
    else if(p.endsWith('/following'))body={following:false};
    else if(/unread/.test(p))body={count:0};
    return route.fulfill({status:200,headers,json:body});
   });
-  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(origin+'/id/jobs/'+job.id,{waitUntil:'domcontentloaded',timeout:120000});
+  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));const embedded=process.argv.includes('--embedded');await page.goto(origin+(embedded?'/id/jobs?mode=all&job='+job.id:'/id/jobs/'+job.id),{waitUntil:'domcontentloaded',timeout:120000});
   await page.getByRole('button',{name:/Lamar sekarang/i}).first().click();const dialog=page.getByRole('dialog',{name:'Pilih CV untuk melamar',exact:true});await dialog.waitFor();
-  await dialog.getByRole('radio',{name:/CV UI-UX General/}).check();await page.screenshot({path:path.join(out,'01-cv-popup.png')});
+  await dialog.getByRole('radio',{name:/CV UI-UX General/}).check();
+  const apply = dialog.getByRole('button',{name:'Lamar dengan CV ini',exact:true});
+  for (const width of [1917,390]) {
+   await page.setViewportSize({width,height:width===390?700:1022});
+   const bounds = await dialog.boundingBox();
+   assert.ok(bounds.width<=570 && bounds.y>=0);
+   assert.ok(await dialog.getByRole('heading').isVisible());
+   assert.ok(await apply.isEnabled());
+   assert.deepEqual(await apply.evaluate(el=>[getComputedStyle(el).cursor,getComputedStyle(el).opacity]),['pointer','1']);
+   const list = dialog.locator('fieldset').first();
+   await list.evaluate(el=>{el.scrollTop=el.scrollHeight});
+   assert.ok(await apply.evaluate(el=>el.getBoundingClientRect().bottom<innerHeight));
+   await list.evaluate(el=>{el.scrollTop=0});
+   await page.screenshot({path:path.join(out,width===390?'01-cv-popup-mobile.png':'01-cv-popup.png')});
+  }
+  await page.setViewportSize({width:1917,height:1022});
   await dialog.getByRole('button',{name:'Lamar dengan CV ini',exact:true}).click();for(let i=0;i<80&&!release;i++)await new Promise(r=>setTimeout(r,25));assert.equal(report.submissions.length,1);assert.equal(await dialog.getByRole('radio').first().isDisabled(),true);await page.keyboard.press('Escape');assert.equal(await dialog.isVisible(),true);release();release=null;await dialog.getByRole('alert').waitFor();
   await dialog.getByRole('button',{name:'Lamar dengan CV ini',exact:true}).click();for(let i=0;i<80&&!release;i++)await new Promise(r=>setTimeout(r,25));release();await dialog.waitFor({state:'detached'});
-  assert.equal(report.submissions.length,2);assert.deepEqual(report.submissions,[{resumeId:'resume-2'},{resumeId:'resume-2'}]);assert.equal(report.screeningRequests,0);assert.deepEqual(report.errors,[]);
-  assert.ok(page.url().includes('/jobs/'+job.id));await page.screenshot({path:path.join(out,'02-applied.png')});
-  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log('Candidate apply browser passed: approved CV popup, selection, locked pending state, retryable error, lost-success response reconciliation, CV-only payload and no Tara/application steps.');
+  await page.getByText(/^Sudah dilamar/).first().waitFor();assert.equal(report.submissions.length,2);assert.deepEqual(report.submissions,[{resumeId:'resume-2'},{resumeId:'resume-2'}]);assert.equal(report.screeningRequests,0);assert.deepEqual(report.errors,[]);
+  assert.ok(page.url().includes(embedded?'job='+job.id:'/jobs/'+job.id));await page.screenshot({path:path.join(out,'02-applied.png')});
+  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));console.log('Candidate apply browser passed: approved CV popup, selection, locked pending state, retryable error, successful POST or lost-success response reconciliation, CV-only payload and no Tara/application steps.');
  }finally{await browser.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
