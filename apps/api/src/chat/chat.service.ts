@@ -1,3 +1,4 @@
+import { recruitmentChatAccess } from './recruitment-chat-access';
 import {
   Injectable,
   ForbiddenException,
@@ -86,6 +87,7 @@ export class ChatService {
       throw new NotFoundException('Conversation not found');
     }
     if (applications.some((application) => employeeApplicationChatAllowed(application.status))) return;
+    if (!applications.length && await recruitmentChatAccess(tx,conversation)) return;
     if (
       !applications.length &&
       (senderRole === 'RECRUITER' || senderRole === 'SUPER_ADMIN') &&
@@ -162,7 +164,8 @@ export class ChatService {
         },
         select: { status: true, events: anonymousRevealHistory },
       });
-      if (!employeeApplicationChatAllowed(application?.status)) {
+      const recruitment=!application?await recruitmentChatAccess(this.prisma,conversation):null;
+      if (!employeeApplicationChatAllowed(application?.status) && !recruitment) {
         if (
           viewer.role === 'EMPLOYEE' ||
           application ||
@@ -170,7 +173,7 @@ export class ChatService {
         ) return false;
       }
       if (!job.isAnonymous) return true;
-      return Boolean(application && revealsAnonymousEmployer(application.status, application.events));
+      return Boolean(application && revealsAnonymousEmployer(application.status, application.events) || recruitment?.anonymousRevealed);
     }
 
     if (!companyId) return false;
@@ -352,10 +355,11 @@ export class ChatService {
         if (application?.status === 'WITHDRAWN') {
           throw new NotFoundException('Conversation not found');
         }
-        if (!employeeApplicationChatAllowed(application?.status)) {
+        const recruitment=!application?await recruitmentChatAccess(this.prisma,{jobPostId:contextJob.id,companyId:requestedCompanyId,userAId:user.id,userBId:peerUserId,initiatedBy:peerUserId,isColdOutreach:true}):null;
+        if (!employeeApplicationChatAllowed(application?.status)&&!recruitment) {
           throw new NotFoundException('An application is required to chat with this recruiter');
         }
-        if (contextJob.isAnonymous && (!application || !revealsAnonymousEmployer(application.status, application.events))) {
+        if (contextJob.isAnonymous && (!application || !revealsAnonymousEmployer(application.status, application.events))&&!recruitment?.anonymousRevealed) {
           throw new NotFoundException('Employer not available');
         }
       }

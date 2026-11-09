@@ -33,7 +33,7 @@ const claim = { id: 'x', criterionId: 'a', statement: cv, quote: cv, lineStart: 
 const schemas = conversationSchemas(current);
 for (const count of [1, 2, 3, 4, 5]) {
     const plan: CandidatePayload = { claims: Array.from({ length: count }, (_, i) => ({ ...claim, id: 'x' + i })), limitations: [] };
-    if (count <= 3) { validateCandidate(plan, rubric, cv, current); assertSchema(schemas.candidate, plan); }
+    if (count <= current.maxCore) { validateCandidate(plan, rubric, cv, current); assertSchema(schemas.candidate, plan); }
     else { assert.throws(() => validateCandidate(plan, rubric, cv, current)); assert.throws(() => assertSchema(schemas.candidate, plan)); }
     validateCandidate(plan, rubric, cv, legacy);
 }
@@ -65,7 +65,7 @@ for (const policy of [current, legacy]) for (const count of [1, 2, 3]) for (let 
         questions.push({ ...target.root, id: 'p' + n, kind: 'FOLLOW_UP', position: questions.length, rootQuestionId: target.root.id, depth: target.depth });
     }
     assert.equal(order.length, Math.min(policy.maxFollowUp, roots.filter(r => r.answer).length * 2));
-    if (count === 3 && mask === 7) assert.deepEqual(order, policy === current ? [0, 1, 2, 0, 1] : [0, 0, 1, 1, 2, 2]);
+    if (count === 3 && mask === 7) assert.deepEqual(order, policy === current ? [0, 1, 2, 0, 1, 2] : [0, 0, 1, 1, 2, 2]);
     assert.equal(nextProbeTarget(questions, policy), null);
     combinations++;
 }
@@ -97,4 +97,4 @@ assert.equal(validateCandidate({ claims: [claim], limitations: [] }, rubric, cv,
 assert.throws(() => validateCandidate({ claims: [{ ...claim, question: 'Eh bentar, bagian mana yang lu pegang?' }], limitations: [] }, rubric, cv, current));
 assert.throws(() => validateCandidate({ claims: [{ ...claim, question: 'Bagian apa yang lu kerjakan 👀?' }], limitations: [] }, rubric, cv, current));
 assert.throws(() => validateCandidate({ claims: [{ ...claim, question: 'kata '.repeat(32) + 'apa?' }], limitations: [] }, rubric, cv, current));
-console.log('v5 opening stored once; v4 snapshots and 30-second deadlines retained; v5 uses 60 seconds.');
+console.log('Opening stored once; historical snapshots retained; v6 allows 10 + 15 at 60 seconds.');

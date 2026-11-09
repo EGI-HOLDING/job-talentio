@@ -47,13 +47,26 @@ export function HrAssistantHeader({ companyId, companyName }: { companyId: strin
   </>;
 }
 
-type Props = { companyId: string; companyName: string; userId: string; creationSessionId: string; initialScene: AssistantSceneId };
-export function HrAssistantOnboarding({ companyId, companyName, userId, creationSessionId, initialScene }: Props) {
+type Props = { companyId: string; companyName: string; userId: string; creationSessionId: string; initialScene: AssistantSceneId; onContinue: (files: File[]) => Promise<void> };
+export function HrAssistantOnboarding({ companyId, companyName, userId, creationSessionId, initialScene, onContinue }: Props) {
   const c = useHrCopy();
   useHrAssistantSurface(companyId, companyName);
   const [scene, setScene] = useState<AssistantSceneId>(initialScene);
   const [leaving, setLeaving] = useState(false), [busy, setBusy] = useState(false);
   const [scale, setScale] = useState(1);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]), [uploadError, setUploadError] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  function chooseFiles(files: File[]) {
+    const invalid = files.find(file => !/\.(pdf|docx?)$/i.test(file.name) || !file.size || file.size > 5 * 1024 * 1024);
+    if (invalid) { setUploadError(invalid.name + ': gunakan PDF, DOC atau DOCX maksimal 5 MB.'); return; }
+    setUploadError(''); setSelectedFiles(previous => [...previous, ...files.filter(file => !previous.some(value => value.name === file.name && value.size === file.size && value.lastModified === file.lastModified))]);
+  }
+  async function finish() {
+    if (lock.current) return; lock.current = true; setBusy(true); setUploadError('');
+    try { await onContinue(selectedFiles); }
+    catch (error) { setUploadError(error instanceof Error ? error.message : 'Belum bisa melanjutkan. Coba lagi.'); }
+    finally { lock.current = false; setBusy(false); }
+  }
   const stage = useRef<HTMLDivElement>(null), heading = useRef<HTMLDivElement>(null);
   const lock = useRef(false), timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const reducedMotion = useRef(false);
@@ -136,11 +149,11 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
               <div className={s.callControls}><button type="button" aria-disabled="true" aria-label={c('Mikrofon contoh interview')}><Microphone/></button><button type="button" aria-disabled="true" aria-label={c('Akhiri contoh interview')}><svg aria-hidden="true" viewBox="0 0 40 25"><path d="M3 18V9C9 0 31 0 37 9v9l-9-1v-7H12v7Z"/></svg></button></div>
             </section>
             <Art name="taka-interview" alt="Taka" className={s.voiceTaka}/>
-            {narrator(<><span className={s.narratorName}>Taka</span><div><strong>{c('Kandidat juga bisa ngobrol langsung lewat suara, sesuai paket lu.')}</strong><p>{c('Abis interview, gua evaluasi hasilnya.')}</p></div></>,s.voiceNarrator)}
+            {narrator(<><span className={s.narratorName}>Taka</span><div><strong>{c('Kandidat juga bisa ngobrol langsung lewat suara.')}</strong><p>{c('Abis interview, gua evaluasi hasilnya.')}</p></div></>,s.voiceNarrator)}
           </>}
 
           {scene === 'cv-upload' && <>
-            <section className={s.uploadPanel}><h1>{c('Upload CV kandidat')}</h1><div className={s.dropzone} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();event.stopPropagation();}} aria-label={c('Area upload CV belum aktif')}><Art name="upload-cloud" className={s.uploadCloud}/><strong>{c('Tarik CV ke sini')}</strong><span>{c('atau')}</span><button type="button" aria-disabled="true" onClick={event=>event.preventDefault()}>{c('Pilih file')}</button></div><p className={s.uploadHint}>{c('Bisa pilih banyak CV sekaligus')}</p></section>
+            <section className={s.uploadPanel}><h1>{c('Upload CV kandidat')}</h1><div className={s.dropzone} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();event.stopPropagation();chooseFiles(Array.from(event.dataTransfer.files));}} aria-label={c('Area upload CV')}><Art name="upload-cloud" className={s.uploadCloud}/><strong>{c('Tarik CV ke sini')}</strong><span>{c('atau')}</span><input ref={fileInput} hidden type="file" multiple accept=".pdf,.doc,.docx" onChange={event=>{chooseFiles(Array.from(event.target.files??[]));event.target.value='';}}/><button type="button" disabled={busy} onClick={()=>fileInput.current?.click()}>{c('Pilih file')}</button></div><p className={s.uploadHint}>{selectedFiles.length ? selectedFiles.length + ' CV dipilih · PDF, DOC, DOCX' : c('Bisa pilih banyak CV sekaligus')}</p>{uploadError && <p role="alert" className={s.uploadHint}>{uploadError}</p>}</section>
             <Art name="taka-upload" alt="Taka" className={s.uploadTaka}/>
             {narrator(<><strong>{c('Yuk, masukin CV kandidat yang udah lu punya.')}</strong><p>{c('Boleh banyak sekaligus. Abis di-upload, gua mulai proses dan bikin rankingnya.')}</p></>,s.uploadNarrator)}
           </>}
@@ -149,6 +162,7 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
     </div>
     <footer className={s.footer}>
       {index > 0 && <button type="button" className={s.back} disabled={busy} onClick={()=>navigate(-1)}><Arrow back/>{c('Kembali')}</button>}
+      {index === assistantScenes.length-1 && <button type="button" className={s.next} disabled={busy} onClick={()=>void finish()}>{busy ? c('Menyiapkan dashboard…') : c('Lanjut')}<Arrow/></button>}
       {index < assistantScenes.length-1 && <button type="button" className={s.next} disabled={busy} onClick={()=>navigate(1)}>{c('Lanjut')}<Arrow/></button>}
     </footer>
   </section>;

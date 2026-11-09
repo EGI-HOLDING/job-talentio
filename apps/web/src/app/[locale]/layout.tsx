@@ -1,4 +1,5 @@
 import { JobImpressions } from '@/components/jobs/JobImpressions';
+import { CandidateImportProgress } from '@/components/recruiter/CandidateImportProgress';
 import type { Metadata, Viewport } from 'next';
 import '../globals.css';
 import { EmployeeOnboardingGate } from '@/components/auth/EmployeeOnboardingGate';
@@ -83,6 +84,7 @@ export default async function RootLayout({
             <AccountRouteGate><EmployeeOnboardingGate><RecruiterOnboardingGate><PublicShell>{children}</PublicShell></RecruiterOnboardingGate></EmployeeOnboardingGate></AccountRouteGate>
             <SiteFooter />
             <InstallPrompt />
+            <CandidateImportProgress />
           </ConfirmProvider></ApplicationPresentationProvider>
         </I18nProvider>
       </body>

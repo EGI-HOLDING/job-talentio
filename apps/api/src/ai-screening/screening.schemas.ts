@@ -182,7 +182,7 @@ export function validatePackage(value: unknown, requirements?: string): PackageP
 export function validateCandidate(value: unknown, p: PackagePayload, cvText: string, policy: ConversationPolicy = CURRENT_CONVERSATION): CandidatePayload {
     assertSchema(CANDIDATE_SCHEMA, value);
     const plan = structuredClone(value) as CandidatePayload, lines = cvText.split('\n');
-    if (policy.version.startsWith('tara-conversation-v5.') && plan.claims[0])
+    if (/^tara-conversation-v[56]\./.test(policy.version) && plan.claims[0])
         plan.claims[0].question = openConversation(plan.claims[0].question);
     if (plan.claims.length < 1 || plan.claims.length > policy.maxCore || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
         throw new Error('Invalid candidate plan');

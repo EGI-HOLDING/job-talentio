@@ -1,4 +1,5 @@
 'use client';
+import { CandidateWorkspace } from './CandidateWorkspace';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
@@ -23,6 +24,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
   const router = useRouter();
   const confirm = useConfirm();
   const [query, setQuery] = useState('');
+  const [pool,setPool]=useState(false);
   const [status, setStatus] = useState('ALL');
   const [sort, setSort] = useState('newest');
   const [packageFilter, setPackageFilter] = useState('ALL');
@@ -99,6 +101,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
     finally { if (alive.current && contextVersion.current === requested) { actionLock.current = false; setBusyId(''); } }
   }
   function closeEditor() { setEditing(null);if(hrFlowV2Enabled){const url=new URL(window.location.href);url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);} onCloseCreate(); }
+  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}>← Kembali ke lowongan</button><h1>Kumpulan CV perusahaan</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>
@@ -106,7 +109,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
       <dl className={bar.metrics} aria-label={t('hr.freeStats')}>
         {[[jobs.filter(job => job.status === 'PUBLISHED').length, t('rw.published')], [jobs.reduce((sum, job) => sum + (job._count?.applications || 0), 0), t('applications')], [jobs.reduce((sum, job) => sum + (job._count?.views || 0), 0), t('rec.viewsWord')]].map(([value, label]) => <div key={label}><dt>{label}</dt><dd>{new Intl.NumberFormat(locale).format(Number(value))}</dd></div>)}
       </dl>
-      <div className={bar.controls}><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobsCompact')} /><WorkspaceSelect className={bar.package} value={packageFilter} options={[{ value: 'ALL', label: t('jr.allPackages') }, { value: 'PREMIUM', label: t('hr.package.PREMIUM') }, { value: 'STANDARD', label: t('hr.package.STANDARD') }, { value: 'FREE', label: t('hr.package.FREE') }]} label={t('jr.package')} onChange={setPackageFilter} /><WorkspaceSelect className={bar.sort} value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} /><button type="button" className={s.primary + ' ' + bar.create} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
+      <div className={bar.controls}><button className={s.secondary} onClick={()=>setPool(true)}>Kumpulan CV</button><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobsCompact')} /><WorkspaceSelect className={bar.package} value={packageFilter} options={[{ value: 'ALL', label: t('jr.allPackages') }, { value: 'PREMIUM', label: t('hr.package.PREMIUM') }, { value: 'STANDARD', label: t('hr.package.STANDARD') }, { value: 'FREE', label: t('hr.package.FREE') }]} label={t('jr.package')} onChange={setPackageFilter} /><WorkspaceSelect className={bar.sort} value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} /><button type="button" className={s.primary + ' ' + bar.create} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
     </div>
     <nav className={s.tabs} aria-label={t('jobs')}>{[['ALL', 'rw.allJobs'], ['PUBLISHED', 'rw.published'], ['DRAFT', 'rw.drafts'], ['PAUSED', 'rw.paused'], ['CLOSED', 'rw.closed'], ['EXPIRED', 'hr.expired']].map(([key, label]) => <button key={key} type="button" aria-current={status === key ? 'page' : undefined} onClick={() => setStatus(key)}>{t(label)}<span className={s.count}>{key === 'ALL' ? jobs.length : jobs.filter((job) => job.status === key).length}</span></button>)}</nav>
 

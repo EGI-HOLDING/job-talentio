@@ -174,13 +174,18 @@ export class StorageService implements OnModuleInit {
   }
 
   /** Download object bytes for background workers (CV parse, etc.). */
-  async getObjectBuffer(key: string): Promise<Buffer> {
+  async getObjectBuffer(key: string, maxBytes?: number): Promise<Buffer> {
     const res = await this.client.send(
       new GetObjectCommand({
         Bucket: this.bucket,
         Key: key,
       }),
     );
+    if (maxBytes && (res.ContentLength === undefined || res.ContentLength > maxBytes)) {
+      const stream = res.Body as unknown as { destroy?: () => void };
+      stream?.destroy?.();
+      throw new Error('OBJECT_SIZE_LIMIT');
+    }
     const body = res.Body;
     if (!body) throw new Error(`Empty S3 body for ${key}`);
     const bytes = await body.transformToByteArray();

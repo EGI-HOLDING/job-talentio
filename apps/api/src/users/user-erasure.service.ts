@@ -128,6 +128,32 @@ export class UserErasureService {
       });
       await tx.companyMember.deleteMany({ where: { userId } });
 
+      // Independent invitations and imported CV evidence must not survive a claimed account erasure.
+      const linkedCandidates=await tx.recruitmentCandidate.findMany({where:{OR:[{application:{profile:{userId}}},{invitations:{some:{claimedUserId:userId}}},{messages:{some:{recipientUserId:userId}}}]},select:{id:true,fileKey:true}});
+      const cvKeys=linkedCandidates.map(c=>c.fileKey).filter((key):key is string=>Boolean(key));
+      const affected=await tx.recruitmentCandidate.findMany({where:{OR:[{id:{in:linkedCandidates.map(c=>c.id)}},{fileKey:{in:cvKeys}}]},select:{id:true,fileKey:true}});
+      const candidateIds=affected.map(c=>c.id),invitations=await tx.screeningInvitation.findMany({where:{OR:[{claimedUserId:userId},{candidateId:{in:candidateIds}}]},select:{id:true}});
+      const removedSubjects=[...candidateIds,...invitations.map(i=>i.id)];
+      await tx.aiScreeningWork.updateMany({where:{subjectId:{in:removedSubjects}},data:{status:'CANCELLED',leaseOwner:null,leaseUntil:null,error:'ACCOUNT_ERASED'}});
+      await tx.aiScreeningCall.updateMany({where:{subjectId:{in:removedSubjects}},data:{status:'ERASED',result:Prisma.DbNull,error:null}});
+      await tx.screeningInvitation.updateMany({where:{id:{in:invitations.map(i=>i.id)}},data:{status:'CANCELLED',snapshot:{erased:true},recipientEmail:'erased@example.invalid',error:null}});
+      const candidateMessages=await tx.candidateMessage.findMany({where:{OR:[{candidateId:{in:candidateIds}},{recipientUserId:userId}]},select:{id:true,messageId:true}});
+      const candidateMessageIds=candidateMessages.map(m=>m.id);
+      await tx.aiScreeningWork.updateMany({where:{kind:'CANDIDATE_DELIVERY',subjectId:{in:candidateMessageIds}},data:{status:'CANCELLED',leaseOwner:null,leaseUntil:null,error:'ACCOUNT_ERASED'}});
+      await tx.chatMessage.updateMany({where:{id:{in:candidateMessages.map(m=>m.messageId).filter((id):id is string=>Boolean(id))}},data:{body:'Message removed'}});
+      await tx.candidateMessage.updateMany({where:{id:{in:candidateMessageIds}},data:{recipientEmail:'erased@example.invalid',recipientUserId:null,subject:'Pesan dihapus',body:'Message removed',emailStatus:'CANCELLED',messageStatus:'CANCELLED',error:null}});
+      await tx.candidateMessageBatch.updateMany({where:{messages:{some:{id:{in:candidateMessageIds}},every:{id:{in:candidateMessageIds}}}},data:{subject:'Pesan dihapus',bodyTemplate:'Message removed'}});
+      await tx.candidateInterview.deleteMany({where:{candidateId:{in:candidateIds}}});
+      await tx.candidateActivity.deleteMany({where:{candidateId:{in:candidateIds}}});
+      await tx.recruitmentCandidate.updateMany({where:{id:{in:candidateIds}},data:{fullName:ANONYMIZED_DISPLAY_NAME,email:null,phone:null,headline:'',filename:'CV dihapus',fileKey:null,checksum:null,cvScore:null,cvResult:Prisma.DbNull,jobSnapshot:Prisma.DbNull,dedupeKey:null,scoreStatus:'ERASED',stage:'WITHDRAWN',error:null,revision:{increment:1}}});
+      taraKeys=[...new Set([...taraKeys,...cvKeys])];
+      const voiceRows=profile?await tx.voiceInterview.findMany({where:{session:{profileId:profile.id}},select:{id:true}}):[];
+      const voiceIds=voiceRows.map(v=>v.id);
+      if(voiceIds.length)await tx.$queryRaw(Prisma.sql`SELECT id FROM "VoiceInterview" WHERE id IN (${Prisma.join(voiceIds)}) ORDER BY id FOR UPDATE`);
+      await tx.voiceFragment.deleteMany({where:{voiceId:{in:voiceIds}}});
+      await tx.voiceInterview.updateMany({where:{id:{in:voiceIds}},data:{promptSnapshot:{erased:true},transcriptComplete:false}});
+      await tx.voiceInterview.updateMany({where:{id:{in:voiceIds},status:{notIn:['ENDED','FAILED','CREATE_UNCERTAIN']}},data:{status:'CLOSING',closeReason:'ACCOUNT_ERASED',closingAt:new Date(),leaseUntil:new Date(0)}});
+      // Provider IDs survive session deletion only until the watchdog confirms hangup; no CV or transcript remains.
       if (!profile) return;
       await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${profile.id} FOR UPDATE`);
       const latestTara=await tx.aiScreeningSession.findMany({where:{profileId:profile.id},select:{id:true,coverFileKey:true,resumeVersionId:true,plans:{select:{id:true,resumeVersionId:true}},evaluation:{select:{pdfKey:true,revisions:{select:{snapshot:true}}}}}});

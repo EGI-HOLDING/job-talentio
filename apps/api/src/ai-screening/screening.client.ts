@@ -36,10 +36,10 @@ export class ScreeningClient {
     private async request(path: string, init: RequestInit = {}) {
         return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000) });
     }
-    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset?: PromptPreset): Promise<unknown> {
+    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset?: PromptPreset, files?: Array<{ filename: string; file_data: string }>): Promise<unknown> {
         if (!this.configured)
             throw new Error('TARA_PROVIDER_NOT_CONFIGURED');
-        const prompt = composePrompt(task, input, preset), model = preset?.model ?? screeningModel(), inputHash = hash([prompt, model]);
+        const prompt = composePrompt(task, input, preset), model = preset?.model ?? screeningModel(), inputHash = hash([prompt, model, files]);
         let call = await this.db.aiScreeningCall.findFirst({ where: { workId, inputHash, status: { not: 'RECOVERED' } }, orderBy: { createdAt: 'desc' } });
         if (call?.status === 'ERASED')
             throw new Error('SESSION_ERASED');
@@ -65,7 +65,7 @@ export class ScreeningClient {
                         model, background: true, store: true, reasoning: { effort: prompt.reasoning, context: 'current_turn' },
                         max_output_tokens: prompt.maxOutput,
                         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
-                        input: [{ role: 'developer', content: [{ type: 'input_text', text: prompt.instructions, prompt_cache_breakpoint: { mode: 'explicit', ttl: '30m' } }] }, ...prompt.input],
+                        input: [{ role: 'developer', content: [{ type: 'input_text', text: prompt.instructions, prompt_cache_breakpoint: { mode: 'explicit', ttl: '30m' } }] }, ...prompt.input.map(item => files?.length ? { ...item, content: [{ type: 'input_text', text: item.content }, ...files.map(file => ({ type: 'input_file', ...file }))] } : item)],
                         text: { format: { type: 'json_schema', name: prompt.name, strict: true, schema: prompt.schema } },
                     }) });
             }

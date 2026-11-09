@@ -1,6 +1,7 @@
 'use client';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect, useRef, useState } from 'react';
+import { startCandidateImport } from '@/lib/candidateImports';
 import { api, getSession } from '@/lib/api';
 import { jobPostSchema } from '@job-talentio/shared';
 import { useI18n } from '@/lib/i18n';
@@ -122,6 +123,14 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     const result=await api<{jobId:string}>('/hr-flow/sessions/'+value.id+'/publish',{method:'POST',headers:{'Idempotency-Key':publishKeys.current[key]},body:JSON.stringify({revision:value.revision})});
     lastSaved.current=JSON.stringify(cleanHrDraft(draftRef.current));await onPublished(result.jobId);
   }
+  async function finishAssistant(files: File[]) {
+    const value = await saveDraft();
+    const key = String(value.revision); publishKeys.current[key] ??= crypto.randomUUID();
+    const result = await api<{jobId:string}>('/hr-flow/sessions/' + value.id + '/publish', {method:'POST',headers:{'Idempotency-Key':publishKeys.current[key]},body:JSON.stringify({revision:value.revision})});
+    if (files.length) await startCandidateImport(companyId, result.jobId, files);
+    lastSaved.current = JSON.stringify(cleanHrDraft(draftRef.current));
+    await onPublished(result.jobId);
+  }
   async function continueToAssistant(){
     const body=cleanHrDraft(draftRef.current);
     const valid=jobPostSchema.safeParse({...body,responsibilities:body.responsibilities?.filter((v:string)=>v.trim()),kpis:body.kpis?.filter((v:string)=>v.trim())});
@@ -135,7 +144,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   const packageName=(code:string)=>code==='FREE'?'Free':code==='STANDARD'?'Standard':'Premium';
   const orderState=(state:string)=>c(({PAID:'Paket dikonfirmasi',PENDING:'Menunggu pembayaran',REVIEW:'Sedang diperiksa',EXPIRED:'Pesanan kedaluwarsa',CANCELLED:'Pesanan dibatalkan',FAILED:'Pembayaran gagal',REFUNDED:'Pembayaran dikembalikan'} as Record<string,string>)[state]??'Perlu pemeriksaan status');
   if(!catalog||!session)return <div className={s.page} data-hr-surface>{error?<div className={s.error} role="alert">{error}<br/><button className={s.link} onClick={()=>setRetry(v=>v+1)}>{c("Coba lagi")}</button><button className={s.link} onClick={onClose}>{c("Kembali")}</button></div>:<WorkspaceLoading/>}</div>;
-  if(onboarding&&assistantScene)return <HrAssistantOnboarding key={session.id} companyId={companyId} companyName={company?.name??session.company?.name??''} userId={getSession()?.user.id??''} creationSessionId={session.id} initialScene={assistantScene}/>;
+  if(onboarding&&assistantScene)return <HrAssistantOnboarding key={session.id} companyId={companyId} companyName={company?.name??session.company?.name??''} userId={getSession()?.user.id??''} creationSessionId={session.id} initialScene={assistantScene} onContinue={finishAssistant}/>;
   const heading=<><h1 className={s.title}>{phase==='PACKAGE'?c("Pilih paket untuk lowongan ini"):phase==='CHECKOUT'?c("Periksa pesanan Anda"):c("Buat lowongan")}</h1><p className={s.subtitle}>{phase==='PACKAGE'?c("Pembelian berlaku untuk satu lowongan. Tidak berlangganan otomatis."):phase==='CHECKOUT'?c("Pastikan paket dan perusahaan sudah sesuai sebelum melanjutkan."):c("Susun kebutuhan posisi dengan jelas untuk kandidat.")}</p></>;
   return <div className={s.page} data-hr-flow-v2 data-hr-surface>
     <HrFlowHeader companyName={company?.name??session.company?.name} stage={(phase==='PACKAGE'?0:phase==='CHECKOUT'?1:2)+(onboarding?1:0)} onboarding={onboarding}/>

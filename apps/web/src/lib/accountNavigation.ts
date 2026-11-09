@@ -4,7 +4,7 @@ export const EMPLOYER_JOBS = '/dashboard/recruiter?tab=jobs';
 
 export function employerJobHref(id: string, section = 'applicants', companyId?: string | null): string {
   const params = new URLSearchParams();
-  if (section === 'kanban' || section === 'details') params.set('section', section);
+  if (section === 'details') params.set('section', section);
   if (companyId) params.set('company', companyId);
   return '/dashboard/recruiter/jobs/' + encodeURIComponent(id) + (params.size ? '?' + params : '');
 }
@@ -35,7 +35,7 @@ export function accountHref(role: string | null | undefined, href: string): stri
     }
     if (path === '/dashboard/recruiter' && url.searchParams.has('job') && (!url.searchParams.get('tab') || url.searchParams.get('tab') === 'pipeline')) {
       target = employerJobHref(url.searchParams.get('job')!, 'applicants', url.searchParams.get('company'));
-      if (url.searchParams.get('application')) target += '&application=' + encodeURIComponent(url.searchParams.get('application')!);
+      if (url.searchParams.get('application')) target += (target.includes('?')?'&':'?')+'application=' + encodeURIComponent(url.searchParams.get('application')!);
     }
     if (/^\/billing(\/|$)/.test(path) || (path === '/dashboard/recruiter' && url.searchParams.get('tab') === 'billing')) target = EMPLOYER_JOBS;
     if ((path === '/' && url.searchParams.get('audience') !== 'seekers') || path === '/jobs' || /^\/(dashboard\/employee|onboarding\/employee)(\/|$)/.test(path)) target = EMPLOYER_JOBS;

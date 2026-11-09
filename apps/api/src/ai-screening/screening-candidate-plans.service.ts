@@ -8,10 +8,10 @@ import { hash } from './screening.policy';
 export class ScreeningCandidatePlans {
     constructor(private db: PrismaService, private packets: ScreeningPackets) { }
     async request(sessionId: string) {
-        const row = await this.db.aiScreeningSession.findUnique({ where: { id: sessionId } });
+        const row = await this.db.aiScreeningSession.findUnique({ where: { id: sessionId }, include: { invitation: true } });
         if (!row || row.status !== 'DRAFT' || !row.resumeId)
             return null;
-        const packet = await this.packets.sync(row.jobId);
+        const packet = row.invitation ? await this.db.aiScreeningPackage.findUnique({where:{id:row.invitation.packageId}}) : await this.packets.sync(row.jobId);
         if (!packet)
             return null;
         return this.db.$transaction(async (tx) => {
@@ -20,10 +20,11 @@ export class ScreeningCandidatePlans {
             if (current.status !== 'DRAFT' || !current.resumeId)
                 return null;
             if (current.package && current.package.version > packet.version) return current.currentPlan;
-            const resume = await tx.resume.findFirst({ where: { id: current.resumeId, profileId: current.profileId, deletedAt: null, fileKey: { not: null } } });
+            const resume = await tx.resume.findFirst({ where: { id: current.resumeId, profileId: current.profileId, ...(row.invitation ? {} : {deletedAt: null}), fileKey: { not: null } } });
             if (!resume?.fileKey)
                 return null;
-            const version = await registerCvVersion(tx, resume.id, resume.fileKey);
+            const version = row.invitation && current.resumeVersionId ? await tx.resumeVersion.findUniqueOrThrow({where:{id:current.resumeVersionId}}) : await registerCvVersion(tx, resume.id, resume.fileKey);
+            if (row.invitation && version.fileKey !== resume.fileKey) throw new Error('INVITED_CV_CHANGED');
             await tx.aiCvSource.upsert({ where: { versionId: version.id }, create: { versionId: version.id, checksum: version.checksum ?? '' }, update: {} });
             await enqueueWork(tx, 'CV_SOURCE', version.id);
             const fingerprint = hash([version.id, version.fileKey, packet.fingerprint, packet.promptVersion]);

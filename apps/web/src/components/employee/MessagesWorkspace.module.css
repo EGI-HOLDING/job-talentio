@@ -67,3 +67,5 @@
   .compose { padding: 12px 14px; gap: 8px; }
   .compose button { padding-inline: 12px; }
 }
+
+.bubble a{color:inherit;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}

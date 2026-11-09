@@ -37,6 +37,6 @@ test('refresh deadlines survive long timeouts, recent focus and hidden tabs, and
   now=deadline-100;window.emit('focus');assert.equal(calls,1);
   now=deadline+50;const last=[...timers.values()][0];timers.clear();last.fn();assert.equal(calls,2,'deadline cannot be dropped by the focus debounce');
   document.visibilityState='hidden';window.emit('focus');assert.equal(calls,2);
-  now+=1000;document.visibilityState='visible';document.emit('visibilitychange');assert.equal(calls,3);
+  now+=1000;document.visibilityState='visible';document.emit('visibilitychange');assert.equal(calls,2,'recent focus is throttled for 30 seconds');now+=30000;document.emit('visibilitychange');assert.equal(calls,3);
   hook.unmount();assert.equal(timers.size,0);
 });

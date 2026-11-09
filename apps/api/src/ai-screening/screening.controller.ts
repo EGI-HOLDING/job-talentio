@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UploadedFile, UseGuards, UseInterceptors, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UploadedFile, UseGuards, UseInterceptors, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { z } from 'zod';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser, type AuthUser } from '../common/auth.decorators';
@@ -13,7 +13,7 @@ import { draftSchema, leaseSchema, answerSchema, questionSchema } from './screen
 export class ScreeningController {
     constructor(private sessions: ScreeningSessions, private hr: ScreeningHr, private db: PrismaService) { }
     @Get('capabilities')
-    capabilities() { return { enabled: screeningEnabled(), mandatory: screeningEnabled(), market: 'id', allPackages: true }; }
+    capabilities() { return { enabled: screeningEnabled(), mandatory: false, market: 'id', allPackages: true }; }
     @Post('jobs/:jobId/draft')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('EMPLOYEE', 'SUPER_ADMIN')
@@ -21,7 +21,19 @@ export class ScreeningController {
     @CurrentUser()
     user: AuthUser,
     @Param('jobId')
-    jobId: string) { return this.sessions.draft(user, jobId); }
+    jobId: string) {
+        return this.resumeLegacy(user,jobId);
+    }
+    private async resumeLegacy(user:AuthUser,jobId:string) {
+        const profile=await this.db.employeeProfile.findUnique({where:{userId:user.id},select:{id:true}});
+        const row=profile?await this.db.aiScreeningSession.findFirst({where:{jobId,profileId:profile.id,startedAt:{not:null},invitation:null},orderBy:{createdAt:'desc'},select:{id:true}}):null;
+        if(!row)throw new NotFoundException('Screening dimulai melalui undangan HR.');
+        return this.sessions.state(user,row.id);
+    }
+    @Post('sessions/:id/complete')
+    @UseGuards(JwtAuthGuard,RolesGuard)
+    @Roles('EMPLOYEE')
+    completeInvited(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.sessions.completeInvited(user,id);}
     @Get('sessions/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('EMPLOYEE', 'SUPER_ADMIN')

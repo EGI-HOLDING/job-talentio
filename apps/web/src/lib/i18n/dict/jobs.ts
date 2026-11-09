@@ -112,6 +112,13 @@ export const jobs = {
     en: 'Resume draft created. Export a PDF from the builder before applying with a file, or continue without a PDF.',
   },
   'job.resume': { uz: 'Rezyume', ru: 'Резюме', en: 'Resume' },
+  'job.cvPickerTitle': { uz: 'Ariza berish uchun CV tanlang', ru: 'Выберите резюме для отклика', en: 'Choose a CV to apply' },
+  'job.cvPickerHint': { uz: 'Ushbu vakansiya uchun foydalanmoqchi bo‘lgan CVni tanlang.', ru: 'Выберите CV, которое хотите использовать для этой вакансии.', en: 'Choose the CV you want to use for this job.' },
+  'job.uploadNewCv': { uz: 'Yangi CV yuklash', ru: 'Загрузить новое CV', en: 'Upload a new CV' },
+  'job.applyWithCv': { uz: 'Shu CV bilan ariza berish', ru: 'Откликнуться с этим CV', en: 'Apply with this CV' },
+  'job.noCvAvailable': { uz: 'Hozircha saqlangan CV yo‘q. Tanlash uchun CV yuklang.', ru: 'Сохранённых CV пока нет. Загрузите CV, чтобы выбрать его.', en: 'There are no saved CVs yet. Upload a CV to choose one.' },
+  'job.cvLoadError': { uz: 'CVlarni yuklab bo‘lmadi. Qayta urinib ko‘ring yoki yangi CV yuklang.', ru: 'Не удалось загрузить CV. Попробуйте ещё раз или загрузите новое CV.', en: 'Could not load your CVs. Try again or upload a new CV.' },
+  'job.cvUpdated': { uz: 'Yangilangan', ru: 'Обновлено', en: 'Updated' },
   'job.noResumesOnProfile': {
     uz: 'Profilda rezyume yo‘q',
     ru: 'В профиле нет резюме',

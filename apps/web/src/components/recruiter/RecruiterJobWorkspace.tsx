@@ -13,8 +13,7 @@ import { RecruiterJobEditor } from './RecruiterJobEditor';
 import { StructuredJobContent,jobExperienceLabel } from '@/components/jobs/StructuredJobContent';
 import { LinkedInSharePreview } from './LinkedInSharePreview';
 import { LinkedInJobSummary } from './LinkedInPostStatus';
-import { RecruiterPipeline } from './RecruiterPipeline';
-import { JobApplicants } from './JobApplicants';
+import { CandidateWorkspace } from './CandidateWorkspace';
 import { JobBenefits } from './HrBenefits';
 import { rememberCompany } from './RecruiterPrimitives';
 import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
@@ -25,9 +24,10 @@ export function RecruiterJobWorkspace() {
   const {t,locale}=useI18n(), enumLabel=useEnumLabel();
   const router=useRouter();
   const context=useRef('');context.current=id+':'+locale;
-  const section=['kanban','details'].includes(params.get('section')||'')?params.get('section')!:'applicants';
+  const section=params.get('section')==='details'?'details':'applicants';
   const [data,setData]=useState<any>(null), [error,setError]=useState(''), [loading,setLoading]=useState(true);
   const [retry,setRetry]=useState(0), [editing,setEditing]=useState<any>(null), [notice,setNotice]=useState(''), [editingBusy,setEditingBusy]=useState(false);
+  const [candidateCount,setCandidateCount]=useState<number|null>(null);
   const linkedInReview=useRef('');
   useEffect(()=>{
     let alive=true;setLoading(true);setData(null);setError('');setEditing(null);setEditingBusy(false);
@@ -41,14 +41,6 @@ export function RecruiterJobWorkspace() {
     })().catch(reason=>{if(alive)setError(reason.message);}).finally(()=>{if(alive)setLoading(false);});
     return()=>{alive=false;};
   },[id,locale,retry]);
-  useEffect(()=>{
-    if(section!=='kanban'||!data?.companyId)return;
-    let alive=true;
-    api<any[]>('/bulk-comms/templates?companyId='+data.companyId).then(templates=>{
-      if(alive)setData((current:any)=>current?{...current,templates}:null);
-    }).catch(reason=>{if(alive)setNotice(reason.message);});
-    return()=>{alive=false;};
-  },[section,data?.companyId,locale]);
   async function refresh(){const job=await api<any>('/jobs/'+encodeURIComponent(id));setData((current:any)=>current?{...current,job,applicants:[],revision:current.revision+1}:null);}
   async function openEditor(initialStep=0){
     if(editingBusy||!data)return;
@@ -77,12 +69,10 @@ export function RecruiterJobWorkspace() {
   if(editing)return <RecruiterJobEditor companyId={companyId} company={company} job={editing} initialStep={editing._initialStep || 0} meta={meta} onClose={()=>setEditing(null)} onSaved={async message=>{await refresh();setNotice(message);}}/>;
   const href=(value:string)=>employerJobHref(id,value,companyId);
   return <section className={s.root} data-job-workspace>
-    <header className={s.header}><Link href={employerWorkspaceHref('jobs',companyId)} className={s.backIcon} aria-label={t('rw.backJobs')} title={t('rw.backJobs')}><WorkspaceIcon kind="left"/></Link><div className={s.jobIdentity}><div className={s.heading}><h1>{job.title}</h1><span className={s.badge} data-status={job.status}>{enumLabel('jobStatus',job.status)}</span></div><p className={s.subtitle}>{[company?.name,localizedJobLocation(job,t),enumLabel('workMode',job.workMode)].filter(Boolean).join(' | ')}</p></div><div className={s.actions}><Link className={s.secondary} href={jobDetailHref(id,href(section))}>{t('ranking.viewJob')}</Link><button type="button" className={s.primary} disabled={editingBusy} onClick={()=>void openEditor()}><WorkspaceIcon kind="edit"/>{t('rec.edit')}</button></div></header>
-    <nav className={s.tabs} aria-label={job.title}>{[['applicants','ranking.applicants'],['kanban','applicants.kanban'],['details','ranking.details']].map(([value,key])=><Link key={value} href={href(value)} aria-current={section===value?'page':undefined}>{t(key)}{value==='applicants'&&job._count?.applications!=null&&<span className={s.count}>{job._count.applications}</span>}</Link>)}</nav>
+    <header className={s.header}><Link href={employerWorkspaceHref('jobs',companyId)} className={s.backIcon} aria-label={t('rw.backJobs')} title={t('rw.backJobs')}><WorkspaceIcon kind="left"/></Link><div className={s.jobIdentity}><div className={s.heading}><h1>{job.title}</h1><span className={s.badge} data-status={job.status}>{enumLabel('jobStatus',job.status)}</span></div><p className={s.subtitle}>{[company?.name,job.city?.name||localizedJobLocation(job,t),enumLabel('workMode',job.workMode)].filter(Boolean).join(' | ')}</p></div><div className={s.actions}><Link className={s.secondary} href={jobDetailHref(id,href(section))}>{t('ranking.viewJob')}</Link><button type="button" className={s.primary} disabled={editingBusy} onClick={()=>void openEditor()}><WorkspaceIcon kind="edit"/>{t('rec.edit')}</button></div></header>
+    <nav className={s.tabs} aria-label={job.title}>{[['applicants','Kandidat'],['details','ranking.details']].map(([value,key])=><Link key={value} href={href(value)} aria-current={section===value?'page':undefined}>{key==='Kandidat'?'Kandidat':t(key)}{value==='applicants'&&job._count?.applications!=null&&<span className={s.count}>{(candidateCount??job._count.applications)}</span>}</Link>)}</nav>
     {notice&&<div className={s.notice} role="status">{notice}</div>}
-    {section!=='details' && <LinkedInJobSummary jobId={id} companyId={companyId}/>}
-    {section==='applicants'&&<JobApplicants key={id} jobId={id} jobTitle={job.title} companyId={companyId} meta={meta} revision={data.revision} applicationId={params.get('application')||undefined} onChanged={()=>{void refresh().catch(reason=>setNotice(reason.message));}}/>}
-    {section==='kanban'&&<div className={s.card}><RecruiterPipeline embedded meta={meta} companyId={companyId} companyName={company?.name||''} jobs={[job]} selectedJob={id} onJobChange={()=>{}} applicants={data.applicants} loading={false} applicationId={params.get('application')||undefined} templates={data.templates} onReload={refresh} onTemplates={()=>router.push(employerWorkspaceHref('bulk',companyId)+'&job='+encodeURIComponent(id))} onFlash={message=>setNotice(message)}/></div>}
+    {section==='applicants'&&<CandidateWorkspace key={id} jobId={id} jobTitle={job.title} companyId={companyId} applicationId={params.get('application')||undefined} onCount={setCandidateCount} onChanged={()=>{void refresh().catch(reason=>setNotice(reason.message));}}/>}
     {section==='details'&&<article className={s.card+' '+s.details}>
       <JobBenefits jobId={id} status={job.status}/>
       <h2>{t('ranking.details')}</h2>

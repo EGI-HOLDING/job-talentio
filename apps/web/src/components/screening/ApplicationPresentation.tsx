@@ -6,7 +6,7 @@ const Presentation = createContext<{ focused: boolean; setKey: Dispatch<SetState
 export function ApplicationPresentationProvider({ children }: { children: ReactNode }) {
     const path = usePathname();
     const [key, setKey] = useState<string | null>(null);
-    const value = useMemo(() => ({ focused: key === path && path.startsWith('/apply/'), setKey }), [key, path]);
+    const value = useMemo(() => ({ focused: key === path && (path.startsWith('/apply/') || path.startsWith('/screening/')), setKey }), [key, path]);
     return <Presentation.Provider value={value}>{children}</Presentation.Provider>;
 }
 export function useApplicationPresentation() { return useContext(Presentation); }

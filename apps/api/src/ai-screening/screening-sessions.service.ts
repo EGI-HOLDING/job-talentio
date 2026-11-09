@@ -14,7 +14,7 @@ import type { CandidatePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
 import { CURRENT_CONVERSATION, conversationPolicy, publicConversationPolicy } from './conversation.policy';
-const sessionInclude = { package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
+const sessionInclude = { invitation: { include: { candidate: { select: { company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
 }>;
@@ -50,6 +50,8 @@ export class ScreeningSessions {
         const row = await this.db.aiScreeningSession.findFirst({ where: { id, profileId: profile.id }, include: sessionInclude });
         if (!row)
             throw new NotFoundException('Draf lamaran tidak ditemukan.');
+        if (row.invitation && (row.invitation.status === 'CANCELLED' || row.invitation.candidate.company.isBanned || row.invitation.candidate.company.anonymizedAt)) throw new ForbiddenException('Undangan tidak lagi tersedia.');
+        if (row.invitation && !row.startedAt && row.invitation.expiresAt <= new Date()) throw new ConflictException('Undangan sudah kedaluwarsa.');
         return row;
     }
     private async public(row: Session) {
@@ -66,7 +68,7 @@ export class ScreeningSessions {
                 title: string;
             };
         } | null;
-        return { id: row.id, status: row.status, startedAt: row.startedAt, completedAt: row.completedAt, applicationId: row.applicationId,
+        return { id: row.id, invitation: row.invitation ? { id: row.invitation.id, mode: row.invitation.mode, status: row.invitation.status } : null, status: row.status, startedAt: row.startedAt, completedAt: row.completedAt, applicationId: row.applicationId,
             resumeId: row.resumeId, cv: cv?.resume ? { id: cv.resume.id, title: cv.resume.title, parseStatus: row.resumeVersion?.parseStatus } : null,
             coverLetter: row.coverLetter ?? '', coverFilename: row.coverFilename, source: row.source, revision: row.revision, serverTime: new Date().toISOString(),
             packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
@@ -84,7 +86,7 @@ export class ScreeningSessions {
         if (application)
             return { applicationId: application.id, status: 'SUBMITTED', jobId };
         if (!screeningEnabled()) {
-            const existing = await this.db.aiScreeningSession.findUnique({ where: { jobId_profileId: { jobId, profileId: profile.id } }, include: sessionInclude });
+            const existing = await this.db.aiScreeningSession.findUnique({ where: { legacyKey: 'legacy:' + jobId + ':' + profile.id }, include: sessionInclude });
             if (!existing?.startedAt)
                 throw new NotFoundException('Screening baru sedang dijeda.');
             return this.public(existing);
@@ -94,7 +96,7 @@ export class ScreeningSessions {
             const account = await tx.user.findUnique({ where: { id: user.id }, select: { isBanned: true, anonymizedAt: true } });
             if (!account || account.isBanned || account.anonymizedAt)
                 throw new ForbiddenException();
-            return tx.aiScreeningSession.upsert({ where: { jobId_profileId: { jobId, profileId: profile.id } }, create: { jobId, profileId: profile.id }, update: {}, include: sessionInclude });
+            return tx.aiScreeningSession.upsert({ where: { legacyKey: 'legacy:' + jobId + ':' + profile.id }, create: { jobId, profileId: profile.id, legacyKey: 'legacy:' + jobId + ':' + profile.id }, update: {}, include: sessionInclude });
         });
         if (row.status === 'DRAFT' && row.resumeId) {
             await this.plans.request(row.id);
@@ -102,6 +104,17 @@ export class ScreeningSessions {
         }
         void this.packets.sync(jobId).catch(() => undefined);
         return this.public(row);
+    }
+    async completeInvited(user: AuthUser, id: string) {
+        const row = await this.owned(user, id);
+        if (!row.invitation || row.invitation.mode !== 'TEXT') throw new ForbiddenException();
+        if (row.status !== 'COMPLETED') throw new ConflictException('Selesaikan interview terlebih dahulu.');
+        await this.db.$transaction(async tx => {
+            await tx.screeningInvitation.update({where:{id:row.invitation!.id},data:{status:'COMPLETED'}});
+            await tx.aiScreeningEvaluation.upsert({where:{sessionId:id},create:{sessionId:id,promptVersion:row.currentPlan?.promptVersion??'pending'},update:{}});
+            await enqueueWork(tx,'EVALUATE',id);
+        });
+        return this.state(user,id);
     }
     async state(user: AuthUser, id: string) { return this.public(await this.owned(user, id)); }
     async save(user: AuthUser, id: string, data: {
@@ -112,10 +125,11 @@ export class ScreeningSessions {
         funnelSession?: string;
     }) {
         const row = await this.owned(user, id);
+        if (row.invitation) throw new ForbiddenException('CV screening ditentukan oleh undangan HR.');
         if (row.status !== 'DRAFT')
             throw new ConflictException('Dokumen sudah dikunci setelah screening dimulai.');
         if (data.resumeId) {
-            const cv = await this.db.resume.findFirst({ where: { id: data.resumeId, profileId: row.profileId, deletedAt: null, fileKey: { not: null } } });
+            const cv = await this.db.resume.findFirst({ where: { id: data.resumeId, profileId: row.profileId, ...(row.invitation ? {} : {deletedAt: null}), fileKey: { not: null } } });
             if (!cv)
                 throw new BadRequestException('CV tidak tersedia.');
         }
@@ -167,17 +181,18 @@ export class ScreeningSessions {
             throw new ConflictException('Tab ini perlu tersambung kembali sebelum mengirim jawaban.');
         return row;
     }
-    async start(user: AuthUser, id: string, clientId: string) {
+    async start(user: AuthUser, id: string, clientId: string, transport: 'TEXT' | 'VOICE' = 'TEXT') {
         const row = await this.owned(user, id);
+        if (row.invitation && row.invitation.mode !== transport) throw new ForbiddenException('Gunakan jenis interview sesuai undangan.');
         if (row.status !== 'DRAFT')
             return this.claim(user, id, clientId);
         if (!screeningEnabled())
             throw new ServiceUnavailableException('Screening baru sedang dijeda.');
-        await this.packets.available(row.jobId);
+        await this.packets.available(row.jobId, Boolean(row.invitation));
         // Validate ownership, lease and CV even when preparation is still pending.
         await this.db.$transaction(async tx => {
             const current = await this.lock(tx, id, row.profileId, clientId);
-            const resume = await tx.resume.findFirst({ where: { id: current.resumeId ?? '', profileId: row.profileId, deletedAt: null, fileKey: { not: null } } });
+            const resume = await tx.resume.findFirst({ where: { id: current.resumeId ?? '', profileId: row.profileId, ...(row.invitation ? {} : {deletedAt: null}), fileKey: { not: null } } });
             if (!resume) throw new BadRequestException('Pilih CV sebelum mulai, ya.');
         });
         const plan = await this.plans.request(id);
@@ -189,11 +204,16 @@ export class ScreeningSessions {
             return this.public(fresh);
         const payload = plan.payload as unknown as CandidatePayload;
         await this.db.$transaction(async (tx) => {
+            if (row.invitation) {
+                await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${row.invitation.id} FOR UPDATE`);
+                const invite=await tx.screeningInvitation.findUniqueOrThrow({where:{id:row.invitation.id}});
+                if(invite.status==='CANCELLED'||invite.expiresAt<=new Date())throw new ConflictException('Undangan tidak lagi aktif.');
+            }
             await tx.$queryRaw(Prisma.sql `SELECT id FROM "EmployeeProfile" WHERE id=${row.profileId} FOR UPDATE`);
             const session = await this.lock(tx, id, row.profileId, clientId);
             if (session.status !== 'DRAFT')
                 return;
-            const resume = await tx.resume.findFirst({ where: { id: session.resumeId ?? '', profileId: row.profileId, deletedAt: null, fileKey: { not: null } } });
+            const resume = await tx.resume.findFirst({ where: { id: session.resumeId ?? '', profileId: row.profileId, ...(row.invitation ? {} : {deletedAt: null}), fileKey: { not: null } } });
             if (!resume?.fileKey)
                 throw new BadRequestException('Pilih CV sebelum mulai, ya.');
             if (session.currentPlanId !== plan.id)
@@ -204,12 +224,14 @@ export class ScreeningSessions {
             const profile = await tx.employeeProfile.findUniqueOrThrow({ where: { id: row.profileId }, include: { languages: { include: { language: true } }, certifications: true } });
             const now = new Date(), snapshot = { resume: { id: resume.id, title: resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
             await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 } } });
+            if (row.invitation) await tx.screeningInvitation.update({ where: { id: row.invitation.id }, data: { status: 'STARTED' } });
             await tx.aiScreeningQuestion.createMany({ data: payload.claims.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: c.question })) });
         });
         return this.state(user, id);
     }
     async shown(user: AuthUser, id: string, clientId: string, questionId: string) {
         const owner = await this.owned(user, id);
+        if (owner.invitation?.mode === 'VOICE') throw new ForbiddenException('Interview suara menggunakan transkrip langsung.');
         await this.db.$transaction(async (tx) => {
             const session = await this.lock(tx, id, owner.profileId, clientId);
             const q = session.questions.find(q => q.answer === null);
@@ -226,6 +248,7 @@ export class ScreeningSessions {
         if (answer.length > MAX_ANSWER_CHARS)
             throw new BadRequestException('Jawab ringkas, maksimal 1.200 karakter ya.');
         const owner = await this.owned(user, id);
+        if (owner.invitation?.mode === 'VOICE') throw new ForbiddenException('Jawaban interview suara direkam melalui sesi suara.');
         await this.recordAnswer(id, owner.profileId, questionId, answer, submit, clientId);
         return this.state(user, id);
     }

@@ -139,3 +139,8 @@ button.cvLink{padding:0;border:0;background:transparent;cursor:pointer;}
 @media(max-width:1400px){.rankingHeader{grid-template-columns:1fr;}.controls{justify-content:flex-start;flex-wrap:wrap;}.search{flex:1;width:auto;}}
 @media(max-width:760px){.interviewForm{grid-template-columns:1fr;}.interviewFormActions{grid-column:1;}.interviewHead{flex-wrap:wrap;}.interviewHead .secondary{width:100%;}.interviewItemHead{align-items:flex-start;}.applicationDetail{padding-inline:16px;}}
 @media(max-width:760px){.header{padding:18px 16px;gap:12px;flex-wrap:wrap;}.header .actions{margin-left:32px;}.heading{gap:10px;}.heading h1{font-size:21px;}.subtitle{font-size:12px;}.tabs{padding-inline:16px;gap:22px;overflow-x:auto;}.tabs a{font-size:13px;}.card{width:calc(100% - 32px);margin-inline:16px;}.rankingHeader{padding:12px;}.rankingIntro h2{font-size:18px;}.controls{gap:8px;}.controls .search{flex-basis:100%;}.sort{flex:1;}.filterPanel{padding-inline:12px;}.primary,.secondary{font-size:13px;}}
+
+/* Candidate workspace mobile header */
+@media(max-width:640px){.header{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:start;padding:18px 16px;gap:12px}.jobIdentity{grid-column:2;min-width:0}.header .actions{grid-column:2;margin-left:0;flex-wrap:wrap}.heading h1{overflow-wrap:normal;word-break:normal;font-size:21px}.subtitle{display:block;line-height:1.6}.backIcon{grid-column:1;grid-row:1}.header .actions .secondary,.header .actions .primary{min-height:38px}}
+
+@media(min-width:1024px){.header{padding-top:16px;padding-bottom:16px}}

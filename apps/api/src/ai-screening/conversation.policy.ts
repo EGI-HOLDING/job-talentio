@@ -9,9 +9,13 @@ export type ConversationPolicy = Readonly<{
     maxCharacters: number;
 }>;
 
-export const CONVERSATION_VERSION = 'tara-conversation-v5.0.0';
+export const CONVERSATION_VERSION = 'tara-conversation-v6.0.0';
 export const CURRENT_CONVERSATION: ConversationPolicy = Object.freeze({
-    version: CONVERSATION_VERSION, questionSeconds: 60, maxCore: 3, maxFollowUp: 5,
+    version: CONVERSATION_VERSION, questionSeconds: 60, maxCore: 10, maxFollowUp: 15,
+    maxPerRoot: 2, probeOrder: 'breadth-first', maxWords: 35, maxCharacters: 280,
+});
+export const V5_CONVERSATION: ConversationPolicy = Object.freeze({
+    version: 'tara-conversation-v5.0.0', questionSeconds: 60, maxCore: 3, maxFollowUp: 5,
     maxPerRoot: 2, probeOrder: 'breadth-first', maxWords: 35, maxCharacters: 280,
 });
 export const V4_CONVERSATION: ConversationPolicy = Object.freeze({
@@ -29,8 +33,10 @@ export function conversationPolicy(snapshot: unknown): ConversationPolicy {
     const value = snapshot as Record<string, unknown>;
     // Patch releases can change the frozen voice prompt while retaining this policy.
     // An existing v4 snapshot must stay readable after a later v4 prompt release.
-    const known = typeof value.version === 'string' && /^tara-conversation-v5\.\d+\.\d+$/.test(value.version)
+    const known = typeof value.version === 'string' && /^tara-conversation-v6\.\d+\.\d+$/.test(value.version)
         ? Object.freeze({ ...CURRENT_CONVERSATION, version: value.version })
+        : typeof value.version === 'string' && /^tara-conversation-v5\.\d+\.\d+$/.test(value.version)
+        ? Object.freeze({ ...V5_CONVERSATION, version: value.version })
         : typeof value.version === 'string' && /^tara-conversation-v4\.\d+\.\d+$/.test(value.version)
         ? Object.freeze({ ...V4_CONVERSATION, version: value.version })
         : value.version === LEGACY_CONVERSATION.version ? LEGACY_CONVERSATION : undefined;

@@ -1,4 +1,5 @@
 'use client';
+import { MessageBody } from './MessageBody';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -182,7 +183,7 @@ export function MessagesWorkspace() {
           const day = new Date(message.createdAt).toLocaleDateString(locale);
           const previousDay = index ? new Date(messages[index - 1].createdAt).toLocaleDateString(locale) : '';
           const receipt = mine ? t(message.readAt ? 'read' : message.deliveredAt ? 'delivered' : 'sent') : '';
-          return <div key={message.id} style={{ display: 'contents' }}>{day !== previousDay && <div className={c.day}>{dateLabel(message.createdAt, locale)}</div>}<div className={c.message + (mine ? ' ' + c.mine : '')}><div className={c.bubble}>{message.body}</div><div className={c.time}><time dateTime={message.createdAt} title={dateLabel(message.createdAt, locale, true)}>{new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</time>{receipt && <span className={c.receipt}>{message.readAt && <WorkspaceIcon kind="check" />}{receipt}</span>}</div></div></div>;
+          return <div key={message.id} style={{ display: 'contents' }}>{day !== previousDay && <div className={c.day}>{dateLabel(message.createdAt, locale)}</div>}<div className={c.message + (mine ? ' ' + c.mine : '')}><div className={c.bubble}><MessageBody text={message.body}/></div><div className={c.time}><time dateTime={message.createdAt} title={dateLabel(message.createdAt, locale, true)}>{new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</time>{receipt && <span className={c.receipt}>{message.readAt && <WorkspaceIcon kind="check" />}{receipt}</span>}</div></div></div>;
         })}</div>
         <form className={c.compose} onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="workspace-message">{t('messageInput')}</label><textarea id="workspace-message" rows={1} maxLength={5000} value={draft} onChange={(event) => setDrafts((items) => ({ ...items, [active.id]: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} placeholder={t('writeMessage')} /><button type="submit" className={s.primary} disabled={!draft.trim() || Boolean(sendingId) || threadLoading}>{t(sendingId === active.id ? 'saving' : 'send')}<WorkspaceIcon kind="send" /></button></form>
       </>}</section>

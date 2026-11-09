@@ -33,9 +33,9 @@ export function KanbanAction({application, jobId, companyId, onChanged}: {applic
     } catch(reason) { if(version===request.current) setError(reason instanceof Error?reason.message:t('ew.loadFailed')); }
     finally { if(version===request.current) {pending.current=false;setBusy(false);} }
   }
-  if(application.kanbanEnteredAt) return <Link className={s.kanbanLink} href={employerJobHref(jobId,'kanban',companyId)+'&application='+encodeURIComponent(application.id)}>{t('applicants.viewKanban')}</Link>;
+  if(application.kanbanEnteredAt) return <Link className={s.kanbanLink} href={employerJobHref(jobId,'applicants',companyId)+'&application='+encodeURIComponent(application.id)}>Lihat proses kandidat</Link>;
   if(!application.canAddToKanban) return null;
-  return <span className={s.actionMessage}><button className={s.addKanban} disabled={busy} onClick={()=>void add()}>{t(busy?'saving':'applicants.addKanban')}</button>{error&&<span role="alert">{error}</span>}</span>;
+  return <span className={s.actionMessage}><button className={s.addKanban} disabled={busy} onClick={()=>void add()}>{busy?t('saving'):'Masukkan ke proses'}</button>{error&&<span role="alert">{error}</span>}</span>;
 }
 
 /** Always resolves the submitted application file, never the database CV. */

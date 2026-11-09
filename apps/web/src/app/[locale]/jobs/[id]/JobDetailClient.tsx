@@ -3,33 +3,31 @@ import { EmployeeJobMatch } from '@/components/jobs/EmployeeJobMatch';
 import { authLink } from '@/lib/authReturn';
 
 import { Link, localeHref } from '@/lib/navigation';
-import { FormEvent, useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
 import type { JobPromotion } from '@job-talentio/shared';
 import { useParams, useSearchParams } from 'next/navigation';
 import { jobBackHref, jobDetailHref } from '@/lib/accountNavigation';
-import { trackJobEvent,jobAttribution } from '@/lib/hr-events';
+import { trackJobEvent } from '@/lib/hr-events';
 import { peekApi, api, getSession } from '@/lib/api';
-import { readSource, rememberSource } from '@/lib/acquisition';
 
-import { sanitizeMojibake } from '@/lib/text';
-
-import { FormField, LabelText } from '@/components/ui/Field';
-import { CreateResumeModal } from '@/components/resume/CreateResumeModal';
+import { CvUploadDialog } from '@/components/profile/CvUploadDialog';
+import { useSessionIdentity } from '@/lib/useSessionIdentity';
+import { CvApplicationPicker } from '@/components/jobs/CvApplicationPicker';
 import { useI18n } from '@/lib/i18n';
 
 import { JobPreview } from '@/components/jobs/JobPreview';
 import workspaceStyles from '@/components/jobs/JobsWorkspace.module.css';
 
-type Question = { id: string; question: string; type: string; isRequired: boolean };
 type ResumeOption = {
   id: string;
   title: string;
   isPrimary?: boolean;
   hasFile?: boolean;
   fileKey?: string | null;
-  targetJobTitle?: { id: string; name: string; slug: string } | null;
+  format?: string | null;
+  updatedAt?: string;
 };
 type Job = {
   promotion?: JobPromotion | null;
@@ -70,7 +68,6 @@ type Job = {
     isRequired: boolean;
   }>;
   benefits?: Array<{ benefit: { name: string; slug?: string; icon?: string | null } }>;
-  questions?: Question[];
   _count?: { applications: number; views: number };
   matchScore?: number | null;
   matchBreakdown?: MatchBreakdownState | null;
@@ -106,25 +103,28 @@ type MyApplicationState = {
 type DetailProps = { jobId?: string; embedded?: boolean; country?: string; onBack?: () => void; saveState?: { saved: boolean; pending: boolean; onToggle: () => Promise<void> } };
 
 export function JobDetailClient({ jobId, embedded = false, country, onBack, saveState }: DetailProps = {}) {
+  const actorIdentity=useSessionIdentity();
   const params = useParams<{ id?: string }>();
   const searchParams = useSearchParams();
   const id = jobId || params.id || '';
   const { t, locale } = useI18n();
   const [job, setJob] = useState<Job | null>(()=>peekApi<Job>('/jobs/'+id)||null);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [showApply, setShowApply] = useState(false);
-  const [showCreateResume, setShowCreateResume] = useState(false);
+  const [showCvPicker, setShowCvPicker] = useState(false);
+  const [showCvUpload, setShowCvUpload] = useState(false);
+  const [resumeLoadError, setResumeLoadError] = useState('');
+  const [resumesLoading, setResumesLoading] = useState(false);
   const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submittedCvBusy, setSubmittedCvBusy] = useState(false);
   const [submittedCvError, setSubmittedCvError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [retry, setRetry] = useState(0);
   const [resumes, setResumes] = useState<ResumeOption[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState('');
+  const [submittingApplication, setSubmittingApplication] = useState(false);
+  const applicationSubmitPending = useRef<symbol|null>(null);
   const session = typeof window !== 'undefined' ? getSession() : null;
   const promotionRead = useRef(0);
   const promotionContext = useRef('');
@@ -136,14 +136,11 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     }).catch(() => { if (request === promotionRead.current && context === promotionContext.current) setJob(current => current ? {...current,promotion:null} : current); });
   });
   const alreadyApplied = Boolean(myApplication);
-  const selectedResume = resumes.find((r) => r.id === selectedResumeId);
-  const selectedHasFile = Boolean(selectedResume?.hasFile || selectedResume?.fileKey);
-  const jobTitleId = job?.jobTitleId || job?.jobTitle?.id || null;
-  const defaultApplyRole = job?.jobTitle?.name || job?.title || '';
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const applicationRead = useRef(0), applicationContext = useRef('');
   const submittedCvRequest = useRef(0), submittedCvPending = useRef(false);
   applicationContext.current = id + ':' + locale + ':' + session?.user.id;
+  useEffect(()=>{applicationSubmitPending.current=null;setShowCvPicker(false);setShowCvUpload(false);setResumes([]);setSelectedResumeId('');setResumeLoadError('');setResumesLoading(false);setSubmittingApplication(false);},[id,actorIdentity]);
   async function refreshApplication() {
     if (!isEmployee) return;
     const context = applicationContext.current, sequence = ++applicationRead.current;
@@ -161,7 +158,9 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   }, [id, embedded, isEmployee]);
 
   async function loadResumes() {
+    const actor=getSession()?.user.id,context=applicationContext.current;
     const p = await api<{ resumes?: ResumeOption[] }>('/profiles/me');
+    if(actor!==getSession()?.user.id||context!==applicationContext.current)throw Error('Konteks lamaran berubah. Buka kembali pilihan CV.');
     const list = (p.resumes || []).filter(row=>row.hasFile||row.fileKey);
     setResumes(list);
     const primary = list.find((r) => r.isPrimary) || list[0];
@@ -175,8 +174,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     setJob(peekApi<Job>('/jobs/'+id)||null);
     setFollowing(false);
     setMyApplication(null);
-    // Keep the utm source from the link (Telegram, PWA, share) for the apply call.
-    rememberSource(id);
     api<Job>(`/jobs/${id}`)
       .then(async (j) => {
         if (!active) return;
@@ -240,8 +237,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     }
   }
 
-  useEffect(()=>{if(showApply)void trackJobEvent(id,'APPLY_START');},[showApply,id]);
-
   async function toggleFollow() {
     if (session && !isEmployee) return;
     if (!session || !job) {
@@ -261,102 +256,27 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     }
   }
 
-  async function onApply(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
+  async function beginApply() {
     if (!session) {
       window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
       return;
     }
-    if (alreadyApplied || submitting) return;
-    if(!selectedHasFile){setError(t('cv.required'));return;}
-
-    const fd = new FormData(e.currentTarget);
-    // Only send non-empty answers. Optional blanks must not hit Zod min(1).
-    // Use nullish coalescing so NUMBER answers of 0 are kept.
-    const answers = (job?.questions || [])
-      .map((q) => {
-        const raw = fd.get(`q_${q.id}`);
-        const answer = raw == null ? '' : String(raw).trim();
-        return { questionId: q.id, answer };
-      })
-      .filter((a) => a.answer.length > 0);
-    setSubmitting(true);
+    if (resumesLoading) return;
+    const actor=session?.user.id,context=applicationContext.current;
+    setResumeLoadError('');
+    setShowCvPicker(true);
+    setResumesLoading(true);
+    void trackJobEvent(id, 'APPLY_START');
     try {
-      const created = await api<MyApplicationState>(`/applications/jobs/${id}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          funnelSession: await jobAttribution(id),
-          coverLetter: String(fd.get('coverLetter') || '').trim() || undefined,
-          answers,
-          resumeId: selectedResumeId || undefined,
-          source: readSource(id),
-        }),
-      });
-      ++applicationRead.current;
-      setMyApplication({
-        id: created.id,
-        status: created.status || 'NEW',
-        matchScore: created.matchScore,
-        matchBreakdown: created.matchBreakdown,
-        createdAt: created.createdAt || new Date().toISOString(),
-        resumeTitle: selectedResume?.title ?? null,
-        hasResumeFile: selectedHasFile,
-      });
-      setSaved(false);
-      if (saveState?.saved) {
-        // The API removes the bookmark atomically with the application. Keep
-        // the surrounding job list's local bookmark state in sync as well.
-        void saveState.onToggle().catch(() => undefined);
-      }
-      setSuccess(t('job.applySuccess'));
-      setShowApply(false);
-    } catch (err) {
-      const message = (err as Error).message;
-      setError(message);
-      if (/already applied/i.test(message)) {
-        try {
-          const mine = await api<{
-            applied: boolean;
-            application: MyApplicationState | null;
-          }>(`/applications/mine/jobs/${id}`);
-          setMyApplication(mine.application);
-          if (mine.application) {
-            setSaved(false);
-            if (saveState?.saved) void saveState.onToggle().catch(() => undefined);
-          }
-          setShowApply(false);
-        } catch {
-          /* ignore */
-        }
-      }
+      await loadResumes();
+    } catch {
+      if(actor!==getSession()?.user.id||context!==applicationContext.current)return;
+      setResumes([]);
+      setSelectedResumeId('');
+      setResumeLoadError(t('job.cvLoadError'));
     } finally {
-      setSubmitting(false);
+      if(actor===getSession()?.user.id&&context===applicationContext.current)setResumesLoading(false);
     }
-  }
-
-
-  async function beginApply() {
-                  if (!session) {
-                    window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
-                    return;
-                  }
-                  try {
-                    const capabilities=await api<{enabled:boolean}>('/ai-screening/capabilities');
-                    if(capabilities.enabled){window.location.href=localeHref('/apply/'+id+window.location.search);return;}
-                    const list = await loadResumes();
-                    if (list.length === 0) {
-                      setShowCreateResume(true);
-                      return;
-                    }
-                  } catch {
-                    setResumes([]);
-                    setSelectedResumeId('');
-                    setShowCreateResume(true);
-                    return;
-                  }
-                  setShowApply(true);
   }
 
   async function saveJob() {
@@ -376,115 +296,40 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   if (error && !job) return <div className={workspaceStyles.previewLoading}><p className="error" role="alert">{t('public.loadError')}</p><button type="button" className={workspaceStyles.primaryButton} onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button><p>{onBack ? <button type="button" className={workspaceStyles.textAction} onClick={onBack}>{t('workspace.back')}</button> : <Link href={backHref}>{t('workspace.back')}</Link>}</p></div>;
   if (!job) return null;
 
+  async function submitSelectedCv() {
+    if (!selectedResumeId || applicationSubmitPending.current || !isEmployee) return;
+    const actor=session?.user.id,context=applicationContext.current,attempt=Symbol('apply');
+    const current=()=>actor===getSession()?.user.id&&context===applicationContext.current&&applicationSubmitPending.current===attempt;
+    applicationSubmitPending.current = attempt; setSubmittingApplication(true); setResumeLoadError('');
+    const reconcile=async()=>{const mine=await api<{applied:boolean;application:MyApplicationState|null}>('/applications/mine/jobs/'+encodeURIComponent(id),{cacheMode:'no-store'});if(current()&&mine.application){setMyApplication(mine.application);setShowCvPicker(false);return true;}return false;};
+    try {
+      await api('/applications/jobs/' + encodeURIComponent(id), {method:'POST',body:JSON.stringify({resumeId:selectedResumeId})});
+      if(current())await reconcile();
+    } catch (error) {
+      if(current()){let applied=false;try{applied=await reconcile();}catch{}if(!applied&&current())setResumeLoadError(error instanceof Error ? error.message : t('job.cvLoadError'));}
+    } finally { if(applicationSubmitPending.current===attempt){applicationSubmitPending.current=null;setSubmittingApplication(false);} }
+  }
   const applicationDialogs = <>
-      <CreateResumeModal
-        open={showCreateResume && !alreadyApplied}
-        defaultJobTitle={defaultApplyRole}
-        defaultTitle={defaultApplyRole}
-        onCancel={() => setShowCreateResume(false)}
-        onCreated={async (result) => {
-          setShowCreateResume(false);
-          try {
-            await loadResumes();
-            setSelectedResumeId(result.id);
-          } catch {
-            /* ignore */
-          }
-          setShowApply(true);
-        }}
-      />
-
-      {showApply && !alreadyApplied && (
-        <div
-          className="modal-backdrop"
-          onClick={() => !submitting && setShowApply(false)}
-          role="presentation"
-        >
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="apply-dialog-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="apply-dialog-title">
-              {t('applyFor')} - {sanitizeMojibake(job.title)}
-            </h2>
-            <p className="required-note">{t('requiredFieldsNote')}</p>
-            <form className="form-stack" onSubmit={onApply}>
-              <fieldset disabled={submitting} style={{ border: 0, margin: 0, padding: 0 }}>
-                <label>
-                  <LabelText>{t('job.resume')}</LabelText>
-                  <select
-                    value={selectedResumeId}
-                    onChange={(e) => setSelectedResumeId(e.target.value)}
-                    required
-                  >
-                    {resumes.length === 0 && (
-                      <option value="">{t('job.noResumesOnProfile')}</option>
-                    )}
-                    {resumes.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.title}
-                        {r.targetJobTitle?.name ? ` - ${r.targetJobTitle.name}` : ''}
-                        {r.isPrimary ? ` (${t('job.resumePrimary')})` : ''}
-                        {r.hasFile || r.fileKey ? '' : ` - ${t('job.resumeNoPdf')}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {selectedResume &&
-                  jobTitleId &&
-                  selectedResume.targetJobTitle?.id === jobTitleId && (
-                    <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
-                      {t('resumeMatchesRole')}
-                    </p>
-                  )}
-                {selectedResumeId && !selectedHasFile && (
-                  <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--hot)' }}>
-                    {t('job.resumeNoPdfWarning')}
-                  </p>
-                )}
-                <FormField label={t('coverLetter')}>
-                  <textarea name="coverLetter" rows={4} placeholder={t('coverLetter')} />
-                </FormField>
-                {(job.questions || []).map((q) => (
-                  <label key={q.id}>
-                    <LabelText required={q.isRequired} optional={!q.isRequired}>
-                      {q.question}
-                    </LabelText>
-                    {q.type === 'YES_NO' ? (
-                      <select name={`q_${q.id}`} required={q.isRequired} aria-required={q.isRequired}>
-                        <option value="">{t('job.selectOption')}</option>
-                        <option value="Yes">{t('job.yes')}</option>
-                        <option value="No">{t('job.no')}</option>
-                      </select>
-                    ) : (
-                      <input
-                        name={`q_${q.id}`}
-                        type={q.type === 'NUMBER' ? 'number' : 'text'}
-                        required={q.isRequired}
-                        aria-required={q.isRequired || undefined}
-                      />
-                    )}
-                  </label>
-                ))}
-              </fieldset>
-              <button type="submit" className="cta" disabled={submitting}>
-                {submitting ? t('job.submitting') : t('submitApplication')}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={submitting}
-                onClick={() => setShowApply(false)}
-              >
-                {t('cancel')}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+    {showCvPicker && <CvApplicationPicker
+      resumes={resumes}
+      selectedResumeId={selectedResumeId}
+      submitting={submittingApplication}
+      onApply={() => void submitSelectedCv()}
+      loading={resumesLoading}
+      error={resumeLoadError}
+      onSelect={setSelectedResumeId}
+      onUpload={() => setShowCvUpload(true)}
+      onClose={() => setShowCvPicker(false)}
+    />}
+    {showCvUpload && <CvUploadDialog
+      onClose={() => setShowCvUpload(false)}
+      onUploaded={async (resumeId) => {
+        setResumeLoadError('');
+        const list = await loadResumes();
+        if (!list.some((resume) => resume.id === resumeId)) throw new Error(t('job.cvLoadError'));
+        setSelectedResumeId(resumeId);
+      }}
+    />}
   </>;
 
   return <JobPreview matchReasons={isEmployee?<EmployeeJobMatch jobId={id}/>:undefined} standalone={!embedded}
@@ -502,9 +347,9 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     saved={saveState?.saved ?? saved} saving={saveState?.pending ?? saving}
     canSave={!session || session.user.role === 'EMPLOYEE'}
     onFollow={!session || isEmployee ? () => void toggleFollow().catch((error) => setError(error.message)) : undefined} following={following}
-    appliedStatus={myApplication?.status} guest={!session} busy={submitting}
+    appliedStatus={myApplication?.status} guest={!session} busy={resumesLoading}
     submittedCvAvailable={Boolean(myApplication?.hasResumeFile)} submittedCvTitle={myApplication?.resumeTitle}
     submittedCvBusy={submittedCvBusy} submittedCvError={submittedCvError} onViewSubmittedCv={viewSubmittedCv}
-    success={success} error={error}
+    error={error}
   >{applicationDialogs}</JobPreview>;
 }

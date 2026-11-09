@@ -24,6 +24,7 @@ model AiCompanyDocument {
 }
 
 model AiScreeningPackage {
+  invitations ScreeningInvitation[]
   id String @id @default(cuid())
   jobId String
   job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -47,7 +48,10 @@ model AiScreeningPackage {
 }
 
 model AiScreeningSession {
+  voice VoiceInterview?
   id String @id @default(cuid())
+  legacyKey String? @unique
+  invitation ScreeningInvitation?
   jobId String
   job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
   profileId String
@@ -80,7 +84,7 @@ model AiScreeningSession {
   updatedAt DateTime @updatedAt
   questions AiScreeningQuestion[]
   evaluation AiScreeningEvaluation?
-  @@unique([jobId, profileId])
+  @@index([jobId, profileId])
   @@index([status, updatedAt])
 }
 
@@ -962,6 +966,10 @@ model JobTitleAlias {
 // ─── Core identity ───────────────────────────────────────────
 
 model User {
+  candidateMessageBatches CandidateMessageBatch[] @relation("CandidateMessageAuthor")
+  receivedScreeningInvitations ScreeningInvitation[] @relation("ScreeningRecipient")
+  sentScreeningInvitations ScreeningInvitation[] @relation("ScreeningSender")
+  assignedRecruitmentCandidates RecruitmentCandidate[] @relation("CandidateAssignee")
   id            String    @id @default(cuid())
   email         String?   @unique
   passwordHash  String?
@@ -1073,6 +1081,9 @@ model EmailChangeToken {
 }
 
 model Company {
+  candidateMessageBatches CandidateMessageBatch[]
+  candidateImports CandidateImport[]
+  recruitmentCandidates RecruitmentCandidate[]
   industryGroups BusinessIndustryGroup[] @relation("CompanyIndustryGroups")
   profileSource String @default("MANUAL")
   profileDocumentId String? @unique
@@ -1218,6 +1229,8 @@ model Payment {
 }
 
 model JobPost {
+  candidateImports CandidateImport[]
+  recruitmentCandidates RecruitmentCandidate[]
   positionEntryMode String @default("LEGACY")
   responsibilities String[] @default([])
   kpis String[] @default([])
@@ -1723,6 +1736,7 @@ model ResumeEmployeeEvidence {
 }
 
 model Application {
+  recruitmentCandidate RecruitmentCandidate?
   screeningSession AiScreeningSession?
   hrSubmissionSnapshot Json?
   recruiterEvaluations ApplicationRecruiterEvaluation[]
@@ -2376,6 +2390,7 @@ model SupportReply {
 }
 
 model Interview {
+  recruitmentInterview CandidateInterview?
   id            String          @id @default(cuid())
   applicationId String
   scheduledAt   DateTime
@@ -2564,4 +2579,217 @@ model CompanyTranslation {
 
   @@unique([companyId, locale])
   @@index([companyId])
+}
+
+
+model CandidateImport {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobId String?
+  job JobPost? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  requestKey String
+  createdById String
+  createdAt DateTime @default(now())
+  candidates RecruitmentCandidate[]
+  @@unique([companyId, requestKey])
+  @@index([companyId, createdAt])
+}
+
+model RecruitmentCandidate {
+  interviews CandidateInterview[]
+  messages CandidateMessage[]
+  invitations ScreeningInvitation[]
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobId String?
+  job JobPost? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  applicationId String? @unique
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  importId String?
+  import CandidateImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+  importFileId String?
+  dedupeKey String? @unique
+  filename String
+  contentType String
+  sizeBytes Int
+  uploadKey String?
+  fileKey String?
+  checksum String?
+  fullName String
+  email String?
+  phone String?
+  headline String @default("")
+  stage ApplicationStatus @default(NEW)
+  enteredProcessAt DateTime?
+  assignedToId String?
+  assignedTo User? @relation("CandidateAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  scoreStatus String @default("UPLOADING")
+  cvScore Float?
+  cvResult Json?
+  jobSnapshot Json?
+  scoringVersion String?
+  error String?
+  revision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  activities CandidateActivity[]
+  @@unique([importId, importFileId])
+  @@index([companyId, jobId, stage])
+  @@index([companyId, scoreStatus, createdAt])
+  @@index([jobId, cvScore, createdAt])
+}
+
+model CandidateActivity {
+  id String @id @default(cuid())
+  candidateId String
+  candidate RecruitmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  actorUserId String?
+  kind String
+  detail Json?
+  createdAt DateTime @default(now())
+  @@index([candidateId, createdAt])
+}
+
+model ScreeningInvitation {
+  packageId String
+  package AiScreeningPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+  candidateId String
+  candidate RecruitmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  mode String
+  recipientEmail String
+  createdById String?
+  createdBy User? @relation("ScreeningSender", fields: [createdById], references: [id], onDelete: SetNull)
+  claimedUserId String?
+  claimedUser User? @relation("ScreeningRecipient", fields: [claimedUserId], references: [id], onDelete: SetNull)
+  requestKey String
+  tokenNonce String
+  tokenHash String @unique
+  expiresAt DateTime
+  status String @default("INVITED")
+  snapshot Json
+  sessionId String? @unique
+  session AiScreeningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  emailStatus String @default("PENDING")
+  emailAttemptAt DateTime?
+  emailSentAt DateTime?
+  messageStatus String @default("PENDING")
+  messageId String? @unique
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([candidateId, requestKey])
+  @@index([candidateId, createdAt])
+  @@index([claimedUserId, status])
+  @@index([status, expiresAt])
+}
+
+
+model VoiceInterview {
+  id String @id @default(cuid())
+  sessionId String? @unique
+  session AiScreeningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status String @default("CREATING")
+  providerId String? @unique
+  model String
+  promptVersion String
+  promptSnapshot Json
+  startedAt DateTime @default(now())
+  heartbeatAt DateTime @default(now())
+  warningAt DateTime?
+  closingAt DateTime?
+  endedAt DateTime?
+  closeReason String?
+  owner String
+  leaseUntil DateTime
+  transcriptComplete Boolean @default(false)
+  usage Json?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  fragments VoiceFragment[]
+  @@index([status, leaseUntil])
+}
+model VoiceFragment {
+  id Int @id @default(autoincrement())
+  voiceId String
+  voice VoiceInterview @relation(fields: [voiceId], references: [id], onDelete: Cascade)
+  eventId String
+  speaker String
+  text String
+  startMs Int
+  endMs Int
+  receivedAt DateTime @default(now())
+  @@unique([voiceId, eventId])
+  @@index([voiceId, id])
+}
+
+
+model CandidateMessageBatch {
+  id String @id @default(cuid())
+  companyId String
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy User? @relation("CandidateMessageAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  requestKey String
+  inputHash String
+  subject String
+  bodyTemplate String
+  email Boolean @default(true)
+  talentio Boolean @default(true)
+  createdAt DateTime @default(now())
+  messages CandidateMessage[]
+  @@unique([companyId, requestKey])
+  @@index([companyId, createdAt])
+}
+
+model CandidateMessage {
+  id String @id @default(cuid())
+  batchId String
+  batch CandidateMessageBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate RecruitmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  interviewId String?
+  interview CandidateInterview? @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+  interviewRevision Int?
+  recipientEmail String
+  recipientUserId String?
+  subject String
+  body String
+  kind String @default("MESSAGE")
+  emailStatus String @default("PENDING")
+  emailAttemptAt DateTime?
+  emailSentAt DateTime?
+  messageStatus String @default("PENDING")
+  messageId String? @unique
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([batchId, candidateId])
+  @@index([candidateId, createdAt])
+  @@index([messageStatus, createdAt])
+}
+
+model CandidateInterview {
+  id String @id @default(cuid())
+  candidateId String
+  candidate RecruitmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  nativeInterviewId String? @unique
+  nativeInterview Interview? @relation(fields: [nativeInterviewId], references: [id], onDelete: Cascade)
+  requestKey String
+  createdById String?
+  scheduledAt DateTime
+  durationMins Int @default(30)
+  location String?
+  meetingUrl String?
+  note String?
+  status InterviewStatus @default(SCHEDULED)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages CandidateMessage[]
+  @@unique([candidateId, requestKey])
+  @@index([candidateId, status, scheduledAt])
 }

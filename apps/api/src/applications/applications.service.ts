@@ -163,11 +163,11 @@ export class ApplicationsService {
 
     if(screeningSessionId)await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${screeningSessionId} FOR UPDATE`);
     const screening=screeningSessionId?await tx.aiScreeningSession.findFirst({where:{id:screeningSessionId,jobId:jobPostId,profileId:profile.id},include:{package:true,currentPlan:true}}):null;
-    if(screeningEnabled()||screeningSessionId){
+    if(screeningSessionId){
       if(!screening||screening.status!=='COMPLETED'||!screening.currentPlan||!screening.resumeVersionId||!screening.cvSnapshot)throw new BadRequestException('Selesaikan screening bersama Tara sebelum mengirim lamaran.');
     }
-    const submittedAnswers=screening?[]:answers;
-    const activeQuestions=screening?[]:job.questions;
+    const submittedAnswers: Array<{questionId:string;answer:string}> = [];
+    const activeQuestions: typeof job.questions = [];
     // Pre-check: one application per employee per job (also enforced by @@unique)
     const existing = await tx.application.findUnique({
       where: { jobPostId_profileId: { jobPostId, profileId: profile.id } },
@@ -304,6 +304,7 @@ export class ApplicationsService {
       // same transaction so a failed application never removes the bookmark.
       await tx.savedJob.deleteMany({ where: { profileId: profile.id, jobPostId } });
 
+        await enqueueWork(tx, 'CAPTURE_APPLICATION', application.id);
         await this.hrEvents?.submitted(tx, application, screening?.funnelSession??funnelSession);
         return { application, job, breakdown };
       });

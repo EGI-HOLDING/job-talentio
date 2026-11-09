@@ -12,13 +12,13 @@ export async function enqueueWork(db: Pick<Prisma.TransactionClient, 'aiScreenin
 export class ScreeningPackets {
     private cursor: string | undefined;
     constructor(private db: PrismaService) { }
-    async sync(jobId: string) {
+    async sync(jobId: string, invited = false) {
         if (!screeningEnabled())
             return null;
         return this.db.$transaction(async (tx) => {
             await tx.$queryRaw(Prisma.sql `SELECT id FROM "JobPost" WHERE id=${jobId} FOR UPDATE`);
             const job = await tx.jobPost.findUnique({ where: { id: jobId }, include: { ...recruiterJobInclude, company: true, benefit: true } });
-            if (!job || job.status !== 'PUBLISHED' || job.company.isBanned || job.company.anonymizedAt || job.benefit?.expiresAt && job.benefit.expiresAt <= new Date())
+            if (!job || job.company.isBanned || job.company.anonymizedAt || !invited && (job.status !== 'PUBLISHED' || Boolean(job.benefit?.expiresAt && job.benefit.expiresAt <= new Date())))
                 return null;
             const document = await tx.aiCompanyDocument.findFirst({ where: { companyId: job.companyId, status: 'READY' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
             const company = { name: job.company.name, description: job.company.description, industryId: job.company.industryId, profile: document?.text ?? null, profileChecksum: document?.checksum ?? null };
@@ -36,9 +36,9 @@ export class ScreeningPackets {
             return packet;
         }, { timeout: 15000 });
     }
-    async available(jobId: string) {
+    async available(jobId: string, invited = false) {
         const job = await this.db.jobPost.findUnique({ where: { id: jobId }, include: { company: { select: { isBanned: true, anonymizedAt: true } }, benefit: true } });
-        if (!job || job.status !== 'PUBLISHED' || job.company.isBanned || job.company.anonymizedAt || job.benefit?.expiresAt && job.benefit.expiresAt <= new Date())
+        if (!job || job.company.isBanned || job.company.anonymizedAt || !invited && (job.status !== 'PUBLISHED' || Boolean(job.benefit?.expiresAt && job.benefit.expiresAt <= new Date())))
             throw new NotFoundException('Lowongan ini sudah tidak menerima lamaran.');
         return job;
     }

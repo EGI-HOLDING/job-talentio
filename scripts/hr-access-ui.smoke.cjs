@@ -115,6 +115,7 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name === '@/components/applications/OfferComposer') return { OfferComposer: () => null };
         if (name === '@/components/applications/OfferPacketHistory') return { OfferPacketHistory: () => null };
         if(name==='@/components/screening/TaraPreparation')return {TaraRunner:()=>null};
+        if(name==='./CandidateWorkspace')return {CandidateWorkspace:()=>null};
         if(name==='./HrCreationFlow')return {hrFlowV2Enabled:false,HrCreationFlow:()=>null};
         if(name==='./RecruiterJobEditorV2')return {RecruiterJobEditorV2:()=>null};
         if(name.endsWith('/StructuredJobContent'))return {StructuredJobContent:()=>null,jobExperienceLabel:()=>null};
@@ -436,7 +437,7 @@ test('a delayed Kanban response cannot update a different application after navi
   let tree=await ui.render(props);nodes(tree,n=>n.type==='button')[0].props.onClick();await ui.render({...props,application:row('new')});result.resolve({kanbanEnteredAt:'2026-10-26'});await ui.render();assert.equal(changes.length,0);ui.unmount();
 });
 
-test('job workspace defaults to Applicants, separates Kanban, preserves draft history and blocks unauthorized access', async () => {
+test('job workspace uses the CV candidate table, retires Kanban, preserves draft history and blocks unauthorized access', async () => {
   const stub=()=>null;
   function Ranking(){} function Pipeline(){} function Editor(){}
   let section='',job={id:'job',title:'Fixture occupation',companyId:'company',company:{name:'Company'},status:'PUBLISHED',publishedAt:'2026-10-25'};
@@ -448,7 +449,7 @@ test('job workspace defaults to Applicants, separates Kanban, preserves draft hi
     '@/lib/accountNavigation':{employerJobHref:(id,section='candidates')=>'/dashboard/recruiter/jobs/'+id+'?section='+section,employerWorkspaceHref:()=>'/dashboard/recruiter?tab=jobs',jobDetailHref:id=>'/jobs/'+id},
     '@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},'@/lib/i18n':t,'@/lib/location':{localizedJobLocation:()=>''},'@/components/jobs/formatJobSalary':{formatJobSalary:()=>''},
     '@/components/employee/WorkspacePrimitives':{ResourceError:stub,WorkspaceLoading:stub,WorkspaceEmpty:stub},
-    './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterPipeline':{RecruiterPipeline:Pipeline},'./JobApplicants':{JobApplicants:Ranking},
+    './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterPipeline':{RecruiterPipeline:Pipeline},'./JobApplicants':{JobApplicants:Ranking},'./CandidateWorkspace':{CandidateWorkspace:Ranking},
     './RecruiterPrimitives':{rememberCompany:id=>remembered.push(id)},
     './LinkedInSharePreview':{LinkedInSharePreview:stub},'./LinkedInPostStatus':{LinkedInJobSummary:stub},
     './HrBenefits':{JobBenefits:stub},
@@ -457,7 +458,7 @@ test('job workspace defaults to Applicants, separates Kanban, preserves draft hi
   assert.equal(nodes(tree,node=>node.type===Ranking).length,1);assert.equal(nodes(tree,node=>node.type===Pipeline).length,0);
   assert.deepEqual(remembered,['company'],'Opening an authorized job selects its company for subsequent HR navigation');
   section='section=kanban&application=notification-app';tree=await ui.render();
-  const pipeline=nodes(tree,node=>node.type===Pipeline)[0];assert.equal(pipeline.props.applicationId,'notification-app');assert.equal(pipeline.props.embedded,true);assert.equal(nodes(tree,node=>node.type===Ranking).length,0);ui.unmount();
+  assert.equal(nodes(tree,node=>node.type===Pipeline).length,0);assert.equal(nodes(tree,node=>node.type===Ranking)[0].props.applicationId,'notification-app','old Kanban URLs retain selected candidate in the new table');ui.unmount();
   section='';job={...job,questions:[{id:'question',question:'Display translation'}]};ui=host('apps/web/src/components/recruiter/RecruiterJobWorkspace.tsx','RecruiterJobWorkspace',dependencies);tree=await ui.render({});
   nodes(tree,node=>node.type==='button'&&nodes(node,child=>child.props?.kind==='edit').length>0)[0].props.onClick();tree=await ui.render();
   const editor=nodes(tree,node=>node.type===Editor)[0];assert.equal(editor.props.job.title,'Authored title');assert.equal(editor.props.job.description,'Authored description');assert.equal(editor.props.job.locale,'uz');assert.equal(editor.props.job.questions[0].question,'Authored question');ui.unmount();

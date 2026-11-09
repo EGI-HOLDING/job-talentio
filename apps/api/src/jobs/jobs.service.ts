@@ -1,3 +1,4 @@
+import { invalidateCvScores, scoringJob, scoreJobInclude } from '../ai-screening/recruitment/cv-job-context';
 import { jobChatPeers } from '../chat/job-chat-peer';
 import { resolveHrPosition, effectiveExperience, structuredJobFields } from '../hr-flow/job-input';
 import { ScreeningPackets } from '../ai-screening/screening-packets.service';
@@ -365,7 +366,7 @@ export class JobsService {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`);
       return this.createInside(user, companyId, data, db);
     }, { timeout: 30000 });
-    if (created) { void this.jobsSearch.syncJob(created.id); void this.screeningPackets?.sync(created.id).catch(()=>undefined); }
+    if (created) { void this.jobsSearch.syncJob(created.id); }
     return created;
   }
   async createInside(user: AuthUser, companyId: string, data: Record<string, unknown>, db: Prisma.TransactionClient, frozenSeniorityVersion?:string) {
@@ -465,7 +466,6 @@ export class JobsService {
   async creationPublished(jobId:string){
     await this.candidateCache?.invalidate(false);
     await this.jobsSearch.syncJob(jobId).catch(()=>this.logger.warn('Published job search synchronization will retry: '+jobId));
-    await this.screeningPackets?.sync(jobId).catch(()=>undefined);
     const job=await this.prisma.jobPost.findUniqueOrThrow({where:{id:jobId},include:{company:{include:{followers:true}},city:true,country:true,jobSkills:{include:{skill:true}}}});
     for(const follower of job.isAnonymous?[]:job.company.followers){
       await this.notifications.create({userId:follower.userId,type:'NEW_JOB_MATCH',title:`New job at ${job.company.name}`,body:job.title,titleKey:'notify.newJobAtCompany.title',params:{company:job.company.name},linkUrl:`/jobs/${job.id}`}).catch(()=>undefined);
@@ -479,13 +479,13 @@ export class JobsService {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${job.companyId} FOR UPDATE`);
       return this.updateInside(user, jobId, data, db);
     }, { timeout: 30000 });
-    if (updated) { void this.jobsSearch.syncJob(jobId); void this.screeningPackets?.sync(jobId).catch(()=>undefined); }
+    if (updated) { void this.jobsSearch.syncJob(jobId); }
     return updated;
   }
   private async updateInside(user: AuthUser, jobId: string, data: Record<string, unknown>, db: Prisma.TransactionClient) {
     const job = await db.jobPost.findUnique({
       where: { id: jobId },
-      include: { company: { select: { anonymizedAt: true } } },
+      include: { ...scoreJobInclude, company: { select: { anonymizedAt: true } } },
     });
     if (!job) throw new NotFoundException('Job not found');
     await this.companies.assertMember(user, job.companyId, ['OWNER', 'ADMIN', 'RECRUITER']);
@@ -590,6 +590,7 @@ export class JobsService {
     }
     if (data.screeningQuestions !== undefined) await this.syncQuestions(jobId, data.screeningQuestions, db);
 
+    await invalidateCvScores(db,jobId,user.id,scoringJob(job));
     const updated = await db.jobPost.findUnique({
       where: { id: jobId },
       include: this.jobInclude,
@@ -771,7 +772,6 @@ export class JobsService {
     }
 
     void this.jobsSearch.syncJob(jobId);
-    void this.screeningPackets?.sync(jobId).catch(()=>undefined);
     return this.withResolvedIcons(updated);
   }
 

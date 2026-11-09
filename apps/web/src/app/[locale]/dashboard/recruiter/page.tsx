@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { allowEmployerContextChange } from '@/components/recruiter/useEmployerUnsaved';
 import { RecruiterJobs } from '@/components/recruiter/RecruiterJobs';
-import { RecruiterPipeline } from '@/components/recruiter/RecruiterPipeline';
+
 import { RecruiterCompany } from '@/components/recruiter/RecruiterCompany';
 import { preferredCompany, rememberCompany } from '@/components/recruiter/RecruiterPrimitives';
 import { WorkspaceEmpty, WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
@@ -236,6 +236,12 @@ function RecruiterDashboard() {
   }, [tab, companyId]);
 
   useEffect(() => {
+    if(tab==='pipeline'&&!bootLoading){
+      const jobId=jobFromUrl||selectedJob;
+      const target=jobId?new URL(employerJobHref(jobId,'applicants',searchParams.get('company')||companyId),'https://jobtalent.internal'):null;
+      if(target&&searchParams.get('application'))target.searchParams.set('application',searchParams.get('application')!);
+      router.replace(target?target.pathname+target.search:employerWorkspaceHref());return;
+    }
     if (tabFromUrl === 'candidates') {
       router.replace(jobFromUrl ? employerJobHref(jobFromUrl, 'applicants', searchParams.get('company')) : employerWorkspaceHref());
       return;
@@ -270,7 +276,7 @@ function RecruiterDashboard() {
     ) {
       setSelectedJob(jobFromUrl);
     }
-  }, [tabFromUrl, jobFromUrl, searchParams]);
+  }, [tabFromUrl, jobFromUrl, searchParams, bootLoading, tab, selectedJob, companyId]);
 
   useEffect(() => {
     const requested = searchParams.get('company');
@@ -341,7 +347,7 @@ function RecruiterDashboard() {
         {msg && <div className={rw.notice} data-tone={msgTone} role="status"><span>{msg}</span><button className={rw.icon} aria-label={t('close')} onClick={() => setMsg('')}>×</button></div>}
 
         {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={(quiet) => loadJobs(companyId, quiet)} onApplicants={(id) => router.push(employerJobHref(id,'applicants',companyId))} onStatus={changeJobStatus} onFlash={flash} />}
-        {tab === 'pipeline' && !bootLoading && companyId && <RecruiterPipeline meta={meta} companyId={companyId} jobs={jobs} selectedJob={selectedJob} onJobChange={setSelectedJob} applicants={applicants} companyName={company?.name || ''} loading={applicantsLoading} applicationId={searchParams.get('application') || undefined} templates={bulkTemplates} onReload={() => loadJobData(selectedJob)} onTemplates={() => setTab('bulk')} onFlash={flash} />}
+        {tab === 'pipeline' && <WorkspaceLoading/>}
 
         {tab === 'bulk' && companyId && <RecruiterTemplates key={companyId} companyId={companyId} jobPostId={selectedJob || undefined} />}
         {tab === 'analytics' && companyId && <RecruiterAnalyticsView key={companyId} companyId={companyId} jobs={jobs} selectedJob={selectedJob} onSelectJob={setSelectedJob} />}
