@@ -209,11 +209,13 @@ export function HrAssistantOnboarding({ companyId, companyName, userId, creation
               <CandidateCvFiles files={selectedFiles} setFiles={setSelectedFiles} disabled={busy} illustrated/>
               {uploadError && <p role="alert" className={s.uploadHint}>{uploadError}</p>}
             </section>
-            <Art name="taka-upload" alt="Taka" className={s.uploadTaka}/>
-            {narrator(<><strong>{c('Yuk, masukin CV kandidat yang udah lu punya.')}</strong><p>{c('Boleh banyak sekaligus. Abis di-upload, gua mulai proses dan bikin rankingnya.')}</p></>,s.uploadNarrator)}
           </>}
         </div>
       </div>
+      {scene === 'cv-upload' && <div className={s.uploadGuide}>
+        {narrator(<><strong>{c('Yuk, masukin CV kandidat yang udah lu punya.')}</strong><p>{c('Boleh banyak sekaligus. Abis di-upload, gua mulai proses dan bikin rankingnya.')}</p></>,s.uploadNarrator)}
+        <Art name="taka-upload" alt="Taka" className={s.uploadTaka}/>
+      </div>}
     </div>
     <footer className={s.footer}>
       {index > 0 && <button type="button" className={s.back} disabled={busy} onClick={()=>navigate(-1)}><Arrow back/>{c('Kembali')}</button>}
