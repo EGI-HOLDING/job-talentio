@@ -30,6 +30,7 @@ import { SeedService } from './seed.service';
 import { BenefitsModule } from './benefits/benefits.module';
 import { LiveUpdatesModule } from './common/live-updates';
 import { CandidateCacheModule } from './common/candidate-cache';
+import { JobContentAiModule } from './job-content-ai/job-content-ai.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { CandidateCacheModule } from './common/candidate-cache';
     AdminModule,
     NewsModule,
     TelegramModule,
+    JobContentAiModule,
   ],
   controllers: [HealthController],
   providers: [SeedService, { provide: APP_INTERCEPTOR, useClass: LocaleInterceptor }],
