@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api, getSession } from '@/lib/api';
+import { api, getSession, saveSession, type AuthSession } from '@/lib/api';
 import { localeUrl } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useAccountRole } from '@/lib/useAccountRole';
@@ -26,13 +26,40 @@ function EnvelopeIcon(){return <svg viewBox="0 0 48 48" aria-hidden="true"><rect
 
 export function ScreeningInvitation({token}:{token:string}){
  const {locale}=useI18n(),role=useAccountRole();
- const [preview,setPreview]=useState<Preview|null>(null),[claim,setClaim]=useState<Claim|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
+ const [preview,setPreview]=useState<Preview|null>(null),[claim,setClaim]=useState<Claim|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[auth,setAuth]=useState<AuthSession|null>(null);
  useEffect(()=>{let live=true;void api<Preview>('/recruitment/invitations/open/'+encodeURIComponent(token),{auth:false,cacheMode:'no-store'}).then(value=>{if(live)setPreview(value);}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[token]);
+ useEffect(()=>{
+   let live=true;
+   const syncStoredSession=()=>setAuth(getSession());
+   const refreshVerifiedStatus=async()=>{
+     const current=getSession();
+     setAuth(current);
+     if(!current||current.user.role!=='EMPLOYEE'||current.user.emailVerified)return;
+     try{
+       const fresh=await api<AuthSession>('/auth/me',{cacheMode:'no-store'});
+       const stored=getSession();
+       if(!live||!stored||stored.user.id!==current.user.id||fresh.user.id!==current.user.id||!fresh.user.emailVerified)return;
+       const updated={...stored,user:{...stored.user,emailVerified:true}};
+       saveSession(updated);
+       setAuth(updated);
+       setNotice('Email berhasil diverifikasi. Kamu bisa membuka interview sekarang.');
+     }catch{/* Keep the current page usable if the account status cannot be refreshed. */}
+   };
+   const onPageActive=()=>{syncStoredSession();if(document.visibilityState==='visible')void refreshVerifiedStatus();};
+   syncStoredSession();
+   void refreshVerifiedStatus();
+   window.addEventListener('storage',syncStoredSession);
+   window.addEventListener('jt-session-updated',syncStoredSession);
+   window.addEventListener('focus',onPageActive);
+   document.addEventListener('visibilitychange',onPageActive);
+   return()=>{live=false;window.removeEventListener('storage',syncStoredSession);window.removeEventListener('jt-session-updated',syncStoredSession);window.removeEventListener('focus',onPageActive);document.removeEventListener('visibilitychange',onPageActive);};
+ },[]);
  async function open(){if(busy)return;setBusy(true);setError('');try{setClaim(await api<Claim>('/recruitment/invitations/open/'+encodeURIComponent(token)+'/claim',{method:'POST',body:'{}'}));}catch(e){setError(e instanceof Error?e.message:'Undangan belum bisa dibuka.');}finally{setBusy(false);}}
  async function verify(){setBusy(true);setError('');setNotice('');try{await api('/auth/request-verification',{method:'POST',body:'{}'});setNotice('Email verifikasi sudah diminta. Periksa kotak masuk, verifikasi email, lalu buka kembali undangan ini.');}catch(e){setError(e instanceof Error?e.message:'Email verifikasi belum bisa dikirim.');}finally{setBusy(false);}}
+ async function checkVerification(){if(busy)return;setBusy(true);setError('');setNotice('');try{const fresh=await api<AuthSession>('/auth/me',{cacheMode:'no-store'}),current=getSession();if(!current||current.user.id!==fresh.user.id)throw new Error('Sesi akun berubah. Muat ulang halaman dan masuk kembali.');if(!fresh.user.emailVerified){setNotice('Status verifikasi belum terlihat. Pastikan tautan sudah dibuka, lalu cek kembali.');return;}const updated={...current,user:{...current.user,emailVerified:true}};saveSession(updated);setAuth(updated);setNotice('Email berhasil diverifikasi. Kamu bisa membuka interview sekarang.');}catch(e){setError(e instanceof Error?e.message:'Status email belum bisa diperiksa.');}finally{setBusy(false);}}
  if(claim?.mode==='TEXT')return <TaraApplication key={claim.session.id} invitedSessionId={claim.session.id}/>;
  if(claim?.mode==='VOICE'&&preview)return <VoiceInterview sessionId={claim.session.id} jobTitle={preview.jobTitle} companyName={preview.companyName}/>;
- const next='/screening/'+token,auth=getSession(),email=auth?.user.email??'',maskedEmail=maskEmail(email);
+ const next='/screening/'+token,email=auth?.user.email??'',maskedEmail=maskEmail(email);
  const expires=preview&&!Number.isNaN(Date.parse(preview.expiresAt))?new Intl.DateTimeFormat('id-ID',{day:'numeric',month:'long',year:'numeric'}).format(new Date(preview.expiresAt)):'';
  const backHref=auth?'/dashboard/employee?tab=applications':'/login?role=EMPLOYEE&next='+encodeURIComponent(next);
  const message=preview?.mode==='VOICE'?'Tim HR mengundangmu untuk membahas pengalaman di CV dan posisi yang kamu lamar. Percakapan akan direkap untuk membantu penilaian tim HR.':'Tim HR mengundangmu untuk membahas pengalaman di CV dan posisi yang kamu lamar.';
@@ -72,6 +99,7 @@ export function ScreeningInvitation({token}:{token:string}){
            {notice&&<p role="status" className={s.notice}>{notice}</p>}
            {error&&<p role="alert" className={s.error}>{error}</p>}
            <button type="button" className={s.primary} disabled={busy} onClick={()=>void verify()}>{busy?'Mengirim email…':'Kirim email verifikasi'}</button>
+           <button type="button" className={s.refreshVerification} disabled={busy} onClick={()=>void checkVerification()}>{busy?'Memeriksa status…':'Saya sudah verifikasi · Cek status'}</button>
            <small>Kamu bisa membuka interview setelah email terverifikasi.</small>
          </>:<>
            <h2>Email siap digunakan</h2>
