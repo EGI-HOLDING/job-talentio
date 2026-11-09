@@ -4,6 +4,8 @@ import { catalogLabelIssue } from '@job-talentio/shared';
 export const jobContentTargetSchema = z.enum(['description', 'responsibilities', 'kpis', 'skills']);
 export type JobContentTarget = z.infer<typeof jobContentTargetSchema>;
 
+export const jobSkillLevelSchema = z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']);
+
 export const generateJobContentSchema = z.object({
   companyId: z.string().min(1).max(100),
   target: jobContentTargetSchema,
@@ -20,7 +22,7 @@ export const generateJobContentSchema = z.object({
     skills: z.array(z.object({
       name: z.string().trim().min(1).max(80),
       isRequired: z.boolean(),
-      minLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).nullable(),
+      minLevel: jobSkillLevelSchema.nullable(),
     }).strict()).max(30),
   }).strict(),
 }).strict();
@@ -40,14 +42,14 @@ const skillsOutput = z.object({
   items: z.array(z.object({
     name: z.string().trim().min(2).max(80).refine(name => catalogLabelIssue(name) === null, 'Invalid catalog skill name'),
     isRequired: z.boolean(),
-    minLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).nullable(),
+    minLevel: jobSkillLevelSchema.nullable(),
   }).strict()).min(1).max(10),
 }).strict();
 
 export type JobContentSuggestion =
   | { description: string }
   | { items: string[] }
-  | { items: Array<{ name: string; isRequired: boolean; minLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT' | null }> };
+  | { items: Array<{ name: string; isRequired: boolean; minLevel: z.infer<typeof jobSkillLevelSchema> | null }> };
 
 export function validateJobContentSuggestion(target: JobContentTarget, value: unknown): JobContentSuggestion {
   const parsed = (target === 'description' ? descriptionOutput

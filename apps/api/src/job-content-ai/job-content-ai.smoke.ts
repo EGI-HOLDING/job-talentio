@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { composeJobContentPrompt, JOB_CONTENT_PROMPT_VERSION } from './prompts/compose';
 import { validateJobContentSuggestion } from './job-content-ai.schema';
 
-assert.equal(JOB_CONTENT_PROMPT_VERSION, 'job-content-v1.0.1');
+assert.equal(JOB_CONTENT_PROMPT_VERSION, 'job-content-v1.0.2');
 
 const description = validateJobContentSuggestion('description', {
   description: 'Bertanggung jawab merancang dan mengembangkan solusi untuk kebutuhan bisnis perusahaan.',
@@ -27,6 +27,14 @@ const skills = validateJobContentSuggestion('skills', {
 assert.equal('items' in skills ? skills.items.length : 0, 2);
 assert.throws(() => validateJobContentSuggestion('kpis', { items: ['x'] }));
 assert.throws(() => validateJobContentSuggestion('description', { items: ['bukan deskripsi'] }));
+
+const skillsPrompt = composeJobContentPrompt('skills', { locale: 'id' });
+assert.match(skillsPrompt.system, /BEGINNER, INTERMEDIATE, ADVANCED, EXPERT/);
+assert.match(skillsPrompt.system, /Jangan menerjemahkan kode/);
+assert.match(skillsPrompt.system, /Gunakan JSON null/);
+assert.throws(() => validateJobContentSuggestion('skills', {
+  items: [{ name: 'Node.js', isRequired: true, minLevel: 'Menengah' }],
+}), /INVALID_JOB_CONTENT_OUTPUT/);
 
 const prompt = composeJobContentPrompt('responsibilities', {
   locale: 'id',

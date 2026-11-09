@@ -18,6 +18,17 @@ node scripts/ai-reliability-regression.cjs --browser
 
 The browser gate covers onboarding navigation/reload, skip confirmations, upload list accumulation and retry identity, CV-only application submission, stale verification tabs/account switches, voice permission/join/disconnect/end states, HR result/evidence/transcript/PDF navigation, and the four AI job-drafting actions. AI job drafting must not send two requests on a rapid double click or replace manual content before preview acceptance.
 
+When both `--integration` and `--browser` are selected, the gate also runs a browser journey against its disposable Nest, PostgreSQL, MinIO, and Mailpit services. It verifies a single CV-only application, a single durable CV scoring job, the resulting score and rationale in the HR drawer, tenant isolation, and an invitation unlocked by verification in a separate browser context. Provider output is simulated. The same journey can be rerun directly with `node scripts/recruitment-http.cjs --browser` after the API build.
+
+An opt-in probe checks all four drafting actions against GPT-6 Luna with a synthetic company profile, including an injected instruction that must be ignored. It checks the validated suggestions and verifies that they do not save changes to the job. Run after the API build:
+
+```powershell
+$env:RELIABILITY_LIVE_AI='1'
+node scripts/recruitment-http.cjs --live-draft
+```
+
+The probe makes at most four provider requests. To diagnose one action, set `RELIABILITY_DRAFT_TARGET` to `description`, `responsibilities`, `kpis`, or `skills`. Invalid output is recorded only for the synthetic test context.
+
 `tara-screening-ui.cjs` and `hr-assistant-onboarding.browser.cjs` contain historical application-time screening or inert-upload assumptions. They are not part of this current-flow acceptance gate. Their existence must not be counted as proof for the replacement flows.
 
 **CV pipeline load and real-provider evidence**
@@ -45,4 +56,4 @@ Results default to `output/ai-reliability`; override with `AI_RELIABILITY_OUTPUT
 
 **Current production acceptance still requires**
 
-Actual browser-to-backend journeys with dedicated accounts, real voice input/output and saved transcript/evaluation, real job-drafting outputs, concurrent-company queue behavior, deployment verification on the primary domain, and a full rehearsal. These gates remain separate from fixture-based browser acceptance and must have their own evidence before declaring the mission complete.
+The remaining gates include the HR onboarding journey with a real backend, real voice input/output and saved transcript/evaluation, concurrent-company queue behavior, deployment verification on the primary domain, and a full rehearsal. These gates remain separate from fixture-based browser acceptance and must have their own evidence before declaring the mission complete.
