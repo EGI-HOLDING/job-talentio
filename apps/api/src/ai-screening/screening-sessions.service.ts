@@ -14,7 +14,7 @@ import type { CandidatePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
 import { CURRENT_CONVERSATION, conversationPolicy, publicConversationPolicy } from './conversation.policy';
-const sessionInclude = { invitation: { include: { candidate: { select: { company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
+const sessionInclude = { invitation: { include: { candidate: { select: { stage:true, company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
 }>;
@@ -51,6 +51,7 @@ export class ScreeningSessions {
         if (!row)
             throw new NotFoundException('Draf lamaran tidak ditemukan.');
         if (row.invitation && (row.invitation.status === 'CANCELLED' || row.invitation.candidate.company.isBanned || row.invitation.candidate.company.anonymizedAt)) throw new ForbiddenException('Undangan tidak lagi tersedia.');
+        if(row.invitation&&!row.startedAt&&['HIRED','REJECTED','WITHDRAWN'].includes(row.invitation.candidate.stage))throw new ForbiddenException('Proses rekrutmen sudah ditutup. Undangan ini tidak dapat dimulai.');
         if (row.invitation && !row.startedAt && row.invitation.expiresAt <= new Date()) throw new ConflictException('Undangan sudah kedaluwarsa.');
         return row;
     }
@@ -206,7 +207,8 @@ export class ScreeningSessions {
         await this.db.$transaction(async (tx) => {
             if (row.invitation) {
                 await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${row.invitation.id} FOR UPDATE`);
-                const invite=await tx.screeningInvitation.findUniqueOrThrow({where:{id:row.invitation.id}});
+                await tx.$queryRaw(Prisma.sql`SELECT id FROM "RecruitmentCandidate" WHERE id=${row.invitation.candidateId} FOR UPDATE`);
+                const invite=await tx.screeningInvitation.findUniqueOrThrow({where:{id:row.invitation.id},include:{candidate:{select:{stage:true}}}});if(['HIRED','REJECTED','WITHDRAWN'].includes(invite.candidate.stage))throw new ConflictException('Proses rekrutmen sudah ditutup.');
                 if(invite.status==='CANCELLED'||invite.expiresAt<=new Date())throw new ConflictException('Undangan tidak lagi aktif.');
             }
             await tx.$queryRaw(Prisma.sql `SELECT id FROM "EmployeeProfile" WHERE id=${row.profileId} FOR UPDATE`);

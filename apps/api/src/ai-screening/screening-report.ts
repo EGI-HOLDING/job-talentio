@@ -50,20 +50,39 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
         rule(74);
         text(label, 44, 90, width, 19, true);
     };
-    header('Ringkasan penilaian kandidat');
+    header(data.independentScores?'Ringkasan screening':'Ringkasan penilaian kandidat');
     let y = 127;
     y += text(data.name, 44, y, width, 16, true) + 7;
-    y += text(data.job + ' · ' + data.company, 44, y, width, 10.5, false, muted) + 5;
-    y += text((data.independentScores ? 'Interview ' : 'Lamaran ') + data.submittedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + ' · Kebutuhan lowongan v' + data.jobVersion, 44, y, width, 9, false, muted) + 20;
-    const scores = data.independentScores ? [['Kecocokan CV',data.cvScore],['Hasil screening',data.screeningScore]] : [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]];
+    y += text(data.job + (data.independentScores?'':' · '+data.company), 44, y, width, 10.5, false, muted) + 5;
+    y += text((data.independentScores?data.company+' · ':'Lamaran ')+data.submittedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })+(data.independentScores?'':' · Kebutuhan lowongan v'+data.jobVersion),44,y,width,9,false,muted)+16;
+    const voice=(data.result as unknown as {voice?:{partial:boolean;testedClaims:number;totalClaims:number;durationSeconds:number;transcriptComplete:boolean}}).voice;
+    if(voice?.partial){doc.roundedRect(44,y,222,23,5).fill('#fff2dc');text('Hasil parsial — perlu ditinjau HR',52,y+5,206,9,true,'#96621c');y+=33;}
+    const scores = data.independentScores ? [['Kecocokan CV',data.cvScore],['Dukungan klaim CV',data.screeningScore]] : [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]];
     const gap = 12, card = (width - (scores.length - 1) * gap) / scores.length;
     for (const [i, [label, n]] of scores.entries()) {
         const x = 44 + i * (card + gap);
         doc.roundedRect(x, y, card, 78, 7).fill(i === 0 ? '#f1edff' : '#f8fafd');
         text(String(label), x + 12, y + 12, card - 24, 9, true, muted);
-        text(val(n as number | null) + (data.independentScores && n !== null ? '%' : ''), x + 12, y + 30, card - 24, 24, true, i === 0 ? purple : navy);
+        text(val(n as number | null) + (data.independentScores && n !== null ? ' / 100' : ''), x + 12, y + 30, card - 24, 24, true, i === 0 ? purple : navy);
     }
     y += 98;
+    if(data.independentScores){
+        if(voice){const duration=Math.floor(voice.durationSeconds/60)+':'+String(voice.durationSeconds%60).padStart(2,'0');y+=text(voice.testedClaims+'/'+voice.totalClaims+' klaim diuji · Durasi '+duration+(voice.transcriptComplete?'':' · Transkrip tidak lengkap'),44,y,width,9,false,muted)+14;}
+        heading('Ringkasan',y);y+=22;y+=text(data.result.summary,44,y,width,10)+16;
+        heading('Bukti terpilih',y);y+=24;
+        const selected=data.result.claims.filter(c=>(c as unknown as {asked?:boolean}).asked!==false).slice(0,3);
+        for(const claim of selected){
+            const source=data.plan.claims.find(c=>c.id===claim.claimId),title=source?.statement??'Klaim CV',evidence=claim.evidence[0];
+            const body=evidence?'Jawaban: '+evidence.quote.slice(0,155)+(evidence.quote.length>155?'…':''):claim.reason;
+            const height=doc.font('Body').fontSize(9.5).heightOfString(body,{width:width-20})+doc.font('Bold').fontSize(10).heightOfString(title,{width:width-64})+24;
+            if(y+height>720){doc.addPage();header('Ringkasan screening (lanjutan)');y=120;}
+            text(title,52,y,width-68,10,true);text(claim.score==null?'—':claim.score+'/4',doc.page.width-83,y,35,10,true,purple);
+            text(body,52,y+doc.font('Bold').fontSize(10).heightOfString(title,{width:width-64})+6,width-20,9.5);
+            y+=height;rule(y-8);
+        }
+        if(y>650){doc.addPage();header('Prioritas tindak lanjut');y=120;}else{heading('Prioritas tindak lanjut',y+3);y+=28;}
+        for(const [i,q] of data.result.interviewQuestions.slice(0,3).entries()){y+=text((i+1)+'. '+q,44,y,width,9.5)+7;}
+    }else{
     if (!data.independentScores && data.finalScore === null)
         y += text('Skor gabungan belum tersedia. Periksa status pemrosesan CV dan evaluasi pada detail lamaran.', 44, y, width, 10, false, muted) + 12;
     heading('Yang perlu diketahui HR', y);
@@ -83,6 +102,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     y += 17;
     y += text('Cara membaca hasil', 44, y, width, 10.5, true) + 8;
     text((data.independentScores ? 'Kecocokan CV dan hasil screening dinilai terpisah, tidak digabung menjadi peringkat baru. ' : 'Skor gabungan: 50% kecocokan CV + 50% dukungan klaim yang diperiksa. ')+ ' Nilai 0 berarti penjelasan belum mendukung klaim; bukan vonis kebohongan. Cakupan screening terbatas pada klaim terpilih. Keputusan rekrutmen tetap dilakukan HR.', 44, y, width, 9.5, false, muted);
+    }
     doc.addPage();
     header('Bukti dan tindak lanjut');
     y = 119;

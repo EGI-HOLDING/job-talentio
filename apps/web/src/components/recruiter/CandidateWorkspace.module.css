@@ -21,3 +21,9 @@
 
 .table[data-phase=progress] th:nth-child(2){width:25%}.table[data-phase=progress] th:nth-child(3){width:15%}.table[data-phase=progress] th:nth-child(4){width:21%}.table[data-phase=progress] th:nth-child(5){width:18%}.table[data-phase=progress] .textButton{white-space:nowrap;font-weight:600}
 @media(max-width:900px){.table[data-phase=progress]{min-width:830px}}
+
+.drawer{box-sizing:border-box;min-width:0}.tabContent{min-width:0;min-height:0}.pdfNavigation select{border:1px solid #d7deeb;background:#fff;color:#34415f;border-radius:5px;font:inherit;font-size:12px;padding:6px}.pdfNavigation{flex-wrap:wrap}
+
+.pdfNavigation select{width:90px}.pdfNavigation button:hover{background:#f3effb;color:#58358b}
+
+.drawerFooterHint{font-size:11px;color:#69768d;align-self:center}@media(max-width:640px){.drawerFooterHint{display:none}}

@@ -3,6 +3,10 @@ import { ProfileIcon } from '@/components/profile/ProfileIcon';
 
 export function WorkspaceIcon({ kind }: { kind: string }) {
   const paths: Record<string, ReactNode> = {
+    mic: <><rect x="8" y="2" width="8" height="13" rx="4"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></>,
+    help: <><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2.5M12 17v.01"/></>,
+    warning: <><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5m0 3v.01"/></>,
+    layers: <><path d="m12 3 10 5-10 5L2 8l10-5Zm-9 9 9 5 9-5m-18 5 9 5 9-5"/></>,
     building: <><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h1m4 0h1M9 11h1m4 0h1M10 21v-5h4v5"/></>,
     chevronUp: <path d="m6 15 6-6 6 6" />,
     chevronDown: <path d="m6 9 6 6 6-6" />,

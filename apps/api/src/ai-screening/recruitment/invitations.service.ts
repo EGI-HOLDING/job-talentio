@@ -16,7 +16,7 @@ import { RecruitmentService } from './recruitment.service';
 import { ScreeningCandidatePlans } from '../screening-candidate-plans.service';
 import { ScreeningSessions } from '../screening-sessions.service';
 import { enqueueWork, ScreeningPackets } from '../screening-packets.service';
-import { json, screeningEnabled } from '../screening.policy';
+import { json, screeningEnabled, PDF_TEMPLATE_VERSION } from '../screening.policy';
 import { registerCvVersion } from '../../profiles/cv-evidence';
 import { CV_MAX_BYTES, fileChecksum } from './cv-scoring.policy';
 import { voiceTurns } from '../voice/voice.policy';
@@ -30,7 +30,7 @@ export class InvitationsService {
  constructor(private db:PrismaService,private config:ConfigService,private candidates:RecruitmentService,private storage:StorageService,private plans:ScreeningCandidatePlans,private sessions:ScreeningSessions,private mail:MailService,private packets:ScreeningPackets,@Optional() private live?:LiveUpdates){}
  private token(row:{id:string;tokenNonce:string}){return invitationToken(row.id,row.tokenNonce,this.config.get<string>('JWT_SECRET')??'');}
  private url(row:{id:string;tokenNonce:string}){const base=this.config.get<string>('WEB_URL')??'http://localhost:3000';const url=new URL('/id/screening/'+this.token(row),base);if(!['http:','https:'].includes(url.protocol))throw Error('WEB_URL_INVALID');return url.toString();}
- private safe(row:Invitation){return {id:row.id,mode:row.mode,status:row.status,expiresAt:row.expiresAt,recipientEmail:row.recipientEmail,emailStatus:row.emailStatus,messageStatus:row.messageStatus,error:row.error,createdAt:row.createdAt,session:row.session?{id:row.session.id,status:row.session.status,startedAt:row.session.startedAt,completedAt:row.session.completedAt,evaluation:row.session.evaluation?{status:row.session.evaluation.status,screeningScore:row.session.evaluation.screeningScore,result:row.session.evaluation.result}:null}:null};}
+ private safe(row:Invitation){return {id:row.id,mode:row.mode,status:row.status,closedByStage:['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt,expiresAt:row.expiresAt,recipientEmail:row.recipientEmail,emailStatus:row.emailStatus,messageStatus:row.messageStatus,error:row.error,createdAt:row.createdAt,session:row.session?{id:row.session.id,status:row.session.status,startedAt:row.session.startedAt,completedAt:row.session.completedAt,evaluation:row.session.evaluation?{status:row.session.evaluation.status,screeningScore:row.session.evaluation.screeningScore,result:row.session.evaluation.result}:null}:null};}
  async create(user:AuthUser,candidateId:string,input:z.infer<typeof invitationCreateSchema>){
   if(!screeningEnabled())throw new ServiceUnavailableException('Screening baru sedang dijeda.');
   const candidate=await this.candidates.owned(user,candidateId);
@@ -57,7 +57,7 @@ export class InvitationsService {
    await tx.$queryRaw(Prisma.sql`SELECT id FROM "RecruitmentCandidate" WHERE id=${candidateId} FOR UPDATE`);
    const repeated=await tx.screeningInvitation.findFirst({where:{candidateId,mode:input.mode,status:{in:['INVITED','STARTED']},expiresAt:{gt:new Date()}},include:inviteInclude});
    if(repeated)return repeated;
-   const current=await tx.recruitmentCandidate.findUniqueOrThrow({where:{id:candidateId}});
+   const current=await tx.recruitmentCandidate.findUniqueOrThrow({where:{id:candidateId}});if(['HIRED','REJECTED','WITHDRAWN'].includes(current.stage))throw new ConflictException('Proses rekrutmen kandidat sudah ditutup.');
    const currentJob=await tx.jobPost.findUniqueOrThrow({where:{id:candidate.jobId!},include:scoreJobInclude});
    if(current.scoreStatus!=='READY'||current.revision!==candidate.revision||!sameScoringJob(current.jobSnapshot,scoringJob(currentJob)))throw new ConflictException('Penilaian CV perlu diperbarui sebelum membuat undangan baru.');
    if(!sameScoringJob(scoringJob(packet.jobSnapshot as never),scoringJob(currentJob)))throw new ConflictException('Lowongan baru saja berubah. Coba buat undangan lagi.');
@@ -76,14 +76,20 @@ export class InvitationsService {
   if(!row)throw new NotFoundException();await this.candidates.owned(user,row.candidateId);
   const evaluation=row.session?.evaluation;
   const claims=((row.session?.currentPlan?.payload as {claims?:Array<{id:string;statement:string;quote:string}>}|null)?.claims??[]).map(c=>({id:c.id,statement:c.statement,quote:c.quote}));
+  let pdfStatus='NOT_READY';
+  if(evaluation?.result&&row.sessionId){
+   if(evaluation.pdfKey&&evaluation.pdfVersion===PDF_TEMPLATE_VERSION)pdfStatus='READY';
+   else{const work=await enqueueWork(this.db,'PDF',row.sessionId,'PDF:'+row.sessionId+':'+PDF_TEMPLATE_VERSION);pdfStatus=work.status==='FAILED'?'FAILED':'PENDING';}
+  }
   const voice=row.sessionId?await this.db.voiceInterview.findUnique({where:{sessionId:row.sessionId},include:{fragments:{orderBy:{id:'asc'}}}}):null;
-  return {claims,invitation:this.safe(row),voice:voice?{status:voice.status,startedAt:voice.startedAt,endedAt:voice.endedAt,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,transcript:voiceTurns(voice.fragments)}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,result:evaluation.result}:null,pdfUrl:evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
+  return {claims,pdfStatus,invitation:this.safe(row),voice:voice?{status:voice.status,startedAt:voice.startedAt,endedAt:voice.endedAt,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,transcript:voiceTurns(voice.fragments)}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
  }
  async retryDelivery(user:AuthUser,id:string,acknowledgePossibleDuplicate=false){
   const row=await this.db.screeningInvitation.findUnique({where:{id}});if(!row)throw new NotFoundException();await this.candidates.owned(user,row.candidateId);
   await this.db.$transaction(async tx=>{
    await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${id} FOR UPDATE`);
    const current=await tx.screeningInvitation.findUniqueOrThrow({where:{id}});
+   const candidate=await tx.recruitmentCandidate.findUniqueOrThrow({where:{id:current.candidateId},select:{stage:true}});if(['HIRED','REJECTED','WITHDRAWN'].includes(candidate.stage))throw new ConflictException('Proses rekrutmen kandidat sudah ditutup.');
    if(current.status==='CANCELLED'||current.expiresAt<=new Date())throw new ConflictException('Buat undangan baru untuk kandidat ini.');
    const work=await enqueueWork(tx,'INVITE_DELIVERY',id);
    if(work.status==='RUNNING')throw new ConflictException('Pengiriman masih berlangsung. Periksa statusnya lagi sebentar.');
@@ -115,6 +121,7 @@ export class InvitationsService {
   const id=invitationId(token);if(!id)throw new NotFoundException('Undangan tidak ditemukan.');
   const row=await this.db.screeningInvitation.findUnique({where:{id},include:inviteInclude});
   if(!row||!validInvitationToken(token,row.tokenHash)||!row.candidate.jobId||row.candidate.company.isBanned||row.candidate.company.anonymizedAt||row.status==='CANCELLED')throw new NotFoundException('Undangan tidak tersedia.');
+  if(['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt)throw new ConflictException('Proses rekrutmen sudah ditutup. Undangan ini tidak dapat dimulai.');
   if(row.expiresAt<=new Date()&&!row.session?.startedAt)throw new ConflictException('Undangan sudah kedaluwarsa. Hubungi HR untuk undangan baru.');
   return row;
  }
@@ -139,6 +146,8 @@ export class InvitationsService {
     const current=await tx.screeningInvitation.findUniqueOrThrow({where:{id:row.id}});
     if(current.claimedUserId&&current.claimedUserId!==user.id)throw new ForbiddenException();
     if(current.sessionId)return tx.aiScreeningSession.findUniqueOrThrow({where:{id:current.sessionId}});
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "RecruitmentCandidate" WHERE id=${row.candidateId} FOR UPDATE`);
+    const candidate=await tx.recruitmentCandidate.findUniqueOrThrow({where:{id:row.candidateId},select:{stage:true}});if(['HIRED','REJECTED','WITHDRAWN'].includes(candidate.stage))throw new ConflictException('Proses rekrutmen sudah ditutup.');
     if(current.status!=='INVITED'||current.expiresAt<=new Date())throw new ConflictException('Undangan tidak lagi aktif.');
     const profile=await tx.employeeProfile.upsert({where:{userId:user.id},create:{userId:user.id},update:{}});
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "EmployeeProfile" WHERE id=${profile.id} FOR UPDATE`);
@@ -178,6 +187,7 @@ export class InvitationsService {
  async deliver(id:string){
   const row=await this.db.screeningInvitation.findUnique({where:{id},include:inviteInclude});
   if(!row||row.status==='CANCELLED'||row.expiresAt<=new Date()&&!row.session?.startedAt)return;
+  if(['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt)return;
   if(!row.candidate.company||row.candidate.company.isBanned||row.candidate.company.anonymizedAt)return;
   const recipient=row.candidate.application?.profile.user??await this.db.user.findFirst({where:{email:{equals:row.recipientEmail,mode:'insensitive'},role:'EMPLOYEE',isBanned:false,anonymizedAt:null}});
   if(recipient)await this.deliverMessage(id,recipient.id);
