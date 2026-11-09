@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { catalogLabelIssue } from '@job-talentio/shared';
 
 export const jobContentTargetSchema = z.enum(['description', 'responsibilities', 'kpis', 'skills']);
 export type JobContentTarget = z.infer<typeof jobContentTargetSchema>;
@@ -17,7 +18,7 @@ export const generateJobContentSchema = z.object({
     kpis: z.array(z.string().max(1_000)).max(30),
     specificExpectations: z.string().max(5_000),
     skills: z.array(z.object({
-      name: z.string().trim().min(1).max(120),
+      name: z.string().trim().min(1).max(80),
       isRequired: z.boolean(),
       minLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).nullable(),
     }).strict()).max(30),
@@ -37,7 +38,7 @@ const kpiOutput = z.object({
 }).strict();
 const skillsOutput = z.object({
   items: z.array(z.object({
-    name: z.string().trim().min(2).max(100),
+    name: z.string().trim().min(2).max(80).refine(name => catalogLabelIssue(name) === null, 'Invalid catalog skill name'),
     isRequired: z.boolean(),
     minLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).nullable(),
   }).strict()).min(1).max(10),

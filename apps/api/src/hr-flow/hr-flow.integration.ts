@@ -76,7 +76,8 @@ async function main(){
   await assert.rejects(()=>commerce.create(actor,{creationSessionId:session.id,code:'PREMIUM',intent:'PURCHASE'},'change-'+randomUUID()),/already/);assertions++;
   let current=await flow.get(actor,session.id);
   const selectedRole=roles[0];
-  const draft={title:selectedRole.name,description:tag+' role responsibilities differ from other vacancies.',positionEntryMode:'CATALOG',jobTitleId:selectedRole.id,seniorityLevelCode:'L6',experienceRangeMin:2,experienceRangeMax:4,workMode:'REMOTE',countryId:city.province.countryId,currency:'IDR',responsibilities:['Lead sales team targets'],kpis:['Sustainable revenue growth'],specificExpectations:'Optional industry connections, without automatic gating.'};
+  const publicationSkill='Pengembangan antarmuka web dengan HTML, CSS, dan JavaScript';
+  const draft={skills:[{name:publicationSkill,isRequired:true,minLevel:'INTERMEDIATE'}],title:selectedRole.name,description:tag+' role responsibilities differ from other vacancies.',positionEntryMode:'CATALOG',jobTitleId:selectedRole.id,seniorityLevelCode:'L6',experienceRangeMin:2,experienceRangeMax:4,workMode:'REMOTE',countryId:city.province.countryId,currency:'IDR',responsibilities:['Lead sales team targets'],kpis:['Sustainable revenue growth'],specificExpectations:'Optional industry connections, without automatic gating.'};
   current=await flow.patch(actor,session.id,{revision:current.revision,draft});
   const frozen=(current.draft as any)._senioritySnapshot;same(frozen.seniorityLevelCode,'L6');same(frozen.seniorityYearsMin,10);
   await assert.rejects(()=>flow.patch(actor,session.id,{revision:0,draft}),/another tab/);assertions++;
@@ -84,6 +85,7 @@ async function main(){
   same((await flow.publish(actor,session.id,current.revision,publishKey)).jobId,published.jobId);
   same(await tx.jobPost.count({where:{companyId:company.id}}),1);
   const post=await tx.jobPost.findUniqueOrThrow({where:{id:published.jobId},include:{jobSkills:{include:{skill:true}},jobLanguages:{include:{language:true}}}});
+  check(post.jobSkills.some(row=>row.skill.name===publicationSkill),'publication accepts the exact comma-containing skill from production');
   same(post.status,'PUBLISHED');same(post.experienceRangeMin,2);same(post.seniorityYearsMin,10);same(post.experienceRangeSource,'EMPLOYER_ADJUSTED');same(post.experienceYearsMin,null);same(post.experienceLevel,null);same(post.positionEntryMode,'CATALOG');
   const benefit=await tx.jobBenefit.findUniqueOrThrow({where:{jobId:post.id}});check(benefit.startsAt&&benefit.expiresAt&&benefit.startsAt<=new Date(),'period starts on publish');
   const consumed=await tx.jobPurchaseOrder.findUniqueOrThrow({where:{id:free.id}});same(consumed.jobId,post.id);check(consumed.fulfilledAt,'order consumed once');

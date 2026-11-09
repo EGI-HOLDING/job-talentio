@@ -19,3 +19,8 @@ assert.ok(validateHrDraft({...draft,salaryMin:100,salaryMax:50}).issues.some(i=>
 assert.ok(validateHrDraft({...draft,experienceRangeMin:5,experienceRangeMax:2}).issues.some(i=>i.field==='experienceRangeMax'));
 assert.ok(validateHrDraft({...draft,skills:Array.from({length:31},()=>({name:'Python'}))}).issues.some(i=>i.field==='skills'));
 console.log('HR draft validation passed: manual lookups, optional empty rows, field messages, range errors, immutability');
+
+assert.deepEqual(validateHrDraft({...draft,skills:[{name:'Pengembangan antarmuka web dengan HTML, CSS, dan JavaScript'}]}).issues,[]);
+assert.deepEqual(validateHrDraft({...draft,skills:[{name:'React (Hooks)'}]}).issues,[]);
+assert.ok(validateHrDraft({...draft,skills:[{name:'HTML<script>'}]}).issues.some(i=>i.field==='skills'&&i.message.includes('HTML<script>')));
+assert.ok(validateHrDraft({...draft,skills:[{name:'asdfgh'}]}).issues.some(i=>i.field==='skills'));

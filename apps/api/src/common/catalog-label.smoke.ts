@@ -20,6 +20,15 @@ function expectOk(name: string) {
   assertCatalogLabel(name);
 }
 
+expectOk('Pengembangan antarmuka web dengan HTML, CSS, dan JavaScript');
+expectOk('React (Hooks)');
+expectOk("D'Angelo");
+expectOk('R&D');
+expectOk('A'.repeat(80));
+expectThrow('A'.repeat(81));
+expectThrow('HTML<script>');
+expectThrow('HTML\nCSS');
+expectThrow('HTML\tCSS');
 expectOk('React');
 expectOk('Node.js');
 expectOk('Ozbek');

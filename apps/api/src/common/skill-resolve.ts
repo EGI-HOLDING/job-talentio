@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { PrismaClient, Skill } from '@prisma/client';
 import { initialCatalogStatus } from './i18n/catalog-tech-identity';
 import { assertCatalogLabel } from './lookup-normalize';
+import { CATALOG_NAME_RE } from '@job-talentio/shared';
 import { slugify } from './utils';
 
 type Db = Pick<PrismaClient, 'skill' | 'skillAlias'>;
@@ -39,7 +40,7 @@ function titleCaseFromSlug(slug: string): string {
   return slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N}+.#/\s-]{0,78}$/u;
+const NAME_RE = CATALOG_NAME_RE;
 
 export type ResolveSkillResult = {
   skill: Skill;
@@ -111,7 +112,7 @@ export async function resolveSkill(
   }
   if (opts.name && !NAME_RE.test(opts.name.trim())) {
     throw new BadRequestException(
-      'Skill name contains invalid characters. Use letters, numbers, and + . # / -',
+      'Skill name is not a valid catalog label',
     );
   }
   const finalSlug = slug || skillSlugify(displayName) || key.slice(0, 60);

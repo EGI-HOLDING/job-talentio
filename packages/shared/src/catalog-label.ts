@@ -12,7 +12,7 @@ export function normalizeLookupKey(input: string): string {
     .slice(0, 80);
 }
 
-export const CATALOG_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N}+.#/&\s-]{0,78}$/u;
+export const CATALOG_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N}+.#/&,()'’\p{Zs}-]{0,79}$/u;
 const NEUTRAL_REJECT = 'Name is not allowed';
 
 export type CatalogLabelIssue = 'empty' | 'charset' | 'blocked' | 'gibberish' | null;
@@ -23,7 +23,7 @@ const SHORT_TECH_RAW = /^(?:[crdfjkq]|c\+\+|c#|f#|r)$/i;
 export function assertLookupName(name: string) {
   if (!CATALOG_NAME_RE.test(name.trim())) {
     throw new Error(
-      'Name contains invalid characters. Use letters, numbers, and + . # / & -',
+      "Name must be at most 80 characters and use letters, numbers, spaces, or + . # / & - , ( ) ' ’",
     );
   }
 }
@@ -69,7 +69,7 @@ export function assertCatalogLabel(name: string, opts?: { skipCharset?: boolean 
   const issue = catalogLabelIssue(name, opts);
   if (!issue) return;
   if (issue === 'charset') {
-    throw new Error('Name contains invalid characters. Use letters, numbers, and + . # / & -');
+    throw new Error("Name must be at most 80 characters and use letters, numbers, spaces, or + . # / & - , ( ) ' ’");
   }
   throw new Error(NEUTRAL_REJECT);
 }

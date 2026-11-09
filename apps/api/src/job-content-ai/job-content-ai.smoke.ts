@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { composeJobContentPrompt, JOB_CONTENT_PROMPT_VERSION } from './prompts/compose';
 import { validateJobContentSuggestion } from './job-content-ai.schema';
 
-assert.equal(JOB_CONTENT_PROMPT_VERSION, 'job-content-v1.0.0');
+assert.equal(JOB_CONTENT_PROMPT_VERSION, 'job-content-v1.0.1');
 
 const description = validateJobContentSuggestion('description', {
   description: 'Bertanggung jawab merancang dan mengembangkan solusi untuk kebutuhan bisnis perusahaan.',
@@ -39,3 +39,10 @@ assert.match(prompt.system, /JSON saja/);
 assert.ok(prompt.maxTokens > 0);
 
 console.log('job content AI: smoke ok');
+
+const skillSuggestion=(name:string)=>({items:[{name,isRequired:true,minLevel:null}]});
+assert.doesNotThrow(()=>validateJobContentSuggestion('skills',skillSuggestion('Pengembangan antarmuka web dengan HTML, CSS, dan JavaScript')));
+assert.doesNotThrow(()=>validateJobContentSuggestion('skills',skillSuggestion('React (Hooks)')));
+assert.throws(()=>validateJobContentSuggestion('skills',skillSuggestion('A'.repeat(81))));
+assert.throws(()=>validateJobContentSuggestion('skills',skillSuggestion('HTML<script>')));
+assert.throws(()=>validateJobContentSuggestion('skills',skillSuggestion('asdfgh')));

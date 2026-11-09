@@ -1,4 +1,4 @@
-import { jobPostSchema } from '@job-talentio/shared';
+import { jobPostSchema, catalogLabelIssue } from '@job-talentio/shared';
 
 export type HrDraft = Record<string, any>;
 export type HrDraftIssue = { field: string; path: string; message: string };
@@ -44,6 +44,16 @@ export function validateHrDraft(draft: HrDraft) {
     if(issue.code==='invalid_type') detail=issue.expected==='number'?'masukkan angka yang valid.':'isi dengan nilai yang valid.';
     return {field,path:issue.path.join('.'),message:`${label}: ${detail}`};
   });
+  for(const field of ['skills','benefits','languages']) {
+    if(!Array.isArray(body[field]))continue;
+    body[field].forEach((row: Record<string,any>,index:number)=>{
+      if(row.slug||row.code||!row.name)return;
+      const issue=catalogLabelIssue(row.name);
+      if(!issue)return;
+      const detail=issue==='charset'?'gunakan huruf, angka, spasi, atau tanda baca umum; maksimal 80 karakter.':'gunakan nama keahlian, benefit, atau bahasa yang sesuai.';
+      issues.push({field,path:`${field}.${index}.name`,message:`${labels[field]} ${index+1} “${row.name}”: ${detail}`});
+    });
+  }
   for(const [min,max,label] of [['experienceRangeMin','experienceRangeMax','Pengalaman maksimum'],['salaryMin','salaryMax','Gaji maksimum']]) {
     if(typeof body[min]==='number'&&typeof body[max]==='number'&&body[max]<body[min]) issues.push({field:max,path:max,message:`${label} harus sama atau lebih besar dari minimum.`});
   }
