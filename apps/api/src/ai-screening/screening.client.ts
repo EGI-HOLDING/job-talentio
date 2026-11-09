@@ -34,7 +34,7 @@ export class ScreeningClient {
     constructor(private db: PrismaService, private config: ConfigService) { }
     get configured() { return Boolean(this.config.get<string>('OPENAI_API_KEY')); }
     private async request(path: string, init: RequestInit = {}) {
-        return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000) });
+        return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(init.method === 'POST' ? 120000 : 20000) });
     }
     async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset?: PromptPreset, files?: Array<{ filename: string; file_data: string }>): Promise<unknown> {
         if (!this.configured)
@@ -45,10 +45,10 @@ export class ScreeningClient {
             throw new Error('SESSION_ERASED');
         if (call?.status === 'COMPLETED')
             return call.result;
-        if (call?.status === 'UNCERTAIN')
+        if (call?.status === 'UNCERTAIN' && !call.responseId)
             throw new AiUncertain('TARA_CALL_UNCERTAIN');
         if (call?.status === 'RUNNING' && !call.responseId) {
-            if (Date.now() - +call.updatedAt < 30000)
+            if (Date.now() - +call.updatedAt < 150000)
                 throw new AiPending('TARA_CALL_IN_FLIGHT');
             await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'UNCERTAIN', error: 'CREATE_RESPONSE_UNCONFIRMED' } });
             throw new AiUncertain('TARA_CALL_UNCERTAIN');
@@ -77,7 +77,12 @@ export class ScreeningClient {
                 await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'FAILED', error: 'PROVIDER_HTTP_' + response.status } });
                 throw new Error('TARA_PROVIDER_HTTP_' + response.status);
             }
-            const body = await response.json() as ResponseBody;
+            let body: ResponseBody;
+            try { body = await response.json() as ResponseBody; }
+            catch {
+                await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'UNCERTAIN', error: 'CREATE_RESPONSE_UNCONFIRMED' } });
+                throw new AiUncertain('TARA_CALL_UNCERTAIN');
+            }
             if (!body.id || !/^resp_[a-zA-Z0-9_-]+$/.test(body.id)) {
                 await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'UNCERTAIN', error: 'MISSING_RESPONSE_ID' } });
                 throw new AiUncertain('TARA_CALL_UNCERTAIN');
@@ -87,7 +92,9 @@ export class ScreeningClient {
         }
         if (!call.responseId)
             throw new AiUncertain('TARA_CALL_UNCERTAIN');
-        const response = await this.request('/' + call.responseId);
+        let response: Response;
+        try { response = await this.request('/' + call.responseId); }
+        catch { throw new AiPending('TARA_RESPONSE_POLL_RETRY'); }
         if (!response.ok || Date.now() - +call.createdAt > 15 * 60000) {
             if ([401, 403, 404, 410].includes(response.status) || Date.now() - +call.createdAt > 15 * 60000) {
                 await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { status: 'UNCERTAIN', error: 'PROVIDER_RESPONSE_REQUIRES_REVIEW' } });
@@ -95,7 +102,10 @@ export class ScreeningClient {
             }
             throw new AiPending('TARA_RESPONSE_POLL_RETRY');
         }
-        return this.consume(call, await response.json() as ResponseBody, prompt.schema);
+        let body: ResponseBody;
+        try { body = await response.json() as ResponseBody; }
+        catch { throw new AiPending('TARA_RESPONSE_POLL_RETRY'); }
+        return this.consume(call, body, prompt.schema);
     }
     private async consume(call: {
         id: string;

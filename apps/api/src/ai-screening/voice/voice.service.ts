@@ -98,7 +98,7 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
   await this.db.voiceInterview.updateMany({where:{sessionId:id,status:{in:['CONNECTING','ACTIVE','CLOSING']}},data:{heartbeatAt:new Date()}});
   return this.state(user,id);
  }
- async end(user:AuthUser,id:string,clientId:string){await this.owned(user,id);const row=await this.db.aiScreeningSession.findUniqueOrThrow({where:{id}});const voice=await this.db.voiceInterview.findUnique({where:{sessionId:id}});if(voice&&terminal.includes(voice.status))return this.state(user,id);if(row.leaseToken!==clientId)throw new ConflictException('Interview digunakan tab lain.');if(voice&&!terminal.includes(voice.status))await this.finish(voice.id,'CANDIDATE_ENDED');return this.state(user,id);}
+ async end(user:AuthUser,id:string,clientId:string,reason:'CANDIDATE_ENDED'|'CANDIDATE_LEFT'|'CONNECTION_FAILED'|'CONNECTION_LOST'='CANDIDATE_ENDED'){await this.owned(user,id);const row=await this.db.aiScreeningSession.findUniqueOrThrow({where:{id}});const voice=await this.db.voiceInterview.findUnique({where:{sessionId:id}});if(voice&&terminal.includes(voice.status))return this.state(user,id);if(row.leaseToken!==clientId)throw new ConflictException('Interview digunakan tab lain.');if(voice&&!terminal.includes(voice.status))await this.finish(voice.id,reason);return this.state(user,id);}
  async tick(now=new Date()){
   if(this.ticking)return;this.ticking=true;
   try{
