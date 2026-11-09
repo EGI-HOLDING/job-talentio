@@ -24,6 +24,7 @@ import { VoiceProvider } from './voice.provider';
 type Channel=ReturnType<VoiceProvider['attach']>;
 type Live={providerId:string;greeting:string;greeted:boolean;channel:Channel;pending:Promise<void>;finishing:boolean;closed:boolean;taraText:string;candidateHeard:boolean;captureFailed?:boolean;closingRequested?:boolean;closingPromptPending?:boolean};
 const terminal=['ENDED','FAILED','CREATE_UNCERTAIN'];
+const VOICE_CLIENT_LEASE_MS=60_000;
 @Injectable()
 export class VoiceService implements OnModuleInit,OnModuleDestroy {
  private owner=randomUUID();private active=new Map<string,Live>();private timer?:ReturnType<typeof setInterval>;private ticking=false;
@@ -37,9 +38,12 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
  async create(user:AuthUser,id:string,clientId:string,sdp:string){
   await this.owned(user,id);if(!screeningEnabled()||!this.provider.configured)throw new ServiceUnavailableException('Interview suara sedang tidak tersedia.');
   const existing=await this.db.voiceInterview.findUnique({where:{sessionId:id}});if(existing)throw new ConflictException(terminal.includes(existing.status)?'Sesi ini sudah berakhir. Hasilnya tetap disimpan.':'Sesi sudah dimulai di tab lain.');
+  await this.sessions.claim(user,id,clientId);
   await this.sessions.start(user,id,clientId,'VOICE');
   const session=await this.db.aiScreeningSession.findUniqueOrThrow({where:{id},include:{currentPlan:true,invitation:true,package:true}});
   if(session.status!=='ACTIVE'||!session.currentPlan?.payload)throw new ConflictException('Tara masih menyiapkan pertanyaan. Coba lagi sebentar.');
+  const lease=await this.db.aiScreeningSession.updateMany({where:{id,leaseToken:clientId,status:'ACTIVE'},data:{leaseExpiresAt:new Date(Date.now()+VOICE_CLIENT_LEASE_MS)}});
+  if(!lease.count)throw new ConflictException('Interview digunakan tab lain.');
   const plan=session.currentPlan.payload as unknown as CandidatePayload;
   const snapshot=session.invitation!.snapshot as {jobTitle:string;companyName:string};
   const request=createVoiceRequest({model:this.config.get<string>('TARA_LIVE_MODEL')??'gpt-live-1',reasoningModel:this.config.get<string>('TARA_LIVE_REASONING_MODEL')??'gpt-6-luna',voice:this.config.get<string>('TARA_LIVE_VOICE')??'marin',job:session.package?.jobSnapshot,plan,jobTitle:snapshot.jobTitle,companyName:snapshot.companyName},sdp);
@@ -54,7 +58,8 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
    const channel=this.provider.attach(providerId,event=>this.accept(row.id,event),()=>{const active=this.active.get(row.id);if(active&&!active.closed){active.captureFailed=true;if(!active.finishing)this.requestFinish(row.id,'TRANSCRIPT_CONNECTION_LOST');}});
    const live:Live={providerId,greeting:request.session.input[0].content[0].text,greeted:false,channel,pending:Promise.resolve(),finishing:false,closed:false,taraText:'',candidateHeard:false};this.active.set(row.id,live);
    await channel.opened;
-   await this.db.voiceInterview.update({where:{id:row.id},data:{status:'ACTIVE',leaseUntil:new Date(Date.now()+15_000)}});
+   await this.heartbeat(user,id,clientId);
+   await this.db.voiceInterview.update({where:{id:row.id},data:{status:'ACTIVE',heartbeatAt:new Date(),leaseUntil:new Date(Date.now()+15_000)}});
    return {...this.safe(row),status:'ACTIVE',sdp:response.transport.sdp};
   }catch(error){
    if(!providerId&&error instanceof Error&&/^VOICE_PROVIDER_HTTP_/.test(error.message)){await this.db.voiceInterview.deleteMany({where:{id:row.id,providerId:null}});throw new ServiceUnavailableException('Koneksi suara belum tersedia. Silakan coba lagi sebentar.');}
@@ -84,7 +89,15 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
    else{live.taraText=(live.taraText+event.delta).slice(-500);if(live.candidateHeard&&/interview kita sudah selesai[.!]?/i.test(live.taraText)&&!live.finishing){const marked=await this.db.voiceInterview.updateMany({where:{id,status:'ACTIVE'},data:{status:'CLOSING',closingAt:new Date(),closeReason:'TARA_FINISHED'}});if(marked.count)live.channel.send({type:'session.input_audio.mute'});}}
   }).catch(async()=>{live.captureFailed=true;await this.db.voiceInterview.updateMany({where:{id},data:{error:'Sebagian transkrip belum tersimpan.',transcriptComplete:false}}).catch(()=>undefined);setTimeout(()=>this.requestFinish(id,'TRANSCRIPT_STORAGE_FAILED'),0);});
  }
- async heartbeat(user:AuthUser,id:string,clientId:string){await this.owned(user,id);const session=await this.db.aiScreeningSession.findUniqueOrThrow({where:{id}});if(session.leaseToken!==clientId)throw new ConflictException('Interview digunakan tab lain.');await this.db.voiceInterview.updateMany({where:{sessionId:id,status:{in:['CONNECTING','ACTIVE','CLOSING']}},data:{heartbeatAt:new Date()}});return this.state(user,id);}
+ async heartbeat(user:AuthUser,id:string,clientId:string){
+  await this.owned(user,id);
+  const voice=await this.db.voiceInterview.findUnique({where:{sessionId:id}});
+  if(voice&&terminal.includes(voice.status))return this.state(user,id);
+  const renewed=await this.db.aiScreeningSession.updateMany({where:{id,leaseToken:clientId,status:'ACTIVE'},data:{leaseExpiresAt:new Date(Date.now()+VOICE_CLIENT_LEASE_MS)}});
+  if(!renewed.count)throw new ConflictException('Interview digunakan tab lain.');
+  await this.db.voiceInterview.updateMany({where:{sessionId:id,status:{in:['CONNECTING','ACTIVE','CLOSING']}},data:{heartbeatAt:new Date()}});
+  return this.state(user,id);
+ }
  async end(user:AuthUser,id:string,clientId:string){await this.owned(user,id);const row=await this.db.aiScreeningSession.findUniqueOrThrow({where:{id}});const voice=await this.db.voiceInterview.findUnique({where:{sessionId:id}});if(voice&&terminal.includes(voice.status))return this.state(user,id);if(row.leaseToken!==clientId)throw new ConflictException('Interview digunakan tab lain.');if(voice&&!terminal.includes(voice.status))await this.finish(voice.id,'CANDIDATE_ENDED');return this.state(user,id);}
  async tick(now=new Date()){
   if(this.ticking)return;this.ticking=true;
@@ -97,8 +110,9 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
     if(!row.sessionId){await this.db.voiceFragment.deleteMany({where:{voiceId:row.id}});await this.db.voiceInterview.updateMany({where:{id:row.id},data:{promptSnapshot:{erased:true},transcriptComplete:false}});await this.finish(row.id,'ACCOUNT_ERASED');return;}
     const clock=voiceClock(row.startedAt,now),live=this.active.get(row.id);
     if(clock.hard){await this.finish(row.id,'TIME_LIMIT');return;}
-    if(+now-+row.heartbeatAt>30_000){await this.finish(row.id,'CANDIDATE_DISCONNECTED');return;}
-    if(!live){if(+now-+row.startedAt>35_000)await this.finish(row.id,'CONNECTION_FAILED');return;}
+    const starting=['CREATING','CONNECTING'].includes(row.status);
+    if(+now-+row.heartbeatAt>(starting?60_000:30_000)){await this.finish(row.id,'CANDIDATE_DISCONNECTED');return;}
+    if(!live){if(+now-+row.startedAt>(starting?60_000:35_000))await this.finish(row.id,'CONNECTION_FAILED');return;}
     if(row.status==='CLOSING'&&row.closingAt&&+now-+row.closingAt>=8000){await this.finish(row.id,row.closeReason??'TIME_LIMIT');return;}
     if(clock.closing&&!row.closingAt){
      const changed=await this.db.voiceInterview.updateMany({where:{id:row.id,closingAt:null},data:{closingAt:now,status:'CLOSING',closeReason:'TIME_LIMIT'}});
