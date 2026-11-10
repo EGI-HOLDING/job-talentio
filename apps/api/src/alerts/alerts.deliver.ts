@@ -102,6 +102,7 @@ export function jobPublicUrl(jobId: string, locale: string, webBase?: string): s
 
 export type AlertJobsListInput = {
   query?: string | null;
+  positionSelections?: Array<{ kind: 'ROLE' | 'GROUP'; id: string }>;
   frequency?: string | null;
   city?: { slug: string } | null;
   country?: { slug: string } | null;
@@ -113,7 +114,8 @@ export type AlertJobsListInput = {
 export function buildAlertJobsListPath(alert: AlertJobsListInput): string {
   const params = new URLSearchParams();
   const q = alert.query?.trim();
-  if (q) params.set('q', q);
+  if (alert.positionSelections?.length) params.set('positions', alert.positionSelections.map(row => row.kind + ':' + row.id).join(','));
+  else if (q) params.set('q', q);
   if (alert.city?.slug) params.set('city', alert.city.slug);
   if (alert.country?.slug) params.set('country', alert.country.slug);
   if (alert.category?.slug) params.set('category', alert.category.slug);

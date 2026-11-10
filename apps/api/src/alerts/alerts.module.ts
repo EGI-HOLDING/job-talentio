@@ -8,9 +8,10 @@ import { MailModule } from '../mail/mail.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { MatchingModule } from '../matching/matching.module';
 
 @Module({
-  imports: [PrismaModule, MailModule, NotificationsModule, TelegramModule],
+  imports: [PrismaModule, MailModule, NotificationsModule, TelegramModule, MatchingModule],
   controllers: [AlertsController],
   providers: [AlertsService],
   exports: [AlertsService],

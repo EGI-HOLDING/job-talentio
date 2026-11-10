@@ -11,6 +11,7 @@ import {employeePreferenceUpdate,desiredSelectionView,desiredRolesInclude,desire
 import {VacancyTasksService} from './vacancy-tasks.service';
 import {ConfigService} from '@nestjs/config';
 import {CandidateCache} from '../common/candidate-cache';
+import { PositionCatalogService } from './position-catalog.service';
 
 async function main(){
   const url=new URL(process.env.DATABASE_URL||'');
@@ -18,7 +19,8 @@ async function main(){
   const db=new PrismaService(),cache=new CandidateCache(new ConfigService(process.env));
   const relations=new OccupationRelationsService(db),catalog=new EmployeeCatalogSnapshot(db,cache,relations),groups=new PositionGroupService(db,relations,cache);
   const service=new EmployeeIntentService(db,catalog,cache,new VacancyTasksService(db,relations,cache),groups);
-  const controller=new PositionGroupsController(groups,catalog),prefix='pg-it-';let checks=0;const cases:string[]=[];
+  const positions = new PositionCatalogService(catalog, groups, { ensure() {}, async search() { return null; } } as never, db);
+  const controller=new PositionGroupsController(groups,catalog,positions),prefix='pg-it-';let checks=0;const cases:string[]=[];
   const check=(value:unknown,label:string)=>{assert.ok(value,label);checks++;cases.push(label);};
   try{
     const before=await db.positionGroupState.findUniqueOrThrow({where:{id:'indonesia'}});

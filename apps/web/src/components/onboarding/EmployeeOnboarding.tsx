@@ -1,6 +1,6 @@
 'use client';
 import { TaraRunner } from '@/components/screening/TaraPreparation';
-import { employeePositionPreferencesEnabled, positionPreferenceNames, positionGroupsUiEnabled, positionPreferenceSelections } from '@/lib/employeePositionPreferences';
+import { positionPreferenceSelections } from '@/lib/employeePositionPreferences';
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -21,14 +21,13 @@ import { WorkspaceLoading } from "@/components/employee/WorkspacePrimitives";
 import { PhoneNumberField, phoneErrorText } from "@/components/ui/PhoneNumberField";
 import { CV_ACCEPT, cvFileError } from "@/components/profile/types";
 import {
-  RoleInput,
   CountryPicker,
   SalaryFields,
   type Country,
   type SalaryValue,
 } from "./PreferenceFields";
 import s from "./Onboarding.module.css";
-import {PositionSelectionPicker} from "./PositionSelectionPicker";
+import { CatalogPositionPicker } from '@/components/ui/CatalogPositionPicker';
 
 type Form = EmployeeOnboardingInput &
   SalaryValue & {
@@ -169,9 +168,8 @@ export function EmployeeOnboarding() {
           salaryNegotiable: p.salaryNegotiable,
           noExperience: p.noExperience,
           ...draft,
-          desiredPositions: positionPreferenceNames(p),
-          ...(positionGroupsUiEnabled?{desiredSelections:positionPreferenceSelections(p).map(({kind,id})=>({kind,id}))}:{}),
-          ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
+          desiredPositions: positionPreferenceSelections(p).map(({name}) => name),
+          desiredSelections: positionPreferenceSelections(p).map(({kind,id}) => ({kind,id})),
           resumeId:selectedCv?.id,
           review:null,reviewState:null,manualExperiences:[],
           phoneDraft,
@@ -200,23 +198,23 @@ export function EmployeeOnboarding() {
       // Persist the editable draft independently of strict import validation.
       review: null,
     };
-    // Retain unresolved legacy choices in the draft until the candidate reviews them.
-    if (employeePositionPreferencesEnabled && value.desiredPositions.length !== value.desiredJobTitleIds?.length)
-      delete payload.desiredJobTitleIds;
-    if(positionGroupsUiEnabled)delete payload.desiredJobTitleIds;
-    if(positionGroupsUiEnabled&&!selectionsTouched.current){delete payload.desiredSelections;delete (payload as Partial<Form>).desiredPositions;}
+    delete payload.desiredJobTitleIds;
+    if (!selectionsTouched.current) {
+      delete payload.desiredSelections;
+      delete (payload as Partial<Form>).desiredPositions;
+    }
     const task = queue.current
       .catch(() => {})
       .then(() =>
         api<State>("/profiles/me/onboarding", {
           method: "PATCH",
-          body: JSON.stringify({...payload,...(positionGroupsUiEnabled?{preferencesRevision:preferenceRevision.current}:{})}),
+          body: JSON.stringify({ ...payload, preferencesRevision: preferenceRevision.current }),
         }),
       );
     queue.current = task;
     void task.then(
       (result) => {
-        if(positionGroupsUiEnabled)preferenceRevision.current=result.profile.preferencesRevision??preferenceRevision.current;
+        preferenceRevision.current = result.profile.preferencesRevision ?? preferenceRevision.current;
         if (version === saveVersion.current) setSaveState("saved");
       },
       (e) => {
@@ -247,12 +245,8 @@ export function EmployeeOnboarding() {
     if (!form || busy) return;
     let normalizedPhone = form.phone;
     if (targetStep > step) {
-      if (step === 1 && !(positionGroupsUiEnabled?form.desiredSelections?.length:employeePositionPreferencesEnabled?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
+      if (step === 1 && !form.desiredSelections?.length) {
         setError(t("requiredRoles"));
-        return;
-      }
-      if (step === 1 && !positionGroupsUiEnabled && employeePositionPreferencesEnabled && !form.desiredJobTitleIds?.length) {
-        setError(intentText('legacyPositionsHint'));
         return;
       }
       if (step === 2 && !form.preferredCountryIds.length) {
@@ -456,13 +450,9 @@ export function EmployeeOnboarding() {
           disabled={busy || uploading}
           style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
         >
-          {step === 1 && (positionGroupsUiEnabled?
-            <PositionSelectionPicker value={(form.desiredSelections??[]).map((selection,i)=>({...selection,name:form.desiredPositions[i]??selection.id}))} onChange={selections=>update({desiredSelections:selections.map(({kind,id})=>({kind,id})),desiredPositions:selections.map(s=>s.name)})}/>:<RoleInput
-              value={form.desiredPositions}
-              selectedIds={form.desiredJobTitleIds}
-              onChange={(v,ids) => update({ desiredPositions: v,...(ids?{desiredJobTitleIds:ids}:{}) })}
-            />
-          )}
+          {step === 1 && <CatalogPositionPicker scope="candidate" max={10} label={intentText('positionsYouAreLookingFor')}
+            value={(form.desiredSelections ?? []).map((selection, i) => ({ ...selection, name: form.desiredPositions[i] ?? selection.id }))}
+            onChange={selections => update({ desiredSelections: selections.map(({kind,id}) => ({kind,id})), desiredPositions: selections.map(s => s.name) })} />}
           {step === 2 && (
             <CountryPicker
               countries={countries}

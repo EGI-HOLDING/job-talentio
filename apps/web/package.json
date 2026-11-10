@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@job-talentio/shared": "workspace:*",
+    "@job-talentio/position-picker": "workspace:*",
     "next": "^15.2.2",
     "pdfjs-dist": "6.2.108",
     "react": "^19.0.0",

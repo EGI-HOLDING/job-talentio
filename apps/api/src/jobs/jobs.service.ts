@@ -49,6 +49,8 @@ import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { jobKeywordOr } from '../search/job-keyword';
+import { parsePositionRefs } from '../matching/position-catalog.controller';
+import { PositionCatalogService } from '../matching/position-catalog.service';
 import { JobsSearchService } from '../search/jobs-search.service';
 import { contentHash as translationSourceHash, resolveUgcContent } from '../common/i18n/content-locale';
 import { TelegramService } from '../telegram/telegram.service';
@@ -121,6 +123,7 @@ export class JobsService {
     @Optional() private recruiterOnboarding?: RecruiterOnboardingService,
     @Optional() private screeningPackets?: ScreeningPackets,
     @Optional() private candidateCache?:CandidateCache,
+    @Optional() private positionCatalog?: PositionCatalogService,
   ) {}
 
   private assertSalaryRange(min: number | null | undefined, max: number | null | undefined) {
@@ -1173,6 +1176,7 @@ export class JobsService {
     industrySlug?: string;
     industryGroupCode?: string;
     jobTitle?: string;
+    positions?: string;
     employmentType?: string;
     workMode?: string;
     experienceLevel?: string;
@@ -1217,7 +1221,13 @@ export class JobsService {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    if (jobTitleSlugs.length) {
+    const selections = parsePositionRefs(query.positions);
+    if (this.positionCatalog && (selections.length || jobTitleSlugs.length)) {
+      const ids = await this.positionCatalog.jobTitleIds(selections, jobTitleSlugs);
+      and.push({ jobTitleId: { in: ids } });
+    } else if (selections.length) {
+      and.push({ jobTitleId: { in: [] } });
+    } else if (jobTitleSlugs.length) {
       and.push({ jobTitle: { slug: { in: jobTitleSlugs } } });
     }
 

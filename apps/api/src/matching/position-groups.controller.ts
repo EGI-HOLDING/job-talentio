@@ -6,30 +6,25 @@ import {parseDto} from '../common/utils';
 import {PrismaService} from '../prisma/prisma.service';
 import {EmployeeCatalogSnapshot} from './employee-catalog-snapshot';
 import {PositionGroupService} from './position-group.service';
-import {positionSuggestionScore} from './employee-position-suggestions';
+import { PositionCatalogService } from './position-catalog.service';
 import {catalogTitleIdentityKey} from '../common/title-resolve';
 
 const querySchema=z.object({q:z.string().max(160).default(''),page:z.coerce.number().int().min(1).max(100000).default(1),limit:z.coerce.number().int().min(1).max(100).default(30)});
 @Controller('meta/position-groups')
 @RawLocaleNames()
 export class PositionGroupsController {
-  constructor(private service:PositionGroupService,private catalog:EmployeeCatalogSnapshot){}
+  constructor(private service:PositionGroupService,private catalog:EmployeeCatalogSnapshot, private positions: PositionCatalogService){}
   @Get()async list(@Query()input:unknown){const q=parseDto(querySchema,input);const catalog=await this.catalog.get();const snapshot=await this.service.snapshot(catalog.roles);const items=(snapshot?.groups??[]).filter(g=>!q.q||[g.nameEn,g.definition].some(label=>catalogTitleIdentityKey(label).includes(catalogTitleIdentityKey(q.q))));return {items:items.slice((q.page-1)*q.limit,q.page*q.limit).map(g=>({id:g.id,kind:'GROUP',name:g.nameEn,definition:g.definition,memberCount:snapshot!.choices.find(c=>c.id===g.id)?.members.length??0})),total:items.length,page:q.page,totalPages:Math.max(1,Math.ceil(items.length/q.limit)),groupReleaseVersion:snapshot?.releaseId??null};}
-  @Get('options')async options(@Query()input:unknown){
-    const q=parseDto(querySchema,input),catalog=await this.catalog.get(),snapshot=await this.service.snapshot(catalog.roles);
-    const needle=catalogTitleIdentityKey(q.q),seen=new Set<string>();
-    const aliasesByCanonical=new Map<string,string[]>();
-    for(const role of catalog.roles){const identity=catalog.index.identity(role.id);if(!identity)continue;const labels=aliasesByCanonical.get(identity.canonicalRoleId)??[];labels.push(...[role.name,role.nameId,role.nameUz,role.nameRu,...role.aliases.filter(a=>a.matchingApproved).map(a=>a.alias)].filter((s):s is string=>!!s));aliasesByCanonical.set(identity.canonicalRoleId,labels);}
-    const entries:Array<{id:string;kind:'GROUP'|'ROLE';name:string;score:number;family?:unknown}>=[];
-    for(const group of snapshot?.groups??[]){const head=group.sourceRoleId?catalog.index.roles.get(group.sourceRoleId):null;const source=group.source as {searchAliases?:string[]};const labels=[group.nameEn,...source.searchAliases??[],head?.nameId,...head?.aliases.filter(a=>a.matchingApproved).map(a=>a.alias)??[]].filter((s):s is string=>!!s);const score=Math.max(0,...labels.map(label=>positionSuggestionScore(needle,label)));if(score>0)entries.push({id:group.id,kind:'GROUP',name:group.nameEn,score});}
-    for(const role of catalog.roles){const identity=catalog.index.identity(role.id);if(!identity||seen.has(identity.canonicalRoleId))continue;seen.add(identity.canonicalRoleId);const root=catalog.index.roles.get(identity.canonicalRoleId)!;const name=snapshot?.labels.get(root.id)??root.name;
-      const score=Math.max(0,...[name,...aliasesByCanonical.get(root.id)??[]].map(label=>positionSuggestionScore(needle,label)));
-      if(score>0)entries.push({id:root.id,kind:'ROLE',name,score,family:root.family});
-    }
-    entries.sort((a,b)=>b.score-a.score||Number(a.kind==='ROLE')-Number(b.kind==='ROLE')||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
-    return {items:entries.slice((q.page-1)*q.limit,q.page*q.limit).map(({score,...row})=>row),total:entries.length,page:q.page,totalPages:Math.max(1,Math.ceil(entries.length/q.limit)),groupReleaseVersion:snapshot?.releaseId??null};
+  // Compatibility for tabs opened before the unified catalog release.
+  @Get('options')
+  options(@Query() input: unknown) {
+    return this.positions.search({ ...parseDto(querySchema, input), scope: 'candidate', reviewedOnly: true });
   }
-  @Get(':id/members')async members(@Param('id')id:string,@Query()input:unknown){const q=parseDto(querySchema,input),catalog=await this.catalog.get(),snapshot=await this.service.snapshot(catalog.roles);const group=snapshot?.choices.find(g=>g.id===id);if(!group)throw new BadRequestException('Unknown active group');const items=group.members.map(member=>({id:member,name:snapshot!.labels.get(member)??catalog.index.roles.get(member)!.name,kind:'ROLE'})).filter(row=>!q.q||catalogTitleIdentityKey(row.name).includes(catalogTitleIdentityKey(q.q))).sort((a,b)=>a.name.localeCompare(b.name));return {items:items.slice((q.page-1)*q.limit,q.page*q.limit),total:items.length,page:q.page,totalPages:Math.max(1,Math.ceil(items.length/q.limit)),groupReleaseVersion:snapshot!.releaseId};}
+
+  @Get(':id/members')
+  members(@Param('id') groupId: string, @Query() input: unknown) {
+    return this.positions.search({ ...parseDto(querySchema, input), scope: 'role', groupId });
+  }
 }
 
 @Controller('admin/position-groups')

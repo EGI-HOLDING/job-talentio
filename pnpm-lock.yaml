@@ -10,6 +10,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@job-talentio/position-picker':
+        specifier: workspace:*
+        version: link:../../packages/position-picker
       '@job-talentio/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -192,6 +195,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@job-talentio/position-picker':
+        specifier: workspace:*
+        version: link:../../packages/position-picker
       '@job-talentio/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -226,6 +232,22 @@ importers:
       typescript:
         specifier: ^5.8.2
         version: 5.9.3
+
+  packages/position-picker:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.10
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.4
+        version: 19.2.4(@types/react@19.2.18)
 
   packages/shared:
     dependencies:

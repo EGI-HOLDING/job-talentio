@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['@job-talentio/position-picker'],
   reactStrictMode: true,
   // Isolated build verification can run while the local dev server stays open.
   distDir: process.env.NEXT_BUILD_DIR || '.next',

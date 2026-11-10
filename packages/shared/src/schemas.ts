@@ -240,6 +240,7 @@ export const jobSearchSchema = z.object({
   industryGroupCode: z.string().max(1000).optional(),
   /** Canonical JobTitle slug (comma-separated ok) */
   jobTitle: z.string().optional(),
+  positions: z.string().max(1300).optional(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY']).optional(),
   workMode: z.enum(['ONSITE', 'REMOTE', 'HYBRID']).optional(),
   experienceLevel: z.string().refine((value) => value.split(',').every((item) => ['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].includes(item.trim())), 'Invalid experience level').optional(),
@@ -473,6 +474,7 @@ export const languageLevelUpdateSchema = z.object({
 export const jobAlertSchema = z.object({
   name: z.string().min(1).max(120),
   query: z.string().max(200).optional(),
+  positionSelections: desiredSelectionsSchema.optional(),
   citySlug: z.string().max(120).optional(),
   countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional(),
@@ -486,6 +488,7 @@ export const jobAlertSchema = z.object({
 export const jobAlertUpdateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   query: z.string().max(200).optional().nullable(),
+  positionSelections: desiredSelectionsSchema.optional(),
   citySlug: z.string().max(120).optional().nullable(),
   countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional().nullable(),

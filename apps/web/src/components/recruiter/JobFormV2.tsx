@@ -3,7 +3,7 @@ import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { JobTitleInput } from '@/components/ui/JobTitleInput';
+import { CatalogPositionPicker, usePositionLabels } from '@/components/ui/CatalogPositionPicker';
 import { LocationFields } from '@/components/ui/LocationFields';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
@@ -27,6 +27,9 @@ export const initialHrDraft=(job?:any):HrDraft=>job?{
 type Level={code:string;name:string;nameId:string;yearsMin:number;yearsMax:number|null};
 export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,validationIssues=[]}:{draft:HrDraft;onChange:(patch:HrDraft)=>void;companyId:string;initialCity?:any;disabled?:boolean;validationIssues?:HrDraftIssue[]}){
   const c=useHrCopy();
+  const [manualTitle, setManualTitle] = useState<boolean | null>(null);
+  const editingManualTitle = manualTitle ?? (draft.positionEntryMode === 'MANUAL' && Boolean(draft.title));
+  const catalogTitle = usePositionLabels(!editingManualTitle && draft.jobTitleId ? 'ROLE:' + draft.jobTitleId : '')?.[0]?.name;
   const fieldErrors=(field:string)=>validationIssues.filter(issue=>issue.field===field).map(issue=><p className={s.error} role="alert" key={issue.path}>{c(issue.message)}</p>);
   const descriptionId=useId();
   const aiRequestInFlight=useRef(false);
@@ -90,7 +93,21 @@ export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,v
   const rangeInvalid=draft.seniorityLevelCode&&(draft.experienceRangeMin==null||draft.experienceRangeMax!=null&&draft.experienceRangeMax<draft.experienceRangeMin);
   return <fieldset disabled={disabled} style={{border:0,padding:0,margin:0,minWidth:0}}>
     <section className={s.section}><h2>{c("Posisi & pengalaman")}</h2><div className={s.grid}>
-      <label className={s.field} data-job-field="title"><span>{c("Posisi yang dicari *")}</span><JobTitleInput name="title" value={draft.title??''} normalizeSeniority={false} required focusSuggestions onValueChange={title=>onChange({title,jobTitleId:null,positionEntryMode:'MANUAL'})} onPickPosition={position=>onChange({title:position.name,jobTitleId:position.id,positionEntryMode:'CATALOG'})} placeholder={c("Cari posisi atau ketik manual")}/></label>
+      <div className={s.field} data-job-field="title">
+        {editingManualTitle ? <label className={s.field}><span>{c("Posisi yang dicari *")}</span>
+          <input required name="title" maxLength={200} value={draft.title ?? ''}
+            onChange={event => onChange({ title: event.target.value, jobTitleId: null, positionEntryMode: 'MANUAL' })} />
+        </label> : <CatalogPositionPicker label={c("Posisi yang dicari *")} disabled={disabled}
+          value={draft.jobTitleId ? [{ id: draft.jobTitleId, kind: 'ROLE', name: catalogTitle ?? draft.title ?? draft.jobTitleId }] : []}
+          onChange={([position]) => onChange(position
+            ? { title: position.name, jobTitleId: position.id, positionEntryMode: 'CATALOG' }
+            : { title: '', jobTitleId: null, positionEntryMode: 'MANUAL' })} />}
+        <button type="button" className={s.secondary} onClick={() => {
+          setManualTitle(!editingManualTitle);
+          if (!editingManualTitle) onChange({ jobTitleId: null, positionEntryMode: 'MANUAL' });
+          else onChange({ title: '', jobTitleId: null, positionEntryMode: 'MANUAL' });
+        }}>{editingManualTitle ? c("Pilih dari katalog") : c("Ketik posisi manual")}</button>
+      </div>
       <label className={s.field} data-job-field="seniorityLevelCode"><span>{c("Senioritas")}</span><select aria-label={c("Senioritas")} name="seniorityLevelCode" value={draft.seniorityLevelCode??''} onChange={e=>void chooseLevel(e.target.value)}><option value="">{c("Pilih senioritas")}</option>{levels.map(v=><option value={v.code} key={v.code}>{locale==='id'?(v.nameId??v.name):v.name}</option>)}</select></label>
     </div>
     {fieldErrors("title")}{fieldErrors("jobTitleId")}{fieldErrors("seniorityLevelCode")}{fieldErrors("experienceRangeMin")}{fieldErrors("experienceRangeMax")}

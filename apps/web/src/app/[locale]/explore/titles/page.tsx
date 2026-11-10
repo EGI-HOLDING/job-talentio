@@ -16,6 +16,7 @@ type TitlesResponse = {
   page: number;
   limit: number;
   totalPages: number;
+  searchState: 'READY' | 'DEGRADED';
 };
 
 export default function ExploreTitlesPage() {
@@ -30,8 +31,8 @@ export default function ExploreTitlesPage() {
 
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(false);
-    const params = new URLSearchParams({page:String(page),limit:'24'}); if (query) params.set('q',query);
-    api<TitlesResponse>('/meta/job-titles?' + params,{auth:false,signal:controller.signal}).then((response) => { if (!controller.signal.aborted) setData(response); }).catch(() => { if (!controller.signal.aborted) setError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    const params = new URLSearchParams({page:String(page),limit:'24',scope:'directory'}); if (query) params.set('q',query);
+    api<TitlesResponse>('/meta/positions/search?' + params,{auth:false,cacheMode:'no-store',signal:controller.signal}).then((response) => { if (!controller.signal.aborted) setData(response); }).catch(() => { if (!controller.signal.aborted) setError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   },[query,page,locale,retry]);
 
@@ -47,7 +48,8 @@ export default function ExploreTitlesPage() {
 
   return <BrowsePage title={t('exploreTitlesTitle')}>
     <form className={s.search} onSubmit={onSearch}><input value={q} onChange={(event) => setQ(event.target.value)} placeholder={t('exploreTitlesSearch')} aria-label={t('exploreTitlesSearch')} /><button type="submit" className={s.primary}>{t('search')}</button></form>
-    {loading || error ? <DirectoryStatus loading={loading} error={error} onRetry={() => setRetry((value) => value + 1)} /> : <div className={s.grid} style={{marginTop:24}}>{data?.items.map((item) => <ExploreTitleCard key={item.id} name={item.name} slug={item.slug} count={item.count} countLabel={rolesLabel(item.count)} />)}{data && !data.items.length && <DirectoryStatus loading={false} onRetry={() => setRetry((value) => value + 1)} />}</div>}
-    {!loading && !error && data && data.totalPages > 1 && <div className={s.pagination}><Pagination page={data.page} totalPages={data.totalPages} total={data.total} limit={data.limit} onPageChange={setPage} /></div>}
+    {data?.searchState === 'DEGRADED' && !loading && <p role="status">{locale === 'id' ? 'Saran salah ketik sedang terbatas.' : 'Typo suggestions are temporarily limited.'}</p>}
+    {loading || error ? <DirectoryStatus loading={loading} error={error} onRetry={() => setRetry((value) => value + 1)} /> : <div className={s.grid} style={{marginTop:24}}>{data?.items.map((item) => <ExploreTitleCard key={item.id} name={item.name} slug={item.slug} count={item.count} countLabel={rolesLabel(item.count)} />)}{data?.searchState === 'READY' && !data.items.length && <DirectoryStatus loading={false} onRetry={() => setRetry((value) => value + 1)} />}</div>}
+    {!loading && !error && data && data.totalPages > 1 && <div className={s.pagination}><Pagination page={data.page} totalPages={data.totalPages} total={data.total} limit={24} onPageChange={setPage} /></div>}
   </BrowsePage>;
 }

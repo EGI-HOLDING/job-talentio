@@ -1,5 +1,5 @@
 'use client';
-import { employeePositionPreferencesEnabled, positionPreferenceNames, positionGroupsUiEnabled, positionPreferenceSelections } from '@/lib/employeePositionPreferences';
+import { positionPreferenceSelections } from '@/lib/employeePositionPreferences';
 
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -8,9 +8,8 @@ import { api } from '@/lib/api';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { FormField } from '@/components/ui/Field';
 import { LocationFields } from '@/components/ui/LocationFields';
-import { JobTitleInput } from '@/components/ui/JobTitleInput';
-import {PositionSelectionPicker} from '../onboarding/PositionSelectionPicker';
-import { RoleInput, CountryPicker, SalaryFields, type Country, type SalaryValue } from '@/components/onboarding/PreferenceFields';
+import { CatalogPositionPicker } from '@/components/ui/CatalogPositionPicker';
+import { CountryPicker, SalaryFields, type Country, type SalaryValue } from '@/components/onboarding/PreferenceFields';
 import { useOnboardingText } from '@/lib/i18n/onboarding';
 import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
@@ -52,9 +51,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   const [countries, setCountries] = useState<Country[]>([]);
   const [selections,setSelections]=useState(positionPreferenceSelections(profile));
   const [selectionsTouched,setSelectionsTouched]=useState(false);
-  const [roleIds,setRoleIds]=useState(profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
   const [workModes,setWorkModes]=useState(profile.preferredWorkModes||[]);
-  const [roles, setRoles] = useState(positionPreferenceNames(profile));
   const [preferredCountries, setPreferredCountries] = useState(profile.preferredCountries?.map(c=>c.id) || []);
   const [residence, setResidence] = useState(profile.residenceCountryId ? [profile.residenceCountryId] : profile.city?.province?.country?.id ? [profile.city.province.country.id] : []);
   const [homeCity, setHomeCity] = useState(profile.city?.slug || '');
@@ -103,11 +100,13 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      if (employeePositionPreferencesEnabled && !(positionGroupsUiEnabled?selections.length:roleIds.length)) {
-        setError(intentText(roleIds.length ? 'legacyPositionsHint' : 'state.PREFERENCES_REQUIRED'));
+      if (selectionsTouched && !selections.length) {
+        setError(intentText('state.PREFERENCES_REQUIRED'));
         return;
       }
-      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, ...(positionGroupsUiEnabled?{...(selectionsTouched?{desiredSelections:selections.map(({kind,id})=>({kind,id})),preferencesRevision:profile.preferencesRevision??0}:{}),preferredWorkModes:workModes}:{desiredPositions:roles,...(employeePositionPreferencesEnabled?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{})}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null,
+        ...(selectionsTouched ? { desiredSelections: selections.map(({kind,id}) => ({kind,id})), preferencesRevision: profile.preferencesRevision ?? 0 } : {}),
+        preferredWorkModes: workModes, preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -151,8 +150,9 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       <fieldset disabled={busy} className={s.resetFieldset}>
         {editor.kind === 'basics' && <>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
-          <>{positionGroupsUiEnabled?<PositionSelectionPicker value={selections} onChange={value=>{setSelectionsTouched(true);setSelections(value);}}/>:<RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />}</>
-          {employeePositionPreferencesEnabled && (
+          <CatalogPositionPicker scope="candidate" max={10} label={intentText('positionsYouAreLookingFor')} value={selections}
+            onChange={value => { setSelectionsTouched(true); setSelections(value); }} />
+          {(
             <fieldset className={s.workModeField}>
               <legend>{t('workMode')}</legend>
               <div className={s.workModeOptions}>
@@ -179,7 +179,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
           <p className={s.inlineNote}><ProfileIcon kind="info" />{t('pc.managedInSettings')} <Link href="/settings">{t('pc.manageAccount')}</Link></p>
         </>}
         {editor.kind === 'experience' && <>
-          <div className={s.formGrid}><FormField label={t('emp.positionTitle')} required><JobTitleInput name="title" defaultValue={experience?.title} required minLength={2} normalizeSeniority={false} /></FormField><FormField label={t('company')} required><input name="companyName" defaultValue={experience?.companyName} required maxLength={160} /></FormField></div>
+          <div className={s.formGrid}><FormField label={t('emp.positionTitle')} required><input name="title" defaultValue={experience?.title} required minLength={2} maxLength={160} /></FormField><FormField label={t('company')} required><input name="companyName" defaultValue={experience?.companyName} required maxLength={160} /></FormField></div>
           <CityChoice initial={experience?.city} initialCountryId={experience?.country?.id} />
           <div className={s.formGrid}><FormField label={t('emp.start')} required><input name="startDate" type="date" defaultValue={dateValue(experience?.startDate)} required /></FormField><FormField label={t('emp.end')} optional><input name="endDate" type="date" defaultValue={dateValue(experience?.endDate)} disabled={current} /></FormField></div>
           <label className={s.checkbox}><input type="checkbox" checked={current} onChange={(event) => setCurrent(event.target.checked)} />{t('emp.currentlyWorkHere')}</label>

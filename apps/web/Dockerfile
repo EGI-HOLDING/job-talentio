@@ -26,6 +26,7 @@ ENV NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=$NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/shared ./packages/shared
+COPY packages/position-picker ./packages/position-picker
 COPY apps/web ./apps/web
 RUN pnpm install --frozen-lockfile=false
 RUN pnpm --filter @job-talentio/shared build

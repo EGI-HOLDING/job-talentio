@@ -1,7 +1,7 @@
 import { liveJobWhere } from '../benefits/benefit-policy';
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { translateMessage } from '@job-talentio/shared';
+import { desiredSelectionsSchema, translateMessage, type DesiredSelection } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { emailLocale } from '../common/i18n/email-locale';
@@ -11,7 +11,7 @@ import { TelegramService } from '../telegram/telegram.service';
 import { AuthUser } from '../common/auth.decorators';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveJobLocation } from '../common/geo-selection';
-import { jobKeywordOr } from '../search/job-keyword';
+import { PositionCatalogService } from '../matching/position-catalog.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { isDemoMailbox } from '../common/demo-mailboxes';
 import {
@@ -35,7 +35,16 @@ export class AlertsService {
     private mail: MailService,
     private notifications: NotificationsService,
     private telegram: TelegramService,
+    private positions: PositionCatalogService,
   ) {}
+
+  private async positionView<T extends { positionSelections: unknown }>(rows: T[]) {
+    const selections = rows.map(row => desiredSelectionsSchema.parse(row.positionSelections));
+    const key = (value: DesiredSelection) => value.kind + ':' + value.id;
+    const options = await this.positions.describe([...new Map(selections.flat().map(value => [key(value), value])).values()]);
+    const labels = new Map(options.map(value => [key(value), value]));
+    return rows.map((row, i) => ({ ...row, positionSelections: selections[i].map(value => labels.get(key(value))!) }));
+  }
 
   setQueue(queue: Queue) {
     this.queue = queue;
@@ -69,6 +78,7 @@ export class AlertsService {
     data: {
       name: string;
       query?: string;
+      positionSelections?: DesiredSelection[];
       citySlug?: string;
       countryId?: string | null;
       categorySlug?: string;
@@ -88,7 +98,9 @@ export class AlertsService {
       categoryId = cat?.id ?? null;
     }
 
-    const queryNorm = (data.query || '').trim().toLowerCase();
+    if (data.query?.trim()) throw new BadRequestException('Select a position from the catalog');
+    const positionSelections = await this.positions.validate(data.positionSelections ?? []);
+    const selectionKey = (rows: DesiredSelection[]) => rows.map(row => row.kind + ':' + row.id).sort().join(',');
     const skillSlugs = [...new Set((data.skillSlugs ?? []).map((s) => s.trim()).filter(Boolean))].sort();
 
     const existing = await this.prisma.jobAlert.findMany({
@@ -97,15 +109,14 @@ export class AlertsService {
         cityId,
         countryId,
         categoryId,
-        query: data.query?.trim() || null,
+        positionReviewRequired: false,
       },
       include: { skills: { include: { skill: true } } },
     });
     const dupe = existing.find((a) => {
       const aSkills = a.skills.map((s) => s.skill.slug).sort().join(',');
       const bSkills = skillSlugs.join(',');
-      const aQuery = (a.query || '').trim().toLowerCase();
-      return aQuery === queryNorm && aSkills === bSkills;
+      return selectionKey(desiredSelectionsSchema.parse(a.positionSelections)) === selectionKey(positionSelections) && aSkills === bSkills;
     });
     if (dupe) {
       throw new ConflictException('An identical job alert already exists');
@@ -121,7 +132,7 @@ export class AlertsService {
       data: {
         userId: user.id,
         name: data.name.trim(),
-        query: data.query?.trim() || null,
+        positionSelections,
         cityId,
         countryId,
         categoryId,
@@ -141,18 +152,20 @@ export class AlertsService {
       }
     }
 
-    return this.prisma.jobAlert.findUnique({
+    const row = await this.prisma.jobAlert.findUniqueOrThrow({
       where: { id: alert.id },
       include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
     });
+    return (await this.positionView([row]))[0];
   }
 
   async list(userId: string) {
-    return this.prisma.jobAlert.findMany({
+    const rows = await this.prisma.jobAlert.findMany({
       where: { userId },
       include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    return this.positionView(rows);
   }
 
   async remove(userId: string, id: string) {
@@ -168,6 +181,7 @@ export class AlertsService {
     data: {
       name?: string;
       query?: string | null;
+      positionSelections?: DesiredSelection[];
       citySlug?: string | null;
       countryId?: string | null;
       categorySlug?: string | null;
@@ -181,6 +195,11 @@ export class AlertsService {
   ) {
     const alert = await this.prisma.jobAlert.findFirst({ where: { id, userId } });
     if (!alert) throw new NotFoundException();
+    if (data.query?.trim()) throw new BadRequestException('Select a position from the catalog');
+    const selections = data.positionSelections === undefined ? undefined : await this.positions.validate(data.positionSelections);
+    if (alert.positionReviewRequired && selections && !selections.length) {
+      throw new BadRequestException('Select a position to resume this alert');
+    }
 
     const { cityId, countryId } = await resolveJobLocation(this.prisma, data, alert);
     let categoryId: string | null | undefined = undefined;
@@ -208,7 +227,8 @@ export class AlertsService {
       where: { id },
       data: {
         name: data.name?.trim(),
-        query: data.query === undefined ? undefined : data.query?.trim() || null,
+        positionSelections: selections,
+        positionReviewRequired: selections === undefined ? undefined : false,
         cityId,
         countryId,
         categoryId,
@@ -232,15 +252,16 @@ export class AlertsService {
       }
     }
 
-    return this.prisma.jobAlert.findUnique({
+    const row = await this.prisma.jobAlert.findUniqueOrThrow({
       where: { id },
       include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
     });
+    return (await this.positionView([row]))[0];
   }
 
   async processDueAlerts() {
     const alerts = await this.prisma.jobAlert.findMany({
-      where: { isActive: true },
+      where: { isActive: true, positionReviewRequired: false },
       include: {
         user: true,
         country: true,
@@ -271,8 +292,11 @@ export class AlertsService {
       if (alert.cityId) and.push({ cityId: alert.cityId });
       if (alert.countryId) and.push({ OR: [{ countryId: alert.countryId }, { countryId: null, city: { province: { countryId: alert.countryId } } }] });
       if (alert.categoryId) and.push({ categoryId: alert.categoryId });
-      if (alert.query) {
-        and.push(jobKeywordOr(alert.query));
+      const selections = desiredSelectionsSchema.parse(alert.positionSelections);
+      if (selections.length) {
+        const ids = await this.positions.jobTitleIds(selections);
+        if (!ids.length) continue;
+        and.push({ jobTitleId: { in: ids } });
       }
       if (alert.skills.length) {
         and.push({
@@ -323,7 +347,7 @@ export class AlertsService {
           const inApp = buildInAppJobAlert({
             alertName: alert.name,
             jobs: digestJobs,
-            listPath: buildAlertJobsListPath(alert),
+            listPath: buildAlertJobsListPath({ ...alert, query: null, positionSelections: selections }),
           });
           await this.notifications.create({
             userId: alert.userId,

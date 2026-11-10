@@ -17,8 +17,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { api, peekApi, invalidateApi, getSession, type AuthSession } from '@/lib/api';
 import { sanitizeMojibake } from '@/lib/text';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
-import { CatalogRoleFilter } from '@/components/ui/CatalogRoleFilter';
-import { useRoleCatalog } from '@/lib/roleCatalog';
+import { CatalogPositionPicker, positionRef, usePositionLabels, type PositionValue } from '@/components/ui/CatalogPositionPicker';
 import { HeroLocationPicker } from '@/components/home/HeroLocationPicker';
 import dynamic from 'next/dynamic';
 const JobDetailClient=dynamic(()=>import('./[id]/JobDetailClient').then(module=>module.JobDetailClient));
@@ -130,6 +129,7 @@ type Filters = {
   companySlug: string;
   industrySlug: string;
   jobTitle: string;
+  positions: string;
   skills: string;
   skillMode: string;
   benefits: string;
@@ -168,6 +168,7 @@ const EMPTY: Filters = {
   companySlug: '',
   industrySlug: '',
   jobTitle: '',
+  positions: '',
   skills: '',
   skillMode: 'OR',
   benefits: '',
@@ -200,6 +201,7 @@ function filtersFromParams(sp: URLSearchParams, implicitSort: string): Filters {
     companySlug: sp.get('companySlug') ?? '',
     industrySlug: sp.get('industrySlug') ?? '',
     jobTitle: sp.get('jobTitle') ?? '',
+    positions: sp.get('positions') ?? '',
     skills: sp.get('skills') ?? '',
     skillMode: sp.get('skillMode') ?? 'OR',
     benefits: sp.get('benefits') ?? '',
@@ -422,9 +424,20 @@ function JobsInner() {
 
   const titleCatalog = data?.facets?.jobTitles || [];
   const titleFacetList = titleCatalog;
+  const positionLabels = usePositionLabels(filters.positions, filters.jobTitle);
+  const positionRefs = filters.positions.split(',').filter(Boolean);
+  const selectedPositions = positionRefs.map((ref): PositionValue => {
+    const existing = positionLabels?.find(row => positionRef(row) === ref);
+    return existing ?? { id: ref.slice(ref.indexOf(':') + 1), kind: ref.startsWith('GROUP:') ? 'GROUP' : 'ROLE',
+      name: ref.slice(ref.indexOf(':') + 1) };
+  });
+  for (const row of positionLabels ?? []) {
+    if (!selectedPositions.some(selected => positionRef(selected) === positionRef(row))) selectedPositions.push(row);
+  }
   const singleJobTitleSlug =
     filters.jobTitle && !filters.jobTitle.includes(',') ? filters.jobTitle : '';
   const activeJobTitle =
+    (singleJobTitleSlug && positionLabels?.length === 1 && { slug: singleJobTitleSlug, name: positionLabels[0].name, count: data?.total ?? 0 }) ||
     (singleJobTitleSlug && titleFacetList.find((x) => x.slug === singleJobTitleSlug)) ||
     (singleJobTitleSlug
       ? { slug: singleJobTitleSlug, name: singleJobTitleSlug, count: data?.total ?? 0 }
@@ -441,7 +454,7 @@ function JobsInner() {
 
   const advancedActiveCount = [
     filters.industrySlug,
-    filters.jobTitle,
+    filters.positions || filters.jobTitle,
     filters.skills,
     filters.benefits,
     filters.languages,
@@ -599,6 +612,9 @@ function JobsInner() {
   selectedCompanies.forEach((slug) => activeChips.push({ key: `company-${slug}`, label: companyFacetList.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ companySlug: toggleCsv(filters.companySlug, slug) }) }));
   selectedSkills.forEach((slug) => activeChips.push({ key: `skill-${slug}`, label: skills.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ skills: toggleCsv(filters.skills, slug) }) }));
   filters.jobTitle.split(',').filter(Boolean).forEach(slug => activeChips.push({ key: `title-${slug}`, label: titleCatalog.find(role => role.slug === slug)?.name || slug, remove: () => apply({ jobTitle: toggleCsv(filters.jobTitle, slug) }) }));
+  selectedPositions.filter(row => positionRefs.includes(positionRef(row))).forEach(row => activeChips.push({
+    key: positionRef(row), label: row.name, remove: () => apply({ positions: toggleCsv(filters.positions, positionRef(row)) }),
+  }));
   if (activeIndustry) activeChips.push({ key: 'industry', label: activeIndustry.name, remove: () => apply({ industrySlug: '' }) });
 
   return (
@@ -643,7 +659,9 @@ function JobsInner() {
             <details className={s.moreFilters} open={forceAdvancedOpen || undefined}><summary><JobsIcon kind="filter" />{t('workspace.moreFilters')}{advancedActiveCount > 0 && <span>{advancedActiveCount}</span>}<JobsIcon kind="chevron" /></summary>
 
 
-          <CatalogRoleFilter enabled={filtersOpen} value={filters.jobTitle} onChange={jobTitle => apply({ jobTitle })} />
+          <CatalogPositionPicker scope="candidate" max={10} label={locale === 'id' ? 'Posisi' : 'Position'}
+            disabled={Boolean(filters.jobTitle && positionLabels === undefined)} value={selectedPositions}
+            onChange={rows => apply({ positions: rows.map(positionRef).join(','), jobTitle: '' })} />
           <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
             <FormField label={t('matchMode')} optional>
               <select

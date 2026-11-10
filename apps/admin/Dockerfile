@@ -11,6 +11,7 @@ ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/shared ./packages/shared
+COPY packages/position-picker ./packages/position-picker
 COPY apps/admin ./apps/admin
 RUN pnpm install --frozen-lockfile=false
 RUN pnpm --filter @job-talentio/shared build

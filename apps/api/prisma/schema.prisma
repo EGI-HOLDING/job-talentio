@@ -1987,6 +1987,8 @@ model JobAlert {
   userId          String
   name            String
   query           String?
+  positionSelections Json       @default("[]")
+  positionReviewRequired Boolean @default(false)
   cityId          String?
   countryId       String?
   country         Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)

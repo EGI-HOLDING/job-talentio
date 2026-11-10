@@ -6,7 +6,6 @@ import {EmployeeIntentService} from './employee-intent.service';
 import {EmployeeMatchingService} from './employee-matching.service';
 import {employeeEvidenceParserVersion} from './employee-intent-evidence';
 import {EmployeeOccupationIndex,intentRoleInclude,employeeOccupationRevision,employeeRecommendationRevision} from './employee-occupation';
-import {positionSuggestionScore} from './employee-position-suggestions';
 import {employeePreferenceUpdate} from './employee-preferences';
 import {JobsService} from '../jobs/jobs.service';
 
@@ -35,7 +34,7 @@ async function main(){
   check(!index.eligibility(['v32-chef'],'v32-chain').eligible,'transitive relation never inferred');
   check(!index.eligibility(['v32-chef'],'v32-photo').eligible&&!index.eligibility(['v32-chef'],'v32-stage').eligible,'same-family photographer and stage work excluded');
   check(!index.eligibility(['v32-chef'],'v32-unreviewed').eligible,'unapproved target excluded');
-  check(positionSuggestionScore('cheff','Chef')>0&&index.resolve('V32 Cheff')===null,'typo suggestions never become persisted identities');
+  check(index.resolve('V32 Cheff')===null,'misspellings never become persisted identities');
   const identity=employeeOccupationRevision(roles),ranking=employeeRecommendationRevision(roles);
   const changed=structuredClone(roles);changed.find(r=>r.id==='v32-chef')!.matchingMetadata={sources:[],relatedRoles:[]};
   check(employeeOccupationRevision(changed)===identity&&employeeRecommendationRevision(changed)!==ranking,'relation changes alter ranking only');

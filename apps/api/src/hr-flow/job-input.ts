@@ -7,9 +7,12 @@ import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occ
 export async function resolveHrPosition(db: Prisma.TransactionClient, data: Record<string, unknown>) {
   const text=String(data.title??'').trim();
   if(data.positionEntryMode==='CATALOG') {
-    const role=typeof data.jobTitleId==='string'?await db.jobTitle.findUnique({where:{id:data.jobTitleId},select:{...currentRoleSelect,name:true}}):null;
+    const role=typeof data.jobTitleId==='string'?await db.jobTitle.findUnique({where:{id:data.jobTitleId},select:{
+      ...currentRoleSelect, name:true,
+      positionGroupLabels:{where:{release:{states:{some:{id:'indonesia'}}}},select:{nameEn:true},take:1},
+    }}):null;
     if(!currentRoleIdentity(role))throw new BadRequestException('POSITION_UNAVAILABLE: Choose another position');
-    return {title:role!.name,jobTitleId:role!.id,positionEntryMode:'CATALOG'};
+    return {title:role!.positionGroupLabels[0]?.nameEn??role!.name,jobTitleId:role!.id,positionEntryMode:'CATALOG'};
   }
   if(text.length<3||text.length>200)throw new BadRequestException('INVALID_POSITION');
   const candidates=await db.jobTitle.findMany({where:{archivedAt:null,OR:[

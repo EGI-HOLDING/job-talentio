@@ -333,5 +333,15 @@
 .cvName strong, .fileSelected > div { overflow-wrap:anywhere; }
 .cvStatus { align-items:flex-start; }
 .cvStatus > span { white-space:normal; line-height:1.5; }
-@media(max-width:900px){.cvTableHeader{display:none}.cvRow{grid-template-columns:minmax(0,1fr) auto}.cvStatus{grid-column:1 / -1}.cvRow .cvDate{display:none}.rowActions{flex-wrap:wrap;justify-content:flex-end}}
-@media(max-width:480px){.cvRow{grid-template-columns:minmax(0,1fr)}.rowActions{grid-column:1;justify-content:flex-start}.libraryActions{flex-wrap:wrap}}
+@media (max-width: 900px) {
+  .cvTableHeader, .cvRow .cvDate { display: none; }
+  .cvRow { grid-template-columns: minmax(0, 1fr) auto; }
+  .cvIdentity { grid-column: 1 / -1; }
+  .cvStatus { grid-column: 1; grid-row: 2; }
+  .rowActions { grid-column: 2; grid-row: 2; flex-wrap: wrap; justify-content: flex-end; }
+}
+@media (max-width: 480px) {
+  .cvRow { grid-template-columns: minmax(0, 1fr); }
+  .rowActions { grid-column: 1; grid-row: 3; justify-content: flex-start; }
+  .libraryActions { flex-wrap: wrap; }
+}

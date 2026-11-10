@@ -1,5 +1,5 @@
-import { BadRequestException, ConflictException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards, Optional } from '@nestjs/common';
-import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
+import { BadRequestException, ConflictException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { PositionCatalogService } from './position-catalog.service';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,30 +7,28 @@ import { JwtAuthGuard, Roles, RolesGuard } from '../common/auth.decorators';
 import { RawLocaleNames } from '../common/locale.interceptor';
 import { parseDto } from '../common/utils';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
-import { EmployeeOccupationIndex, intentRoleInclude } from './employee-occupation';
-import { positionSuggestionScore } from './employee-position-suggestions';
+import { intentRoleInclude } from './employee-occupation';
+// Compatibility for older tabs. Ranking and labels come from the same catalog as the new picker.
 @Controller('meta/employee-positions')
+@RawLocaleNames()
 export class EmployeePositionController {
-    constructor(private db: PrismaService, @Optional() private snapshot?:EmployeeCatalogSnapshot) { }
+    constructor(private catalog: PositionCatalogService) {}
+
     @Get()
-    async list(
-    @Query()
-    query: unknown) {
-        const { q, page, limit } = parseDto(z.object({ q: z.string().max(160).default(''), page: z.coerce.number().int().min(1).max(100000).default(1), limit: z.coerce.number().int().min(1).max(100).default(100) }), query);
-        const catalog=await (this.snapshot || new EmployeeCatalogSnapshot(this.db)).get();
-        const rows = [...catalog.roles].sort((a,b)=>a.name.localeCompare(b.name));
-        const index = catalog.index;
-        const key = catalogTitleIdentityKey(q.slice(0, 160));
-        const scored=rows.map(r=>({role:r,score:Math.max(0,...[r.name,r.nameId,r.nameUz,r.nameRu,...r.aliases.filter(a=>a.matchingApproved).map(a=>a.alias)].filter((s):s is string=>!!s).map(label=>positionSuggestionScore(key,label)))}));
-        const eligible = scored.filter(r=>index.identity(r.role.id)&&r.score>0).sort((a,b)=>b.score-a.score||a.role.name.localeCompare(b.role.name)).map(r=>r.role);
-        const seen = new Set<string>();
-        const unique = eligible.filter(r => { const id = index.identity(r.id)!.canonicalRoleId; if (seen.has(id))
-            return false; seen.add(id); return true; });
-        const total = unique.length, totalPages = Math.max(1, Math.ceil(total / limit));
-        const current = Math.min(totalPages, Math.max(1, page || 1));
-        return { items: unique.slice((current - 1) * limit, current * limit).map(r => { const identity = index.identity(r.id)!; const root = index.roles.get(identity.canonicalRoleId)!; return { id: root.id, name: root.name, nameId: root.nameId, nameUz: root.nameUz, nameRu: root.nameRu, canonicalRoleId: root.id, family: root.family, matchingEligible: true }; }), page: current, totalPages, total };
+    async list(@Query() query: unknown) {
+        const input = parseDto(z.object({
+            q: z.string().max(160).default(''),
+            page: z.coerce.number().int().min(1).max(100000).default(1),
+            limit: z.coerce.number().int().min(1).max(100).default(100),
+        }), query);
+        const result = await this.catalog.search({ ...input, scope: 'role', reviewedOnly: true });
+        return { ...result, items: result.items.map(row => ({
+            ...row, canonicalRoleId: row.id, matchingEligible: row.selectable,
+            family: row.family ? { name: row.family } : null,
+        })) };
     }
 }
+
 const familySchema = z.object({ code: z.string().regex(/^\d{3}$/), name: z.string().min(1).max(160), nameId: z.string().max(160).nullable().optional(), nameUz: z.string().max(160).nullable().optional(), nameRu: z.string().max(160).nullable().optional(), source: z.string().min(1).max(500), sourceVersion: z.string().min(1).max(100) }).strict();
 const identitySchema = z.object({ familyId: z.string().min(1), canonicalRoleId: z.string().min(1).nullable(), approved: z.boolean(), approvedAliasIds: z.array(z.string()).max(200) }).strict();
 @Controller('admin/employee-matching')

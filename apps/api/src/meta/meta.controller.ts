@@ -1,9 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { MetaService } from './meta.service';
+import { PositionCatalogService } from '../matching/position-catalog.service';
+import { RawLocaleNames } from '../common/locale.interceptor';
 
 @Controller('meta')
 export class MetaController {
-  constructor(private meta: MetaService) {}
+  constructor(private meta: MetaService, private positions: PositionCatalogService) {}
 
   @Get('skills/suggest')
   suggestSkills(@Query('q') q?: string, @Query('take') take?: string) {
@@ -87,16 +89,26 @@ export class MetaController {
   }
 
   @Get('job-titles/suggest')
-  suggestJobTitles(@Query('q') q?: string, @Query('take') take?: string) {
-    return this.meta.suggestJobTitles(q, take ? Number(take) : 10);
+  @RawLocaleNames()
+  async suggestJobTitles(@Query('q') q?: string, @Query('take') take?: string) {
+    const limit = Math.min(20, Math.max(1, parseInt(take ?? '', 10) || 10));
+    const result = await this.positions.search({ q: (q ?? '').slice(0, 160), page: 1, limit, scope: 'directory' });
+    return result.items.map(row => ({ ...row, canonicalName: row.name, usageCount: row.count ?? 0 }));
   }
 
   @Get('job-titles')
-  jobTitles(
+  @RawLocaleNames()
+  async jobTitles(
     @Query('q') q?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.meta.jobTitles(q, page ? Number(page) : 1, limit ? Number(limit) : 24);
+    const take = Math.min(100, Math.max(1, parseInt(limit ?? '', 10) || 24));
+    const current = Math.min(100000, Math.max(1, parseInt(page ?? '', 10) || 1));
+    const result = await this.positions.search({ q: (q ?? '').slice(0, 160), page: current, limit: take, scope: 'directory' });
+    return { ...result, limit: take, items: result.items.map(row => ({
+      ...row, canonicalName: row.name, canonicalRoleId: row.id, matchingEligible: row.selectable,
+      family: row.family ? { name: row.family } : null,
+    })) };
   }
 }

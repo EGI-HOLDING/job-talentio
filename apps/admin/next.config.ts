@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['@job-talentio/position-picker'],
   reactStrictMode: true,
   distDir: process.env.NEXT_BUILD_DIR || '.next',
   // Linux containers use standalone; local Windows builds run with next start.

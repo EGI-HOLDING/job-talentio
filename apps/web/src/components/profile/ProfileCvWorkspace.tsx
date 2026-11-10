@@ -15,7 +15,6 @@ import { countryName } from '@/components/onboarding/PreferenceFields';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { scoreProfileCompleteness, MAX_RESUMES_PER_PROFILE } from '@job-talentio/shared';
 import { FormField } from '@/components/ui/Field';
-import { JobTitleInput } from '@/components/ui/JobTitleInput';
 import { ProfileIcon } from './ProfileIcon';
 import { ProfileForms } from './ProfileForms';
 import { ProfileDialog } from './ProfileDialog';

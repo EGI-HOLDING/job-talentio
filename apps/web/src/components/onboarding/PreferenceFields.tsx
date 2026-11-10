@@ -1,10 +1,7 @@
 'use client';
-import { employeePositionPreferencesEnabled } from '@/lib/employeePositionPreferences';
 
-import { EmployeePositionPicker } from './EmployeePositionPicker';
 import { createPortal } from "react-dom";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { JobTitleInput } from "@/components/ui/JobTitleInput";
 import { floatingPanelPosition, type FloatingPanelPosition } from "@/components/ui/floatingPanelPosition";
 import { WorkspaceIcon } from "@/components/employee/WorkspaceIcon";
 import { useI18n } from "@/lib/i18n";
@@ -42,26 +39,6 @@ function countryPanelPosition(rect: DOMRect): FloatingPanelPosition {
   const left = Math.min(Math.max(edge, rect.left), Math.max(edge, window.innerWidth - edge - width));
   const top = Math.min(Math.max(edge, rect.bottom + 6), Math.max(edge, window.innerHeight - edge - maxHeight));
   return { left, top, width, maxHeight };
-}
-export function RoleInput({ value, onChange,selectedIds }: { value: string[]; selectedIds?:string[]; onChange: (value: string[],ids?:string[]) => void }) {
-  const t = useOnboardingText(), id = useId();
-  const [text, setText] = useState("");
-  if(employeePositionPreferencesEnabled)return <EmployeePositionPicker value={value} selectedIds={selectedIds} onChange={onChange}/>;
-  function add(input = text) {
-    const role = input.trim().replace(/\s+/g, " ");
-    if (!role || value.length >= 10) return;
-    if (!value.some(selected => selected.toLocaleLowerCase() === role.toLocaleLowerCase())) onChange([...value, role]);
-    setText("");
-  }
-  return <div className={s.fields}>
-    <label htmlFor={id}>{t("roleLabel")}</label>
-    <div className={s.inputAction}>
-      <JobTitleInput id={id} name="" value={text} onValueChange={setText} onPick={add} onSubmitValue={add} normalizeSeniority={false} minLength={1} disabled={value.length >= 10} placeholder={t("rolePlaceholder")} />
-      <button type="button" className={s.secondary} disabled={!text.trim() || value.length >= 10} onClick={() => add()}>{t("add")}</button>
-    </div>
-    <div className={s.chips}>{value.map(role => <span key={role}>{role}<button type="button" aria-label={t("remove") + ": " + role} onClick={() => onChange(value.filter(selected => selected !== role))}>×</button></span>)}</div>
-    <small>{t("rolesLimit")}</small>
-  </div>;
 }
 export function CountryPicker({
   countries,
