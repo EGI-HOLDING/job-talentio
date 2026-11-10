@@ -26,6 +26,11 @@ export function middleware(request: NextRequest) {
     const response = destination
       ? NextResponse.redirect(new URL(destination, request.url))
       : NextResponse.next();
+    // These interactive routes can carry long-lived client state and picker
+    // bundles. Do not let a shared cache retain an old screen after a release.
+    if (/^\/(dashboard|onboarding|jobs|explore)(\/|$)/.test(path)) {
+      response.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    }
     if (request.cookies.get(LOCALE_COOKIE)?.value !== current) {
       response.cookies.set(LOCALE_COOKIE, current, {
         path: '/',
