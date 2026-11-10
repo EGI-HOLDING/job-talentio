@@ -86,7 +86,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     } });
     const target = page || await openContext(null);
     await target.goto(web + '/id/login?role=' + user.role, { waitUntil: 'domcontentloaded' });
-    await target.waitForLoadState('networkidle', { timeout: 30000 });
+    await target.locator('form button[type="submit"]:enabled').waitFor({ timeout: 30000 });
     await target.locator('input[name="email"]').fill(user.email);
     await target.locator('input[name="password"]').fill(password);
     const response = target.waitForResponse(item => new URL(item.url()).pathname === '/api/auth/login' && item.request().method() === 'POST');
