@@ -28,7 +28,7 @@ async function main(){
    const jobs=await db.jobPost.findMany({where:{status:'PUBLISHED'},select:{id:true,jobTitleId:true,description:true,responsibilities:true,updatedAt:true},orderBy:{id:'asc'}});
    const changed=jobs.filter(job=>(service.project({...job,responsibilities:[]}).keys??[]).join('|')!==(service.project(job).keys??[]).join('|')).map(job=>job.id);
    let processed=0;
-   if(apply){if(VACANCY_TASK_VERSION!=='vacancy-tasks-v3')throw Error('Explicit v3 task version required');for(let i=0;i<10000;i++){const n=await service.refresh(100);processed+=n;if(!n)break;}}
+   if(apply){if(VACANCY_TASK_VERSION!=='vacancy-tasks-v4')throw Error('Explicit v4 task version required');for(let i=0;i<10000;i++){const n=await service.refresh(100);processed+=n;if(!n)break;}}
    tasks={version:VACANCY_TASK_VERSION,jobs:jobs.length,changedByResponsibilities:changed,processed};
   }
   console.log(JSON.stringify({dryRun:!apply,report,history:before,historyPreserved:true,tasks,checksum:createHash('sha256').update(JSON.stringify(report)).digest('hex')},null,2));

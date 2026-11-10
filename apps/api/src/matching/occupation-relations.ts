@@ -2,10 +2,16 @@ import {createHash} from 'node:crypto';
 import {catalogTitleIdentityKey as key} from '../common/title-resolve';
 import {EmployeeOccupationIndex,type IntentRole} from './employee-occupation';
 
-export const PROFESSION_RELATION_ALGORITHM='talentio-occupation-tasks-v2';
+export const PROFESSION_RELATION_ALGORITHM='talentio-occupation-tasks-v3-reciprocal-evidence';
 // Offline profession-vector similarity, never a threshold on a candidate's CV.
 const MIN_PROFESSION_SIMILARITY=0.2;
 const MIN_TARGET_TASK_COVERAGE = 0.30;
+// Directional target coverage is useful for ranking but can hide a strong reverse
+// relation when one profession has a narrower ESCO task profile than the other.
+// Only mirror an already-qualified RELATED edge when both roles share multiple
+// specific essential tasks and their full task vectors are substantially alike.
+const MIN_RECIPROCAL_SIMILARITY = 0.30;
+const MIN_RECIPROCAL_ESSENTIAL_TASKS = 2;
 export const professionDigest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export type LocalProfessionDefinition = {
   titles: readonly string[];
@@ -134,7 +140,7 @@ export function buildProfessionGraph(roles:IntentRole[],source:ProfessionSource)
  for(const r of roots){const p=mapped.get(r.id);if(!p)continue;const ids=new Set(p.facts.essential.filter(s=>specific(s.uri)).map(s=>s.uri));anchors.set(r.id,ids);for(const uri of ids){const ids=postings.get(uri)||[];ids.push(r.id);postings.set(uri,ids);}}
  const vectors=new Map([...mapped].map(([id,p])=>[id,new Map([...p.facts.optional.map(s=>[s.uri,0.5] as const),...p.facts.essential.map(s=>[s.uri,1] as const)])]));
  const norms=new Map([...vectors].map(([id,v])=>[id,[...v].reduce((n,[uri,value])=>n+value*weight(uri),0)]));
- const relations:Array<{fromRoleId:string;toRoleId:string;score:number;basis:{method:string;kind:'RELATED'|'CAREER_PATH';sourceVersion:string;sharedEssentialSkills:Array<{uri:string;label:string}>;targetEssentialCoverage:number;similarity:number}}>=[];
+ const relations:Array<{fromRoleId:string;toRoleId:string;score:number;basis:{method:string;kind:'RELATED'|'CAREER_PATH';sourceVersion:string;sharedEssentialSkills:Array<{uri:string;label:string}>;targetEssentialCoverage:number;similarity:number;evidenceMode:'DIRECTIONAL_TASK_COVERAGE'|'SYMMETRIC_ESSENTIAL_TASK_OVERLAP';reciprocalTaskCount?:number;reciprocalSimilarityThreshold?:number}}>=[];
  for(const r of roots){const from=mapped.get(r.id),anchor=anchors.get(r.id);if(!from||!anchor?.size)continue;
   const workTasks=new Set([...from.facts.essential,...from.facts.optional].filter(s=>specific(s.uri)).map(s=>s.uri));
   const candidates=new Set([...workTasks].flatMap(uri=>postings.get(uri)||[]));candidates.delete(r.id);
@@ -145,13 +151,34 @@ export function buildProfessionGraph(roles:IntentRole[],source:ProfessionSource)
    const essential=to.facts.essential;const denominator=essential.reduce((n,s)=>n+weight(s.uri),0);const covered=essential.reduce((n,s)=>n+(fromSkills.get(s.uri)||0)*weight(s.uri),0);const score=denominator?covered/denominator:0;
    const sameWorkScope=overlapsWorkScope(r.id,toRoleId);
    const kind=score>=MIN_TARGET_TASK_COVERAGE&&sameWorkScope?'RELATED':'CAREER_PATH';
-   relations.push({fromRoleId:r.id,toRoleId,score,basis:{method:'Talentio derived occupational competency overlap; not ESCO equivalence',kind,sourceVersion:source.sourceVersion,sharedEssentialSkills:shared.sort().map(uri=>({uri,label:skillInfo.get(uri)?.label||uri})),targetEssentialCoverage:score,similarity}});
+   relations.push({fromRoleId:r.id,toRoleId,score,basis:{method:'Talentio derived occupational competency overlap; not ESCO equivalence',kind,sourceVersion:source.sourceVersion,sharedEssentialSkills:shared.sort().map(uri=>({uri,label:skillInfo.get(uri)?.label||uri})),targetEssentialCoverage:score,similarity,evidenceMode:'DIRECTIONAL_TASK_COVERAGE'}});
   }
+ }
+ // Preserve the original directed decision. Add the reverse RELATED result only
+ // when that directed edge already passed its work-scope and coverage checks,
+ // and the pair independently shares strong, specific essential-task evidence.
+ const byPair=new Map(relations.map(row=>[row.fromRoleId+'|'+row.toRoleId,row]));
+ for(const relation of relations){
+   if(relation.basis.kind!=='RELATED')continue;
+   const reverse=byPair.get(relation.toRoleId+'|'+relation.fromRoleId);
+   if(!reverse||reverse.basis.kind==='RELATED')continue;
+   const fromEssential=anchors.get(relation.fromRoleId)??new Set<string>();
+   const toEssential=anchors.get(relation.toRoleId)??new Set<string>();
+   const sharedEssential=[...fromEssential].filter(uri=>toEssential.has(uri));
+   if(sharedEssential.length<MIN_RECIPROCAL_ESSENTIAL_TASKS||relation.basis.similarity<MIN_RECIPROCAL_SIMILARITY)continue;
+   if(!overlapsWorkScope(relation.fromRoleId,relation.toRoleId)||!overlapsWorkScope(relation.toRoleId,relation.fromRoleId))continue;
+   for(const edge of [relation,reverse]){
+     edge.basis.kind='RELATED';
+     edge.basis.evidenceMode='SYMMETRIC_ESSENTIAL_TASK_OVERLAP';
+     edge.basis.reciprocalTaskCount=sharedEssential.length;
+     edge.basis.reciprocalSimilarityThreshold=MIN_RECIPROCAL_SIMILARITY;
+   }
  }
  relations.sort((a,b)=>a.fromRoleId.localeCompare(b.fromRoleId)||a.toRoleId.localeCompare(b.toRoleId));
  const catalogRevision=professionCatalogRevision(roles),sourceDigest=professionDigest(source),id=professionDigest([PROFESSION_RELATION_ALGORITHM,catalogRevision,sourceDigest]);
  const related=relations.filter(r=>r.basis.kind==='RELATED');
  const crossFamily=related.filter(r=>index.identity(r.fromRoleId)!.familyId!==index.identity(r.toRoleId)!.familyId).length;
- const report={positionsProcessed:roles.length,selectableCanonicalPositions:roots.length,profilesAvailable:profiles.filter(p=>p.sourceUri).length,localTaskProfiles:profiles.filter(p=>p.mappingMethod==='LOCAL_TASK_REFERENCE').length,sourceMissing:profiles.filter(p=>p.mappingMethod==='SOURCE_NOT_AVAILABLE').map(p=>({id:p.jobTitleId,name:index.roles.get(p.jobTitleId)!.name})),notSelectable:profiles.filter(p=>p.mappingMethod==='NOT_SELECTABLE').length,relations:relations.length,related:related.length,careerPaths:relations.length-related.length,positionsWithRelations:new Set(related.map(r=>r.fromRoleId)).size,withinFamily:related.length-crossFamily,crossFamily};
+ const reciprocalRelations=related.filter(r=>r.basis.evidenceMode==='SYMMETRIC_ESSENTIAL_TASK_OVERLAP').length;
+ const report={positionsProcessed:roles.length,selectableCanonicalPositions:roots.length,profilesAvailable:profiles.filter(p=>p.sourceUri).length,localTaskProfiles:profiles.filter(p=>p.mappingMethod==='LOCAL_TASK_REFERENCE').length,sourceMissing:profiles.filter(p=>p.mappingMethod==='SOURCE_NOT_AVAILABLE').map(p=>({id:p.jobTitleId,name:index.roles.get(p.jobTitleId)!.name})),notSelectable:profiles.filter(p=>p.mappingMethod==='NOT_SELECTABLE').length,relations:relations.length,related:related.length,careerPaths:relations.length-related.length,reciprocalRelations,reciprocalPairs:reciprocalRelations/2,positionsWithRelations:new Set(related.map(r=>r.fromRoleId)).size,withinFamily:related.length-crossFamily,crossFamily};
  return {id,algorithmVersion:PROFESSION_RELATION_ALGORITHM,sourceVersion:source.sourceVersion,sourceDigest,catalogRevision,profiles,relations,report};
 }

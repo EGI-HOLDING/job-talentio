@@ -51,7 +51,7 @@
     "matching:v3:benchmark": "tsx src/matching/employee-intent.benchmark.ts ../../output/employee-intent-v3",
     "test:employee-related": "tsx src/matching/employee-related.integration.ts",
     "test:employee-related:local": "node ../../scripts/employee-related.integration.cjs",
-    "test:profession-relations": "tsx src/matching/occupation-relations.smoke.ts && tsx src/matching/occupation-relations.source.smoke.ts && tsx src/matching/occupation-relations.local.smoke.ts",
+    "test:profession-relations": "tsx src/matching/vacancy-tasks.smoke.ts && tsx src/matching/occupation-relations.smoke.ts && tsx src/matching/occupation-relations.source.smoke.ts && tsx src/matching/occupation-relations.local.smoke.ts",
     "matching:professions": "tsx src/scripts/occupation-relations.ts",
     "test:hr-flow": "tsx src/hr-flow/hr-flow.smoke.ts",
     "test:hr-flow:local": "node ../../scripts/business-catalog-run.cjs apps/api/src/hr-flow/hr-flow.integration.ts",

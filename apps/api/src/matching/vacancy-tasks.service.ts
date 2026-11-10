@@ -53,7 +53,7 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
         LIMIT ${limit}
       `;
       for(const row of rows){
-        const evidence=taskEvidence(VACANCY_TASK_VERSION==='vacancy-tasks-v3'?vacancyTaskText(row):row.description,this.concepts());
+        const evidence=taskEvidence(vacancyTaskText(row),this.concepts());
         const keys=evidence.map(task=>task.key);
         await this.db.$executeRaw`
           INSERT INTO "JobOccupationTaskEvidence" ("jobId","version","jobUpdatedAt","coreKeys","evidence")

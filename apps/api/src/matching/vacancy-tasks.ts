@@ -1,7 +1,7 @@
 import type { EmployeeEligibility } from '@job-talentio/shared';
 import { createHash } from 'node:crypto';
 
-export const VACANCY_TASK_VERSION = 'vacancy-tasks-v3';
+export const VACANCY_TASK_VERSION = 'vacancy-tasks-v4';
 export const vacancyTaskText=(posting:{description:string;responsibilities?:readonly string[]})=>posting.responsibilities?.length?[posting.description,'Responsibilities',...posting.responsibilities].join('\n'):posting.description;
 
 // Concepts describe work products and responsibility. A domain name or a
@@ -79,7 +79,7 @@ export function escoTaskDictionary(skills:ReadonlyArray<{uri:string;label:string
   for(const skill of skills){
     if(skill.type!=='skill'||skill.reuse!=='occupation-specific')continue;
     const tokens=words(skill.label);
-    if(tokens.length<3)continue;
+    if(tokens.length<2)continue;
     const entries=byStart.get(tokens[0]!)??[];
     entries.push({key:skill.uri,tokens});
     byStart.set(tokens[0]!,entries);
@@ -96,19 +96,47 @@ export function escoTaskDictionary(skills:ReadonlyArray<{uri:string;label:string
 }
 export type EscoTaskDictionary=ReturnType<typeof escoTaskDictionary>;
 
+type VacancySection='UNKNOWN'|'DUTIES'|'EXCLUDED';
+const DUTY_HEADING=/^(?:(?:key|main|primary|core|utama|job) )*(?:job )?(?:responsibilities|responsibility|duties|accountabilities|tanggung jawab(?: utama)?|tugas(?: utama)?|uraian tugas|tugas dan tanggung jawab|job description|job duties|position description|what you(?:'|’)ll do|what you will do|role overview|position overview|key deliverables|обязанности|vazifalar|lavozim vazifalari)(?: +(?:and|dan|&) +(?:responsibilities|duties|accountabilities|tanggung jawab|tugas|deliverables))?$/iu;
+const EXCLUDED_HEADING=/^(?:(?:candidate|minimum|required|preferred|job|role) )*(?:requirements?(?: (?:and|&) qualifications?)?|qualifications?(?: (?:and|&) requirements?)?|persyaratan(?: dan kualifikasi)?|kualifikasi(?: dan persyaratan)?|candidate profile|your profile|what we(?:'|’)re looking for|what we are looking for|you(?:'|’)ll need|skills?(?: and experience| and qualifications)?|keahlian yang dibutuhkan|kriteria kandidat|education|experience requirements?|benefits?|keuntungan|tentang perusahaan|about (?:us|the company)|nilai tambah|nice[- ]to[- ]have|kpi(?:s)?|kompensasi|cara melamar|pertanyaan penyaringan|требования|talablar|ko['’]nikmalar)$/iu;
+const ACTION_START=/^(?:(?:you|the role|the successful candidate|incumbent) +(?:will|shall|must|is expected to) +|(?:responsible for|bertanggung jawab (?:untuk|atas)|bertugas untuk) +)?(?:lead|manage|set|assign|review|supervise|coach|perform|map|identify|prospect|negotiate|record|process|plan|analyse|analyze|research|prepare|cook|serve|develop|build|design|implement|operate|inspect|maintain|repair|teach|monitor|assess|collect|test|conduct|resolve|escalate|verify|confirm|coordinate|deliver|train|support|ensure|oversee|execute|install|configure|mengelola|memimpin|menetapkan|membina|melatih|melakukan|memetakan|menggali|mencari|menegosiasikan|menyusun|mencatat|memproses|merancang|meneliti|menyiapkan|memasak|melayani|mengembangkan|membangun|mengimplementasikan|mengoperasikan|memeriksa|memelihara|memperbaiki|mengajar|memantau|menilai|mengambil|menguji|menangani|meneruskan|mengonfirmasi|mengoordinasikan|menyampaikan|memastikan|mengawasi|mengeksekusi|memasang|mengonfigurasi|управлять|разрабатывать|проводить|готовить|обеспечивать|координировать|контролировать|boshqarish|ishlab chiqish|tashkil etish|nazorat qilish|bajarish|tayyorlash|yetkazib berish)\b/iu;
+
+function isDutyHeading(line:string){
+  const heading=line.replace(/^[#*_ \-]+|[*_]+$/g,'').trim().replace(/\s*[:：]\s*$/u,'').trim();
+  if(DUTY_HEADING.test(heading))return {matched:true,inline:''};
+  const split=heading.match(/^(.{2,70}?)[\s:：–—-]+(.+)$/u);
+  if(split&&DUTY_HEADING.test(split[1]!.replace(/\s*[:：]\s*$/u,'')))return {matched:true,inline:split[2]!.trim()};
+  return {matched:false,inline:''};
+}
+function isExcludedHeading(line:string){
+  const heading=line.replace(/^[#*_ \-]+|[*_]+$/g,'').trim().replace(/\s*[:：]\s*$/u,'').trim();
+  if(EXCLUDED_HEADING.test(heading))return true;
+  const split=heading.match(/^(.{2,70}?)[\s:：–—-]+(.+)$/u);
+  return Boolean(split&&EXCLUDED_HEADING.test(split[1]!.replace(/\s*[:：]\s*$/u,'')));
+}
+function beforeExcludedInlineHeading(line:string){
+  const boundary=/(?:^|[.!?;]\s+)(?:requirements?|qualifications?|persyaratan|kualifikasi|benefits?|keuntungan|candidate profile|your profile|what we(?:'|’)re looking for|what we are looking for|skills?(?: and experience| and qualifications)?|education|nice[- ]to[- ]have|nilai tambah|kpi(?:s)?|kompensasi|cara melamar|pertanyaan penyaringan|требования|talablar|ko['’]nikmalar)\s*[:：]/iu.exec(line);
+  return boundary?line.slice(0,boundary.index).replace(/[.!?;\s]+$/u,'').trim():line;
+}
+
 export function taskEvidence(description: string,dictionary?:EscoTaskDictionary): TaskEvidence[] {
-  const lines = description.slice(0, 40_000).replace(/<\/(?:p|li|h[1-6]|div)>|<br\s*\/?\s*>/gi,'\n')
-    .replace(/<[^>]*>/g,' ').split(/[\n•]+/).map(normalized).filter(Boolean);
+  const lines = description.slice(0, 40_000).replace(/<li\b[^>]*>/gi,'\n- ')
+    .replace(/<\/(?:p|li|h[1-6]|div|tr)>|<br\s*\/?\s*>/gi,'\n')
+    .replace(/([•▪◦])/gu,'\n$1 ').replace(/<[^>]*>/g,' ').split(/[\n]+/).map(normalized).filter(Boolean);
   const found = new Map<string,TaskEvidence>();
-  let inDuties = false;
-  const standaloneDuties=lines.length===1&&/^(?:build|develop|design|implement|operate|inspect|maintain|repair|teach|prepare|manage|mengembangkan|membangun|merancang|mengoperasikan|memeriksa|menangani|menyiapkan)\b/iu.test(lines[0]??'');
+  let section:VacancySection='UNKNOWN';
   for (const line of lines) {
-    const heading=line.replace(/^[#*_\-\s]+|[*_]+$/g,'').trim();
-    const shortDutyHeading=heading.length<=55&&/^(?:[\p{L}]+\s+){0,4}tanggung jawab(?: utama)?\s*:?$/iu.test(heading);
-    if (shortDutyHeading||/^(?:tanggung jawab|tugas(?: utama)?|uraian tugas|job responsibilities|responsibilities|duties|what you.ll do|обязанности|vazifalar)(?:\s|:|$)/iu.test(heading)) inDuties = true;
-    else if (/^(?:persyaratan|kualifikasi|required qualifications|requirements?|qualifications?|benefits?|keuntungan|tentang perusahaan|about (?:us|the company)|nilai tambah|компенсация|требования|talablar|kompensasi|cara melamar|pertanyaan penyaringan)(?:\s|:|$)/iu.test(heading)) inDuties = false;
-    if (!inDuties&&!standaloneDuties) continue;
-    for (const sentence of line.split(/(?<=[.!?;])\s+/)) {
+    const text=line.replace(/^\s*(?:[-*]|\d+[.)])\s+/u,'').trim();
+    const dutyHeading=isDutyHeading(text);
+    if(dutyHeading.matched){section='DUTIES';}
+    else if(isExcludedHeading(text)){section='EXCLUDED';continue;}
+    const scanText=beforeExcludedInlineHeading(dutyHeading.inline||(!dutyHeading.matched?text:''));
+    // Real postings frequently omit a formal responsibilities heading. In that
+    // case, accept only concise action-led lines; a requirements heading turns
+    // this recovery off so requirements are never mistaken for performed work.
+    const actionLed=ACTION_START.test(scanText);
+    if(section!=='DUTIES'&&!(section==='UNKNOWN'&&actionLed))continue;
+    for (const sentence of scanText.split(/(?<=[.!?;])\s+/)) {
       if (/\b(?:tidak bertugas|tidak perlu|tidak akan|bukan bertanggung jawab|does not|will not|not responsible|nice to have)\b/i.test(sentence)) continue;
       for (const [key,,,pattern] of concepts)
         if (!found.has(key) && pattern.test(sentence)) found.set(key,{key,excerpt:sentence.slice(0,240)});
