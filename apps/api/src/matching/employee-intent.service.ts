@@ -127,9 +127,10 @@ export class EmployeeIntentService {
         const now = new Date();
         let mainTotal=0,salaryUnverifiedTotal=0;
         let primaryTotal=0,relatedTotal=0,primarySalaryUnverifiedTotal=0,relatedSalaryUnverifiedTotal=0;
+        let relatedProfessions:Array<{id:string;slug:string;name:string;nameId:string|null;nameRu:string|null;nameUz:string|null;count:number}>=[];
         const separated=options.separated||feed==='related';
         const policy={version:EMPLOYEE_PRACTICAL_POLICY_VERSION,active:context.practicalEnabled,countryFilterApplied:!!(context.preferences.preferredCountries.length||context.preferences.residenceCountryId)};
-        const empty = (state: EmployeeRecommendationState,emptyReason: import('@job-talentio/shared').EmployeeEmptyReason=state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS') => ({ primaryTotal,relatedTotal,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items: [], page: 1, limit, total: 0, totalPages: 1, mode: 'UNAVAILABLE' as const, state, emptyReason, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: context.fingerprint, cvSource: context.cvSource });
+        const empty = (state: EmployeeRecommendationState,emptyReason: import('@job-talentio/shared').EmployeeEmptyReason=state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS') => ({ primaryTotal,relatedTotal,relatedProfessions,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items: [], page: 1, limit, total: 0, totalPages: 1, mode: 'UNAVAILABLE' as const, state, emptyReason, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: context.fingerprint, cvSource: context.cvSource });
         if (context.state !== 'READY')
             return empty(context.state);
         const compute=async()=>{
@@ -155,6 +156,17 @@ export class EmployeeIntentService {
         relatedTotal=ranked.filter(row=>isRelated(row)&&group(row)==='MAIN').length;
         primarySalaryUnverifiedTotal=ranked.filter(row=>!isRelated(row)&&group(row)==='SALARY_UNVERIFIED').length;
         relatedSalaryUnverifiedTotal=ranked.filter(row=>isRelated(row)&&group(row)==='SALARY_UNVERIFIED').length;
+        const relatedCounts=new Map<string,number>();
+        for(const row of ranked){
+          const roleId=row.evaluation.eligibility.canonicalRoleId;
+          if(isRelated(row)&&group(row)==='MAIN'&&roleId)relatedCounts.set(roleId,(relatedCounts.get(roleId)||0)+1);
+        }
+        const topRelated=[...relatedCounts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,3);
+        if(topRelated.length){
+          const roles=await this.db.jobTitle.findMany({where:{id:{in:topRelated.map(([id])=>id)}},select:{id:true,slug:true,name:true,nameId:true,nameRu:true,nameUz:true}});
+          const byRole=new Map(roles.map(role=>[role.id,role]));
+          relatedProfessions=topRelated.flatMap(([id,count])=>{const role=byRole.get(id);return role?[{...role,count}]:[];});
+        }
         ranked=ranked.filter(row=>group(row)===(feed==='salary-unverified'?'SALARY_UNVERIFIED':'MAIN')&&(!separated||isRelated(row)===(feed==='related'||feed==='salary-unverified'&&options.scope==='related')));
         if (!ranked.length){
             if(roleTotal)return empty('NO_ELIGIBLE_JOBS','PRACTICAL_PREFERENCES');
@@ -171,7 +183,7 @@ export class EmployeeIntentService {
         if (!items.length)
             return empty('NO_ELIGIBLE_JOBS');
         new Logger('EmployeeIntent').log(JSON.stringify({ version: EMPLOYEE_INTENT_VERSION, state: 'READY', eligible: total, returned: items.length, unknown: items.reduce((n, i) => n + i.matchInsights.evidence.filter(e => e.status === 'UNKNOWN').length, 0) }));
-        return { primaryTotal,relatedTotal,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items, page, limit, total, totalPages, mode: context.preferencesOnly?'PREFERENCES_BASED' as const:'PERSONALIZED' as const, state: 'READY' as const, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: digest([context.fingerprint,feed, ranked.map(r => [r.job.id, r.evaluation])]), cvSource: context.cvSource };
+        return { primaryTotal,relatedTotal,relatedProfessions,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items, page, limit, total, totalPages, mode: context.preferencesOnly?'PREFERENCES_BASED' as const:'PERSONALIZED' as const, state: 'READY' as const, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: digest([context.fingerprint,feed, ranked.map(r => [r.job.id, r.evaluation])]), cvSource: context.cvSource };
     }
     async explore(profileId:string,page:number,limit:number,context?:Awaited<ReturnType<EmployeeIntentService['context']>>){
         context??=await this.context(profileId,false);

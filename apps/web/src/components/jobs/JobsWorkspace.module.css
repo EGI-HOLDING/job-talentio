@@ -325,3 +325,33 @@
 .recommendationEnd { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:54px; padding:12px 20px; border-top:1px solid var(--line); color:#8993a6; font-size:.76rem; }
 .recommendationEnd .textButton { flex:0 0 auto; }
 @media (max-width: 600px) { .recommendationEnd { padding:12px 16px; gap:12px; } }
+.recommendationEmpty { margin:20px; padding:24px 20px; border:1px solid #ded3ff; border-radius:10px; background:linear-gradient(135deg,#fbf9ff 0%,#f7f3ff 100%); text-align:center; }
+.recommendationEmpty > svg { width:27px; height:27px; color:#7048e8; }
+.recommendationEmpty h2 { max-width:680px; margin:11px auto 0; color:#17213a; font-size:1.02rem; line-height:1.4; letter-spacing:-.02em; }
+.recommendationEmpty p { max-width:660px; margin:5px auto 0; color:#66738d; font-size:.79rem; line-height:1.55; }
+.recommendationExplore { display:inline-flex; align-items:center; gap:7px; margin-top:12px; color:#5b36dc; font-size:.78rem; font-weight:650; }
+.recommendationExplore:hover { color:#3e22aa; }
+.relatedProfessions { padding:19px 20px 22px; border-top:1px solid var(--line); background:#fff; }
+.relatedProfessions > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:13px; }
+.relatedProfessions > header h2 { margin:0; color:#17213a; font-size:.96rem; font-weight:700; letter-spacing:-.02em; }
+.relatedProfessions > header p { margin:4px 0 0; color:#7b859c; font-size:.72rem; line-height:1.45; }
+.relatedProfessions > header > a { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; padding-top:1px; color:#5635e8; font-size:.73rem; font-weight:600; }
+.relatedProfessions > header > a:hover { color:#392199; }
+.professionGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.professionCard { display:flex; align-items:center; gap:10px; min-width:0; min-height:70px; padding:10px 12px; border:1px solid #e3e6ef; border-radius:8px; background:#fff; color:var(--ink); transition:border-color .15s,background .15s,transform .15s; }
+.professionCard:hover { border-color:#c7b7ff; background:#fbf9ff; transform:translateY(-1px); }
+.professionIcon { display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px; border-radius:8px; background:#f2edff; color:#7048e8; }
+.professionIcon svg { width:17px; height:17px; }
+.professionCopy { display:flex; flex:1; flex-direction:column; min-width:0; gap:3px; }
+.professionCopy strong { overflow:hidden; color:#17213a; font-size:.76rem; font-weight:650; line-height:1.35; text-overflow:ellipsis; }
+.professionCopy small { color:#7b859c; font-size:.68rem; }
+.professionCard > svg:last-child { width:15px; height:15px; flex:0 0 15px; color:#6550b2; transform:rotate(-90deg); }
+@media (max-width: 760px) {
+  .recommendationEmpty { margin:14px; padding:20px 16px; }
+  .recommendationEmpty h2 { font-size:.92rem; }
+  .recommendationEmpty p { font-size:.74rem; }
+  .relatedProfessions { padding:16px; }
+  .relatedProfessions > header { align-items:center; }
+  .professionGrid { grid-template-columns:1fr; gap:8px; }
+  .professionCard { min-height:62px; }
+}
