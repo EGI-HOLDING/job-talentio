@@ -330,8 +330,25 @@ async function main() {
         const detail = await app.getForJob(hrUser, job.id, 'load-995', 'id');
         check(detail.tara?.rank === 2, 'detail rank uses the complete version pool rather than a one-row pool');
         check(calls.length === loadCalls, '50–1,000 applicant listing never calls AI');
-        const erasure = new UserErasureService(db, storage as never);
+        // Reproduce a bounded database delay inside the atomic erasure transaction.
+        // The default five-second transaction budget previously rolled back all cleanup.
+        let erasureTransactionBudget: number | undefined;
+        const delayedErasureDb = new Proxy(db, {
+            get(target, property) {
+                if (property === '$transaction') return (operation: (tx: unknown) => unknown, options: { timeout?: number } | undefined) => {
+                    erasureTransactionBudget = options?.timeout;
+                    return target.$transaction(async tx => {
+                        await tx.$executeRaw`SELECT pg_sleep(5.2)`;
+                        return operation(tx);
+                    }, options);
+                };
+                const value = Reflect.get(target, property);
+                return typeof value === 'function' ? value.bind(target) : value;
+            },
+        });
+        const erasure = new UserErasureService(delayedErasureDb, storage as never);
         await erasure.erase(a.user.id);
+        check(erasureTransactionBudget === 30_000, 'erasure uses a bounded budget for atomic cleanup across screening tables');
         check(await db.aiScreeningSession.count({ where: { profileId: a.user.id } }) === 0, 'erasure clears sessions and answers');
         check(await db.aiScreeningCall.count({ where: { subjectId: a.id, status: 'ERASED' } }) === 1, 'erasure clears private provider results but retains accounting');
         check(!objects.has(report.pdfKey!), 'private PDF removed');

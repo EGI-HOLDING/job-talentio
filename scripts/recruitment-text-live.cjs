@@ -73,6 +73,7 @@ module.exports = async function verifyText({ page, dashboard, drawer, db, worker
     report.textRounds.push({ status: advanced.status, count: advanced.questions.length, last: advanced.questions.at(-1)?.text });
   }
   const complete = await session();
+  report.questions = complete.questions.map(question => ({ kind: question.kind, question: question.text, answer: question.answer }));
   assert.equal(complete.status, 'COMPLETED');
   assert.ok(complete.questions.some(q => q.kind === 'FOLLOW_UP'), 'The injection was followed by a substantive follow-up');
   assert.ok(complete.questions.every(q => !q.text.includes(marker)), 'Tara did not repeat the injected marker');
@@ -87,6 +88,7 @@ module.exports = async function verifyText({ page, dashboard, drawer, db, worker
   await processWork(db, worker, 'EVALUATE', sessionId, allowed);
   const endpoint = '/recruitment/invitations/' + invitationId + '/report';
   const result = await call(endpoint, hr);
+  report.assessment = result.evaluation;
   assert.equal(result.evaluation.status, 'READY');
   assert.ok(result.evaluation.result.summary);
   assert.equal(result.questions.length, complete.questions.length);
@@ -115,9 +117,7 @@ module.exports = async function verifyText({ page, dashboard, drawer, db, worker
   await drawer.getByRole('heading', { name: 'Laporan screening' }).waitFor();
   assert.equal(await drawer.getByRole('button', { name: 'Unduh PDF', exact: true }).last().isEnabled(), true);
   report.steps.push('HR browser displays the text interview evaluation, saved conversation and downloadable PDF.');
-  report.questions = complete.questions.map(q => ({ kind: q.kind, question: q.text, answer: q.answer }));
   report.score = result.evaluation.score;
-  report.assessment = result.evaluation;
   report.supportedAnswersProvided = !unsupported;
   report.providerCalls = await db.aiScreeningCall.findMany({ where: { workId: { in: [...allowed] } }, select: { id: true, responseId: true, task: true, status: true, model: true, inputTokens: true, outputTokens: true, costUsd: true } });
   if (textUi) assert.equal(report.providerCalls.length, 0);

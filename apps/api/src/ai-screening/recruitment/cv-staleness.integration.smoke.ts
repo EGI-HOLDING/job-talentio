@@ -46,13 +46,19 @@ async function main(){
  await service.retry(hr,row.id);
  const work=await db.aiScreeningWork.findUniqueOrThrow({where:{key:'CV_SCORE:'+row.id+':2'}});
  const running=scorer.process(work.id,row.id);await begun;
+ const pendingCall=await db.aiScreeningCall.create({data:{key:'stale-running-provider-call',workId:work.id,subjectId:row.id,task:'cv-score',model:'gpt-6-luna',promptVersion:'test',inputHash:'old-criteria',status:'RUNNING',responseId:'resp_stale_criteria'}});
+
  await jobs.update(hr,job.id,{description:'Mengembangkan layanan data Python, PostgreSQL, dan Apache Kafka.'});
- release();await running;
  saved=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}});
  assert.equal(saved.scoreStatus,'STALE');assert.equal(saved.cvScore,null,'old in-flight result cannot restore obsolete score');
  assert.equal(calls,1,'job edits never invoke paid scoring');
  await assert.rejects(service.bulk(hr,{companyId:company.id,selection:{ids:[row.id,'foreign-candidate']},action:{kind:'rescore'}}));
- assert.equal((await service.bulk(hr,{companyId:company.id,selection:{ids:[row.id]},action:{kind:'rescore'}})).count,1);
+ try {
+  assert.equal((await service.bulk(hr,{companyId:company.id,selection:{ids:[row.id]},action:{kind:'rescore'}})).count,1,'an explicit rescore with changed criteria does not resume an obsolete running response');
+ } finally { release();await running; }
+ assert.equal((await db.aiScreeningCall.findUniqueOrThrow({where:{id:pendingCall.id}})).responseId,'resp_stale_criteria');
+ assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}})).scoreStatus,'PENDING','old result cannot overwrite the explicitly requested new criteria');
+
  await scorer.failure(row.id,'OLD_FAILURE',work.key);
  saved=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}});assert.equal(saved.scoreStatus,'PENDING','old worker failure cannot fail a new revision');
  await scorer.process(work.id,row.id);assert.equal(calls,1,'obsolete durable work cannot spend on a newer revision');

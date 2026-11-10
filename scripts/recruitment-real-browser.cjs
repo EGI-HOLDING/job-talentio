@@ -202,6 +202,18 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     report.passed = true;
   } catch (error) {
     report.failure = redact(error.message);
+    report.failureState = await db.aiScreeningSession.findFirst({
+      where: { jobId: job.id }, orderBy: { createdAt: 'desc' },
+      select: {
+        status: true, revision: true,
+        questions: { orderBy: { position: 'asc' }, select: { id: true, text: true, answer: true, shownAt: true, answeredAt: true } },
+        evaluation: { select: { status: true, screeningScore: true, result: true, error: true } },
+      },
+    }).catch(() => null);
+    if (!report.providerCalls) report.providerCalls = await db.aiScreeningCall.findMany({
+      where: { workId: { in: [...allowed] } },
+      select: { id: true, responseId: true, task: true, status: true, inputTokens: true, outputTokens: true, costUsd: true, error: true },
+    }).catch(() => []);
     throw error;
   } finally {
     fs.writeFileSync(path.join(out, test + '.json'), JSON.stringify(report, null, 2));

@@ -3,7 +3,8 @@ import type { Prisma } from '@prisma/client';
 
 // Resume the exact revision and provider response. Never authorize another billed creation.
 export async function resumeKnownCvScore(tx: Prisma.TransactionClient, row: { id: string; revision: number; scoreStatus: string }, actorUserId: string) {
-  const unresolved = await tx.aiScreeningCall.findMany({ where: { subjectId: row.id, status: { in: ['RUNNING', 'UNCERTAIN'] } }, select: { workId: true, responseId: true } });
+  const statuses = row.scoreStatus === 'FAILED' ? ['RUNNING', 'UNCERTAIN'] : ['UNCERTAIN'];
+  const unresolved = await tx.aiScreeningCall.findMany({ where: { subjectId: row.id, status: { in: statuses } }, select: { workId: true, responseId: true } });
   if (!unresolved.length) return false;
   const work = await tx.aiScreeningWork.findUnique({ where: { key: 'CV_SCORE:' + row.id + ':' + row.revision } });
   if (row.scoreStatus !== 'FAILED' || !work || work.kind !== 'CV_SCORE' || work.subjectId !== row.id || work.status !== 'FAILED' ||

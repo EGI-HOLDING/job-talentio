@@ -261,6 +261,10 @@ export class UserErasureService {
           },
         });
       }
+    }, {
+      // This atomic cleanup touches screening, invitations and profile history.
+      // Keep it bounded while allowing brief database contention beyond Prisma's 5s default.
+      timeout: 30_000,
     });
 
     if (avatarKey) {
