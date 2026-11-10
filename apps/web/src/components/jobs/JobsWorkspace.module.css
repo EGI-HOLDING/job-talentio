@@ -80,10 +80,10 @@
 .companyMeta { display: flex; align-items: center; gap: 5px 8px; min-width: 0; margin: 3px 0 0; color: #35435d; font-size: .85rem; line-height: 1.4; }
 .companyMeta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .promotionControl { position: relative; z-index: 2; display: inline-flex; flex-shrink: 0; }
-.jobMeta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 9px; margin-top: 4px; color: #56647d; font-size: .78rem; line-height: 1.4; }
-.jobMeta > span, .jobMeta time { display: inline-flex; align-items: flex-start; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.jobMeta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 9px; margin-top: 4px; color: #56647d; font-size: .78rem; line-height: 1.4; }
+.jobMeta > span, .jobMeta time { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
 .jobMeta time { white-space: nowrap; }
-.jobMeta svg { flex: 0 0 14px; width: 14px; height: 14px; margin-top: 1px; }
+.jobMeta svg { flex: 0 0 14px; width: 14px; height: 14px; margin-top: 0; }
 .postedWithLocation::before { content: ""; align-self: center; flex: 0 0 3px; margin-inline: 0 4px; height: 3px; border-radius: 50%; background: currentColor; }
 .saveButton { position: absolute; z-index: 3; top: 50%; right: 12px; display: grid; place-items: center; width: 30px; height: 30px; padding: 4px; transform: translateY(-50%); color: #8d98ad; background: transparent; }
 .saveButton:hover { color: var(--purple); background: #ece7ff; }
@@ -321,3 +321,7 @@
 .promotionControl { position:relative; z-index:2; display:inline-flex; }
 .previewCompanyHeading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
 .previewCompanyHeading > strong { min-width:0; overflow-wrap:anywhere; }
+
+.recommendationEnd { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:54px; padding:12px 20px; border-top:1px solid var(--line); color:#8993a6; font-size:.76rem; }
+.recommendationEnd .textButton { flex:0 0 auto; }
+@media (max-width: 600px) { .recommendationEnd { padding:12px 16px; gap:12px; } }
