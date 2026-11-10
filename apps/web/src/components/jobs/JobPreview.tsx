@@ -22,7 +22,7 @@ type PreviewJob = {
   salaryMin?: number | null; salaryMax?: number | null; currency?: string | null;
   salaryPeriod?: string | null; workMode?: string; employmentType?: string; experienceLevel?: string | null;
   experienceYearsMin?: number | null; city?: { name: string } | null; category?: { name: string } | null;
-  company: { name: string; slug: string; logoUrl?: string | null; anonymous?: boolean; isVerified?: boolean };
+  company: { name: string; logoUrl?: string | null; anonymous?: boolean; isVerified?: boolean };
   jobSkills?: Array<{ skill: { name: string }; isRequired: boolean }>;
   benefits?: Array<{ benefit: { name: string } }>;
   jobLanguages?: Array<{ language: { name: string }; minLevel: string; isRequired: boolean; provenance?: string }>;
