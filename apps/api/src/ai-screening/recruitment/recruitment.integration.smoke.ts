@@ -158,6 +158,13 @@ async function main() {
     assert.equal(await db.aiScreeningWork.count({where:{subjectId:recoveryId}}),1,'no duplicate work');
     await markFailed();
     assert.equal((await candidates.bulk(hr,{companyId:'co',selection:{ids:[recoveryId]},action:{kind:'rescore'}})).count,1,'bulk resumes the same stored response too');
+    await markFailed();
+    await db.aiScreeningCall.updateMany({where:{workId:recoveryWork.id},data:{status:'RUNNING',responseId:null}});
+    await assert.rejects(candidates.retry(hr,recoveryId),'an unacknowledged running creation must not be replaced');
+    await db.aiScreeningCall.updateMany({where:{workId:recoveryWork.id},data:{responseId:'resp_cv_recovery'}});
+    await candidates.retry(hr,recoveryId);
+    assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:recoveryId}})).revision,0,'a known running response retains its original CV revision');
+    assert.equal(await db.aiScreeningWork.count({where:{subjectId:recoveryId}}),1,'known running response cannot create another paid CV work');
     globalThis.fetch=(async(url:any,init:any)=>{
       assert.notEqual(init.method,'POST','recovery never creates a second provider request');
       if(init.method==='DELETE')return new Response('{}');

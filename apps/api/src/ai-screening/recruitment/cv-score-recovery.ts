@@ -3,11 +3,11 @@ import type { Prisma } from '@prisma/client';
 
 // Resume the exact revision and provider response. Never authorize another billed creation.
 export async function resumeKnownCvScore(tx: Prisma.TransactionClient, row: { id: string; revision: number; scoreStatus: string }, actorUserId: string) {
-  const uncertain = await tx.aiScreeningCall.findMany({ where: { subjectId: row.id, status: 'UNCERTAIN' }, select: { workId: true, responseId: true } });
-  if (!uncertain.length) return false;
+  const unresolved = await tx.aiScreeningCall.findMany({ where: { subjectId: row.id, status: { in: ['RUNNING', 'UNCERTAIN'] } }, select: { workId: true, responseId: true } });
+  if (!unresolved.length) return false;
   const work = await tx.aiScreeningWork.findUnique({ where: { key: 'CV_SCORE:' + row.id + ':' + row.revision } });
   if (row.scoreStatus !== 'FAILED' || !work || work.kind !== 'CV_SCORE' || work.subjectId !== row.id || work.status !== 'FAILED' ||
-      uncertain.some(call => call.workId !== work.id || !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
+      unresolved.some(call => call.workId !== work.id || !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
     throw new ConflictException('Proses AI memerlukan pemeriksaan operator sebelum dicoba ulang.');
   }
   const claimed = await tx.recruitmentCandidate.updateMany({ where: { id: row.id, revision: row.revision, scoreStatus: 'FAILED' }, data: { scoreStatus: 'PENDING', error: null } });

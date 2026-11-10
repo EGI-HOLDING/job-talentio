@@ -34,7 +34,7 @@ async function main(){
  const emails:Array<{to:string;body:string}>=[];let failEmail=false;
  const actions=new CandidateActions(db,candidates,{send:async(to:string,_subject:string,body:string)=>{if(failEmail)return null;emails.push({to,body});return{id:'mock-mail-'+emails.length};}} as never);
  const worker=new ScreeningWorker(db,new ConfigService({}),storage as never,{} as never,{} as never,{} as never,{} as never,{} as never,undefined,candidates,undefined,undefined,actions);
- async function deliver(messageId:string,key?:string){const work=await db.aiScreeningWork.findUniqueOrThrow({where:{key:key??'CANDIDATE_DELIVERY:'+messageId}});await worker.process(work.id);assert.equal((await db.aiScreeningWork.findUniqueOrThrow({where:{id:work.id}})).status,'DONE');}
+ async function deliver(messageId:string,key?:string){const work=await db.aiScreeningWork.findUniqueOrThrow({where:{key:key??'CANDIDATE_DELIVERY:'+messageId}});await worker.process(work.id);const finished=await db.aiScreeningWork.findUniqueOrThrow({where:{id:work.id}});assert.equal(finished.status,'DONE',JSON.stringify({key:finished.key,error:finished.error,availableAt:finished.availableAt,started:work.availableAt,attempts:finished.attempts}));}
  const input=candidateMessageSchema.parse({companyId:'actions-co',selection:{ids:['actions-c1','actions-c2']},requestKey:'actions-message-001',subject:'Info {{jobTitle}}',body:'Halo {{name}}, <script> adalah teks biasa.\nTim {{companyName}} mengundangmu berdiskusi.',channels:{email:true,talentio:true}});
  await assert.rejects(actions.send({...hr,id:'actions-foreign'},input));
  await assert.rejects(actions.send(hr,{...input,requestKey:'actions-missing-email',selection:{ids:['actions-c1','actions-missing']}}));

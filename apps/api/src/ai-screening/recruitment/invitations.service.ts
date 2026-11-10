@@ -114,7 +114,13 @@ export class InvitationsService {
    const kind=evaluation?.status==='FAILED'?(row.mode==='VOICE'?'VOICE_EVALUATE':'EVALUATE'):'PDF';
    const works=await tx.aiScreeningWork.findMany({where:{subjectId:sessionId,kind,status:'FAILED'}});
    if(!works.length)throw new ConflictException('Tidak ada proses gagal yang perlu diulang.');
-   if(await tx.aiScreeningCall.count({where:{workId:{in:works.map(w=>w.id)},OR:[{status:'UNCERTAIN',responseId:null},{status:'RUNNING'}]}}))throw new ConflictException('Status panggilan AI perlu diperiksa operator sebelum dicoba ulang.');
+   const unresolved = await tx.aiScreeningCall.findMany({
+    where: { workId: { in: works.map(work => work.id) }, status: { in: ['RUNNING', 'UNCERTAIN'] } },
+    select: { responseId: true },
+   });
+   if (unresolved.some(call => !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
+    throw new ConflictException('Status panggilan AI perlu diperiksa operator sebelum dicoba ulang.');
+   }
    await tx.aiScreeningCall.updateMany({where:{workId:{in:works.map(w=>w.id)},status:{in:['FAILED','INVALID']}},data:{status:'RECOVERED'}});
    const claim=await tx.aiScreeningWork.updateMany({where:{id:{in:works.map(w=>w.id)},status:'FAILED'},data:{status:'PENDING',attempts:0,availableAt:new Date(),error:null}});
    if(kind!=='PDF')await tx.aiScreeningEvaluation.updateMany({where:{sessionId,status:'FAILED'},data:{status:'PENDING',error:null}});
