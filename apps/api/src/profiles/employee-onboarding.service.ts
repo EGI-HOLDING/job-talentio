@@ -9,7 +9,6 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { ProfilesService } from "./profiles.service";
 import { AuthUser } from "../common/auth.decorators";
-import { canonicalRoleNames } from "../common/title-resolve";
 import { resolveJobLocation } from "../common/geo-selection";
 
 const include = {
@@ -82,8 +81,7 @@ export class EmployeeOnboardingService {
     if (step >= 5 && !normalizeE164Phone(profile.phone))
       throw new BadRequestException("PHONE_REQUIRED");
   }
-  private async save(db: Db, user: AuthUser, input: EmployeeOnboardingInput) {
-    const before = await this.profile(db, user.id);
+  private async save(db: Db, user: AuthUser, input: EmployeeOnboardingInput, before: Awaited<ReturnType<EmployeeOnboardingService['profile']>>) {
     const draft = {
       ...((before.onboardingDraft || {}) as Record<string, unknown>),
     };
@@ -139,10 +137,6 @@ export class EmployeeOnboardingService {
     )
       throw new BadRequestException("Invalid currency");
     const intentPreferences = await employeePreferenceUpdate(db,input,before.id);
-    const roles =
-      input.desiredPositions === undefined
-        ? undefined
-        : await canonicalRoleNames(db, input.desiredPositions);
     let phone: string | null | undefined;
     if (input.phone !== undefined) {
       const rawPhone = input.phone.trim();
@@ -167,9 +161,6 @@ export class EmployeeOnboardingService {
     const profile = await db.employeeProfile.update({
       where: { id: before.id },
       data: {
-        ...(roles
-          ? { desiredPositions: roles, desiredPosition: roles[0] || null }
-          : {}),
         ...intentPreferences,
         ...(input.preferredWorkModes ? {preferredWorkModes:input.preferredWorkModes} : {}),
         ...(input.preferredCountryIds
@@ -210,7 +201,7 @@ export class EmployeeOnboardingService {
         const current = await this.profile(db, user.id);
         if (current.onboardingStatus !== "IN_PROGRESS")
           return this.result(current);
-        return this.result(await this.save(db, user, input));
+        return this.result(await this.save(db, user, input, current));
       });
     } catch (error) {
       this.rethrowPhoneConflict(error);
@@ -226,7 +217,7 @@ export class EmployeeOnboardingService {
         const before = await this.profile(db, user.id);
         if (before.onboardingStatus !== "IN_PROGRESS")
           return this.result(before);
-        const profile = await this.save(db, user, input);
+        const profile = await this.save(db, user, input, before);
         this.validate(profile, 5);
         const draft = employeeOnboardingSchema.parse(
           profile.onboardingDraft || {},

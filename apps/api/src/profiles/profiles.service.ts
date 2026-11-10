@@ -46,7 +46,7 @@ import { resolveSkill } from '../common/skill-resolve';
 import { resolveLanguage } from '../common/language-resolve';
 import { resolveCity } from '../common/city-resolve';
 import { resolveJobLocation } from '../common/geo-selection';
-import { canonicalRoleNames, normalizeJobTitleKey, profileRoleTexts, resolveJobTitle } from '../common/title-resolve';
+import { normalizeJobTitleKey, profileRoleTexts, resolveJobTitle } from '../common/title-resolve';
 import { detectLocale, effectiveSourceLocale } from '../common/i18n/detect-locale';
 import { resolveUgcContent } from '../common/i18n/content-locale';
 import { DEFAULT_LOCALE } from '../common/i18n/locale';
@@ -320,8 +320,6 @@ export class ProfilesService {
     if (countryIds.length && await this.prisma.country.count({where:{id:{in:countryIds},isActive:true,archivedAt:null}}) !== countryIds.length) throw new BadRequestException('Select countries from the available list');
     if (data.desiredSalaryCurrency && !Intl.supportedValuesOf('currency').includes(String(data.desiredSalaryCurrency))) throw new BadRequestException('Invalid currency');
     const intentPreferences = await employeePreferenceUpdate(this.prisma,data,profile.id);
-    const roleInput = data.desiredPositions === undefined ? (data.desiredPosition === undefined ? undefined : [String(data.desiredPosition)].filter(Boolean)) : data.desiredPositions as string[];
-    const roles = roleInput === undefined ? undefined : await canonicalRoleNames(this.prisma, roleInput);
     const headline = data.headline as string | undefined;
     const summary = data.summary as string | undefined;
 
@@ -340,7 +338,6 @@ export class ProfilesService {
           cityId,
           phone,
           desiredSalaryMin: data.desiredSalaryMin as number | null | undefined,
-          ...(roles ? { desiredPositions: roles, desiredPosition: roles[0] || null } : {}),
           ...intentPreferences,
           ...(data.preferredWorkModes ? {preferredWorkModes:data.preferredWorkModes as never} : {}),
           desiredSalaryCurrency: data.desiredSalaryCurrency as string | undefined,
