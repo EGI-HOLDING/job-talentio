@@ -39,13 +39,14 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, serviceWorkers: 'block' });
     contexts.push(context);
     if (useAudio) await voiceProbe.useSyntheticMicrophone(context, wav, interruptedVoice);
-    await context.addInitScript(session => {
+    await context.addInitScript(({ session, origin }) => {
+      if (location.origin !== origin) return;
       if (session) {
         localStorage.setItem('jt_token', session.accessToken);
         localStorage.setItem('jt_session', JSON.stringify(session));
       }
       localStorage.setItem('jt_country', 'ID');
-    }, session);
+    }, { session, origin: web });
     // Forward browser API traffic to the ephemeral Nest port. All responses come from Nest.
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
@@ -70,6 +71,13 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     return page;
   }
 
+  async function releaseContext(page) {
+    const context = page.context();
+    await context.unrouteAll({ behavior: 'ignoreErrors' });
+    await context.close();
+    contexts.splice(contexts.indexOf(context), 1);
+  }
+
   async function loginUser(userId, page) {
     const apiRequire = createRequire(path.resolve('apps/api/package.json'));
     const password = 'SyntheticAuditOnly-729!Local';
@@ -92,6 +100,9 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   async function logoutAndReturn(page, userId, destination) {
     await page.locator('button[aria-controls="workspace-account-menu"]').click();
     await page.locator('#workspace-account-menu').getByRole('button', { name: 'Keluar', exact: true }).click();
+    // Local state clears before the application's hard redirect starts.
+    // Wait for that redirect so a new login navigation cannot be interrupted by logout.
+    await page.waitForURL(url => url.pathname.replace(/\/$/, '') === '/id', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => !localStorage.getItem('jt_token') && !localStorage.getItem('jt_session'));
     await loginUser(userId, page);
     await page.goto(destination, { waitUntil: 'domcontentloaded' });
@@ -126,6 +137,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     employee = await candidate.evaluate(() => localStorage.getItem('jt_token'));
     assert.equal(await db.application.count({ where: { jobPostId: job.id } }), 1);
     report.steps.push('The candidate logs out through the account menu, logs back in through the password form and still sees one saved application.');
+    await releaseContext(candidate);
 
 
     await worker.onModuleInit();
@@ -184,6 +196,8 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     const verified = verification.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/verify-email' && response.request().method() === 'POST');
     await verification.goto(web + '/id/verify-email?token=' + encodeURIComponent(token), { waitUntil: 'domcontentloaded' });
     assert.equal((await verified).status(), 201);
+    await verification.waitForFunction(() => JSON.parse(localStorage.getItem('jt_session') || '{}').user?.emailVerified === true);
+    await releaseContext(verification);
     await invitationPage.bringToFront();
     await invitationPage.getByRole('button', { name: /Saya sudah verifikasi/ }).click({ timeout: 15000 }).catch(async error => {
       if (!await invitationPage.getByRole('button', { name: 'Buka interview' }).isVisible()) throw error;
