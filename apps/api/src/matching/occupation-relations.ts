@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {catalogTitleIdentityKey as key} from '../common/title-resolve';
 import {EmployeeOccupationIndex,type IntentRole} from './employee-occupation';
 
-export const PROFESSION_RELATION_ALGORITHM='talentio-occupation-tasks-v3-reciprocal-evidence';
+export const PROFESSION_RELATION_ALGORITHM='talentio-occupation-tasks-v3-reciprocal-evidence-compact-basis';
 // Offline profession-vector similarity, never a threshold on a candidate's CV.
 const MIN_PROFESSION_SIMILARITY=0.2;
 const MIN_TARGET_TASK_COVERAGE = 0.30;
@@ -140,7 +140,7 @@ export function buildProfessionGraph(roles:IntentRole[],source:ProfessionSource)
  for(const r of roots){const p=mapped.get(r.id);if(!p)continue;const ids=new Set(p.facts.essential.filter(s=>specific(s.uri)).map(s=>s.uri));anchors.set(r.id,ids);for(const uri of ids){const ids=postings.get(uri)||[];ids.push(r.id);postings.set(uri,ids);}}
  const vectors=new Map([...mapped].map(([id,p])=>[id,new Map([...p.facts.optional.map(s=>[s.uri,0.5] as const),...p.facts.essential.map(s=>[s.uri,1] as const)])]));
  const norms=new Map([...vectors].map(([id,v])=>[id,[...v].reduce((n,[uri,value])=>n+value*weight(uri),0)]));
- const relations:Array<{fromRoleId:string;toRoleId:string;score:number;basis:{method:string;kind:'RELATED'|'CAREER_PATH';sourceVersion:string;sharedEssentialSkills:Array<{uri:string;label:string}>;targetEssentialCoverage:number;similarity:number;evidenceMode:'DIRECTIONAL_TASK_COVERAGE'|'SYMMETRIC_ESSENTIAL_TASK_OVERLAP';reciprocalTaskCount?:number;reciprocalSimilarityThreshold?:number}}>=[];
+ const relations:Array<{fromRoleId:string;toRoleId:string;score:number;basis:{method:string;kind:'RELATED'|'CAREER_PATH';sourceVersion:string;sharedEssentialSkills:Array<{uri:string;label:string}>;sharedEssentialSkillCount:number;targetEssentialCoverage:number;similarity:number;evidenceMode:'DIRECTIONAL_TASK_COVERAGE'|'SYMMETRIC_ESSENTIAL_TASK_OVERLAP';reciprocalTaskCount?:number;reciprocalSimilarityThreshold?:number}}>=[];
  for(const r of roots){const from=mapped.get(r.id),anchor=anchors.get(r.id);if(!from||!anchor?.size)continue;
   const workTasks=new Set([...from.facts.essential,...from.facts.optional].filter(s=>specific(s.uri)).map(s=>s.uri));
   const candidates=new Set([...workTasks].flatMap(uri=>postings.get(uri)||[]));candidates.delete(r.id);
@@ -151,7 +151,11 @@ export function buildProfessionGraph(roles:IntentRole[],source:ProfessionSource)
    const essential=to.facts.essential;const denominator=essential.reduce((n,s)=>n+weight(s.uri),0);const covered=essential.reduce((n,s)=>n+(fromSkills.get(s.uri)||0)*weight(s.uri),0);const score=denominator?covered/denominator:0;
    const sameWorkScope=overlapsWorkScope(r.id,toRoleId);
    const kind=score>=MIN_TARGET_TASK_COVERAGE&&sameWorkScope?'RELATED':'CAREER_PATH';
-   relations.push({fromRoleId:r.id,toRoleId,score,basis:{method:'Talentio derived occupational competency overlap; not ESCO equivalence',kind,sourceVersion:source.sourceVersion,sharedEssentialSkills:shared.sort().map(uri=>({uri,label:skillInfo.get(uri)?.label||uri})),targetEssentialCoverage:score,similarity,evidenceMode:'DIRECTIONAL_TASK_COVERAGE'}});
+   // Keep the two stable explanation tasks; the complete overlap already contributes
+   // to selection and scoring, while retaining every repeated label per edge made
+   // the production graph exceed the bounded API worker heap.
+   const orderedShared=shared.sort();
+   relations.push({fromRoleId:r.id,toRoleId,score,basis:{method:'Talentio derived occupational competency overlap; not ESCO equivalence',kind,sourceVersion:source.sourceVersion,sharedEssentialSkills:orderedShared.slice(0,2).map(uri=>({uri,label:skillInfo.get(uri)?.label||uri})),sharedEssentialSkillCount:orderedShared.length,targetEssentialCoverage:score,similarity,evidenceMode:'DIRECTIONAL_TASK_COVERAGE'}});
   }
  }
  // Preserve the original directed decision. Add the reverse RELATED result only
