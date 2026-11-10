@@ -9,8 +9,8 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
  if(port!=='5434'||!/^talentio_http_it_\d+$/.test(dbName))throw Error('Disposable local database guard failed');
  const bucket=dbName.replaceAll('_','-'),s3='http://127.0.0.1:'+minio.NetworkSettings.Ports['9000/tcp'][0].HostPort;
  const env={...process.env,NODE_ENV:'test',RECRUITMENT_HTTP_CHILD:'1',DATABASE_URL:`postgresql://${encodeURIComponent(user)}:${encodeURIComponent(pgEnv.POSTGRES_PASSWORD)}@127.0.0.1:${port}/${dbName}`,JWT_SECRET:'recruitment-http-synthetic-signing-key-only',OPENAI_API_KEY:'',TARA_SCREENING_ENABLED:'true',TARA_SCREENING_MARKET:'id',TELEGRAM_BOT_TOKEN:'',RESEND_API_KEY:'',SUPERADMIN_PASSWORD:'',MEILI_HOST:'',REDIS_URL:'',HR_RANKING_V2_MODE:'off',EMPLOYEE_INTENT_V3_MODE:'off',S3_ENDPOINT:s3,S3_PUBLIC_URL:s3+'/'+bucket,S3_BUCKET:bucket,S3_ACCESS_KEY:minioEnv.MINIO_ROOT_USER||'minioadmin',S3_SECRET_KEY:minioEnv.MINIO_ROOT_PASSWORD||'minioadmin',S3_REGION:'us-east-1',S3_FORCE_PATH_STYLE:'true',SMTP_HOST:'127.0.0.1',SMTP_PORT:mailpit.NetworkSettings.Ports['1025/tcp'][0].HostPort,SMTP_USER:'',SMTP_PASS:'',SMTP_SECURE:'false',WEB_URL:'http://127.0.0.1:3035',SMTP_FROM:'Talentio Tests <recruitment@synthetic.test>',RECRUITMENT_MAILPIT_URL:'http://127.0.0.1:'+mailpit.NetworkSettings.Ports['8025/tcp'][0].HostPort};
- if (process.argv.includes('--onboarding')) { env.HR_CREATION_V2_ENABLED = 'true'; env.HR_FLOW_MARKET = 'id'; }
- if (['--live-draft', '--live-voice', '--live-text', '--live-cv-formats'].some(mode => process.argv.includes(mode))) {
+ if (process.argv.includes('--onboarding') || process.argv.includes('--onboarding-live-draft')) { env.HR_CREATION_V2_ENABLED = 'true'; env.HR_FLOW_MARKET = 'id'; }
+ if (['--live-draft', '--live-voice', '--live-text', '--live-cv-formats', '--onboarding-live-draft'].some(mode => process.argv.includes(mode))) {
   assert.equal(process.env.RELIABILITY_LIVE_AI, '1', 'Explicit live-provider opt-in required');
   const dotenv = createRequire(req.resolve('@nestjs/config'))('dotenv');
   env.OPENAI_API_KEY = dotenv.parse(require('node:fs').readFileSync(path.join(root, '.env'))).OPENAI_API_KEY;
@@ -153,11 +153,12 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    if (liveCvFormats) await require('./recruitment-cv-formats-live.cjs')({db,worker,call,hr,makeToken:token,allowed:allowedProviderWork});
    const liveVoice = process.argv.includes('--live-voice');
    const liveText = process.argv.includes('--live-text');
-   const onboarding = process.argv.includes('--onboarding');
+   const onboardingDraft = process.argv.includes('--onboarding-live-draft');
+   const onboarding = onboardingDraft || process.argv.includes('--onboarding');
    if (process.argv.includes('--browser') || liveVoice || liveText || textUi || onboarding) await require('./recruitment-real-browser.cjs')({
-     base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,liveText,textUi,voiceEvents,allowed: allowedProviderWork,onboarding,makeToken: token,makePdf,
+     base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,liveText,textUi,voiceEvents,allowed: allowedProviderWork,onboarding,onboardingDraft,makeToken: token,makePdf,
    });
-   console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio, real SMTP verification and stale-token refresh/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. ' + (liveVoice ? 'Bounded live voice probe.' : liveText ? 'Bounded live text probe.' : liveCvFormats ? 'Bounded real-provider CV formats probe.' : process.argv.includes('--live-draft') ? 'Bounded live drafting probe.' : 'No paid API calls.'));
+   console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio, real SMTP verification and stale-token refresh/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. ' + (liveVoice ? 'Bounded live voice probe.' : liveText ? 'Bounded live text probe.' : liveCvFormats ? 'Bounded real-provider CV formats probe.' : onboardingDraft ? 'Four real drafting calls through the HR browser.' : process.argv.includes('--live-draft') ? 'Bounded live drafting probe.' : 'No paid API calls.'));
   }finally{
    if (db && process.argv.some(option => option.startsWith('--live-'))) {
     const unresolved = await db.aiScreeningCall.count({where:{status:{in:['RUNNING','UNCERTAIN']}}});

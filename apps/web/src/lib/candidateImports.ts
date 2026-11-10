@@ -7,7 +7,21 @@ let batches: ImportBatch[] = [];
 const empty: ImportBatch[] = [];
 const listeners = new Set<() => void>();
 let persistTimer:ReturnType<typeof setTimeout>|undefined;
-function persist(){if(typeof window==='undefined')return;for(const userId of new Set(batches.map(b=>b.userId)))try{localStorage.setItem('candidate-imports:'+userId,JSON.stringify(batches.filter(b=>b.userId===userId).map(b=>({...b,files:b.files.map(({file,...f})=>f)}))));}catch{/* A full browser store must not interrupt an upload. */}}
+function persistUserImports(userId: string) {
+  try {
+    const saved = batches.filter(batch => batch.userId === userId).map(batch => ({
+      ...batch,
+      files: batch.files.map(({ file, ...metadata }) => file && metadata.status === 'error'
+        ? { ...metadata, needsReselect: true }
+        : metadata),
+    }));
+    localStorage.setItem('candidate-imports:' + userId, JSON.stringify(saved));
+  } catch { /* A full browser store must not interrupt an upload. */ }
+}
+function persist() {
+  if (typeof window === 'undefined') return;
+  for (const userId of new Set(batches.map(batch => batch.userId))) persistUserImports(userId);
+}
 const notify = () => { batches = batches.map(b => ({ ...b, files: b.files.map(f => ({ ...f })) })); if(persistTimer)clearTimeout(persistTimer);persistTimer=setTimeout(persist,250);for(const listener of listeners)listener(); };
 const update = (batchId:string,id:string,patch:Partial<ImportFile>) => { batches=batches.map(b=>b.id!==batchId?b:{...b,files:b.files.map(f=>f.id===id?{...f,...patch}:f)});notify(); };
 const subscribe=(listener:()=>void)=>{listeners.add(listener);return()=>{listeners.delete(listener);};};
@@ -68,22 +82,35 @@ export async function startCandidateImport(companyId:string,jobId:string|undefin
 }
 export function retryCandidateTransfer(batchId:string,id:string){update(batchId,id,{status:'queued',error:undefined,loaded:0});void drain();}
 export function markCandidateProcessing(id:string){const batch=batches.find(b=>b.files.some(f=>f.id===id));if(batch)update(batch.id,id,{status:'processing',error:undefined});}
-export function dismissCandidateImport(id:string){const batch=batches.find(b=>b.id===id);if(batch?.files.some(f=>['queued','uploading','processing'].includes(f.status)))return;batches=batches.filter(b=>b.id!==id);notify();if(batch)try{localStorage.setItem('candidate-imports:'+batch.userId,JSON.stringify(batches.filter(b=>b.userId===batch.userId).map(b=>({...b,files:b.files.map(({file,...f})=>f)}))));}catch{}}
+export function dismissCandidateImport(id: string) {
+  const batch = batches.find(item => item.id === id);
+  if (!batch || batch.files.some(file => ['queued', 'uploading', 'processing'].includes(file.status))) return;
+  batches = batches.filter(item => item.id !== id);
+  notify();
+  persistUserImports(batch.userId);
+}
 const restored=new Set<string>();
 export async function restoreCandidateImports(userId:string){
  if(!userId)return;if(restored.has(userId)){await refreshCandidateImports();void drain();return;}restored.add(userId);
  try{const stored=JSON.parse(localStorage.getItem('candidate-imports:'+userId)??'[]') as ImportBatch[];if(!Array.isArray(stored))return;
- for(const batch of stored){if(batch.userId!==userId||typeof batch.id!=='string'||!Array.isArray(batch.files)||batches.some(b=>b.id===batch.id))continue;batches.push({...batch,files:batch.files.map(({file,...f})=>['queued','uploading'].includes(f.status)?{...f,status:'error' as const,needsReselect:true,error:'Upload terhenti. Pilih kembali berkas yang sama untuk melanjutkan.'}:f)});}notify();await refreshCandidateImports();void drain();
+ for(const batch of stored){if(batch.userId!==userId||typeof batch.id!=='string'||!Array.isArray(batch.files)||batches.some(b=>b.id===batch.id))continue;batches.push({...batch,files:batch.files.map(({file,...f})=>['queued','uploading'].includes(f.status)?{...f,status:'error' as const,needsReselect:true,error:'Upload terhenti. Pilih kembali berkas yang sama untuk melanjutkan.'}:f)});}notify();await refreshCandidateImports(true);void drain();
  }catch{/* Invalid or unavailable local metadata cannot affect durable server work. */}
 }
 export function resumeCandidateTransfer(batchId:string,id:string,file:File){const batch=batches.find(b=>b.id===batchId),item=batch?.files.find(f=>f.id===id);if(!batch||!item||batch.userId!==getSession()?.user.id)throw Error('Gunakan akun yang memulai upload.');if(file.name!==item.name||file.size!==item.size)throw Error('Pilih berkas dengan nama dan ukuran yang sama.');update(batchId,id,{file,needsReselect:false,status:'queued',loaded:0,error:undefined});void drain();}
-export async function refreshCandidateImports() {
+export async function refreshCandidateImports(includeRestoredErrors = false) {
   const userId=getSession()?.user.id;
-  await Promise.all(batches.filter(b=>b.userId===userId&&b.files.some(f=>f.status==='processing'||f.needsReselect)).map(async batch=>{
+  const needsRefresh = (file: ImportFile) => file.status === 'processing' || file.needsReselect
+    || (includeRestoredErrors && file.status === 'error' && !file.file);
+  await Promise.all(batches.filter(batch => batch.userId === userId && batch.files.some(needsRefresh)).map(async batch=>{
     try{
       const result=await api<{files:Array<{id:string;scoreStatus:string;error?:string}>}>('/recruitment/imports/'+batch.id);
-      for(const item of result.files){const local=batch.files.find(f=>f.id===item.id);if(!local||local.status!=='processing'&&!local.needsReselect)continue;
-        if(['READY','EXTRACTED'].includes(item.scoreStatus)){update(batch.id,item.id,{status:'done',needsReselect:false,error:undefined,loaded:local.size});window.dispatchEvent(new Event('candidate-import-updated'));}
+      if (getSession()?.user.id !== userId) return;
+      for (const item of result.files) {
+        const local = batches.find(current => current.id === batch.id)?.files.find(file => file.id === item.id);
+        if (!local || !needsRefresh(local)) continue;
+        if (item.scoreStatus === 'UPLOADING' && local.status === 'error' && !local.file && !local.needsReselect) {
+          update(batch.id, item.id, { needsReselect: true, error: 'Upload terhenti. Pilih kembali berkas yang sama untuk melanjutkan.' });
+        } else if(['READY','EXTRACTED'].includes(item.scoreStatus)){update(batch.id,item.id,{status:'done',needsReselect:false,error:undefined,loaded:local.size});window.dispatchEvent(new Event('candidate-import-updated'));}
         else if(item.scoreStatus==='DUPLICATE')update(batch.id,item.id,{status:'duplicate',needsReselect:false,error:undefined,loaded:local.size});
         else if(['PENDING','PROCESSING'].includes(item.scoreStatus))update(batch.id,item.id,{status:'processing',needsReselect:false,error:undefined,loaded:local.size});
         else if(['FAILED','UNREADABLE','STALE'].includes(item.scoreStatus))update(batch.id,item.id,{status:'error',needsReselect:false,error:item.error??'Penilaian belum berhasil.'});

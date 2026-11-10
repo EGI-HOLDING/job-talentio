@@ -12,7 +12,7 @@ function playwright() {
   }
 }
 
-module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, liveText, textUi, voiceEvents, allowed, onboarding, makeToken, makePdf }) {
+module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, liveText, textUi, voiceEvents, allowed, onboarding, onboardingDraft, makeToken, makePdf }) {
   const web = process.env.RECRUITMENT_WEB_URL || 'http://127.0.0.1:3035';
   const redact = value => value.replace(/(\/screening\/|\/invitations\/open\/)[^/\s?]+/g, '$1[redacted]').replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
   const isLoopback = url => ['127.0.0.1', 'localhost'].includes(new URL(url).hostname);
@@ -24,8 +24,10 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   const browser = await playwright().chromium.launch({ headless: true });
   const contexts = [];
   const interruptedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'interrupted-indonesian';
-  const test = liveVoice ? interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? 'live-browser-text' : textUi ? 'browser-text-timing' : onboarding ? 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
-  const report = { steps: [], exceptions: [], requests: [], provider: liveVoice ? 'real voice and screening, simulated CV scoring' : liveText ? 'real text screening, simulated CV scoring' : 'simulated', test };
+  const timedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'timed';
+  const taraClosesVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'tara-closes';
+  const test = liveVoice ? taraClosesVoice ? 'live-browser-voice-tara-closes' : timedVoice ? 'live-browser-voice-timed' : interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? 'live-browser-text' : textUi ? 'browser-text-timing' : onboarding ? onboardingDraft ? 'real-browser-hr-onboarding-with-ai' : 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
+  const report = { steps: [], exceptions: [], requests: [], provider: liveVoice ? 'real voice and screening, simulated CV scoring' : liveText ? 'real text screening, simulated CV scoring' : onboardingDraft ? 'real job drafting, simulated CV scoring' : 'simulated', test };
   const job = await db.jobPost.create({ data: {
     id: 'http-browser-job', companyId: 'http-co', title: 'Backend Engineer Browser Audit',
     description: 'Mengembangkan API dan layanan backend dengan Node.js.', status: 'PUBLISHED',
@@ -52,7 +54,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
         if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
         const forwarded = await request.allHeaders();
         const requestHeaders = Object.fromEntries(['authorization', 'content-type', 'accept-language', 'x-locale', 'idempotency-key'].filter(key => forwarded[key]).map(key => [key, forwarded[key]]));
-        const response = await fetch(endpoint, { method, headers: requestHeaders, body: request.postDataBuffer() ?? undefined, redirect: 'manual', signal: AbortSignal.timeout(liveVoice ? 50000 : 20000) });
+        const response = await fetch(endpoint, { method, headers: requestHeaders, body: request.postDataBuffer() ?? undefined, redirect: 'manual', signal: AbortSignal.timeout(liveVoice || onboardingDraft ? 50000 : 20000) });
         report.requests.push({ method, path: redact(url.pathname), status: response.status });
         const contentType = response.headers.get('content-type');
         if (contentType) headers['content-type'] = contentType;
@@ -69,7 +71,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   try {
     if (onboarding) {
       await db.featureFlag.upsert({ where: { key: 'hr_packages' }, create: { key: 'hr_packages', enabled: true }, update: { enabled: true } });
-      await require('./recruitment-onboarding-real.cjs')({ web, db, openContext, makeToken, makePdf, worker, report });
+      await require('./recruitment-onboarding-real.cjs')({ web, db, openContext, makeToken, makePdf, worker, report, onboardingDraft });
       assert.deepEqual(report.exceptions, []);
       report.passed = true;
       return;
@@ -149,7 +151,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     assert.equal(invitationWithSession.claimedUserId, 'http-employee');
     report.steps.push('An invitation delivered by SMTP and Talentio opens after verification in a separate browser context with the original tab kept open.');
     const screening = { page: invitationPage, dashboard, drawer, db, worker, call, hr, foreign, sessionId: invitationWithSession.sessionId, invitationId: invitation.id, report, allowed, voiceEvents };
-    if (voiceProbe) await voiceProbe.verifyVoice({ ...screening, interruptedVoice });
+    if (voiceProbe) await voiceProbe.verifyVoice({ ...screening, interruptedVoice, timedVoice, taraClosesVoice });
     if (liveText || textUi) await require('./recruitment-text-live.cjs')({ ...screening, textUi });
     assert.deepEqual(report.exceptions, []);
     report.passed = true;

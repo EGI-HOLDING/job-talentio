@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { CV_RUBRIC, validateCvResult, validateCvBytes, fileChecksum } from './cv-scoring.policy';
+import { CV_MAX_BYTES, CV_RUBRIC, validateCvResult, validateCvBytes, fileChecksum } from './cv-scoring.policy';
 import { candidateImportSchema, candidateListSchema } from './recruitment.schemas';
 import { composePrompt } from '../prompts/compose';
 import { assertSchema } from '../screening.schemas';
@@ -20,7 +20,12 @@ assert.equal(validateCvResult({ ...sample, readable: false, cvText: '', criteria
 assert.equal(validateCvBytes(Buffer.from('%PDF-1.4 data'), 'cv.pdf'), 'application/pdf');
 assert.throws(() => validateCvBytes(Buffer.from('<script>bad</script>'), 'cv.pdf'));
 assert.throws(() => validateCvBytes(Buffer.from('%PDF-1.4'), 'cv.exe'));
-assert.throws(() => validateCvBytes(Buffer.alloc(5*1024*1024+1), 'cv.pdf'));
+assert.throws(() => validateCvBytes(Buffer.alloc(0), 'cv.pdf'), /CV_FILE_SIZE/);
+assert.throws(() => validateCvBytes(Buffer.from('%PDF-1.4 data'), 'cv.docx'), /CV_FILE_INVALID/);
+const maxSizePdf = Buffer.alloc(CV_MAX_BYTES);
+maxSizePdf.write('%PDF-');
+assert.equal(validateCvBytes(maxSizePdf, 'cv.pdf'), 'application/pdf');
+assert.throws(() => validateCvBytes(Buffer.concat([maxSizePdf, Buffer.alloc(1)]), 'cv.pdf'), /CV_FILE_SIZE/);
 assert.equal(fileChecksum(Buffer.from('same')), fileChecksum(Buffer.from('same')));
 const prompt=composePrompt('cv-score', {job:{title:'Developer'}});
 assertSchema(prompt.schema,sample);

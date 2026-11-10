@@ -22,6 +22,13 @@ async function main(){
   row.status='RUNNING';
   globalThis.fetch=(async()=>new Response('{}',{status:503})) as any;
   await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(row.status,'RUNNING','temporary provider error remains resumable regardless of age');
+  globalThis.fetch=(async(_url:any,init:any)=>{
+   assert.notEqual(init.method,'POST');
+   return new Response('{}',{status:429,headers:{'Retry-After':'2'}});
+  }) as any;
+  await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);
+  assert.equal(row.status,'RUNNING');
+  assert.equal(row.responseId,'resp_synthetic','provider rate limit must preserve the existing response');
   globalThis.fetch=(async()=>new Response('{}',{status:404})) as any;
   await assert.rejects(client.run('w','s','evaluate',{},preset),AiUncertain);assert.equal(row.status,'UNCERTAIN','unavailable stored response still requires operator review');
   row={...row,status:'RUNNING',responseId:null,updatedAt:new Date(Date.now()-60000)};await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(row.status,'RUNNING','long create is not prematurely declared uncertain');

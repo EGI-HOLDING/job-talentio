@@ -64,7 +64,7 @@ async function useSyntheticMicrophone(context, audio, interruptedVoice) {
   }, { wav: audio, interrupted: interruptedVoice });
 }
 
-async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, foreign, sessionId, invitationId, report, allowed, interruptedVoice, voiceEvents }) {
+async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, foreign, sessionId, invitationId, report, allowed, interruptedVoice, timedVoice, taraClosesVoice, voiceEvents }) {
   const invitation = await db.screeningInvitation.findUniqueOrThrow({ where: { id: invitationId } });
   const plan = await db.aiCandidatePlan.findFirstOrThrow({ where: { sessionId } });
   const prepWork = await processWork(db, worker, 'PREPARE', invitation.packageId, allowed);
@@ -108,6 +108,36 @@ async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, fore
       Object.defineProperty(peer, 'connectionState', { configurable: true, value: 'disconnected' });
       peer.dispatchEvent(new Event('connectionstatechange'));
     });
+  } else if (timedVoice) {
+    const afterCandidate = Math.max(...(await fragments('CANDIDATE')).map(turn => turn.endMs));
+    const spokenAfter = async cutoff => (await fragments('TARA'))
+      .filter(turn => turn.startMs >= cutoff - 100)
+      .sort((a, b) => a.startMs - b.startMs)
+      .map(turn => turn.text).join('');
+    await db.voiceInterview.update({ where: { id: voice.id }, data: { startedAt: new Date(Date.now() - 600000) } });
+    const warning = await until(async () => {
+      const row = await db.voiceInterview.findUniqueOrThrow({ where: { id: voice.id } });
+      if (!row.warningAt) return false;
+      const spoken = await spokenAfter(afterCandidate);
+      return /(?:sisa|tinggal|sekitar).{0,35}(?:5|lima) menit|(?:5|lima) menit (?:lagi|tersisa)/i.test(spoken) && spoken;
+    }, 'the spoken five-minute warning from the live provider', 30000);
+    report.timedWarning = warning;
+    const beforeClosing = Math.max(...(await fragments('TARA')).map(turn => turn.endMs));
+    await db.voiceInterview.update({ where: { id: voice.id }, data: { startedAt: new Date(Date.now() - 840000) } });
+    const signoff = await until(async () => {
+      const row = await db.voiceInterview.findUniqueOrThrow({ where: { id: voice.id } });
+      if (!row.closingAt || row.closeReason !== 'TIME_LIMIT') return false;
+      const spoken = await spokenAfter(beforeClosing);
+      return /terima kasih|makasih/i.test(spoken) && /batas waktu|waktu.{0,25}(?:habis|hampir)|interview.{0,20}selesai/i.test(spoken) && spoken;
+    }, 'the spoken minute-14 sign-off from the live provider', 25000);
+    report.timedSignoff = signoff;
+    report.steps.push('Controlled session elapsed time triggered spoken five-minute warning and minute-14 sign-off through the real provider.');
+  } else if (taraClosesVoice) {
+    report.taraSignoff = await until(async () => {
+      const text = (await fragments('TARA')).sort((a, b) => a.startMs - b.startMs).map(turn => turn.text).join('');
+      return /interview kita sudah selesai/i.test(text) && text;
+    }, 'Tara deciding to end after a verbal wrap-up', 30000);
+    report.steps.push('Tara ended the session after the candidate requested a verbal wrap-up without pressing the end button.');
   } else {
     await page.getByRole('button', { name: 'Akhiri', exact: true }).click();
     await page.getByRole('button', { name: 'Akhiri interview', exact: true }).click();
@@ -121,17 +151,21 @@ async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, fore
     await page.getByText(/Interview berakhir karena koneksi mengalami kendala/).waitFor();
     assert.equal(closed.transcriptComplete, false);
     report.steps.push('The Indonesian injection was transcribed, Tara did not echo the requested marker, and the controlled peer interruption was saved as a technical closure.');
-  } else assert.equal(closed.closeReason, 'CANDIDATE_ENDED');
+  } else if (timedVoice) {
+    assert.equal(closed.closeReason, 'TIME_LIMIT');
+    assert.ok(+closed.endedAt - +closed.startedAt < 900000);
+  } else assert.equal(closed.closeReason, taraClosesVoice ? 'TARA_FINISHED' : 'CANDIDATE_ENDED');
   report.connectedToClosedMs = Date.now() - started;
 
   const evalWork = await processWork(db, worker, 'VOICE_EVALUATE', sessionId, allowed);
   const endpoint = '/recruitment/invitations/' + invitationId + '/report';
   const result = await call(endpoint, hr);
-  assert.equal(result.evaluation.status, 'NEEDS_REVIEW');
+  if (timedVoice || taraClosesVoice) assert.ok(['READY', 'NEEDS_REVIEW'].includes(result.evaluation.status));
+  else assert.equal(result.evaluation.status, 'NEEDS_REVIEW');
   assert.ok(result.evaluation.result.summary);
   assert.ok(result.voice.transcript.some(turn => turn.speaker === 'CANDIDATE'));
   assert.ok(result.voice.transcript.some(turn => turn.speaker === 'TARA'));
-  assert.equal(result.evaluation.result.voice.partial, true);
+  if (!timedVoice && !taraClosesVoice) assert.equal(result.evaluation.result.voice.partial, true);
   const evidence = result.evaluation.result.claims.flatMap(claim => claim.evidence);
   assert.ok(evidence.every(entry => result.voice.transcript.some(turn => turn.id === entry.questionId && turn.text.includes(entry.quote))));
   await processWork(db, worker, 'PDF', sessionId);
@@ -142,7 +176,7 @@ async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, fore
   const pdf = await fetch(ready.pdfUrl, { signal: AbortSignal.timeout(10000) });
   assert.ok(pdf.ok);
   assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
-  report.steps.push('The real evaluation and partial-session report were persisted, with access denied to a foreign recruiter.');
+  report.steps.push('The real evaluation and screening report were persisted, with access denied to a foreign recruiter.');
 
   await dashboard.reload({ waitUntil: 'domcontentloaded' });
   await dashboard.getByRole('button', { name: 'HTTP Candidate', exact: true }).click({ timeout: 30000 });
