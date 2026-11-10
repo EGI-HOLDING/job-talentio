@@ -1342,7 +1342,7 @@ export class JobsService {
           logoUrl: true,
         },
       },
-      city: { include: { province: { select: { country: { select: { name: true } } } } } },
+      city: true,
       country: true,
       category: true,
       jobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, nameId: true, slug: true } },
