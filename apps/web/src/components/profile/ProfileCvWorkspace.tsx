@@ -24,11 +24,6 @@ import { CvFileDrop } from './CvFileDrop';
 import { CVS_HREF, PROFILE_HREF, cvFileError, type CareerProfile, type ProfileEditor, type Resume } from './types';
 import s from './ProfileWorkspace.module.css';
 
-const SECTIONS = [
-  ['overview', 'pc.overview', 'user'], ['preferences', 'pc.preferences', 'briefcase'],
-  ['contact', 'pc.contact', 'user'], ['languages', 'languages', 'globe'], ['certifications', 'certifications', 'award'],
-] as const;
-
 function Section({ id, title, action, children }: { id: string; title: string; action?: ReactNode; children: ReactNode }) {
   return <section id={id} data-profile-section className={s.section}><header className={s.sectionHeading}><h2>{title}</h2>{action}</header>{children}</section>;
 }
@@ -63,8 +58,6 @@ export function ProfileCvWorkspace() {
   const [menu, setMenu] = useState<string | null>(null);
   const [menuUp, setMenuUp] = useState(false);
   const menuButton = useRef<HTMLButtonElement | null>(null);
-  const profileScrollRef = useRef<HTMLDivElement | null>(null);
-  const [activeSection, setActiveSection] = useState('overview');
   const [busy, setBusy] = useState<string | null>(null);
   const actionInFlight = useRef(false);
   const mounted = useRef(true);
@@ -90,16 +83,6 @@ export function ProfileCvWorkspace() {
   useEffect(()=>{if(profileResource.error)setError(profileResource.error);},[profileResource.error]);
   const processing=Boolean(profile?.resumes.some(row=>['PENDING','PROCESSING'].includes(row.parseStatus||'')&&row.hasFile));
   useMatchingStatus(processing,()=>{void load().catch(()=>{});});
-  useEffect(() => {
-    if (showCvs || !profile) return;
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((item) => item.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) setActiveSection(visible[0].target.id);
-    }, { root: profileScrollRef.current, rootMargin: '-24px 0px -55% 0px', threshold: 0 });
-    document.querySelectorAll('[data-profile-section]').forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [showCvs, Boolean(profile)]);
-
   useEffect(() => {
     if (!menu) return;
     function outside(event: MouseEvent) { if (!(event.target as Element).closest('[data-cv-menu]')) setMenu(null); }
@@ -219,23 +202,20 @@ export function ProfileCvWorkspace() {
           <span className={s.cvPreviewBadge}><i />CV</span>
         </div>
       </div>}
-    </section> : <div className={s.profileLayout}>
-      <nav className={s.sectionNav} aria-label={t('pc.myProfile')}>{SECTIONS.map(([id, label, icon]) => <a href={`#${id}`} key={id} aria-current={activeSection === id ? 'location' : undefined} onClick={() => setActiveSection(id)}><ProfileIcon kind={icon} />{t(label)}</a>)}</nav>
-      <div className={s.profileContent} ref={profileScrollRef}>
-        <section id="overview" data-profile-section className={s.identity}>
-          <div className={s.person}><Link className={s.personAvatar} href="/settings" aria-label={t('pc.manageAccount')}>
-            {profile.user.avatarUrl && failedAvatarUrl !== profile.user.avatarUrl
-              ? <img src={profile.user.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(profile.user.avatarUrl || null)} />
-              : profile.user.fullName.charAt(0)}
-          </Link><div><h2>{profile.user.fullName}</h2><p>{profile.desiredPositions?.join(', ') || profile.desiredPosition}</p>{(profile.city || profile.residenceCountry) && <div className={s.location}><ProfileIcon kind="pin" />{profile.city?.name || profile.residenceCountry?.name}</div>}<button type="button" className={s.secondary} onClick={() => setEditor({ kind: 'basics' })}><ProfileIcon kind="edit" />{t('pc.editBasics')}</button></div></div>
-          <div className={s.completeness}><div><span>{t('workspace.profileComplete')}</span><strong>{completeness?.percent || 0}%</strong></div><progress max={100} value={completeness?.percent || 0} aria-label={t('workspace.profileComplete')} /><p>{completeness?.percent === 100 ? t('cv.completeHint') : completeness?.missing[0] ? t(completeness.missing[0].labelKey) : t('pc.profileHint')}</p></div>
-        </section>
-        <div className={s.importStrip}><ProfileIcon /><span>{t('cv.noManual')}</span><Link className={s.primary} href={CVS_HREF}>{t('pc.myCvs')}<ProfileIcon kind="arrow" /></Link></div>
-        <Section id="preferences" title={t('pc.preferences')} action={editButton('basics')}><dl className={s.facts}><div><dt>{t('emp.desiredPosition')}</dt><dd>{profile.desiredPositions?.join(', ') || profile.desiredPosition || <span className={s.quiet}>{t('pc.notSet')}</span>}</dd></div><div><dt>{onboardingText('salaryTitle')}</dt><dd>{profile.desiredSalaryMin != null ? `${new Intl.NumberFormat(locale).format(Number(profile.desiredSalaryMin))} ${profile.desiredSalaryCurrency || 'UZS'} | ${onboardingText(profile.desiredSalaryPeriod || 'MONTHLY')}${profile.salaryNegotiable ? ' | '+onboardingText('negotiable') : ''}` : <span className={s.quiet}>{t('pc.notSet')}</span>}</dd></div><div><dt>{onboardingText('countries')}</dt><dd>{profile.preferredCountries?.map(c=>countryName(c,locale)).join(', ') || t('pc.notSet')}</dd></div><div><dt>{onboardingText('residence')}</dt><dd>{profile.residenceCountry ? countryName(profile.residenceCountry,locale) : profile.city?.name || t('pc.notSet')}</dd></div></dl></Section>
-        <Section id="contact" title={t('pc.contact')} action={<Link className={s.textButton} href="/settings"><ProfileIcon kind="external" />{t('pc.manageAccount')}</Link>}><dl className={s.facts}><div><dt>{t('email')}</dt><dd>{profile.user.email || t('pc.notSet')}{profile.user.emailVerified && <span className={s.badge}><ProfileIcon kind="check" />{t('emailVerifiedBadge')}</span>}</dd>{profile.user.email && !profile.user.emailVerified && <button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={() => void action('verify', async () => { const res = await api<{ message?: string }>('/auth/request-verification', { method: 'POST' }); await refresh(res.message || t('verifyEmailSentTo') + ' ' + profile.user.email); })}>{t('verifyEmailCta')}</button>}</div><div><dt>{t('emp.phone')}</dt><dd>{profile.phone || <span className={s.quiet}>{t('pc.notSet')}</span>}<button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={() => setEditor({ kind: 'phone' })}><ProfileIcon kind="edit" />{onboardingText('phoneEdit')}</button></dd></div></dl></Section>
-        <Section id="languages" title={t('languages')} action={editButton('languages')}><div className={s.tags}>{profile.languages.map((row) => <span className={s.tag} key={row.id}>{row.language.name}<small>{enumLabel('cefr', row.level)}</small></span>)}{addButton('languages')}</div></Section>
-        <Section id="certifications" title={t('certifications')}><div className={s.timeline}>{profile.certifications.map((row) => <div className={s.timelineItem} key={row.id}><div className={s.entryHeading}><div><strong>{row.name}</strong>{row.issuer && <p>{row.issuer}</p>}<small>{[date(row.issuedAt), row.expiresAt ? `${t('emp.expiresAt')} ${date(row.expiresAt)}` : ''].filter(Boolean).join(' | ')}</small>{row.credentialUrl && /^https?:\/\//i.test(row.credentialUrl) && <p><a className={s.textButton} href={row.credentialUrl} target="_blank" rel="noreferrer">{t('emp.credentialUrl')}<ProfileIcon kind="external" /></a></p>}</div>{entryActions('certification', 'certifications', row.id, row.name)}</div></div>)}</div>{!profile.certifications.length && <p className={s.quiet}>{t('pc.emptySection')}</p>}{addButton('certification')}</Section>
-      </div>
+    </section> : <div className={s.profileContent}>
+      <section id="overview" data-profile-section className={s.identity}>
+        <div className={s.person}><Link className={s.personAvatar} href="/settings" aria-label={t('pc.manageAccount')}>
+          {profile.user.avatarUrl && failedAvatarUrl !== profile.user.avatarUrl
+            ? <img src={profile.user.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatarUrl(profile.user.avatarUrl || null)} />
+            : profile.user.fullName.charAt(0)}
+        </Link><div><h2>{profile.user.fullName}</h2><p>{profile.desiredPositions?.join(', ') || profile.desiredPosition}</p>{(profile.city || profile.residenceCountry) && <div className={s.location}><ProfileIcon kind="pin" />{profile.city?.name || profile.residenceCountry?.name}</div>}<button type="button" className={s.secondary} onClick={() => setEditor({ kind: 'basics' })}><ProfileIcon kind="edit" />{t('pc.editBasics')}</button></div></div>
+        <div className={s.completeness}><div><span>{t('workspace.profileComplete')}</span><strong>{completeness?.percent || 0}%</strong></div><progress max={100} value={completeness?.percent || 0} aria-label={t('workspace.profileComplete')} /><p>{completeness?.percent === 100 ? t('cv.completeHint') : completeness?.missing[0] ? t(completeness.missing[0].labelKey) : t('pc.profileHint')}</p></div>
+      </section>
+      <div className={s.importStrip}><ProfileIcon /><span>{t('cv.noManual')}</span><Link className={s.primary} href={CVS_HREF}>{t('pc.myCvs')}<ProfileIcon kind="arrow" /></Link></div>
+      <Section id="preferences" title={t('pc.preferences')} action={editButton('basics')}><dl className={s.facts}><div><dt>{t('emp.desiredPosition')}</dt><dd>{profile.desiredPositions?.join(', ') || profile.desiredPosition || <span className={s.quiet}>{t('pc.notSet')}</span>}</dd></div><div><dt>{onboardingText('salaryTitle')}</dt><dd>{profile.desiredSalaryMin != null ? `${new Intl.NumberFormat(locale).format(Number(profile.desiredSalaryMin))} ${profile.desiredSalaryCurrency || 'UZS'} | ${onboardingText(profile.desiredSalaryPeriod || 'MONTHLY')}${profile.salaryNegotiable ? ' | '+onboardingText('negotiable') : ''}` : <span className={s.quiet}>{t('pc.notSet')}</span>}</dd></div><div><dt>{onboardingText('countries')}</dt><dd>{profile.preferredCountries?.map(c=>countryName(c,locale)).join(', ') || t('pc.notSet')}</dd></div><div><dt>{onboardingText('residence')}</dt><dd>{profile.residenceCountry ? countryName(profile.residenceCountry,locale) : profile.city?.name || t('pc.notSet')}</dd></div></dl></Section>
+      <Section id="contact" title={t('pc.contact')} action={<Link className={s.textButton} href="/settings"><ProfileIcon kind="external" />{t('pc.manageAccount')}</Link>}><dl className={s.facts}><div><dt>{t('email')}</dt><dd>{profile.user.email || t('pc.notSet')}{profile.user.emailVerified && <span className={s.badge}><ProfileIcon kind="check" />{t('emailVerifiedBadge')}</span>}</dd>{profile.user.email && !profile.user.emailVerified && <button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={() => void action('verify', async () => { const res = await api<{ message?: string }>('/auth/request-verification', { method: 'POST' }); await refresh(res.message || t('verifyEmailSentTo') + ' ' + profile.user.email); })}>{t('verifyEmailCta')}</button>}</div><div><dt>{t('emp.phone')}</dt><dd>{profile.phone || <span className={s.quiet}>{t('pc.notSet')}</span>}<button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={() => setEditor({ kind: 'phone' })}><ProfileIcon kind="edit" />{onboardingText('phoneEdit')}</button></dd></div></dl></Section>
+      <Section id="languages" title={t('languages')} action={editButton('languages')}><div className={s.tags}>{profile.languages.map((row) => <span className={s.tag} key={row.id}>{row.language.name}<small>{enumLabel('cefr', row.level)}</small></span>)}{addButton('languages')}</div></Section>
+      <Section id="certifications" title={t('certifications')}><div className={s.timeline}>{profile.certifications.map((row) => <div className={s.timelineItem} key={row.id}><div className={s.entryHeading}><div><strong>{row.name}</strong>{row.issuer && <p>{row.issuer}</p>}<small>{[date(row.issuedAt), row.expiresAt ? `${t('emp.expiresAt')} ${date(row.expiresAt)}` : ''].filter(Boolean).join(' | ')}</small>{row.credentialUrl && /^https?:\/\//i.test(row.credentialUrl) && <p><a className={s.textButton} href={row.credentialUrl} target="_blank" rel="noreferrer">{t('emp.credentialUrl')}<ProfileIcon kind="external" /></a></p>}</div>{entryActions('certification', 'certifications', row.id, row.name)}</div></div>)}</div>{!profile.certifications.length && <p className={s.quiet}>{t('pc.emptySection')}</p>}{addButton('certification')}</Section>
     </div>)}
 
     {editor && profile && <ProfileForms key={`${editor.kind}:${editor.id || ''}`} editor={editor} profile={profile} onClose={() => setEditor(null)} onSaved={refresh} />}

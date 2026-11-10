@@ -6,7 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { ProfileIcon } from './ProfileIcon';
 import s from './ProfileWorkspace.module.css';
 
-export function ProfileDialog({ title, subtitle, children, onClose, busy = false, wide = false, guardChanges = false, hideHeader = false }: { title: string; subtitle?: string; children: ReactNode; onClose: () => void; busy?: boolean; wide?: boolean; guardChanges?: boolean; hideHeader?: boolean }) {
+export function ProfileDialog({ title, subtitle, children, onClose, busy = false, wide = false, guardChanges = false, hideHeader = false, initialFocus = 'field' }: { title: string; subtitle?: string; children: ReactNode; onClose: () => void; busy?: boolean; wide?: boolean; guardChanges?: boolean; hideHeader?: boolean; initialFocus?: 'field' | 'close' }) {
   const { t } = useI18n();
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
@@ -58,7 +58,13 @@ export function ProfileDialog({ title, subtitle, children, onClose, busy = false
     const active = document.activeElement as HTMLElement | null;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const frame = requestAnimationFrame(() => (ref.current?.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea') || ref.current?.querySelector<HTMLElement>('button'))?.focus());
+    const frame = requestAnimationFrame(() => {
+      const dialog = ref.current;
+      const field = initialFocus === 'field'
+        ? dialog?.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea')
+        : null;
+      (field || dialog?.querySelector<HTMLElement>('button:not(:disabled)'))?.focus();
+    });
     function onKey(event: KeyboardEvent) {
       if (event.defaultPrevented) return;
       if (latest.current.discard) return;
@@ -73,7 +79,7 @@ export function ProfileDialog({ title, subtitle, children, onClose, busy = false
     }
     document.addEventListener('keydown', onKey);
     return () => { cancelAnimationFrame(frame); document.body.style.overflow = previous; document.removeEventListener('keydown', onKey); active?.focus(); };
-  }, [mounted]);
+  }, [mounted, initialFocus]);
   useEffect(() => {
     if (!discard) return;
     const frame = requestAnimationFrame(() => discardRef.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus());

@@ -25,6 +25,11 @@ import s from './ProfileWorkspace.module.css';
 
 const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
 const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'];
+const WORK_MODES = [
+  { mode: 'ONSITE', icon: 'building' },
+  { mode: 'HYBRID', icon: 'hybrid' },
+  { mode: 'REMOTE', icon: 'monitor' },
+] as const;
 const DEGREES = ['HIGH_SCHOOL', 'VOCATIONAL', 'BACHELOR', 'MASTER', 'PHD'];
 
 function CityChoice({ initial, initialCountryId = '' }: { initial?: City | null; initialCountryId?: string }) {
@@ -116,7 +121,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   }
 
   const listEditor = editor.kind === 'skills' || editor.kind === 'languages';
-  return <ProfileDialog title={titles[editor.kind]} subtitle={editor.kind === 'basics' ? t('pc.basicsHint') : undefined} onClose={onClose} busy={busy} guardChanges={!listEditor}>
+  return <ProfileDialog title={titles[editor.kind]} subtitle={editor.kind === 'basics' ? t('pc.basicsHint') : undefined} onClose={onClose} busy={busy} guardChanges={!listEditor} initialFocus={editor.kind === 'languages' ? 'close' : 'field'}>
     {error && <div className={s.formError} role="alert">{error}</div>}
     {editor.kind === 'phone' ? <form onSubmit={submit} className={s.form}>
       <fieldset disabled={busy} className={s.resetFieldset}>
@@ -132,7 +137,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose} disabled={busy}>{t('cancel')}</button><button type="submit" className={s.primary} disabled={busy}>{busy ? t('saving') : t('save')}</button></footer>
     </form> : listEditor ? <div className={s.dialogBody}>
       <fieldset disabled={busy} className={s.resetFieldset}>
-        {editor.kind === 'skills' ? <SkillCombobox focusSuggestions disabled={busy} onPick={(item) => mutate('/profiles/me/skills', 'POST', { ...(item.slug ? { slug: item.slug } : { name: item.name }), level: item.level || 'INTERMEDIATE' })} /> : <LookupCombobox focusSuggestions kind="languages" disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1" onPick={(item) => mutate('/profiles/me/languages', 'POST', { ...(item.code || item.slug ? { code: item.code || item.slug } : { name: item.name }), level: item.level || 'B1' })} />}
+        {editor.kind === 'skills' ? <SkillCombobox focusSuggestions disabled={busy} onPick={(item) => mutate('/profiles/me/skills', 'POST', { ...(item.slug ? { slug: item.slug } : { name: item.name }), level: item.level || 'INTERMEDIATE' })} /> : <LookupCombobox focusSuggestions kind="languages" placeholder={t('languageSearchPlaceholder')} disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1" onPick={(item) => mutate('/profiles/me/languages', 'POST', { ...(item.code || item.slug ? { code: item.code || item.slug } : { name: item.name }), level: item.level || 'B1' })} />}
         <div className={s.editList}>
           {(editor.kind === 'skills' ? profile.skills : profile.languages).map((row) => {
             const name = 'skill' in row ? row.skill.name : row.language.name;
@@ -147,7 +152,27 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
         {editor.kind === 'basics' && <>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
           <>{positionGroupsUiEnabled?<PositionSelectionPicker value={selections} onChange={value=>{setSelectionsTouched(true);setSelections(value);}}/>:<RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />}</>
-          {employeePositionPreferencesEnabled&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
+          {employeePositionPreferencesEnabled && (
+            <fieldset className={s.workModeField}>
+              <legend>{t('workMode')}</legend>
+              <div className={s.workModeOptions}>
+                {WORK_MODES.map(({ mode, icon }) => (
+                  <label className={s.workModeOption} key={mode}>
+                    <span className={s.workModeIcon}><ProfileIcon kind={icon} /></span>
+                    <span>{enumLabel('workMode', mode)}</span>
+                    <input
+                      type="checkbox"
+                      checked={workModes.includes(mode)}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setWorkModes(modes => checked ? [...modes, mode] : modes.filter(value => value !== mode));
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
 
           <SalaryFields countries={countries} value={salary} onChange={setSalary} />

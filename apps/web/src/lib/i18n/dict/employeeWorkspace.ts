@@ -54,7 +54,6 @@ export const employeeWorkspace = {
   'ew.alertsHint': {"en":"Choose the roles you want and how you want to hear about them.","ru":"Укажите интересующие вакансии и способы получения уведомлений.","uz":"Qiziqqan ishlaringizni va bildirishnoma kanallarini tanlang."},
   'ew.alertSaved': {"en":"Job alert saved.","ru":"Уведомление сохранено.","uz":"Ogohlantirish saqlandi."},
   'ew.channelsRequired': {"en":"Select at least one notification channel.","ru":"Выберите хотя бы один канал уведомлений.","uz":"Kamida bitta bildirishnoma kanalini tanlang."},
-  'ew.manageConnection': {"en":"Manage connection","ru":"Управление подключением","uz":"Ulanishni boshqarish"},
   'ew.allLocations': {"en":"All locations","ru":"Все местоположения","uz":"Barcha manzillar"},
   'ew.chooseLocation': {"en":"Choose location","ru":"Выбрать местоположение","uz":"Manzilni tanlash"},
   'ew.notifyVia': {"en":"Notify me via","ru":"Каналы уведомлений","uz":"Bildirishnoma kanallari"},

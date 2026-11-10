@@ -757,7 +757,6 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   'ew.alertsHint': 'Pilih posisi yang Anda inginkan dan cara menerima pemberitahuannya.',
   'ew.alertSaved': 'Pemberitahuan lowongan disimpan.',
   'ew.channelsRequired': 'Pilih minimal satu saluran pemberitahuan.',
-  'ew.manageConnection': 'Kelola koneksi',
   'ew.allLocations': 'Semua lokasi',
   'ew.chooseLocation': 'Pilih lokasi',
   'ew.notifyVia': 'Beri tahu saya melalui',

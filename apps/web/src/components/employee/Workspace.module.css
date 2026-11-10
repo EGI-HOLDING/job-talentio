@@ -31,6 +31,7 @@
 .bookmarked { color: var(--ws-purple); }
 .bookmarked svg { fill: currentColor; }
 .scroll { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 28px; scrollbar-width: thin; }
+.alertEmptyScroll { display: grid; }
 .table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: .86rem; }
 .table th { position: sticky; top: 0; z-index: 2; padding: 16px 18px; text-align: left; font-size: .77rem; font-weight: 500; color: #697991; background: #f9fafd; border-bottom: 1px solid var(--ws-line); }
 .table td { padding: 21px 18px; height: 88px; border-bottom: 1px solid var(--ws-line); vertical-align: middle; }
@@ -86,9 +87,6 @@
 .switch:disabled { opacity: .5; }
 .textButton { display: inline-flex; align-items: center; gap: 7px; padding: 4px 0; border: 0; background: transparent; color: #6341d5; font-size: .76rem !important; font-weight: 500; }
 .textButton:hover { background: transparent; color: #4225ac; }
-.connection { display: flex; align-items: center; gap: 10px; padding: 20px 18px; color: #8390a6; font-size: .74rem; }
-.connection > svg { color: #229dce; }
-.connection a { color: #6240d3; border-left: 1px solid #e1e6f0; padding-left: 12px; margin-left: 5px; }
 .menuAnchor { position: relative; }
 .menu { position: absolute; top: 35px; right: 0; z-index: 5; min-width: 145px; padding: 5px; border: 1px solid #e6e9f0; border-radius: 8px; background: #fff; box-shadow: 0 8px 25px #17213a18; }
 .menu button { width: 100%; display: flex; gap: 8px; align-items: center; text-align: left; padding: 10px; background: #fff; color: #c13455; border: 0; border-radius: 4px; font-size: .76rem; }
@@ -172,7 +170,6 @@
   .footer { padding: 12px 16px; font-size: .66rem; }
   .fieldGrid { grid-template-columns: 1fr; gap: 0; }
   .modalForm { padding-inline: 20px; }
-  .connection { align-items: flex-start; flex-wrap: wrap; padding-inline: 0; line-height: 1.7; }
   .notice { padding-inline: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } .switch::after { transition: none; } }
