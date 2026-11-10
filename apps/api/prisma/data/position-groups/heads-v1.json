@@ -1,0 +1,2413 @@
+{
+  "version": "position-groups-v1",
+  "sourceVersion": "ESCO v1.2.1",
+  "heads": [
+    {
+      "id": "group:accountant",
+      "code": "accountant",
+      "nameEn": "Accountant",
+      "definition": "Accountants review and analyse financial statements, budgets, financial reports, and business plans in order to check for irregularities resulting from error or fraud, and provide their clients with financial advice in matters such as financial forecasting and risk analysis. They may audit financial data, resolve insolvency cases, prepare tax returns and provide other tax-related advice in reference to current legislation.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxke9011y0nrcx4ws009s"
+        ],
+        "escoCode": "2411.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxke9011y0nrcx4ws009s",
+      "seeds": [
+        "Accountant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "account|financial statement|tax return|audit"
+    },
+    {
+      "id": "group:administrative-assistant",
+      "code": "administrative-assistant",
+      "nameEn": "Administrative Assistant",
+      "definition": "Administrative assistants provide administrative and office support for supervisors. They perform a variety of tasks, such as answering telephone calls, receiving and directing visitors, ordering office supplies, maintaining the office facilities running smoothly, and ensuring that equipment and appliances work properly.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_3b79ffd5e96d5808000540ae5583265a"
+        ],
+        "escoCode": "3343.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_3b79ffd5e96d5808000540ae5583265a",
+      "seeds": [
+        "Administrative Assistant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "administrat|office|clerical|correspondence"
+    },
+    {
+      "id": "group:agricultural-technician",
+      "code": "agricultural-technician",
+      "nameEn": "Agricultural Technician",
+      "definition": "Agricultural technicians collect and conduct experiments and tests on agriculture and aquaculture specimens. They provide support to scientists and farmers and also analyse and report on conditions in the collected specimens' environments.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_74d85674afaf5ed0a888fcc4858325c9"
+        ],
+        "escoCode": "3142.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_74d85674afaf5ed0a888fcc4858325c9",
+      "seeds": [
+        "Agricultural Technician"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "agricultur|crop|farm|soil"
+    },
+    {
+      "id": "group:agronomist",
+      "code": "agronomist",
+      "nameEn": "Agronomist",
+      "definition": "Agronomists provide consulting services to companies, agricultural cooperatives, agronomical crop growers and horticultural crop growers on the cultivation of food crops. They study the science, technology and business related to growing plants. They examine crops and perform experiments in order to improve crop yields and farms' production. Agronomists also examine the most effective ways to harvest and cultivate plants.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_fc0e883e589810b3f3c7038b4a6dcd56"
+        ],
+        "escoCode": "2132.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_fc0e883e589810b3f3c7038b4a6dcd56",
+      "seeds": [
+        "Agronomist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "agronom|crop|soil|agricultur"
+    },
+    {
+      "id": "group:air-traffic-controller",
+      "code": "air-traffic-controller",
+      "nameEn": "Air Traffic Controller",
+      "definition": "Air traffic controllers assist pilots by providing information concerning the height, speed and course. They assist pilots in order to facilitate a safe take off and landing of aircrafts. They are responsible for maintaining a secure and orderly movement of aircraft along major air routes up in the sky and around airports. They control air traffic in and within vicinity of airports according to established procedures and policies to prevent collisions and to minimise delays arising from traffic congestion.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_f0936f281750bc0e40f7661c8d04166a"
+        ],
+        "escoCode": "3154.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_f0936f281750bc0e40f7661c8d04166a",
+      "seeds": [
+        "Air Traffic Controller"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "air traffic|aircraft|airspace|flight"
+    },
+    {
+      "id": "group:animal-care-attendant",
+      "code": "animal-care-attendant",
+      "nameEn": "Animal Care Attendant",
+      "definition": "Animal care attendants provide routine care for non-production animals, which may include feeding, watering, cleaning, exercise and enrichment, grooming, training and monitoring of the health and welfare, in accordance with national legislation.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_a3706f9933bf064b98497e7ef018e6d8"
+        ],
+        "escoCode": "5164.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_a3706f9933bf064b98497e7ef018e6d8",
+      "seeds": [
+        "Animal Care Attendant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "animal|pet|wildlife"
+    },
+    {
+      "id": "group:animal-handler",
+      "code": "animal-handler",
+      "nameEn": "Animal Handler",
+      "definition": "Animal handlers are in charge of handling animals in a working role and continue the training of the animal, in accordance with national legislation.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_b38323b14fa211639c31d67bae19daed"
+        ],
+        "escoCode": "5164.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_b38323b14fa211639c31d67bae19daed",
+      "seeds": [
+        "Animal Handler"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "animal|livestock"
+    },
+    {
+      "id": "group:animal-trainer",
+      "code": "animal-trainer",
+      "nameEn": "Animal Trainer",
+      "definition": "Animal trainers train animals and/or animal handlers for general and specific purposes, including assistance, security, leisure, competition, transportation, obedience and routine handling, entertainment and education, in accordance with national legislation.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_29e42024f5c55018a7f5d8f1477e8164"
+        ],
+        "escoCode": "5164.2.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_29e42024f5c55018a7f5d8f1477e8164",
+      "seeds": [
+        "Animal Trainer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "animal|train.*dog|dog.*train"
+    },
+    {
+      "id": "group:architect",
+      "code": "architect",
+      "nameEn": "Architect",
+      "definition": "Architects investigate, design, and oversee the construction and development of buildings, urban spaces, infrastructure projects, and social spaces. They design in accordance with the surroundings and regulations applicable in specific geographic areas, taking into account factors that include function, aesthetics, costs, and public health and safety. They are aware of social contexts and environmental factors, which include the relationships between people and buildings, and buildings and the environment. They engage in multidisciplinary projects aimed at developing the social fabric of a geographic area and advancing in social urbanism projects.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_c7dfa46d480b689c55cdfe2b018baa8a"
+        ],
+        "escoCode": "2161.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_c7dfa46d480b689c55cdfe2b018baa8a",
+      "seeds": [
+        "Architect"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "architect|building|construction"
+    },
+    {
+      "id": "group:audio-visual-technician",
+      "code": "audio-visual-technician",
+      "nameEn": "Audio-visual Technician",
+      "definition": "Audio-visual technicians set up, operate and maintain equipment to record and edit images and sound for radio and television broadcasts, at live events and for telecommunication signals.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_d0cc786c1fcef982149d95aad381dab0"
+        ],
+        "escoCode": "3521.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_d0cc786c1fcef982149d95aad381dab0",
+      "seeds": [
+        "Audio-visual Technician"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "audio|visual|video|sound|broadcast"
+    },
+    {
+      "id": "group:baker",
+      "code": "baker",
+      "nameEn": "Baker",
+      "definition": "Bakers make a wide range of breads, pastries, and other baked goods. They follow all the processes from receipt and storage of raw materials, preparation of raw materials for bread-making, measurement and mixing of ingredients into dough and proof. They tend ovens to bake products to an adequate temperature and time.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_caddf3edf88003a37bd1459d8458ce5e"
+        ],
+        "escoCode": "7512.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_caddf3edf88003a37bd1459d8458ce5e",
+      "seeds": [
+        "Baker"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "bak|bread|dough|pastr"
+    },
+    {
+      "id": "group:bank-teller",
+      "code": "bank-teller",
+      "nameEn": "Bank Teller",
+      "definition": "Bank tellers deal most frequently with customers of the bank. They promote the banks products and services, and provide information about the customers personal accounts and related transfers, deposits, savings etc. They order bank cards and checks for the customers, receive and balance cash and checks and ensure compliance with internal policies. They work on client accounts, deal with payments and manage the use of vaults and safe deposit boxes.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_536e015eb37878eedd7b17496ef75bcc"
+        ],
+        "escoCode": "4211.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_536e015eb37878eedd7b17496ef75bcc",
+      "seeds": [
+        "Bank Teller"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "bank|cash|financial transaction"
+    },
+    {
+      "id": "group:barista",
+      "code": "barista",
+      "nameEn": "Barista",
+      "definition": "Barista's prepare specialised types of coffee using professional equipment in a hospitality/coffee shop/bar unit.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_0b53cd53f14fa0abb97e666a65ecb12b"
+        ],
+        "escoCode": "5132.1.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_0b53cd53f14fa0abb97e666a65ecb12b",
+      "seeds": [
+        "Barista"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "coffee|espresso|beverage"
+    },
+    {
+      "id": "group:bartender",
+      "code": "bartender",
+      "nameEn": "Bartender",
+      "definition": "Bartenders serve alcoholic or non-alcoholic drinks as requested by clients in a hospitality service bar outlet.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_9372578448a080a72c907ef1c5412658"
+        ],
+        "escoCode": "5132.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_9372578448a080a72c907ef1c5412658",
+      "seeds": [
+        "Bartender"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "bar|cocktail|drink|beverage"
+    },
+    {
+      "id": "group:biologist",
+      "code": "biologist",
+      "nameEn": "Biologist",
+      "definition": "Biologists study living organisms and life in its broader extent in combination with its environment. Through research, they strive to explain the functional mechanisms, interactions, and evolution of organisms.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_6d518efa778fb68e2bba6cf972769148"
+        ],
+        "escoCode": "2131.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_6d518efa778fb68e2bba6cf972769148",
+      "seeds": [
+        "Biologist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "biolog|organism|ecolog|genetic"
+    },
+    {
+      "id": "group:bookkeeper",
+      "code": "bookkeeper",
+      "nameEn": "Bookkeeper",
+      "definition": "Bookkeepers record and assemble the day-to-day financial transactions of an organisation or company, consisting usually of sales, purchases, payments and receipts. They ensure all financial transactions are documented in the appropriate (day) book and general ledger, and that they are balanced out. Bookkeepers prepare the recorded books and ledgers with financial transactions for an accountant to then analyse balance sheets and income statements.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_120694caf8c5cc0454c66b7b8004836c"
+        ],
+        "escoCode": "3313.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_120694caf8c5cc0454c66b7b8004836c",
+      "seeds": [
+        "Bookkeeper"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "bookkeep|account|financial record"
+    },
+    {
+      "id": "group:business-analyst",
+      "code": "business-analyst",
+      "nameEn": "Business Analyst",
+      "definition": "Business analysts research and understand the strategic position of businesses and companies in relation to their markets and their stakeholders. They analyse and present their views on how the company, from many perspectives, can improve its strategic position and internal corporate structure. They assess needs for change, communication methods, technology, IT tools, new standards and certifications.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_b5ddd001a61ed711cbe7efb104c434c4"
+        ],
+        "escoCode": "2421.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_b5ddd001a61ed711cbe7efb104c434c4",
+      "seeds": [
+        "Business Analyst"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "business|organisation.*process|organizational.*process"
+    },
+    {
+      "id": "group:call-centre-agent",
+      "code": "call-centre-agent",
+      "nameEn": "Call Centre Agent",
+      "definition": "Call centre agents handle incoming or outgoing customer calls for a business. They call existing and prospective customers to promote goods and services. They also obtain sales and arrange sales visits.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_fce0727805e992ad62a076bb608afc18"
+        ],
+        "escoCode": "5244.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_fce0727805e992ad62a076bb608afc18",
+      "seeds": [
+        "Call Centre Agent"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "call|telephone|customer"
+    },
+    {
+      "id": "group:carpenter",
+      "code": "carpenter",
+      "nameEn": "Carpenter",
+      "definition": "Carpenters cut, shape and assemble wooden elements for the construction of buildings and other structures. They also use materials such as plastic and metal in their creations. Carpenters create the wooden frames to support wood framed buildings.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_d6e7fc249929b8ebc2ac4e7eed58a4fe"
+        ],
+        "escoCode": "7115.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_d6e7fc249929b8ebc2ac4e7eed58a4fe",
+      "seeds": [
+        "Carpenter"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "carpent|wood|timber"
+    },
+    {
+      "id": "group:cashier",
+      "code": "cashier",
+      "nameEn": "Cashier",
+      "definition": "Cashiers operate the cash register, receive payments from customers, issue receipts and return change due.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_fde7bc6a2723b17fa7e31389cf277a51"
+        ],
+        "escoCode": "5230.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_fde7bc6a2723b17fa7e31389cf277a51",
+      "seeds": [
+        "Cashier"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "cash|payment|transaction"
+    },
+    {
+      "id": "group:chef",
+      "code": "chef",
+      "nameEn": "Chef",
+      "definition": "Chefs are culinary professionals with a flair for creativity and innovation to provide a unique gastronomic experience.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_8656316e5b43c3005e39482da0f64c3a"
+        ],
+        "escoCode": "3434.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_8656316e5b43c3005e39482da0f64c3a",
+      "seeds": [
+        "Chef"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "chef|culinary|kitchen|menu|food preparation"
+    },
+    {
+      "id": "group:chemist",
+      "code": "chemist",
+      "nameEn": "Chemist",
+      "definition": "Chemists perform laboratory research by testing and analysing the chemical structure of substances.They translate the research results into industrial production processes which are further used in the development or improvement of products. Chemists are also testing the quality of the manufactured products and their environmental impact.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_fe476eae6140f51ec342314de0d478bc"
+        ],
+        "escoCode": "2113.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_fe476eae6140f51ec342314de0d478bc",
+      "seeds": [
+        "Chemist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "chemi|substance|laborator"
+    },
+    {
+      "id": "group:child-care-worker",
+      "code": "child-care-worker",
+      "nameEn": "Child Care Worker",
+      "definition": "Child care workers provide care for children when the parents or family members are unavailable. They look after the children's basic needs and help or supervise them during play. Child care workers can work for preschools, daycare centres, childcare agencies or individual families.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_35a05cb647b1b958a467662e7b4446ae"
+        ],
+        "escoCode": "5311.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_35a05cb647b1b958a467662e7b4446ae",
+      "seeds": [
+        "Child Care Worker"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "child|infant|nurser"
+    },
+    {
+      "id": "group:civil-engineer",
+      "code": "civil-engineer",
+      "nameEn": "Civil Engineer",
+      "definition": "Civil engineers design, plan, and develop technical and engineering specifications for infrastructure and construction projects. They apply engineering knowledge in a vast array of projects, from the construction of infrastructure for transportation, housing projects, and luxury buildings, to the construction of natural sites. They design plans that seek to optimise materials and integrate specifications and resource allocation within the time constraints.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_a4227bc85b931f63bbd5615f8e28fefb"
+        ],
+        "escoCode": "2142.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_a4227bc85b931f63bbd5615f8e28fefb",
+      "seeds": [
+        "Civil Engineer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "civil|bridge|road|structur|construction|infrastructure"
+    },
+    {
+      "id": "group:construction-manager",
+      "code": "construction-manager",
+      "nameEn": "Construction Manager",
+      "definition": "Construction managers are responsible for the planning and coordination of the construction projects. They provide expertise in the design phase of construction projects by facilitating a better estimate of the costs and the functional implications. They participate on bid processes for construction projects and handle subcontractors to deliver the different stages of the construction process from beginning to completion. They strive to enhance the value of the projects both improving efficiency and creating value for customers.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_22bb4905fb715497a642cbe01c68e596"
+        ],
+        "escoCode": "1323.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_22bb4905fb715497a642cbe01c68e596",
+      "seeds": [
+        "Construction Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "construction|building|civil"
+    },
+    {
+      "id": "group:cook",
+      "code": "cook",
+      "nameEn": "Cook",
+      "definition": "Cooks are culinary operatives who are able to prepare and present food, normally in domestic and institutional environments.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_9cad19d79e72337574b4973b382207ab"
+        ],
+        "escoCode": "5120.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_9cad19d79e72337574b4973b382207ab",
+      "seeds": [
+        "Cook"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "cook|food preparation|dishes|kitchen"
+    },
+    {
+      "id": "group:customer-service-representative",
+      "code": "customer-service-representative",
+      "nameEn": "Customer Service Representative",
+      "definition": "Customer service representatives handle complaints and are responsible for maintaining overall goodwill between an organisation and its customers. They manage data regarding customer satisfaction and report it.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_53d1854fa28572a47c0d8af5dc68cbaa"
+        ],
+        "escoCode": "4225.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_53d1854fa28572a47c0d8af5dc68cbaa",
+      "seeds": [
+        "Customer Service Representative"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "customer|consumer|client|enquir"
+    },
+    {
+      "id": "group:data-analyst",
+      "code": "data-analyst",
+      "nameEn": "Data Analyst",
+      "definition": "Data analysts import, inspect, clean, transform, validate, model, or interpret collections of data with regard to the business goals of the company. They ensure that the data sources and repositories provide consistent and reliable data. Data analysts use different algorithms and IT tools as demanded by the situation and the current data. They might prepare reports in the form of visualisations such as graphs, charts, and dashboards.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxk7000xq0nrcyj8uqybt"
+        ],
+        "escoCode": "2511.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxk7000xq0nrcyj8uqybt",
+      "seeds": [
+        "Data Analyst"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "data|analytic"
+    },
+    {
+      "id": "group:data-engineer",
+      "code": "data-engineer",
+      "nameEn": "Data Engineer",
+      "definition": "Data engineers develop the architecture needed to process, manage, and store large amounts of data which will be used by data scientists for analysis. They design the infrastructure and maintain data pipelines and warehouses to leverage data for strategic advantage.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxjue00r20nrcw12ybfun"
+        ],
+        "escoCode": "2511.20",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxjue00r20nrcw12ybfun",
+      "seeds": [
+        "Data Engineer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "data|pipeline|warehouse"
+    },
+    {
+      "id": "group:data-entry-clerk",
+      "code": "data-entry-clerk",
+      "nameEn": "Data Entry Clerk",
+      "definition": "Data entry clerks update, maintain and retrieve information held on computer systems. They prepare source data for computer entry by compiling and sorting information, process customer and account source documents by reviewing data for deficiencies and verify entered customer and account data.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_8b80588d10f51c1a51f565fd6ded1ef1"
+        ],
+        "escoCode": "4132.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_8b80588d10f51c1a51f565fd6ded1ef1",
+      "seeds": [
+        "Data Entry Clerk"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "data|record|input"
+    },
+    {
+      "id": "group:data-scientist",
+      "code": "data-scientist",
+      "nameEn": "Data Scientist",
+      "definition": "Data scientists find and interpret rich data sources, manage large amounts of data, merge data sources, ensure consistency of data-sets, and create visualisations to aid in understanding data. They build mathematical models using data, present and communicate data insights and findings to specialists and scientists in their team and if required, to a non-expert audience, and recommend ways to apply the data.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_98c2ff1de42a6ad238e8cb0cf979ff43"
+        ],
+        "escoCode": "2511.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_98c2ff1de42a6ad238e8cb0cf979ff43",
+      "seeds": [
+        "Data Scientist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "data|statistic|machine learning"
+    },
+    {
+      "id": "group:database-administrator",
+      "code": "database-administrator",
+      "nameEn": "Database Administrator",
+      "definition": "Database administrators test, implement and administer computer databases. They use their expertise in database management systems to plan, coordinate and implement security measures to safeguard computer databases. They also use scripts and configuration files to tailor a database to users' needs.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_fb0efaaa5451d190ae78dee9b0c91b3c"
+        ],
+        "escoCode": "2521.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_fb0efaaa5451d190ae78dee9b0c91b3c",
+      "seeds": [
+        "Database Administrator"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "database|data management"
+    },
+    {
+      "id": "group:designer",
+      "code": "designer",
+      "nameEn": "Designer",
+      "definition": "Research needs and create, develop or validate visual, physical or digital designs.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_0d279644f1a2272f74725c26cc17c04e",
+          "jobcat_6e04f1924214f4c649a52cb10426de04",
+          "cmvccxkmu01720nrc7olcdk2n",
+          "jobcat_3e1f739e4b6a9d5e69fa8f0de64db92d",
+          "jobcat_d609c9bb13a3676d8e57727fa29fbaff",
+          "cmvccxkof017s0nrc8o4cndod",
+          "cmvccxkl701620nrc0fsaigyk"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Desainer",
+          "Perancang"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "graphic designer",
+        "industrial designer",
+        "fashion designer",
+        "interior designer",
+        "user experience analyst",
+        "digital media designer"
+      ],
+      "candidate": null,
+      "exclude": "database designer|data warehouse designer",
+      "task": "design|visual|creat|user|aesthetic"
+    },
+    {
+      "id": "group:devops-engineer",
+      "code": "devops-engineer",
+      "nameEn": "DevOps Engineer",
+      "definition": "Exact English catalog title and assigned family are present in the live catalog; retain as candidate-selectable role head.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxjq300oj0nrc6ng6d8r7"
+        ],
+        "escoCode": null,
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxjq300oj0nrc6ng6d8r7",
+      "seeds": [
+        "DevOps Engineer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "devops|cloud|deployment|infrastructure|automat"
+    },
+    {
+      "id": "group:doctor",
+      "code": "doctor",
+      "nameEn": "Doctor",
+      "definition": "Diagnose, prevent and treat human medical conditions as a physician or surgeon.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_7f5ddee54568ef3d232dd3d75ebd4666",
+          "jobcat_3568ea917842e400c9205a6c59acbde7",
+          "jobcat_0b52c42a492d10f27ee1ec7fa3813285",
+          "jobcat_712bfe866ac81ffadf109ef612470d6e",
+          "jobcat_01b69649fdf38ea30815667c6bde0fc6",
+          "jobcat_f006ce97762b4a9469609eb72a3bc882",
+          "jobcat_bdb237165a70217a03f75994b739ecc3",
+          "jobcat_eec503ca01f251252a0151f717930d25"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Dokter"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [],
+      "candidate": "physician|surgeon|cardiologist|general practitioner|anesthesiologist|dermatologist|paediatrician|psychiatrist|medical doctor",
+      "exclude": "veterinary|dentist",
+      "task": "diagnos|treat|patient|surg|medical"
+    },
+    {
+      "id": "group:driver",
+      "code": "driver",
+      "nameEn": "Driver",
+      "definition": "Drive road vehicles to transport passengers or deliver goods safely.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_2f4e6bc0c59fcf4304f3a85d3edae497",
+          "jobcat_6dc342bca8f5e185a60737b268669980",
+          "jobcat_c0ccdd6cc21eb38697246e83f686abaf",
+          "jobcat_5bb89da355ecc7e0dfede5693f18baa8",
+          "jobcat_324c75fde57b5adf93cb507407881d1e",
+          "jobcat_f0f926640b47a1c035df2aba8cefc806",
+          "jobcat_85efd3a1e155a26fc7cb57cd0f3f3fea",
+          "jobcat_ebf63fed12e6aa60c6cab6416d5610f9"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Sopir",
+          "Pengemudi"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [],
+      "candidate": "driver",
+      "exclude": "carriage|animal|test driver",
+      "task": "driv|vehicle|transport|deliver"
+    },
+    {
+      "id": "group:economist",
+      "code": "economist",
+      "nameEn": "Economist",
+      "definition": "Economists perform research and develop theories in the field of economics, whether for microeconomic or macroeconomic analysis. They study trends, analyse statistical data, and to some extent work with economic mathematical models in order to advise companies, governments, and related institutions. They advise on product feasibility, trend forecasts, emerging markets, tax policies, and consumer trends.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_0f85dd2cb98937527000445b57410a44"
+        ],
+        "escoCode": "2631.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_0f85dd2cb98937527000445b57410a44",
+      "seeds": [
+        "Economist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "econom|market|fiscal"
+    },
+    {
+      "id": "group:electrician",
+      "code": "electrician",
+      "nameEn": "Electrician",
+      "definition": "Electricians fit and repair electrical circuits and wiring systems. They also install and maintain electrical equipment and machinery. This work can be performed indoors as well as outdoors, in nearly every type of facility.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_cac6d3db10f2d890a9ed407b90c65e01"
+        ],
+        "escoCode": "7411.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_cac6d3db10f2d890a9ed407b90c65e01",
+      "seeds": [
+        "Electrician"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "electric|wiring|power"
+    },
+    {
+      "id": "group:engineer",
+      "code": "engineer",
+      "nameEn": "Engineer",
+      "definition": "Research, design, develop, validate or improve engineered products, infrastructure and technical systems.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_6be9f207b85de1f7b23da1ad0798bf70",
+          "jobcat_56e7b200f4f2218b3d8e807eca72bf0b",
+          "jobcat_a4227bc85b931f63bbd5615f8e28fefb",
+          "cmvccxkws01c00nrc3tqc28bj",
+          "jobcat_ec628480739ad3247d4ae1338ff56fc9",
+          "jobcat_0dd9a7c8c485cc9ecdbcdb5244758f74",
+          "jobcat_b70dc41f743af15c7e0d2bf2651361c1"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Insinyur"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "civil engineer",
+        "mechanical engineer",
+        "electrical engineer",
+        "electronics engineer",
+        "chemical engineer",
+        "industrial engineer",
+        "environmental engineer",
+        "energy engineer",
+        "software developer"
+      ],
+      "candidate": "engineer$",
+      "exclude": "engineering teacher|engineering lecturer|sales|presales",
+      "task": "design|develop|engineer|research|validat|technical"
+    },
+    {
+      "id": "group:environmental-engineer",
+      "code": "environmental-engineer",
+      "nameEn": "Environmental Engineer",
+      "definition": "Environmental engineers integrate environmental and sustainable measures in the development of projects of various natures. They seek to preserve natural resources and natural sites. They work together with engineers from other fields to envision all the implications that projects might have in order to design ways to conserve natural reserves, prevent pollution, and deploy sanitary measures.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_0dd9a7c8c485cc9ecdbcdb5244758f74"
+        ],
+        "escoCode": "2143.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_0dd9a7c8c485cc9ecdbcdb5244758f74",
+      "seeds": [
+        "Environmental Engineer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "environment|pollut|waste|sustainab"
+    },
+    {
+      "id": "group:event-manager",
+      "code": "event-manager",
+      "nameEn": "Event Manager",
+      "definition": "Event managers plan and oversee events such as festivals, conferences, ceremonies, cultural events, exhibitions, formal parties, concerts, or conventions. They organise every stage of the events planning the venues, staff, suppliers, media, insurances all within the allocated budgetary and time limits. Event managers ensure the legal obligations are followed and the expectations of the target audience are met. They work together with the marketing team in promoting the event, searching new clients and gathering constructive feedback after the events took place.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_f1b730bdaadf41b3e76b19a2c9028339"
+        ],
+        "escoCode": "3332.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_f1b730bdaadf41b3e76b19a2c9028339",
+      "seeds": [
+        "Event Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "event|conference|convention"
+    },
+    {
+      "id": "group:farm-manager",
+      "code": "farm-manager",
+      "nameEn": "Farm Manager",
+      "definition": "Farm managers plan and organise the daily operations, resourcing and business management of animal and crops producing farms.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_bab3aabffe848b0cdbeae3f87adbc0b8"
+        ],
+        "escoCode": "6130.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_bab3aabffe848b0cdbeae3f87adbc0b8",
+      "seeds": [
+        "Farm Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "farm|agricultur|livestock|crop"
+    },
+    {
+      "id": "group:fashion-designer",
+      "code": "fashion-designer",
+      "nameEn": "Fashion Designer",
+      "definition": "Fashion designers work on designs for the haute couture and/or ready-to-wear, high street fashion markets, and more generally on items of clothing and fashion ranges. Fashion designers can operate in a specialised area, such as sportswear, childrenswear, footwear or accessories.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_6e04f1924214f4c649a52cb10426de04"
+        ],
+        "escoCode": "2163.1.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_6e04f1924214f4c649a52cb10426de04",
+      "seeds": [
+        "Fashion Designer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "fashion|garment|cloth|apparel"
+    },
+    {
+      "id": "group:financial-analyst",
+      "code": "financial-analyst",
+      "nameEn": "Financial Analyst",
+      "definition": "Financial analysts conduct economic research and elicit valuable analyses on financial matters such as profitability, liquidity, solvency, and asset management. They provide recommendations on financial matters for decision-making processes. Financial analysts work in both the public and the private sector.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxkfq012u0nrc1erzj6n6"
+        ],
+        "escoCode": "2413.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxkfq012u0nrc1erzj6n6",
+      "seeds": [
+        "Financial Analyst"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "financ|invest|economic"
+    },
+    {
+      "id": "group:financial-manager",
+      "code": "financial-manager",
+      "nameEn": "Financial Manager",
+      "definition": "Financial managers handle all the matters in reference to the finance and investments of a company. They manage financial operations of companies such as the assets, liabilities, equity and cash flow aiming to maintain the financial health of the company and operative viability. Financial managers evaluate the strategic plans of the company in financial terms, maintain transparent financial operations for taxation and auditing bodies, and create the financial statements of the company at the end of the fiscal year.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_56428ae713a50368597d8f13e2487eb5"
+        ],
+        "escoCode": "1211.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_56428ae713a50368597d8f13e2487eb5",
+      "seeds": [
+        "Financial Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "financ|budget|treasur"
+    },
+    {
+      "id": "group:firefighter",
+      "code": "firefighter",
+      "nameEn": "Firefighter",
+      "definition": "Firefighters are responsible for emergency response in case of a fire outbreak or other hazardous situations. They oversee the evacuation of the endangered premises and ensure victims are rescued and taken care of by the appropriate professionals. Once the premises are clear of victims, they ensure the fire is extinguished, compliant with health and safety regulations. They also regulate the clean-up of the scene and assess the damage.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_8b81739e6ac332cab7a42aa82bf8f7e1"
+        ],
+        "escoCode": "5411.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_8b81739e6ac332cab7a42aa82bf8f7e1",
+      "seeds": [
+        "Firefighter"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "fire|rescue|emergenc"
+    },
+    {
+      "id": "group:fitness-instructor",
+      "code": "fitness-instructor",
+      "nameEn": "Fitness Instructor",
+      "definition": "Fitness instructors build fitness participation of new and existing members through fitness experiences that meet their needs. They deliver fitness instruction to individuals, with the use of equipment, or to a group, through fitness classes. Both individual and group instructors have the purpose of promoting and delivering safe and effective exercise. Depending on the specific situation, some additional knowledge, skills and competences may be required.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_b0c6ef37f64c175c75790809166eb02d"
+        ],
+        "escoCode": "3423.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_b0c6ef37f64c175c75790809166eb02d",
+      "seeds": [
+        "Fitness Instructor"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "fitness|exercise|physical training"
+    },
+    {
+      "id": "group:forklift-operator",
+      "code": "forklift-operator",
+      "nameEn": "Forklift Operator",
+      "definition": "Forklift operators are responsible for operating forklifts to move, locate, relocate, stack, and count merchandise. They are accountable for the safe and efﬁcient operation of forklifts. Moreover, they perform the filling of orders and check the accuracy of other orders.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_86a35fd766242b7061f0ab18d53960bb"
+        ],
+        "escoCode": "8344.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_86a35fd766242b7061f0ab18d53960bb",
+      "seeds": [
+        "Forklift Operator"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "forklift|lift truck"
+    },
+    {
+      "id": "group:geologist",
+      "code": "geologist",
+      "nameEn": "Geologist",
+      "definition": "Geologists research the materials that form the earth. Their observations depend on the purpose of the research. Depending on their specialisation, geologists study how the Earth has been shaped over time, its geological layers, the quality of minerals for mining purposes, earthquakes and volcanic activity for private services, and similar phenomena.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_a7a29abd686cd9691292c93cbc1f4c9d"
+        ],
+        "escoCode": "2114.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_a7a29abd686cd9691292c93cbc1f4c9d",
+      "seeds": [
+        "Geologist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "geolog|earth|rock|mineral"
+    },
+    {
+      "id": "group:graphic-designer",
+      "code": "graphic-designer",
+      "nameEn": "Graphic Designer",
+      "definition": "Graphic designers create text and images to communicate ideas. They make visual concepts by hand or using computer software, intended for publishing in paper or online media such as advertisements, websites, and magazines.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxkmu01720nrc7olcdk2n"
+        ],
+        "escoCode": "2166.9",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxkmu01720nrc7olcdk2n",
+      "seeds": [
+        "Graphic Designer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "graphic|visual|design|layout"
+    },
+    {
+      "id": "group:hairdresser",
+      "code": "hairdresser",
+      "nameEn": "Hairdresser",
+      "definition": "Hairdressers offer beauty services such as cutting, colouring, bleaching, permanent waving and styling clients' hair. They ask their clients about their hairstyle preferences in order to provide customised services. Hairdressers use clippers, scissors and razors. They provide hair and scalp treatments and shampoo, condition and rinse hair.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_679699115099c6a021af2756bd2e0709"
+        ],
+        "escoCode": "5141.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_679699115099c6a021af2756bd2e0709",
+      "seeds": [
+        "Hairdresser"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "hair|scalp"
+    },
+    {
+      "id": "group:health-and-safety-officer",
+      "code": "health-and-safety-officer",
+      "nameEn": "Health And Safety Officer",
+      "definition": "Health and safety officers execute plans for the improvement of work environments and cultures. They assess risks and interview employees to ensure the work environment is compliant with health and safety rules, as well as ensuring the interaction within the workplace occurs in a positive and productive manner. If employed in a healthcare facility the health and safety officer has to investigate infections spreading across a facility and advice all employees how to combat and prevent infections. Furthermore health physics is applied at facilities where people are exposed to ionizing radiation such as nuclear power plants and research institutions.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_dd51bf93aa081c78946df58061ea375a"
+        ],
+        "escoCode": "2263.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_dd51bf93aa081c78946df58061ea375a",
+      "seeds": [
+        "Health And Safety Officer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "safety|occupational health|workplace|hazard"
+    },
+    {
+      "id": "group:healthcare-assistant",
+      "code": "healthcare-assistant",
+      "nameEn": "Healthcare Assistant",
+      "definition": "Healthcare assistants work in teams of nurses within the occupational fields of nursing, social care, clinical care and care of people of all age-groups. Healthcare assistants assist in the promotion and restoration of patients' health by providing physical and psychological support to patients, friends and families.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_2b49345f4f8ed165ea0e79485cd05bf7"
+        ],
+        "escoCode": "5321.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_2b49345f4f8ed165ea0e79485cd05bf7",
+      "seeds": [
+        "Healthcare Assistant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "patient|health|care|nurs"
+    },
+    {
+      "id": "group:human-resources-specialist",
+      "code": "human-resources-specialist",
+      "nameEn": "Human Resources Specialist",
+      "definition": "Administer employee processes, advise on employment matters or source and assess candidates.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "cmvccxkq1018k0nrcddsyzwsn",
+          "jobcat_ef8e88f95650998ca8857b8335196dbc",
+          "jobcat_be7608be8b0ede6056b5da6e393877c0",
+          "jobcat_d849a36a10a707ebd38c7d8de255b518",
+          "jobcat_049b51c1f8fa758fbb485a625e030bf6",
+          "jobcat_cdcc5e1ce364213d68e7a461a462c405",
+          "jobcat_247bef181f6a1cf8f0798a8d16a66b7c"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Sumber Daya Manusia",
+          "SDM"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "human resources officer",
+        "human resources manager",
+        "human resources assistant",
+        "human resources business partner",
+        "recruitment consultant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "human resources|employee|recruit|personnel|employment|staff|training|onboard"
+    },
+    {
+      "id": "group:industrial-designer",
+      "code": "industrial-designer",
+      "nameEn": "Industrial Designer",
+      "definition": "Industrial designers work out ideas and develop them into designs and concepts for a wide variety of manufactured products. They integrate creativity, aesthetics, production feasibility, and market relevance in the design of new products.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_3e1f739e4b6a9d5e69fa8f0de64db92d"
+        ],
+        "escoCode": "2163.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_3e1f739e4b6a9d5e69fa8f0de64db92d",
+      "seeds": [
+        "Industrial Designer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "design|product|manufactur"
+    },
+    {
+      "id": "group:industrial-engineer",
+      "code": "industrial-engineer",
+      "nameEn": "Industrial Engineer",
+      "definition": "Industrial engineers design a vast array of production systems aiming to present efficient and effective solutions. They integrate a varied number of variables such as workers, technology, ergonomics, production flows, and product specifications for the design and implementation of production systems. They can specify and design for microsystems as well.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_b70dc41f743af15c7e0d2bf2651361c1"
+        ],
+        "escoCode": "2141.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_b70dc41f743af15c7e0d2bf2651361c1",
+      "seeds": [
+        "Industrial Engineer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "industrial|manufactur|production|process|efficien"
+    },
+    {
+      "id": "group:industrial-production-manager",
+      "code": "industrial-production-manager",
+      "nameEn": "Industrial Production Manager",
+      "definition": "Industrial production managers oversee the operations and the resources needed in industrial plants and manufacturing sites for a smooth running of the operations. They prepare the production schedule by combining the requirements of clients with the resources of the production plant. They organise the journey of incoming raw materials or semi finished products in the plant until a final product is delivered by coordinating inventories, warehouses, distribution, and support activities.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_3015ca651dad10b93ae51fcdaaf76a7b"
+        ],
+        "escoCode": "1321.2.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_3015ca651dad10b93ae51fcdaaf76a7b",
+      "seeds": [
+        "Industrial Production Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "production|manufactur|plant|industrial"
+    },
+    {
+      "id": "group:interior-designer",
+      "code": "interior-designer",
+      "nameEn": "Interior Designer",
+      "definition": "Interior designers design or renovate of internal spaces, including structural alterations, fixtures and fittings, lighting and colour schemes, furnishings. They combine the efficient and functional use of space with an understanding of aesthetics.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_d609c9bb13a3676d8e57727fa29fbaff"
+        ],
+        "escoCode": "3432.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_d609c9bb13a3676d8e57727fa29fbaff",
+      "seeds": [
+        "Interior Designer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "interior|space|room|furnish"
+    },
+    {
+      "id": "group:it-support-specialist",
+      "code": "it-support-specialist",
+      "nameEn": "IT Support Specialist",
+      "definition": "Diagnose user technology incidents, resolve technical issues and support operation of ICT systems.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_10bbb861568471c665d652d49f369e06",
+          "cmvccxkzy01dk0nrcqb4rh371"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Dukungan TI",
+          "Dukungan Teknologi Informasi"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "ICT help desk agent",
+        "ICT help desk manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "support|incident|troubleshoot|diagnos|technical"
+    },
+    {
+      "id": "group:journalist",
+      "code": "journalist",
+      "nameEn": "Journalist",
+      "definition": "Journalists research, verify and write news stories for newspapers, magazines, television and other broadcast media. They cover political, economic, cultural, social and sport events. Journalists must conform to ethical codes such as freedom of speech and right of reply, press law and editorial standards in order to bring objective information.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_bc5f32ea5e05c93f6618270f2ab7ffe2"
+        ],
+        "escoCode": "2642.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_bc5f32ea5e05c93f6618270f2ab7ffe2",
+      "seeds": [
+        "Journalist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "journal|news|report|media"
+    },
+    {
+      "id": "group:lawyer",
+      "code": "lawyer",
+      "nameEn": "Lawyer",
+      "definition": "Lawyers provide legal advice to clients and act on their behalf in legal proceedings and in compliance with the law. They research for, interpret and study cases to represent their clients in a variety of settings such as courts and administrative boards. They create arguments on behalf of their clients for lawsuits in different contexts with the aim of finding a legal remedy.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_ace4126acc77df7a2cdea12dfef6fe97"
+        ],
+        "escoCode": "2611.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_ace4126acc77df7a2cdea12dfef6fe97",
+      "seeds": [
+        "Lawyer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "legal|law|client.*court|litigat"
+    },
+    {
+      "id": "group:legal-assistant",
+      "code": "legal-assistant",
+      "nameEn": "Legal Assistant",
+      "definition": "Legal assistants work closely together with lawyers and legal representatives in the research and preparation of cases brought to courts. They assist in the paper work of cases and management of the administrative side of court affairs.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_c177520d53f20f917310d9409af876f4"
+        ],
+        "escoCode": "3411.7",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_c177520d53f20f917310d9409af876f4",
+      "seeds": [
+        "Legal Assistant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "legal|law|court"
+    },
+    {
+      "id": "group:logistics-coordinator",
+      "code": "logistics-coordinator",
+      "nameEn": "Logistics Coordinator",
+      "definition": "Exact English catalog title and assigned family are present in the live catalog; retain as candidate-selectable role head.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "cmvccxl1p01eg0nrcqhuys57q"
+        ],
+        "escoCode": null,
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "cmvccxl1p01eg0nrcqhuys57q",
+      "seeds": [
+        "Logistics Coordinator"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "logistic|transport|shipment|goods"
+    },
+    {
+      "id": "group:machine-operator",
+      "code": "machine-operator",
+      "nameEn": "Machine Operator",
+      "definition": "Set up, operate, monitor and adjust production machinery and check its output.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_8e01aaff45f319e4d818becc134011bb",
+          "jobcat_6b50cf6922996ba77425bdfaf69da296",
+          "jobcat_8a14e660e1c686075aa3c43a8f8f361d",
+          "jobcat_4d705ecf17badc8b0897469ff8bbe71a",
+          "jobcat_0fd38be50e770e2fbce707de1e9a47c4",
+          "jobcat_ac6ded473da8c6e7221165abed7498c1",
+          "jobcat_3edef94d50b61bbdbc2f9c52ee3225af",
+          "jobcat_e9aebb87ad7f57c25fcdaa7c91837a11"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Operator Mesin"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [],
+      "candidate": "machine operator",
+      "exclude": "machine learning",
+      "task": "operat|machine|monitor|manufactur|produc"
+    },
+    {
+      "id": "group:marketing-manager",
+      "code": "marketing-manager",
+      "nameEn": "Marketing Manager",
+      "definition": "Marketing managers carry out the implementation of efforts related to the marketing operations in a company. They develop marketing strategies and plans by detailing cost and resources needed. They analyse the profitability of these plans, develop pricing strategies, and strive to raise awareness on products and companies among targeted customers.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_40d037ea393b4c0815a7b3ce616bad3d"
+        ],
+        "escoCode": "1221.3.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_40d037ea393b4c0815a7b3ce616bad3d",
+      "seeds": [
+        "Marketing Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "market|campaign|advertis|brand"
+    },
+    {
+      "id": "group:marketing-specialist",
+      "code": "marketing-specialist",
+      "nameEn": "Marketing Specialist",
+      "definition": "Plan, implement or measure marketing strategy, campaigns and market communication.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_6187d47593b137dce1b4e5b417e5c956",
+          "jobcat_7a7898c200b89ffda498e0059f57f85b",
+          "cmvccxkjs01580nrcgno3h7ta",
+          "jobcat_e532d4d33660e3fbe82235d7c8003f8b",
+          "jobcat_6d2d62f89eff55274da58efd89ef873c",
+          "jobcat_40d037ea393b4c0815a7b3ce616bad3d"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Pemasaran"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "marketing manager",
+        "marketing consultant",
+        "marketing assistant",
+        "digital marketing manager"
+      ],
+      "candidate": null,
+      "exclude": "teacher|lecturer",
+      "task": "market|campaign|advertis|brand"
+    },
+    {
+      "id": "group:midwife",
+      "code": "midwife",
+      "nameEn": "Midwife",
+      "definition": "Midwives assist women in childbirth by providing the necessary support, care and advice during pregnancy, labour and the postpartum period, conduct births and provide care for the new-born. They advise on health, preventive measures, preparation for parenthood, detection of complications in mother and child, accessing of medical care, promoting normal birth and carrying out emergency measures.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_9d356c6e6a296585bca875d4705824c6"
+        ],
+        "escoCode": "2222.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_9d356c6e6a296585bca875d4705824c6",
+      "seeds": [
+        "Midwife"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "midwi|pregnan|birth|childbirth"
+    },
+    {
+      "id": "group:musician",
+      "code": "musician",
+      "nameEn": "Musician",
+      "definition": "Musicians perform a vocal or musical part that can be recorded or played for an audience. They have know-how and practice of one or many instruments or using their voice. The musician can also write and transcribe music.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_00d7ffaa60efa0f8b3cb8c3a75a10bb4"
+        ],
+        "escoCode": "2652.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_00d7ffaa60efa0f8b3cb8c3a75a10bb4",
+      "seeds": [
+        "Musician"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "music|instrument|perform"
+    },
+    {
+      "id": "group:nurse",
+      "code": "nurse",
+      "nameEn": "Nurse",
+      "definition": "Provide, coordinate or assist human patient nursing care and monitor care plans.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_0a06bc0c3fd38039876e605945eef94c",
+          "jobcat_1759f88736a525f2ce2fbef166a97123",
+          "cmvccxktf01aa0nrcwp19lsyp",
+          "jobcat_bf09ebe734f822961df4ba2486923d2c"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Perawat"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "nurse responsible for general care",
+        "specialist nurse",
+        "advanced nurse practitioner",
+        "nurse assistant"
+      ],
+      "candidate": null,
+      "exclude": "veterinary|teacher|lecturer",
+      "task": "nurs|patient|care"
+    },
+    {
+      "id": "group:office-clerk",
+      "code": "office-clerk",
+      "nameEn": "Office Clerk",
+      "definition": "Office clerks are responsible for performing clerical and administrative duties in an office setting and support of business operations within a department. They assist all the administrative staff, secretaries, and assistants by sorting mail, filing forms and documents, answering phones, greeting clients and scheduling meetings.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_2033f76f87fe864a1ac76c1e243aefaa"
+        ],
+        "escoCode": "4110.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_2033f76f87fe864a1ac76c1e243aefaa",
+      "seeds": [
+        "Office Clerk"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "office|clerical|administrat|document"
+    },
+    {
+      "id": "group:operations-manager",
+      "code": "operations-manager",
+      "nameEn": "Operations Manager",
+      "definition": "Operations managers plan, oversee and coordinate the daily operations of production of goods and provision of services. They also formulate and implement company policies and plan the use of human resources and materials.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_529153d6ce232ae83641290e3af7e28e"
+        ],
+        "escoCode": "1321.2.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_529153d6ce232ae83641290e3af7e28e",
+      "seeds": [
+        "Operations Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "operation|business|organisation|organization"
+    },
+    {
+      "id": "group:pharmacist",
+      "code": "pharmacist",
+      "nameEn": "Pharmacist",
+      "definition": "Pharmacists prepare, dispense, and provide prescriptions for, over the counter medication. They offer clinical information on medicines, report suspected adverse reactions, and provide personalised support to patients. Pharmacists formulate and test medications in laboratories, and store, preserve, and distribute them.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_f146cf40f8ee6071afe71200fea51b13"
+        ],
+        "escoCode": "2262.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_f146cf40f8ee6071afe71200fea51b13",
+      "seeds": [
+        "Pharmacist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "pharma|medicin|drug|dispens"
+    },
+    {
+      "id": "group:photographer",
+      "code": "photographer",
+      "nameEn": "Photographer",
+      "definition": "Photographers take pictures using digital or film cameras and equipment. Photographers may develop negatives or use computer software in order to produce finished images and prints.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_a1083fc820a5c27c5eddefa530f3744b"
+        ],
+        "escoCode": "3431.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_a1083fc820a5c27c5eddefa530f3744b",
+      "seeds": [
+        "Photographer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "photograph|image|camera"
+    },
+    {
+      "id": "group:plumber",
+      "code": "plumber",
+      "nameEn": "Plumber",
+      "definition": "Plumbers maintain and install water, gas and sewage systems. They inspect pipes and fixtures on a regular basis or make repairs as needed. They bend, cut, and install pipes. They test systems and make adjustments safely and following regulations. They place sanitary equipment.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_5e5bea40007303cd3185320ea271601d"
+        ],
+        "escoCode": "7126.8",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_5e5bea40007303cd3185320ea271601d",
+      "seeds": [
+        "Plumber"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "plumb|pipe|water|sanitary"
+    },
+    {
+      "id": "group:police-officer",
+      "code": "police-officer",
+      "nameEn": "Police Officer",
+      "definition": "Police officers use investigation methods to prevent crime, to pursue and apprehend criminals, and protect the public from violent and criminal activities. They perform surveillance and patrol activities to prevent crimes and apprehend offenders. They provide support to victimised parties and the public at large, and fulfil administrative duties.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_c89433c563ea8780dd5341c511b8923c"
+        ],
+        "escoCode": "5412.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_c89433c563ea8780dd5341c511b8923c",
+      "seeds": [
+        "Police Officer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "police|law|crime|public order"
+    },
+    {
+      "id": "group:product-manager",
+      "code": "product-manager",
+      "nameEn": "Product Manager",
+      "definition": "Product managers are responsible for managing the lifecycle of a product. They research and develop new products in addition to managing existing ones through market research and strategic planning. Product managers perform marketing and planning activities to increase profits.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_00df5f95217b73d25bdab5a5d0f84f22"
+        ],
+        "escoCode": "1223.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_00df5f95217b73d25bdab5a5d0f84f22",
+      "seeds": [
+        "Product Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "product|market|lifecycle"
+    },
+    {
+      "id": "group:production-supervisor",
+      "code": "production-supervisor",
+      "nameEn": "Production Supervisor",
+      "definition": "Production supervisors coordinate, plan and direct manufacturing and production processes. They are responsible for reviewing production schedules or orders as well as dealing with staff in these production areas.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_aea00f06bbafce0fc14f4b92893c8001"
+        ],
+        "escoCode": "3122.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_aea00f06bbafce0fc14f4b92893c8001",
+      "seeds": [
+        "Production Supervisor"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "production|manufactur|worker|process"
+    },
+    {
+      "id": "group:project-manager",
+      "code": "project-manager",
+      "nameEn": "Project Manager",
+      "definition": "Project managers oversee the project on a daily basis and are responsible for delivering high-quality results within the identified objectives and constraints, ensuring the effective use of the allocated resources. They are responsible for risk and issue management, project communication and stakeholder management. Project managers perform the activities of planning, organising, securing, monitoring and managing the resources and work necessary to deliver specific project goals and objectives in an effective and efficient way.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_e908544fc8df420d843f6bfab1908d89"
+        ],
+        "escoCode": "1219.6",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_e908544fc8df420d843f6bfab1908d89",
+      "seeds": [
+        "Project Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "project|deliver|budget|schedule"
+    },
+    {
+      "id": "group:psychologist",
+      "code": "psychologist",
+      "nameEn": "Psychologist",
+      "definition": "Psychologists study the behaviour and mental processes in humans. They provide services to clients who deal with mental health issues and life issues such as bereavement, relationship difficulties, domestic violence, and sexual abuse. They also provide counselling for mental health issues such as eating disorders, post-traumatic stress disorders, and psychosis in order to help the clients rehabilitate and reach a healthy behaviour.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_0c77a20ea767e604d6c11d38bbccdd11"
+        ],
+        "escoCode": "2634.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_0c77a20ea767e604d6c11d38bbccdd11",
+      "seeds": [
+        "Psychologist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "psycholog|mental|behaviour|behavior"
+    },
+    {
+      "id": "group:quality-engineer",
+      "code": "quality-engineer",
+      "nameEn": "Quality Engineer",
+      "definition": "Quality engineers define quality standards for the creation of products or services. They check to make sure the products and services are in compliance with the quality standards and they coordinate quality improvements.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_a4adf9d0fe494081ce6420f6b87aa07d"
+        ],
+        "escoCode": "2149.2.7",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_a4adf9d0fe494081ce6420f6b87aa07d",
+      "seeds": [
+        "Quality Engineer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "quality|test|inspection|standard"
+    },
+    {
+      "id": "group:receptionist",
+      "code": "receptionist",
+      "nameEn": "Receptionist",
+      "definition": "Receptionists are responsible for the reception area of a business. They answer the phone, greet guests, pass information, respond to inquiries and instruct visitors. They are the first point of contact for clients and customers.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_3f4dc50b5d860278b84b249c360bd3dd"
+        ],
+        "escoCode": "4226.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_3f4dc50b5d860278b84b249c360bd3dd",
+      "seeds": [
+        "Receptionist"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "reception|visitor|guest|front desk"
+    },
+    {
+      "id": "group:restaurant-manager",
+      "code": "restaurant-manager",
+      "nameEn": "Restaurant Manager",
+      "definition": "Restaurant managers are in charge of managing food and beverage operations in the kitchen and other food and beverage outlets or units in a hospitality establishment.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_bbc592719e478d5796222af33581aefd"
+        ],
+        "escoCode": "1412.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_bbc592719e478d5796222af33581aefd",
+      "seeds": [
+        "Restaurant Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "restaurant|food service|dining|catering"
+    },
+    {
+      "id": "group:sales",
+      "code": "sales",
+      "nameEn": "Sales",
+      "definition": "Sell products or services, develop customer accounts, or lead sales targets and sales teams.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_954964f54006c8ecf5094e12e86f8c90",
+          "jobcat_814cc4715d79e42a65b5a9217741ea93",
+          "jobcat_cd0c23fe4aeaeb3b35a0bd8e6114c12e",
+          "jobcat_17bc79608896c44fc11a44f22eada528",
+          "cmvccxkif014e0nrcipdt7lbs",
+          "jobcat_331b21eb61164db02b5c9080de4f8367",
+          "jobcat_85bc1c460202d212125815d48f906feb",
+          "jobcat_f13282ad02e2a721998268f46714bf41"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Penjualan",
+          "Tenaga Penjualan"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "commercial sales representative",
+        "sales manager",
+        "sales account manager",
+        "sales engineer",
+        "technical sales representative",
+        "advertising sales agent"
+      ],
+      "candidate": "sales|seller|selling|commercial",
+      "exclude": "after.?sales|sales process(?:ing|or)|sales support|sales admin",
+      "task": "sell|sales|prospect|negotiate|commercial"
+    },
+    {
+      "id": "group:security-guard",
+      "code": "security-guard",
+      "nameEn": "Security Guard",
+      "definition": "Security guards observe, detect irregularities and protect people, buildings and assets. They maintain security at all times by patrolling designated property areas, controlling access at entrances, watching alarm and video recording systems, asking suspicious individuals for identification and reporting infractions and law breaching activities.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_1e6fd9e1405eda3ff88c6a373d74f866"
+        ],
+        "escoCode": "5414.1",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_1e6fd9e1405eda3ff88c6a373d74f866",
+      "seeds": [
+        "Security Guard"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "secur|guard|protect|patrol"
+    },
+    {
+      "id": "group:ship-captain",
+      "code": "ship-captain",
+      "nameEn": "Ship Captain",
+      "definition": "Ship captains are in charge of a vessel for the transportation of goods and passengers, operating in offshore and coastal waters. The size of the vessel can range from a small vessel to a cruise liner depending on the tonnage that they are certified to sail. Ship captains have vast experience with ships and their operation, and are likely to have worked their way through the ranks of other ship-related positions.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_147a77e0642c8ad314f06244c77aa8cf"
+        ],
+        "escoCode": "3152.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_147a77e0642c8ad314f06244c77aa8cf",
+      "seeds": [
+        "Ship Captain"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "ship|vessel|maritime|navigat"
+    },
+    {
+      "id": "group:social-worker",
+      "code": "social-worker",
+      "nameEn": "Social Worker",
+      "definition": "Social workers are practice-based professionals who promote social change and development, social cohesion, and the empowerment and liberation of people. They interact with individuals, families, groups, organisations and communities in order to provide various forms of therapy and counselling, group work, and community work. Social workers guide people to use services to claim benefits, access community resources, find jobs and training, obtain legal advice or deal with other local authority departments.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_1deebde2bf01f2adf868f560c4848455"
+        ],
+        "escoCode": "2635.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_1deebde2bf01f2adf868f560c4848455",
+      "seeds": [
+        "Social Worker"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "social|welfare|famil|support|communit"
+    },
+    {
+      "id": "group:software-developer",
+      "code": "software-developer",
+      "nameEn": "Software Developer",
+      "definition": "Software developers implement or program all kinds of software systems based on specifications and designs by using programming languages, tools, and platforms.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_15c5a4837aac26ddeeb77af686c6abc9"
+        ],
+        "escoCode": "2512.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_15c5a4837aac26ddeeb77af686c6abc9",
+      "seeds": [
+        "Software Developer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "software|program|application|develop"
+    },
+    {
+      "id": "group:software-tester",
+      "code": "software-tester",
+      "nameEn": "Software Tester",
+      "definition": "Software testers perform software tests. They may also plan and design them. They may also debug and repair software although this mainly corresponds to designers and developers. They ensure that applications function properly before delivering them to internal and external clients.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_dabd7ea20d4b113fcb4721929f5f5ebf"
+        ],
+        "escoCode": "2519.7",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_dabd7ea20d4b113fcb4721929f5f5ebf",
+      "seeds": [
+        "Software Tester"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "software|test|quality assurance"
+    },
+    {
+      "id": "group:statistician",
+      "code": "statistician",
+      "nameEn": "Statistician",
+      "definition": "Statisticians collect, tabulate, and, most importantly, analyse quantitative information coming from a varied array of fields. They interpret and analyse statistical studies on fields such as health, demographics, finance, business, etc. and advise based on patterns and drawn analysis.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_070df1b852a5a98c9d2da0ef43d08b80"
+        ],
+        "escoCode": "2120.6",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_070df1b852a5a98c9d2da0ef43d08b80",
+      "seeds": [
+        "Statistician"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "statistic|data|probabil"
+    },
+    {
+      "id": "group:supply-chain-manager",
+      "code": "supply-chain-manager",
+      "nameEn": "Supply Chain Manager",
+      "definition": "Supply chain managers plan, manage and coordinate all activities related to the sourcing and procurement of supplies needed to run manufacturing operations from the acquisition of raw materials to the distribution of finished products. The supplies can be raw materials or finished products, and it can be for internal or external use. Moreover, they plan and commission all the activities needed to be performed in manufacturing plants and adjust operations to changing levels of demand for a company's products.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_8a338ae02c1673084292e36a31aa487c"
+        ],
+        "escoCode": "1324.8",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_8a338ae02c1673084292e36a31aa487c",
+      "seeds": [
+        "Supply Chain Manager"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "supply|logistic|procure|distribution"
+    },
+    {
+      "id": "group:teacher",
+      "code": "teacher",
+      "nameEn": "Teacher",
+      "definition": "Plan and deliver instruction, assess learning and support students.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "ADD_SYNTHETIC_HEAD",
+        "referenceIds": [
+          "jobcat_c07f6d2ac5a8fab4d3e525c525e9052d",
+          "jobcat_32b069eecbd827c88aecd2d09041e4b6",
+          "jobcat_786707aed0eb8f522fc634442562b82d",
+          "jobcat_176c236bf714b3cdd56a2674a827106e",
+          "jobcat_9f99a33b886162034371dc6769e005d7",
+          "jobcat_3108b20d0c0e7c8970aaa67d5e6056a8",
+          "jobcat_75828c4bb6c17d2a3e256a4c44c8e33a",
+          "jobcat_68fa8a7fec632f6f8887691ac3c4786e"
+        ],
+        "escoCode": null,
+        "searchAliases": [
+          "Guru",
+          "Pengajar"
+        ],
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": null,
+      "seeds": [
+        "primary school teacher",
+        "secondary school teacher",
+        "vocational teacher",
+        "special educational needs teacher",
+        "higher education lecturer",
+        "adult literacy teacher",
+        "language school teacher"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "teach|instruct|lesson|learn|student"
+    },
+    {
+      "id": "group:translator",
+      "code": "translator",
+      "nameEn": "Translator",
+      "definition": "Translators transcribe written documents from one or more languages to another ensuring that the message and nuances therein remain in the translated material. They translate material backed up by an understanding of it, which can include commercial and industrial documentation, personal documents, journalism, novels, creative writing, and scientific texts delivering the translations in any format.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_471de7c69c5a47195c452163b77b8a33"
+        ],
+        "escoCode": "2643.6",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_471de7c69c5a47195c452163b77b8a33",
+      "seeds": [
+        "Translator"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "translat|language|text"
+    },
+    {
+      "id": "group:veterinary-technician",
+      "code": "veterinary-technician",
+      "nameEn": "Veterinary Technician",
+      "definition": "Veterinary technicians provide the technical and administrative support to the veterinarian in accordance with national legislation.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_3121dc26375fc6f32d4147ba8c68645a"
+        ],
+        "escoCode": "3240.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_3121dc26375fc6f32d4147ba8c68645a",
+      "seeds": [
+        "Veterinary Technician"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "veterinar|animal|pet"
+    },
+    {
+      "id": "group:waiter-waitress",
+      "code": "waiter-waitress",
+      "nameEn": "Waiter/waitress",
+      "definition": "Waiters/waitresses supply guests with food and drinks as requested. Waiters/waitresses usually work in restaurants, bars and hotels. This involves the preparation of tables, serving food or beverages and taking payments.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_51e40d9eff9d713c8bb1f5ef2b7f2b9e"
+        ],
+        "escoCode": "5131.2",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_51e40d9eff9d713c8bb1f5ef2b7f2b9e",
+      "seeds": [
+        "Waiter/waitress"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "waiter|waitress|serve|customer|food|drink"
+    },
+    {
+      "id": "group:warehouse-worker",
+      "code": "warehouse-worker",
+      "nameEn": "Warehouse Worker",
+      "definition": "Warehouse workers execute the accurate handling, packing and storage of materials in a warehouse. They receive goods, label them, check quality, store the goods and document any damage. Warehouse workers also monitor stock levels of items, keep inventory and ship goods.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_8645e4f49eb77c4a3213b09db6fb2aaa"
+        ],
+        "escoCode": "9333.8",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_8645e4f49eb77c4a3213b09db6fb2aaa",
+      "seeds": [
+        "Warehouse Worker"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "warehous|goods|stock|storage"
+    },
+    {
+      "id": "group:web-developer",
+      "code": "web-developer",
+      "nameEn": "Web Developer",
+      "definition": "Web developers develop, implement and document web-accessible software based on the designs provided. They align the client's web presence with its business strategy, troubleshoot software problems and issues and look for ways to improve the application.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_333b5f2312917ec4f0a6119246da2f73"
+        ],
+        "escoCode": "2513.5",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_333b5f2312917ec4f0a6119246da2f73",
+      "seeds": [
+        "Web Developer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "web|website|application|internet"
+    },
+    {
+      "id": "group:welder",
+      "code": "welder",
+      "nameEn": "Welder",
+      "definition": "Welders operate welding equipment in order to join metal workpieces together. They can use fusion welding processes based on different techniques and materials. They also perform simple visual inspection of welds.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_5b13e35b41560526a08d7c609413d68e"
+        ],
+        "escoCode": "7212.3",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_5b13e35b41560526a08d7c609413d68e",
+      "seeds": [
+        "Welder"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "weld|metal|join"
+    },
+    {
+      "id": "group:wholesale-merchant",
+      "code": "wholesale-merchant",
+      "nameEn": "Wholesale Merchant",
+      "definition": "Wholesale merchants investigate potential wholesale buyers and suppliers and match their needs. They conclude trades involving large quantities of goods.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_f0164d15d65b161e9482063397c0aa3c"
+        ],
+        "escoCode": "3324.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_f0164d15d65b161e9482063397c0aa3c",
+      "seeds": [
+        "Wholesale Merchant"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "wholesale|goods|purchas|supplier|sell"
+    },
+    {
+      "id": "group:writer",
+      "code": "writer",
+      "nameEn": "Writer",
+      "definition": "Writers develop content for books. They write novels, poetry, short stories, comics and other forms of literature. These forms of writing can be fictional or non-fictional.",
+      "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
+      "source": {
+        "version": "talentio-position-heads-2026-11-10",
+        "kind": "PROMOTE_EXISTING_TITLE",
+        "referenceIds": [
+          "jobcat_2e54401a0258dd08c34c07506ab4e2a3"
+        ],
+        "escoCode": "2641.4",
+        "scopeRules": "talentio-work-domain-boundaries-1"
+      },
+      "sourceRoleId": "jobcat_2e54401a0258dd08c34c07506ab4e2a3",
+      "seeds": [
+        "Writer"
+      ],
+      "candidate": null,
+      "exclude": null,
+      "task": "writ|text|content|edit|author"
+    }
+  ]
+}

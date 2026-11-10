@@ -27,7 +27,7 @@ export class RecruiterEvidenceWorker implements OnModuleInit,OnModuleDestroy {
         await this.db.application.updateMany({where:{id:row.id,hrSubmissionSnapshot:{equals:Prisma.DbNull}},data:{hrSubmissionSnapshot:JSON.parse(JSON.stringify(snapshot)),...(version?{resumeVersionId:version.id}:{})}});
         if(version)await this.db.application.updateMany({where:{id:row.id,resumeVersionId:null},data:{resumeVersionId:version.id}});
       }
-      const versions=await this.db.resumeVersion.findMany({where:{OR:[{applications:{some:{}}},{currentFor:{is:{deletedAt:null,profile:{databaseCvEnabled:true}}}}],recruiterEvidence:{none:{parserVersion:HR_PARSER,catalogRevision:catalog.revision}}},take:25,orderBy:{id:'asc'}});
+      const versions=await this.db.resumeVersion.findMany({where:{OR:[{applications:{some:{}}},{currentFor:{is:{isPrimary:true,deletedAt:null,fileKey:{not:null},profile:{user:{isBanned:false,anonymizedAt:null}}}}}],recruiterEvidence:{none:{parserVersion:HR_PARSER,catalogRevision:catalog.revision}}},take:25,orderBy:{id:'asc'}});
       if(versions.length)await this.db.resumeRecruiterEvidence.createMany({data:versions.map(v=>({versionId:v.id,parserVersion:HR_PARSER,catalogRevision:catalog.revision,generation:v.parseGeneration})),skipDuplicates:true});
       const stale=await this.db.resumeRecruiterEvidence.findMany({where:{parserVersion:HR_PARSER,catalogRevision:catalog.revision},include:{version:{select:{parseGeneration:true}}}});
       for(const row of stale)if(row.generation!==row.version.parseGeneration)await this.db.resumeRecruiterEvidence.updateMany({where:{id:row.id,generation:row.generation,revision:row.revision},data:{generation:row.version.parseGeneration,status:'PENDING',startedAt:null,revision:{increment:1}}});

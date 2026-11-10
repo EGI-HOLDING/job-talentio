@@ -449,7 +449,6 @@ async function main() {
       `Career-focused professional with a foundation in ${skillFocus}, ready to grow inside a product team.`,
     ];
     const summary = summaryVariants[i % summaryVariants.length];
-    const visibility = (['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'] as const)[i % 4];
     let profile = await prisma.employeeProfile.findUnique({ where: { userId: user.id } });
     if (!profile) {
       profile = await prisma.employeeProfile.create({
@@ -461,7 +460,6 @@ async function main() {
           phone: `+9989${String(10 + (i % 90)).padStart(2, '0')}${String(1000000 + i * 17).slice(0, 7)}`,
           desiredPosition: headline,
           desiredSalaryMin: 6_000_000 + yearsExp * 1_500_000 + (i % 5) * 500_000,
-          visibility,
         },
       });
     } else {
@@ -473,7 +471,6 @@ async function main() {
           cityId: city.id,
           desiredPosition: headline,
           desiredSalaryMin: 6_000_000 + yearsExp * 1_500_000 + (i % 5) * 500_000,
-          visibility,
         },
       });
     }

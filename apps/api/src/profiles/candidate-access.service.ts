@@ -48,7 +48,7 @@ export class CandidateAccessService {
     await this.member(actor, companyId);
     const profile = await this.db.employeeProfile.findUnique({
       where: { id: profileId },
-      include: { user: true, databaseResume: true },
+      include: { user: { select: { id: true, email: true, isBanned: true, anonymizedAt: true } } },
     });
     if (!profile || profile.user.isBanned || profile.user.anonymizedAt)
       throw new NotFoundException('Candidate unavailable');
@@ -56,40 +56,21 @@ export class CandidateAccessService {
       where: { profileId, jobPost: { companyId } },
       select: { id: true },
     }));
-    if (profile.visibility === 'PRIVATE' && !applicant)
-      throw new NotFoundException('Candidate unavailable');
     return { profile, applicant };
   }
 
-  async access(actor: AuthUser, companyId: string, profileId: string) {
-    const { profile, applicant } = await this.candidate(actor, companyId, profileId);
-    return {
-      applicant,
-      canReadContact: !!(profile.user.email || profile.phone),
-      canReadCv: !!(
-        profile.databaseCvEnabled &&
-        profile.databaseResume?.fileKey &&
-        !profile.databaseResume.deletedAt &&
-        profile.databaseResume.profileId === profile.id
-      ),
-    };
-  }
-
-  async assertAccess(
+  async resume(
     actor: AuthUser,
     companyId: string,
     profileId: string,
-    kind: 'CV' | 'CONTACT',
+    resumeId: string,
   ) {
     const { profile } = await this.candidate(actor, companyId, profileId);
-    if (
-      kind === 'CV' &&
-      (!profile.databaseCvEnabled ||
-        !profile.databaseResume?.fileKey ||
-        profile.databaseResume.deletedAt ||
-        profile.databaseResume.profileId !== profile.id)
-    )
-      throw new ForbiddenException('Database CV permission is not available');
-    return profile;
+    const resume = await this.db.resume.findFirst({
+      where: { id: resumeId, profileId: profile.id, deletedAt: null, fileKey: { not: null } },
+      select: { id: true, title: true, fileKey: true, isPrimary: true, updatedAt: true },
+    });
+    if (!resume?.fileKey) throw new NotFoundException('CV file unavailable');
+    return { profile, resume };
   }
 }

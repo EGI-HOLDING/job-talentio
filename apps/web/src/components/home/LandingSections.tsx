@@ -6,8 +6,6 @@ import { getSession } from '@/lib/api';
 import { authLink } from '@/lib/authReturn';
 import { useI18n } from '@/lib/i18n';
 import { sanitizeMojibake } from '@/lib/text';
-import type { NewsListItem } from '@/lib/newsSeo';
-import { formatNewsDate, NEWS_CATEGORY_LABEL_KEY } from '@/components/news/NewsCard';
 import s from './LandingSections.module.css';
 import { PromotionBadge } from '@/components/jobs/PromotionBadge';
 import type { JobPromotion } from '@job-talentio/shared';
@@ -47,8 +45,8 @@ const LOCATION_PHOTOS: Record<string, string> = {
   bukhara: '/images/location-bukhara.webp', andijan: '/images/location-andijan.webp',
 };
 
-export function LandingSections({ jobs, categories, cities, roles, news, showEmployerCta = true }: {
-  jobs: LandingJob[]; categories: LandingCategory[]; cities: LandingLocation[]; roles: LandingFacet[]; news: NewsListItem[]; showEmployerCta?: boolean;
+export function LandingSections({ jobs, categories, cities, roles, showEmployerCta = true }: {
+  jobs: LandingJob[]; categories: LandingCategory[]; cities: LandingLocation[]; roles: LandingFacet[]; showEmployerCta?: boolean;
 }) {
   const { t, locale } = useI18n();
   const [profileHref, setProfileHref] = useState(() => authLink('/register', '/dashboard/employee?tab=profile&section=cvs', 'EMPLOYEE'));
@@ -128,14 +126,6 @@ export function LandingSections({ jobs, categories, cities, roles, news, showEmp
     {roles.length > 0 && <section>
       <Heading title={t('landing.roles')} subtitle={t('landing.rolesSub')} href="/explore/titles" action={t('landing.allRoles')} />
       <div className={s.roles}>{roles.map((role) => <Link key={role.slug} href={`/jobs?jobTitle=${encodeURIComponent(role.slug)}`}><strong>{role.name}</strong><span>{countLabel(role.count)}</span><LandingIcon /></Link>)}</div>
-    </section>}
-
-    {news.length > 0 && <section>
-      <Heading title={t('landing.insights')} subtitle={t('landing.insightsSub')} href="/news" action={t('landing.allArticles')} />
-      <div className={s.news}>{news.map((item) => <Link className={s.article} key={item.slug} href={`/news/${item.slug}`}>
-        {item.coverUrl && <img src={item.coverUrl} alt="" loading="lazy" />}
-        <div className={s.articleBody}><div className={s.articleMeta}><span className={s.badge}>{t(NEWS_CATEGORY_LABEL_KEY[item.category])}</span><time dateTime={item.publishedAt}>{formatNewsDate(item.publishedAt, locale)}</time></div><h3>{item.title}</h3><p>{item.excerpt}</p><span className={s.readMore}>{t('readMore')}<LandingIcon /></span></div>
-      </Link>)}</div>
     </section>}
 
     {showEmployerCta && <section className={s.employer}><LandingIcon kind="briefcase" /><div><h2>{t('landing.employerTitle')}</h2><p>{t('landing.employerSub')}</p></div><Link href="/register?role=RECRUITER" className={s.outlineButton}>{t('postAJob')}<LandingIcon /></Link></section>}

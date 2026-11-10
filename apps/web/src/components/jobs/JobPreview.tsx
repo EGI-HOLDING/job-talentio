@@ -32,17 +32,16 @@ type Props = {
   matchReasons?:ReactNode;
   standalone?: boolean;
   backHref?: string;
-  companyHref?: string;
   chatHref?: string;
   whatsappApplicationId?: string;
   job: PreviewJob; country?: string; onBack?: () => void; onApply?: () => void; onSave: () => void;
-  onFollow?: () => void; following: boolean; appliedStatus?: string; guest: boolean; busy: boolean;
+  appliedStatus?: string; guest: boolean; busy: boolean;
   submittedCvAvailable?: boolean; submittedCvTitle?: string | null; submittedCvBusy?: boolean; submittedCvError?: string; onViewSubmittedCv?: () => void;
   saved?: boolean; saving?: boolean; canSave?: boolean; success?: string; error?: string;
   children: ReactNode;
 };
 
-export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs', companyHref, chatHref, whatsappApplicationId, job, country, onBack, onApply, onSave, onFollow, following, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
+export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs', chatHref, whatsappApplicationId, job, country, onBack, onApply, onSave, appliedStatus, guest, busy, submittedCvAvailable, submittedCvTitle, submittedCvBusy, submittedCvError, onViewSubmittedCv, saved, saving, canSave = true, success, error, children }: Props) {
   const { t, locale } = useI18n();
   const enumLabel = useEnumLabel();
   const Title = standalone ? 'h1' : 'h2';
@@ -60,7 +59,6 @@ export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs
       <div className={s.previewCompany}>
         <span className={s.previewLogo}>{job.company.anonymous ? <JobsIcon kind="briefcase" /> : job.company.logoUrl ? <img src={job.company.logoUrl} alt="" /> : employerName.charAt(0)}</span>
         <div><div className={s.previewCompanyHeading}><strong>{employerName}{!job.company.anonymous && job.company.isVerified && <span aria-label={t('trustVerifiedChip')}> {'\u2713'}</span>}</strong><PromotionBadge promotion={job.promotion} /></div>
-          {!job.company.anonymous && <Link href={companyHref || `/companies/${job.company.slug}`}>{t('viewCompanyProfile')} <span aria-hidden="true">{'\u2192'}</span></Link>}
         </div>
       </div>
       <Title className={s.previewTitle}>{job.title}</Title>{matchReasons}
@@ -84,7 +82,6 @@ export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs
       {!!job.jobSkills?.length && <section className={s.detailSection}><h3>{t('skills')}</h3><div className={s.tags}>{job.jobSkills.map((item, index) => <span key={index} title={item.isRequired ? t('workspace.required') : undefined}>{item.skill.name}{item.isRequired ? ' *' : ''}</span>)}</div></section>}
       {!!job.benefits?.length && <section className={s.detailSection}><h3>{t('benefits')}</h3><div className={s.tags}>{job.benefits.map((item, index) => <span key={index}>{item.benefit.name}</span>)}</div></section>}
       {!!job.jobLanguages?.filter(item=>item.provenance === 'EMPLOYER_CONFIRMED').length && <section className={s.detailSection}><h3>{t('languages')}</h3><div className={s.tags}>{job.jobLanguages.filter(item=>item.provenance === 'EMPLOYER_CONFIRMED').map((item, index) => <span key={index}>{item.language.name} {item.minLevel}+{item.isRequired ? ' *' : ''}</span>)}</div></section>}
-      {!job.company.anonymous && onFollow && <button className={s.textAction} type="button" onClick={onFollow}>{following ? t('following') : t('followCompany')}</button>}
     </div>
     <div className={s.previewActions}>
       {appliedStatus ? <><span className={s.applied}>{t('job.appliedBadge')} / {enumLabel('applicationStatus', appliedStatus)}</span><Link className={s.outlineButton} href="/dashboard/employee?tab=applications">{t('job.viewMyApplications')}</Link>{submittedCvAvailable && onViewSubmittedCv ? <button type="button" className={s.outlineButton} onClick={onViewSubmittedCv} disabled={submittedCvBusy} title={submittedCvTitle || undefined} aria-label={submittedCvTitle ? `${t('job.viewSubmittedCv')}: ${submittedCvTitle}` : t('job.viewSubmittedCv')}><JobsIcon kind="document" />{submittedCvBusy ? t('loading') : t('job.viewSubmittedCv')}</button> : <span className={s.cvUnavailable}>{t('noCvAttached')}</span>}{submittedCvError && <span className={s.cvError} role="alert">{submittedCvError}</span>}</> : onApply && <button type="button" className={s.primaryButton} onClick={onApply} disabled={busy}>{t('applyNow')}</button>}

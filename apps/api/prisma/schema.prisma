@@ -456,12 +456,6 @@ enum ResumeParseStatus {
   FAILED
 }
 
-enum ProfileVisibility {
-  PUBLIC
-  TO_REGISTERED_RECRUITERS
-  PRIVATE
-}
-
 enum SkillLevel {
   BEGINNER
   INTERMEDIATE
@@ -915,6 +909,9 @@ model BenefitAlias {
 
 /// Canonical role title (no seniority — use JobPost.experienceLevel).
 model JobTitle {
+  positionGroupMemberships PositionGroupMembership[]
+  positionGroupLabels PositionGroupRoleLabel[]
+  positionGroupHeads PositionGroup[]
   familyId String?
   family JobFamily? @relation(fields: [familyId], references: [id], onDelete: Restrict)
   canonicalRoleId String?
@@ -1389,6 +1386,8 @@ enum EmployeeOnboardingStatus {
 }
 
 model EmployeeProfile {
+  preferencesRevision Int @default(0)
+  desiredGroups EmployeeDesiredGroup[]
   screeningSessions AiScreeningSession[]
   desiredRoles EmployeeDesiredRole[]
   matchingPreferencesReviewed Boolean @default(false)
@@ -1402,7 +1401,6 @@ model EmployeeProfile {
   contentLocale     String?
   cityId            String?
   phone             String?           @unique
-  visibility        ProfileVisibility @default(TO_REGISTERED_RECRUITERS)
   desiredSalaryMin  Decimal? @db.Decimal(18, 2)
   desiredSalaryCurrency String @default("UZS")
   desiredSalaryPeriod SalaryPeriod @default(MONTHLY)
@@ -1416,9 +1414,6 @@ model EmployeeProfile {
   onboardingStep Int @default(1)
   onboardingCompletedAt DateTime?
   onboardingDraft Json?
-  databaseCvEnabled Boolean @default(false)
-  databaseResumeId String?
-  databaseResume Resume? @relation("DatabaseCv", fields: [databaseResumeId], references: [id], onDelete: SetNull)
   databaseAccesses CandidateAccess[]
   desiredPosition   String?
   /// GDPR: opt out of recruiter bulk messaging (pipeline status updates still allowed)
@@ -1601,8 +1596,6 @@ model Resume {
   profile        EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   targetJobTitle JobTitle?       @relation(fields: [targetJobTitleId], references: [id], onDelete: SetNull)
   applications   Application[]
-  databaseProfiles EmployeeProfile[] @relation("DatabaseCv")
-
   @@index([profileId])
   @@index([profileId, deletedAt])
   @@index([targetJobTitleId])
@@ -1718,6 +1711,86 @@ model EmployeeDesiredRole {
   jobTitle JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   @@id([profileId, jobTitleId])
   @@index([jobTitleId])
+}
+
+/// Candidate search scopes; membership is never occupational equivalence.
+model PositionGroup {
+  id String @id
+  code String @unique
+  nameEn String
+  definition String
+  scope String
+  source Json
+  sourceRoleId String?
+  sourceRole JobTitle? @relation(fields: [sourceRoleId], references: [id], onDelete: Restrict)
+  archivedAt DateTime?
+  memberships PositionGroupMembership[]
+  selectedBy EmployeeDesiredGroup[]
+  createdAt DateTime @default(now())
+}
+
+model PositionGroupRelease {
+  id String @id
+  catalogRevision String
+  checksum String
+  algorithmVersion String
+  status String @default("STAGED")
+  report Json
+  createdAt DateTime @default(now())
+  memberships PositionGroupMembership[]
+  labels PositionGroupRoleLabel[]
+  states PositionGroupState[]
+}
+
+model PositionGroupMembership {
+  releaseId String
+  groupId String
+  jobTitleId String
+  basis Json
+  release PositionGroupRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  group PositionGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  jobTitle JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  @@id([releaseId, groupId, jobTitleId])
+  @@index([releaseId, jobTitleId])
+}
+
+model PositionGroupRoleLabel {
+  releaseId String
+  jobTitleId String
+  nameEn String
+  source Json
+  release PositionGroupRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  jobTitle JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  @@id([releaseId, jobTitleId])
+}
+
+model PositionGroupState {
+  id String @id
+  activeReleaseId String?
+  activeRelease PositionGroupRelease? @relation(fields: [activeReleaseId], references: [id], onDelete: Restrict)
+  revision Int @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model PositionGroupCorrection {
+  id String @id @default(cuid())
+  groupId String
+  jobTitleId String
+  enabled Boolean
+  reason String
+  source Json
+  actorId String
+  createdAt DateTime @default(now())
+  @@index([groupId, jobTitleId, createdAt])
+}
+
+model EmployeeDesiredGroup {
+  profileId String
+  groupId String
+  profile EmployeeProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  group PositionGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  @@id([profileId, groupId])
+  @@index([groupId])
 }
 
 model ResumeEmployeeEvidence {

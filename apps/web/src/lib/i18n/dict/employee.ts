@@ -274,14 +274,6 @@ export const employee = {
   'emp.headline': { uz: 'Sarlavha', ru: 'Заголовок', en: 'Headline' },
   'emp.summary': { uz: 'Qisqacha ma’lumot', ru: 'О себе', en: 'Summary' },
   'emp.phone': { uz: 'Telefon', ru: 'Телефон', en: 'Phone' },
-  'emp.visibility': { uz: 'Ko‘rinishi', ru: 'Видимость', en: 'Visibility' },
-  'emp.visibilityPublic': { uz: 'Ochiq', ru: 'Публичный', en: 'Public' },
-  'emp.visibilityRecruiters': {
-    uz: 'Ro‘yxatdan o‘tgan rekruterlarga ko‘rinadi',
-    ru: 'Виден зарегистрированным рекрутерам',
-    en: 'Visible to registered recruiters',
-  },
-  'emp.visibilityPrivate': { uz: 'Yopiq', ru: 'Приватный', en: 'Private' },
   'emp.desiredPosition': {
     uz: 'Istalgan lavozim',
     ru: 'Желаемая должность',

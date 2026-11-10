@@ -22,14 +22,14 @@ export async function runApplicantsKanbanSuite(db:PrismaService,benefits:Benefit
   const service=new ApplicationsService(db,{assertObjectAvailable:async()=>{if(fileMissing)throw Object.assign(new Error('Missing synthetic file'),{name:'NotFound'});},getPresignedGetUrl:async(key:string)=>{files.push(key);return 'https://example.test/submitted-cv';}} as never,companies as never,new MatchingService(db),{create:async()=>{notifications++;}} as never,{send:async()=>{}} as never);
   const apps:Application[]=[];
   for(let n=0;n<36;n++){
-    const user=await db.user.create({data:{fullName:'Kanban applicant '+n,role:'EMPLOYEE',employeeProfile:{create:{headline:'Fixture role',visibility:n===35?'PRIVATE':'PUBLIC',...(n===35?{skills:{create:{skillId:skill.id,level:'EXPERT'}}}:{})}}},include:{employeeProfile:true}});
+    const user=await db.user.create({data:{fullName:'Kanban applicant '+n,role:'EMPLOYEE',employeeProfile:{create:{headline:'Fixture role',...(n===35?{skills:{create:{skillId:skill.id,level:'EXPERT'}}}:{})}}},include:{employeeProfile:true}});
     apps.push(await db.application.create({data:{jobPostId:job.id,profileId:user.employeeProfile!.id,createdAt:new Date(1700000000000+n*1000),resumeSnapshot:{resume:{title:'Submitted fixture',fileKey:n===35?'synthetic/submitted.pdf':null}}}}));
   }
   const stranger=await db.user.create({data:{fullName:'Not an applicant',role:'EMPLOYEE',employeeProfile:{create:{headline:'Fixture role'}}}});
   const ranked=await service.searchForJob(hr,job.id,{sort:'match',page:1,limit:10},'en');
   assert.equal(ranked.total,36);assert.equal(ranked.items[0].id,apps[35].id,'Private applicant ranks before pagination, unlike the generic employee search');
   assert.ok(!ranked.items.some(row=>row.profile.user.id===stranger.id));
-  assert.equal(ranked.items[0].hasResumeFile,true,'Submitted CV is independent of database CV opt-in');
+  assert.equal(ranked.items[0].hasResumeFile,true,'Submitted CV snapshot remains independent of the candidate profile CV library');
   assert.equal((await service.kanbanForJob(hr,job.id,{page:1,limit:20},'en')).columns.reduce((sum,column)=>sum+column.total,0),0,'Applications do not enter the board automatically');
   const beforeEvents=await db.pipelineEvent.count({where:{applicationId:apps[0].id}});
   const [a,b]=await Promise.all([service.addToKanban(hr,apps[0].id),service.addToKanban(hr,apps[0].id)]);

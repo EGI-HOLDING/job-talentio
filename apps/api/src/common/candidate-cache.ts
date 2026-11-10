@@ -87,7 +87,7 @@ class CandidateInvalidationInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<{method:string;originalUrl?:string;url:string}>();
     const path = request.originalUrl || request.url;
     const handler=()=>['GET','HEAD','OPTIONS'].includes(request.method) || !/\/api\/(profiles|jobs|applications|companies|admin)\b/.test(path)
-      ?next.handle():next.handle().pipe(mergeMap(async value => { const catalogChanged=/\/admin\/(catalog|employee-matching)/.test(path);invalidateHrRanking(catalogChanged);await this.cache.invalidate(catalogChanged); return value; }));
+      ?next.handle():next.handle().pipe(mergeMap(async value => { const catalogChanged=/\/admin\/(catalog|employee-matching)/.test(path);if(!/\/admin\/position-groups(?:\/|$)/.test(path))invalidateHrRanking(catalogChanged);await this.cache.invalidate(catalogChanged); return value; }));
     return this.cache.inRequest(context.switchToHttp().getResponse<Response>(),handler);
   }
 }

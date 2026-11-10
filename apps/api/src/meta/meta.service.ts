@@ -706,7 +706,6 @@ export class MetaService {
       }),
       this.prisma.employeeProfile.count({
         where: {
-          visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] },
           user: { isBanned: false, anonymizedAt: null },
         },
       }),

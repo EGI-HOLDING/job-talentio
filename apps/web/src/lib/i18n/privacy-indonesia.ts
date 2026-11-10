@@ -32,7 +32,7 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         ],
       },
       {
-        heading: '3. Visibilitas dan penerima data',
+        heading: '3. Akses profil dan penerima data',
         paragraphs: [
           'Anda mengatur visibilitas profil sesuai pilihan yang tersedia. Perusahaan dapat melihat profil sesuai pengaturan tersebut dan dapat melihat data yang Anda kirim saat melamar. Anggota tim yang berwenang pada perusahaan penerima dapat memproses data lamaran untuk proses rekrutmen mereka; perusahaan bertanggung jawab atas penggunaan data setelah menerimanya.',
           'Kami tidak menjual data pribadi. Data dapat diproses oleh penyedia yang membantu menjalankan layanan, seperti hosting dan penyimpanan berkas, email, pencarian, serta penyedia login atau komunikasi yang Anda pilih. Penyedia hanya menerima data yang diperlukan untuk fungsi yang digunakan.',
@@ -99,7 +99,7 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         heading: '1. Data we process',
         items: [
           'Account and contact data, such as your name, email address, phone number, password hash, profile photo, interface language, and identifiers from Google or Telegram if you choose those sign-in methods.',
-          'Profile and career data, such as your summary, work history, education, skills, languages, certificates, job preferences, and visibility settings.',
+          'Profile and career data, such as your summary, work history, education, skills, languages, certificates, job preferences, and uploaded CV files.',
           'CV data, including files you upload, text extracted to populate your profile, and CVs you create or submit with applications. CV text extraction runs on our service; CV files are not sent to an AI provider for parsing.',
           'Company and recruitment data, such as company details, team members, vacancies, screening questions, applications, answers, interview schedules, and messages.',
           'Usage and technical data, such as saved jobs, notifications, interactions with the service, IP address, device and browser information, and data needed for security and troubleshooting.',
@@ -116,9 +116,9 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         ],
       },
       {
-        heading: '3. Visibility and recipients',
+        heading: '3. Profile access and recipients',
         paragraphs: [
-          'You control profile visibility using the available settings. Employers may see your profile according to those settings and may see data you submit when applying. Authorized team members at the receiving company may process application data for their recruitment; that company is responsible for its use of data after receiving it.',
+          'Recruiters who are signed in and have active membership in a Talentio company may find candidate profiles and access uploaded profile CV files for recruitment. A CV submitted with an application remains tied to that application and may be processed by the receiving company’s authorized team; that company is responsible for its use of application data after receiving it.',
           'We do not sell personal data. Service providers may process data to help operate the service, including hosting and file storage, email, search, and sign-in or communication providers you choose. Each provider receives only the data needed for the feature used.',
         ],
       },
@@ -183,7 +183,7 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         heading: '1. Обрабатываемые данные',
         items: [
           'Данные аккаунта и контакты: имя, адрес электронной почты, номер телефона, хеш пароля, фото профиля, язык интерфейса и идентификаторы Google или Telegram, если вы выбрали эти способы входа.',
-          'Данные профиля и карьеры: описание, опыт работы, образование, навыки, языки, сертификаты, предпочтения по работе и настройки видимости.',
+          'Данные профиля и карьеры: описание, опыт, образование, навыки, языки, сертификаты, предпочтения по работе и загруженные файлы резюме.',
           'Данные резюме: загруженные файлы, извлечённый для заполнения профиля текст и резюме, созданные или отправленные с откликом. Извлечение текста выполняется внутри нашего сервиса; файлы резюме не отправляются поставщику ИИ для распознавания.',
           'Данные компании и найма: сведения о компании, участники команды, вакансии, вопросы отбора, отклики, ответы, расписание собеседований и сообщения.',
           'Данные об использовании и технические данные: сохранённые вакансии, уведомления, действия в сервисе, IP-адрес, сведения об устройстве и браузере, а также данные для безопасности и устранения неполадок.',
@@ -200,9 +200,9 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         ],
       },
       {
-        heading: '3. Видимость и получатели',
+        heading: '3. Доступ к профилю и получатели',
         paragraphs: [
-          'Вы управляете видимостью профиля с помощью доступных настроек. Работодатели могут видеть профиль согласно этим настройкам и данные, отправленные вами при отклике. Уполномоченные участники команды получившей компании могут обрабатывать данные отклика для найма; после получения данных компания отвечает за их дальнейшее использование.',
+          'Рекрутеры, вошедшие в систему и состоящие в активной команде компании Talentio, могут находить профили кандидатов и использовать загруженные файлы резюме для подбора персонала. Резюме, отправленное с откликом, остаётся связанным с этим откликом и может обрабатываться уполномоченной командой получившей компании; компания отвечает за дальнейшее использование данных отклика.',
           'Мы не продаём персональные данные. Поставщики услуг могут обрабатывать данные для работы сервиса, включая хостинг и хранение файлов, электронную почту, поиск, а также выбранные вами сервисы входа или связи. Каждый поставщик получает только данные, необходимые для используемой функции.',
         ],
       },
@@ -267,7 +267,7 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         heading: '1. Qayta ishlanadigan ma’lumotlar',
         items: [
           'Hisob va aloqa ma’lumotlari: ism, elektron pochta, telefon raqami, parol xeshi, profil rasmi, interfeys tili hamda tanlangan kirish usuliga qarab Google yoki Telegram identifikatorlari.',
-          'Profil va kasbiy ma’lumotlar: qisqacha ma’lumot, ish tajribasi, ta’lim, ko‘nikmalar, tillar, sertifikatlar, ish afzalliklari va ko‘rinish sozlamalari.',
+          'Profil va kasbiy ma’lumotlar: qisqacha ma’lumot, ish tajribasi, ta’lim, ko‘nikmalar, tillar, sertifikatlar, ish afzalliklari va yuklangan rezyume fayllari.',
           'Rezyume ma’lumotlari: yuklangan fayllar, profilni to‘ldirish uchun ajratilgan matn hamda yaratilgan yoki arizaga qo‘shib yuborilgan rezyumelar. Rezyumeni matnga aylantirish xizmatimiz ichida bajariladi; CV fayllari tahlil uchun AI provayderiga yuborilmaydi.',
           'Kompaniya va yollash ma’lumotlari: kompaniya tafsilotlari, jamoa a’zolari, vakansiyalar, saralash savollari, arizalar, javoblar, suhbat jadvali va xabarlar.',
           'Foydalanish va texnik ma’lumotlar: saqlangan vakansiyalar, bildirishnomalar, xizmatdagi harakatlar, IP-manzil, qurilma va brauzer ma’lumotlari, xavfsizlik va nosozliklarni tuzatish uchun zarur ma’lumotlar.',
@@ -284,9 +284,9 @@ export const INDONESIA_PRIVACY_DOCS: Record<'uz' | 'ru' | 'en' | 'id', LegalDoc>
         ],
       },
       {
-        heading: '3. Ko‘rinish va ma’lumot oluvchilar',
+        heading: '3. Profilga kirish va ma’lumot oluvchilar',
         paragraphs: [
-          'Profil ko‘rinishini mavjud sozlamalar orqali o‘zingiz boshqarasiz. Ish beruvchilar profilni shu sozlamalarga muvofiq va vakansiyaga ariza yuborganingizda taqdim etgan ma’lumotlaringizni ko‘rishi mumkin. Arizani olgan kompaniyaning vakolatli jamoa a’zolari ma’lumotlardan yollash jarayonida foydalanishi mumkin; qabul qilinganidan keyingi foydalanish uchun kompaniyaning o‘zi javob beradi.',
+          'Talentio kompaniyasining faol jamoasiga a’zo bo‘lib tizimga kirgan rekruterlar nomzod profillarini topishi va ishga yollash uchun yuklangan rezyume fayllaridan foydalanishi mumkin. Arizaga yuborilgan rezyume shu arizaga bog‘langan holda qoladi va uni qabul qilgan kompaniyaning vakolatli jamoasi tomonidan qayta ishlanishi mumkin; ariza ma’lumotlaridan keyingi foydalanish uchun kompaniyaning o‘zi javob beradi.',
           'Biz shaxsiy ma’lumotlarni sotmaymiz. Xizmatni yuritishda yordam beradigan provayderlar, jumladan hosting va fayl saqlash, elektron pochta, qidiruv, siz tanlagan kirish yoki aloqa xizmatlari ma’lumotlarni qayta ishlashi mumkin. Har bir provayderga faqat ishlatilayotgan funksiya uchun kerakli ma’lumot beriladi.',
         ],
       },

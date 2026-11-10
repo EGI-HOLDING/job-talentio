@@ -166,12 +166,10 @@ function SiteNavContent() {
   const companyHref = '/dashboard/recruiter?tab=company' + (activeCompany ? '&company=' + encodeURIComponent(activeCompany.companyId) : '');
 
   const isOnboarding = pathname.startsWith('/onboarding/');
-  const hrFlow = hrCompany !== null || process.env.NEXT_PUBLIC_HR_CREATION_V2 === 'true' && pathname === '/onboarding/recruiter';
+  const hrFlow = hrCompany !== null || (process.env.NEXT_PUBLIC_HR_CREATION_V2 === 'true' || process.env.NEXT_PUBLIC_PRIVACY_MARKET === 'id') && pathname === '/onboarding/recruiter';
   const isRecruiter = session?.user.role === 'RECRUITER';
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const isJobs = pathname === '/jobs' || pathname.startsWith('/jobs/');
-  const isCompanies = pathname === '/explore/companies' || pathname.startsWith('/companies/');
-  const isInsights = pathname === '/news' || pathname.startsWith('/news/');
   const isPublic = !/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname);
   const isEmployerContext = pathname === '/employers' || (/^\/(login|register|forgot-password|reset-password)$/.test(pathname) && (searchParams.get('role') === 'RECRUITER' || Boolean(searchParams.get('invite'))));
   const accountRole = isEmployerContext ? 'RECRUITER' : authRoleFrom(searchParams.get('role'));
@@ -181,14 +179,14 @@ function SiteNavContent() {
   const recruiterTab = searchParams.get('tab') || 'jobs';
   const recruiterActive = [(pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab)) || pathname.startsWith('/dashboard/recruiter/jobs/') || pathname.startsWith('/jobs/') || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
   const browseLinks = isOnboarding || pathname.startsWith('/apply/')
-    ? [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']]
+    ? [['/jobs', 'home.findJobs']]
     : isRecruiter
     ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]
     : isEmployee
     ? [['/jobs', 'home.findJobs'], ['/dashboard/employee?tab=applications', 'applications'], ['/dashboard/employee?tab=saved', 'savedJobs'], ['/messages', 'messages']]
     : isEmployerContext
     ? [['/employers#how-it-works', 'employers.how'], ['/employers#hiring-insights', 'employers.insights']]
-    : [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']];
+    : [['/jobs', 'home.findJobs']];
   const dash =
     session?.user.role === 'EMPLOYEE'
       ? '/jobs?mode=for-you'
@@ -208,14 +206,13 @@ function SiteNavContent() {
         {hrFlow && <span className={styles.hrCompany}><WorkspaceIcon kind="building"/><span>{hrCompany || activeCompany?.company.name || t('employers.badge')}</span></span>}
         {isLanding && !hrFlow && (
           <div className={styles.browse}>
-            {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={(isRecruiter ? recruiterActive[index] : isEmployee ? [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'][index] : !isEmployerContext && [isJobs, isCompanies, isInsights][index]) ? 'page' : undefined}>{t(key)}</Link>)}
+            {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={(isRecruiter ? recruiterActive[index] : isEmployee ? [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'][index] : !isEmployerContext && isJobs && href === '/jobs') ? 'page' : undefined}>{t(key)}</Link>)}
           </div>
         )}
         </div>
         <div className={`nav-links ${isLanding ? styles.landingLinks : ''} ${isLanding && session ? styles.signedIn : ''}`}>
           {hrFlow && <Link className={styles.hrHelp} href={'/dashboard/recruiter/support' + (activeCompany ? '?company=' + encodeURIComponent(activeCompany.companyId) : '')}><span aria-hidden="true">ⓘ</span>{t('hr.support')}</Link>}
           {!isLanding && <><Link href="/jobs">{t('jobs')}</Link>{dash && <Link href={dash}>{t('dashboard')}</Link>}</>}
-          {!isLanding && <Link href="/news">{t('news')}</Link>}
           {isLanding && !session && <div className={styles.audienceToggle} role="group" aria-label={AUDIENCE_LABELS[locale].group}>
             <Link className={`${styles.audienceOption} ${!isEmployerContext ? styles.audienceActive : ''}`} href="/" aria-current={!isEmployerContext ? 'page' : undefined}>{AUDIENCE_LABELS[locale].seekers}</Link>
             <Link className={`${styles.audienceOption} ${isEmployerContext ? styles.audienceActive : ''}`} href="/employers" aria-current={isEmployerContext ? 'page' : undefined}>{AUDIENCE_LABELS[locale].employers}</Link>
@@ -349,7 +346,7 @@ function SiteNavContent() {
                   {isRecruiter ? <><Link href={companyHref}>{t('rw.companyProfile')}</Link><Link href={companyHref + '&panel=promotion'}>{t('rw.promotion')}</Link></> : <><Link href="/dashboard/employee?tab=profile">{t('workspace.profileCv')}</Link><Link href="/dashboard/employee?tab=alerts">{t('workspace.jobAlerts')}</Link></>}
                   <Link href={isRecruiter ? '/settings?role=RECRUITER' : '/settings?role=EMPLOYEE'}>{t('settings')}</Link>
                   {isRecruiter && <><Link href="/dashboard/recruiter/orders">{t('commerce.orders')}</Link><Link href={'/dashboard/recruiter/support' + (activeCompany ? '?company=' + encodeURIComponent(activeCompany.companyId) : '')}>{t('hr.support')}</Link></>}
-                  <div className={styles.accountResources}>{!isRecruiter && <Link href="/explore/companies">{t('companiesStat')}</Link>}<Link href="/news">{t('landing.insights')}</Link>{isRecruiter && <Link href="/employers">{t('employers.badge')}</Link>}</div>
+                  {isRecruiter && <div className={styles.accountResources}><Link href="/news">{t('employers.insights')}</Link><Link href="/employers">{t('employers.badge')}</Link></div>}
                   <button type="button" onClick={async () => { if (!await allowEmployerContextChange()) return; await logout(); window.location.href = localeHref('/'); }}>{t('logout')}</button>
                 </div>}
               </div> : <><Link href="/settings" className="nav-user" title={t('settings')}>

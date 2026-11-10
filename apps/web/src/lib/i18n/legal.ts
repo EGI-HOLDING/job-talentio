@@ -35,7 +35,7 @@ const termsEn: LegalDoc = {
     {
       heading: '2. Job seekers',
       paragraphs: [
-        'Your profile, CV and messages remain yours. You choose who can see your profile: everyone, registered recruiters only, or nobody. You grant us the right to store, display and translate that content to employers according to your visibility settings and to the employers you apply to. Do not upload personal data of other people without their permission.',
+        'Your profile, CV and messages remain yours. Recruiters who are signed in and have active membership in a Talentio company can find your profile and access your uploaded CV files for recruitment. A CV submitted with an application is retained with that application. You grant us the right to store, display and translate this content to provide the Service. Do not upload personal data of other people without their permission.',
       ],
     },
     {
@@ -109,7 +109,7 @@ const termsRu: LegalDoc = {
     {
       heading: '2. Соискатели',
       paragraphs: [
-        'Ваш профиль, резюме и сообщения принадлежат вам. Вы выбираете, кто видит профиль: все, только зарегистрированные рекрутеры или никто. Вы разрешаете нам хранить, показывать и переводить этот контент работодателям согласно настройкам видимости и тем работодателям, к которым вы откликаетесь. Не загружайте персональные данные других людей без их разрешения.',
+        'Ваш профиль, резюме и сообщения принадлежат вам. Рекрутеры, вошедшие в систему и состоящие в активной команде компании Talentio, могут находить ваш профиль и использовать загруженные вами файлы резюме для подбора персонала. Резюме, отправленное с откликом, хранится вместе с этим откликом. Вы разрешаете нам хранить, показывать и переводить этот контент для работы Сервиса. Не загружайте персональные данные других людей без их разрешения.',
       ],
     },
     {
@@ -183,7 +183,7 @@ const termsUz: LegalDoc = {
     {
       heading: '2. Ish izlovchilar',
       paragraphs: [
-        'Profilingiz, rezyumeingiz va xabarlaringiz sizga tegishli. Profilni kim ko‘rishini siz tanlaysiz: hamma, faqat ro‘yxatdan o‘tgan rekruterlar yoki hech kim. Siz bizga ushbu kontentni ko‘rinish sozlamalaringizga muvofiq va ariza yuborgan ish beruvchilarga saqlash, ko‘rsatish va tarjima qilish huquqini berasiz. Boshqa odamlarning shaxsiy ma’lumotlarini ularning ruxsatisiz yuklamang.',
+        'Profilingiz, rezyumeingiz va xabarlaringiz sizga tegishli. Talentio kompaniyasiga faol a’zo bo‘lgan va tizimga kirgan rekruterlar profilingizni topishi hamda ishga yollash uchun yuklagan rezyume fayllaringizdan foydalanishi mumkin. Arizaga yuborilgan rezyume o‘sha ariza bilan birga saqlanadi. Xizmatni taqdim etish uchun ushbu kontentni saqlash, ko‘rsatish va tarjima qilish huquqini bizga berasiz. Boshqa odamlarning shaxsiy ma’lumotlarini ruxsatisiz yuklamang.',
       ],
     },
     {
@@ -270,7 +270,7 @@ const privacyEn: LegalDoc = {
     {
       heading: '3. Who can see your data',
       paragraphs: [
-        'Employers see your profile according to your visibility setting and always when you apply to their vacancy; their invited team members see the same. We rely on service providers that act on our instructions: cloud hosting and file storage, email delivery, Telegram (if you link it), Google sign-in (if you use it), search infrastructure, and AI providers that structure CV text or translate company descriptions, profile text, news articles, and catalog labels. Only the text needed for the task is sent to AI providers and it is not used to train their models. We do not sell personal data.',
+        'Recruiters who are signed in and have active membership in a Talentio company may find candidate profiles and access uploaded profile CV files for recruitment. A CV submitted with an application remains tied to that application and is available to the receiving company’s authorized team. We rely on service providers that act on our instructions: cloud hosting and file storage, email delivery, Telegram (if you link it), Google sign-in (if you use it), search infrastructure, and AI providers that structure CV text or translate company descriptions, profile text, news articles, and catalog labels. Only the text needed for the task is sent to AI providers and it is not used to train their models. We do not sell personal data.',
       ],
     },
     {
@@ -289,7 +289,7 @@ const privacyEn: LegalDoc = {
       heading: '6. Your rights',
       items: [
         'Access, correct or delete your data in your profile and Settings.',
-        'Restrict who sees your profile with the visibility setting.',
+        'Review and update the profile and CV information you provide in your account.',
         'Unlink Google or Telegram and turn notification channels off.',
         'Export your CV as a PDF from the resume builder.',
         `Contact us at ${CONTACT} for any request, or lodge a complaint with the authorized body for personal data protection.`,
@@ -348,7 +348,7 @@ const privacyRu: LegalDoc = {
     {
       heading: '3. Кто видит ваши данные',
       paragraphs: [
-        'Работодатели видят профиль согласно вашей настройке видимости и всегда - когда вы откликаетесь на их вакансию; то же видят приглашённые ими участники команды. Мы используем поставщиков услуг, действующих по нашим инструкциям: облачный хостинг и хранение файлов, доставку электронной почты, Telegram (если вы его привязали), вход через Google (если вы им пользуетесь), поисковую инфраструктуру и провайдеров ИИ, которые структурируют текст резюме или переводят вакансии и профили. Провайдерам ИИ передаётся только текст, необходимый для задачи, и он не используется для обучения их моделей. Мы не продаём персональные данные.',
+        'Рекрутеры, вошедшие в систему и состоящие в активной команде компании Talentio, могут находить профили кандидатов и использовать загруженные файлы резюме для подбора персонала. Резюме, отправленное с откликом, остаётся связанным с этим откликом и доступно уполномоченной команде получившей его компании. Мы используем поставщиков услуг, действующих по нашим инструкциям: облачный хостинг и хранение файлов, доставку электронной почты, Telegram (если вы его привязали), вход через Google (если вы им пользуетесь), поисковую инфраструктуру и провайдеров ИИ, которые структурируют текст резюме или переводят вакансии и профили. Провайдерам ИИ передаётся только текст, необходимый для задачи, и он не используется для обучения их моделей. Мы не продаём персональные данные.',
       ],
     },
     {
@@ -367,7 +367,7 @@ const privacyRu: LegalDoc = {
       heading: '6. Ваши права',
       items: [
         'Получать, исправлять и удалять данные в профиле и настройках.',
-        'Ограничивать видимость профиля соответствующей настройкой.',
+        'Просматривать и обновлять данные профиля и резюме, которые вы указали в аккаунте.',
         'Отвязывать Google или Telegram и отключать каналы уведомлений.',
         'Экспортировать резюме в PDF из конструктора резюме.',
         `Обращаться к нам по адресу ${CONTACT} с любым запросом или подавать жалобу в уполномоченный орган по защите персональных данных.`,
@@ -426,7 +426,7 @@ const privacyUz: LegalDoc = {
     {
       heading: '3. Ma’lumotlaringizni kim ko‘radi',
       paragraphs: [
-        'Ish beruvchilar profilingizni ko‘rinish sozlamangizga muvofiq va ularning bo‘sh ish o‘rniga ariza berganingizda doimo ko‘radi; ular taklif qilgan jamoa a’zolari ham xuddi shuni ko‘radi. Biz ko‘rsatmalarimiz bo‘yicha ishlaydigan xizmat ko‘rsatuvchilardan foydalanamiz: bulutli xosting va fayllarni saqlash, elektron pochta yetkazish, Telegram (agar bog‘lagan bo‘lsangiz), Google orqali kirish (agar foydalansangiz), qidiruv infratuzilmasi va rezyume matnini tuzilmaga soluvchi yoki e’lon va profillarni tarjima qiluvchi sun’iy intellekt provayderlari. Sun’iy intellekt provayderlariga faqat vazifa uchun zarur matn yuboriladi va u ularning modellarini o‘rgatish uchun ishlatilmaydi. Biz shaxsiy ma’lumotlarni sotmaymiz.',
+        'Talentio kompaniyasining faol jamoasiga a’zo bo‘lib tizimga kirgan rekruterlar nomzod profillarini topishi va ishga yollash uchun yuklangan rezyume fayllaridan foydalanishi mumkin. Arizaga yuborilgan rezyume shu arizaga bog‘langan holda qoladi va uni qabul qilgan kompaniyaning vakolatli jamoasiga taqdim etiladi. Biz ko‘rsatmalarimiz bo‘yicha ishlaydigan xizmat ko‘rsatuvchilardan foydalanamiz: bulutli xosting va fayllarni saqlash, elektron pochta yetkazish, Telegram (agar bog‘lagan bo‘lsangiz), Google orqali kirish (agar foydalansangiz), qidiruv infratuzilmasi va rezyume matnini tuzilmaga soluvchi yoki e’lon va profillarni tarjima qiluvchi sun’iy intellekt provayderlari. Sun’iy intellekt provayderlariga faqat vazifa uchun zarur matn yuboriladi va u ularning modellarini o‘rgatish uchun ishlatilmaydi. Biz shaxsiy ma’lumotlarni sotmaymiz.',
       ],
     },
     {

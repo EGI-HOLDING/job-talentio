@@ -24,7 +24,7 @@ type AssistantAttempt = {
   importRegistered?: boolean;
 };
 
-export const hrFlowV2Enabled=process.env.NEXT_PUBLIC_HR_CREATION_V2==='true';
+export const hrFlowV2Enabled=process.env.NEXT_PUBLIC_HR_CREATION_V2==='true'||process.env.NEXT_PUBLIC_PRIVACY_MARKET==='id';
 export function HrFlowHeader({companyName,stage,onboarding=false}:{companyName?:string;stage:number;onboarding?:boolean}){
   const c=useHrCopy();
   const labels=onboarding?['Perusahaan','Paket','Checkout','Lowongan']:['Paket','Checkout','Lowongan'];

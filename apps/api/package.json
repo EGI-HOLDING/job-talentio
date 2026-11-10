@@ -57,7 +57,9 @@
     "test:hr-flow:local": "node ../../scripts/business-catalog-run.cjs apps/api/src/hr-flow/hr-flow.integration.ts",
     "test:hr-flow:concurrency": "node ../../scripts/business-catalog-run.cjs apps/api/src/hr-flow/hr-flow.concurrency.ts",
     "test:candidate-v32": "tsx src/matching/candidate-v32.smoke.ts",
-    "test:recruitment": "node ../../scripts/recruitment-local.cjs"
+    "test:recruitment": "node ../../scripts/recruitment-local.cjs",
+    "test:position-groups": "tsx src/matching/position-groups.smoke.ts",
+    "matching:position-groups": "tsx src/scripts/position-groups.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

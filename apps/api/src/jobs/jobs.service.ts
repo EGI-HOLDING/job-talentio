@@ -1163,6 +1163,7 @@ export class JobsService {
   }
 
   async search(query: {
+    selectionScope?:'primary'|'related';
     q?: string;
     country?: string;
     city?: string;
@@ -1196,6 +1197,10 @@ export class JobsService {
     const intentScope=query.sort==='match'&&query.profileId?await this.employeeMatching.intentSearchScope(query.profileId):null;
     const intentFilter:Prisma.JobPostWhereInput|null=intentScope?{...intentJobScope(intentScope),applications:{none:{profileId:query.profileId}}}:null;
     if(intentFilter)and.push(intentFilter);
+    if(intentScope&&query.selectionScope){
+      const related=query.selectionScope==='related';
+      and.push(intentScope.vacancies?{id:{in:[...intentScope.vacancies.decisions].filter(([,row])=>(row.eligibility.matchType==='RELATED')===related).map(([id])=>id)}}:{jobTitleId:{in:intentScope.allowedIds.filter(id=>(intentScope.index.eligibility(intentScope.preferences.selectedIds,id).matchType==='RELATED')===related)}});
+    }
 
     const citySlugs = (query.city || '').split(',').map((s) => s.trim()).filter(Boolean);
     if (citySlugs.length) and.push({ city: { slug: { in: citySlugs } } });
@@ -1762,14 +1767,15 @@ export class JobsService {
     return this.analytics.summary(user, companyId);
   }
 
-  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'exploration'|'salary-unverified'='recommendations') {
+  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'related'|'exploration'|'salary-unverified'='recommendations',options:{separated?:boolean;scope?:'primary'|'related'}={}) {
     const profile = await this.prisma.employeeProfile.findUnique({
       where: { userId: user.id },
     });
     if (!profile) return page ? { items:[],page:1,limit,total:0,totalPages:1,mode:'UNAVAILABLE',state:'PREFERENCES_REQUIRED',version:'employee-intent-v3.2' } : [];
-    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit,feed).catch(error=>{throw new ServiceUnavailableException('Recommendations temporarily unavailable');});
+    const result = await this.employeeMatching.recommend(profile.id,page ?? 1,limit,feed,options).catch(error=>{throw new ServiceUnavailableException('Recommendations temporarily unavailable');});
     const items = result.items.map((row) => ({
       ...row,
+      ...(!options.separated&&feed!=='related'&&'selectionBasis' in row&&row.selectionBasis==='GROUP'?{recommendationType:'RELATED',matchType:'RELATED',eligibility:{...row.eligibility,matchType:'RELATED'}}:{}),
       job: maskAnonymousCompany(this.withResolvedIcons(row.job), locale),
     }));
     return page ? { ...result,items } : items;

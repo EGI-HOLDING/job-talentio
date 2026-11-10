@@ -1,4 +1,6 @@
 'use client';
+import {positionGroupsUiEnabled} from '@/lib/employeePositionPreferences';
+import {EmployeeRelatedSection} from '@/components/jobs/EmployeeRelatedSection';
 import { EmployeeSalaryUnverifiedSection } from '@/components/jobs/EmployeeSalaryUnverifiedSection';
 import { EmployeeCountryPreferenceNotice,EmployeeRecommendationNotice,EmployeeMatchReasons } from '@/components/jobs/EmployeeRecommendationState';
 import {useEmployeeIntentText} from '@/lib/i18n/employeeIntent';
@@ -37,7 +39,7 @@ export function ForYouJobsSection() {
   const intentText=useEmployeeIntentText();
   const identity=useSessionIdentity();
   const active=!!identity&&getSession()?.user.role==='EMPLOYEE';
-  const feed=useApiResource<{items:RecommendedItem[];salaryUnverifiedTotal?:number;practicalPolicy?:{active:boolean;countryFilterApplied:boolean};mode?:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6':null);
+  const feed=useApiResource<{items:RecommendedItem[];relatedTotal?:number;primarySalaryUnverifiedTotal?:number;relatedSalaryUnverifiedTotal?:number;salaryUnverifiedTotal?:number;practicalPolicy?:{active:boolean;countryFilterApplied:boolean};mode?:string;state?:EmployeeRecommendationState;evidenceState?:EmployeeEvidenceState;preferenceWarnings?:string[];emptyReason?:EmployeeEmptyReason}>(active?'/jobs/recommended?page=1&limit=6'+(positionGroupsUiEnabled?'&presentation=separated':''):null);
   const items=feed.data?.items.slice(0,HOME_FOR_YOU_LIMIT)||[];
   const recommendationState=feed.data?.state||(feed.error?'UNAVAILABLE':undefined);
   const ready=!feed.loading;
@@ -94,7 +96,8 @@ export function ForYouJobsSection() {
           })}
         </div>
       )}
-      {ready&&<EmployeeSalaryUnverifiedSection total={feed.data?.salaryUnverifiedTotal||0}/> }
+      {ready&&<EmployeeSalaryUnverifiedSection total={(positionGroupsUiEnabled?feed.data?.primarySalaryUnverifiedTotal:feed.data?.salaryUnverifiedTotal)||0}/> }
+      {ready&&positionGroupsUiEnabled&&<EmployeeRelatedSection total={feed.data?.relatedTotal??0} salaryUnverifiedTotal={feed.data?.relatedSalaryUnverifiedTotal??0} preview/>}
     </ExploreSection>
   );
 }

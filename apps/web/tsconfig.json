@@ -31,9 +31,12 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-hr-assistant-preview/types/**/*.ts",
+    ".next-invitation/types/**/*.ts",
+    ".next-journey/types/**/*.ts",
+    ".next-recruitment/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-journey/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

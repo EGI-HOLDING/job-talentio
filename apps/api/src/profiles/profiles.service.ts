@@ -1,4 +1,4 @@
-import { employeePreferenceUpdate, desiredRolesInclude } from '../matching/employee-preferences';
+import { employeePreferenceUpdate, desiredRolesInclude, desiredGroupsInclude, desiredSelectionView } from '../matching/employee-preferences';
 import { liveJobWhere } from '../benefits/benefit-policy';
 import { createHash } from 'node:crypto';
 import { validateOfferFiles } from '../applications/application-offer-files';
@@ -80,11 +80,12 @@ export class ProfilesService {
     private presence: PresenceService,
     private translation: TranslationService,
     @Optional() @Inject(RATE_LIMIT_REDIS) private readonly rlRedis: IORedis | null,
-    @Optional() private candidateAccess?: CandidateAccessService,
+    private candidateAccess: CandidateAccessService,
   ) {}
 
   private profileInclude = {
     desiredRoles: desiredRolesInclude,
+    desiredGroups: desiredGroupsInclude,
     skills: { include: { skill: true } },
     experiences: { include: { city: { include: { province: { include: { country: true } } } }, country: true } },
     educations: true,
@@ -133,8 +134,9 @@ export class ProfilesService {
     const { onboardingDraft: _draft, ...safe } = profile as T & {onboardingDraft?:unknown};
     return {
       ...safe,
+      desiredSelections:desiredSelectionView(profile as Parameters<typeof desiredSelectionView>[0]),
       ...(profile.resumes ? {resumes: profile.resumes.map((r) => this.sanitizeResume(r))} : {}),
-    } as T;
+    } as unknown as T;
   }
 
   private sourceNarrativeLocale(
@@ -317,7 +319,7 @@ export class ProfilesService {
     const countryIds = [...new Set([...(data.preferredCountryIds as string[] || []), ...(data.residenceCountryId ? [String(data.residenceCountryId)] : [])])];
     if (countryIds.length && await this.prisma.country.count({where:{id:{in:countryIds},isActive:true,archivedAt:null}}) !== countryIds.length) throw new BadRequestException('Select countries from the available list');
     if (data.desiredSalaryCurrency && !Intl.supportedValuesOf('currency').includes(String(data.desiredSalaryCurrency))) throw new BadRequestException('Invalid currency');
-    const intentPreferences = await employeePreferenceUpdate(this.prisma,data as {desiredJobTitleIds?:string[];desiredPositions?:string[];desiredPosition?:string});
+    const intentPreferences = await employeePreferenceUpdate(this.prisma,data,profile.id);
     const roleInput = data.desiredPositions === undefined ? (data.desiredPosition === undefined ? undefined : [String(data.desiredPosition)].filter(Boolean)) : data.desiredPositions as string[];
     const roles = roleInput === undefined ? undefined : await canonicalRoleNames(this.prisma, roleInput);
     const headline = data.headline as string | undefined;
@@ -325,7 +327,7 @@ export class ProfilesService {
 
     try {
       const updated = await this.prisma.employeeProfile.update({
-        where: { userId: user.id },
+        where: { userId: user.id,...(data.desiredSelections!==undefined?{preferencesRevision:data.preferencesRevision as number}:{}) },
         data: {
           headline,
           summary,
@@ -337,7 +339,6 @@ export class ProfilesService {
           ),
           cityId,
           phone,
-          visibility: data.visibility as never,
           desiredSalaryMin: data.desiredSalaryMin as number | null | undefined,
           ...(roles ? { desiredPositions: roles, desiredPosition: roles[0] || null } : {}),
           ...intentPreferences,
@@ -353,6 +354,7 @@ export class ProfilesService {
       });
       return this.sanitizeProfileResumes(withCvFacts(updated,updated.resumes.find(resume=>resume.isPrimary&&resume.fileKey)?.currentVersion));
     } catch (e: unknown) {
+      if(data.desiredSelections!==undefined&&(e as {code?:string}).code==='P2025')throw new ConflictException('POSITION_PREFERENCES_CHANGED');
       const target = String((e as { meta?: { target?: unknown } })?.meta?.target || '').toLowerCase();
       if ((e as { code?: string })?.code === 'P2002' && (target.includes('phone') || data.phone !== undefined)) {
         throw new ConflictException('PHONE_DUPLICATE');
@@ -1006,7 +1008,6 @@ export class ProfilesService {
         headline: full.headline,
         summary: full.summary,
         phone: full.phone,
-        visibility: full.visibility,
       },
     };
   }
@@ -1189,22 +1190,20 @@ export class ProfilesService {
 
     // Recruiter may download only if the candidate applied to their company
     if (!allowed && user.role === 'RECRUITER') {
-      const companyIds = this.candidateAccess ? [await this.candidateAccess!.context(user,companyId)] : await this.activeCompanyIds(user);
-      if (companyIds.length) {
-        const applied = await this.prisma.application.findFirst({
-          where: {
-            profileId: resume.profile.id,
-            resumeId,
-            jobPost: { companyId: { in: companyIds } },
-          },
-          select: { id: true, resumeSnapshot: true },
-          orderBy: { createdAt: 'desc' },
-        });
-        allowed = Boolean(applied);
-        const submitted = submittedResume(applied?.resumeSnapshot);
-        fileKey = submitted.fileKey;
-        title = submitted.title ?? 'Resume';
-      }
+      const scopedCompanyId = await this.candidateAccess.context(user, companyId);
+      const applied = await this.prisma.application.findFirst({
+        where: {
+          profileId: resume.profile.id,
+          resumeId,
+          jobPost: { companyId: scopedCompanyId },
+        },
+        select: { id: true, resumeSnapshot: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      allowed = Boolean(applied);
+      const submitted = submittedResume(applied?.resumeSnapshot);
+      fileKey = submitted.fileKey;
+      title = submitted.title ?? 'Resume';
     }
 
     if (!allowed) throw new ForbiddenException('Not allowed to download this resume');
@@ -1540,46 +1539,7 @@ export class ProfilesService {
       locale?: Locale;
     },
   ) {
-    return new CvCandidatesService(this.prisma,this.matching,this.companies,this.presence,this.candidateAccess??new CandidateAccessService(this.prisma)).search(user,query);
-  }
-
-  /**
-   * Contacts require an active company; private applicants retain their visibility exception.
-   */
-  private async contactAccessFor(user: AuthUser, profileId: string, companyId?:string) {
-    const activeCompanyIds = await this.activeCompanyIds(user);
-    let limited = user.role !== 'SUPER_ADMIN' && activeCompanyIds.length === 0;
-    const companyIds = companyId?[companyId]:activeCompanyIds;
-
-    // Applicants to this recruiter's company must remain viewable even if PRIVATE.
-    const applied =
-      user.role === 'SUPER_ADMIN'
-        ? { id: 'admin' }
-        : companyIds.length
-          ? await this.prisma.application.findFirst({
-              where: {
-                profileId,
-                jobPost: { companyId: { in: companyIds } },
-              },
-              select: { id: true },
-            })
-          : null;
-    const appliedToMyCompany = Boolean(applied);
-
-    if (limited && appliedToMyCompany) {
-      limited = false;
-    }
-    return { limited, appliedToMyCompany };
-  }
-
-  private async activeCompanyIds(user: AuthUser) {
-    const companyIds = [...new Set((user.memberships ?? []).map((membership) => membership.companyId))];
-    if (!companyIds.length) return [];
-    const companies = await this.prisma.company.findMany({
-      where: { id: { in: companyIds }, isBanned: false, anonymizedAt: null },
-      select: { id: true },
-    });
-    return companies.map((company) => company.id);
+    return new CvCandidatesService(this.prisma,this.matching,this.companies,this.presence,this.candidateAccess).search(user,query);
   }
 
   async getCandidateProfile(
@@ -1589,7 +1549,7 @@ export class ProfilesService {
     locale: Locale = DEFAULT_LOCALE,
     companyId?: string,
   ) {
-    return new CvCandidatesService(this.prisma,this.matching,this.companies,this.presence,this.candidateAccess??new CandidateAccessService(this.prisma)).get(user,profileId,matchJobId,companyId);
+    return new CvCandidatesService(this.prisma,this.matching,this.companies,this.presence,this.candidateAccess).get(user,profileId,matchJobId,companyId);
   }
 
   async machineTranslateCandidate(
@@ -1598,7 +1558,7 @@ export class ProfilesService {
     locale: Locale,
     matchJobId?: string,
   ) {
-    // Same visibility gate as the profile page; then one provider batch is cached.
+    // The candidate profile query applies the same HR membership checks as the profile page.
     await this.getCandidateProfile(user, profileId, matchJobId, locale);
     const result = await this.translation.translateProfile(profileId, locale);
     if (result.status === 'failed') throw new BadRequestException(result.reason);
@@ -1628,52 +1588,13 @@ export class ProfilesService {
       if (withdrawnApplication) throw new NotFoundException('Contact not available');
     }
 
-    if (this.candidateAccess) {
-      const context = await this.candidateAccess.context(user, scopedCompanyId);
-      const profile = await this.candidateAccess.assertAccess(user, context, profileId, 'CONTACT');
-      await this.assertRevealQuota(user);
-      await this.prisma.auditLog.create({data:{actorId:user.id,action:'CANDIDATE_CONTACT_REVEAL',entityType:'EmployeeProfile',entityId:profileId,metadata:{companyId:context,...(jobPostId?{jobPostId}:{})}}});
-      return { email: profile.user.email, phone: profile.phone };
-    }
-    const profile = await this.prisma.employeeProfile.findUnique({
-      where: { id: profileId },
-      select: {
-        id: true,
-        phone: true,
-        visibility: true,
-        user: { select: { email: true, isBanned: true, anonymizedAt: true } },
-      },
-    });
-    if (!profile) throw new NotFoundException('Profile not available');
-    if (profile.user.isBanned || profile.user.anonymizedAt) {
-      throw new NotFoundException('Profile not available');
-    }
-
-    const { limited, appliedToMyCompany } = await this.contactAccessFor(user, profileId);
-    if (profile.visibility === 'PRIVATE' && !appliedToMyCompany) {
-      throw new NotFoundException('Profile not available');
-    }
-    if (limited) {
-      throw new ForbiddenException(
-        'An active company membership is required to reveal contacts',
-      );
-    }
-
+    const context = await this.candidateAccess.context(user, scopedCompanyId);
+    const { profile } = await this.candidateAccess.candidate(user, context, profileId);
     await this.assertRevealQuota(user);
-
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: user.id,
-        action: 'CANDIDATE_CONTACT_REVEAL',
-        entityType: 'EmployeeProfile',
-        entityId: profileId,
-        ...(jobPostId ? { metadata: { companyId: scopedCompanyId, jobPostId } } : {}),
-      },
-    });
-
+    await this.prisma.auditLog.create({data:{actorId:user.id,action:'CANDIDATE_CONTACT_REVEAL',entityType:'EmployeeProfile',entityId:profileId,metadata:{companyId:context,...(jobPostId?{jobPostId}:{})}}});
     return {
-      email: profile.user.email ?? null,
-      phone: profile.phone ?? null,
+      email: profile.user.email,
+      phone: profile.phone,
     };
   }
 

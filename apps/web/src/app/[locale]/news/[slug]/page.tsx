@@ -33,7 +33,7 @@ export default async function NewsArticlePage({ params }: PageProps) {
   const { slug, locale } = await params;
   const active = isLocale(locale) ? locale : DEFAULT_LOCALE;
   const article = await fetchNewsArticle(slug, active);
-  if (!article) notFound();
+  if (!article || article.category !== 'INSIGHT') notFound();
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',

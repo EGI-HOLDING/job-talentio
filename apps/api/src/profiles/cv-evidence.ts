@@ -55,18 +55,15 @@ export function withCvFacts<T extends {id:string}>(profile:T, version:{id:string
 
 export const cvVersionSelect = {id:true,parseStatus:true,matchingData:true,experienceYears:true} satisfies Prisma.ResumeVersionSelect;
 export const cvSourceInclude = {
-  databaseResume:{include:{currentVersion:{select:cvVersionSelect}}},
   resumes:{where:{isPrimary:true,deletedAt:null,fileKey:{not:null}},include:{currentVersion:{select:cvVersionSelect}}},
 } satisfies Prisma.EmployeeProfileInclude;
 
-export function discoveryVersion(profile:{databaseResume?:{deletedAt:Date|null;currentVersion?:unknown}|null;resumes?:Array<{currentVersion?:unknown}>}) {
-  return (profile.databaseResume && !profile.databaseResume.deletedAt ? profile.databaseResume.currentVersion : profile.resumes?.[0]?.currentVersion) as {id:string;parseStatus:string;matchingData:unknown}|null|undefined;
+export function discoveryVersion(profile:{resumes?:Array<{isPrimary?:boolean;currentVersion?:unknown}>}) {
+  return profile.resumes?.find(resume=>resume.isPrimary)?.currentVersion as {id:string;parseStatus:string;matchingData:unknown}|null|undefined;
 }
 
 export function cvSourceWhere(condition:Prisma.ResumeVersionWhereInput):Prisma.EmployeeProfileWhereInput {
-  return {OR:[{databaseResume:{is:{deletedAt:null,currentVersion:{is:condition}}}},
-    {AND:[{OR:[{databaseResumeId:null},{databaseResume:{is:{deletedAt:{not:null}}}}]},
-      {resumes:{some:{isPrimary:true,deletedAt:null,currentVersion:{is:condition}}}}]}]};
+  return {resumes:{some:{isPrimary:true,deletedAt:null,fileKey:{not:null},currentVersion:{is:condition}}}};
 }
 
 export async function registerCvVersion(db:Prisma.TransactionClient,resumeId:string,fileKey:string,checksum?:string) {

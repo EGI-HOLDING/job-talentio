@@ -138,7 +138,7 @@ export async function runHrHttpSuite(input: {
     const kanbanResponse=await request('/applications/jobs/'+kanbanJob.id+'/kanban',input.hr);
     assert.equal(kanbanResponse.status,200);
     const kanbanData=await kanbanResponse.json() as {columns:Array<{status:string;items:Array<{id:string}>;total:number}>};
-    assert.ok(kanbanData.columns.find(column=>column.status==='NEW')?.items.some(item=>item.id===kanbanApplication.id));
+    assert.ok(kanbanData.columns.find(column=>column.status==='IN_REVIEW')?.items.some(item=>item.id===kanbanApplication.id));
     assert.equal((await request('/applications/jobs/'+kanbanJob.id+'/kanban?page=0',input.hr)).status,400);
     assert.equal((await request('/applications/jobs/'+kanbanJob.id+'/kanban',input.employee)).status,403);
     assert.equal((await request('/applications/jobs/'+kanbanJob.id+'/search?sort=match',input.outsider)).status,403);
@@ -186,21 +186,13 @@ export async function runHrHttpSuite(input: {
     assert.match(csv.headers.get('Content-Type') || '', /text\/csv/);
     assert.equal(
       (
-        await request('/profiles/me/database-cv-permission', input.hr, 'PATCH', {
-          enabled: true,
-          resumeId: input.resumeId,
-        })
-      ).status,
-      403,
-    );
-    assert.equal(
-      (
         await request('/profiles/me/database-cv-permission', input.employee, 'PATCH', {
           enabled: true,
           resumeId: input.resumeId,
         })
       ).status,
-      200,
+      404,
+      'Candidate CV sharing preferences are no longer an API feature',
     );
     const creditsBefore = await input.db.candidateCredit.findMany();
     const unlocksBefore = await input.db.candidateAccess.findMany();
@@ -233,25 +225,42 @@ export async function runHrHttpSuite(input: {
       404,
     );
     const cvPath =
-      '/profiles/candidates/' + input.profileId + '/database-cv?companyId=' + input.companyId;
+      '/profiles/candidates/' + input.profileId + '/resumes/' + input.resumeId + '/download?companyId=' + input.companyId;
+    assert.equal((await request(cvPath)).status, 401, 'CV files are not public or anonymously downloadable');
     assert.equal((await request(cvPath, input.hr)).status, 404, 'Missing CV files return 404');
     fileAvailable = true;
     const cv = await request(cvPath, input.hr);
     assert.equal(cv.status, 200, 'CV is directly available without an unlock');
     assert.match(cv.headers.get('Cache-Control') || '', /no-store/);
     assert.match(await cv.text(), /synthetic isolated CV/);
+    assert.equal(
+      await input.db.auditLog.count({ where: { actorId: input.hr.id, action: 'CANDIDATE_PROFILE_CV_DOWNLOAD', entityId: input.profileId } }),
+      1,
+      'Every profile CV download is audited',
+    );
+    const secondResume = await input.db.resume.create({
+      data: { profileId: input.profileId, title: 'Second active CV', fileKey: 'synthetic/second-cv.pdf' },
+    });
+    const secondCv = await request(
+      '/profiles/candidates/' + input.profileId + '/resumes/' + secondResume.id + '/download?companyId=' + input.companyId,
+      input.hr,
+    );
+    assert.equal(secondCv.status, 200, 'Each active file-backed CV can be downloaded');
+    assert.equal(
+      await input.db.auditLog.count({ where: { actorId: input.hr.id, action: 'CANDIDATE_PROFILE_CV_DOWNLOAD', entityId: input.profileId } }),
+      2,
+      'Downloads of multiple CVs are each audited',
+    );
     const freeMembership = await input.db.companyMember.findFirstOrThrow({
       where: { userId: input.outsider.id },
     });
+    assert.equal((await request(cvPath, input.outsider)).status, 403, 'A recruiter cannot claim a company they do not belong to');
     const freeCvPath =
-      '/profiles/candidates/' +
-      input.profileId +
-      '/database-cv?companyId=' +
-      freeMembership.companyId;
+      '/profiles/candidates/' + input.profileId + '/resumes/' + input.resumeId + '/download?companyId=' + freeMembership.companyId;
     assert.equal(
       (await request(freeCvPath, input.outsider)).status,
       200,
-      'Free employer can access a non-applicant CV',
+      'A recruiter with active company membership can access a non-applicant CV',
     );
     await input.db.featureFlag.update({ where: { key: 'hr_packages' }, data: { enabled: false } });
     assert.equal(
@@ -261,38 +270,30 @@ export async function runHrHttpSuite(input: {
     );
     await input.db.featureFlag.update({ where: { key: 'hr_packages' }, data: { enabled: true } });
     assert.equal((await request(cvPath, input.employee)).status, 403);
-    await input.db.employeeProfile.update({
-      where: { id: input.profileId },
-      data: { visibility: 'PRIVATE' },
+    const unlinkedRecruiter = await input.db.user.create({ data: { fullName: 'Unlinked recruiter', role: 'RECRUITER' } });
+    assert.equal((await request(cvPath, unlinkedRecruiter)).status, 403, 'Recruiters without company membership are denied');
+    const otherProfileResume = await input.db.resume.findFirst({
+      where: { profileId: { not: input.profileId }, deletedAt: null, fileKey: { not: null } },
+      select: { id: true },
     });
-    assert.equal(
-      (await request(freeCvPath, input.outsider)).status,
-      404,
-      'Private candidates are hidden from unrelated employers',
-    );
-    assert.equal(
-      (await request(cvPath, input.hr)).status,
-      200,
-      'An existing applicant keeps submitted-company visibility',
-    );
-    await input.db.employeeProfile.update({
-      where: { id: input.profileId },
-      data: { visibility: 'PUBLIC' },
-    });
+    if (otherProfileResume) {
+      assert.equal(
+        (await request('/profiles/candidates/' + input.profileId + '/resumes/' + otherProfileResume.id + '/download?companyId=' + input.companyId, input.hr)).status,
+        404,
+        'A CV attached to another profile cannot be downloaded through this profile',
+      );
+    }
     onFileRead = () =>
-      input.db.employeeProfile
-        .update({ where: { id: input.profileId }, data: { databaseCvEnabled: false } })
+      input.db.resume
+        .update({ where: { id: input.resumeId }, data: { deletedAt: new Date() } })
         .then(() => {});
     assert.equal(
       (await request(cvPath, input.hr)).status,
-      403,
-      'Revocation during storage IO prevents delivery',
+      404,
+      'A CV deleted during storage IO cannot be delivered',
     );
     onFileRead = undefined;
-    await input.db.employeeProfile.update({
-      where: { id: input.profileId },
-      data: { databaseCvEnabled: true },
-    });
+    await input.db.resume.update({ where: { id: input.resumeId }, data: { deletedAt: null } });
     const selected = await input.db.resume.findUniqueOrThrow({ where: { id: input.resumeId } });
     onFileRead = () =>
       input.db.resume
@@ -312,7 +313,7 @@ export async function runHrHttpSuite(input: {
       where: { id: input.resumeId },
       data: { deletedAt: new Date() },
     });
-    assert.equal((await request(cvPath, input.hr)).status, 403, 'Deleted CV cannot be downloaded');
+    assert.equal((await request(cvPath, input.hr)).status, 404, 'Deleted CV cannot be downloaded');
     await input.db.resume.update({ where: { id: input.resumeId }, data: { deletedAt: null } });
     await input.db.company.update({
       where: { id: freeMembership.companyId },
@@ -366,23 +367,16 @@ export async function runHrHttpSuite(input: {
     await input.db.company.update({ where: { id: input.companyId }, data: { isBanned: false } });
     assert.deepEqual(await input.db.candidateCredit.findMany(), creditsBefore);
     assert.deepEqual(await input.db.candidateAccess.findMany(), unlocksBefore);
-    assert.equal(
-      (
-        await request('/profiles/me/database-cv-permission', input.employee, 'PATCH', {
-          enabled: false,
-          resumeId: null,
-        })
-      ).status,
-      200,
-    );
+    assert.equal((await request('/profiles/me/database-cv-permission', input.employee, 'PATCH', { enabled: false })).status, 404);
     assert.equal(
       (
         await request(
-          '/profiles/candidates/' + input.profileId + '/database-cv?companyId=' + input.companyId,
+          '/profiles/candidates/' + input.profileId + '/resumes/' + input.resumeId + '/download?companyId=' + input.companyId,
           input.hr,
         )
       ).status,
-      403,
+      200,
+      'A previously private candidate CV remains available to authorized company HR',
     );
     assert.equal(
       (await request('/hr-support/' + input.ticketId + '/assign-self', input.admin, 'POST', {}))

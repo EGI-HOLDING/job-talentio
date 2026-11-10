@@ -10,7 +10,6 @@ const STATIC_PATHS = [
   '/news',
   '/explore/categories',
   '/explore/cities',
-  '/explore/companies',
   '/terms',
   '/privacy',
 ];
@@ -40,7 +39,7 @@ async function fetchList<T>(path: string): Promise<T[]> {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [jobs, news] = await Promise.all([
     fetchList<{ id: string; updatedAt?: string }>('/jobs?limit=200&sort=newest'),
-    fetchList<{ slug: string; publishedAt?: string }>('/news?limit=24'),
+    fetchList<{ slug: string; publishedAt?: string }>('/news?category=INSIGHT&limit=24'),
   ]);
 
   return [

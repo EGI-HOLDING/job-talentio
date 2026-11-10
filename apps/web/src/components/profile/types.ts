@@ -6,6 +6,8 @@ export type Certification = { id: string; name: string; issuer?: string | null; 
 export type ProfileLanguage = { id: string; level: string; language: { name: string; code: string } };
 export type Resume = { currentVersionId?:string|null; id: string; title: string; isPrimary: boolean; hasFile: boolean; updatedAt?: string; targetJobTitle?: { name: string; slug: string } | null; parseStatus?: string; builderMeta?: { lastExportAt?: string } | null };
 export type CareerProfile = {
+  preferencesRevision?:number;
+  desiredSelections?:import('@/lib/employeePositionPreferences').NamedPositionSelection[];
   id: string;
   headline?: string | null;
   summary?: string | null;
@@ -24,7 +26,6 @@ export type CareerProfile = {
   salaryNegotiable?: boolean;
   noExperience?: boolean;
   city?: City | null;
-  visibility: 'PUBLIC' | 'TO_REGISTERED_RECRUITERS' | 'PRIVATE';
   user: { fullName: string; email?: string | null; avatarUrl?: string | null; emailVerified?: boolean };
   skills: Skill[];
   experiences: Experience[];

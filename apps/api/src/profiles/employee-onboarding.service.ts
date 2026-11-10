@@ -1,4 +1,4 @@
-import { employeePreferenceUpdate, desiredRolesInclude } from '../matching/employee-preferences';
+import { employeePreferenceUpdate, desiredRolesInclude, desiredGroupsInclude, desiredSelectionView } from '../matching/employee-preferences';
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
@@ -14,6 +14,7 @@ import { resolveJobLocation } from "../common/geo-selection";
 
 const include = {
   desiredRoles:desiredRolesInclude,
+  desiredGroups:desiredGroupsInclude,
   user: { select: { fullName: true, email: true } },
   residenceCountry: true,
   preferredCountries: true,
@@ -42,6 +43,7 @@ export class EmployeeOnboardingService {
       draft: profile.onboardingDraft || {},
       profile: {
         ...profile,
+        desiredSelections:desiredSelectionView(profile),
         resumes:profile.resumes.map(({fileKey,...resume})=>({...resume,hasFile:Boolean(fileKey)})),
         desiredSalaryMin:
           profile.desiredSalaryMin === null
@@ -136,7 +138,7 @@ export class EmployeeOnboardingService {
       !Intl.supportedValuesOf("currency").includes(input.desiredSalaryCurrency)
     )
       throw new BadRequestException("Invalid currency");
-    const intentPreferences = await employeePreferenceUpdate(db,input);
+    const intentPreferences = await employeePreferenceUpdate(db,input,before.id);
     const roles =
       input.desiredPositions === undefined
         ? undefined
@@ -185,7 +187,6 @@ export class EmployeeOnboardingService {
         desiredSalaryCurrency: input.desiredSalaryCurrency,
         desiredSalaryPeriod: input.desiredSalaryPeriod,
         salaryNegotiable: input.salaryNegotiable,
-        visibility: input.visibility,
         ...(phone !== undefined ? { phone } : {}),
         onboardingDraft: JSON.parse(
           JSON.stringify(draft),

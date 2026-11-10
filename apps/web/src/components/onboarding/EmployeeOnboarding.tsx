@@ -1,6 +1,6 @@
 'use client';
 import { TaraRunner } from '@/components/screening/TaraPreparation';
-import { employeePositionPreferencesEnabled, positionPreferenceNames } from '@/lib/employeePositionPreferences';
+import { employeePositionPreferencesEnabled, positionPreferenceNames, positionGroupsUiEnabled, positionPreferenceSelections } from '@/lib/employeePositionPreferences';
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -28,13 +28,13 @@ import {
   type SalaryValue,
 } from "./PreferenceFields";
 import s from "./Onboarding.module.css";
+import {PositionSelectionPicker} from "./PositionSelectionPicker";
 
 type Form = EmployeeOnboardingInput &
   SalaryValue & {
     desiredPositions: string[];
     preferredCountryIds: string[];
     fullName: string;
-    visibility: "PUBLIC" | "TO_REGISTERED_RECRUITERS" | "PRIVATE";
   };
 type State = {
   status: "IN_PROGRESS" | "NOT_REQUIRED" | "COMPLETED";
@@ -44,6 +44,8 @@ type State = {
     user: { fullName: string };
     resumes: { id: string; title: string;isPrimary:boolean;hasFile:boolean }[];
     desiredPositions: string[];
+    preferencesRevision?:number;
+    desiredSelections?:import("@/lib/employeePositionPreferences").NamedPositionSelection[];
     desiredRoles?:Array<{jobTitleId:string;jobTitle:{name:string}}>;
     matchingPreferencesReviewed?: boolean;
     preferredCountries: Country[];
@@ -52,7 +54,6 @@ type State = {
     desiredSalaryCurrency: string;
     desiredSalaryPeriod: SalaryValue["desiredSalaryPeriod"];
     salaryNegotiable: boolean;
-    visibility: Form["visibility"];
     noExperience: boolean;
     phone: string | null;
     residenceCountry?: Country | null;
@@ -93,6 +94,8 @@ function Badge({ step }: { step: number }) {
   );
 }
 export function EmployeeOnboarding() {
+  const preferenceRevision=useRef(0);
+  const selectionsTouched=useRef(false);
   const intentText = useEmployeeIntentText();
   const router = useRouter(),
     params = useSearchParams(),
@@ -152,6 +155,8 @@ export function EmployeeOnboarding() {
         setFileName(selectedCv?.title||'');
         setCountries(options);
         setStep(state.step);
+        preferenceRevision.current=p.preferencesRevision??0;
+        selectionsTouched.current=false;
         setForm({
           preferredCountryIds: p.preferredCountries.map((c) => c.id),
           fullName: p.user.fullName,
@@ -162,10 +167,10 @@ export function EmployeeOnboarding() {
           desiredSalaryPeriod:
             p.desiredSalaryMin == null ? "MONTHLY" : p.desiredSalaryPeriod,
           salaryNegotiable: p.salaryNegotiable,
-          visibility: p.visibility,
           noExperience: p.noExperience,
           ...draft,
           desiredPositions: positionPreferenceNames(p),
+          ...(positionGroupsUiEnabled?{desiredSelections:positionPreferenceSelections(p).map(({kind,id})=>({kind,id}))}:{}),
           ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:p.desiredRoles?.map(r=>r.jobTitleId)||[]} : {}),
           resumeId:selectedCv?.id,
           review:null,reviewState:null,manualExperiences:[],
@@ -198,17 +203,20 @@ export function EmployeeOnboarding() {
     // Retain unresolved legacy choices in the draft until the candidate reviews them.
     if (employeePositionPreferencesEnabled && value.desiredPositions.length !== value.desiredJobTitleIds?.length)
       delete payload.desiredJobTitleIds;
+    if(positionGroupsUiEnabled)delete payload.desiredJobTitleIds;
+    if(positionGroupsUiEnabled&&!selectionsTouched.current){delete payload.desiredSelections;delete (payload as Partial<Form>).desiredPositions;}
     const task = queue.current
       .catch(() => {})
       .then(() =>
-        api("/profiles/me/onboarding", {
+        api<State>("/profiles/me/onboarding", {
           method: "PATCH",
-          body: JSON.stringify(payload),
+          body: JSON.stringify({...payload,...(positionGroupsUiEnabled?{preferencesRevision:preferenceRevision.current}:{})}),
         }),
       );
     queue.current = task;
     void task.then(
-      () => {
+      (result) => {
+        if(positionGroupsUiEnabled)preferenceRevision.current=result.profile.preferencesRevision??preferenceRevision.current;
         if (version === saveVersion.current) setSaveState("saved");
       },
       (e) => {
@@ -230,6 +238,7 @@ export function EmployeeOnboarding() {
     if (form && loaded.current && !stopped.current) void persist(form, step);
   }, [form, step]); // eslint-disable-line react-hooks/exhaustive-deps
   function update(value: Partial<Form>) {
+    if(value.desiredSelections!==undefined)selectionsTouched.current=true;
     setError("");
     if (value.phoneDraft !== undefined) setPhoneServerError(undefined);
     setForm((prev) => (prev ? { ...prev, ...value } : prev));
@@ -238,11 +247,11 @@ export function EmployeeOnboarding() {
     if (!form || busy) return;
     let normalizedPhone = form.phone;
     if (targetStep > step) {
-      if (step === 1 && !(employeePositionPreferencesEnabled?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
+      if (step === 1 && !(positionGroupsUiEnabled?form.desiredSelections?.length:employeePositionPreferencesEnabled?form.desiredJobTitleIds?.length:form.desiredPositions.length)) {
         setError(t("requiredRoles"));
         return;
       }
-      if (step === 1 && employeePositionPreferencesEnabled && !form.desiredJobTitleIds?.length) {
+      if (step === 1 && !positionGroupsUiEnabled && employeePositionPreferencesEnabled && !form.desiredJobTitleIds?.length) {
         setError(intentText('legacyPositionsHint'));
         return;
       }
@@ -447,8 +456,8 @@ export function EmployeeOnboarding() {
           disabled={busy || uploading}
           style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
         >
-          {step === 1 && (
-            <RoleInput
+          {step === 1 && (positionGroupsUiEnabled?
+            <PositionSelectionPicker value={(form.desiredSelections??[]).map((selection,i)=>({...selection,name:form.desiredPositions[i]??selection.id}))} onChange={selections=>update({desiredSelections:selections.map(({kind,id})=>({kind,id})),desiredPositions:selections.map(s=>s.name)})}/>:<RoleInput
               value={form.desiredPositions}
               selectedIds={form.desiredJobTitleIds}
               onChange={(v,ids) => update({ desiredPositions: v,...(ids?{desiredJobTitleIds:ids}:{}) })}
@@ -501,26 +510,6 @@ export function EmployeeOnboarding() {
                 label={t("residence")}
                 onChange={(v) => update({ residenceCountryId: v[0] || null })}
               />
-              <div className={s.fields}>
-                <span>{t("visibility")}</span>
-                {(
-                  ["PUBLIC", "TO_REGISTERED_RECRUITERS", "PRIVATE"] as const
-                ).map((v) => (
-                  <label key={v} className={s.visibility}>
-                    <input
-                      type="radio"
-                      name="visibility"
-                      checked={form.visibility === v}
-                      onChange={() => update({ visibility: v })}
-                    />
-                    <span>
-                      <strong>{t(v)}</strong>
-                      <small>{t(`${v}Hint`)}</small>
-                    </span>
-                  </label>
-                ))}
-                <small>{t("changeLater")}</small>
-              </div>
             </>
           )}
           {step === 5 && <>

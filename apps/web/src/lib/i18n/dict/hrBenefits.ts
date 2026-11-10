@@ -64,31 +64,6 @@ export const hrBenefits = {
     uz: 'Boostni yoqish',
     ru: 'Активировать boost',
   },
-  'hr.databaseCv': {
-    en: 'CV database',
-    uz: 'CV bazasi',
-    ru: 'База резюме',
-  },
-  'hr.downloadDatabaseCv': {
-    en: 'Download shared CV',
-    uz: 'Ruxsat berilgan CVni yuklash',
-    ru: 'Скачать доступное резюме',
-  },
-  'hr.cvPermissionHint': {
-    en: 'Your profile visibility does not share your CV file. You can revoke this permission at any time. Submitted applications keep their original CV.',
-    uz: 'Profil ko‘rinishi CV fayliga ruxsat bermaydi. Ruxsatni istalgan payt bekor qilishingiz mumkin. Arizaga yuborilgan CV saqlanadi.',
-    ru: 'Видимость профиля не открывает файл CV. Разрешение можно отозвать. Резюме в отправленных откликах сохраняется.',
-  },
-  'hr.cvPermission': {
-    en: 'Allow registered employers to access my selected CV',
-    uz: 'Ro‘yxatdan o‘tgan ish beruvchilarga tanlangan CVni ochish',
-    ru: 'Разрешить работодателям доступ к выбранному CV',
-  },
-  'hr.chooseCv': {
-    en: 'Choose a CV file',
-    uz: 'CV faylini tanlang',
-    ru: 'Выбрать файл CV',
-  },
   'hr.support': {
     en: 'HR support',
     uz: 'HR yordami',

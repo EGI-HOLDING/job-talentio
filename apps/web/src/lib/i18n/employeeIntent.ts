@@ -1,6 +1,7 @@
 'use client';
 import { useI18n } from '@/lib/i18n';
 const en = {
+"selectedGroupMatches":"Matches selected group: ",
 "salaryUnverifiedTitle":"Relevant positions, salary not yet confirmed",
 "salaryUnverifiedCopy":"These jobs match your position and country preferences, but their salary cannot yet be compared with your target.",
 "salaryUnverifiedView":"View these jobs",
@@ -83,6 +84,7 @@ const en = {
     "confirmAndSave": "Confirm and save"
 };
 const id: Record<keyof typeof en, string> = {
+"selectedGroupMatches":"Sesuai kelompok pilihan: ",
 "salaryUnverifiedTitle":"Posisi relevan, gaji belum dapat dipastikan",
 "salaryUnverifiedCopy":"Lowongan ini memenuhi preferensi posisi dan negara, tetapi gajinya belum dapat dibandingkan dengan target Anda.",
 "salaryUnverifiedView":"Lihat lowongan ini",

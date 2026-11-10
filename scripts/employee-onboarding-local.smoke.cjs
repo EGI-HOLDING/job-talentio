@@ -144,7 +144,6 @@ async function main() {
     {
       fullName: "Jane Doe Test",
       residenceCountryId: country.id,
-      visibility: "PRIVATE",
       step: 5,
     },
     session,

@@ -12,12 +12,14 @@ import { EmployeeMatchingStatusController } from './employee-status.controller';
 import {OccupationRelationsService} from './occupation-relations.service';
 import {OccupationRelationsController} from './occupation-relations.controller';
 import { VacancyTasksService } from './vacancy-tasks.service';
+import {PositionGroupService} from './position-group.service';
+import {PositionGroupsController,PositionGroupsAdminController} from './position-groups.controller';
 
 @Module({
   imports: [PrismaModule,StorageModule],
-  controllers:[EmployeeEvidenceController,EmployeeMatchingStatusController,OccupationRelationsController],
-  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker,OccupationRelationsService,VacancyTasksService],
-  exports: [MatchingService, EmployeeMatchingService,EmployeeCatalogSnapshot],
+  controllers:[EmployeeEvidenceController,EmployeeMatchingStatusController,OccupationRelationsController,PositionGroupsController,PositionGroupsAdminController],
+  providers: [MatchingService, EmployeeMatchingService,EmployeeIntentService,EmployeeEvidenceService,EmployeeCatalogSnapshot,RecruiterEvidenceWorker,OccupationRelationsService,VacancyTasksService,PositionGroupService],
+  exports: [MatchingService, EmployeeMatchingService,EmployeeCatalogSnapshot,PositionGroupService],
 })
 export class MatchingModule implements OnModuleInit,OnModuleDestroy {
   private timer?:ReturnType<typeof setInterval>;

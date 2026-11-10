@@ -7,9 +7,8 @@ import { api, getSession } from '@/lib/api';
 import { authLink } from '@/lib/authReturn';
 import { useI18n } from '@/lib/i18n';
 import { LandingIcon } from './LandingSections';
-import type { TopCompany } from './TopCompaniesCarousel';
+import type { TopCompany } from './FeaturedCompaniesCarousel';
 import type { NewsListItem } from '@/lib/newsSeo';
-import { NEWS_CATEGORY_LABEL_KEY } from '@/components/news/NewsCard';
 import hero from './SeekerHero.module.css';
 import sections from './LandingSections.module.css';
 import s from './EmployerLanding.module.css';
@@ -76,7 +75,7 @@ export function EmployerLanding() {
 
       {<section id="hiring-insights" aria-labelledby="employer-insights"><div className={sections.heading}><div><h2 id="employer-insights">{t('employers.insights')}</h2><p>{t('employers.insightsSub')}</p></div><Link href="/news">{t('landing.allArticles')}<LandingIcon /></Link></div>
         {!news.length && <p className={s.articleEmpty}>{t('employers.insightsSub')} <Link href="/news">{t('landing.allArticles')} →</Link></p>}<div className={sections.news}>{news.map((item) => <Link className={sections.article} key={item.slug} href={`/news/${item.slug}`}>
-          {item.coverUrl && <img src={item.coverUrl} alt="" loading="lazy" />}<div className={sections.articleBody}><div className={sections.articleMeta}><span className={sections.badge}>{t(NEWS_CATEGORY_LABEL_KEY[item.category])}</span></div><h3>{item.title}</h3><span className={`${sections.readMore} ${s.articleLink}`}>{t('readMore')}<LandingIcon /></span></div>
+          {item.coverUrl && <img src={item.coverUrl} alt="" loading="lazy" />}<div className={sections.articleBody}><div className={sections.articleMeta}><span className={sections.badge}>{t('employers.insights')}</span></div><h3>{item.title}</h3><span className={`${sections.readMore} ${s.articleLink}`}>{t('readMore')}<LandingIcon /></span></div>
         </Link>)}</div>
       </section>}
 

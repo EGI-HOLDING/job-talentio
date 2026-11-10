@@ -16,7 +16,7 @@ export function LandingFooter({ employer = false }: { employer?: boolean }) {
     [['/employers#hiring-insights', 'employers.insights'], ['/terms', 'termsOfService'], ['/privacy', 'privacyPolicy']],
     signedInEmployer ? [['/dashboard/recruiter?tab=jobs', 'jobs']] : [['/', 'employers.seekers']],
   ] : [
-    [['/jobs', 'home.findJobs'], ['/explore/companies', 'companiesStat'], ['/news', 'landing.insights']],
+    [['/jobs', 'home.findJobs']],
     [['/explore/categories', 'landing.field'], ['/explore/cities', 'landing.locations'], ['/explore/titles', 'landing.roles']],
     [['/employers', 'recruiterHeroBadge'], ['/terms', 'termsOfService'], ['/privacy', 'privacyPolicy']],
   ];

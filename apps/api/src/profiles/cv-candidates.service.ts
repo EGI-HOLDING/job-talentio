@@ -6,7 +6,7 @@ import { MatchingService } from '../matching/matching.service';
 import { CompaniesService } from '../companies/companies.service';
 import { PresenceService } from '../presence/presence.service';
 import { CandidateAccessService } from './candidate-access.service';
-import { cvSourceInclude, cvSourceWhere, discoveryVersion, withCvFacts } from './cv-evidence';
+import { cvSourceInclude, cvSourceWhere, cvVersionSelect, discoveryVersion, withCvFacts } from './cv-evidence';
 import { applicationCvProfile } from './cv-source';
 import { submittedResume } from '../applications/application-payload';
 import { hrEnabled, type HrProfile } from '../matching/recruiter-ranking';
@@ -18,6 +18,7 @@ import type { AuthUser } from '../common/auth.decorators';
 import type { ProfilesService } from './profiles.service';
 
 const include={...cvSourceInclude,user:{select:{id:true,fullName:true,avatarUrl:true}},city:{include:{province:{include:{country:true}}}},residenceCountry:true,preferredCountries:true,languages:{include:{language:true}},certifications:true} satisfies Prisma.EmployeeProfileInclude;
+const detailInclude={...include,resumes:{where:{deletedAt:null,fileKey:{not:null}},orderBy:{updatedAt:'desc' as const},include:{currentVersion:{select:cvVersionSelect}}}} satisfies Prisma.EmployeeProfileInclude;
 type Candidate=Prisma.EmployeeProfileGetPayload<{include:typeof include}>;
 const project=(row:Candidate)=>({...withCvFacts(row,discoveryVersion(row)),experienceYears:(discoveryVersion(row) as {experienceYears?:number|null}|null)?.experienceYears??null,matchScore:null as number|null,matchBreakdown:null as RecruiterBreakdown|null});
 
@@ -29,7 +30,7 @@ export class CvCandidatesService {
     const company=await this.access.context(user,query.companyId||undefined);
     if(query.matchJobId){const job=await this.db.jobPost.findUnique({where:{id:query.matchJobId}});if(!job)throw new NotFoundException('Job unavailable');if(job.companyId!==company)throw new ForbiddenException('Job and company context differ');if(!job.publishedAt||job.status==='DRAFT')throw new BadRequestException('Publish this job before ranking candidates');}
     const csv=(v?:string)=>(v||'').split(',').map(s=>s.trim()).filter(Boolean);
-    const and:Prisma.EmployeeProfileWhereInput[]=[{visibility:{in:['PUBLIC','TO_REGISTERED_RECRUITERS']}},{user:{isBanned:false,anonymizedAt:null}}];
+    const and:Prisma.EmployeeProfileWhereInput[]=[{user:{isBanned:false,anonymizedAt:null}}];
     if(query.excludeApplied&&query.matchJobId)and.push({applications:{none:{jobPostId:query.matchJobId}}});
     if(csv(query.city).length)and.push({city:{slug:{in:csv(query.city)}}});
     if(csv(query.country).length)and.push({OR:[{residenceCountry:{slug:{in:csv(query.country)}}},{residenceCountryId:null,city:{province:{country:{slug:{in:csv(query.country)}}}}}]});
@@ -56,7 +57,7 @@ export class CvCandidatesService {
     const catalog=await this.db.jobTitle.findMany({where:ACTIVE_CATALOG,include:{aliases:true}});
     for(const row of sample){add(cities,row.city);for(const s of row.skills)add(skills,s.skill);const keys=new Set([row.headline,...row.cvRoleTitles,...row.experiences.map(e=>e.title)].filter((s):s is string=>Boolean(s)).map(normalizeJobTitleKey));for(const t of catalog)if([t.normalizedKey,t.name,t.nameId,t.nameUz,t.nameRu,...t.aliases.map(a=>a.alias)].some(label=>label&&keys.has(normalizeJobTitleKey(label))))add(titles,t);}
     const presence=await this.presence.getPresence(items.map(p=>p.user.id));
-    return {items:items.map(p=>({id:p.id,user:p.user,headline:p.headline,city:p.city,residenceCountry:p.residenceCountry,desiredPositions:p.desiredPositions,desiredPosition:p.desiredPosition,desiredSalaryMin:p.desiredSalaryMin,desiredSalaryCurrency:p.desiredSalaryCurrency,skills:p.skills.map(s=>({id:s.id,skillId:s.skillId,skill:s.skill})),experienceYears:p.experienceYears,languages:p.languages,certifications:p.certifications,cvSource:p.cvSource,matchScore:p.matchScore,matchBreakdown:p.matchBreakdown,contactsBlurred:false,canReadCv:Boolean(p.databaseCvEnabled&&p.databaseResume?.fileKey&&!p.databaseResume.deletedAt),presence:presence[p.user.id]??null})),total,matchedTotal:total,truncated:false,page,limit,totalPages:Math.max(1,Math.ceil(total/limit)),limited:false,facets:{cities:[...cities.values()].slice(0,80),skills:[...skills.values()].slice(0,80),jobTitles:[...titles.values()].slice(0,80)}};
+    return {items:items.map(p=>({id:p.id,user:p.user,headline:p.headline,city:p.city,residenceCountry:p.residenceCountry,desiredPositions:p.desiredPositions,desiredPosition:p.desiredPosition,desiredSalaryMin:p.desiredSalaryMin,desiredSalaryCurrency:p.desiredSalaryCurrency,skills:p.skills.map(s=>({id:s.id,skillId:s.skillId,skill:s.skill})),experienceYears:p.experienceYears,languages:p.languages,certifications:p.certifications,cvSource:p.cvSource,matchScore:p.matchScore,matchBreakdown:p.matchBreakdown,contactsBlurred:false,presence:presence[p.user.id]??null})),total,matchedTotal:total,truncated:false,page,limit,totalPages:Math.max(1,Math.ceil(total/limit)),limited:false,facets:{cities:[...cities.values()].slice(0,80),skills:[...skills.values()].slice(0,80),jobTitles:[...titles.values()].slice(0,80)}};
   }
 
   async get(user:AuthUser,profileId:string,jobId?:string,companyId?:string) {
@@ -65,16 +66,16 @@ export class CvCandidatesService {
     const company=await this.access.context(user,companyId||job?.companyId);
     if(job&&job.companyId!==company)throw new ForbiddenException('Job and company context differ');
     const {applicant}=await this.access.candidate(user,company,profileId);
-    const profile=await this.db.employeeProfile.findUniqueOrThrow({where:{id:profileId},include});
+    const profile=await this.db.employeeProfile.findUniqueOrThrow({where:{id:profileId},include:detailInclude});
     let source=project(profile) as ReturnType<typeof project>&HrProfile;let match:RecruiterBreakdown|null=null;
     let applicationForJob:{id:string;resumeTitle:string|null;hasResumeFile:boolean;status:string;kanbanEnteredAt:Date|null;canAddToKanban:boolean}|null=null;
-    let cv:{title:string|null;hasFile:boolean;format?:string;downloadPath:string;application:boolean}|null=null;
-    if(job){const application=await this.db.application.findUnique({where:{jobPostId_profileId:{jobPostId:job.id,profileId}}});if(application){if(!hrEnabled())source={...source,...await applicationCvProfile(this.db,application,profile)};const submitted=submittedResume(application.resumeSnapshot);applicationForJob={id:application.id,resumeTitle:submitted.title,hasResumeFile:Boolean(submitted.fileKey),status:application.status,kanbanEnteredAt:application.kanbanEnteredAt,canAddToKanban:!application.kanbanEnteredAt&&!['WITHDRAWN','REJECTED','HIRED'].includes(application.status)};cv={title:submitted.title,hasFile:Boolean(submitted.fileKey),format:submitted.fileKey?.split('.').pop()?.toLowerCase(),downloadPath:'/applications/'+application.id+'/resume-download',application:true};}if(!hrEnabled()&&source.cvSource.status==='READY')match=await this.matching.scoreInputs(source,job);}
-    if(!applicationForJob&&profile.databaseCvEnabled&&profile.databaseResume?.fileKey&&!profile.databaseResume.deletedAt)cv={title:profile.databaseResume.title,hasFile:true,format:profile.databaseResume.fileKey.split('.').pop()?.toLowerCase(),downloadPath:'/profiles/candidates/'+profileId+'/database-cv?companyId='+company,application:false};
+    let applicationCv:{key:string;title:string|null;hasFile:boolean;format?:string;downloadPath:string;application:true}|null=null;
+    if(job){const application=await this.db.application.findUnique({where:{jobPostId_profileId:{jobPostId:job.id,profileId}}});if(application){if(!hrEnabled())source={...source,...await applicationCvProfile(this.db,application,profile)};const submitted=submittedResume(application.resumeSnapshot);applicationForJob={id:application.id,resumeTitle:submitted.title,hasResumeFile:Boolean(submitted.fileKey),status:application.status,kanbanEnteredAt:application.kanbanEnteredAt,canAddToKanban:!application.kanbanEnteredAt&&!['WITHDRAWN','REJECTED','HIRED'].includes(application.status)};applicationCv={key:'application:'+application.id,title:submitted.title,hasFile:Boolean(submitted.fileKey),format:submitted.fileKey?.split('.').pop()?.toLowerCase(),downloadPath:'/applications/'+application.id+'/resume-download',application:true};}if(!hrEnabled()&&source.cvSource.status==='READY')match=await this.matching.scoreInputs(source,job);}
+    const resumeFiles=profile.resumes.filter(resume=>resume.fileKey&&!resume.deletedAt).map(resume=>({key:'resume:'+resume.id,id:resume.id,title:resume.title,isPrimary:resume.isPrimary,updatedAt:resume.updatedAt,hasFile:true as const,format:resume.fileKey!.split('.').pop()?.toLowerCase(),downloadPath:'/profiles/candidates/'+profileId+'/resumes/'+resume.id+'/download?companyId='+encodeURIComponent(company),application:false as const}));
     if(hrEnabled()&&job){
       if(applicationForJob){const window=await rankHrApplications(this.db,{jobPostId:job.id},job.id);const p=window.profiles.get(applicationForJob.id);if(p)source={...source,...p} as typeof source;match=window.scores.get(applicationForJob.id)??null;}
       else {source={...source,...(await this.matching.hrDatabaseInputs([source]))[0],city:source.city,preferredCountries:source.preferredCountries,languages:source.languages,experiences:source.experiences};match=await this.matching.scoreInputs(source,job);}
     }
-    return {id:profile.id,user:profile.user,headline:source.headline,city:profile.city,residenceCountry:profile.residenceCountry,skills:source.skills.map(s=>({id:s.id,skill:s.skill})).slice(0,8),languages:hrEnabled()&&source.hr?source.hr.facts.languages.map(l=>({id:l.key,language:{name:l.code,code:l.code},level:l.level})):source.languages,certifications:hrEnabled()&&source.hr?source.hr.facts.certifications??[]:source.certifications,cvSource:source.cvSource,cv,match,applicationForJob,contactsBlurred:false,appliedToMyCompany:applicant,presence:await this.presence.getOne(profile.user.id)};
+    return {id:profile.id,user:profile.user,headline:source.headline,city:profile.city,residenceCountry:profile.residenceCountry,skills:source.skills.map(s=>({id:s.id,skill:s.skill})).slice(0,8),languages:hrEnabled()&&source.hr?source.hr.facts.languages.map(l=>({id:l.key,language:{name:l.code,code:l.code},level:l.level})):source.languages,certifications:hrEnabled()&&source.hr?source.hr.facts.certifications??[]:source.certifications,cvSource:source.cvSource,applicationCv,resumeFiles,match,applicationForJob,contactsBlurred:false,appliedToMyCompany:applicant,presence:await this.presence.getOne(profile.user.id)};
   }
 }

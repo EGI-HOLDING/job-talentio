@@ -1,5 +1,5 @@
 export const cvSource = {
-  'cv.previewHint': {id:'Buka CV untuk meninjau dokumen yang dibagikan kandidat.',en:'Open the CV to review the document shared by the candidate.',ru:'Откройте резюме, чтобы просмотреть документ кандидата.',uz:'Nomzod ulashgan hujjatni ko‘rish uchun CV ni oching.'},
+  'cv.previewHint': {id:'Buka CV untuk meninjau dokumen kandidat.',en:'Open the CV to review the candidate’s document.',ru:'Откройте резюме, чтобы просмотреть документ кандидата.',uz:'Nomzod hujjatini ko‘rish uchun CV ni oching.'},
   'cv.hrPending': {id:'Data CV sedang dibaca. Berkas tetap dapat dibuka.',en:'CV data is being processed. The file can still be opened.',ru:'Данные резюме обрабатываются. Файл уже можно открыть.',uz:'CV ma’lumotlariga ishlov berilmoqda. Faylni ochish mumkin.'},
   'cv.hrFailed': {id:'Data CV belum dapat dibaca. Penilaian otomatis belum tersedia.',en:'CV data could not be read. Automatic assessment is not available yet.',ru:'Данные резюме не прочитаны. Автоматическая оценка пока недоступна.',uz:'CV ma’lumotlari o‘qilmadi. Avtomatik baholash hali mavjud emas.'},
   'cv.addPreferences': {id:'Tentukan posisi yang dicari',en:'Set your preferred roles',ru:'Укажите желаемые должности',uz:'Istalgan lavozimlarni tanlang'},
@@ -19,8 +19,10 @@ export const cvSource = {
   'cv.saved': {id:'CV tersimpan. Kamu bisa melanjutkan; rekomendasi disiapkan otomatis.',en:'CV saved. You can continue while recommendations are prepared automatically.',ru:'Резюме сохранено. Можно продолжить: рекомендации готовятся автоматически.',uz:'CV saqlandi. Davom etishingiz mumkin; tavsiyalar avtomatik tayyorlanadi.'},
   'cv.additional': {id:'Informasi tambahan kandidat',en:'Additional candidate information',ru:'Дополнительные сведения кандидата',uz:'Nomzodning qo‘shimcha ma’lumotlari'},
   'cv.applicationFile': {id:'CV yang dikirim pada lamaran ini',en:'CV submitted with this application',ru:'Резюме из этого отклика',uz:'Ushbu ariza bilan yuborilgan CV'},
-  'cv.databaseFile': {id:'CV database kandidat',en:'Candidate database CV',ru:'Резюме из базы кандидатов',uz:'Nomzodlar bazasidagi CV'},
-  'cv.notShared': {id:'CV tidak tersedia pada konteks ini.',en:'A CV is not available in this context.',ru:'Резюме недоступно в этом контексте.',uz:'Bu holatda CV mavjud emas.'},
+  'cv.profileFile': {id:'CV profil kandidat',en:'Candidate profile CV',ru:'Резюме в профиле кандидата',uz:'Nomzod profilidagi CV'},
+  'cv.selectDocument': {id:'Pilih dokumen CV',en:'Choose a CV document',ru:'Выберите резюме',uz:'CV hujjatini tanlang'},
+  'cv.primaryFile': {id:'CV utama',en:'Primary CV',ru:'Основное резюме',uz:'Asosiy CV'},
+  'cv.noFile': {id:'Tidak ada file CV aktif yang tersedia.',en:'No active CV file is available.',ru:'Нет доступного активного файла резюме.',uz:'Faol CV fayli mavjud emas.'},
   'cv.basedOn': {id:'Rekomendasi berdasarkan CV utama',en:'Recommendations based on your primary CV',ru:'Рекомендации по основному резюме',uz:'Asosiy CV asosidagi tavsiyalar'},
   'cv.preferencesOnly': {id:'Sementara berdasarkan preferensi pekerjaan. Kecocokan CV tersedia setelah pemrosesan selesai.',en:'Based on job preferences for now. CV matching is available once processing finishes.',ru:'Пока учитываются предпочтения. Соответствие резюме появится после обработки.',uz:'Hozircha ish bo‘yicha istaklar hisobga olinadi. CV mosligi ishlov tugagach ko‘rsatiladi.'},
 } as const;

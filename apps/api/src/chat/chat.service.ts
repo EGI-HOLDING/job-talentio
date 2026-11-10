@@ -311,11 +311,11 @@ export class ChatService {
 
       if (!hasApplication && !peerInitiated) {
         if (peer.role !== 'EMPLOYEE') throw new NotFoundException('User not found');
-        const candidateProfile = await this.prisma.employeeProfile.findUnique({
-          where: { userId: peerUserId },
-          select: { visibility: true },
+        const candidateProfile = await this.prisma.employeeProfile.findFirst({
+          where: { userId: peerUserId, user: { isBanned: false, anonymizedAt: null } },
+          select: { id: true },
         });
-        if (!candidateProfile || candidateProfile.visibility === 'PRIVATE') {
+        if (!candidateProfile) {
           throw new NotFoundException('User not found');
         }
         isColdOutreach = true;
@@ -456,8 +456,7 @@ export class ChatService {
   }
 
   /**
-   * Batch company / job / candidate-profile context for the inbox header.
-   * Candidate ids follow the same PRIVATE gate as GET /profiles/candidates/:id.
+   * Batch company / job / active candidate-profile context for the inbox header.
    */
   private async inboxContextFor(
     user: AuthUser,
@@ -485,32 +484,13 @@ export class ChatService {
     const profiles =
       employeePeerIds.length > 0
         ? await this.prisma.employeeProfile.findMany({
-            where: { userId: { in: employeePeerIds } },
-            select: { id: true, userId: true, visibility: true },
+            where: { userId: { in: employeePeerIds }, user: { isBanned: false, anonymizedAt: null } },
+            select: { id: true, userId: true },
           })
         : [];
 
-    const privateProfileIds = profiles
-      .filter((p) => p.visibility === 'PRIVATE')
-      .map((p) => p.id);
-    const viewerCompanyIds = (user.memberships ?? []).map((m) => m.companyId).filter(Boolean);
-    const appliedProfileIds = new Set<string>();
-    if (user.role === 'SUPER_ADMIN') {
-      for (const id of privateProfileIds) appliedProfileIds.add(id);
-    } else if (privateProfileIds.length > 0 && viewerCompanyIds.length > 0) {
-      const applied = await this.prisma.application.findMany({
-        where: {
-          profileId: { in: privateProfileIds },
-          jobPost: { companyId: { in: viewerCompanyIds } },
-        },
-        select: { profileId: true },
-      });
-      for (const row of applied) appliedProfileIds.add(row.profileId);
-    }
-
     const peerCandidateByUserId = new Map<string, string>();
     for (const profile of profiles) {
-      if (profile.visibility === 'PRIVATE' && !appliedProfileIds.has(profile.id)) continue;
       peerCandidateByUserId.set(profile.userId, profile.id);
     }
 

@@ -71,24 +71,14 @@
 .jobRow:hover { background: #fbfaff; }
 .selectedRow { background: #f5f2ff; box-shadow: inset 3px 0 0 var(--purple); }
 .selectedRow:hover { background: #f1edff; }
-.jobLink { display: flex; align-items: flex-start; gap: 14px; min-height: 118px; padding: 20px 44px 18px 20px; }
-.jobLogo { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; overflow: hidden; border: 1px solid #e6eaf3; border-radius: 9px; color: var(--purple); background: #fff; font-size: 1.1rem; font-weight: 600; }
-.jobLogo img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+.jobLink { display: flex; align-items: center; gap: 14px; min-height: 84px; padding: 14px 52px 14px 20px; }
 .jobCopy { flex: 1; min-width: 0; }
 .rowHeading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 8px; }
-.page:not(.withPreview) .jobCopy { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; }
-.page:not(.withPreview) .rowHeading { grid-column: 1; grid-row: 1; }
-.page:not(.withPreview) .companyMeta { grid-column: 1; grid-row: 2; }
-.page:not(.withPreview) .jobMeta { grid-column: 1; grid-row: 3; }
-.page:not(.withPreview) .jobSalary { grid-column: 2; grid-row: 1 / 4; align-self: center; margin-top: 0; font-size: .88rem; }
 .jobCopy h2 { margin: 0; color: #15203b; font-family: var(--font-display); font-size: .96rem; font-weight: 700; line-height: 1.4; letter-spacing: -.025em; overflow-wrap: anywhere; }
-.companyMeta { margin: 3px 0 8px; font-size: .78rem; color: #7b879f; line-height: 1.4; }
-
-.jobMeta { display: flex; align-items: center; gap: 7px 12px; flex-wrap: wrap; color: #8590a6; font-size: .68rem; line-height: 1.4; }
-.jobMeta > span { display: inline-flex; align-items: center; gap: 4px; }
-.jobMeta svg { width: 13px; height: 13px; flex-shrink: 0; }
-.jobSalary { display: block; margin-top: 8px; color: #008d79; font-size: .79rem; font-weight: 600; line-height: 1.4; }
-.saveButton { position: absolute; right: 12px; top: 18px; display: grid; place-items: center; width: 30px; height: 30px; padding: 4px; color: #8d98ad; background: transparent; }
+.companyMeta { display: flex; align-items: center; gap: 5px 8px; min-width: 0; margin: 2px 0 0; color: #7b879f; font-size: .78rem; line-height: 1.4; }
+.companyMeta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.promotionControl { position: relative; z-index: 2; display: inline-flex; flex-shrink: 0; }
+.saveButton { position: absolute; z-index: 3; top: 50%; right: 12px; display: grid; place-items: center; width: 30px; height: 30px; padding: 4px; transform: translateY(-50%); color: #8d98ad; background: transparent; }
 .saveButton:hover { color: var(--purple); background: #ece7ff; }
 .saveButton[aria-pressed=true] { color: var(--purple); }
 .activeChips { display: flex; flex-shrink: 0; flex-wrap: wrap; gap: 6px; max-height: 90px; overflow-y: auto; padding: 9px 18px; border-bottom: 1px solid var(--line); }
@@ -199,7 +189,6 @@
 .recommendationHeading p { margin: 5px 0 0; color: #8993a6; font-size: .72rem; }
 .refreshButton { display: grid; place-items: center; width: 34px; height: 34px; padding: 7px; background: #fff; color: #8a94a8; border: 1px solid #e8ecf3; }
 .refreshButton:hover { color: var(--purple); background: #f7f4ff; }
-.personalized .jobLink { padding-bottom: 10px; }
 .personalizeBanner { display: flex; align-items: flex-start; gap: 12px; margin: 20px; padding: 17px 20px; border: 1px solid #ebe5ff; border-radius: 9px; background: #faf8ff; color: #4f3b91; }
 .personalizeBanner > svg { flex-shrink: 0; margin-top: 2px; color: #7f5ee3; }
 .personalizeBanner strong { font-size: .8rem; }
@@ -215,15 +204,7 @@
 @media (min-width: 1024px) {
   .employeePage .jobCopy h2 { font-size: 1rem; }
   .employeePage .companyMeta { font-size: .8rem; }
-  .employeePage .jobMeta { font-size: .72rem; }
   .employeePage .resultsToolbar { min-height: 70px; }
-}
-@media (min-width: 1024px) {
-  .page:not(.withPreview) .jobLink { min-height: 98px; align-items: center; padding-block: 17px; }
-  .page:not(.withPreview) .jobCopy { grid-template-columns: minmax(200px, 1.2fr) minmax(190px, 1fr) minmax(160px, auto); align-items: center; }
-  .page:not(.withPreview) .companyMeta { margin-bottom: 0; }
-  .page:not(.withPreview) .jobMeta { grid-column: 2; grid-row: 1 / 3; align-self: center; }
-  .page:not(.withPreview) .jobSalary { grid-column: 3; grid-row: 1 / 3; text-align: right; }
 }
 @media (max-width: 1439px) {
   .workspace { grid-template-columns: minmax(0, 1fr); }
@@ -260,8 +241,6 @@
   .standalone .previewScroll { padding: 22px 0; }
   .standalone .previewTitle { font-size: 1.65rem; }
   .standalone .description { font-size: .88rem; }
-  .page:not(.withPreview) .jobCopy { display: block; }
-  .page:not(.withPreview) .jobSalary { margin-top: 8px; font-size: .76rem; }
   .page { min-height: 0; }
   .searchHeader { padding: 16px; }
   .searchForm { grid-template-columns: minmax(0, 1fr) 90px; gap: 8px; }
@@ -276,14 +255,10 @@
   .resultControls { gap: 9px; }
   .sortSelect { width: 112px; font-size: .72rem; padding-block: 7px; }
 
-  .jobLink { gap: 11px; padding: 17px 42px 16px 16px; min-height: 126px; }
-  .jobLogo { width: 39px; height: 39px; }
+  .jobLink { gap: 11px; padding: 12px 42px 12px 16px; min-height: 76px; }
   .jobCopy h2 { font-size: .9rem; }
-  .companyMeta { font-size: .74rem; margin-bottom: 7px; }
-  .jobMeta { font-size: .65rem; gap: 5px 8px; }
-  .jobMeta > span:last-child:nth-child(3) { display: none; }
-  .jobSalary { font-size: .76rem; }
-  .saveButton { right: 9px; top: 15px; }
+  .companyMeta { font-size: .74rem; margin-top: 2px; }
+  .saveButton { right: 9px; }
   .pagination { gap: 7px; padding: 10px 12px; }
   .pagination > .perPage { width: 84px; }
   .pagination :global(.pagination-meta) { width: 100%; }
@@ -330,12 +305,11 @@
   .recommendationEnd { padding: 18px 16px; }
 }
 
-.companyMeta { display:flex; align-items:center; flex-wrap:wrap; gap:5px 8px; }
-.companyMeta > span:first-child { min-width:0; overflow-wrap:anywhere; }
+.companyMeta { display:flex; align-items:center; flex-wrap:nowrap; gap:5px 8px; }
+.companyMeta > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .jobTitleLink { color:inherit; }
 .jobTitleLink::after { content:''; position:absolute; inset:0; z-index:1; }
 .jobTitleLink:focus-visible { outline:2px solid var(--purple); outline-offset:3px; }
 .promotionControl { position:relative; z-index:2; display:inline-flex; }
-.saveButton { z-index:3; }
 .previewCompanyHeading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
 .previewCompanyHeading > strong { min-width:0; overflow-wrap:anywhere; }

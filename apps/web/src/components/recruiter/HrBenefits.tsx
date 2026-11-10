@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { api, ApiError, apiBlob } from '@/lib/api';
+import { useEffect, useState } from 'react';
+import { api, ApiError } from '@/lib/api';
 import { postOnce } from '@/lib/hr-benefits';
 import { useI18n } from '@/lib/i18n';
 import s from './RecruiterWorkspace.module.css';
@@ -130,75 +130,5 @@ export function JobBenefits({ jobId, status }: { jobId: string; status: string }
       )}
       {error && <span role="alert">{error}</span>}
     </div>
-  );
-}
-export function DatabaseCvAccess({
-  profileId,
-  companyId,
-}: {
-  profileId: string;
-  companyId: string;
-}) {
-  const { t } = useI18n();
-  const request = useRef(0);
-  const [data, setData] = useState<any>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
-  useEffect(() => {
-    let active = true;
-    ++request.current;
-    setData(null);
-    setError('');
-    api('/profiles/candidates/' + profileId + '/access?companyId=' + companyId)
-      .then((value) => {
-        if (active) setData(value);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-      ++request.current;
-    };
-  }, [profileId, companyId]);
-  async function download() {
-    if (busy) return;
-    const version = request.current;
-    setBusy(true);
-    setError('');
-    try {
-      const blob = await apiBlob(
-        '/profiles/candidates/' + profileId + '/database-cv?companyId=' + companyId,
-      );
-      if (version !== request.current) return;
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      const extension =
-        blob.type === 'application/pdf'
-          ? 'pdf'
-          : blob.type === 'application/msword'
-            ? 'doc'
-            : blob.type ===
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-              ? 'docx'
-              : 'bin';
-      anchor.download = 'candidate-cv.' + extension;
-      anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      if (version === request.current)
-        setError(error instanceof Error ? error.message : t('ew.loadFailed'));
-    } finally {
-      if (version === request.current) setBusy(false);
-    }
-  }
-  if (!data?.canReadCv) return null;
-  return (
-    <section>
-      <h3>{t('hr.databaseCv')}</h3>
-      <button className={s.secondary} disabled={busy} onClick={() => void download()}>
-        {t(busy ? 'loading' : 'hr.downloadDatabaseCv')}
-      </button>
-      {error && <p role="alert">{error}</p>}
-    </section>
   );
 }

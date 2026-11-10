@@ -362,33 +362,11 @@
 }
 .check input,
 .countryOptions input[type="checkbox"],
-.countryOptions input[type="radio"],
-.visibility input {
+.countryOptions input[type="radio"] {
   width: 19px;
   height: 19px;
   accent-color: var(--on-purple);
   flex-shrink: 0;
-}
-.visibility {
-  display: flex;
-  gap: 15px;
-  align-items: flex-start;
-  border: 1px solid #cdd6e6;
-  border-radius: 9px;
-  padding: 16px;
-  font-weight: 400 !important;
-}
-.visibility:has(:checked) {
-  background: #f2eeff;
-  border-color: var(--on-purple);
-}
-.visibility strong {
-  display: block;
-  margin-bottom: 6px;
-}
-.visibility small {
-  display: block;
-  font-weight: 400;
 }
 .empty {
   text-align: center;

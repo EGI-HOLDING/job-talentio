@@ -190,10 +190,6 @@ const REQUIRED_SKILLS_MISS_CAP = 12;
 const FOR_YOU_JOBS_LIMIT = 300;
 const FOR_YOU_SCAN_BATCH = 100;
 
-const VISIBLE_PROFILE = {
-  in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] as ['PUBLIC', 'TO_REGISTERED_RECRUITERS'],
-};
-
 function skillIdentityKey(skill: SkillRef): string {
   if (skill.normalizedKey) {
     return normalizeSkillKey(skill.normalizedKey) || skill.normalizedKey;
@@ -600,7 +596,7 @@ export class MatchingService {
     let cursor:string|undefined;
     let ranked:Array<{profile:Candidate;matchScore:number;matchBreakdown:RecruiterBreakdown}>=[];
     while(true) {
-      const batch=await this.prisma.employeeProfile.findMany({where:{visibility:VISIBLE_PROFILE,user:{isBanned:false,anonymizedAt:null},applications:{none:{jobPostId}}},include,take:100,orderBy:{id:'asc'},...(cursor?{cursor:{id:cursor},skip:1}:{})});
+      const batch=await this.prisma.employeeProfile.findMany({where:{user:{isBanned:false,anonymizedAt:null},applications:{none:{jobPostId}}},include,take:100,orderBy:{id:'asc'},...(cursor?{cursor:{id:cursor},skip:1}:{})});
       const scored=batch.map(profile=>{const matchBreakdown=evaluateRecruiter(withCvFacts(profile,discoveryVersion(profile)),context.job,context.index,context.now);return {profile,matchScore:matchBreakdown.total,matchBreakdown};}).filter(row=>row.matchBreakdown.positiveCore);
       ranked=[...ranked,...scored].sort((a,b)=>compareRecruiterMatches(a.matchBreakdown,b.matchBreakdown)||a.profile.id.localeCompare(b.profile.id)).slice(0,resultLimit);
       if(batch.length<100)break;

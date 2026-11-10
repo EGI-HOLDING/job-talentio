@@ -467,69 +467,10 @@ test('job workspace uses the CV candidate table, retires Kanban, preserves draft
   job={...job,status:'PUBLISHED',publishedAt:'2026-10-25'};member=false;const priorRemembered=remembered.length;ui=host('apps/web/src/components/recruiter/RecruiterJobWorkspace.tsx','RecruiterJobWorkspace',dependencies);tree=await ui.render({});assert.equal(nodes(tree,node=>node.type===Ranking).length,0);assert.match(JSON.stringify(tree),/rw.noCompanyHint/);assert.equal(remembered.length,priorRemembered,'Unauthorized jobs cannot change the selected company');ui.unmount();
 });
 
-test('CV download is direct, has no unlock/credit UI, and ignores a response after navigation', async () => {
-  const urls = [],
-    clicks = [],
-    requests = [];
-  let downloading = deferred();
-  const ui = host(
-    'apps/web/src/components/recruiter/HrBenefits.tsx',
-    'DatabaseCvAccess',
-    {
-      '@/components/employee/WorkspaceIcon': {WorkspaceIcon:()=>null},
-      '@/lib/navigation': {Link:()=>null},
-      '@/lib/jobCommerce': {packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},
-      '@/lib/i18n': t,
-      '@/lib/api': {
-        ApiError,
-        api: async (route) => {
-          requests.push(route);
-          return { canReadCv: true };
-        },
-        apiBlob: (route) => {
-          urls.push(route);
-          return downloading.promise;
-        },
-      },
-      '@/lib/hr-benefits': {
-        postOnce: () => {
-          throw Error('CV must not unlock');
-        },
-      },
-    },
-    {
-      URL: { createObjectURL: () => 'blob:synthetic', revokeObjectURL() {} },
-      document: { createElement: () => ({ click: () => clicks.push('download') }) },
-    },
-  );
-  let tree = await ui.render({ profileId: 'candidate', companyId: 'free-company' });
-  assert.equal(nodes(tree, (node) => node.type === 'button').length, 1);
-  assert.doesNotMatch(JSON.stringify(tree), /unlock|credit|quota|balance/i);
-  nodes(tree, (node) => node.type === 'button')[0].props.onClick();
-  downloading.resolve({ type: 'application/pdf' });
-  await ui.render();
-  assert.equal(clicks.length, 1);
-  assert.equal(urls[0], '/profiles/candidates/candidate/database-cv?companyId=free-company');
-  downloading = deferred();
-  tree = await ui.render();
-  nodes(tree, (node) => node.type === 'button')[0].props.onClick();
-  ui.unmount();
-  downloading.resolve({ type: 'application/pdf' });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(clicks.length, 1, 'Leaving the candidate must cancel the old download result');
-  assert.ok(requests.every((route) => route.startsWith('/profiles/')));
-});
-
-test('the job editor saves content and questions in one request with its loaded version', async () => {
-  const requests = [],
-    saved = [];
+test('the V2 editor saves existing-job content with its loaded version', async () => {
+  const requests = [], saved = [];
   const stub = () => null;
-  const question = {
-    id: 'question',
-    question: 'Do you hold a certificate?',
-    type: 'YES_NO',
-    isRequired: true,
-  };
+  function JobForm() {}
   const draft = {
     id: 'job',
     title: 'A synthetic role',
@@ -538,66 +479,57 @@ test('the job editor saves content and questions in one request with its loaded 
     status: 'DRAFT',
     currency: 'IDR',
     updatedAt: '2026-10-25T00:00:00.000Z',
-    questions: [question],
+    responsibilities: [],
+    kpis: [],
   };
-  const drafts = (value) => (value.questions || []).map((row) => ({ ...row, answerCount: 0 }));
   const ui = host(
-    'apps/web/src/components/recruiter/RecruiterJobEditor.tsx',
-    'RecruiterJobEditor',
+    'apps/web/src/components/recruiter/RecruiterJobEditorV2.tsx',
+    'RecruiterJobEditorV2',
     {
       '@/lib/api': {
         api: async (route, options) => {
-          if(route==='/ai-screening/capabilities')return {enabled:false};
-          requests.push({ route, ...options });
-          return draft;
+          requests.push({route, ...options});
+          return {...draft, description: 'Updated synthetic job description.'};
         },
       },
-      '@/lib/i18n': t,
-      '@/lib/navigation': {localeUrl:(locale,href)=>'/'+locale+href},
-      '@/lib/accountNavigation': {employerJobHref:id=>'/dashboard/recruiter/jobs/'+id},
-      '@/lib/jobCommerce': {packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},
-      '@/components/ui/ConfirmProvider': { useConfirm: () => async () => true },
-      '@/components/ui/Field': { FormField: stub, LabelText: stub },
-      '@/components/ui/JobTitleInput': { JobTitleInput: stub },
-      '@/components/ui/LocationFields': { LocationFields: stub },
-      '@/components/ui/LookupCombobox': { LookupCombobox: stub },
-      '@/components/employee/WorkspaceIcon': { WorkspaceIcon: stub },
-      '@/components/employee/WorkspacePrimitives': { CompanyMark: stub },
-      './ScreeningQuestionsEditor': {
-        ScreeningQuestionsEditor: stub,
-        screeningDraftsFromJob: drafts,
+      '@/lib/i18n/hr-flow': {useHrCopy: () => value => value},
+      '@/lib/navigation': {useRouter: () => ({push() {}})},
+      '@/lib/accountNavigation': {employerJobHref: id => '/dashboard/recruiter/jobs/' + id},
+      '@/lib/jobCommerce': {packageHref: id => '/dashboard/recruiter/jobs/' + id + '/package'},
+      './HrFlowPresentation': {HrIcon: stub, useHrFlowSurface() {}},
+      './JobFormV2': {
+        JobFormV2: JobForm,
+        cleanHrDraft: value => ({...value}),
+        initialHrDraft: value => ({...value}),
       },
-      './JobLanguageVersions': { JobLanguageVersions: stub },
-      './LinkedInSharePreview': { LinkedInSharePreview: stub },
-      './useEmployerUnsaved': { useEmployerUnsaved() {} },
+      './useEmployerUnsaved': {useEmployerUnsaved() {}},
     },
+    {window: {addEventListener() {}, removeEventListener() {}}, setTimeout: () => 1, clearTimeout() {}},
   );
-  const tree = await ui.render({
+  let tree = await ui.render({
     companyId: 'company',
-    company: { name: 'Company' },
+    company: {name: 'Company'},
     job: draft,
-    meta: {},
     onClose() {},
-    onSaved: async (value) => saved.push(value),
+    onSaved: async value => saved.push(value),
   });
-  const button = nodes(
-    tree,
-    (node) => node.type === 'button' && node.props.children === 'rw.saveDraft',
-  )[0];
+  const editor = nodes(tree, node => node.type === JobForm)[0];
+  assert.ok(editor);
+  editor.props.onChange({description: 'Updated synthetic job description.'});
+  tree = await ui.render();
+  const button = nodes(tree, node => node.type === 'button' && /Simpan\s+draf/.test(visibleText(node)))[0];
   assert.ok(button);
   button.props.onClick();
   await ui.render();
-  assert.equal(requests.length, 1, 'Screening must not be saved by a later series of HTTP calls');
-  const payload = JSON.parse(requests[0].body);
+  assert.equal(requests.length, 1);
   assert.equal(requests[0].route, '/jobs/job');
   assert.equal(requests[0].method, 'PATCH');
+  const payload = JSON.parse(requests[0].body);
   assert.equal(payload.expectedUpdatedAt, draft.updatedAt);
-  assert.equal(payload.screeningQuestions[0].id, question.id);
-  assert.equal(payload.screeningQuestions[0].question, question.question);
+  assert.equal(payload.description, 'Updated synthetic job description.');
   assert.equal(saved.length, 1);
   ui.unmount();
 });
-
 for (const [file, name] of [
   ['apps/web/src/lib/hr-benefits.ts', 'web'],
   ['apps/admin/src/lib/operations.ts', 'admin'],
@@ -685,13 +617,15 @@ test('company benefits never render a balance or a stale previous company promot
 });
 
 test('the candidate CV workspace opens the authorized file with company context', async () => {
-  function SharedCv() {} function SharedWhatsApp() {}
+  function SharedWhatsApp() {}
   const remembered=[],downloads=[];
   const stub = () => null;
   const profile = {
     user: { id: 'user', fullName: 'Synthetic Candidate' },
-    cv:{hasFile:true,title:'Submitted CV',format:'pdf',downloadPath:'/profiles/candidates/candidate/database-cv?companyId=free-company',application:false},
-    resumes: [],
+    resumeFiles: [
+      {key:'resume:primary',id:'primary',title:'Primary CV.pdf',isPrimary:true,hasFile:true,format:'pdf',application:false,downloadPath:'/profiles/candidates/candidate/resumes/primary/download?companyId=free-company'},
+      {key:'resume:secondary',id:'secondary',title:'Secondary CV.pdf',isPrimary:false,hasFile:true,format:'pdf',application:false,downloadPath:'/profiles/candidates/candidate/resumes/secondary/download?companyId=free-company'},
+    ],
     experiences: [],
     educations: [],
     languages: [],
@@ -708,7 +642,6 @@ test('the candidate CV workspace opens the authorized file with company context'
       },
       '@/lib/navigation': { Link: stub, useRouter: () => ({ replace() {} }) },
       '@/lib/accountNavigation': { employerJobHref: id => '/dashboard/recruiter/jobs/'+id, employerWorkspaceHref: () => '/dashboard/recruiter?tab=jobs', jobDetailHref: (id) => '/jobs/' + id },
-      './HrBenefits': { DatabaseCvAccess: SharedCv },
       '@/lib/i18n': t,
       '@/lib/api': {
         apiBlob:async route=>{downloads.push(route);return {};},
@@ -745,8 +678,11 @@ test('the candidate CV workspace opens the authorized file with company context'
   const open=nodes(tree,node=>node.type==='button'&&visibleText(node).includes('viewCv'))[0];
   assert.ok(open,'The CV workspace offers its authorized CV action');
   await open.props.onClick();tree=await ui.render();
-  assert.deepEqual(downloads,['/profiles/candidates/candidate/database-cv?companyId=free-company']);
+  assert.deepEqual(downloads,['/profiles/candidates/candidate/resumes/primary/download?companyId=free-company']);
   assert.equal(nodes(tree,node=>node.type==='iframe')[0].props.src,'blob:fixture-cv');
+  const secondary=nodes(tree,node=>node.props?.role==='tab')[1];assert.ok(secondary,'Each active profile CV is selectable');secondary.props.onClick();tree=await ui.render();
+  assert.match(visibleText(tree),/Secondary CV\.pdf/);nodes(tree,node=>node.type==='button'&&visibleText(node).includes('viewCv'))[0].props.onClick();tree=await ui.render();
+  assert.deepEqual(downloads,['/profiles/candidates/candidate/resumes/primary/download?companyId=free-company','/profiles/candidates/candidate/resumes/secondary/download?companyId=free-company']);
   const whatsApp = nodes(tree, (node) => node.type === SharedWhatsApp);
   assert.equal(whatsApp.length, 1, 'The recruiter candidate profile exposes the shared WhatsApp action beside internal chat');
   assert.deepEqual({profileId:whatsApp[0].props.profileId,companyId:whatsApp[0].props.companyId,contactRevealed:whatsApp[0].props.contactRevealed},{profileId:'candidate',companyId:'free-company',contactRevealed:false});

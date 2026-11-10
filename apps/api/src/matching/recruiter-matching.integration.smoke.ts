@@ -26,23 +26,24 @@ export async function runRecruiterMatchingSuite(db:PrismaService,benefits:Benefi
   const draft=await db.jobPost.create({data:{companyId:company.id,title:role.name,description:'Draft fixture with no publication.'}});
   // The best profile is older than a full scan batch and lexically last by ID.
   for(let n=0;n<106;n++){
-    await db.user.create({data:{id:'hr-rank-user-'+n,fullName:'Ranking fixture '+n,role:'EMPLOYEE',isBanned:n===103,employeeProfile:{create:{id:'hr-rank-profile-'+String(n).padStart(3,'0'),headline:n===105?'FO':'Unrelated fixture occupation',visibility:n===104?'PRIVATE':'PUBLIC',updatedAt:new Date(n===105?'2020-01-01':'2026-10-25'),...(n===105?{skills:{create:{skillId:skill.id,level:'BEGINNER',levelSource:'CV_DEFAULT'}}}:{})}}}});
+    await db.user.create({data:{id:'hr-rank-user-'+n,fullName:'Ranking fixture '+n,role:'EMPLOYEE',isBanned:n===103,employeeProfile:{create:{id:'hr-rank-profile-'+String(n).padStart(3,'0'),headline:n===105?'FO':'Unrelated fixture occupation',updatedAt:new Date(n===105?'2020-01-01':'2026-10-25'),...(n===105?{skills:{create:{skillId:skill.id,level:'BEGINNER',levelSource:'CV_DEFAULT'}}}:{})}}}});
   }
-  const resume=await db.resume.create({data:{profileId:'hr-rank-profile-105',title:'Shared fixture CV',fileKey:'synthetic/private-ranking-cv.pdf'}});
-  await db.employeeProfile.update({where:{id:'hr-rank-profile-105'},data:{databaseCvEnabled:true,databaseResumeId:resume.id,updatedAt:new Date('2020-01-01')}});
+  const resume=await db.resume.create({data:{profileId:'hr-rank-profile-105',title:'Primary fixture CV',fileKey:'synthetic/private-ranking-cv.pdf',isPrimary:true}});
+  await db.employeeProfile.update({where:{id:'hr-rank-profile-105'},data:{updatedAt:new Date('2020-01-01')}});
   const input={companyId:company.id,matchJobId:job.id,q:'Ranking fixture',sort:'match' as const,page:1,limit:10,excludeApplied:true,locale:'en' as const};
   const page=await profiles.searchCandidates(hr,input);
-  assert.equal(page.total,104);assert.equal(page.items[0].id,'hr-rank-profile-105','Ranking happens before pagination across all batches');
+  assert.equal(page.total,105);assert.equal(page.items[0].id,'hr-rank-profile-105','Ranking happens before pagination across all batches');
   assert.equal(page.items[0].matchScore,100);assert.equal((page.items[0].matchBreakdown as any).version,'hr-evidence-v1');
-  assert.ok(!page.items.some(row=>['hr-rank-profile-103','hr-rank-profile-104'].includes(row.id)));
-  assert.equal(page.items[0].canReadCv,true,'Visible CV action follows current permission and file availability');
-  assert.equal(page.items[1].canReadCv,false,'A profile without a shared CV has no file action');
-  assert.doesNotMatch(JSON.stringify(page.items),/fileKey|private-ranking-cv|databaseResume":/,'List exposes only availability, never a storage key');
-  await db.employeeProfile.update({where:{id:'hr-rank-profile-105'},data:{databaseCvEnabled:false}});
-  assert.equal((await profiles.searchCandidates(hr,input)).items[0].canReadCv,false,'Revocation removes the list action');
-  await db.employeeProfile.update({where:{id:'hr-rank-profile-105'},data:{databaseCvEnabled:true,updatedAt:new Date('2020-01-01')}});
+  assert.ok(!page.items.some(row=>row.id==='hr-rank-profile-103'),'Banned profiles remain excluded');
+  assert.ok(page.items.some(row=>row.id==='hr-rank-profile-104'),'A formerly private profile is searchable to company HR');
+  assert.doesNotMatch(JSON.stringify(page.items),/fileKey|private-ranking-cv|databaseResume":/,'Search results never expose a storage key');
+  const fileDetail=await profiles.getCandidateProfile(hr,'hr-rank-profile-105',job.id,'en',company.id);
+  assert.equal((fileDetail as any).resumeFiles[0].id,resume.id,'HR detail lists file-backed profile CVs');
+  assert.doesNotMatch(JSON.stringify((fileDetail as any).resumeFiles),/fileKey|private-ranking-cv/,'CV metadata never exposes storage keys');
+  const formerlyPrivate=await profiles.getCandidateProfile(hr,'hr-rank-profile-104',job.id,'en',company.id);
+  assert.equal((formerlyPrivate as any).resumeFiles.length,0,'A candidate without an uploaded CV has no file action');
   await db.resume.update({where:{id:resume.id},data:{deletedAt:new Date()}});
-  assert.equal((await profiles.searchCandidates(hr,input)).items[0].canReadCv,false,'A deleted file is unavailable');
+  assert.equal((await profiles.getCandidateProfile(hr,'hr-rank-profile-105',job.id,'en',company.id) as any).resumeFiles.length,0,'A deleted file is unavailable');
   await db.resume.update({where:{id:resume.id},data:{deletedAt:null}});
   await assert.rejects(()=>profiles.searchCandidates(outsider,input));
   await assert.rejects(()=>profiles.searchCandidates(hr,{...input,companyId:foreign.id}));

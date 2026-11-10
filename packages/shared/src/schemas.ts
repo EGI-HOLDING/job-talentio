@@ -1,3 +1,4 @@
+import { desiredSelectionsSchema } from './employee-intent';
 import { z } from 'zod';
 
 const calendarDateSchema = z.union([
@@ -227,6 +228,7 @@ export const jobPostSchema = z.object({
 });
 
 export const jobSearchSchema = z.object({
+  selectionScope: z.enum(['primary','related']).optional(),
   q: z.string().optional(),
   country: z.string().optional(),
   city: z.string().optional(), // slug or comma-separated slugs
@@ -401,13 +403,12 @@ export const newsLatestSchema = z.object({
 });
 
 export const profileUpdateSchema = z.object({
+  desiredSelections: desiredSelectionsSchema.optional(),
+  preferencesRevision: z.number().int().nonnegative().optional(),
   headline: z.string().max(200).optional(),
   summary: z.string().max(5000).optional(),
   citySlug: z.string().max(120).optional().nullable(),
   phone: z.string().trim().max(40).optional(),
-  visibility: z
-    .enum(['PUBLIC', 'TO_REGISTERED_RECRUITERS', 'PRIVATE'])
-    .optional(),
   desiredSalaryMin: z.number().finite().nonnegative().max(1_000_000_000_000).refine(n => /^\d+(?:\.\d{1,2})?$/.test(String(n)), 'Use at most two decimal places').optional().nullable(),
   desiredSalaryCurrency: z.string().regex(/^[A-Z]{3}$/).optional(),
   desiredSalaryPeriod: z.enum(['MONTHLY','YEARLY','HOURLY']).optional(),

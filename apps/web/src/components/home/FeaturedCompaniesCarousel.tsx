@@ -4,10 +4,16 @@ import { useMemo, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { Link } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
-import type { TopCompany } from './TopCompaniesCarousel';
 import styles from './FeaturedCompaniesCarousel.module.css';
 
 const SWIPE_THRESHOLD = 48;
+
+export type TopCompany = {
+  slug: string;
+  name: string;
+  logoUrl?: string | null;
+  openJobsCount: number;
+};
 
 function makePages(companies: TopCompany[]) {
   const pages: TopCompany[][] = [];

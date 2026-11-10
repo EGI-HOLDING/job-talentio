@@ -48,9 +48,9 @@ async function main(){
   const foreign=await db.application.findFirst({where:{jobPostId:{not:hero.id}}});
   await request(base+'/applicants/'+foreign.id,hr.accessToken,undefined,404);
   pass('Unauthenticated, employee, non-member and wrong-job detail access rejected');
-  const privateApp=await db.application.findFirst({where:{jobPostId:hero.id,profile:{visibility:'PRIVATE'}}});
-  assert.ok(privateApp);assert.equal((await request(base+'/applicants/'+privateApp.id,hr.accessToken)).id,privateApp.id);
-  pass('Private applicants remain available to the company receiving their application');
+  const companyApp=await db.application.findFirstOrThrow({where:{jobPostId:hero.id},select:{id:true}});
+  assert.equal((await request(base+'/applicants/'+companyApp.id,hr.accessToken)).id,companyApp.id);
+  pass('Application details remain available only within the receiving company');
   const changed=await db.application.findUniqueOrThrow({where:{id:manifest.changedCvApplicationId},include:{resume:true}});
   assert.notEqual(changed.resumeSnapshot.resume.fileKey,changed.resume.fileKey);
   const download=await request('/applications/'+changed.id+'/resume-download',hr.accessToken),file=await fetch(download.url);
@@ -72,9 +72,16 @@ async function main(){
     const eventCounts=await db.jobEvent.groupBy({by:['kind'],where:{session:{job:{companyId:company.id}}},_count:{_all:true}});
     for(const event of eventCounts)assert.equal(summary.events[event.kind],event._count._all,'Report must include every stored '+event.kind+' event');
     const csv=await request('/hr-reports/csv?companyId='+company.id,hr.accessToken,undefined,company.package==='PREMIUM'?200:403);if(company.package==='PREMIUM')assert.ok(csv.includes('Job ID')&&csv.includes('Operations Supervisor'));
-    // Identical public candidate CV available with every tier, no unlock action.
-    const candidate=await db.employeeProfile.findFirst({where:{databaseCvEnabled:true,visibility:{not:'PRIVATE'},databaseResume:{fileKey:{not:null}}}});
-    const cv=await fetch('http://localhost:4000/api/profiles/candidates/'+candidate.id+'/database-cv?companyId='+company.id,{headers:{Authorization:'Bearer '+hr.accessToken}});assert.equal(cv.status,200);assert.equal(Buffer.from(await cv.arrayBuffer()).subarray(0,4).toString(),'%PDF');
+    // Each active profile CV is available to authenticated company members, with every package tier.
+    const candidate=await db.employeeProfile.findFirstOrThrow({
+      where:{user:{isBanned:false,anonymizedAt:null},resumes:{some:{deletedAt:null,fileKey:{not:null}}}},
+      include:{resumes:{where:{deletedAt:null,fileKey:{not:null}},select:{id:true,fileKey:true},orderBy:[{isPrimary:'desc'},{updatedAt:'desc'}]}},
+    });
+    for(const resume of candidate.resumes){
+      const cv=await fetch('http://localhost:4000/api/profiles/candidates/'+candidate.id+'/resumes/'+resume.id+'/download?companyId='+company.id,{headers:{Authorization:'Bearer '+hr.accessToken}});
+      assert.equal(cv.status,200);assert.equal(cv.headers.get('cache-control'),'private, no-store');assert.ok((await cv.arrayBuffer()).byteLength>0);
+    }
+    assert.equal(await db.auditLog.count({where:{actorId:hr.user.id,action:'CANDIDATE_PROFILE_CV_DOWNLOAD',entityId:candidate.id}}),(manifest.companies.indexOf(company)+1)*candidate.resumes.length);
     const tickets=await request('/hr-support?companyId='+company.id,hr.accessToken);assert.equal(tickets.items.length,1);assert.equal(tickets.items[0].priority,company.package==='PREMIUM');
   }
   pass('Free/Standard/Premium capabilities, reconciled reports/CSV, unrestricted commercial CV access and support priorities');

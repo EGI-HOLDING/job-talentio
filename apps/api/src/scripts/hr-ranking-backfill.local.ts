@@ -13,7 +13,7 @@ async function main(){
     const missing=rows.filter(r=>!r.hrSubmissionSnapshot);
     const report={mode:apply?'apply':'dry-run',database:url.pathname,applications:rows.length,snapshotsToFreeze:missing.length,unboundSubmittedFiles:rows.filter(r=>!r.resumeVersionId&&historicalHrSubmission(r).fileKey).map(r=>r.id),missingFiles:rows.filter(r=>!historicalHrSubmission(r).fileKey).map(r=>r.id),catalogRevision:catalog.revision,changesToCatalog:0};
     if(apply){for(const row of missing)await db.application.updateMany({where:{id:row.id,hrSubmissionSnapshot:{equals:Prisma.DbNull}},data:{hrSubmissionSnapshot:JSON.parse(JSON.stringify(historicalHrSubmission(row)))}});
-      const versions=await db.resumeVersion.findMany({where:{OR:[{applications:{some:{profile:{user:{anonymizedAt:null}}}}},{currentFor:{is:{deletedAt:null,profile:{databaseCvEnabled:true}}}}]},select:{id:true,parseGeneration:true}});
+      const versions=await db.resumeVersion.findMany({where:{OR:[{applications:{some:{profile:{user:{anonymizedAt:null}}}}},{currentFor:{is:{isPrimary:true,deletedAt:null,fileKey:{not:null},profile:{user:{isBanned:false,anonymizedAt:null}}}}}]},select:{id:true,parseGeneration:true}});
       await db.resumeRecruiterEvidence.createMany({data:versions.map(v=>({versionId:v.id,generation:v.parseGeneration,parserVersion:HR_PARSER,catalogRevision:catalog.revision})),skipDuplicates:true});
     }
     fs.mkdirSync('output',{recursive:true});fs.writeFileSync('output/hr-ranking-backfill-'+(apply?'applied':'dry-run')+'.json',JSON.stringify(report,null,2));console.log(JSON.stringify({...report,missingFiles:report.missingFiles.length,unboundSubmittedFiles:report.unboundSubmittedFiles.length}));

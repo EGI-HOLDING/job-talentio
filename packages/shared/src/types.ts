@@ -15,11 +15,6 @@ export type ApplicationStatus =
   | 'REJECTED'
   | 'WITHDRAWN';
 
-export type ProfileVisibility =
-  | 'PUBLIC'
-  | 'TO_REGISTERED_RECRUITERS'
-  | 'PRIVATE';
-
 export type EmploymentType =
   | 'FULL_TIME'
   | 'PART_TIME'

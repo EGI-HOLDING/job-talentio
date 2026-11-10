@@ -176,7 +176,6 @@ export const core = {
   'home.findJobs': { uz: 'Ish topish', ru: 'Найти работу', en: 'Find jobs' },
   'home.createProfile': { uz: 'Profil yaratish', ru: 'Создать профиль', en: 'Create profile' },
   openRoles: { uz: 'Ochiq ish o‘rinlari', ru: 'Открытые вакансии', en: 'Open roles' },
-  companiesStat: { uz: 'Kompaniyalar', ru: 'Компании', en: 'Companies' },
   talentProfiles: { uz: 'Nomzodlar', ru: 'Профили талантов', en: 'Talent profiles' },
   citiesCovered: { uz: 'Shaharlar', ru: 'Городов', en: 'Cities covered' },
   'home.forYou': { uz: 'Siz uchun', ru: 'Для вас', en: 'For you' },
@@ -205,11 +204,6 @@ export const core = {
     ru: '{n} вакансий',
     en: '{n} open roles',
   },
-  companiesCount: {
-    uz: '{n} kompaniya',
-    ru: '{n} компаний',
-    en: '{n} companies',
-  },
   exploreByCategory: {
     uz: 'Kategoriya bo‘yicha ishlar',
     ru: 'Вакансии по категориям',
@@ -219,26 +213,6 @@ export const core = {
     uz: 'Soha bo‘yicha ochiq ishlarni ko‘ring',
     ru: 'Смотрите открытые роли по отраслям',
     en: 'Browse open roles by field',
-  },
-  exploreByIndustry: {
-    uz: 'Sanoat bo‘yicha ishlar',
-    ru: 'Вакансии по отраслям компаний',
-    en: 'Jobs by industry',
-  },
-  exploreByIndustrySubtitle: {
-    uz: 'Kompaniya sanoati bo‘yicha ochiq ishlar',
-    ru: 'Открытые роли по отрасли компании',
-    en: 'Open roles by company industry',
-  },
-  exploreIndustriesTitle: {
-    uz: 'Barcha sanoatlar',
-    ru: 'Все отрасли',
-    en: 'All industries',
-  },
-  exploreIndustriesSubtitle: {
-    uz: 'Sanoatni tanlang - tegishli kompaniya ishlari ochiladi',
-    ru: 'Выберите отрасль, чтобы увидеть вакансии компаний',
-    en: 'Pick an industry to see matching company jobs',
   },
   exploreByCity: {
     uz: 'Shahar bo‘yicha ishlar',
@@ -250,60 +224,15 @@ export const core = {
     ru: 'Вакансии в городах Узбекистана',
     en: 'Openings across Uzbekistan cities',
   },
-  exploreByCompany: {
-    uz: 'Kompaniya bo‘yicha ishlar',
-    ru: 'Вакансии по компаниям',
-    en: 'Jobs by company',
-  },
-  exploreByCompanySubtitle: {
-    uz: 'Hozir ishga olayotgan kompaniyalar',
-    ru: 'Компании, которые сейчас нанимают',
-    en: 'Companies hiring right now',
-  },
-  topCompanies: {
-    uz: 'Top kompaniyalar',
-    ru: 'Топ компании',
-    en: 'Top Companies',
-  },
-  topCompaniesSubtitle: {
-    uz: 'Hozir xodim izlayotgan kompaniyalar',
-    ru: 'Компании, которые сейчас нанимают',
-    en: 'Companies hiring now',
-  },
   topCompaniesCarousel: {
     uz: 'Top kompaniyalar karuseli',
     ru: 'Карусель топ компаний',
     en: 'Top companies carousel',
   },
-  topCompaniesGoToSlide: {
-    uz: '{n}-guruhni ko‘rsatish',
-    ru: 'Показать группу {n}',
-    en: 'Show group {n}',
-  },
   topCompaniesSlideStatus: {
     uz: '{total} guruhdan {current}-guruh',
     ru: 'Группа {current} из {total}',
     en: 'Group {current} of {total}',
-  },
-  exploreCompaniesTabs: {
-    uz: 'Kompaniyalar bo‘yicha ko‘rish',
-    ru: 'Просмотр компаний',
-    en: 'Browse companies',
-  },
-  exploreCompaniesTabIndustry: {
-    uz: 'Sanoat bo‘yicha',
-    ru: 'По отраслям',
-    en: 'By industry',
-  },
-  exploreCompaniesTabAll: {
-    uz: 'Barchasi',
-    ru: 'Все',
-    en: 'All',
-  },
-  exploreCompaniesSearch: {
-    uz: 'Kompaniya qidirish...',
-    ru: 'Поиск компании...',
-    en: 'Search companies...',
   },
   exploreByTitle: {
     uz: 'Lavozim bo‘yicha ishlar',
@@ -354,16 +283,6 @@ export const core = {
     uz: 'Boshqa',
     ru: 'Другое',
     en: 'Other',
-  },
-  exploreCompaniesTitle: {
-    uz: 'Barcha kompaniyalar',
-    ru: 'Все компании',
-    en: 'All companies',
-  },
-  exploreCompaniesSubtitle: {
-    uz: 'Kompaniyani tanlang - uning ochiq ishlari ochiladi',
-    ru: 'Выберите компанию, чтобы увидеть её вакансии',
-    en: 'Pick a company to see its open roles',
   },
   exploreTitlesTitle: {
     uz: 'Barcha lavozimlar',
@@ -430,36 +349,6 @@ export const core = {
     ru: 'Не удалось загрузить должности. Попробуйте ещё раз.',
     en: 'Could not load job titles. Please try again.',
   },
-  browseByCompany: {
-    uz: 'Kompaniya bo‘yicha qidirish',
-    ru: 'Поиск по компаниям',
-    en: 'Browse jobs by company',
-  },
-  browseByCompanyHint: {
-    uz: 'Kompaniyani tanlang - uning barcha ochiq ishlari chiqadi.',
-    ru: 'Выберите компанию, чтобы увидеть все её открытые вакансии.',
-    en: 'Pick a company to see all of its open roles.',
-  },
-  jobsAtCompany: {
-    uz: 'Ishlar: {name}',
-    ru: 'Вакансии: {name}',
-    en: 'Jobs at {name}',
-  },
-  clearCompanyFilter: {
-    uz: 'Kompaniya filtrini tozalash',
-    ru: 'Сбросить фильтр компании',
-    en: 'Clear company filter',
-  },
-  viewCompanyProfile: {
-    uz: 'Kompaniya profili',
-    ru: 'Профиль компании',
-    en: 'Company profile',
-  },
-  companiesHiring: {
-    uz: 'Ishga olayotgan kompaniyalar',
-    ru: 'Компании, которые нанимают',
-    en: 'Companies hiring',
-  },
   forCandidates: { uz: 'Nomzodlar uchun', ru: 'Для кандидатов', en: 'For candidates' },
   forCandidatesDesc: {
     uz: 'Profil, ko‘nikmalar, CV yuklash, moslik ballari, ogohlantirishlar va chat.',
@@ -487,8 +376,6 @@ export const core = {
   salary: { uz: 'Maosh', ru: 'Зарплата', en: 'Salary' },
   applyNow: { uz: 'Ariza topshirish', ru: 'Откликнуться', en: 'Apply now' },
   saveJob: { uz: 'Saqlash', ru: 'Сохранить', en: 'Save job' },
-  followCompany: { uz: 'Kompaniyani kuzatish', ru: 'Подписаться', en: 'Follow company' },
-  following: { uz: 'Kuzatilmoqda', ru: 'Вы подписаны', en: 'Following' },
   followersCount: { uz: '{n} kuzatuvchi', ru: 'Подписчиков: {n}', en: '{n} followers' },
   share: { uz: 'Ulashish', ru: 'Поделиться', en: 'Share' },
   'share.telegram': { uz: 'Telegramda ulashish', ru: 'Отправить в Telegram', en: 'Share on Telegram' },
@@ -1352,33 +1239,12 @@ export const core = {
     ru: 'Мин. уровень',
     en: 'Min level',
   },
-  news: { uz: 'Yangiliklar', ru: 'Новости', en: 'News' },
-  latestNews: {
-    uz: 'So‘nggi yangiliklar',
-    ru: 'Последние новости',
-    en: 'Latest news',
-  },
-  latestNewsSubtitle: {
-    uz: 'Karyera, tahlillar, tadbirlar va ta’lim - O‘zbekiston mehnat bozori haqida',
-    ru: 'Карьера, аналитика, события и образование на рынке труда Узбекистана',
-    en: 'Career, insights, events and education across the Uzbek job market',
-  },
-  newsAll: { uz: 'Barchasi', ru: 'Все', en: 'All' },
-  newsCatCareer: { uz: 'Karyera', ru: 'Карьера', en: 'Career' },
-  newsCatInsight: { uz: 'Tahlil', ru: 'Аналитика', en: 'Insight' },
-  newsCatEvent: { uz: 'Tadbir', ru: 'Событие', en: 'Event' },
-  newsCatEducation: { uz: 'Ta’lim', ru: 'Образование', en: 'Education' },
   readMore: { uz: 'Batafsil', ru: 'Читать далее', en: 'Read more' },
   newsSource: { uz: 'Manba', ru: 'Источник', en: 'Source' },
   newsFurtherReading: {
     uz: 'Batafsil o‘qish uchun manba',
     ru: 'Первоисточник для дальнейшего чтения',
     en: 'Further reading at the original source',
-  },
-  backToNews: {
-    uz: 'Yangiliklarga qaytish',
-    ru: 'К новостям',
-    en: 'Back to news',
   },
   newsEmpty: {
     uz: 'Hozircha yangiliklar yo‘q',

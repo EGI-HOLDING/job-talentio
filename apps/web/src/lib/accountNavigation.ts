@@ -70,10 +70,10 @@ export function accountReturnHref(role: string | null | undefined, value?: strin
   const url = internalUrl(value);
   if (!url) return null;
   const path = stripLocale(url.pathname);
-  const shared = /^\/(jobs\/[^/]+|companies\/[^/]+|explore\/companies|news(?:\/[^/]+)?|messages|settings)\/?$/.test(path);
+  const shared = /^\/(jobs\/[^/]+|messages|settings)\/?$/.test(path);
   const allowed = isEmployerRole(role)
-    ? shared || /^\/(dashboard\/recruiter(?:\/(?:orders|support|jobs\/[^/]+(?:\/package)?))?|talent|candidates\/[^/]+|checkout\/[^/]+|pricing)\/?$/.test(path)
-    : shared || path === '/jobs' || path === '/explore/companies' || (role === 'EMPLOYEE' && path === '/dashboard/employee');
+    ? shared || /^\/(companies\/[^/]+|news(?:\/[^/]+)?|dashboard\/recruiter(?:\/(?:orders|support|jobs\/[^/]+(?:\/package)?))?|talent|candidates\/[^/]+|checkout\/[^/]+|pricing)\/?$/.test(path)
+    : shared || path === '/jobs' || (role === 'EMPLOYEE' && path === '/dashboard/employee');
   return allowed ? accountHref(role, path + url.search + url.hash) : null;
 }
 

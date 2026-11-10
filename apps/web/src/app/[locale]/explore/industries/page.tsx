@@ -3,15 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from '@/lib/navigation';
 
-/** Industry browse lives on Jobs by company (company context). */
+/** The company directory was removed from the candidate-facing discovery flow. */
 export default function ExploreIndustriesRedirectPage() {
   const router = useRouter();
   useEffect(() => {
-    router.replace('/explore/companies?tab=industry');
+    router.replace('/jobs');
   }, [router]);
-  return (
-    <div className="shell" style={{ padding: '2rem 1.5rem' }}>
-      Redirecting...
-    </div>
-  );
+  return null;
 }

@@ -8,7 +8,7 @@ import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
 import type { JobPromotion } from '@job-talentio/shared';
 import { useParams, useSearchParams } from 'next/navigation';
-import { jobBackHref, jobDetailHref } from '@/lib/accountNavigation';
+import { jobBackHref } from '@/lib/accountNavigation';
 import { trackJobEvent } from '@/lib/hr-events';
 import { peekApi, api, getSession } from '@/lib/api';
 
@@ -51,12 +51,10 @@ type Job = {
   company: {
     id: string;
     name: string;
-    slug: string;
     logoUrl?: string | null;
     isVerified?: boolean;
     /** Confidential posting: placeholder company, nothing to link or follow. */
     anonymous?: boolean;
-    _count?: { followers: number };
   };
   isAnonymous?: boolean;
   city?: { name: string } | null;
@@ -114,7 +112,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
   const [showCvUpload, setShowCvUpload] = useState(false);
   const [resumeLoadError, setResumeLoadError] = useState('');
   const [resumesLoading, setResumesLoading] = useState(false);
-  const [following, setFollowing] = useState(false);
   const [myApplication, setMyApplication] = useState<MyApplicationState | null>(null);
   const [submittedCvBusy, setSubmittedCvBusy] = useState(false);
   const [submittedCvError, setSubmittedCvError] = useState('');
@@ -172,7 +169,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     let active = true;
     setError('');
     setJob(peekApi<Job>('/jobs/'+id)||null);
-    setFollowing(false);
     setMyApplication(null);
     api<Job>(`/jobs/${id}`)
       .then(async (j) => {
@@ -181,14 +177,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
         setJob({
           ...j,
         });
-        if (isEmployee) {
-          try {
-            const f = await api<{ following: boolean }>(`/companies/${j.company.id}/following`);
-            if (active) setFollowing(f.following);
-          } catch {
-            /* ignore */
-          }
-        }
         if (session?.user.role === 'EMPLOYEE') {
           try {
             await refreshApplication();
@@ -234,25 +222,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
         submittedCvPending.current = false;
         setSubmittedCvBusy(false);
       }
-    }
-  }
-
-  async function toggleFollow() {
-    if (session && !isEmployee) return;
-    if (!session || !job) {
-      window.location.href = localeHref(authLink('/login', `/jobs/${id}`));
-      return;
-    }
-    if (following) {
-      const r = await api<{ following: boolean }>(`/companies/${job.company.id}/follow`, {
-        method: 'DELETE',
-      });
-      setFollowing(r.following);
-    } else {
-      const r = await api<{ following: boolean }>(`/companies/${job.company.id}/follow`, {
-        method: 'POST',
-      });
-      setFollowing(r.following);
     }
   }
 
@@ -348,7 +317,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
 
   return <JobPreview matchReasons={isEmployee?<EmployeeJobMatch jobId={id}/>:undefined} standalone={!embedded}
     backHref={backHref}
-    companyHref={'/companies/' + job.company.slug + '?returnTo=' + encodeURIComponent(jobDetailHref(id, backHref))}
     chatHref={isEmployee && myApplication && myApplication.status !== 'WITHDRAWN' && job.chatPeerUserId
       ? `/messages?peer=${encodeURIComponent(job.chatPeerUserId)}&job=${encodeURIComponent(id)}&application=${encodeURIComponent(myApplication.id)}`
       : undefined}
@@ -360,7 +328,6 @@ export function JobDetailClient({ jobId, embedded = false, country, onBack, save
     onSave={() => { if (saveState) void saveState.onToggle(); else void saveJob().catch((error) => setError(error.message)); }}
     saved={saveState?.saved ?? saved} saving={saveState?.pending ?? saving}
     canSave={!session || session.user.role === 'EMPLOYEE'}
-    onFollow={!session || isEmployee ? () => void toggleFollow().catch((error) => setError(error.message)) : undefined} following={following}
     appliedStatus={myApplication?.status} guest={!session} busy={resumesLoading}
     submittedCvAvailable={Boolean(myApplication?.hasResumeFile)} submittedCvTitle={myApplication?.resumeTitle}
     submittedCvBusy={submittedCvBusy} submittedCvError={submittedCvError} onViewSubmittedCv={viewSubmittedCv}

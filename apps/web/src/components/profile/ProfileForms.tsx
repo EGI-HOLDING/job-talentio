@@ -1,5 +1,5 @@
 'use client';
-import { employeePositionPreferencesEnabled, positionPreferenceNames } from '@/lib/employeePositionPreferences';
+import { employeePositionPreferencesEnabled, positionPreferenceNames, positionGroupsUiEnabled, positionPreferenceSelections } from '@/lib/employeePositionPreferences';
 
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -9,6 +9,7 @@ import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { FormField } from '@/components/ui/Field';
 import { LocationFields } from '@/components/ui/LocationFields';
 import { JobTitleInput } from '@/components/ui/JobTitleInput';
+import {PositionSelectionPicker} from '../onboarding/PositionSelectionPicker';
 import { RoleInput, CountryPicker, SalaryFields, type Country, type SalaryValue } from '@/components/onboarding/PreferenceFields';
 import { useOnboardingText } from '@/lib/i18n/onboarding';
 import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
@@ -44,6 +45,8 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   ));
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
+  const [selections,setSelections]=useState(positionPreferenceSelections(profile));
+  const [selectionsTouched,setSelectionsTouched]=useState(false);
   const [roleIds,setRoleIds]=useState(profile.desiredRoles?.map(r=>r.jobTitleId)||[]);
   const [workModes,setWorkModes]=useState(profile.preferredWorkModes||[]);
   const [roles, setRoles] = useState(positionPreferenceNames(profile));
@@ -95,11 +98,11 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
     if (start && end && end < start && !(editor.kind === 'experience' && current)) { setError(t('pc.dateOrder')); return; }
     if (editor.kind === 'basics') {
-      if (employeePositionPreferencesEnabled && (!roleIds.length)) {
+      if (employeePositionPreferencesEnabled && !(positionGroupsUiEnabled?selections.length:roleIds.length)) {
         setError(intentText(roleIds.length ? 'legacyPositionsHint' : 'state.PREFERENCES_REQUIRED'));
         return;
       }
-      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, desiredPositions: roles, ...(employeePositionPreferencesEnabled?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
+      await mutate('/profiles/me', 'PATCH', { citySlug: homeCity || null, ...(positionGroupsUiEnabled?{...(selectionsTouched?{desiredSelections:selections.map(({kind,id})=>({kind,id})),preferencesRevision:profile.preferencesRevision??0}:{}),preferredWorkModes:workModes}:{desiredPositions:roles,...(employeePositionPreferencesEnabled?{desiredJobTitleIds:roleIds,preferredWorkModes:workModes}:{})}), preferredCountryIds: preferredCountries, residenceCountryId: residence[0] || null, ...salary }, true);
     } else {
       const kind = editor.kind === 'experience' ? 'experiences' : editor.kind === 'education' ? 'educations' : 'certifications';
       const body = editor.kind === 'experience'
@@ -143,7 +146,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       <fieldset disabled={busy} className={s.resetFieldset}>
         {editor.kind === 'basics' && <>
           <LocationFields countryId={residence[0] || ''} citySlug={homeCity} initialCity={profile.city} onChange={next => { setResidence(next.countryId ? [next.countryId] : []); setHomeCity(next.citySlug); }} />
-          <RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />
+          <>{positionGroupsUiEnabled?<PositionSelectionPicker value={selections} onChange={value=>{setSelectionsTouched(true);setSelections(value);}}/>:<RoleInput value={roles} selectedIds={roleIds} onChange={(names,ids)=>{setRoles(names);if(ids)setRoleIds(ids);}} />}</>
           {employeePositionPreferencesEnabled&&<fieldset><legend>{t('workMode')}</legend>{(['ONSITE','HYBRID','REMOTE'] as const).map(mode=><label key={mode}><input type="checkbox" checked={workModes.includes(mode)} onChange={e=>setWorkModes(old=>e.target.checked?[...old,mode]:old.filter(m=>m!==mode))}/>{enumLabel('workMode',mode)}</label>)}</fieldset>}
           <CountryPicker countries={countries} value={preferredCountries} onChange={setPreferredCountries} />
 

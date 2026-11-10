@@ -7,7 +7,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAccountRole } from '@/lib/useAccountRole';
 import { EMPLOYER_JOBS, isEmployerRole } from '@/lib/accountNavigation';
-import insightsStyles from './news/CareerInsights.module.css';
+import footerStyles from './SiteFooter.module.css';
 
 function SiteFooterContent() {
   const { t } = useI18n();
@@ -17,12 +17,12 @@ function SiteFooterContent() {
   const isRecruiter = isEmployerRole(useAccountRole());
   const jobsHref = isRecruiter ? EMPLOYER_JOBS : '/jobs';
   if (pathname.startsWith('/onboarding/') || pathname.startsWith('/apply/')) return null;
-  if (pathname === '/jobs' || pathname === '/explore/companies') return null;
+  if (pathname === '/jobs') return null;
   if (pathname === '/dashboard/employee' || pathname === '/dashboard/employee/resume-builder') return null;
   if (pathname === '/messages' || pathname === '/settings' || pathname.startsWith('/dashboard/recruiter') || pathname.startsWith('/billing/') || pathname === '/talent' || pathname.startsWith('/candidates/')) return null;
   if (pathname === '/employers') return <LandingFooter employer />;
   if (pathname === '/' && (!isRecruiter || seekerLandingPreview)) return <LandingFooter />;
-  if (!/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname)) return <footer className={insightsStyles.footer}><div className={insightsStyles.footerInner}><Link href={isRecruiter ? EMPLOYER_JOBS : '/'} className={insightsStyles.footerBrand}><img src="/brand/talentio-logo.webp" alt="Talentio" /></Link><nav className={insightsStyles.footerLinks} aria-label={t('footer')}><Link href={jobsHref}>{t(isRecruiter ? 'jobs' : 'home.findJobs')}</Link><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></nav></div></footer>;
+  if (!/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname)) return <footer className={footerStyles.footer}><div className={footerStyles.footerInner}><Link href={isRecruiter ? EMPLOYER_JOBS : '/'} className={footerStyles.footerBrand}><img src="/brand/talentio-logo.webp" alt="Talentio" /></Link><nav className={footerStyles.footerLinks} aria-label={t('footer')}><Link href={jobsHref}>{t(isRecruiter ? 'jobs' : 'home.findJobs')}</Link><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></nav></div></footer>;
   return (
     <footer className="footer">
       <div className="shell" style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -31,7 +31,6 @@ function SiteFooterContent() {
         </span>
         <nav style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }} aria-label="Footer">
           <Link href={jobsHref}>{t('jobs')}</Link>
-          <Link href="/news">{t('news')}</Link>
           <Link href="/terms">{t('termsOfService')}</Link>
           <Link href="/privacy">{t('privacyPolicy')}</Link>
         </nav>

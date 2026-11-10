@@ -37,7 +37,7 @@ async function main() {
   const secret = 'journey-isolated-http-fixture-signing-key-2026';
   const jwt = new JwtService({secret});
   const config = new ConfigService({JWT_SECRET:secret});
-  const user = async (name: string, role: 'RECRUITER'|'EMPLOYEE') => db.user.create({data:{fullName:name,role,email:name+'@example.test',emailVerified:true,...(role==='EMPLOYEE'?{employeeProfile:{create:{headline:'Frontend developer',visibility:'PRIVATE'}}}:{})}});
+  const user = async (name: string, role: 'RECRUITER'|'EMPLOYEE') => db.user.create({data:{fullName:name,role,email:name+'@example.test',emailVerified:true,...(role==='EMPLOYEE'?{employeeProfile:{create:{headline:'Frontend developer'}}}:{})}});
   const [owner, recruiter, employee, stranger] = await Promise.all([user('owner','RECRUITER'),user('recruiter','RECRUITER'),user('employee','EMPLOYEE'),user('stranger','EMPLOYEE')]);
   const company = await db.company.create({data:{name:'Journey fixture',slug:'journey-fixture',members:{create:[{userId:owner.id,role:'OWNER'},{userId:recruiter.id,role:'RECRUITER'}]}}});
   const job = await db.jobPost.create({data:{companyId:company.id,title:'Frontend developer',description:'Isolated journey verification role.',status:'PUBLISHED',publishedAt:new Date()}});

@@ -119,7 +119,7 @@ async function main() {
     assert.equal(history.comparisons[0].detailViews, 1, 'Full report excludes Standard and Free periods');
     const candidateUsers = Array.from({length: 105}, (_, i) => ({id: 'recommendation-user-' + i, role: 'EMPLOYEE' as const, fullName: 'Qualified candidate ' + i}));
     await db.user.createMany({data: candidateUsers});
-    await db.employeeProfile.createMany({data: candidateUsers.map((user, i) => ({id: 'recommendation-profile-' + i, userId: user.id, desiredPosition: job.title, desiredPositions: [job.title], visibility: 'PUBLIC' as const}))});
+    await db.employeeProfile.createMany({data: candidateUsers.map((user, i) => ({id: 'recommendation-profile-' + i, userId: user.id, desiredPosition: job.title, desiredPositions: [job.title]}))});
     // Discovery has used submitted CV evidence since the CV-source refactor;
     // profile preferences alone no longer make these fixtures qualified.
     await db.resume.createMany({data:candidateUsers.map((_,i)=>({id:'commerce-cv-'+i,profileId:'recommendation-profile-'+i,title:'CV fixture',fileKey:'commerce-fixtures/'+i+'.pdf',isPrimary:true,parseStatus:'READY'}))});

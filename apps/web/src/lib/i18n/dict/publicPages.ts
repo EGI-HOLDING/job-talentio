@@ -3,8 +3,6 @@ export const publicPages = {
   'public.openPositions': { en: 'Open positions ({n})', ru: 'Открытые вакансии ({n})', uz: 'Ochiq ish o‘rinlari ({n})' },
   'public.noPositions': { en: 'No open positions right now.', ru: 'Сейчас нет открытых вакансий.', uz: 'Hozir ochiq ish o‘rinlari yo‘q.' },
   'public.aboutCompany': { en: 'About the company', ru: 'О компании', uz: 'Kompaniya haqida' },
-  'public.backCompanies': { en: 'Back to companies', ru: 'Назад к компаниям', uz: 'Kompaniyalarga qaytish' },
-  'public.backInsights': { en: 'Back to career insights', ru: 'Назад к статьям о карьере', uz: 'Karyera maqolalariga qaytish' },
   'public.searchCities': { en: 'Search city or country...', ru: 'Поиск города или страны...', uz: 'Shahar yoki mamlakatni qidirish...' },
   'public.onlyHiring': { en: 'With open jobs only', ru: 'Только с вакансиями', uz: 'Faqat ish o‘rni bor joylar' },
   'public.noResults': { en: 'No matches. Try another search or reset your filters.', ru: 'Ничего не найдено. Измените запрос или сбросьте фильтры.', uz: 'Mos natija yo‘q. Boshqa so‘rov kiriting yoki filtrlarni tozalang.' },

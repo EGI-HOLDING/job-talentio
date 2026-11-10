@@ -28,6 +28,18 @@ export type NewsArticleDetail = NewsListItem & {
   availableLocales?: string[];
 };
 
+export function formatNewsDate(iso: string, locale: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(locale === 'uz' ? 'uz' : locale === 'ru' ? 'ru-RU' : locale === 'id' ? 'id-ID' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return new Date(iso).toLocaleDateString(locale);
+  }
+}
+
 /** Server-side fetch; cached 5 min. Returns null for unpublished/missing. */
 export async function fetchNewsArticle(
   slug: string,

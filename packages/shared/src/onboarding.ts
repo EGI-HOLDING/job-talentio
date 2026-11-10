@@ -1,3 +1,4 @@
+import { desiredSelectionsSchema } from './employee-intent';
 import { z } from "zod";
 import { resumeImportSchema, resumeImportExperienceSchema, resumeImportEducationSchema, resumeImportLanguageSchema } from "./schemas";
 export const onboardingStatusSchema = z.enum([
@@ -26,6 +27,8 @@ export const onboardingReviewSchema = z.object({
 });
 export type OnboardingReview = z.infer<typeof onboardingReviewSchema>;
 export const employeePreferencesSchema = z.object({
+  desiredSelections: desiredSelectionsSchema.optional(),
+  preferencesRevision: z.number().int().nonnegative().optional(),
   desiredJobTitleIds: z.array(z.string().min(1).max(100)).max(10).optional(),
   preferredWorkModes: z.array(z.enum(["ONSITE","HYBRID","REMOTE"])).max(3).optional(),
   desiredPositions: z
@@ -62,9 +65,6 @@ export const employeeOnboardingSchema = employeePreferencesSchema.extend({
     nationalNumber: z.string().max(40),
   }).optional(),
   fullName: z.string().trim().max(200).optional(),
-  visibility: z
-    .enum(["PUBLIC", "TO_REGISTERED_RECRUITERS", "PRIVATE"])
-    .optional(),
   noExperience: z.boolean().optional(),
   resumeId: z.string().max(100).nullable().optional(),
   resumeGeneration: z.number().int().nonnegative().optional(),

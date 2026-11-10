@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import PDFDocument from 'pdfkit';
+import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, DeleteBucketCommand } from '@aws-sdk/client-s3';
 import { PrismaService } from '../prisma/prisma.service';
@@ -45,7 +46,7 @@ async function main(){
     const hr=await db.user.create({data:{fullName:'CV HR fixture',email:'cv-hr@example.test',role:'RECRUITER'}}) as AuthUser;
     const foreign=await db.user.create({data:{fullName:'Other HR fixture',email:'cv-other@example.test',role:'RECRUITER'}}) as AuthUser;
     const company=await db.company.create({data:{name:'CV fixture company',slug:'cv-fixture-company',members:{create:{userId:hr.id,role:'OWNER'}}}});
-    await db.company.create({data:{name:'Other CV company',slug:'other-cv-company',members:{create:{userId:foreign.id,role:'OWNER'}}}});
+    const otherCompany=await db.company.create({data:{name:'Other CV company',slug:'other-cv-company',members:{create:{userId:foreign.id,role:'OWNER'}}}});
     hr.memberships=[{companyId:company.id,role:'OWNER'}];
     const roles=await Promise.all(['Frontend Developer','Backend Developer','Software Engineer'].map(name=>db.jobTitle.create({data:{name,slug:normalizeJobTitleKey(name),normalizedKey:normalizeJobTitleKey(name)}})));
     const skills=await Promise.all(['React','PostgreSQL'].map(name=>db.skill.create({data:{name,slug:name.toLowerCase(),normalizedKey:name.toLowerCase()}})));
@@ -74,19 +75,23 @@ async function main(){
     hold=false;release!();await ready(b.id);
     assert.equal((await applications.getForJob(hr,jobs[0].id,resultA.id,'en')).matchScore,originalScore,'Changing primary CV must not change submitted CV evidence');
     const scoredB=await applications.getForJob(hr,jobs[2].id,resultB.id,'en');assert.ok(scoredB.matchScore!>0);assert.ok((await db.application.findUniqueOrThrow({where:{id:resultB.id}})).matchScore!>0);
-    await db.employeeProfile.update({where:{id:profile.id},data:{databaseCvEnabled:true,databaseResumeId:a.id}});
-    const pool=await profiles.searchCandidates(hr,{companyId:company.id,skills:'react',matchJobId:jobs[1].id,sort:'match'});assert.equal(pool.items[0].id,profile.id);
-    const backendPool=await profiles.searchCandidates(hr,{companyId:company.id,skills:'postgresql'});assert.equal(backendPool.total,0,'Database filters follow its selected CV, rather than the primary CV');
+    const pool=await profiles.searchCandidates(hr,{companyId:company.id,skills:'react',matchJobId:jobs[1].id,sort:'match'});assert.equal(pool.total,0,'Database ranking follows the current primary CV, not an older uploaded file');
+    const backendPool=await profiles.searchCandidates(hr,{companyId:company.id,skills:'postgresql'});assert.equal(backendPool.total,1);assert.equal(backendPool.items[0].id,profile.id,'The current primary CV supplies database ranking evidence');
     const extras=await profiles.searchCandidates(hr,{companyId:company.id,languages:'en:B2',hasCertification:true,experienceYearsMin:3});assert.equal(extras.total,1);assert.equal(extras.items[0].languages[0].level,'B2');assert.equal(extras.items[0].certifications[0].name,'Optional cloud certification');
     assert.equal((await profiles.searchCandidates(hr,{companyId:company.id,languages:'en:C2'})).total,0);
     const detail=await profiles.getCandidateProfile(hr,profile.id,jobs[0].id,'en',company.id);
-    assert.equal(detail.cv?.downloadPath,'/applications/'+resultA.id+'/resume-download');assert.ok(!('experiences' in detail));assert.ok(!('educations' in detail));assert.ok(!JSON.stringify(detail).includes('fileKey'));
+    assert.equal(detail.applicationCv?.downloadPath,'/applications/'+resultA.id+'/resume-download');assert.equal(detail.resumeFiles.length,2,'HR sees every active file-backed CV in profile details');assert.ok(!('experiences' in detail));assert.ok(!('educations' in detail));assert.ok(!JSON.stringify(detail).includes('fileKey'));
+    assert.equal((await access.resume(hr,company.id,profile.id,a.id)).resume.id,a.id);
+    await assert.rejects(()=>access.resume(foreign,company.id,profile.id,a.id),error=>error instanceof ForbiddenException&&error.getStatus()===403,'A recruiter without membership in the requested company is denied');
+    assert.equal((await access.resume(foreign,otherCompany.id,profile.id,a.id)).resume.id,a.id,
+      'A recruiter with an active company membership can access the candidate database');
+    assert.ok((await profiles.searchCandidates(foreign,{companyId:otherCompany.id})).items.some(row=>row.id===profile.id),
+      'Candidate discovery is available to authorized HR without profile opt-in');
     const download=await applications.downloadResume(hr,resultA.id);assert.ok(download.url);
     const signedResponse=await fetch(download.url);assert.equal(signedResponse.status,200);assert.equal(Buffer.from(await signedResponse.arrayBuffer()).equals(fileA),true);
     const unsigned=new URL(download.url);unsigned.search='';assert.equal((await fetch(unsigned)).status,403,'CV objects must never be anonymously readable');
     await assert.rejects(()=>applications.downloadResume(foreign,resultA.id));
     await assert.rejects(()=>profiles.searchCandidates(foreign,{companyId:company.id}));
-    await db.employeeProfile.update({where:{id:profile.id},data:{databaseCvEnabled:false}});await assert.rejects(()=>access.assertAccess(hr,company.id,profile.id,'CV'));
     await profiles.updateResume(user,a.id,{isPrimary:true});assert.equal((await db.resume.findUniqueOrThrow({where:{id:a.id}})).isPrimary,true);
     const replacement=await pdf('Backend Developer','PostgreSQL');await profiles.attachFileToResume(user,a.id,{buffer:replacement,size:replacement.length,originalname:'replacement.pdf',mimetype:'application/pdf'} as Express.Multer.File);await ready(a.id);
     assert.equal((await applications.getForJob(hr,jobs[0].id,resultA.id,'en')).matchScore,originalScore,'Replacing the submitted library entry must retain the original application CV');
@@ -111,7 +116,7 @@ async function main(){
     assert.equal(firstPage.total,2);assert.equal(secondPage.total,2);assert.notEqual(firstPage.items[0].id,secondPage.items[0].id);
     const orphan=await db.application.create({data:{profileId:legacyUser.employeeProfile!.id,jobPostId:jobs[1].id,resumeSnapshot:{resume:{fileKey:originalVersion.fileKey,title:'Known file without library entry.pdf'}}}});
     const orphanDetail=await profiles.getCandidateProfile(hr,legacyUser.employeeProfile!.id,jobs[1].id,'en',company.id);
-    assert.equal(orphanDetail.cv?.hasFile,true);
+    assert.equal(orphanDetail.applicationCv?.hasFile,true);
     const orphanRecord=await db.application.findUniqueOrThrow({where:{id:orphan.id},include:{resumeVersion:true}});assert.equal(orphanRecord.resumeVersion?.fileKey,originalVersion.fileKey);
     await parser.processResume(null,orphanRecord.resumeVersion!.parseGeneration,orphanRecord.resumeVersionId!);
     assert.ok((await applications.getForJob(hr,jobs[1].id,orphan.id,'en')).matchScore!>0,'Historical files remain processable without a library entry');
@@ -129,9 +134,8 @@ async function main(){
     await assert.rejects(()=>storage.getObjectBuffer(discardKey));
     assert.equal((await profiles.deleteResume(user,a.id)).softDeleted,true);
     assert.equal(Buffer.from(await (await fetch((await applications.downloadResume(hr,resultA.id)).url)).arrayBuffer()).equals(fileA),true,'Removing a used library CV must retain the submitted file');
-    await db.employeeProfile.update({where:{id:profile.id},data:{visibility:'PRIVATE'}});
-    assert.equal((await profiles.searchCandidates(hr,{companyId:company.id})).items.some(row=>row.id===profile.id),false);
-    assert.equal((await profiles.getCandidateProfile(hr,profile.id,jobs[0].id,'en',company.id)).applicationForJob?.id,resultA.id,'Private candidates remain available in their submitted application context');
+    assert.equal((await profiles.searchCandidates(hr,{companyId:company.id})).items.some(row=>row.id===profile.id),true,'Profiles remain discoverable to authorized HR without profile opt-in');
+    assert.equal((await profiles.getCandidateProfile(hr,profile.id,jobs[0].id,'en',company.id)).applicationForJob?.id,resultA.id,'The submitted application context remains available to its company');
     assert.deepEqual(await Promise.all([db.skill.count(),db.jobTitle.count(),db.workExperience.count(),db.profileSkill.count()]),catalogCounts,'Parsing must not modify catalogs or manual career tables');
     await assert.rejects(()=>profiles.uploadCv(user,{buffer:Buffer.from('bad'),size:3,originalname:'fake.pdf',mimetype:'application/pdf'} as Express.Multer.File),/content/);
     await new UserErasureService(db,storage).erase(user.id);

@@ -297,7 +297,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     return value;
   }
   const value = await apiNetwork<T>(path, networkOptions);
-  if (!['GET','HEAD'].includes(method) && /^\/(profiles|jobs|applications|alerts|admin\/(catalog|employee-matching)|companies)/.test(path)) {
+  if (!['GET','HEAD'].includes(method) && /^\/(profiles|jobs|applications|alerts|admin\/(catalog|employee-matching|position-groups)|companies)/.test(path)) {
     invalidateApi(path.startsWith('/admin/') ? ['/meta/', '/jobs', '/profiles/me'] : undefined);
   }
   return value;

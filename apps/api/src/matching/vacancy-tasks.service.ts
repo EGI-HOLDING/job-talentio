@@ -1,9 +1,11 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import {CandidateCache} from '../common/candidate-cache';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmployeeOccupationIndex } from './employee-occupation';
 import { escoTaskDictionary, primaryTaskScope, professionTaskKeys, taskCompatibility, taskDigest, taskEvidence, vacancyTaskText, VACANCY_TASK_VERSION, type EscoTaskDictionary, type TaskEvidence, type VacancyEligibility } from './vacancy-tasks';
 import { OccupationRelationsService } from './occupation-relations.service';
+import {PositionGroupOccupationIndex} from './position-group-index';
 
 export type VacancySelection = {
   decisions: Map<string,{ roleId:string; updatedAt:Date; eligibility:VacancyEligibility }>;
@@ -16,8 +18,9 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private working = false;
   private dictionary?: EscoTaskDictionary;
+  private readonly selections=new WeakMap<EmployeeOccupationIndex,Map<string,{expires:number;value:Promise<VacancySelection>}>>();
   private readonly logger = new Logger(VacancyTasksService.name);
-  constructor(private readonly db: PrismaService,private readonly relations:OccupationRelationsService) {}
+  constructor(private readonly db: PrismaService,private readonly relations:OccupationRelationsService,@Optional()private readonly cache?:CandidateCache) {}
 
   private concepts() { return this.dictionary??=escoTaskDictionary(this.relations.loadSource().skills); }
 
@@ -67,7 +70,17 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
   }
 
   async select(index:EmployeeOccupationIndex, selectedIds:string[], graphIds:string[], snapshotRelease?:string|null, preview?:readonly TaskRow[]):Promise<VacancySelection> {
-    const choices=[...new Set(selectedIds.flatMap(id=>index.identity(id)?.canonicalRoleId??[]))].sort();
+    if(!this.cache||preview)return this.computeSelection(index,selectedIds,graphIds,snapshotRelease,preview);
+    const key=taskDigest([await this.cache.version('jobs'),snapshotRelease,selectedIds,graphIds]);
+    const entries=this.selections.get(index)??new Map();this.selections.set(index,entries);
+    const previous=entries.get(key);if(previous&&previous.expires>Date.now())return previous.value;
+    const value=this.computeSelection(index,selectedIds,graphIds,snapshotRelease).catch(error=>{entries.delete(key);throw error;});
+    entries.set(key,{expires:Date.now()+30000,value});while(entries.size>20)entries.delete(entries.keys().next().value!);
+    return value;
+  }
+
+  private async computeSelection(index:EmployeeOccupationIndex, selectedIds:string[], graphIds:string[], snapshotRelease?:string|null, preview?:readonly TaskRow[]):Promise<VacancySelection> {
+    const choices=index instanceof PositionGroupOccupationIndex&&selectedIds===index.expandedIds?selectedIds:[...new Set(selectedIds.flatMap(id=>index.identity(id)?.canonicalRoleId??[]))].sort();
     if(!choices.length)return {decisions:new Map(),revision:VACANCY_TASK_VERSION};
     const release=snapshotRelease===undefined?(await this.db.occupationRelationState.findUnique({where:{id:'employee'},select:{activeReleaseId:true}}))?.activeReleaseId:snapshotRelease;
     const profiles=release?await this.db.occupationProfessionProfile.findMany({
@@ -113,7 +126,7 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
       const target=index.identity(row.jobTitleId);
       if(!target)continue;
       const exact=index.eligibility(choices,row.jobTitleId);
-      if(exact.matchType==='EXACT'){
+      if(exact.matchType==='EXACT'||exact.matchType==='GROUP'){
         decisions.set(row.id,{roleId:row.jobTitleId,updatedAt:row.updatedAt,eligibility:exact});
         continue;
       }

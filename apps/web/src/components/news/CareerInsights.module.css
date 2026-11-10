@@ -1,11 +1,5 @@
 .page { min-height: calc(100dvh - 146px); background: #fff; color: #17213a; padding: 32px 0 24px; }
 .container { width: min(1260px, calc(100% - 5rem)); margin-inline: auto; }
-.tabs { display: flex; align-items: stretch; gap: 30px; border-bottom: 1px solid #e5eaf3; overflow-x: auto; scrollbar-width: none; }
-.tabs::-webkit-scrollbar { display: none; }
-.tabs button { position: relative; flex-shrink: 0; min-height: 55px; padding: 15px 10px; border-radius: 0; background: transparent; color: #586b87; font-size: .78rem; font-weight: 500; white-space: nowrap; }
-.tabs button:hover { background: #faf8ff; color: #5635e8; }
-.tabs button[aria-selected=true] { color: #5635e8; font-weight: 600; }
-.tabs button[aria-selected=true]::after { position: absolute; content: ''; height: 2px; left: 0; right: 0; bottom: 0; background: #5635e8; }
 .page a:focus-visible, .page button:focus-visible { outline: 2px solid #9b83ed; outline-offset: 4px; }
 .leadGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 26px; padding-top: 26px; }
 .lead { min-width: 0; }
@@ -75,7 +69,6 @@
   .page { padding-top: 24px; }
   .header h1 { font-size: 1.75rem; }
   .header p { font-size: .85rem; }
-  .tabs { gap: 15px; }
   .leadGrid { grid-template-columns: minmax(0, 1fr); gap: 26px; }
   .lead h2 { font-size: 1.6rem; }
   .latest { padding-left: 0; border-left: 0; border-top: 1px solid #e8ecf3; padding-top: 22px; }
@@ -97,8 +90,6 @@
   .header { padding-bottom: 16px; }
   .header h1 { font-size: 1.5rem; }
   .header p { font-size: .8rem; line-height: 1.6; }
-  .tabs { gap: 10px; }
-  .tabs button { padding: 13px 6px; min-height: 50px; font-size: .72rem; }
   .leadGrid { padding-top: 20px; }
   .cover { aspect-ratio: 1.7; }
   .lead h2 { font-size: 1.35rem; line-height: 1.35; }

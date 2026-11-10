@@ -200,7 +200,7 @@ async function main() {
     }
   });
   await check('invalid public job enum is a validation error', () => request('/jobs?workMode=invalid', null, 'GET', undefined, [400]));
-  await check('candidate edits own profile', () => request('/profiles/me', candidate, 'PATCH', { headline: 'Audit software specialist', summary: 'A synthetic profile used for local integration testing.', visibility: 'PRIVATE' }));
+  await check('candidate edits own profile', () => request('/profiles/me', candidate, 'PATCH', { headline: 'Audit software specialist', summary: 'A synthetic profile used for local integration testing.' }));
   await check('invalid experience date is a validation error', () => request('/profiles/me/experiences', candidate, 'POST', { companyName: 'Audit company', title: 'Engineer', startDate: 'not-a-date' }, [400]));
   if (skill) await check('candidate adds profile skill', () => request('/profiles/me/skills', candidate, 'POST', { slug: skill.slug, level: 'ADVANCED' }));
   const pdf = await testPdf();

@@ -38,7 +38,7 @@ async function main() {
   const fillerUsers = Array.from({ length: 260 }, (_, index) => ({ id: `audit-${marker}-${index}`, fullName: `${marker} filler ${index}`, email: `${marker}-filler-${index}@example.test`, role: 'EMPLOYEE' }));
   userIds.push(...fillerUsers.map(user => user.id));
   await db.user.createMany({ data: fillerUsers });
-  const fillerProfiles = fillerUsers.map(user => ({ id: user.id, userId: user.id, headline: 'Sales Manager', desiredPosition: 'Sales Manager', desiredPositions: ['Sales Manager'], visibility: 'PUBLIC' }));
+  const fillerProfiles = fillerUsers.map(user => ({ id: user.id, userId: user.id, headline: 'Sales Manager', desiredPosition: 'Sales Manager', desiredPositions: ['Sales Manager'] }));
   await db.employeeProfile.createMany({ data: fillerProfiles });
   await db.profileSkill.createMany({ data: fillerProfiles.map(row => ({ profileId: row.id, skillId: skill.id, level: 'BEGINNER' })) });
   await db.jobPost.createMany({ data: fillerUsers.map(user => ({ companyId: companyIds[0], title: 'Sales Manager', description: marker, status: 'PUBLISHED', publishedAt: new Date(), countryId: country.id, workMode: 'REMOTE' })) });
@@ -69,13 +69,11 @@ async function main() {
   assert.equal(translatedCandidate.headline, 'Sales Manager');
   assert.equal(translatedCandidate.matchScore, detail.matchScore, 'Display translation cannot alter scoring');
   checks.push('display translations do not alter canonical scoring or title filtering');
-  await db.employeeProfile.update({ where: { id: profile.id }, data: { visibility: 'PRIVATE' } });
-  assert.ok(!(await http(`/jobs/${job.id}/recommended-candidates`, employer)).some(row => row.profile.id === profile.id));
-  await http(`/profiles/candidates/${profile.id}?matchJobId=${job.id}`, employer, 'GET', undefined, 404);
-  await db.employeeProfile.update({ where: { id: profile.id }, data: { visibility: 'PUBLIC' } });
+  assert.ok((await http(`/jobs/${job.id}/recommended-candidates`, employer)).some(row => row.profile.id === profile.id));
+  await http(`/profiles/candidates/${profile.id}?matchJobId=${job.id}`, employer, 'GET', undefined, 200);
   await http(`/profiles/candidates?matchJobId=${job.id}`, stranger, 'GET', undefined, 403);
   await http(`/jobs/${job.id}/recommended-candidates`, stranger, 'GET', undefined, 403);
-  checks.push('private candidates and another company\'s job-scoring endpoints remain inaccessible');
+  checks.push('candidate profiles remain discoverable to authorized HR; another company\'s endpoints remain inaccessible');
   const pdfBytes = fs.readFileSync('node_modules/.cache/employee-onboarding/fixtures/employee-cv.pdf');
   const form = new FormData(); form.append('file', new Blob([pdfBytes], { type: 'application/pdf' }), 'original.pdf');
   const resume = await http('/profiles/me/resumes/upload', employee, 'POST', form, 201);

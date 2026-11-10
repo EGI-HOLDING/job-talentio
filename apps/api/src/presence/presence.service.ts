@@ -120,7 +120,7 @@ export class PresenceService {
   }
 
   /**
-   * Presence is private profile data: only return it for visible candidates,
+   * Presence is private profile data: only return it for company-authorized candidates,
    * conversation peers, or the signed-in user. Never trust caller-supplied IDs.
    */
   async getVisiblePresence(viewer: AuthUser, requestedIds: string[]) {
@@ -166,25 +166,12 @@ export class PresenceService {
             })
           : [];
         const companyIds = activeCompanies.map((company) => company.id);
-        const visibleCandidates = await this.prisma.employeeProfile.findMany({
-          where: {
-            userId: { in: ids },
-            user: { isBanned: false, anonymizedAt: null },
-            OR: [
-              { visibility: { in: ['PUBLIC', 'TO_REGISTERED_RECRUITERS'] } },
-              ...(companyIds.length
-                ? [
-                    {
-                      applications: {
-                        some: { jobPost: { companyId: { in: companyIds } } },
-                      },
-                    },
-                  ]
-                : []),
-            ],
-          },
-          select: { userId: true },
-        });
+        const visibleCandidates = companyIds.length
+          ? await this.prisma.employeeProfile.findMany({
+              where: { userId: { in: ids }, user: { isBanned: false, anonymizedAt: null } },
+              select: { userId: true },
+            })
+          : [];
         for (const profile of visibleCandidates) visibleIds.add(profile.userId);
       }
     }

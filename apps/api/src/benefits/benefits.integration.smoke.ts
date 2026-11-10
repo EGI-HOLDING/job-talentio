@@ -130,7 +130,7 @@ async function main() {
       false,
     );
     const create = (title: string, description: string) =>
-      jobs.create(hr, company.id, { title, description, workMode: 'REMOTE', skills: [] });
+      jobs.create(hr, company.id, { title, description, positionEntryMode: 'MANUAL', workMode: 'REMOTE', skills: [] });
     const first = (await create(
       'Kitchen Coordinator',
       'Coordinate food preparation and kitchen safety across shifts.',
@@ -188,13 +188,13 @@ async function main() {
     assert.equal(await db.candidateCredit.count(), 0, 'Reopening does not create candidate quotas');
     const candidate = await actor('EMPLOYEE', 'Candidate');
     const profile = await db.employeeProfile.create({
-      data: { userId: candidate.id, visibility: 'PUBLIC' },
+      data: { userId: candidate.id },
     });
-    await assert.rejects(() => candidateAccess.assertAccess(hr, other.id, profile.id, 'CONTACT'));
-    await assert.rejects(() => candidateAccess.assertAccess(hr, company.id, profile.id, 'CV'));
+    await assert.rejects(() => candidateAccess.candidate(hr, other.id, profile.id));
+    assert.equal((await candidateAccess.candidate(hr, company.id, profile.id)).profile.id, profile.id);
     await Promise.all(
       Array.from({ length: 12 }, (_, i) =>
-        candidateAccess.assertAccess(i % 2 ? hr : hr2, company.id, profile.id, 'CONTACT'),
+        candidateAccess.candidate(i % 2 ? hr : hr2, company.id, profile.id),
       ),
     );
     assert.equal(await db.candidateCredit.count(), 0);
@@ -227,21 +227,9 @@ async function main() {
     const resume = await db.resume.create({
       data: { profileId: profile.id, title: 'Shared CV', fileKey: 'synthetic/file.pdf' },
     });
-    await db.employeeProfile.update({
-      where: { id: profile.id },
-      data: { databaseCvEnabled: true, databaseResumeId: resume.id },
-    });
-    await candidateAccess.assertAccess(hr2, company.id, profile.id, 'CV');
-    await db.employeeProfile.update({
-      where: { id: profile.id },
-      data: { databaseCvEnabled: false },
-    });
-    await assert.rejects(() => candidateAccess.assertAccess(hr2, company.id, profile.id, 'CV'));
-    await db.employeeProfile.update({ where: { id: profile.id }, data: { visibility: 'PRIVATE' } });
-    await assert.rejects(() =>
-      candidateAccess.assertAccess(hr2, company.id, profile.id, 'CONTACT'),
-    );
-    await db.employeeProfile.update({ where: { id: profile.id }, data: { visibility: 'PUBLIC' } });
+    assert.equal((await candidateAccess.resume(hr2, company.id, profile.id, resume.id)).resume.id, resume.id,
+      'Company members can access every active profile CV without candidate opt-in');
+    await assert.rejects(() => candidateAccess.resume(hr, other.id, profile.id, resume.id));
     const q = await jobs.addQuestion(hr, second.id, {
       question: 'Years doing this role?',
       type: 'NUMBER',
@@ -531,7 +519,7 @@ async function main() {
     });
     const applicant = await actor('EMPLOYEE', 'Actual applicant');
     const applicantProfile = await db.employeeProfile.create({
-      data: { userId: applicant.id, visibility: 'PUBLIC', bulkCommsOptOut: true },
+      data: { userId: applicant.id, bulkCommsOptOut: true },
     });
     const applicantCv = await db.resume.create({
       data: {
@@ -540,6 +528,24 @@ async function main() {
         fileKey: 'submitted-original.pdf',
       },
     });
+    await runHrHttpSuite({
+      db,
+      benefits,
+      candidateAccess,
+      analytics,
+      support,
+      admin,
+      hr,
+      outsider,
+      employee: applicant,
+      companyId: company.id,
+      standardJobId: second.id,
+      premiumJobId: first.id,
+      resumeId: applicantCv.id,
+      profileId: applicantProfile.id,
+      ticketId: ticket.id,
+    });
+    console.log('HTTP HR suite passed, including candidate CV access checks.');
     const required = await jobs.addQuestion(hr, second.id, {
       question: 'Do you have the required certificate?',
       type: 'YES_NO',
@@ -697,23 +703,6 @@ async function main() {
     await db.employeeProfile.update({where:{id:applicantProfile.id},data:{residenceCountryId:uzCountry.id}});
     assert.equal(await filterCount({country:idCountry.slug}),0,'Explicit residence must take precedence over an old city');
     assert.equal(await filterCount({country:uzCountry.slug}),1);
-    await runHrHttpSuite({
-      db,
-      benefits,
-      candidateAccess,
-      analytics,
-      support,
-      admin,
-      hr,
-      outsider,
-      employee: applicant,
-      companyId: company.id,
-      standardJobId: second.id,
-      premiumJobId: first.id,
-      resumeId: applicantCv.id,
-      profileId: applicantProfile.id,
-      ticketId: ticket.id,
-    });
     const profileService = new ProfilesService(
       db,
       {} as never,
@@ -752,19 +741,19 @@ async function main() {
     await support.reply(hr, ticket.id, 'Please reopen this synthetic issue.', 'support-reopen');
     assert.equal((await support.get(hr, ticket.id)).priority, true);
     assert.equal(await db.candidateCredit.count(), 0);
-    await candidateAccess.assertAccess(hr, company.id, applicantProfile.id, 'CONTACT');
+    await candidateAccess.candidate(hr, company.id, applicantProfile.id);
     // A Free company can read every available candidate without an unlock.
     const freeCandidates = await Promise.all(
       Array.from({ length: 6 }, (_, index) => actor('EMPLOYEE', 'Free quota ' + index)),
     );
     const freeProfiles = await Promise.all(
       freeCandidates.map((user) =>
-        db.employeeProfile.create({ data: { userId: user.id, visibility: 'PUBLIC' } }),
+        db.employeeProfile.create({ data: { userId: user.id } }),
       ),
     );
     const freeRace = await Promise.allSettled(
       freeProfiles.map((row) =>
-        candidateAccess.assertAccess(outsider, other.id, row.id, 'CONTACT'),
+        candidateAccess.candidate(outsider, other.id, row.id),
       ),
     );
     assert.equal(
@@ -790,7 +779,7 @@ async function main() {
         expiresAt: new Date(Date.now() - DAY_MS),
       },
     });
-    await candidateAccess.assertAccess(outsider, other.id, freeProfiles[0].id, 'CONTACT');
+    await candidateAccess.candidate(outsider, other.id, freeProfiles[0].id);
     assert.deepEqual(
       await db.candidateCredit.findUnique({ where: { id: legacyCredit.id } }),
       legacyCredit,
@@ -883,7 +872,7 @@ async function main() {
       ),
     );
     await assert.rejects(() =>
-      candidateAccess.assertAccess(hr, lifecycleCompany.id, profile.id, 'CONTACT'),
+      candidateAccess.candidate(hr, lifecycleCompany.id, profile.id),
     );
     await db.company.update({ where: { id: lifecycleCompany.id }, data: { isBanned: false } });
     assert.equal(

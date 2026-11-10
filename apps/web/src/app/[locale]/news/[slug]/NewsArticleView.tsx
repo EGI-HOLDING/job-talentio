@@ -5,8 +5,7 @@ import { Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { UgcText } from '@/components/ui/UgcText';
-import { NEWS_CATEGORY_LABEL_KEY, formatNewsDate } from '@/components/news/NewsCard';
-import type { NewsArticleDetail } from '@/lib/newsSeo';
+import { formatNewsDate, type NewsArticleDetail } from '@/lib/newsSeo';
 import s from '@/components/public/PublicPages.module.css';
 
 export function NewsArticleView({ article: initial }: { article: NewsArticleDetail }) {
@@ -38,11 +37,11 @@ export function NewsArticleView({ article: initial }: { article: NewsArticleDeta
     <div className={s.page}><div className={s.container}>
       <article className={s.article}>
         <Link href="/news" className={s.back}>
-          {'\u2190'} {t('public.backInsights')}
+          {'\u2190'} {t('employers.insights')}
         </Link>
 
         <div className="news-card-meta" style={{ margin: '1rem 0 0.6rem' }}>
-          <span className="badge">{t(NEWS_CATEGORY_LABEL_KEY[article.category])}</span>
+          <span className="badge">{t('employers.insights')}</span>
           <span className="muted">{formatNewsDate(article.publishedAt, locale)}</span>
         </div>
 

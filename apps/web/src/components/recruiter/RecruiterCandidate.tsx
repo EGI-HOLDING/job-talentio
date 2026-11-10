@@ -27,13 +27,15 @@ export function RecruiterCandidate() {
   const [contacts, setContacts] = useState<any>(null), [contactBusy, setContactBusy] = useState(false), [contactError, setContactError] = useState('');
   const [companyId,setCompanyId]=useState('');
   const [canChat, setCanChat] = useState(false), [cvUrl, setCvUrl] = useState(''), [cvBusy, setCvBusy] = useState(false), [cvError, setCvError] = useState('');
+  const [selectedDocumentKey, setSelectedDocumentKey] = useState('');
+  const cvRequest = useRef(0);
   const presence = usePresence([data?.user?.id]);
   function navigate(patch: Record<string, string>) { const next = new URLSearchParams(params.toString()); for (const [key, value] of Object.entries(patch)) { if (value) next.set(key, value); else next.delete(key); } router.replace('/candidates/' + id + '?' + next.toString(), { scroll: false }); }
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace('/login?role=RECRUITER&next=' + encodeURIComponent('/candidates/' + id + '?' + params.toString())); return; }
     if (!['RECRUITER', 'SUPER_ADMIN'].includes(session.user.role)) { router.replace(session.user.role === 'EMPLOYEE' ? '/jobs' : '/'); return; }
-    let active = true; ++request.current; setLoading(true); setError(''); setContacts(null); setContactError(''); setCvUrl(''); setCvError('');setCvBusy(false);setContactBusy(false);
+    let active = true; ++request.current; ++cvRequest.current; setLoading(true); setError(''); setContacts(null); setContactError(''); setCvUrl(''); setCvError('');setCvBusy(false);setContactBusy(false);
     api<any[]>('/companies/mine').then(async (memberships) => {
       const lists = await Promise.all(memberships.map(async (membership) => { const items = await api<any[]>('/jobs/company/' + membership.companyId); return items.map((job) => ({ ...job, companyId: membership.companyId })); }));
       if (!active) return;
@@ -41,7 +43,7 @@ export function RecruiterCandidate() {
       const selected = allJobs.find((job) => job.id === matchJobId);
       const membership = memberships.find((item) => item.companyId === (params.get('company')||selected?.companyId)) || preferredCompany(memberships);
       const profile=await api<any>('/profiles/candidates/'+id+'?'+new URLSearchParams({...(matchJobId?{matchJobId}:{}),...(membership?{companyId:membership.companyId}:{})}));
-      if(!active||getSession()?.user.id!==session.user.id)return;if(params.get('application')&&profile.applicationForJob?.id!==params.get('application'))throw new Error(t('ew.loadFailed'));setData(profile);
+      if(!active||getSession()?.user.id!==session.user.id)return;if(params.get('application')&&profile.applicationForJob?.id!==params.get('application'))throw new Error(t('ew.loadFailed'));setData(profile);setSelectedDocumentKey(profile.applicationCv?.key||profile.resumeFiles?.find((resume:any)=>resume.isPrimary)?.key||profile.resumeFiles?.[0]?.key||'');
       if (!active) return;
       setCompanyId(membership?.companyId || '');
       if(membership)rememberCompany(membership.companyId);
@@ -55,7 +57,7 @@ export function RecruiterCandidate() {
     let active=true;const version=request.current,actor=getSession()?.user.id;
     const refresh=async()=>{try{const result=await api('/profiles/candidates/'+id+'?'+new URLSearchParams({companyId,...(matchJobId?{matchJobId}:{})}));if(active&&version===request.current&&getSession()?.user.id===actor)setData(result);}catch{/* Keep the last authorized view; foreground navigation reports errors. */}};
     window.addEventListener('focus',refresh);
-    const timer=['PENDING','PROCESSING','NONE'].includes(data.cvSource?.status)&&data.cv?.hasFile?setInterval(refresh,5000):undefined;
+    const timer=['PENDING','PROCESSING','NONE'].includes(data.cvSource?.status)&&(data.applicationCv?.hasFile||data.resumeFiles?.length>0)?setInterval(refresh,5000):undefined;
     return()=>{active=false;window.removeEventListener('focus',refresh);if(timer)clearInterval(timer);};
   },[loading,id,matchJobId,companyId,locale,data?.cvSource?.status,data?.cvSource?.versionId]);
   useEffect(()=>{
@@ -66,20 +68,24 @@ export function RecruiterCandidate() {
     }
   },[matchJobId,data?.applicationForJob?.status]);
   async function reveal() { const version = request.current,actor=getSession()?.user.id; setContactBusy(true); setContactError(''); try { const query=new URLSearchParams({companyId,...(matchJobId?{jobPostId:matchJobId}:{})}); const result = await api('/profiles/candidates/' + id + '/reveal-contact?'+query.toString(), { method: 'POST' }); if (version === request.current&&getSession()?.user.id===actor) setContacts(result); } catch (reason) { if(version===request.current)setContactError(reason instanceof Error ? reason.message : t('talent.revealContactsFailed')); } finally { if(version===request.current)setContactBusy(false); } }
+  const cvDocuments=[...(data?.applicationCv?[data.applicationCv]:[]),...(data?.resumeFiles||[])];
+  const selectedDocument=cvDocuments.find((item:any)=>item.key===selectedDocumentKey)||cvDocuments.find((item:any)=>item.isPrimary)||cvDocuments[0]||null;
   const blobUrl=useRef('');
   useEffect(()=>()=>{if(blobUrl.current)URL.revokeObjectURL(blobUrl.current);},[id,matchJobId,companyId]);
-  async function viewCv(){const version=request.current;if(!data?.cv?.hasFile||cvBusy)return;setCvBusy(true);setCvError('');try{
+  function selectDocument(key:string){++cvRequest.current;setCvBusy(false);setSelectedDocumentKey(key);setCvUrl('');setCvError('');if(blobUrl.current){URL.revokeObjectURL(blobUrl.current);blobUrl.current='';}}
+  async function viewCv(){if(!selectedDocument?.hasFile||cvBusy)return;const version=++cvRequest.current,actor=getSession()?.user.id;setCvBusy(true);setCvError('');try{
     let url:string;
-    if(data.cv.application){url=(await api<{url:string}>(data.cv.downloadPath)).url;}else{const blob=await apiBlob(data.cv.downloadPath);url=URL.createObjectURL(blob);if(blobUrl.current)URL.revokeObjectURL(blobUrl.current);blobUrl.current=url;}
-    if(version===request.current)setCvUrl(url);else if(url.startsWith('blob:'))URL.revokeObjectURL(url);
-  }catch(reason){if(version===request.current)setCvError(reason instanceof Error?reason.message:t('viewCvFailed'));}finally{if(version===request.current)setCvBusy(false);}}
+    if(selectedDocument.application){url=(await api<{url:string}>(selectedDocument.downloadPath)).url;}else{const blob=await apiBlob(selectedDocument.downloadPath);url=URL.createObjectURL(blob);if(blobUrl.current)URL.revokeObjectURL(blobUrl.current);blobUrl.current=url;}
+    if(version===cvRequest.current&&getSession()?.user.id===actor)setCvUrl(url);else if(url.startsWith('blob:'))URL.revokeObjectURL(url);
+  }catch(reason){if(version===cvRequest.current)setCvError(reason instanceof Error?reason.message:t('viewCvFailed'));}finally{if(version===cvRequest.current)setCvBusy(false);}}
   const job = jobs.find((item) => item.id === matchJobId);
   return <section className={s.root} aria-label={t('viewCv')}>
     <div className={s.context}><Link className={s.textButton} href={matchJobId?employerJobHref(matchJobId,params.get('from')==='kanban'?'kanban':'applicants',companyId):employerWorkspaceHref('candidates',companyId)}><WorkspaceIcon kind="left" />{t(matchJobId?'applicants.back':'candidates')}</Link>{jobs.length>0&&<JobContextSelect allowBrowse jobs={jobs.filter(job=>job.publishedAt&&job.status!=='DRAFT')} value={matchJobId} onChange={value=>navigate({application:'',matchJobId:value,company:jobs.find(item=>item.id===value)?.companyId||companyId})} />}</div>
     {error?<ResourceError message={error} onRetry={()=>setRetry(value=>value+1)} />:loading?<WorkspaceLoading />:data&&<div className={c.workspace}>
       <header className={c.identity}><RecruiterAvatar name={data.user.fullName} src={data.user.avatarUrl} /><div className={c.name}><h1>{data.user.fullName}</h1>{data.headline&&<p>{data.headline}</p>}<small>{data.city?.name||data.residenceCountry?.name}</small><PresenceDot status={presence[data.user.id]??data.presence} showLabel /></div><div className={c.actions}>{canChat && !(matchJobId && data.applicationForJob?.status === 'WITHDRAWN')&&<><Link className={s.primary} href={'/messages?'+new URLSearchParams({peer:data.user.id,...(matchJobId?{job:matchJobId}:{}),role:'RECRUITER'})}><WorkspaceIcon kind="message" />{t('rec.chat')}</Link><WhatsAppAction profileId={id} companyId={companyId} jobPostId={matchJobId || undefined} contactRevealed={contacts!==null} phone={contacts?.phone} /></>}</div></header>
-      <div className={c.columns}><section className={c.document} aria-label={t('viewCv')}><header className={c.documentHeading}><div><span className={c.eyebrow}>{t(data.cv?.application?'cv.applicationFile':'cv.databaseFile')}</span><h2>{data.cv?.title||t('resumes')}</h2></div>{data.cv?.hasFile&&<button type="button" className={s.secondary} disabled={cvBusy} onClick={()=>void viewCv()}><WorkspaceIcon kind="file" />{t(cvBusy?'loading':'viewCv')}</button>}</header>
-        {cvError&&<p role="alert" className={c.error}>{cvError}</p>}{cvBusy?<WorkspaceLoading />:cvUrl?<><div className={c.download}><a href={cvUrl} target="_blank" rel="noopener noreferrer" className={s.textButton}>{t('pc.downloadFile')}<WorkspaceIcon kind="external" /></a></div>{data.cv?.format==='pdf'?<iframe title={t('viewCv')} src={cvUrl} className={c.frame} />:<div className={c.placeholder}><WorkspaceIcon kind="file" /><a href={cvUrl} target="_blank" rel="noopener noreferrer" className={s.primary}>{t('pc.downloadFile')}</a></div>}</>:<div className={c.placeholder}><WorkspaceIcon kind="file" /><p>{t(data.cv?.hasFile?'cv.previewHint':'cv.notShared')}</p>{data.cv?.hasFile&&<button type="button" className={s.primary} disabled={cvBusy} onClick={()=>void viewCv()}>{t('viewCv')}</button>}</div>}
+      <div className={c.columns}><section className={c.document} aria-label={t('viewCv')}><header className={c.documentHeading}><div><span className={c.eyebrow}>{t(selectedDocument?.application?'cv.applicationFile':'cv.profileFile')}</span><h2>{selectedDocument?.title||t('resumes')}</h2></div>{selectedDocument?.hasFile&&<button type="button" className={s.secondary} disabled={cvBusy} onClick={()=>void viewCv()}><WorkspaceIcon kind="file" />{t(cvBusy?'loading':'viewCv')}</button>}</header>
+        {cvDocuments.length>1&&<nav className={c.documentList} aria-label={t('cv.selectDocument')} role="tablist">{cvDocuments.map((item:any)=><button key={item.key} type="button" role="tab" aria-selected={selectedDocument?.key===item.key} className={selectedDocument?.key===item.key?c.documentSelected:undefined} onClick={()=>selectDocument(item.key)}>{item.application?t('cv.applicationFile'):item.isPrimary?t('cv.primaryFile'):t('cv.profileFile')}<strong>{item.title||t('resumes')}</strong></button>)}</nav>}
+        {cvError&&<p role="alert" className={c.error}>{cvError}</p>}{cvBusy?<WorkspaceLoading />:cvUrl?<><div className={c.download}><a href={cvUrl} target="_blank" rel="noopener noreferrer" className={s.textButton}>{t('pc.downloadFile')}<WorkspaceIcon kind="external" /></a></div>{selectedDocument?.format==='pdf'?<iframe title={t('viewCv')} src={cvUrl} className={c.frame} />:<div className={c.placeholder}><WorkspaceIcon kind="file" /><a href={cvUrl} target="_blank" rel="noopener noreferrer" className={s.primary}>{t('pc.downloadFile')}</a></div>}</>:<div className={c.placeholder}><WorkspaceIcon kind="file" /><p>{selectedDocument?.hasFile?t('cv.previewHint'):t('cv.noFile')}</p>{selectedDocument?.hasFile&&<button type="button" className={s.primary} disabled={cvBusy} onClick={()=>void viewCv()}>{t('viewCv')}</button>}</div>}
       </section><aside className={c.aside}>
         {data.applicationForJob&&<section><h2>{t('rw.application')}</h2><p>{job?.title}</p><strong>{enumLabel('applicationStatus',data.applicationForJob.status)}</strong><KanbanAction application={data.applicationForJob} jobId={matchJobId} companyId={companyId} onChanged={value=>setData((current:any)=>({...current,applicationForJob:{...current.applicationForJob,...value}}))} /></section>}
         {matchJobId&&<section><h2>{t('rw.matchForJob')}</h2>{data.match?.rankingVersion?<HrMatchSummary assessment={data.match} detail/>:<p>{t(data.cvSource?.status==='FAILED'?'cv.hrFailed':data.cvSource?.status==='READY'?'ranking.insufficient':data.cvSource?.status==='NONE'?'noCvAttached':'cv.hrPending')}</p>}</section>}

@@ -115,6 +115,7 @@ async function main() {
   const { JobsService } = load('jobs/jobs.service.js');
   const { MatchingService } = load('matching/matching.service.js');
   const { ProfilesService } = load('profiles/profiles.service.js');
+  const { CandidateAccessService } = load('profiles/candidate-access.service.js');
   const { ChatService } = load('chat/chat.service.js');
   const { ApplicationsService } = load('applications/applications.service.js');
   const config = new ConfigService({});
@@ -122,7 +123,8 @@ async function main() {
   const auth = new AuthService(coreDb, { signAsync: async () => 'isolated-token' }, config, mail, storage, companies, {});
   const matching = new MatchingService(coreDb);
   const jobs = new JobsService(coreDb, companies, matching, notifications, search, telegram);
-  const profiles = new ProfilesService(coreDb, storage, companies, matching, {}, presence, {}, null);
+  const candidateAccess = new CandidateAccessService(coreDb);
+  const profiles = new ProfilesService(coreDb, storage, companies, matching, {}, presence, {}, null, candidateAccess);
   const chat = new ChatService(coreDb, presence, notifications, telegram);
   const applications = new ApplicationsService(coreDb, storage, companies, matching, notifications, mail);
   const actors = [];
@@ -132,7 +134,7 @@ async function main() {
     actors.push(ctx(session));
   }
   const employee = ctx(await auth.register({ email: 'candidate@isolated.test', password: 'IsolatedTest!2026', fullName: 'Isolated Candidate', role: 'EMPLOYEE' }));
-  const candidate = await db.employeeProfile.update({ where: { userId: employee.id }, data: { visibility: 'PUBLIC', phone: '+998901234567' } });
+  const candidate = await db.employeeProfile.update({ where: { userId: employee.id }, data: { phone: '+998901234567' } });
   await check('registrations and login work without subscriptions', async () => {
     assert.equal(await db.subscription.count(), 0);
     const session = await auth.login('missing@isolated.test', 'IsolatedTest!2026', 'RECRUITER');
@@ -194,17 +196,20 @@ async function main() {
     assert.deepEqual(await db.subscription.findMany({ orderBy: { id: 'asc' } }), subscriptionBefore);
     assert.equal(await db.payment.count(), 0);
   });
-  await check('private candidates, nonmembers, banned companies and unauthorized CV downloads remain blocked', async () => {
+  await check('candidate access requires active company membership and protects unavailable CV files', async () => {
     const actor = actors[0], job = postings[0];
-    await db.employeeProfile.update({ where: { id: candidate.id }, data: { visibility: 'PRIVATE' } });
-    await denied(() => profiles.revealCandidateContact(actor, candidate.id), [404]);
-    // A distinct candidate ensures an earlier conversation cannot bypass privacy.
-    const privateSession = ctx(await auth.register({ email: 'private@isolated.test', password: 'IsolatedTest!2026', fullName: 'Private Candidate', role: 'EMPLOYEE' }));
-    await db.employeeProfile.update({ where: { userId: privateSession.id }, data: { visibility: 'PRIVATE' } });
-    await denied(() => chat.startConversation(actor, privateSession.id), [404]);
+    assert.equal((await candidateAccess.candidate(actor, actor.memberships[0].companyId, candidate.id)).profile.id, candidate.id);
+    // A distinct candidate ensures a prior conversation cannot bypass membership checks.
+    const secondCandidate = ctx(await auth.register({ email: 'second-candidate@isolated.test', password: 'IsolatedTest!2026', fullName: 'Second Candidate', role: 'EMPLOYEE' }));
+    const secondProfile = await db.employeeProfile.findUniqueOrThrow({ where: { userId: secondCandidate.id } });
+    assert.equal((await candidateAccess.candidate(actor, actor.memberships[0].companyId, secondProfile.id)).profile.id, secondProfile.id);
+    assert.equal((await chat.startConversation(actor, secondCandidate.id, { companyId: actor.memberships[0].companyId })).isColdOutreach, true);
     await denied(() => jobs.changeStatus(actors[1], job.id, 'PAUSED'), [403]);
     await denied(() => chat.startConversation({ ...actor, memberships: [] }, employee.id), [403]);
+    await denied(() => candidateAccess.candidate({ ...actor, memberships: [] }, actor.memberships[0].companyId, candidate.id), [403]);
     const resume = await db.resume.create({ data: { profileId: candidate.id, title: 'Isolated CV', fileKey: 'isolated-cv.pdf', isPrimary: true } });
+    assert.equal((await candidateAccess.resume(actor, actor.memberships[0].companyId, candidate.id, resume.id)).resume.id, resume.id);
+    await denied(() => candidateAccess.resume(actor, actor.memberships[0].companyId, secondProfile.id, resume.id), [404]);
     await denied(() => profiles.downloadResume(actor, resume.id), [403]);
     const application = await applications.apply(employee, job.id, undefined, undefined, resume.id);
     assert.ok((await profiles.downloadResume(actor, resume.id)).url);
@@ -215,12 +220,11 @@ async function main() {
     assert.ok(interview.id);
     await db.company.update({ where: { id: actor.memberships[0].companyId }, data: { isBanned: true } });
     await denied(() => profiles.revealCandidateContact(actor, candidate.id), [404, 403]);
-    await denied(() => chat.startConversation(actor, privateSession.id), [404]);
+    await denied(() => candidateAccess.candidate(actor, actor.memberships[0].companyId, candidate.id), [403]);
     await denied(() => jobs.changeStatus(actor, job.id, 'PAUSED'), [403]);
   });
   await check('contact anti-scraping quota and account erasure remain effective', async () => {
     const actor = actors[1];
-    await db.employeeProfile.update({ where: { id: candidate.id }, data: { visibility: 'PUBLIC' } });
     await db.auditLog.createMany({ data: Array.from({ length: 30 }, () => ({ actorId: actor.id, action: 'CANDIDATE_CONTACT_REVEAL', entityType: 'EmployeeProfile', entityId: candidate.id })) });
     await denied(() => profiles.revealCandidateContact(actor, candidate.id), [429]);
     const { UserErasureService } = load('users/user-erasure.service.js');

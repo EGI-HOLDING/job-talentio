@@ -4,7 +4,6 @@ import { useSessionIdentity } from '@/lib/useSessionIdentity';
 import { useMatchingStatus } from '@/lib/useMatchingStatus';
 import { EmployeeEvidenceReview } from './EmployeeEvidenceReview';
 import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
-import { DatabaseCvPermission } from './DatabaseCvPermission';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -27,7 +26,7 @@ import s from './ProfileWorkspace.module.css';
 
 const SECTIONS = [
   ['overview', 'pc.overview', 'user'], ['preferences', 'pc.preferences', 'briefcase'],
-  ['contact', 'pc.contact', 'user'], ['languages', 'languages', 'globe'], ['certifications', 'certifications', 'award'], ['visibility', 'pc.visibility', 'eye'],
+  ['contact', 'pc.contact', 'user'], ['languages', 'languages', 'globe'], ['certifications', 'certifications', 'award'],
 ] as const;
 
 function Section({ id, title, action, children }: { id: string; title: string; action?: ReactNode; children: ReactNode }) {
@@ -66,7 +65,6 @@ export function ProfileCvWorkspace() {
   const menuButton = useRef<HTMLButtonElement | null>(null);
   const profileScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeSection, setActiveSection] = useState('overview');
-  const [visibility, setVisibility] = useState<CareerProfile['visibility']>('TO_REGISTERED_RECRUITERS');
   const [busy, setBusy] = useState<string | null>(null);
   const actionInFlight = useRef(false);
   const mounted = useRef(true);
@@ -92,7 +90,6 @@ export function ProfileCvWorkspace() {
   useEffect(()=>{if(profileResource.error)setError(profileResource.error);},[profileResource.error]);
   const processing=Boolean(profile?.resumes.some(row=>['PENDING','PROCESSING'].includes(row.parseStatus||'')&&row.hasFile));
   useMatchingStatus(processing,()=>{void load().catch(()=>{});});
-  useEffect(() => { if (profile) setVisibility(profile.visibility); }, [profile?.visibility]);
   useEffect(() => {
     if (showCvs || !profile) return;
     const observer = new IntersectionObserver((entries) => {
@@ -238,7 +235,6 @@ export function ProfileCvWorkspace() {
         <Section id="contact" title={t('pc.contact')} action={<Link className={s.textButton} href="/settings"><ProfileIcon kind="external" />{t('pc.manageAccount')}</Link>}><dl className={s.facts}><div><dt>{t('email')}</dt><dd>{profile.user.email || t('pc.notSet')}{profile.user.emailVerified && <span className={s.badge}><ProfileIcon kind="check" />{t('emailVerifiedBadge')}</span>}</dd>{profile.user.email && !profile.user.emailVerified && <button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={() => void action('verify', async () => { const res = await api<{ message?: string }>('/auth/request-verification', { method: 'POST' }); await refresh(res.message || t('verifyEmailSentTo') + ' ' + profile.user.email); })}>{t('verifyEmailCta')}</button>}</div><div><dt>{t('emp.phone')}</dt><dd>{profile.phone || <span className={s.quiet}>{t('pc.notSet')}</span>}<button type="button" className={s.textButton} disabled={Boolean(busy)} onClick={() => setEditor({ kind: 'phone' })}><ProfileIcon kind="edit" />{onboardingText('phoneEdit')}</button></dd></div></dl></Section>
         <Section id="languages" title={t('languages')} action={editButton('languages')}><div className={s.tags}>{profile.languages.map((row) => <span className={s.tag} key={row.id}>{row.language.name}<small>{enumLabel('cefr', row.level)}</small></span>)}{addButton('languages')}</div></Section>
         <Section id="certifications" title={t('certifications')}><div className={s.timeline}>{profile.certifications.map((row) => <div className={s.timelineItem} key={row.id}><div className={s.entryHeading}><div><strong>{row.name}</strong>{row.issuer && <p>{row.issuer}</p>}<small>{[date(row.issuedAt), row.expiresAt ? `${t('emp.expiresAt')} ${date(row.expiresAt)}` : ''].filter(Boolean).join(' | ')}</small>{row.credentialUrl && /^https?:\/\//i.test(row.credentialUrl) && <p><a className={s.textButton} href={row.credentialUrl} target="_blank" rel="noreferrer">{t('emp.credentialUrl')}<ProfileIcon kind="external" /></a></p>}</div>{entryActions('certification', 'certifications', row.id, row.name)}</div></div>)}</div>{!profile.certifications.length && <p className={s.quiet}>{t('pc.emptySection')}</p>}{addButton('certification')}</Section>
-        <Section id="visibility" title={t('pc.visibility')}><DatabaseCvPermission resumes={profile.resumes}/><p className={s.muted}>{t('pc.visibilityHint')}</p><form onSubmit={(event) => { event.preventDefault(); void action('visibility', async () => { await api('/profiles/me', { method: 'PATCH', body: JSON.stringify({ visibility }) }); await refresh(t('pc.saved')); }); }}><fieldset disabled={Boolean(busy)} className={s.resetFieldset}><div className={s.visibilityOptions}>{([['TO_REGISTERED_RECRUITERS', 'pc.registered'], ['PUBLIC', 'pc.public'], ['PRIVATE', 'pc.private']] as const).map(([value, key]) => <label key={value}><input type="radio" name="visibility" value={value} checked={visibility === value} onChange={() => setVisibility(value)} /><div>{t(key)}{value === 'PRIVATE' && <small>{t('pc.privateHint')}</small>}</div></label>)}</div><div className={s.visibilityFooter}><p>{t('pc.visibilityApplications')}</p><button type="submit" className={s.primary} disabled={Boolean(busy) || visibility === profile.visibility}>{busy === 'visibility' ? t('saving') : t('pc.saveVisibility')}</button></div></fieldset></form></Section>
       </div>
     </div>)}
 

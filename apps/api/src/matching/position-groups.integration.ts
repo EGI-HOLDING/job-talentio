@@ -1,0 +1,97 @@
+import 'reflect-metadata';
+import assert from 'node:assert/strict';
+import {writeFileSync} from 'node:fs';
+import {PrismaService} from '../prisma/prisma.service';
+import {OccupationRelationsService} from './occupation-relations.service';
+import {PositionGroupService} from './position-group.service';
+import {PositionGroupsController} from './position-groups.controller';
+import {EmployeeCatalogSnapshot} from './employee-catalog-snapshot';
+import {EmployeeIntentService} from './employee-intent.service';
+import {employeePreferenceUpdate,desiredSelectionView,desiredRolesInclude,desiredGroupsInclude} from './employee-preferences';
+import {VacancyTasksService} from './vacancy-tasks.service';
+import {ConfigService} from '@nestjs/config';
+import {CandidateCache} from '../common/candidate-cache';
+
+async function main(){
+  const url=new URL(process.env.DATABASE_URL||'');
+  if(!['localhost','127.0.0.1'].includes(url.hostname)||url.pathname!=='/talentio_position_groups_20261110')throw Error('Isolated position-group database required');
+  const db=new PrismaService(),cache=new CandidateCache(new ConfigService(process.env));
+  const relations=new OccupationRelationsService(db),catalog=new EmployeeCatalogSnapshot(db,cache,relations),groups=new PositionGroupService(db,relations,cache);
+  const service=new EmployeeIntentService(db,catalog,cache,new VacancyTasksService(db,relations,cache),groups);
+  const controller=new PositionGroupsController(groups,catalog),prefix='pg-it-';let checks=0;const cases:string[]=[];
+  const check=(value:unknown,label:string)=>{assert.ok(value,label);checks++;cases.push(label);};
+  try{
+    const before=await db.positionGroupState.findUniqueOrThrow({where:{id:'indonesia'}});
+    const built=await groups.build(true);
+    check(built.id===before.activeReleaseId,'active release matches the current complete manifest');
+    const releaseCount=await db.positionGroupRelease.count();await groups.build(false,built.id);
+    check(await db.positionGroupRelease.count()===releaseCount,'repeated import does not create duplicate releases');
+    await assert.rejects(()=>groups.activate(built.id,before.revision-1,null));checks++;
+    const list=await controller.list({limit:100});check(list.total===99&&list.items.length===99,'all 99 groups are available through metadata');
+    const chefOptions=await controller.options({q:'Chef',limit:100});
+    check(chefOptions.items.some(x=>x.kind==='GROUP'&&x.name==='Chef')&&chefOptions.items.some(x=>x.kind==='ROLE'&&x.name==='Chef'),'same-name group and role have distinct typed identities');
+    check((await controller.options({q:'Penjualan',limit:100})).items.some(x=>x.kind==='GROUP'&&x.name==='Sales'),'Indonesian search returns English group label');
+    const snapshot=await catalog.get(true),resolve=(name:string)=>{const id=snapshot.index.resolve(name);assert.ok(id,name);return id;};
+    const titles=['Sales Manager','Commercial Sales Representative','Medical Sales Representative','Aftersales Service Manager','Chef','Head Chef','Cook','Accountant','Civil Engineer','Electrician'];
+    const ids=new Map(titles.map(name=>[name,resolve(name)]));
+    const company=await db.company.upsert({where:{slug:prefix+'company'},create:{id:prefix+'company',slug:prefix+'company',name:'Anonymous catalog group fixtures'},update:{}});
+    for(const [name,jobTitleId] of ids)await db.jobPost.upsert({where:{id:prefix+jobTitleId},create:{id:prefix+jobTitleId,companyId:company.id,title:name,jobTitleId,description:'Responsibilities for '+name,status:'PUBLISHED',publishedAt:new Date(),countryId:null},update:{status:'PUBLISHED',salaryMin:null,salaryMax:null,countryId:null}});
+    const user=await db.user.upsert({where:{id:prefix+'user'},create:{id:prefix+'user',email:prefix+'user@example.test',role:'EMPLOYEE',fullName:'Anonymous group fixture',employeeProfile:{create:{id:prefix+'profile'}}},update:{}});
+    const profileId=prefix+'profile';await db.application.deleteMany({where:{profileId}});
+    const save=async(selections:Array<{kind:'GROUP'|'ROLE';id:string}>,revision?:number)=>{
+      const profile=await db.employeeProfile.findUniqueOrThrow({where:{id:profileId}});
+      return db.$transaction(async tx=>{const update=await employeePreferenceUpdate(tx,{desiredSelections:selections,preferencesRevision:revision??profile.preferencesRevision},profileId);return tx.employeeProfile.update({where:{id:profileId,preferencesRevision:revision??profile.preferencesRevision},data:update});});
+    };
+    let saved=await save([{kind:'GROUP',id:'group:sales'}]);await cache.invalidate();
+    let primary=await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true});
+    check(primary.version==='employee-intent-v3.2'&&primary.mode==='PREFERENCES_BASED','V3.2 serves group preferences without CV gate');
+    const fixtureIds=primary.items.filter(x=>x.job.companyId===company.id).map(x=>x.job.id);
+    for(const name of titles.slice(0,3))check(fixtureIds.includes(prefix+ids.get(name)),'Sales group includes '+name);
+    check(!fixtureIds.includes(prefix+ids.get('Aftersales Service Manager')),'aftersales does not leak into selected Sales group');
+    check(primary.items.every(x=>x.selectionBasis==='GROUP'),'group-only primary section never claims EXACT');
+    const view=await db.employeeProfile.findUniqueOrThrow({where:{id:profileId},include:{desiredRoles:desiredRolesInclude,desiredGroups:desiredGroupsInclude}});
+    check(desiredSelectionView(view).some(s=>s.kind==='GROUP'&&s.name==='Sales'),'typed preference round-trips with English label');
+    await assert.rejects(()=>employeePreferenceUpdate(db,{desiredJobTitleIds:[ids.get('Chef')!]},profileId));checks++;
+    await assert.rejects(()=>save([{kind:'ROLE',id:ids.get('Chef')!}],saved.preferencesRevision-1));checks++;
+    check((await db.employeeProfile.findUniqueOrThrow({where:{id:profileId}})).preferencesRevision===saved.preferencesRevision,'stale and legacy writes retain group selections');
+    await save([{kind:'GROUP',id:'group:sales'},{kind:'ROLE',id:ids.get('Sales Manager')!}]);await cache.invalidate();
+    primary=await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true});
+    check(primary.items[0]?.selectionBasis==='EXACT'&&primary.items.find(x=>x.job.id===prefix+ids.get('Sales Manager'))?.selectionBasis==='EXACT','explicit member is EXACT before other group members');
+    await save([{kind:'ROLE',id:ids.get('Sales Manager')!}]);await cache.invalidate();
+    primary=await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true});
+    check(primary.items.every(x=>x.selectionBasis==='EXACT')&&!primary.items.some(x=>x.job.id===prefix+ids.get('Commercial Sales Representative')),'specific Sales Manager does not expand into Sales group');
+    const five=[{kind:'GROUP' as const,id:'group:sales'},{kind:'GROUP' as const,id:'group:chef'},{kind:'GROUP' as const,id:'group:cook'},{kind:'GROUP' as const,id:'group:engineer'},{kind:'ROLE' as const,id:ids.get('Civil Engineer')!}];
+    await save(five);await cache.invalidate();
+    const a=await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true});
+    await save([...five].reverse());await cache.invalidate();
+    const b=await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true});
+    check(JSON.stringify(a.items.map(x=>[x.job.id,x.matchScore]))===JSON.stringify(b.items.map(x=>[x.job.id,x.matchScore])),'five mixed choices are independent of click order');
+    check(new Set(b.items.map(x=>x.job.id)).size===b.items.length,'overlap does not duplicate jobs');
+    const first=await service.recommend(profileId,1,2,undefined,'recommendations',{separated:true}),second=await service.recommend(profileId,2,2,undefined,'recommendations',{separated:true});
+    check(!first.items.some(x=>second.items.some(y=>x.job.id===y.job.id)),'pagination has no duplicate members');
+    const related=await service.recommend(profileId,1,100,undefined,'related',{separated:true});
+    check(related.items.every(x=>x.selectionBasis==='RELATED')&&!related.items.some(x=>b.items.some(y=>y.job.id===x.job.id)),'related section is typed and disjoint');
+    const excluded=prefix+ids.get('Head Chef');await db.jobPost.update({where:{id:excluded},data:{status:'CLOSED'}});
+    const closed=await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true});
+    check(!closed.items.some(x=>x.job.id===excluded),'warm cache rechecks closed jobs');
+    const applied=prefix+ids.get('Chef');await db.application.create({data:{profileId,jobPostId:applied}});
+    check(!(await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true})).items.some(x=>x.job.id===applied),'warm cache rechecks new applications');
+    await db.application.deleteMany({where:{profileId}});
+    await db.employeeProfile.update({where:{id:profileId},data:{desiredSalaryMin:100,desiredSalaryCurrency:'USD',desiredSalaryPeriod:'MONTHLY'}});await cache.invalidate();
+    const unknown=await service.recommend(profileId,1,100,undefined,'salary-unverified',{separated:true,scope:'primary'});
+    check(unknown.items.some(x=>x.job.id===applied)&&unknown.items.every(x=>x.selectionBasis!=='RELATED'),'unconfirmed salary has a separate primary feed');
+    check((await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true})).items.every(x=>x.job.id!==applied),'unconfirmed salary does not appear in confirmed primary feed');
+    await db.jobPost.update({where:{id:applied},data:{salaryMin:100,salaryMax:200,currency:'USD',salaryPeriod:'MONTHLY'}});await cache.invalidate();
+    check((await service.recommend(profileId,1,100,undefined,'recommendations',{separated:true})).items.some(x=>x.job.id===applied),'salary change moves the same eligible role into primary');
+    await assert.rejects(()=>save(Array.from({length:11},(_,i)=>({kind:'GROUP' as const,id:list.items[i].id}))));checks++;
+    const times:number[]=[];for(let n=0;n<12;n++){const start=performance.now();await service.recommend(profileId,1,24,undefined,'recommendations',{separated:true});if(n>1)times.push(performance.now()-start);}
+    const report={checks,cases,engine:'employee-intent-v3.2',release:before.activeReleaseId,memberships:built.summary.memberships,warmP95Ms:[...times].sort((a,b)=>a-b)[Math.ceil(times.length*.95)-1],times};
+    writeFileSync('output/position-groups/integration.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+  }finally{
+    await db.application.deleteMany({where:{profileId:prefix+'profile'}});
+    await db.jobPost.deleteMany({where:{companyId:prefix+'company'}});await db.company.deleteMany({where:{id:prefix+'company'}});
+    await db.employeeProfile.deleteMany({where:{id:prefix+'profile'}});await db.user.deleteMany({where:{id:prefix+'user'}});
+    cache.onModuleDestroy();await db.$disconnect();
+  }
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

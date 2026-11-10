@@ -7,9 +7,9 @@ import { useI18n } from '@/lib/i18n';
 import { floatingPanelPosition, type FloatingPanelPosition } from './floatingPanelPosition';
 import s from './JobTitleInput.module.css';
 
-type Suggestion = { id: string; name: string; label: string; slug?: string; usageCount?: number; family?: string };
+type Suggestion = { kind?:'GROUP'|'ROLE'; id: string; name: string; label: string; slug?: string; usageCount?: number; family?: string };
 type JobTitleCatalog = {
-  items: Array<{ id: string; name: string; canonicalName?: string; slug?: string; count?: number; family?: { name: string } | null }>;
+  items: Array<{ kind?:'GROUP'|'ROLE'; id: string; name: string; canonicalName?: string; slug?: string; count?: number; family?: { name: string } | null }>;
   totalPages: number;
 };
 
@@ -36,6 +36,9 @@ type JobTitleInputProps = {
   disabled?: boolean;
   onSubmitValue?: (value: string) => void;
   matchingOnly?: boolean;
+  selectionCatalog?: boolean;
+  selectionLabels?: {group:string;role:string};
+  onPickSelection?: (selection:{kind:'GROUP'|'ROLE';id:string;name:string})=>void;
   selectedIds?: string[];
   onPickPosition?: (position: { id: string; name: string; label: string }) => void;
 };
@@ -120,6 +123,9 @@ export function JobTitleInput({
   disabled,
   onSubmitValue,
   matchingOnly = false,
+  selectionCatalog = false,
+  selectionLabels,
+  onPickSelection,
   selectedIds = [],
   onPickPosition,
 }: JobTitleInputProps) {
@@ -148,12 +154,14 @@ export function JobTitleInput({
   const requestIdRef = useRef(0);
   const loadingMoreRef = useRef(false);
   const selectedKey = selectedIds.join('|');
-  const catalogUrl = (q: string, page: number) => matchingOnly
+  const catalogUrl = (q: string, page: number) => selectionCatalog
+    ? `/meta/position-groups/options?limit=${PAGE_SIZE}&page=${page}&q=${encodeURIComponent(q)}`
+    : matchingOnly
     ? `/meta/employee-positions?limit=${PAGE_SIZE}&page=${page}&q=${encodeURIComponent(q)}`
     : `/meta/job-titles?limit=${PAGE_SIZE}&page=${page}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
   const mapSuggestions = (items: JobTitleCatalog['items']): Suggestion[] => items
     .filter(item => !matchingOnly || !selectedIds.includes(item.id))
-    .map(item => ({ id: item.id, name: item.canonicalName || item.name, label: item.name,
+    .map(item => ({ id: item.id, name: item.canonicalName || item.name, label: selectionCatalog?item.name+' — '+(item.kind==='GROUP'?selectionLabels?.group:selectionLabels?.role):item.name,kind:item.kind,
       slug: item.slug, usageCount: item.count, family: item.family?.name }));
   useLayoutEffect(() => {
     if (!showPanel) { setPosition(null); return; }
@@ -220,7 +228,7 @@ export function JobTitleInput({
       requestIdRef.current += 1;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [value, focusSuggestions, isOpen, locale, disabled, matchingOnly, selectedKey]);
+  }, [value, focusSuggestions, isOpen, locale, disabled, matchingOnly, selectionCatalog, selectedKey]);
 
   async function loadNextPage() {
     if (loadingMoreRef.current || loading || page >= totalPages) return;
@@ -253,6 +261,7 @@ export function JobTitleInput({
 
   function pick(s: Suggestion) {
     setValue(s.name);
+    onPickSelection?.({kind:s.kind??'ROLE',id:s.id,name:s.name});
     onPick?.(s.name);
     onPickPosition?.({ id: s.id, name: s.name, label: s.label });
     setSuggestions([]);
