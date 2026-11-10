@@ -77,7 +77,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    screeningClient.run=async(_w,_s,task,input,...options)=>{
      if (allowedProviderWork.has(_w)) return textUi ? require('./recruitment-screening-fixture.cjs')(task,input) : originalRun(_w,_s,task,input,...options);
      assert.equal(task,'cv-score');paidMockCalls++;if(scoreHook)await scoreHook(_s);return {readable:true,fullName:'HTTP Candidate',email:candidateEmail,phone:null,headline:'Developer',summary:'Pengalaman API.',cvText:text,criteria:input.job?CV_RUBRIC.map(c=>({criterionId:c.id,level:3,reason:'Tertulis di CV.',evidence:[text]})):[],limitations:[]};};
-   const base=(await app.getUrl())+'/api',jwt=new JwtService(),token=id=>jwt.sign({sub:id,tv:0},{secret:process.env.JWT_SECRET,expiresIn:'5m'});
+   const base=(await app.getUrl())+'/api',jwt=new JwtService(),token=id=>jwt.sign({sub:id,tv:0},{secret:process.env.JWT_SECRET,expiresIn:'1h'});
    async function call(route,bearer,body,method=body?'POST':'GET',status=body?201:200,timeoutMs=15000){const r=await fetch(base+route,{method,headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer '+bearer}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(timeoutMs)});const raw=await r.text();assert.equal(r.status,status,route+': '+raw.slice(0,500));return raw?JSON.parse(raw):null;}
    await call('/health');
    await db.user.createMany({data:[{id:'http-hr',fullName:'HTTP HR',role:'RECRUITER',email:'hr-http@synthetic.test',emailVerified:true},{id:'http-foreign',fullName:'Other HR',role:'RECRUITER'},{id:'http-employee',fullName:'HTTP Candidate',role:'EMPLOYEE',email:candidateEmail,emailVerified:true}]});

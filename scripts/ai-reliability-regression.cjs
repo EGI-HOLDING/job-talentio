@@ -15,7 +15,7 @@ if(selected('integration')){
  tests.push({id:'api-production-build',layer:'build',cwd:path.join(root,'apps/api'),args:['node_modules/@nestjs/cli/bin/nest.js','build']});
  for(const file of ['recruitment-local.cjs','tara-screening-local.cjs','recruitment-http.cjs'])tests.push({id:file,layer:'integration',args:['scripts/'+file]});
 }
-if(selected('browser'))for(const file of ['recruitment-onboarding.browser.cjs','candidate-apply.browser.cjs','screening-verification.browser.cjs','invited-voice-ui.browser.cjs','screening-workspace.browser.cjs','recruitment-ui.browser.cjs'])tests.push({id:file,layer:'browser-with-provider-fixtures',args:['scripts/'+file]});
+if(selected('browser'))for(const file of ['recruitment-onboarding.browser.cjs','candidate-apply.browser.cjs','screening-verification.browser.cjs','invited-voice-ui.browser.cjs','screening-workspace.browser.cjs','recruitment-ui.browser.cjs','login-hydration.browser.cjs'])tests.push({id:file,layer:'browser-with-provider-fixtures',args:['scripts/'+file]});
 if(selected('integration'))tests.push({id:'concurrent-imports-redis',layer:'integration-redis-fault',args:['scripts/recruitment-http.cjs','--load']});
 if(selected('browser')&&selected('integration')){
  tests.push({id:'browser-nest-candidate-to-hr',layer:'browser-real-local-backend',args:['scripts/recruitment-http.cjs','--browser']});
@@ -24,10 +24,13 @@ if(selected('browser')&&selected('integration')){
 if(selected('unit'))tests.unshift({id:'ascii-ui',layer:'repository-guard',args:['scripts/check-ascii-ui.mjs']},{id:'i18n-ui',layer:'repository-guard',args:['scripts/check-i18n-ui.mjs']});
 const env={...process.env,OPENAI_API_KEY:'',TELEGRAM_BOT_TOKEN:'',RESEND_API_KEY:'',RECRUITMENT_WEB_URL:process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035',AI_RELIABILITY_OUTPUT:out};
 if(selected('browser')&&!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(env.RECRUITMENT_WEB_URL))throw Error('Local-only browser regression guard');
+if(selected('integration')&&selected('browser'))for(const viewport of ['desktop','mobile']){
+ tests.push({id:'browser-text-'+viewport,layer:'browser-real-local-backend',args:['scripts/recruitment-http.cjs','--text-ui'],env:{RELIABILITY_TEXT_VIEWPORT:viewport}});
+}
 const report={revision:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true}).trim(),worktree:execFileSync('git',['status','--short'],{cwd:root,encoding:'utf8',windowsHide:true}).trim().split('\n'),startedAt:new Date().toISOString(),groups:[...args],tests:[],paidProviderCalls:0,fullMissionPassed:false,limitations:['AI responses are simulated. Browser fixture tests and the browser journey with the real local backend are reported separately.','Passing this runner does not prove real voice/audio, provider latency under concurrent HR load, full production journeys, or rehearsal readiness.']};
 const save=()=>fs.writeFileSync(path.join(out,'regression-gate.json'),JSON.stringify(report,null,2));
 for(const test of tests){
- const started=Date.now(),result=spawnSync(process.execPath,test.args,{cwd:test.cwd||root,env,encoding:'utf8',windowsHide:true,maxBuffer:12*1024*1024});
+ const started=Date.now(),result=spawnSync(process.execPath,test.args,{cwd:test.cwd||root,env:{...env,...test.env},encoding:'utf8',windowsHide:true,maxBuffer:12*1024*1024});
  const log='gate-'+test.id.replace(/[^a-zA-Z0-9.-]/g,'-')+'.log';fs.writeFileSync(path.join(out,log),(result.stdout||'')+'\n'+(result.stderr||'')+(result.error?'\n'+result.error.message:''));
  const item={id:test.id,layer:test.layer,status:result.status===0?'PASSED':'FAILED',exitCode:result.status,durationMs:Date.now()-started,log};report.tests.push(item);save();console.log(item.id+': '+item.status+' ('+Math.round(item.durationMs/1000)+'s)');
 }

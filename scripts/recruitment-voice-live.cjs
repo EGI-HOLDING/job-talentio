@@ -196,11 +196,11 @@ async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, fore
   report.steps.push('HR browser renders the voice result, both transcript speakers and the downloadable PDF.');
   report.providerCalls = await db.aiScreeningCall.findMany({
     where: { workId: { in: [prepWork, planWork, evalWork] } },
-    select: { task: true, model: true, status: true, inputTokens: true, outputTokens: true },
+    select: { id: true, responseId: true, task: true, model: true, status: true, inputTokens: true, outputTokens: true, costUsd: true },
   });
   assert.equal(report.providerCalls.length, 3);
   assert.ok(report.providerCalls.every(row => row.status === 'COMPLETED'));
-  report.voice = { model: closed.model, closeReason: closed.closeReason, completeTranscript: closed.transcriptComplete, turns: ready.voice.transcript.length, score: ready.evaluation.score, evidenceCount: evidence.length };
+  report.voice = { usage: closed.usage, model: closed.model, closeReason: closed.closeReason, completeTranscript: closed.transcriptComplete, turns: ready.voice.transcript.length, score: ready.evaluation.score, evidenceCount: evidence.length };
 }
 
 module.exports = { loadSyntheticAudio, useSyntheticMicrophone, verifyVoice, until, processWork };

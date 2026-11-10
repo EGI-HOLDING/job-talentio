@@ -29,8 +29,10 @@ function LoginForm() {
   const employer = role === 'RECRUITER';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
   const formHintId = useId();
 
+  useEffect(() => { setReady(true); }, []);
   useEffect(() => { setError(''); }, [role]);
 
   /** Land on the language saved on the account, not the one used to sign in. */
@@ -88,7 +90,7 @@ function LoginForm() {
         <p id={formHintId} className="required-note">
           {t('requiredFieldsNote')}
         </p>
-        <form className="form-stack" onSubmit={onSubmit} aria-describedby={formHintId} noValidate>
+        <form method="post" className="form-stack" onSubmit={onSubmit} aria-describedby={formHintId} noValidate>
           <FormField label={t('email')} required>
             <input
               name="email"
@@ -108,7 +110,7 @@ function LoginForm() {
             </AuthLink>
           </p>
           <FormAlert>{error}</FormAlert>
-          <button type="submit" disabled={loading} aria-busy={loading}>
+          <button type="submit" disabled={!ready || loading} aria-busy={loading}>
             {loading ? t('signingIn') : t('signIn')}
           </button>
         </form>

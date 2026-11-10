@@ -130,6 +130,14 @@ if(process.env.RELIABILITY_CV_CHILD!=='1'){
    else report.checks.push('Real AI result validated and stored; same work and one provider request');
    const list=await call('/recruitment/candidates?companyId=latency-co&jobId=latency-job');assert.equal(list.items[0].cvScore,final.cvScore);
    report.checks.push('HR ranking endpoint returns stored score');
+   if(process.env.RELIABILITY_CV_UI==='1'){
+    assert.ok(!mocked,'Use one real CV for the UI latency measurement');
+    report.ui=await require('./recruitment-ranking-browser.cjs')({base,token,companyId:'latency-co',jobId:'latency-job',score:final.cvScore,out});
+    report.visibleInUiMs=report.ui.firstVisibleAt-start;
+    if(report.visibleInUiMs>180000)report.latencyExceeded=true;
+    report.checks.push('The actual HR browser renders the real score and evidence and preserves them after reload');
+   }
+
    if(mocked){
     const completed=await db.candidateActivity.findMany({where:{candidate:{importId:batch.id},kind:{in:['CV_RECEIVED','CV_ANALYZED']}},select:{candidateId:true,kind:true,createdAt:true}});
     report.perCvMs=batch.files.map(f=>{const rows=completed.filter(r=>r.candidateId===f.id);return +rows.find(r=>r.kind==='CV_ANALYZED').createdAt- +rows.find(r=>r.kind==='CV_RECEIVED').createdAt;}).sort((a,b)=>a-b);

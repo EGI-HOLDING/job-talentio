@@ -26,7 +26,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   const interruptedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'interrupted-indonesian';
   const timedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'timed';
   const taraClosesVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'tara-closes';
-  const test = liveVoice ? taraClosesVoice ? 'live-browser-voice-tara-closes' : timedVoice ? 'live-browser-voice-timed' : interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? 'live-browser-text' : textUi ? 'browser-text-timing' : onboarding ? onboardingDraft ? 'real-browser-hr-onboarding-with-ai' : 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
+  const test = liveVoice ? taraClosesVoice ? 'live-browser-voice-tara-closes' : timedVoice ? 'live-browser-voice-timed' : interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? process.env.RELIABILITY_TEXT_SCENARIO==='unsupported-injection'?'live-browser-text-unsupported-injection':'live-browser-text' : textUi ? 'browser-text-timing-'+(process.env.RELIABILITY_TEXT_VIEWPORT==='desktop'?'desktop':'mobile') : onboarding ? onboardingDraft ? 'real-browser-hr-onboarding-with-ai' : 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
   const report = { steps: [], exceptions: [], requests: [], provider: liveVoice ? 'real voice and screening, simulated CV scoring' : liveText ? 'real text screening, simulated CV scoring' : onboardingDraft ? 'real job drafting, simulated CV scoring' : 'simulated', test };
   const job = await db.jobPost.create({ data: {
     id: 'http-browser-job', companyId: 'http-co', title: 'Backend Engineer Browser Audit',
@@ -35,13 +35,15 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   } });
 
   async function openContext(token, useAudio = false) {
-    const session = { ...await call('/auth/me', token), accessToken: token };
+    const session = token ? { ...await call('/auth/me', token), accessToken: token } : null;
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, serviceWorkers: 'block' });
     contexts.push(context);
     if (useAudio) await voiceProbe.useSyntheticMicrophone(context, wav, interruptedVoice);
     await context.addInitScript(session => {
-      localStorage.setItem('jt_token', session.accessToken);
-      localStorage.setItem('jt_session', JSON.stringify(session));
+      if (session) {
+        localStorage.setItem('jt_token', session.accessToken);
+        localStorage.setItem('jt_session', JSON.stringify(session));
+      }
       localStorage.setItem('jt_country', 'ID');
     }, session);
     // Forward browser API traffic to the ephemeral Nest port. All responses come from Nest.
@@ -68,6 +70,33 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     return page;
   }
 
+  async function loginUser(userId, page) {
+    const apiRequire = createRequire(path.resolve('apps/api/package.json'));
+    const password = 'SyntheticAuditOnly-729!Local';
+    const user = await db.user.update({ where: { id: userId }, data: {
+      passwordHash: await apiRequire('bcryptjs').hash(password, 4), locale: 'id',
+    } });
+    const target = page || await openContext(null);
+    await target.goto(web + '/id/login?role=' + user.role, { waitUntil: 'domcontentloaded' });
+    await target.waitForLoadState('networkidle', { timeout: 30000 });
+    await target.locator('input[name="email"]').fill(user.email);
+    await target.locator('input[name="password"]').fill(password);
+    const response = target.waitForResponse(item => new URL(item.url()).pathname === '/api/auth/login' && item.request().method() === 'POST');
+    await target.locator('form button[type="submit"]').click();
+    assert.equal((await response).status(), 201);
+    await target.waitForURL(url => !url.pathname.endsWith('/login'), { timeout: 30000 });
+    assert.equal(await target.evaluate(() => JSON.parse(localStorage.getItem('jt_session')).user.id), userId);
+    return target;
+  }
+
+  async function logoutAndReturn(page, userId, destination) {
+    await page.locator('button[aria-controls="workspace-account-menu"]').click();
+    await page.locator('#workspace-account-menu').getByRole('button', { name: 'Keluar', exact: true }).click();
+    await page.waitForFunction(() => !localStorage.getItem('jt_token') && !localStorage.getItem('jt_session'));
+    await loginUser(userId, page);
+    await page.goto(destination, { waitUntil: 'domcontentloaded' });
+  }
+
   try {
     if (onboarding) {
       await db.featureFlag.upsert({ where: { key: 'hr_packages' }, create: { key: 'hr_packages', enabled: true }, update: { enabled: true } });
@@ -78,7 +107,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     }
     await db.employeeProfile.update({ where: { userId: 'http-employee' }, data: { onboardingStatus: 'COMPLETED', onboardingStep: 3, phone: '+6281234567890' } });
     await db.recruiterOnboarding.upsert({ where: { userId: 'http-hr' }, create: { userId: 'http-hr', status: 'COMPLETE', step: 3, companyId: 'http-co' }, update: { status: 'COMPLETE', step: 3, companyId: 'http-co' } });
-    const candidate = await openContext(employee);
+    const candidate = await loginUser('http-employee');
     await candidate.goto(web + '/id/jobs/' + job.id, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await candidate.getByRole('button', { name: /Lamar sekarang/i }).first().click({ timeout: 60000 });
     const picker = candidate.getByRole('dialog', { name: 'Pilih CV untuk melamar' });
@@ -92,6 +121,12 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     await candidate.reload({ waitUntil: 'domcontentloaded' });
     await candidate.getByText(/^Sudah dilamar/).first().waitFor({ timeout: 30000 });
     report.steps.push('Browser applies once with the existing CV, survives reload, and creates no screening session.');
+    await logoutAndReturn(candidate, 'http-employee', web + '/id/jobs/' + job.id);
+    await candidate.getByText(/^Sudah dilamar/).first().waitFor({ timeout: 30000 });
+    employee = await candidate.evaluate(() => localStorage.getItem('jt_token'));
+    assert.equal(await db.application.count({ where: { jobPostId: job.id } }), 1);
+    report.steps.push('The candidate logs out through the account menu, logs back in through the password form and still sees one saved application.');
+
 
     await worker.onModuleInit();
     const deadline = Date.now() + 25000;
@@ -106,7 +141,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     assert.equal(await db.aiScreeningWork.count({ where: { subjectId: row.id, kind: 'CV_SCORE' } }), 1);
     await call('/recruitment/jobs/' + job.id + '/applications/' + application.id + '/candidate', foreign, null, 'GET', 403);
 
-    const dashboard = await openContext(hr);
+    const dashboard = await loginUser('http-hr');
     await dashboard.goto(web + '/id/dashboard/recruiter/jobs/' + job.id + '?company=http-co', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await dashboard.getByRole('button', { name: 'HTTP Candidate', exact: true }).click({ timeout: 60000 });
     const drawer = dashboard.getByRole('dialog', { name: 'HTTP Candidate' });
@@ -115,7 +150,17 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     await drawer.getByText('75%', { exact: true }).waitFor({ timeout: 12000 });
     await drawer.getByText('Tertulis di CV.', { exact: true }).first().waitFor({ timeout: 12000 });
     report.steps.push('Durable worker scores once; HR browser displays score and reason; foreign recruiter receives 403.');
+    await drawer.getByRole('button', { name: 'Tutup detail kandidat', exact: true }).click();
+    await logoutAndReturn(dashboard, 'http-hr', web + '/id/dashboard/recruiter/jobs/' + job.id + '?company=http-co');
+    await dashboard.getByRole('button', { name: 'HTTP Candidate', exact: true }).click({ timeout: 30000 });
+    await drawer.getByText('75%', { exact: true }).waitFor({ timeout: 12000 });
+    hr = await dashboard.evaluate(() => localStorage.getItem('jt_token'));
+    report.steps.push('The HR logs out and back in through the password form and sees the original score and candidate.');
+
     await worker.onModuleDestroy();
+    if (!liveVoice && !liveText && !textUi) {
+      await require('./recruitment-cv-recovery-browser.cjs')({ db, worker, call, hr, row, dashboard, drawer, job, web, allowed, report });
+    }
 
     const invitation = await call('/recruitment/candidates/' + row.id + '/invitations', hr, { mode: liveVoice ? 'VOICE' : 'TEXT', requestKey: 'http-browser-invite' });
     await deliver(invitation.id);

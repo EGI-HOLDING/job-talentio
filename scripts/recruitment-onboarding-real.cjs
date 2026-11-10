@@ -82,6 +82,9 @@ module.exports = async function runOnboarding({ web, db, openContext, makeToken,
   await db.city.create({ data: { name: 'Kota Jakarta', slug: 'kota-jakarta-test', provinceId: province.id } });
   const file = async index => ({ name: `Kandidat-Audit-${index}.pdf`, mimeType: 'application/pdf', buffer: await makePdf(`Kandidat sintetis ${index} mengembangkan API Node.js.`) });
 
+  const uploadCount = Number(process.env.RELIABILITY_ONBOARDING_CV_COUNT || 10);
+  assert.ok([1, 10, 100].includes(uploadCount), 'Use a bounded upload count');
+  report.uploadCount = uploadCount;
   const temporaryFolders = new Map();
   try {
     for (const decision of ['skip', 'upload']) {
@@ -95,7 +98,7 @@ module.exports = async function runOnboarding({ web, db, openContext, makeToken,
       const upload = uploadScene.getByRole('button', { name: 'Upload', exact: true });
       const skip = uploadScene.getByRole('button', { name: 'Lewati', exact: true });
       assert.equal(await upload.isEnabled(), false);
-      const files = await Promise.all(Array.from({ length: decision === 'skip' ? 1 : 10 }, (_, index) => file(index + 1)));
+      const files = await Promise.all(Array.from({ length: decision === 'skip' ? 1 : uploadCount }, (_, index) => file(index + 1)));
       const picker = uploadScene.locator('button[data-dragging]:not(:disabled)');
       const list = uploadScene.getByRole('list', { name: 'CV yang dipilih' });
       async function choose(batch) {
@@ -192,12 +195,12 @@ module.exports = async function runOnboarding({ web, db, openContext, makeToken,
           await reselect.waitFor({ state: 'attached', timeout: 8000 });
           await reselect.setInputFiles(files.find(item => item.name === missing.filename));
           await worker.onModuleInit();
-          const until = Date.now() + 40000;
+          const until = Date.now() + 90000;
           while (await db.recruitmentCandidate.count({ where: { ...where, scoreStatus: 'READY' } }) !== files.length && Date.now() < until) await wait(250);
           assert.equal(await db.recruitmentCandidate.count({ where: { ...where, scoreStatus: 'READY', cvScore: 75 } }), files.length);
           assert.equal(await db.candidateImport.count({ where }), 1);
           assert.equal(await db.recruitmentCandidate.count({ where }), files.length);
-          report.steps.push('Ten CVs from two filesystem folders reach MinIO. The dashboard opens before upload completion, and after one dropped PUT and reload HR reselects only that CV. Legacy saved metadata also resumes the same transfer. All ten score through the original import.');
+          report.steps.push(uploadCount + ' CVs selected from filesystem folders reach MinIO. The dashboard opens before upload completion, and after one dropped PUT and reload HR reselects only that CV. Legacy saved metadata also resumes the same transfer. Each scores through the original import.');
         }
       } finally { releaseUploads(); }
     }

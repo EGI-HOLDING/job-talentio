@@ -1,6 +1,6 @@
 'use client';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { api, getSession } from '@/lib/api';
 import { localeUrl } from '@/lib/navigation';
@@ -214,10 +214,6 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
             return () => cancelAnimationFrame(frame);
         }
     }, [step, current?.id, current?.shownAt, tabReady, state?.status, state?.id, accept, now, requestState]);
-    useEffect(() => {
-        if (!nearBottom.current || !messages.current) return;
-        messages.current.scrollTo({ top: messages.current.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-    }, [state?.questions.length, state?.status, current?.id]);
     useEffect(() => { const clock = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(clock); }, []);
     const policy = state?.conversationPolicy ?? { version: 'legacy', questionSeconds: 60, maxQuestions: 15 };
     const casual = /^tara-conversation-v[456]\./.test(policy.version);
@@ -257,7 +253,9 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
             await writing.current.catch(() => undefined);
             const fresh = sessionRef.current;
             if (fresh?.id !== id || fresh.status !== 'ACTIVE' || fresh.questions.find(v => v.answer === null)?.id !== q.id) return;
-            accept(await requestState('/ai-screening/sessions/' + id + '/answer', { method: 'POST', body: JSON.stringify({ clientId: client.current, questionId: q.id, answer: value }) }));
+            const next = await requestState('/ai-screening/sessions/' + id + '/answer', { method: 'POST', body: JSON.stringify({ clientId: client.current, questionId: q.id, answer: value }) });
+            nearBottom.current = true;
+            accept(next);
             setNotice('');
         }
         catch (e) {
@@ -273,7 +271,7 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
             void send('timeout');
     }, [current?.id, remaining, tabReady, send]);
     const canSend = state?.status === 'ACTIVE' && tabReady && Boolean(current?.shownAt) && remaining > 0 && !busy && Boolean(answer.trim());
-    useEffect(() => {
+    useLayoutEffect(() => {
         const el = textareaRef.current;
         if (!focused || !el) return;
         const resize = () => {
@@ -285,6 +283,12 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
         window.addEventListener('resize', resize);
         return () => { window.visualViewport?.removeEventListener('resize', resize); window.removeEventListener('resize', resize); };
     }, [answer, focused, state?.status]);
+    useLayoutEffect(() => {
+        const log = messages.current;
+        if (!nearBottom.current || !log) return;
+        // Align after the composer resizes, before scroll events can mistake layout movement for reading history.
+        log.scrollTop = log.scrollHeight;
+    }, [answer, focused, state?.questions.length, state?.status, current?.id]);
     async function run(action: () => Promise<void>) {
         if (busy)
             return;
