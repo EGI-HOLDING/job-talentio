@@ -114,6 +114,18 @@ async function main(){
  await page.getByRole('button',{name:'← Ringkasan screening',exact:true}).click();
  const choices=page.getByRole('button',{name:/Lihat Interview suara/});await choices.last().click();await choices.first().click();await page.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).waitFor();await page.waitForTimeout(700);assert.equal(await page.getByText('Ringkasan sesi sebelumnya.',{exact:true}).count(),0,'slow report response cannot overwrite newly selected session');report.checks.push('Out-of-order reports cannot overwrite the selected session');
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'04-mobile.png')});assert.ok(await page.getByRole('dialog',{name:'Dinda Pramesti'}).evaluate(e=>e.scrollWidth<=e.clientWidth),'mobile drawer has no horizontal overflow');
+ await page.getByRole('button',{name:'Kandidat berikutnya',exact:true}).click();
+ const nextCandidate=page.getByRole('dialog',{name:'Rizky Aditya',exact:true});
+ await nextCandidate.waitFor();
+ await nextCandidate.getByRole('button',{name:'Screening',exact:true}).click();
+ assert.equal(await nextCandidate.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).count(),0);
+ assert.equal(await nextCandidate.getByRole('button',{name:/Lihat Interview suara/}).count(),0);
+ await nextCandidate.getByRole('button',{name:'Kandidat sebelumnya',exact:true}).click();
+ const firstCandidate=page.getByRole('dialog',{name:'Dinda Pramesti',exact:true});
+ await firstCandidate.waitFor();
+ await firstCandidate.getByRole('button',{name:'Screening',exact:true}).click();
+ await firstCandidate.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).waitFor();
+ report.checks.push('Candidate navigation keeps screening results scoped to their original candidate');
  await page.keyboard.press('Escape');rows[0].stage='REJECTED';await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).click();await page.getByRole('button',{name:'Screening',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Undang screening',exact:true}).isDisabled(),true);report.checks.push('Closed candidate cannot open invitation action');
  assert.deepEqual(report.writes,[]);assert.deepEqual(report.errors,[]);
  console.log('Screening workspace checks passed: '+report.checks.join('; '));

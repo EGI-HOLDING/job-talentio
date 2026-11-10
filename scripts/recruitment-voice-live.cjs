@@ -87,7 +87,7 @@ async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, fore
   const oldTara = (await fragments('TARA')).length;
   await page.evaluate(() => window.playRecruitmentTestAudio());
   await until(async () => (await fragments('CANDIDATE')).map(turn => turn.text).join('').trim().length > 15, 'transcribed candidate audio', 25000);
-  await until(async () => (await fragments('TARA')).length > oldTara, 'Tara response to the candidate audio', 15000);
+  await until(async () => (await fragments('TARA')).length > oldTara, 'Tara response to the candidate audio', taraClosesVoice ? 35000 : 15000);
   report.steps.push('Browser connected with WebRTC, received Tara audio, sent a synthetic WAV and persisted audio transcripts for both speakers.');
 
   if (interruptedVoice) {
@@ -133,6 +133,10 @@ async function verifyVoice({ page, dashboard, drawer, db, worker, call, hr, fore
     report.timedSignoff = signoff;
     report.steps.push('Controlled session elapsed time triggered spoken five-minute warning and minute-14 sign-off through the real provider.');
   } else if (taraClosesVoice) {
+    report.verbalWrapup = await until(async () => {
+      const text = (await fragments('CANDIDATE')).map(turn => turn.text).join('');
+      return /ingin mengakhiri interview/i.test(text) && text;
+    }, 'the candidate verbal wrap-up', 15000);
     report.taraSignoff = await until(async () => {
       const text = (await fragments('TARA')).sort((a, b) => a.startMs - b.startMs).map(turn => turn.text).join('');
       return /interview kita sudah selesai/i.test(text) && text;
