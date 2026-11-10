@@ -1,7 +1,8 @@
 /* Talentio service worker: app shell offline fallback + static asset cache.
  * Pages and API responses are never cached; only Next static chunks, icons and
  * brand assets, and the offline page are. Bump CACHE when these assets change. */
-const CACHE = 'jt-static-v3';
+// Invalidate previously cached Next chunks when the picker and app UI change.
+const CACHE = 'jt-static-v4';
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/brand/talentio-logo.webp', '/brand/talentio-logo-white.webp', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/manifest.webmanifest'];
 
