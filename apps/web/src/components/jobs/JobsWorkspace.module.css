@@ -194,6 +194,15 @@
 .profileRail .filterLegal { margin-top: 24px; border-top: 1px solid var(--line); }
 .recommendationHeading strong { font-size: .9rem; }
 .recommendationHeading p { margin: 5px 0 0; color: #8993a6; font-size: .72rem; }
+.relatedResultsToolbar { min-height: 72px; padding-block: 10px; }
+.relatedResultsToolbar .recommendationHeading { flex: 1; min-width: 0; }
+.relatedModeHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.relatedModeCopy { min-width: 0; }
+.relatedModeCopy h1 { margin: 0; color: #17213a; font-size: 1rem; font-weight: 700; line-height: 1.35; letter-spacing: -.02em; }
+.relatedModeCopy p { margin: 3px 0 0; color: #77839a; font-size: .75rem; line-height: 1.45; }
+.backToRecommendations { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 11px; border: 1px solid #e2def3; border-radius: 7px; background: #fff; color: #5635e8; font-size: .73rem; font-weight: 600; text-decoration: none; transition: border-color .15s, background .15s; }
+.backToRecommendations:hover { border-color: #c8b9ff; background: #f8f5ff; }
+.backToRecommendations svg { width: 14px; height: 14px; }
 .refreshButton { display: grid; place-items: center; width: 34px; height: 34px; padding: 7px; background: #fff; color: #8a94a8; border: 1px solid #e8ecf3; }
 .refreshButton:hover { color: var(--purple); background: #f7f4ff; }
 .personalizeBanner { display: flex; align-items: flex-start; gap: 12px; margin: 20px; padding: 17px 20px; border: 1px solid #ebe5ff; border-radius: 9px; background: #faf8ff; color: #4f3b91; }
@@ -308,6 +317,12 @@
   .modeBar > .profileShortcut { font-size: .66rem; gap: 4px; }
   .recommendationHeading strong { font-size: .83rem; }
   .recommendationHeading p { font-size: .68rem; line-height: 1.5; }
+  .relatedResultsToolbar { min-height: 0; align-items: flex-start; padding-block: 12px; }
+  .relatedModeHeading { align-items: flex-start; flex-wrap: wrap; gap: 9px 12px; }
+  .relatedModeCopy { flex: 1 1 180px; }
+  .relatedModeCopy h1 { font-size: .92rem; }
+  .relatedModeCopy p { font-size: .7rem; }
+  .backToRecommendations { margin-left: auto; min-height: 32px; padding-inline: 9px; font-size: .69rem; }
   .personalizeBanner { flex-wrap: wrap; margin: 12px; padding: 14px; gap: 10px; }
   .personalizeBanner > div { flex: 1; }
   .personalizeBanner > a, .personalizeBanner > button { margin-left: 28px; }

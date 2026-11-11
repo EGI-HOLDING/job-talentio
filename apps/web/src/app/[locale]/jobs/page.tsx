@@ -786,7 +786,44 @@ function JobsInner() {
           <button className={s.showResults} type="button" onClick={() => setFiltersOpen(false)}>{t('workspace.showResults')} {data ? `(${data.total})` : ''}</button>
         </aside>}
         <section className={s.results} aria-label={t('jobs')} inert={filtersOpen ? true : undefined}>
-          <div className={s.resultsToolbar}>{personalized ? <><div className={s.recommendationHeading}>{exploration?<EmployeeExplorationNotice/>:related?<div><strong>{locale==='id'?'Profesi terkait':'Related occupations'}</strong><p>{locale==='id'?'Lowongan dengan tugas terkait di luar pilihan langsung Anda.':'Jobs with related tasks outside your direct selections.'}</p><Link href="/jobs?mode=for-you">{intentText('backMain')}</Link></div>:salaryUnverified?<div><strong>{intentText('salaryUnverifiedTitle')}</strong><p>{intentText('salaryUnverifiedCopy')}</p><Link href="/jobs?mode=for-you">{intentText('backMain')}</Link></div>:<><strong>{t('workspace.personalized')}</strong><p>{recommendationMeta.mode==='PREFERENCES_BASED'?t('cv.preferencesOnly'):profile?.cvSource?.status==='READY'?t('cv.basedOn'):t('cv.preferencesOnly')}</p></>}</div><button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}><JobsIcon kind="refresh" /></button></> : <><button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}><JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button><strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong><div className={s.resultControls}><WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} /></div></>}</div>
+          <div className={`${s.resultsToolbar} ${related ? s.relatedResultsToolbar : ''}`}>
+            {personalized ? <>
+              <div className={s.recommendationHeading}>
+                {exploration ? <EmployeeExplorationNotice /> : related ? (
+                  <div className={s.relatedModeHeading}>
+                    <div className={s.relatedModeCopy}>
+                      <h1>{locale === 'id' ? 'Profesi terkait' : locale === 'uz' ? 'Tegishli kasblar' : locale === 'ru' ? 'Связанные профессии' : 'Related occupations'}</h1>
+                      <p>{locale === 'id' ? 'Lowongan dengan tugas terkait di luar pilihan langsung Anda.' : locale === 'uz' ? "To‘g‘ridan-to‘g‘ri tanlovingizdan tashqaridagi o‘xshash vazifali vakansiyalar." : locale === 'ru' ? 'Вакансии со схожими задачами за пределами выбранных профессий.' : 'Jobs with related tasks outside your direct selections.'}</p>
+                    </div>
+                    <Link className={s.backToRecommendations} href="/jobs?mode=for-you">
+                      <JobsIcon kind="back" />
+                      <span>{intentText('backMain')}</span>
+                    </Link>
+                  </div>
+                ) : salaryUnverified ? (
+                  <div>
+                    <strong>{intentText('salaryUnverifiedTitle')}</strong>
+                    <p>{intentText('salaryUnverifiedCopy')}</p>
+                    <Link href="/jobs?mode=for-you">{intentText('backMain')}</Link>
+                  </div>
+                ) : <>
+                  <strong>{t('workspace.personalized')}</strong>
+                  <p>{recommendationMeta.mode === 'PREFERENCES_BASED' ? t('cv.preferencesOnly') : profile?.cvSource?.status === 'READY' ? t('cv.basedOn') : t('cv.preferencesOnly')}</p>
+                </>}
+              </div>
+              <button className={s.refreshButton} type="button" aria-label={t('workspace.refresh')} title={t('workspace.refresh')} disabled={resultsLoading} onClick={() => setDiscoveryRetry((value) => value + 1)}>
+                <JobsIcon kind="refresh" />
+              </button>
+            </> : <>
+              <button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}>
+                <JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </button>
+              <strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong>
+              <div className={s.resultControls}>
+                <WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} />
+              </div>
+            </>}
+          </div>
           {!personalized && !!activeChips.length && <div className={s.activeChips}>{activeChips.map((chip) => <button key={chip.key} type="button" onClick={chip.remove}>{chip.label}<JobsIcon kind="close" /></button>)}</div>}
           <div ref={listRef} className={s.resultsScroll} aria-busy={resultsLoading}>
             {isEmployee&&!exploration&&!salaryUnverified&&(personalized||filters.sort==='match'||!hasSearchIntent&&requestedMode!=='all')&&recommendationMeta.state&&!noPrimaryRecommendations&&<EmployeeRecommendationNotice state={recommendationMeta.state} evidenceState={recommendationMeta.evidenceState} preferenceWarnings={recommendationMeta.preferenceWarnings} emptyReason={recommendationMeta.emptyReason}/>}

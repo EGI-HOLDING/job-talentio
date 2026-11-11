@@ -172,9 +172,14 @@ export function PositionPicker({ label, labels, request, value, onChange, max = 
           <button type="button" role="option" tabIndex={-1} id={id + '-option-' + i}
             aria-selected={selected.has(key(row))} aria-disabled={unavailable(row)}
             data-highlighted={i === active} onPointerDown={event => event.preventDefault()} onClick={() => choose(row)}>
-            <span>{row.name}</span>
-            <small>{row.selectable === false ? labels.unavailable : row.reviewed === false ? labels.needsReview
-              : row.kind === 'GROUP' ? labels.group : labels.role}{row.family ? ' · ' + row.family : ''}</small>
+            <span className={styles.optionName}>{row.name}</span>
+            {(row.kind === 'GROUP' || row.selectable === false || row.reviewed === false || row.family) && <span className={styles.optionMeta}>
+              {(row.selectable === false || row.reviewed === false || row.kind === 'GROUP') && <span className={styles.optionBadge}
+                data-tone={row.selectable === false ? 'muted' : row.reviewed === false ? 'warning' : 'neutral'}>
+                {row.selectable === false ? labels.unavailable : row.reviewed === false ? labels.needsReview : labels.group}
+              </span>}
+              {row.family && <span className={styles.optionFamily}>{row.family}</span>}
+            </span>}
           </button>
         </li>)}
       </ul>

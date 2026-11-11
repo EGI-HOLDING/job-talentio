@@ -4,11 +4,24 @@
 .selected { display: flex; flex-wrap: wrap; gap: .4rem; }
 .chip { display: inline-flex; align-items: center; gap: .4rem; max-width: 100%; padding: .25rem .5rem; background: #f0ebff; color: #30207d; border-radius: .4rem; overflow-wrap: anywhere; }
 .chip button { border: 0; background: transparent; color: inherit; padding: 0 .2rem; cursor: pointer; }
-.panel { position: fixed; z-index: 11000; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; background: #fff; color: #17213a; border: 1px solid #dfe4f0; border-radius: .55rem; box-shadow: 0 12px 24px #17213a26; padding: .25rem; }
+.panel { position: fixed; z-index: 11000; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; background: #fff; color: #17213a; border: 1px solid #dfe4f0; border-radius: .65rem; box-shadow: 0 10px 24px #17213a1f; padding: .25rem; }
 .list { list-style: none; margin: 0; padding: 0; }
-.list button { display: grid; gap: .2rem; width: 100%; text-align: start; border: 0; background: #fff; color: inherit; padding: .55rem .65rem; border-radius: .35rem; cursor: pointer; }
+.list button { display: grid; gap: .18rem; width: 100%; text-align: start; border: 0; background: #fff; color: inherit; padding: .42rem .6rem; border-radius: .4rem; cursor: pointer; }
 .list button:hover, .list button[data-highlighted=true], .list button[aria-selected=true] { background: #f0ebff; }
 .list button[aria-disabled=true] { color: #5e6980; cursor: default; }
-.list small, .panel p { color: #536078; }
+.optionName { min-width: 0; font-size: .9rem; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.optionMeta { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .4rem; min-width: 0; color: #69758c; font-size: .75rem; line-height: 1.3; }
+.optionBadge { display: inline-flex; align-items: center; border-radius: 999px; padding: .08rem .38rem; background: #f0ebff; color: #5632c5; font-size: .7rem; font-weight: 600; line-height: 1.4; }
+.optionBadge[data-tone=warning] { background: #fff4dd; color: #855300; }
+.optionBadge[data-tone=muted] { background: #eef1f6; color: #5e6980; }
+.optionFamily { min-width: 0; overflow-wrap: anywhere; }
+.chip small { color: #536078; font-size: .72rem; }
+.panel p { color: #536078; }
 .panel p { margin: .5rem; }
 .panel > button, .panel [role=alert] button { margin: .5rem; }
+
+@media (max-width: 480px) {
+  .list button { padding: .45rem .55rem; }
+  .optionName { font-size: .875rem; }
+  .optionMeta { font-size: .72rem; }
+}
