@@ -8,8 +8,8 @@ export class PositionGroupOccupationIndex extends EmployeeOccupationIndex {
   readonly expandedIds:string[];
   private readonly origins=new Map<string,GroupChoice[]>();
   private readonly related=new Map<string,{source:string;reference:string;score?:number}>();
-  constructor(roles:IntentRole[], explicitIds:string[], readonly groups:GroupChoice[], readonly release:string) {
-    super(roles,true);
+  constructor(roles:IntentRole[], explicitIds:string[], readonly groups:GroupChoice[], readonly release:string, allowRelated=true) {
+    super(roles,allowRelated);
     this.explicitRoleIds=new Set(explicitIds.flatMap(id=>this.identity(id)?.canonicalRoleId??[]));
     for(const group of [...groups].sort((a,b)=>a.id.localeCompare(b.id))) {
       for(const member of group.members) {
@@ -20,7 +20,7 @@ export class PositionGroupOccupationIndex extends EmployeeOccupationIndex {
       }
     }
     this.expandedIds=[...new Set([...this.explicitRoleIds,...this.origins.keys()])].sort();
-    for(const source of this.expandedIds)for(const relation of reviewedRelatedRoles(this.roles.get(source)!)){
+    if(allowRelated)for(const source of this.expandedIds)for(const relation of reviewedRelatedRoles(this.roles.get(source)!)){
       if(relation.id===source||this.identity(relation.id)?.canonicalRoleId!==relation.id)continue;
       const previous=this.related.get(relation.id);
       if(!previous||(relation.score??0)>(previous.score??0)||(relation.score??0)===(previous.score??0)&&source.localeCompare(previous.source)<0)this.related.set(relation.id,{source,reference:relation.reference,score:relation.score});

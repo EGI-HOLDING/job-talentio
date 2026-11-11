@@ -15,6 +15,7 @@ import { evaluateIntent, compareIntent, type IntentEvaluation, type IntentExperi
 import { VacancyTasksService, type VacancySelection } from './vacancy-tasks.service';
 import {PositionGroupService} from './position-group.service';
 import {PositionGroupOccupationIndex} from './position-group-index';
+import {compileHierarchy, EmployeeHierarchyIndex, employeeHierarchyMode, loadHierarchyManifest} from './employee-hierarchy';
 export const employeeIntentJobSelect = { ...candidateExperienceSelect, id: true, updatedAt:true, title: true, jobTitleId: true, jobTitle:{select:currentRoleSelect}, companyId: true, publishedAt: true, countryId: true, cityId: true, workMode: true, experienceYearsMin: true, experienceLevel: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { select: { province: { select: { countryId: true } } } }, jobSkills: { include: { skill: { select: { name: true, matchingKind: true } } } }, jobLanguages: { include: { language: { select: { code: true, name: true } } } } } as const;
 export const intentRoleScope = (context:{allowedIds:string[];vacancies?:VacancySelection}) =>
   context.vacancies ? {id:{in:[...context.vacancies.decisions.keys()]}} : {jobTitleId:{in:context.allowedIds}};
@@ -22,9 +23,34 @@ export const intentJobScope = (context:{allowedIds:string[];vacancies?:VacancySe
   context.practicalSelection ? {id:{in:context.practicalSelection.mainIds}} : intentRoleScope(context);
 export const practicalJobSelect = {countryId:true,city:{select:{province:{select:{countryId:true}}}},salaryMin:true,salaryMax:true,currency:true,salaryPeriod:true} as const;
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
+export type RecommendationOptions = {separated?:boolean;scope?:'primary'|'related';relatedRoleId?:string};
+export function rankRelatedProfessions(
+    ranked: ReadonlyArray<{job:{publishedAt:Date|null};evaluation:IntentEvaluation}>,
+    hierarchyActive: boolean,
+) {
+    const professions = new Map<string,{count:number;best:typeof ranked[number]}>();
+    for (const row of ranked) {
+        const {canonicalRoleId, matchType} = row.evaluation.eligibility;
+        const group = row.evaluation.insights.practicalFit?.group ?? 'MAIN';
+        if (matchType !== 'RELATED' || group !== 'MAIN' || !canonicalRoleId) continue;
+        const previous = professions.get(canonicalRoleId);
+        if (previous) previous.count++;
+        else professions.set(canonicalRoleId, {count:1,best:row});
+    }
+    return [...professions].sort(([a,left],[b,right]) => (hierarchyActive
+        ? compareIntent(left.best.evaluation,right.best.evaluation)
+          || (right.best.job.publishedAt?.getTime()??0)-(left.best.job.publishedAt?.getTime()??0)
+        : right.count-left.count) || a.localeCompare(b)).slice(0,3);
+}
 @Injectable()
 export class EmployeeIntentService {
     private readonly scopes=new WeakMap<EmployeeOccupationIndex,Map<string,{allowedIds:string[];relatedCatalogTotal:number}>>();
+    private readonly hierarchySnapshots=new WeakMap<EmployeeOccupationIndex,{
+        groupRevision:string;
+        compiled:ReturnType<typeof compileHierarchy>;
+        indexes:Map<string,EmployeeHierarchyIndex>;
+    }>();
+    private readonly hierarchyManifest=loadHierarchyManifest();
     constructor(private db: PrismaService, @Optional() private catalogSnapshot?: EmployeeCatalogSnapshot, @Optional() private cache?: CandidateCache, @Optional() private vacancyTasks?:VacancyTasksService,@Optional() private positionGroups?:PositionGroupService) { }
     onModuleInit(){new Logger('EmployeeIntent').log('Candidate engine V3.2 is the only engine: exact/related occupations, partial evidence and explicit exploration.');}
     catalog(){return (this.catalogSnapshot||new EmployeeCatalogSnapshot(this.db)).get(true);}
@@ -61,14 +87,36 @@ export class EmployeeIntentService {
         const rawSelectedIds = profile.desiredRoles.map(r => r.jobTitleId);
         const explicitIds = rawSelectedIds.filter(id=>!!index.identity(id));
         const groupIds=(profile.desiredGroups??[]).map(g=>g.groupId);
-        const groupResolution=groupIds.length&&this.positionGroups?await this.positionGroups.resolve(roles,explicitIds,groupIds):null;
-        if(groupResolution)index=groupResolution.index;
+        const hierarchyMode=employeeHierarchyMode();
+        const groupResolution=groupIds.length&&this.positionGroups&&!hierarchyMode?await this.positionGroups.resolve(roles,explicitIds,groupIds):null;
+        const groupSnapshot=hierarchyMode?await this.positionGroups?.snapshot(roles):groupResolution?.snapshot;
+        const groups=groupSnapshot?.choices.filter(group=>groupIds.includes(group.id))??[];
+        let hierarchyRevision:string|null=null;
+        if(hierarchyMode){
+            const groupRevision=groupSnapshot?`${groupSnapshot.releaseId}:${groupSnapshot.revision}`:'unavailable';
+            let snapshot=this.hierarchySnapshots.get(index);
+            if(!snapshot||snapshot.groupRevision!==groupRevision){
+                const compiled=compileHierarchy(index,groupSnapshot?.choices??[],this.hierarchyManifest);
+                snapshot={groupRevision,compiled,indexes:new Map()};
+                this.hierarchySnapshots.set(index,snapshot);
+                if(compiled.reasons.length)new Logger('EmployeeIntent').warn('Related hierarchy unavailable: '+compiled.reasons.join(', '));
+            }
+            hierarchyRevision=digest([hierarchyMode,groupRevision,snapshot.compiled.revision]);
+            const key=digest([hierarchyMode,[...explicitIds].sort(),[...groupIds].sort()]);
+            let resolved=snapshot.indexes.get(key);
+            if(!resolved){
+                resolved=new EmployeeHierarchyIndex(roles,explicitIds,groups,groupSnapshot?.releaseId??'',snapshot.compiled,hierarchyMode==='direct-only');
+                snapshot.indexes.set(key,resolved);
+                if(snapshot.indexes.size>64)snapshot.indexes.delete(snapshot.indexes.keys().next().value!);
+            }
+            index=resolved;
+        } else if(groupResolution)index=groupResolution.index;
         const selectedIds=index instanceof PositionGroupOccupationIndex?index.expandedIds:explicitIds;
-        const groupReleaseVersion=groupResolution?.snapshot?.releaseId??null;
-        const groupUnavailable=groupIds.length>0&&(!groupResolution||groupResolution.missing.length>0);
+        const groupReleaseVersion=groupSnapshot?.releaseId??null;
+        const groupUnavailable=groupIds.some(id=>!groups.some(group=>group.id===id&&group.members.length));
         const preferenceWarnings= [...(!profile.matchingPreferencesReviewed||explicitIds.length!==rawSelectedIds.length?['PREFERENCES_REVIEW_REQUIRED']:[]),...(groupUnavailable?['POSITION_GROUP_UNAVAILABLE']:[])];
         const preferences = { ...profile, selectedIds };
-        const state:EmployeeRecommendationState=process.env.EMPLOYEE_RECOMMENDATIONS_AVAILABLE==='false'?'UNAVAILABLE':groupUnavailable&&!explicitIds.length?'UNAVAILABLE':!selectedIds.length&&!groupResolution?.groups.length?(profile.desiredPositions.length||rawSelectedIds.length?'PREFERENCES_REVIEW_REQUIRED':'PREFERENCES_REQUIRED'):'READY';
+        const state:EmployeeRecommendationState=process.env.EMPLOYEE_RECOMMENDATIONS_AVAILABLE==='false'?'UNAVAILABLE':groupUnavailable&&!selectedIds.length?'UNAVAILABLE':!selectedIds.length?(profile.desiredPositions.length||rawSelectedIds.length?'PREFERENCES_REVIEW_REQUIRED':'PREFERENCES_REQUIRED'):'READY';
         let facts: IntentFacts = { roles: [], skills: [], experiences: [], languages: [] };
         // Only the completed projection of this CV generation may supply ranking facts.
         // A conflict in one correction must not suppress unrelated evidence.
@@ -82,7 +130,8 @@ export class EmployeeIntentService {
 
         let evidenceState:EmployeeEvidenceState=!version?'REQUIRED':version.parseStatus==='FAILED'||stored?.status==='FAILED'?'FAILED':version.parseStatus!=='READY'||!stored||stored.parserVersion!==parserVersion||stored.generation!==version.parseGeneration||['PENDING','PROCESSING'].includes(stored.status)?'PROCESSING':!stored.facts||stored.status!=='READY'||evidenceConflicts(stored.facts as unknown as IntentFacts,(stored.overrides??[]) as EvidenceOverride[]).length||!hasEmployeeCareerEvidence(facts)?'REVIEW_REQUIRED':'READY';
         const {allowedIds,relatedCatalogTotal}=state==='READY'?this.roleScope(index,selectedIds):{allowedIds:[],relatedCatalogTotal:0};
-        const selectionRevision='selectionRevision' in catalog?catalog.selectionRevision??null:null;
+        const graphSelectionRevision='selectionRevision' in catalog?catalog.selectionRevision??null:null;
+        const selectionRevision=hierarchyRevision?digest([graphSelectionRevision,hierarchyRevision]):graphSelectionRevision;
         const taskVersion='taskVersion' in catalog?catalog.taskVersion as string|undefined:undefined;
         const relationReleaseId='relationReleaseId' in catalog?catalog.relationReleaseId as string|null|undefined:undefined;
         let vacancies:VacancySelection|undefined;
@@ -132,10 +181,19 @@ export class EmployeeIntentService {
         }
         return result;
     }
-    private eligibility(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:{id:string;jobTitleId:string|null;updatedAt?:Date}) {
-        if(!context.vacancies)return context.index.eligibility(context.preferences.selectedIds,job.jobTitleId);
+    private eligibility(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:{id:string;jobTitleId:string|null;updatedAt?:Date;jobTitle?:Parameters<typeof currentRoleIdentity>[0]}) {
+        const unreviewed={eligible:false,reason:'POSITION_MISMATCH'} as const;
+        const isCurrent=(decision:EmployeeEligibility)=>{
+            if(!(context.index instanceof EmployeeHierarchyIndex)||job.jobTitle===undefined||!decision.eligible)return true;
+            const identity=currentRoleIdentity(job.jobTitle);
+            return identity?.canonicalRoleId===decision.canonicalRoleId&&identity?.familyId===decision.familyId;
+        };
+        if(!context.vacancies){
+            const decision=context.index.eligibility(context.preferences.selectedIds,job.jobTitleId);
+            return isCurrent(decision)?decision:unreviewed;
+        }
         const row=context.vacancies.decisions.get(job.id);
-        return row&&row.roleId===job.jobTitleId&&row.updatedAt.getTime()===job.updatedAt?.getTime()?row.eligibility:{eligible:false,reason:'POSITION_MISMATCH'} as const;
+        return row&&row.roleId===job.jobTitleId&&row.updatedAt.getTime()===job.updatedAt?.getTime()&&isCurrent(row.eligibility)?row.eligibility:unreviewed;
     }
     evaluate(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:Parameters<typeof evaluateIntent>[2]&{updatedAt?:Date},now=new Date()) {
         const evaluation=evaluateIntent(context.preferences,context.facts,job,context.index,now,this.eligibility(context,job),context.experiencePolicyEnabled,context.experienceCache);
@@ -144,16 +202,18 @@ export class EmployeeIntentService {
         if(context.practicalEnabled)evaluation.insights={...evaluation.insights,practicalFit:practicalFit(context.preferences,job)};
         return evaluation;
     }
-    async recommend(profileId: string, page = 1, limit = 24, provided?:Awaited<ReturnType<EmployeeIntentService['context']>>,feed:'recommendations'|'related'|'salary-unverified'='recommendations',options:{separated?:boolean;scope?:'primary'|'related'}={}) {
+    async recommend(profileId: string, page = 1, limit = 24, provided?:Awaited<ReturnType<EmployeeIntentService['context']>>,feed:'recommendations'|'related'|'salary-unverified'='recommendations',options:RecommendationOptions={}) {
         const context = provided || await this.context(profileId);
         const now = new Date();
         let mainTotal=0,salaryUnverifiedTotal=0;
         let primaryTotal=0,relatedTotal=0,primarySalaryUnverifiedTotal=0,relatedSalaryUnverifiedTotal=0;
         let relatedProfessions:Array<{id:string;slug:string;name:string;nameId:string|null;nameRu:string|null;nameUz:string|null;count:number}>=[];
         const separated=options.separated||feed==='related';
+        const relatedRoleId=feed==='related'?options.relatedRoleId:undefined;
+        const relatedTarget=relatedRoleId?context.index.identity(relatedRoleId)?.canonicalRoleId:undefined;
         const policy={version:EMPLOYEE_PRACTICAL_POLICY_VERSION,active:context.practicalEnabled,countryFilterApplied:!!(context.preferences.preferredCountries.length||context.preferences.residenceCountryId)};
         const selectionMeta={selectionRevision:context.selectionRevision,relatedCatalogTotal:context.relatedCatalogTotal};
-        const empty = (state: EmployeeRecommendationState,emptyReason: import('@job-talentio/shared').EmployeeEmptyReason=state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_RELEVANT_JOBS') => ({ ...selectionMeta,primaryTotal,relatedTotal,relatedProfessions,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items: [], page: 1, limit, total: 0, totalPages: 1, mode: 'UNAVAILABLE' as const, state, emptyReason, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: context.fingerprint, cvSource: context.cvSource });
+        const empty = (state: EmployeeRecommendationState,emptyReason: import('@job-talentio/shared').EmployeeEmptyReason=state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_RELEVANT_JOBS') => ({ ...selectionMeta,primaryTotal,relatedTotal,relatedProfessions,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items: [], page: 1, limit, total: 0, totalPages: 1, mode: 'UNAVAILABLE' as const, state, emptyReason, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: digest([context.fingerprint,feed,relatedRoleId]), cvSource: context.cvSource });
         if (context.state !== 'READY')
             return empty(context.state);
         const compute=async()=>{
@@ -179,18 +239,14 @@ export class EmployeeIntentService {
         relatedTotal=ranked.filter(row=>isRelated(row)&&group(row)==='MAIN').length;
         primarySalaryUnverifiedTotal=ranked.filter(row=>!isRelated(row)&&group(row)==='SALARY_UNVERIFIED').length;
         relatedSalaryUnverifiedTotal=ranked.filter(row=>isRelated(row)&&group(row)==='SALARY_UNVERIFIED').length;
-        const relatedCounts=new Map<string,number>();
-        for(const row of ranked){
-          const roleId=row.evaluation.eligibility.canonicalRoleId;
-          if(isRelated(row)&&group(row)==='MAIN'&&roleId)relatedCounts.set(roleId,(relatedCounts.get(roleId)||0)+1);
-        }
-        const topRelated=[...relatedCounts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,3);
+        const topRelated=rankRelatedProfessions(ranked,context.index instanceof EmployeeHierarchyIndex);
         if(topRelated.length){
           const roles=await this.db.jobTitle.findMany({where:{id:{in:topRelated.map(([id])=>id)}},select:{id:true,slug:true,name:true,nameId:true,nameRu:true,nameUz:true}});
           const byRole=new Map(roles.map(role=>[role.id,role]));
-          relatedProfessions=topRelated.flatMap(([id,count])=>{const role=byRole.get(id);return role?[{...role,count}]:[];});
+          relatedProfessions=topRelated.flatMap(([id,{count}])=>{const role=byRole.get(id);return role?[{...role,count}]:[];});
         }
-        const section=ranked.filter(row=>!separated||isRelated(row)===(feed==='related'||feed==='salary-unverified'&&options.scope==='related'));
+        const section=ranked.filter(row=>(!separated||isRelated(row)===(feed==='related'||feed==='salary-unverified'&&options.scope==='related'))
+            &&(!relatedRoleId||!!relatedTarget&&row.evaluation.eligibility.canonicalRoleId===relatedTarget));
         ranked=section.filter(row=>group(row)===(feed==='salary-unverified'?'SALARY_UNVERIFIED':'MAIN'));
         if (!ranked.length){
             if(section.length)return empty('NO_ELIGIBLE_JOBS','PRACTICAL_PREFERENCES');
@@ -213,7 +269,7 @@ export class EmployeeIntentService {
         if (!items.length)
             return empty('NO_ELIGIBLE_JOBS');
         new Logger('EmployeeIntent').log(JSON.stringify({ version: EMPLOYEE_INTENT_VERSION, state: 'READY', eligible: total, returned: items.length, unknown: items.reduce((n, i) => n + i.matchInsights.evidence.filter(e => e.status === 'UNKNOWN').length, 0) }));
-        return { ...selectionMeta,primaryTotal,relatedTotal,relatedProfessions,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items, page, limit, total, totalPages, mode: context.preferencesOnly?'PREFERENCES_BASED' as const:'PERSONALIZED' as const, state: 'READY' as const, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: digest([context.fingerprint,feed, ranked.map(r => [r.job.id, r.evaluation])]), cvSource: context.cvSource };
+        return { ...selectionMeta,primaryTotal,relatedTotal,relatedProfessions,primarySalaryUnverifiedTotal,relatedSalaryUnverifiedTotal,groupReleaseVersion:context.groupReleaseVersion,mainTotal,salaryUnverifiedTotal,practicalPolicy:policy,feed,items, page, limit, total, totalPages, mode: context.preferencesOnly?'PREFERENCES_BASED' as const:'PERSONALIZED' as const, state: 'READY' as const, evidenceState:context.evidenceState,preferenceWarnings:context.preferenceWarnings, version: EMPLOYEE_INTENT_VERSION, rankingRevision: digest([context.fingerprint,feed,relatedRoleId, ranked.map(r => [r.job.id, r.evaluation])]), cvSource: context.cvSource };
     }
     async explore(profileId:string,page:number,limit:number,context?:Awaited<ReturnType<EmployeeIntentService['context']>>){
         context??=await this.context(profileId,false);

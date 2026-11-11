@@ -92,7 +92,7 @@ export class JobsController {
   @Get('recommended')
   @UseGuards(JwtAuthGuard, RolesGuard, SearchRateLimitGuard)
   @Roles('EMPLOYEE', 'SUPER_ADMIN')
-  recommended(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string, @Query('limit') limit?: string, @Query('feed') feed?: string,@Query('presentation') presentation?:string,@Query('scope') scope?:string) {
+  recommended(@CurrentUser() user: AuthUser, @Req() req: Request, @Query('page') page?: string, @Query('limit') limit?: string, @Query('feed') feed?: string,@Query('presentation') presentation?:string,@Query('scope') scope?:string,@Query('relatedRoleId') relatedRoleId?:string) {
     const parsed = (value:string | undefined, fallback:number, max:number) => {
       if (value === undefined) return fallback;
       if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > max) throw new BadRequestException('Invalid recommendation pagination');
@@ -101,7 +101,8 @@ export class JobsController {
     if(feed!==undefined&&feed!=='exploration'&&feed!=='recommendations'&&feed!=='salary-unverified'&&feed!=='related')throw new BadRequestException('Invalid recommendation feed');
     if(presentation!==undefined&&presentation!=='separated')throw new BadRequestException('Invalid recommendation presentation');
     if(scope!==undefined&&scope!=='primary'&&scope!=='related')throw new BadRequestException('Invalid recommendation scope');
-    return this.jobs.recommendedForUser(user, requestLocale(req), page === undefined ? undefined : parsed(page,1,1000000), parsed(limit,24,50),feed as 'recommendations'|'related'|'exploration'|'salary-unverified',{separated:presentation==='separated'||feed==='related',scope:scope as 'primary'|'related'|undefined});
+    if(relatedRoleId!==undefined&&(feed!=='related'||typeof relatedRoleId!=='string'||!/^[-_a-zA-Z0-9]{1,128}$/.test(relatedRoleId)))throw new BadRequestException('Invalid related occupation filter');
+    return this.jobs.recommendedForUser(user, requestLocale(req), page === undefined ? undefined : parsed(page,1,1000000), parsed(limit,24,50),feed as 'recommendations'|'related'|'exploration'|'salary-unverified',{separated:presentation==='separated'||feed==='related',scope:scope as 'primary'|'related'|undefined,relatedRoleId});
   }
 
   @Get('company/:companyId')

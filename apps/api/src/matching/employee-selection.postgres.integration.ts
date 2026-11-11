@@ -7,6 +7,8 @@ import { EmployeeIntentService } from './employee-intent.service';
 import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { OccupationRelationsService } from './occupation-relations.service';
 import { VacancyTasksService } from './vacancy-tasks.service';
+import { PositionGroupService } from './position-group.service';
+import { employeeHierarchyMode } from './employee-hierarchy';
 
 async function main() {
   const url=new URL(process.env.DATABASE_URL??'');
@@ -18,7 +20,8 @@ async function main() {
   const relations=new OccupationRelationsService(db);
   const catalog=new EmployeeCatalogSnapshot(db,undefined,relations);
   const tasks=new VacancyTasksService(db,relations);
-  const service=new EmployeeIntentService(db,catalog,undefined,tasks);
+  const groups=new PositionGroupService(db,relations);
+  const service=new EmployeeIntentService(db,catalog,undefined,tasks,groups);
   let checks=0;
   const check=(value:unknown,label:string)=>{assert.ok(value,label);checks++;};
   try {
@@ -27,7 +30,9 @@ async function main() {
     const desired=snapshot.index.resolve('Digital Media Designer');
     const graphic=snapshot.index.resolve('Graphic Designer');
     const chef=snapshot.index.resolve('Chef');
-    assert.ok(desired&&graphic&&chef&&desired!==graphic,'Resolve distinct catalog identities');
+    const frontend=snapshot.index.resolve('Frontend Developer');
+    const fullstack=snapshot.index.resolve('Full-stack Developer');
+    assert.ok(desired&&graphic&&chef&&frontend&&fullstack&&desired!==graphic,'Resolve distinct catalog identities');
     await db.company.create({data:{id:companyId,name:'Selection integration fixture',slug:companyId}});
     const user=await db.user.create({data:{id:userId,email:userId+'@example.test',fullName:'Synthetic candidate',role:'EMPLOYEE',
       employeeProfile:{create:{id:profileId,matchingPreferencesReviewed:true,desiredRoles:{create:{jobTitleId:desired}}}}}});
@@ -48,6 +53,11 @@ async function main() {
         ['Prepare ingredients','Cook menu items']),
       posting('brief',graphic,'Join our team.'),
     ]);
+    const strict=employeeHierarchyMode()==='strict';
+    const misleading= strict?await Promise.all([
+      posting('frontend',frontend,'Produce digital content.', ['Design graphics for publication', 'Develop digital content']),
+      posting('fullstack',fullstack,'Produce digital content.', ['Design graphics for publication', 'Develop digital content']),
+    ]):[];
     while(await tasks.refresh()) { /* consume bounded local batches */ }
     const context=await service.context(profileId);
     check(context.evidenceState==='REQUIRED','The fixture has no CV');
@@ -64,7 +74,21 @@ async function main() {
     check(!ids.includes(negative.id),'API excludes the negative posting');
     const relatedPage=await api('/jobs/recommended?feed=related&page=1&limit=50');
     check(relatedPage.items.some((row:any)=>(row.id??row.job?.id)===related.id),'Related feed shows the posting');
-    check(relatedPage.selectionRevision===snapshot.selectionRevision,'The feed exposes the activated revision');
+    check(relatedPage.selectionRevision===context.selectionRevision,'The feed exposes the activated revision');
+    if(strict){
+      check(misleading.every(job=>!context.vacancies?.decisions.has(job.id)),'Task evidence and old graph edges cannot add developers');
+      check(relatedPage.relatedProfessions.some((row:any)=>row.id===graphic)
+        &&relatedPage.relatedProfessions.every((row:any)=>row.id!==frontend&&row.id!==fullstack),'Related cards use the same eligibility');
+      const filtered=await api('/jobs/recommended?feed=related&relatedRoleId='+graphic+'&page=1&limit=1');
+      check(filtered.total>=2&&filtered.items.every((row:any)=>row.eligibility.canonicalRoleId===graphic),'Card opens its own paginated recommendations');
+      const blocked=await api('/jobs/recommended?feed=related&relatedRoleId='+frontend+'&page=1');
+      check(blocked.total===0&&blocked.items.length===0,'Direct related URL cannot grant eligibility');
+      check((await call('/jobs/recommended?relatedRoleId='+graphic+'&page=1')).status===400,'Role filter is scoped to related recommendations');
+      for(const job of misleading){
+        const detail=await api('/jobs/'+job.id+'/match-insights');
+        check(!detail.eligibility?.eligible,'Detail does not revive an outside-family vacancy');
+      }
+    }
     const detail=await api('/jobs/'+related.id+'/match-insights');
     check(detail.matchType==='RELATED','HTTP detail and the related feed agree');
     const match=await api('/jobs?sort=match&page=1&limit=24&companySlug='+companyId);
@@ -80,7 +104,7 @@ async function main() {
     await db.application.deleteMany({where:{profileId,jobPostId:related.id}});
     await db.jobPost.update({where:{id:related.id},data:{status:'CLOSED'}});
     check(!(await api('/jobs/recommended?feed=related&page=1&limit=50')).items.some((row:any)=>(row.id??row.job?.id)===related.id),'Closed posting excluded with warm cache');
-    console.log(JSON.stringify({suite:'employee-selection-postgres-http',checks,selectionRevision:snapshot.selectionRevision}));
+    console.log(JSON.stringify({suite:'employee-selection-postgres-http',checks,selectionRevision:context.selectionRevision}));
   } finally {
     await db.user.deleteMany({where:{id:userId}});
     await db.company.deleteMany({where:{id:companyId}});

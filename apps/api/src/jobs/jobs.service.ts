@@ -34,7 +34,7 @@ import { MatchingService } from '../matching/matching.service';
 import { EmployeeMatchingService } from '../matching/employee-matching.service';
 import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
 import { publicEmployeeEvaluation } from '../matching/employee-public-evaluation';
-import { intentJobScope } from '../matching/employee-intent.service';
+import { intentJobScope, type RecommendationOptions } from '../matching/employee-intent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify, parseDto } from '../common/utils';
@@ -1777,7 +1777,7 @@ export class JobsService {
     return this.analytics.summary(user, companyId);
   }
 
-  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'related'|'exploration'|'salary-unverified'='recommendations',options:{separated?:boolean;scope?:'primary'|'related'}={}) {
+  async recommendedForUser(user: AuthUser, locale: Locale = DEFAULT_LOCALE, page?: number, limit = 24, feed:'recommendations'|'related'|'exploration'|'salary-unverified'='recommendations',options:RecommendationOptions={}) {
     const profile = await this.prisma.employeeProfile.findUnique({
       where: { userId: user.id },
     });

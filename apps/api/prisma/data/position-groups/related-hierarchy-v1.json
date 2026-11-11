@@ -1,0 +1,170 @@
+{
+  "version": "employee-related-hierarchy-v1",
+  "specializations": [
+    {
+      "groupId": "group:chef",
+      "members": [
+        {
+          "id": "jobcat_8656316e5b43c3005e39482da0f64c3a",
+          "revision": "db3a80a9d58739e06f497800539534cc118dce57e6ece22fb44f3ae6e03ef34c"
+        },
+        {
+          "id": "jobcat_451e860ea7a887fa11a31c2b9b5d78bc",
+          "revision": "387b11f915fe74dc57bc0b686fa3cf39c0146e5a49e3c63b95c6c03601c15485"
+        },
+        {
+          "id": "curated_99aa9edc5402a06972f8b2d1ade0e434",
+          "revision": "17a052da0056c56d84b9b02fce1533a31edeb5618789185c4ae2af37f8fdc6df"
+        },
+        {
+          "id": "curated_b456fc3567673677b1a8010b7818db69",
+          "revision": "19b96dbcb4e4bbc041590db56b8b246da9f3c4cae0cd75b76a88c579e0fe085a"
+        }
+      ],
+      "evidence": "Lead kitchen production, implement recipes, and maintain dish quality and consistency."
+    },
+    {
+      "groupId": "group:nurse",
+      "members": [
+        {
+          "id": "jobcat_6b3b85f7bd645e80a2f091eadba9ed92",
+          "revision": "400651957291c8e3a4d1cbbc39ac94eae616c016c6614b13a1a535186208c75b"
+        },
+        {
+          "id": "jobcat_bf09ebe734f822961df4ba2486923d2c",
+          "revision": "0b9387e0ba737f36c8ae89557b3bf79db9293837385fa7c7e0aab124983309bf"
+        }
+      ],
+      "evidence": "Assess patient needs, provide nursing care, and monitor the care plan."
+    },
+    {
+      "groupId": "group:software-developer",
+      "members": [
+        {
+          "id": "cmvccxjom00np0nrccmfvrkyn",
+          "revision": "1f836af9c8c60c8fdac6edd5eac5f4f4e9dc48cb6a12718b34937a340679221a"
+        },
+        {
+          "id": "cmvccxjyr00tk0nrcwyc94p7w",
+          "revision": "81d63b03cccdad5110f8d414433ce23d4768d768408a90e1a921f4dbcddc3ed9"
+        },
+        {
+          "id": "cmvccxk0h00ui0nrcenhlwnlb",
+          "revision": "6555fe21347456ba1493648e2615f9670aa5729743e97096d1a28326a5ae0925"
+        }
+      ],
+      "evidence": "Implement and test server-side application logic, APIs, and integrations per reviewed local job profiles."
+    },
+    {
+      "groupId": "group:web-developer",
+      "members": [
+        {
+          "id": "cmvccxjnb00mz0nrc7l4fxwgu",
+          "revision": "6b23950105eeb2642722235cef79fcdac5bdea999cdb066af5672668311de67a"
+        },
+        {
+          "id": "cmvccxmgj01zm0nrc3omyd82v",
+          "revision": "147188ff43be8c5eba88309bc2fbdeacf3045069c5bf715f939c1c2c56c667c5"
+        },
+        {
+          "id": "cmvqvx07b00000newjr8vz62u",
+          "revision": "394b1a553d882bef7560ac82d895c28d753bb09523e20bdafd0b7b8bc0b0b9fe"
+        }
+      ],
+      "evidence": "Implement and test user-facing web interfaces and reusable components per reviewed local job profiles."
+    },
+    {
+      "groupId": "group:software-tester",
+      "members": [
+        {
+          "id": "cmvccxjvw00rw0nrcqf6ghfr0",
+          "revision": "67c5ed1d33a70f528d607921c3b1e356241a9335193fd563dd80423bfcc40a0e"
+        },
+        {
+          "id": "jobcat_dabd7ea20d4b113fcb4721929f5f5ebf",
+          "revision": "747dc3c26e5ac6a8e279a1459d9eaae681cd0d14e3c8a36a9b6abac495de3561"
+        }
+      ],
+      "evidence": "Design test cases, verify software functionality, and report software defects."
+    }
+  ],
+  "pairs": [
+    {
+      "from": {
+        "id": "jobcat_0593d1bde795485f385226805fd13f28",
+        "revision": "faeeb9ea92e6a8fabc7028f4510258737b8a41502afe8b78696c2d0f04e7f7a5"
+      },
+      "to": {
+        "id": "cmvccxkmu01720nrc7olcdk2n",
+        "revision": "3ebb6fcc1f10b7eae04bc5b1745baa7e181f81abea8373256e202cbb4c8e23e7"
+      },
+      "evidence": "Create visual assets, graphics, and digital content for publication."
+    },
+    {
+      "from": {
+        "id": "cmvccxkmu01720nrc7olcdk2n",
+        "revision": "3ebb6fcc1f10b7eae04bc5b1745baa7e181f81abea8373256e202cbb4c8e23e7"
+      },
+      "to": {
+        "id": "jobcat_0593d1bde795485f385226805fd13f28",
+        "revision": "faeeb9ea92e6a8fabc7028f4510258737b8a41502afe8b78696c2d0f04e7f7a5"
+      },
+      "evidence": "Create visual assets, graphics, and digital content for publication."
+    },
+    {
+      "from": {
+        "id": "jobcat_8656316e5b43c3005e39482da0f64c3a",
+        "revision": "db3a80a9d58739e06f497800539534cc118dce57e6ece22fb44f3ae6e03ef34c"
+      },
+      "to": {
+        "id": "curated_0b6ad6b5fc2ad7930ca511289eb6922e",
+        "revision": "587e53f95c01015b371acf73e501d98188accbd7d676d85f7effecdc2bae1347"
+      },
+      "evidence": "Lead a kitchen section and maintain plating, recipes, and dish quality."
+    },
+    {
+      "from": {
+        "id": "jobcat_8656316e5b43c3005e39482da0f64c3a",
+        "revision": "db3a80a9d58739e06f497800539534cc118dce57e6ece22fb44f3ae6e03ef34c"
+      },
+      "to": {
+        "id": "curated_4f70f7fa51f4b16bca36a2219ad3755a",
+        "revision": "44d63c764087a46d53c97ae83ce3d340bd0d9166c75ff583812640bea9638e7e"
+      },
+      "evidence": "Lead restaurant pastry and dessert preparation, standardize recipes, and maintain production quality."
+    },
+    {
+      "from": {
+        "id": "jobcat_8656316e5b43c3005e39482da0f64c3a",
+        "revision": "db3a80a9d58739e06f497800539534cc118dce57e6ece22fb44f3ae6e03ef34c"
+      },
+      "to": {
+        "id": "curated_907089744521484ffe90a91fe9716d21",
+        "revision": "dd25447e75dc83979c192de63a24d198fb0487a6aa08ad195e88ac748e5f07b8"
+      },
+      "evidence": "Develop and test dishes and standardize menu preparation and presentation for a restaurant kitchen."
+    },
+    {
+      "from": {
+        "id": "jobcat_457f48f7828f501cc2364e864d3121da",
+        "revision": "4ad2e24e85927c4f052a9d2188f171752b64003c7d1277344700d4d03b7129f4"
+      },
+      "to": {
+        "id": "jobcat_bc23678af969acbd6bcda9639b8563d7",
+        "revision": "cb203008c7b13c383f36a9537bbb5604a0f4baba24dc659103193ad882006c7b"
+      },
+      "evidence": "Arrange itineraries and book travel and accommodation for clients per reviewed travel booking scope."
+    },
+    {
+      "from": {
+        "id": "jobcat_bc23678af969acbd6bcda9639b8563d7",
+        "revision": "cb203008c7b13c383f36a9537bbb5604a0f4baba24dc659103193ad882006c7b"
+      },
+      "to": {
+        "id": "jobcat_457f48f7828f501cc2364e864d3121da",
+        "revision": "4ad2e24e85927c4f052a9d2188f171752b64003c7d1277344700d4d03b7129f4"
+      },
+      "evidence": "Arrange itineraries and book travel and accommodation for clients per reviewed travel booking scope."
+    }
+  ]
+}

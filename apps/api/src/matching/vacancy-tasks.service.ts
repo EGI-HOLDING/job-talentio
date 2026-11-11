@@ -6,6 +6,7 @@ import { EmployeeOccupationIndex } from './employee-occupation';
 import { escoTaskDictionary, primaryTaskScope, professionTaskKeys, taskCompatibility, taskDigest, projectTaskEvidence, vacancyTaskText, LEGACY_VACANCY_TASK_VERSION, type EscoTaskDictionary, type TaskEvidence, type TaskEvidenceState, type VacancyEligibility } from './vacancy-tasks';
 import { OccupationRelationsService } from './occupation-relations.service';
 import {PositionGroupOccupationIndex} from './position-group-index';
+import { EmployeeHierarchyIndex } from './employee-hierarchy';
 
 export type VacancySelection = {
   decisions: Map<string,{ roleId:string; updatedAt:Date; eligibility:VacancyEligibility }>;
@@ -95,7 +96,7 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
   async select(index:EmployeeOccupationIndex, selectedIds:string[], graphIds:string[], snapshotRelease?:string|null, preview?:readonly TaskRow[], evidenceVersion?:string):Promise<VacancySelection> {
     const version=evidenceVersion??(preview?this.evidenceVersion():LEGACY_VACANCY_TASK_VERSION);
     if(!this.cache||preview)return this.computeSelection(index,selectedIds,graphIds,snapshotRelease,version,preview);
-    const key=taskDigest([await this.cache.version('jobs'),snapshotRelease,version,selectedIds,graphIds]);
+    const key=taskDigest([await this.cache.version('jobs'),snapshotRelease,version,selectedIds,graphIds,index instanceof EmployeeHierarchyIndex?index.hierarchy.revision:null]);
     const entries=this.selections.get(index)??new Map();this.selections.set(index,entries);
     const previous=entries.get(key);if(previous&&previous.expires>Date.now())return previous.value;
     const value=this.computeSelection(index,selectedIds,graphIds,snapshotRelease,version).catch(error=>{entries.delete(key);throw error;});
@@ -104,8 +105,9 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
   }
 
   private async computeSelection(index:EmployeeOccupationIndex, selectedIds:string[], graphIds:string[], snapshotRelease:string|null|undefined, version:string, preview?:readonly TaskRow[]):Promise<VacancySelection> {
-    const choices=index instanceof PositionGroupOccupationIndex&&selectedIds===index.expandedIds?selectedIds:[...new Set(selectedIds.flatMap(id=>index.identity(id)?.canonicalRoleId??[]))].sort();
-    if(!choices.length)return {decisions:new Map(),revision:version};
+    const strict=index instanceof EmployeeHierarchyIndex?index:null;
+    const choices=strict?[...strict.explicitRoleIds]:index instanceof PositionGroupOccupationIndex&&selectedIds===index.expandedIds?selectedIds:[...new Set(selectedIds.flatMap(id=>index.identity(id)?.canonicalRoleId??[]))].sort();
+    if(!choices.length&&!strict?.expandedIds.length)return {decisions:new Map(),revision:version};
     const legacy=version===LEGACY_VACANCY_TASK_VERSION;
     const dictionary=this.concepts();
     const eligibleTaskKeys=legacy?new Set(this.relations.loadSource().skills.filter(skill=>skill.type==='skill'&&skill.reuse==='occupation-specific').map(skill=>skill.uri)):dictionary.keys;
@@ -128,8 +130,8 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
     const rows=preview??await this.db.$queryRaw<TaskRow[]>(Prisma.sql`
       WITH candidates AS (
         SELECT "id" FROM "JobPost" WHERE "status"='PUBLISHED' AND "jobTitleId"=ANY(${graphIds}::text[])
-        UNION
-        SELECT "jobId" FROM "JobOccupationTaskEvidence" WHERE "version"=${version} AND "state"<>'FAILED' AND "coreKeys" && ${keys}::text[]
+        ${strict?Prisma.empty:Prisma.sql`UNION
+        SELECT "jobId" FROM "JobOccupationTaskEvidence" WHERE "version"=${version} AND "state"<>'FAILED' AND "coreKeys" && ${keys}::text[]`}
       )
       SELECT job."id",job."jobTitleId",job."updatedAt",ev."coreKeys" AS "keys",ev."evidence",ev."state"
       FROM candidates JOIN "JobPost" job ON job."id"=candidates."id"
@@ -160,16 +162,34 @@ export class VacancyTasksService implements OnModuleInit,OnModuleDestroy {
         continue;
       }
       const candidates:VacancyEligibility[]=[];
-      for(const source of choices){
-        if(blocked.has(source+':'+target.canonicalRoleId)){trace?.push({sourceRoleId:source,reason:'ADMIN_EXCLUDED',sharedTasks:[]});continue;}
+      const withinScope=strict?.relatedSources(row.jobTitleId);
+      if(strict&&!withinScope?.length){
+        trace?.push({sourceRoleId:choices[0]??'',reason:'OUTSIDE_VERIFIED_HIERARCHY',sharedTasks:[]});
+        continue;
+      }
+      for(const source of withinScope?.map(row=>row.selectedRoleId!)??choices){
+        const excluded=blocked.has(source+':'+target.canonicalRoleId);
+        if(!strict&&excluded){trace?.push({sourceRoleId:source,reason:'ADMIN_EXCLUDED',sharedTasks:[]});continue;}
         const scope=scopesByRole.get(source);
         const tasks=taskCompatibility(scope?.keys??[],row.keys??[],scope?.primary,legacy?'RECOGNIZED':row.state??'UNRECOGNIZED',legacy?undefined:{
           specific:this.specificOutputs??dictionary.specificKeys,primary:scope?.primaryOfficial??new Set(),independent:dictionary.independent,
         });
-        if(tasks.conflict){trace?.push({sourceRoleId:source,reason:'CONFLICTING_DUTIES',sharedTasks:tasks.shared});continue;}
-        const graph=index.eligibility([source],row.jobTitleId);
-        const sharedTasks=row.evidence?.filter(task=>tasks.shared.includes(task.key)).map(task=>task.excerpt).slice(0,2);
+        if(!strict&&tasks.conflict){trace?.push({sourceRoleId:source,reason:'CONFLICTING_DUTIES',sharedTasks:tasks.shared});continue;}
+        const sharedTasks=[...new Set(row.evidence?.filter(task=>tasks.shared.includes(task.key)).map(task=>task.excerpt))].slice(0,2);
         const basis=graphTasks.get(source+':'+target.canonicalRoleId);
+        if(strict){
+          const approved=withinScope!.find(item=>item.selectedRoleId===source)!;
+          const useGraph=!excluded&&(basis?.length||approved.relationScore!==undefined);
+          const useTasks=!excluded&&tasks.strong&&!tasks.conflict;
+          trace?.push({sourceRoleId:source,reason:'VERIFIED_HIERARCHY',sharedTasks:excluded||tasks.conflict?[]:tasks.shared});
+          candidates.push({...approved,
+            ...(useGraph?{selectionEvidence:'PROFESSION_GRAPH' as const,taskConceptIds:basis?.map(t=>t.uri),sharedTasks:useTasks&&sharedTasks.length?sharedTasks:basis?.map(t=>t.label)}
+              :useTasks?{selectionEvidence:'VACANCY_TASKS' as const,relationScore:tasks.shared.length/(row.keys?.length||1),taskConceptIds:tasks.shared,sharedTasks}
+              :{relationScore:undefined}),
+          });
+          continue;
+        }
+        const graph=index.eligibility([source],row.jobTitleId);
         trace?.push({sourceRoleId:source,reason:graph.eligible?'PROFESSION_GRAPH':tasks.strong?'VACANCY_TASKS':!row.keys?.length?'TASKS_UNRECOGNIZED':'INSUFFICIENT_TASK_OVERLAP',sharedTasks:tasks.shared});
         if(graph.eligible) candidates.push({...graph,selectionEvidence:'PROFESSION_GRAPH',taskConceptIds:basis?.map(t=>t.uri)??tasks.shared,sharedTasks:sharedTasks?.length?sharedTasks:basis?.map(t=>t.label)});
         else if(tasks.strong)candidates.push({eligible:true,reason:'MATCH',...target,matchType:'RELATED',selectedRoleId:source,selectedRoleName:index.roles.get(source)?.name,relationReference:version,relationScore:tasks.shared.length/(row.keys?.length||1),selectionEvidence:'VACANCY_TASKS',taskConceptIds:tasks.shared,sharedTasks});
