@@ -53,6 +53,10 @@ async function main(){
   else if(/^\/recruitment\/invitations\/[^/]+\/report$/.test(p)){
     const id=p.split('/')[3];if(id==='invite-older')await new Promise(r=>setTimeout(r,500));
     body={invitation:invitations.find(i=>i.id===id),pdfStatus:'READY',claims:[{id:'forecast',statement:'Mengembangkan model forecasting',quote:'Mengembangkan model forecasting untuk analisis data.'},{id:'lead',statement:'Memimpin tim proyek',quote:'Memimpin tim proyek.'}],voice:{startedAt:'2026-11-09T09:43:00Z',endedAt:'2026-11-09T09:46:49Z',closeReason:'CONNECTION_LOST',transcriptComplete:false,transcript:[{id:'v1',speaker:'TARA',text:'Bagian mana yang kamu kerjakan sendiri?',startMs:92000},{id:'v2',speaker:'CANDIDATE',text:'Saya lebih banyak membantu di bagian EDA.',startMs:103000},{id:'v3',speaker:'TARA',text:'Apa metrik keberhasilan proyek tersebut?',startMs:126000}]},questions:[],evaluation:{status:'NEEDS_REVIEW',score:id==='invite-older'?50:37.5,result:{summary:id==='invite-older'?'Ringkasan sesi sebelumnya.':'Kontribusi pada EDA disebutkan; langkah dan hasil perlu didalami.',voice:{testedClaims:4,totalClaims:6,partial:true,durationSeconds:229,transcriptComplete:false},strengths:['Kontribusi EDA dijelaskan.'],gaps:['Perlu memperjelas langkah pribadi.'],claims:[{claimId:'forecast',score:2,status:'INSUFFICIENT',asked:true,reason:'Langkah dan hasil belum dijelaskan.',evidence:[{questionId:'v2',questionRef:'v1',questionText:'Bagian mana yang kamu kerjakan sendiri?',quote:'Saya lebih banyak membantu di bagian EDA.'}]},{claimId:'lead',score:null,status:'INSUFFICIENT',asked:false,reason:'Belum diuji.',evidence:[]}],interviewQuestions:['Langkah EDA apa yang dilakukan sendiri?']}},pdfUrl:'https://private.test/report.pdf?signature='+reportSignature};
+    if(id==='invite-1')body.evaluation.result.taraInterview={version:'tara-conversation-v7.0.0',topics:[
+      {topicId:'forecast',label:'Python',alternative:false,outcome:'CONCRETE_EXAMPLE',questionRefs:['v1'],answerRefs:['v2'],quote:'Saya lebih banyak membantu di bagian EDA.'},
+      {topicId:'lead',label:'Project leadership',alternative:false,outcome:'NOT_ASKED',questionRefs:[],answerRefs:[]},
+    ]};
   }
   else if(p==='/recruitment/messages'&&method==='POST'){const input=request.postDataJSON();report.writes.push({message:input});const count=input.selection.ids?.length??input.selection.expectedCount;followupBatch={id:'message-batch',count,emailCounts:{PENDING:count},messageCounts:{PENDING:count},messages:[]};body=followupBatch;}
   else if(p==='/recruitment/message-batches/message-batch')body={...followupBatch,emailCounts:{SENT:followupBatch.count},messageCounts:{SENT:followupBatch.count}};
@@ -96,6 +100,12 @@ async function main(){
  await page.getByText('37,5',{exact:true}).first().waitFor();await page.getByText('4 dari 6 klaim diuji',{exact:true}).waitFor();
  await page.setViewportSize({width:1586,height:2220});await page.getByRole('dialog',{name:'Dinda Pramesti'}).screenshot({path:path.join(out,'01-overview.png')});await page.setViewportSize({width:1586,height:992});
  const reads=invitationReads;invitations[1].status='STARTED';await page.getByText('Sedang berlangsung',{exact:true}).first().waitFor({timeout:12000});assert.ok(invitationReads>reads,'sent waiting invitation is refreshed');report.checks.push('Active invitation transitions without reopening drawer');
+ const notes=page.getByRole('region',{name:'Catatan wawancara Tara',exact:true});
+ await notes.getByText('Belum sempat ditanya',{exact:true}).waitFor();
+ await notes.getByRole('button',{name:'Lihat konteks percakapan',exact:true}).click();
+ await page.locator('[data-turn="v2"][data-highlight="true"]').waitFor();
+ await page.getByRole('tab',{name:'Hasil',exact:true}).click();
+ report.checks.push('Tara v7 notes distinguish tested claims and link to the stored answer');
  await page.getByRole('button',{name:'Lihat konteks percakapan →',exact:true}).click();
  await page.locator('[data-turn="v2"][data-highlight="true"]').waitFor();await page.getByRole('heading',{name:'Konteks bukti',exact:true}).waitFor();
  await page.getByLabel('Cari dalam percakapan',{exact:true}).fill('metrik');assert.equal(await page.locator('[data-turn]').count(),1);await page.getByLabel('Cari dalam percakapan',{exact:true}).fill('');await page.getByLabel('Filter pembicara',{exact:true}).selectOption('CANDIDATE');assert.equal(await page.locator('[data-turn]').count(),4);await page.getByLabel('Filter pembicara',{exact:true}).selectOption('all');

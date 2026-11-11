@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import WebSocket from 'ws';
+import { renderTaraClip } from './voice-playback';
 @Injectable()
 export class VoiceProvider {
  constructor(private config:ConfigService){}
  get configured(){return Boolean(this.config.get<string>('OPENAI_API_KEY'));}
+ render(text:string,signal:AbortSignal){return renderTaraClip(text,this.config.get<string>('OPENAI_API_KEY')??'',this.config.get<string>('TARA_LIVE_VOICE')??'marin',signal);}
  private headers(){return {Authorization:'Bearer '+this.config.get<string>('OPENAI_API_KEY'),'Content-Type':'application/json'};}
  async create(body:unknown){const response=await fetch('https://api.openai.com/v1/live/sessions',{method:'POST',headers:this.headers(),body:JSON.stringify(body),signal:AbortSignal.timeout(25_000)});if(!response.ok){const detail=await response.json().catch(()=>({})) as {error?:{code?:string;param?:string;message?:string}};const error=new Error('VOICE_PROVIDER_HTTP_'+response.status+':'+String(detail.error?.code??'UNKNOWN')+':'+String(detail.error?.param??''));Object.assign(error,{providerMessage:detail.error?.message});throw error;}return response.json() as Promise<{session:{id:string};transport:{sdp:string}}>;}
  attach(id:string,onEvent:(event:Record<string,unknown>)=>void,onLost:()=>void){

@@ -151,7 +151,7 @@ export class UserErasureService {
       const voiceIds=voiceRows.map(v=>v.id);
       if(voiceIds.length)await tx.$queryRaw(Prisma.sql`SELECT id FROM "VoiceInterview" WHERE id IN (${Prisma.join(voiceIds)}) ORDER BY id FOR UPDATE`);
       await tx.voiceFragment.deleteMany({where:{voiceId:{in:voiceIds}}});
-      await tx.voiceInterview.updateMany({where:{id:{in:voiceIds}},data:{promptSnapshot:{erased:true},transcriptComplete:false}});
+      await tx.voiceInterview.updateMany({where:{id:{in:voiceIds}},data:{promptSnapshot:{erased:true},taraInterview:Prisma.DbNull,transcriptComplete:false}});
       await tx.voiceInterview.updateMany({where:{id:{in:voiceIds},status:{notIn:['ENDED','FAILED','CREATE_UNCERTAIN']}},data:{status:'CLOSING',closeReason:'ACCOUNT_ERASED',closingAt:new Date(),leaseUntil:new Date(0)}});
       // Provider IDs survive session deletion only until the watchdog confirms hangup; no CV or transcript remains.
       if (!profile) return;

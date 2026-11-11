@@ -2,7 +2,7 @@ import { interviewBoundaries } from './shared/interview-boundaries';
 import { taraVoice } from './shared/tara-voice';
 import { taraHumor } from './shared/tara-humor';
 import { conversationOpening } from './shared/conversation-opening';
-import { CURRENT_CONVERSATION, CONVERSATION_VERSION, assessmentVersion, type ConversationPolicy } from '../conversation.policy';
+import { CURRENT_CONVERSATION, assessmentVersion, usesSkillInterview, usesTimedInterview, type ConversationPolicy } from '../conversation.policy';
 import { questionStyle } from './shared/question-style';
 import { inputTrust } from './shared/input-trust';
 import { jobRelevance } from './shared/job-relevance';
@@ -28,6 +28,7 @@ import { cvAssessment } from './shared/cv-assessment';
 import { scoreCv } from './tasks/score-cv';
 import { cvScoreExample } from './examples/cv-score';
 import { CV_RESULT_SCHEMA, CV_SCORING_VERSION } from '../recruitment/cv-scoring.policy';
+import { skillCandidate, skillTurn, timedCandidate, timedTurn, SKILL_TURN_SCHEMA, TIMED_TURN_SCHEMA } from './tasks/skill-interview';
 export type ScreeningTask = 'prepare' | 'candidate' | 'follow-up' | 'evaluate' | 'cv-score';
 export type PromptPreset = {
     instructions: string;
@@ -42,7 +43,13 @@ export function composePrompt(task: ScreeningTask, input: unknown, preset?: Prom
     if (preset)
         return { ...preset, input: [{ role: 'user', content: 'DATA_INPUT\n' + JSON.stringify(input) }] };
     if (task === 'cv-score') return { instructions: [inputTrust, cvAssessment, scoreCv, cvScoreExample].join('\n\n'), input: [{ role: 'user', content: 'DATA_INPUT\n' + JSON.stringify(input) }], schema: CV_RESULT_SCHEMA, name: 'talentio_cv_score', version: CV_SCORING_VERSION, reasoning: 'low', maxOutput: 16000 };
-    const modules = task === 'prepare' ? [inputTrust, jobRelevance, prepareJob] :
+    const skillInterview = usesSkillInterview(policy);
+    const timed = usesTimedInterview(policy);
+    const modules = task === 'prepare' ? [inputTrust, jobRelevance, prepareJob, ...(skillInterview ? [
+        'Urutkan kriteria dari tugas inti dan keahlian wajib ke tugas pendukung. Tanggung jawab terstruktur adalah sumber tugas. Jangan gunakan KPI atau nice-to-have sebagai syarat wajib.',
+    ] : [])] :
+        skillInterview && task === 'candidate' ? [inputTrust, interviewBoundaries, taraVoice, taraHumor, questionStyle, skillCandidate, ...(timed ? [timedCandidate] : [])] :
+        skillInterview && task === 'follow-up' ? [inputTrust, interviewBoundaries, taraVoice, taraHumor, questionStyle, skillTurn, ...(timed ? [timedTurn] : [])] :
         task === 'candidate' ? [inputTrust, interviewBoundaries, cvSource, taraVoice, taraHumor, questionStyle, questionExample, prepareCandidate, conversationOpening] :
             task === 'follow-up' ? [inputTrust, interviewBoundaries, taraVoice, taraHumor, questionStyle, questionExample, followUp] :
                 [inputTrust, evidenceRules, claimScoring, claimScoreExamples, evaluationExample, evaluateCandidate, evidenceReferences, claimStatus];
@@ -50,7 +57,7 @@ export function composePrompt(task: ScreeningTask, input: unknown, preset?: Prom
     modules.unshift(neutrality);
     const schemas = conversationSchemas(policy);
     return { instructions: modules.join('\n\n'), input: [{ role: 'user', content: 'DATA_INPUT\n' + JSON.stringify(input) }],
-        schema: task === 'prepare' ? PACKAGE_SCHEMA : task === 'candidate' ? schemas.candidate : task === 'follow-up' ? schemas.followUp : policy.probeOrder === 'breadth-first' ? JUDGED_CLAIM_PROVIDER_SCHEMA : CLAIM_PROVIDER_SCHEMA,
-        name: 'tara_' + task.replace('-', '_'), version: task === 'evaluate' ? assessmentVersion(policy) : CONVERSATION_VERSION,
-        reasoning: task === 'evaluate' ? 'low' : 'none', maxOutput: task === 'prepare' ? 2600 : task === 'candidate' ? (policy.maxCore > 5 ? 7200 : 2800) : task === 'evaluate' ? (policy.maxCore > 5 ? 6500 : 4500) : 240 };
+        schema: task === 'prepare' ? PACKAGE_SCHEMA : task === 'candidate' ? schemas.candidate : task === 'follow-up' ? timed ? TIMED_TURN_SCHEMA : skillInterview ? SKILL_TURN_SCHEMA : schemas.followUp : policy.probeOrder === 'breadth-first' ? JUDGED_CLAIM_PROVIDER_SCHEMA : CLAIM_PROVIDER_SCHEMA,
+        name: 'tara_' + task.replace('-', '_'), version: task === 'evaluate' ? assessmentVersion(policy) : policy.version,
+        reasoning: task === 'evaluate' ? 'low' : 'none', maxOutput: task === 'prepare' ? 2600 : task === 'candidate' ? (policy.maxCore > 5 ? 7200 : timed ? 3400 : 2800) : task === 'evaluate' ? (policy.maxCore > 5 ? 6500 : 4500) : timed ? 700 : 240 };
 }

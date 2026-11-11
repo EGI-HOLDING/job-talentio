@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { PDF_TEMPLATE_VERSION } from './screening.policy';
 import type { CandidatePayload, EvaluationPayload, PackagePayload } from './screening.schemas';
+import { taraOutcomeLabel } from './tara-interview';
 export type ScreeningReport = {
     name: string;
     job: string;
@@ -56,6 +57,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     y += text(data.job + (data.independentScores?'':' · '+data.company), 44, y, width, 10.5, false, muted) + 5;
     y += text((data.independentScores?data.company+' · ':'Lamaran ')+data.submittedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })+(data.independentScores?'':' · Kebutuhan lowongan v'+data.jobVersion),44,y,width,9,false,muted)+16;
     const voice=(data.result as unknown as {voice?:{partial:boolean;testedClaims:number;totalClaims:number;durationSeconds:number;transcriptComplete:boolean}}).voice;
+    const alternative=data.result.taraInterview?.topics.some(topic=>topic.alternative);
     if(voice?.partial){doc.roundedRect(44,y,222,23,5).fill('#fff2dc');text('Hasil parsial — perlu ditinjau HR',52,y+5,206,9,true,'#96621c');y+=33;}
     const scores = data.independentScores ? [['Kecocokan CV',data.cvScore],['Dukungan klaim CV',data.screeningScore]] : [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]];
     const gap = 12, card = (width - (scores.length - 1) * gap) / scores.length;
@@ -67,7 +69,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     y += 98;
     if(data.independentScores){
-        if(voice){const duration=Math.floor(voice.durationSeconds/60)+':'+String(voice.durationSeconds%60).padStart(2,'0');y+=text(voice.testedClaims+'/'+voice.totalClaims+' klaim diuji · Durasi '+duration+(voice.transcriptComplete?'':' · Transkrip tidak lengkap'),44,y,width,9,false,muted)+14;}
+        if(voice){const duration=Math.floor(voice.durationSeconds/60)+':'+String(voice.durationSeconds%60).padStart(2,'0');y+=text((alternative?'Pengalaman di luar CV':voice.testedClaims+'/'+voice.totalClaims+' klaim diuji')+' · Durasi '+duration+(voice.transcriptComplete?'':' · Transkrip tidak lengkap'),44,y,width,9,false,muted)+14;}
         heading('Ringkasan',y);y+=22;y+=text(data.result.summary,44,y,width,10)+16;
         heading('Bukti terpilih',y);y+=24;
         const selected=data.result.claims.filter(c=>(c as unknown as {asked?:boolean}).asked!==false).slice(0,3);
@@ -84,7 +86,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
         for(const [i,q] of data.result.interviewQuestions.slice(0,3).entries()){y+=text((i+1)+'. '+q,44,y,width,9.5)+7;}
     }else{
     if (!data.independentScores && data.finalScore === null)
-        y += text('Skor gabungan belum tersedia. Periksa status pemrosesan CV dan evaluasi pada detail lamaran.', 44, y, width, 10, false, muted) + 12;
+        y += text(alternative?'Wawancara ini mencatat pengalaman di luar CV tanpa skor klaim.':'Skor gabungan belum tersedia. Periksa status pemrosesan CV dan evaluasi pada detail lamaran.', 44, y, width, 10, false, muted) + 12;
     heading('Yang perlu diketahui HR', y);
     y += 24;
     y += text(data.result.summary, 44, y, width, 10.5) + 22;
@@ -106,6 +108,20 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     doc.addPage();
     header('Bukti dan tindak lanjut');
     y = 119;
+    if (data.result.taraInterview) {
+        heading('Catatan wawancara Tara', y);
+        y += 22;
+        for (const topic of data.result.taraInterview.topics) {
+            if (y > 650) { doc.addPage(); header('Catatan wawancara Tara'); y = 119; }
+            y += text((topic.alternative ? 'Pengalaman di luar CV · ' : '') + topic.label, 44, y, width, 10, true) + 3;
+            y += text(taraOutcomeLabel[topic.outcome], 44, y, width, 9.5) + 3;
+            if (topic.opportunities?.some(item=>item.delivery==='TEXT_FALLBACK'))
+                y += text('Pertanyaan disampaikan lewat teks saat wawancara suara.', 44, y, width, 9, false, muted) + 3;
+            const quotes = topic.evidence?.length ? topic.evidence.slice(0,2).map(item=>item.quote) : topic.quote ? [topic.quote] : [];
+            for (const quote of quotes) y += text('“' + quote.slice(0,240) + (quote.length>240?'…':'') + '”', 44, y, width, 9.5, false, muted) + 3;
+            y += 7;
+        }
+    }
     const excerpt = (value: string, n = 90) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
     const modern = data.result.claims.length > 0 && data.result.claims.every(c => 'score' in c);
     const records = modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null, reason: result.reason,

@@ -1,6 +1,7 @@
 export type Evidence={questionId:string;questionRef?:string;questionText?:string;quote:string};
 export type Claim={claimId:string;score?:number|null;status:string;asked?:boolean;reason:string;evidence?:Evidence[];contradictions?:Array<{left:{source:string;quote:string};right:{source:string;quote:string}}>};
-export type ScreeningEvaluation={summary?:string;strengths?:string[];gaps?:string[];interviewQuestions?:string[];claims?:Claim[];voice?:{testedClaims:number;totalClaims:number;partial:boolean;durationSeconds?:number;transcriptComplete?:boolean;closeReason?:string|null}};
+export type TaraInterviewNotes={version:string;endedReason?:string;topics:Array<{topicId:string;label:string;alternative:boolean;outcome:string;questionRefs:string[];answerRefs:string[];quote?:string;reason?:string;fields?:string[];cvQuote?:string;requirementRef?:string;evidence?:Array<{answerRef:string;quote:string;fields:string[];fromTopic:string}>;opportunities?:Array<{questionRef:string;openedAt?:number;closedAt?:number;delivery:string}>}>};
+export type ScreeningEvaluation={summary?:string;strengths?:string[];gaps?:string[];interviewQuestions?:string[];claims?:Claim[];taraInterview?:TaraInterviewNotes;voice?:{testedClaims:number;totalClaims:number;partial:boolean;durationSeconds?:number;transcriptComplete?:boolean;closeReason?:string|null}};
 export type Invitation={id:string;mode:'TEXT'|'VOICE';status:string;closedByStage?:boolean;expiresAt:string;recipientEmail:string;emailStatus:string;messageStatus:string;error?:string|null;createdAt:string;session:{id:string;status:string;startedAt?:string|null;completedAt:string|null;evaluation:{status:string;screeningScore:number|null;result:ScreeningEvaluation|null}|null}|null};
 export type Turn={id:string;speaker:string;text:string;startMs:number|null;timedOut?:boolean};
 export type Report={pdfStatus?:'NOT_READY'|'PENDING'|'FAILED'|'READY';claims?:Array<{id:string;statement:string;quote:string}>;invitation?:Invitation;voice?:{startedAt?:string;endedAt?:string;closeReason:string;transcriptComplete:boolean;transcript:Array<{id:string;speaker:string;text:string;startMs:number}>}|null;questions:Array<{id:string;text:string;answer:string|null;shownAt?:string|null;answeredAt?:string|null;timedOut:boolean}>;evaluation:{status:string;score:number|null;result:ScreeningEvaluation|null}|null;pdfUrl:string|null};
@@ -20,7 +21,7 @@ export function status(i:Invitation){
  if(e.status==='FAILED')return 'Penilaian gagal';
  return e.status==='NEEDS_REVIEW'||e.result?.voice?.partial?'Hasil parsial':'Hasil tersedia';
 }
-export function coverage(i:Invitation){const r=i.session?.evaluation?.result;if(!r||!r.voice&&!r.claims?.length)return null;return r.voice?{tested:r.voice.testedClaims,total:r.voice.totalClaims}:{tested:r.claims?.filter(c=>c.asked!==false&&c.score!=null).length??0,total:r.claims?.length??0};}
+export function coverage(i:Invitation){const r=i.session?.evaluation?.result;if(!r||r.taraInterview?.topics.some(topic=>topic.alternative)||!r.voice&&!r.claims?.length)return null;return r.voice?{tested:r.voice.testedClaims,total:r.voice.totalClaims}:{tested:r.claims?.filter(c=>c.asked!==false&&c.score!=null).length??0,total:r.claims?.length??0};}
 export function turns(report:Report):Turn[]{
  if(report.voice)return report.voice.transcript;
  const first=report.questions.find(q=>q.shownAt)?.shownAt;

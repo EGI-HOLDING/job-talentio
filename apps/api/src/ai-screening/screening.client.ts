@@ -45,10 +45,10 @@ function responseTiming(previous: unknown, body: ResponseBody): ProviderTiming {
 export class ScreeningClient {
     constructor(private db: PrismaService, private config: ConfigService) { }
     get configured() { return Boolean(this.config.get<string>('OPENAI_API_KEY')); }
-    private async request(path: string, init: RequestInit = {}) {
-        return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(init.method === 'POST' ? 120000 : 20000) });
+    private async request(path: string, init: RequestInit = {}, timeoutMs?: number) {
+        return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(timeoutMs ?? (init.method === 'POST' ? 120000 : 20000)) });
     }
-    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset?: PromptPreset, files?: Array<{ filename: string; file_data: string }>): Promise<unknown> {
+    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset?: PromptPreset, files?: Array<{ filename: string; file_data: string }>, timeoutMs?: number): Promise<unknown> {
         if (!this.configured)
             throw new Error('TARA_PROVIDER_NOT_CONFIGURED');
         const prompt = composePrompt(task, input, preset), model = preset?.model ?? screeningModel(), inputHash = hash([prompt, model, files]);
@@ -81,7 +81,7 @@ export class ScreeningClient {
                         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
                         input: [{ role: 'developer', content: [{ type: 'input_text', text: prompt.instructions, prompt_cache_breakpoint: { mode: 'explicit', ttl: '30m' } }] }, ...prompt.input.map(item => files?.length ? { ...item, content: [{ type: 'input_text', text: item.content }, ...files.map(file => ({ type: 'input_file', ...file }))] } : item)],
                         text: { format: { type: 'json_schema', name: prompt.name, strict: true, schema: prompt.schema } },
-                    }) });
+                    }) }, timeoutMs);
             }
             catch {
                 await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'UNCERTAIN', error: 'CREATE_RESPONSE_UNCONFIRMED' } });
@@ -107,7 +107,7 @@ export class ScreeningClient {
         if (!call.responseId)
             throw new AiUncertain('TARA_CALL_UNCERTAIN');
         let response: Response;
-        try { response = await this.request('/' + call.responseId); }
+        try { response = await this.request('/' + call.responseId, {}, timeoutMs); }
         catch { throw new AiPending('TARA_RESPONSE_POLL_RETRY'); }
         // A stored background response remains resumable by ID, even after a long queue.
         // Local elapsed time must never discard a completed provider result.

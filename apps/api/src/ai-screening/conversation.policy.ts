@@ -14,6 +14,16 @@ export const CURRENT_CONVERSATION: ConversationPolicy = Object.freeze({
     version: CONVERSATION_VERSION, questionSeconds: 60, maxCore: 10, maxFollowUp: 15,
     maxPerRoot: 2, probeOrder: 'breadth-first', maxWords: 35, maxCharacters: 280,
 });
+export const SKILL_CONVERSATION: ConversationPolicy = Object.freeze({
+    ...CURRENT_CONVERSATION, version: 'tara-conversation-v7.0.0', maxCore: 4, maxFollowUp: 6,
+});
+export const TIMED_CONVERSATION: ConversationPolicy = Object.freeze({
+    ...SKILL_CONVERSATION, version: 'tara-conversation-v8.0.0',
+});
+export const usesTimedInterview = (policy: ConversationPolicy) => policy.version === TIMED_CONVERSATION.version;
+export const usesSkillInterview = (policy: ConversationPolicy) => policy.version === SKILL_CONVERSATION.version || usesTimedInterview(policy);
+export const newConversationPolicy = () => process.env.TARA_TIMED_INTERVIEW_ENABLED === 'true'
+    ? TIMED_CONVERSATION : process.env.TARA_SKILL_INTERVIEW_ENABLED === 'true' ? SKILL_CONVERSATION : CURRENT_CONVERSATION;
 export const V5_CONVERSATION: ConversationPolicy = Object.freeze({
     version: 'tara-conversation-v5.0.0', questionSeconds: 60, maxCore: 3, maxFollowUp: 5,
     maxPerRoot: 2, probeOrder: 'breadth-first', maxWords: 35, maxCharacters: 280,
@@ -33,7 +43,9 @@ export function conversationPolicy(snapshot: unknown): ConversationPolicy {
     const value = snapshot as Record<string, unknown>;
     // Patch releases can change the frozen voice prompt while retaining this policy.
     // An existing v4 snapshot must stay readable after a later v4 prompt release.
-    const known = typeof value.version === 'string' && /^tara-conversation-v6\.\d+\.\d+$/.test(value.version)
+    const known = value.version === TIMED_CONVERSATION.version ? TIMED_CONVERSATION
+        : value.version === SKILL_CONVERSATION.version ? SKILL_CONVERSATION
+        : typeof value.version === 'string' && /^tara-conversation-v6\.\d+\.\d+$/.test(value.version)
         ? Object.freeze({ ...CURRENT_CONVERSATION, version: value.version })
         : typeof value.version === 'string' && /^tara-conversation-v5\.\d+\.\d+$/.test(value.version)
         ? Object.freeze({ ...V5_CONVERSATION, version: value.version })

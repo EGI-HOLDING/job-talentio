@@ -35,12 +35,26 @@ async function main(){
  let mailUncertain=false;
  const candidates=new RecruitmentService(db,storage as never,companies as never),mail={send:async(to:string,_subject:string,html:string)=>{emails.push({to,html});return mailUncertain?null:{id:'mock-email'};}};
  const invitations=new InvitationsService(db,config,candidates,storage as never,plans,sessions,mail as never,packets);
- let calls=0;
+ let calls=0, alternativeSkillFixture=false;
  const rubric={context:'Layanan backend',criteria:['API','Dokumentasi','Pengujian'].map((name,i)=>({id:'c'+i,name,requirementRef:'API',anchors:['Tidak tersedia','Terbatas','Sebagian','Jelas','Lengkap']}))};
- const provider={run:async(_work:string,_subject:string,task:string,input:any)=>{
+ const provider={run:async(_work:string,_subject:string,task:string,input:any,preset?:{version:string})=>{
   calls++;
   if(task==='prepare')return rubric;
+  if(task==='candidate'&&input.duties){
+   const line=input.cvLines.find((row:{text:string})=>row.text.includes('Node.js'));
+   return {claims:alternativeSkillFixture?[]:['Node.js','API'].map((skill,i)=>({
+    id:'skill-'+i,criterionId:'c0',statement:line.text,quote:line.text,lineStart:line.line,lineEnd:line.line,
+    question:`Bagian mana yang lu kerjain sendiri pakai ${skill} di proyek itu?`,
+    skill,scope:'CONTEXTUAL',relevance:'CORE',...(preset?.version==='tara-conversation-v8.0.0'?{extraEvidence:[]}:{}),
+   })),limitations:[],alternativeCriterionId:alternativeSkillFixture?'c0':null};
+  }
   if(task==='candidate')return {claims:input.cvLines.filter((line:any)=>line.text.includes('Membantu tim')).map((line:any,i:number)=>({id:'claim'+i,criterionId:'c'+i%3,statement:line.text,quote:line.text,lineStart:line.line,lineEnd:line.line,question:`Gue lihat pengalaman proyek ${i+1} di CV lu. Bagian apa yang lu kerjain?`})),limitations:[]};
+  if(task==='follow-up'&&input.topic){
+   const answer=input.chain.at(-1).answer;
+   const unrelated=answer.includes('mengelola gudang');
+   return {outcome:unrelated?'OFF_TOPIC':'EXAMPLE',answerQuote:answer,question:'Gue tarik balik dikit ya. Bagian mana yang lu kerjain pakai keahlian tadi?',
+    ...(input.assessmentTopics?{evidence:unrelated?[]:input.assessmentTopics.map((topic:any)=>({topicId:topic.id,quote:answer,fields:['TASK','ACTION']}))}:{})};
+  }
   if(task==='follow-up')return {stop:false,question:input.targetDepth===1?'Bagaimana lu memastikan hasil kerja lu sesuai kebutuhan proyek?':'Apa yang lu perbaiki setelah melihat hasil pengujian itu?'};
   if(task==='evaluate')return {summary:'Kandidat menjelaskan kontribusi pribadi pada proyek.',strengths:['Pengalaman API dijelaskan.'],gaps:[],interviewQuestions:[],claims:input.claims.map((claim:any)=>{const answer=input.answers.find((a:any)=>a.claimId===claim.id);return {claimId:claim.id,judgement:{level:'CONCRETE',detail:'NONE',detailRef:null},status:'SUPPORTED',reason:'Ada penjelasan kontribusi pribadi.',evidence:[{questionId:answer.id,quoteRef:input.evidenceCatalog.find((e:any)=>e.source==='ANSWER'&&e.ref===answer.id).id}],contradictions:[]};})};
   throw Error('Unexpected task '+task);
@@ -152,7 +166,9 @@ async function main(){
  let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[];
  const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.responses.model,'gpt-6-luna');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.ok(body.session.instructions.includes('Jangan memberikan jawaban'));return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any)=>{const question=input.transcript.find((t:any)=>t.speaker==='TARA'),answer=input.transcript.find((t:any)=>t.speaker==='CANDIDATE');return {summary:'Kontribusi API dijelaskan; klaim lain belum diuji.',strengths:['Kontribusi pribadi pada API'],gaps:['Cakupan terbatas'],interviewQuestions:['Konfirmasikan proyek berikutnya.'],claims:input.claims.map((c:any,i:number)=>({claimId:c.id,asked:i===0,opportunities:i===0?[{questionRef:question.id,answerRefs:[answer.id]}]:[],level:i===0?'CONCRETE':'NONE',detail:'NONE',reason:i===0?'Kandidat menjelaskan tindakan pada API.':'Belum ditanyakan.'}))};}};
- const voiceService=new VoiceService(db,config,sessions,liveProvider as never,voiceEvaluator as never);
+ const voiceService=new VoiceService(db,config,sessions,{
+  ...liveProvider,render:async(text:string)=>({audio:Buffer.from('fixture audio'),durationMs:25,transcript:text}),
+ } as never,voiceEvaluator as never);
  const connected=await voiceService.create(user,voiceClaim.session.id,clientId,'v=0 mock SDP offer for integration');assert.ok(connected.sdp);assert.equal(creates,1);
  await assert.rejects(voiceService.create(user,voiceClaim.session.id,clientId,'v=0 repeat mock SDP offer'));assert.equal(creates,1,'concurrent/repeated create cannot start another paid voice session');
  await db.aiScreeningSession.update({where:{id:voiceClaim.session.id},data:{leaseExpiresAt:new Date(0)}});
@@ -256,6 +272,171 @@ async function main(){
   assert.ok((await invitations.report(hr,voice.id)).evaluation,'historical report is still readable after closure');
  }
  await db.recruitmentCandidate.update({where:{id:candidate.id},data:{stage:originalStage}});await invitations.cancel(hr,closedInvite.id);
+ process.env.TARA_SKILL_INTERVIEW_ENABLED='true';
+ const prepareSkillInvite=async(mode:'TEXT'|'VOICE',requestKey:string)=>{
+  const created=await invitations.create(hr,candidate.id,{mode,requestKey});
+  const row=await db.screeningInvitation.findUniqueOrThrow({where:{id:created.id}});
+  const token=invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!);
+  const claimed=await invitations.claim(user,token);
+  const prepared=await db.aiScreeningPackage.findUniqueOrThrow({where:{id:row.packageId}});
+  if(prepared.status!=='READY')await deliver('PREPARE',row.packageId);
+  const plan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});
+  await deliver('CANDIDATE',plan.id);
+  return {invitationId:created.id,sessionId:claimed.session.id,token};
+ };
+ const textSkills=await prepareSkillInvite('TEXT','text-skill-interview-test');
+ process.env.TARA_SKILL_INTERVIEW_ENABLED='false';
+ assert.equal((await invitations.preview(textSkills.token)).conversationPolicy.maxQuestions,10);
+ await sessions.claim(user,textSkills.sessionId,clientId);
+ let guidedText=await sessions.start(user,textSkills.sessionId,clientId);
+ assert.equal(guidedText.conversationPolicy.maxQuestions,10,'invitation freezes v7 even when activation is turned off');
+ const submitText=async(answer:string)=>{
+  const active=guidedText.questions.find(q=>q.answer===null)!;
+  await sessions.shown(user,guidedText.id,clientId,active.id);
+  await sessions.answer(user,guidedText.id,clientId,active.id,answer,true);
+  await sessions.answer(user,guidedText.id,clientId,active.id,'Late duplicate',true);
+  await deliver('ADVANCE',guidedText.id);
+  guidedText=await sessions.state(user,guidedText.id);
+ };
+ await submitText('Saya mengelola gudang dan barang masuk.');
+ assert.match(guidedText.questions.at(-1)!.text,/Gue tarik balik/);
+ await submitText('Saya membuat satu endpoint Node.js saat bantu dosen.');
+ assert.match(guidedText.questions.at(-1)!.text,/pakai API/);
+ await submitText('Saya menulis endpoint API untuk tim.');
+ assert.equal(guidedText.status,'COMPLETED');
+ await deliver('EVALUATE',guidedText.id);
+ const guidedReport=await invitations.report(hr,textSkills.invitationId);
+ const guidedResult=guidedReport.evaluation!.result as {taraInterview:{topics:Array<{outcome:string;questionRefs:string[]}>}};
+ assert.equal(guidedResult.taraInterview.topics[0].outcome,'CONCRETE_EXAMPLE');
+ assert.equal(guidedResult.taraInterview.topics[0].questionRefs.length,2);
+ assert.equal(guidedReport.evaluation!.score,75,'the same Taka evaluator and score mapping are retained');
+ await deliver('PDF',guidedText.id);
+ assert.equal((await invitations.report(hr,textSkills.invitationId)).pdfStatus,'READY');
+
+ process.env.TARA_SKILL_INTERVIEW_ENABLED='true';
+ alternativeSkillFixture=true;
+ const alternate=await prepareSkillInvite('TEXT','text-skill-alternative-test');
+ await sessions.claim(user,alternate.sessionId,clientId);
+ guidedText=await sessions.start(user,alternate.sessionId,clientId);
+ await submitText('Saya membantu dosen membuat endpoint untuk arsip kelas.');
+ await deliver('EVALUATE',guidedText.id);
+ const alternateReport=await invitations.report(hr,alternate.invitationId);
+ assert.equal(alternateReport.evaluation!.status,'READY');
+ assert.equal(alternateReport.evaluation!.score,null);
+ assert.equal((alternateReport.evaluation!.result as {taraInterview:{topics:Array<{alternative:boolean}>}}).taraInterview.topics[0].alternative,true);
+ await deliver('PDF',guidedText.id);
+ alternativeSkillFixture=false;
+ const guidedVoice=await prepareSkillInvite('VOICE','voice-skill-interview-test');
+ const voiceRun=await voiceService.create(user,guidedVoice.sessionId,clientId,'v=0 guided mock SDP offer');
+ const persistedVoice=await db.voiceInterview.findUniqueOrThrow({where:{id:voiceRun.id}});
+ const guidedPlan=(await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:guidedVoice.sessionId}})).payload as {claims:Array<{question:string}>};
+ onEvent({type:'session.started',event_id:'guided-start'});
+ await (voiceService as any).active.get(voiceRun.id).pending;
+ assert.ok(commands.some(command=>command.type==='session.instructions.append'&&command.content.includes('Node.js')));
+ onEvent({type:'session.output_transcript.delta',event_id:'guided-first',delta:guidedPlan.claims[0].question,start_ms:10,end_ms:2000});
+ onEvent({type:'session.input_transcript.delta',event_id:'guided-long',delta:'Saya sedang membahas pengalaman lain secara panjang.',start_ms:3000,end_ms:179000});
+ await (voiceService as any).active.get(voiceRun.id).pending;
+ const switchAt=new Date(+persistedVoice.startedAt+185000);
+ const beforeTransition=commands.length;
+ await db.voiceInterview.update({where:{id:voiceRun.id},data:{heartbeatAt:switchAt}});
+ await voiceService.tick(switchAt);
+ await (voiceService as any).active.get(voiceRun.id).pending;
+ const transitionCommands=commands.slice(beforeTransition);
+ assert.deepEqual(transitionCommands.slice(0,2).map(command=>command.type),['session.input_audio.mute','session.output_audio.fixture.play']);
+ assert.ok(transitionCommands.some(command=>command.type==='session.instructions.append'&&command.content.includes('pakai API di proyek itu')));
+ assert.ok(!transitionCommands.some(command=>command.type==='session.input_audio.unmute'));
+ onEvent({type:'session.output_transcript.delta',event_id:'guided-second',delta:guidedPlan.claims[1].question,start_ms:182000,end_ms:185000});
+ await (voiceService as any).active.get(voiceRun.id).pending;
+ assert.equal(commands.at(-1)?.type,'session.input_audio.unmute');
+ await voiceService.end(user,guidedVoice.sessionId,clientId,'CONNECTION_LOST');
+ const guidedVoiceSaved=await db.voiceInterview.findUniqueOrThrow({where:{id:voiceRun.id}});
+ const guidedNotes=(guidedVoiceSaved.taraInterview as {topics:Array<{note:{outcome:string;questionRefs:string[]}}>}).topics;
+ assert.equal(guidedNotes[0].note.questionRefs.length,1);
+ assert.equal(guidedNotes[0].note.outcome,'ANSWER_CUT_SHORT');
+ assert.equal(guidedNotes[1].note.outcome,'TECHNICAL_INTERRUPTION');
+ assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:guidedVoice.sessionId}}),1);
+ process.env.TARA_SKILL_INTERVIEW_ENABLED='false';
+
+ process.env.TARA_TIMED_INTERVIEW_ENABLED='true';
+ const timedText=await prepareSkillInvite('TEXT','text-timed-interview-test');
+ await sessions.claim(user,timedText.sessionId,clientId);
+ guidedText=await sessions.start(user,timedText.sessionId,clientId);
+ assert.equal(guidedText.conversationPolicy.version,'tara-conversation-v8.0.0');
+ assert.ok(!('interviewDeadlineAt' in guidedText),'draft and preparation do not consume the session clock');
+ const firstTimedQuestion=guidedText.questions[0].id;
+ const firstShown=await sessions.shown(user,timedText.sessionId,clientId,firstTimedQuestion);
+ const firstDeadline=(firstShown as {interviewDeadlineAt?:Date}).interviewDeadlineAt!;
+ assert.ok(+firstDeadline-Date.now()>899_000);
+ assert.equal(+(await sessions.shown(user,timedText.sessionId,clientId,firstTimedQuestion) as {interviewDeadlineAt?:Date}).interviewDeadlineAt!,+firstDeadline);
+ await submitText('Saya membuat endpoint Node.js dan menulis dokumentasi API.');
+ assert.match(guidedText.questions.at(-1)!.text,/Soal API/);
+ await submitText('Saya menulis contoh penggunaan API untuk tim.');
+ assert.equal(guidedText.status,'COMPLETED');
+ await deliver('EVALUATE',timedText.sessionId);
+ const timedReport=await invitations.report(hr,timedText.invitationId);
+ const notes=(timedReport.evaluation!.result as {taraInterview:{topics:Array<{evidence:Array<{fromTopic:string}>;opportunities:Array<{delivery:string}>}>}}).taraInterview;
+ assert.ok(notes.topics[1].evidence.some(row=>row.fromTopic==='skill-0'));
+ assert.equal(notes.topics[0].opportunities[0].delivery,'CHAT');
+ assert.equal(timedReport.evaluation!.score,75,'coverage notes do not change Taka scoring');
+
+ const partial=await prepareSkillInvite('TEXT','text-timed-partial-test');
+ await sessions.claim(user,partial.sessionId,clientId);
+ const partialStart=await sessions.start(user,partial.sessionId,clientId), partialQ=partialStart.questions[0].id;
+ await sessions.shown(user,partial.sessionId,clientId,partialQ);
+ await sessions.answer(user,partial.sessionId,clientId,partialQ,'Draf terakhir milik kandidat',false);
+ await sessions.answer(user,partial.sessionId,clientId,partialQ,'Saya mengelola gudang.',true);
+ await db.aiScreeningSession.update({where:{id:partial.sessionId},data:{taraAdvanceAt:new Date(0)}});
+ const continued=await sessions.state(user,partial.sessionId);
+ assert.match(continued.questions.at(-1)!.text,/bagian mana yang lu kerjain sendiri/i);
+ await sessions.shown(user,partial.sessionId,clientId,continued.questions.at(-1)!.id);
+ await sessions.answer(user,partial.sessionId,clientId,continued.questions.at(-1)!.id,'Draf terakhir sebelum penutupan',false);
+ await db.aiScreeningSession.update({where:{id:partial.sessionId},data:{taraDeadlineAt:new Date(Date.now()+59_000)}});
+ const timedOut=await sessions.state(user,partial.sessionId);
+ assert.equal(timedOut.status,'COMPLETED');
+ assert.equal(timedOut.questions.at(-1)!.answer,'Draf terakhir sebelum penutupan');
+ await deliver('EVALUATE',partial.sessionId);
+ const partialReport=await invitations.report(hr,partial.invitationId);
+ assert.equal(partialReport.evaluation!.status,'NEEDS_REVIEW');
+ assert.equal(partialReport.evaluation!.score,null);
+ await deliver('PDF',partial.sessionId);
+
+ const controlledVoice=await prepareSkillInvite('VOICE','voice-controlled-playback-test');
+ const controlled=await voiceService.create(user,controlledVoice.sessionId,clientId,'v=0 controlled mock SDP offer');
+ assert.equal(controlled.clockRunning,false);
+ onEvent({type:'session.started',event_id:'controlled-start'});
+ const opened=await voiceService.playback(user,controlledVoice.sessionId,clientId,'READY');
+ const rev=opened!.playback!.revision;
+ assert.ok(opened!.clockRunning);
+ assert.equal((await voiceService.playback(user,controlledVoice.sessionId,clientId,'READY'))!.startedAt.toISOString(),opened!.startedAt.toISOString());
+ await assert.rejects(voiceService.clip(wrong,controlledVoice.sessionId,clientId,rev));
+ await assert.rejects(voiceService.clip(user,controlledVoice.sessionId,'another-owner-tab',rev));
+ await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_PLAYED',rev);
+ assert.equal((await voiceService.state(user,controlledVoice.sessionId))!.playback!.state,'AUDIO');
+ await voiceService.clip(user,controlledVoice.sessionId,clientId,rev);
+ await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_PLAYED',rev);
+ await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_PLAYED',rev);
+ onEvent({type:'session.output_transcript.delta',event_id:'unsolicited-model-output',delta:'Pertanyaan yang tidak boleh disampaikan?',start_ms:150,end_ms:500});
+ onEvent({type:'session.input_transcript.delta',event_id:'controlled-answer',delta:'Saya menulis endpoint Node.js.',start_ms:600,end_ms:900});
+ await (voiceService as any).active.get(controlled.id).pending;
+ assert.equal(await db.voiceFragment.count({where:{voiceId:controlled.id}}),2);
+ const transitionAt=new Date(+opened!.startedAt+181_000);
+ await db.voiceInterview.update({where:{id:controlled.id},data:{heartbeatAt:transitionAt}});
+ await voiceService.tick(transitionAt);
+ const secondClip=(await voiceService.state(user,controlledVoice.sessionId))!.playback!;
+ assert.equal(secondClip.revision,rev+1);
+ await assert.rejects(voiceService.clip(user,controlledVoice.sessionId,clientId,rev));
+ await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_FAILED',secondClip.revision);
+ const fallback=await voiceService.playback(user,controlledVoice.sessionId,clientId,'TEXT_SHOWN',secondClip.revision);
+ assert.equal(fallback!.playback!.state,'TEXT_SHOWN');
+ assert.equal(commands.at(-1)?.type,'session.input_audio.unmute');
+ await voiceService.end(user,controlledVoice.sessionId,clientId,'CONNECTION_LOST');
+ const controlledNotes=(await db.voiceInterview.findUniqueOrThrow({where:{id:controlled.id}})).taraInterview as {topics:Array<{note:{opportunities:Array<{delivery:string}>}}>};
+ assert.equal(controlledNotes.topics[0].note.opportunities[0].delivery,'AUDIO');
+ assert.equal(controlledNotes.topics[1].note.opportunities[0].delivery,'TEXT_FALLBACK');
+ assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:controlledVoice.sessionId}}),1);
+ process.env.TARA_TIMED_INTERVIEW_ENABLED='false';
+ console.log('Tara timed integration passed: server clock, cross-skill notes, bounded fallback, partial PDF, protected audio, deduplication and preserved Taka scoring.');
+
  const eraseInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-erasure'}),eraseRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:eraseInvite.id}}),eraseToken=invitationToken(eraseRow.id,eraseRow.tokenNonce,config.get('JWT_SECRET')!),eraseClaim=await invitations.claim(user,eraseToken);
  const erasePlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:eraseClaim.session.id}});await deliver('CANDIDATE',erasePlan.id);await sessions.claim(user,eraseClaim.session.id,clientId);
  const erasing=await voiceService.create(user,eraseClaim.session.id,clientId,'v=0 erasure mock SDP offer');onEvent({type:'session.input_transcript.delta',event_id:'erase-input',delta:'Pengalaman kandidat yang harus dihapus.',start_ms:1000,end_ms:2000});await (voiceService as any).active.get(erasing.id).pending;

@@ -345,13 +345,14 @@ export async function apiUpload<T>(path: string, body: FormData, onProgress?: (p
   return data as T;
 }
 
-export async function apiBlob(path:string):Promise<Blob> {
+export async function apiBlob(path:string, options?: {headers?: HeadersInit; signal?: AbortSignal}):Promise<Blob> {
   const actor=getSession()?.user.id;
-  const headers=new Headers({'X-Locale':activeLocale()});
+  const headers=new Headers(options?.headers);
+  headers.set('X-Locale',activeLocale());
   if(getToken())headers.set('Authorization','Bearer '+getToken());
-  let response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});
+  let response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store',signal:options?.signal});
   if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
-  if(response.status===401){const token=await tryRefresh();if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);if(token){headers.set('Authorization','Bearer '+token);response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store'});}}
+  if(response.status===401){const token=await tryRefresh();if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);if(token){headers.set('Authorization','Bearer '+token);response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store',signal:options?.signal});}}
   if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
   if(!response.ok){const body=await response.json().catch(()=>null);throw new ApiError(formatApiError(body,response.statusText),response.status);}
   const file=await response.blob();

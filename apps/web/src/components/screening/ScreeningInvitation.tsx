@@ -9,7 +9,7 @@ import { TaraApplication } from './TaraApplication';
 import { VoiceInterview } from './VoiceInterview';
 import s from './ScreeningInvitation.module.css';
 
-type Preview={mode:'TEXT'|'VOICE';jobTitle:string;companyName:string;expiresAt:string;status:string};
+type Preview={mode:'TEXT'|'VOICE';jobTitle:string;companyName:string;expiresAt:string;status:string;conversationPolicy?:{maxQuestions:number}};
 type Claim={invitationId:string;mode:'TEXT'|'VOICE';session:{id:string;job:{id:string}}};
 
 function maskEmail(email:string|null|undefined){
@@ -78,7 +78,7 @@ export function ScreeningInvitation({token}:{token:string}){
          <p className={s.intro}>{message}</p>
          <div className={s.detailsGrid}>
            <div className={s.detailItem}><span className={s.detailIcon}><MessageIcon/></span><span><strong>{preview.mode==='VOICE'?'Interview suara':'Interview teks'}</strong>{preview.mode==='VOICE'&&<small>{uiCopy("Siapkan mikrofon")}</small>}</span></div>
-           <div className={s.detailItem}><span className={s.detailIcon}>{preview.mode==='VOICE'?<ClockIcon/>:<ListIcon/>}</span><span><strong>{preview.mode==='VOICE'?'Maksimal 15 menit':'Maksimal 25 pertanyaan'}</strong></span></div>
+           <div className={s.detailItem}><span className={s.detailIcon}>{preview.mode==='VOICE'?<ClockIcon/>:<ListIcon/>}</span><span><strong>{preview.mode==='VOICE'?'Maksimal 15 menit':`Maksimal ${preview.conversationPolicy?.maxQuestions??25} pertanyaan`}</strong></span></div>
            {preview.mode==='TEXT'&&<div className={s.detailItem}><span className={s.detailIcon}><ClockIcon/></span><span><strong>1 menit per pertanyaan</strong></span></div>}
          </div>
          {preview.mode==='TEXT'&&<p className={s.transcriptNote}>Percakapan akan direkap untuk membantu penilaian tim HR.</p>}

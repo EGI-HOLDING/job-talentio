@@ -48,6 +48,9 @@ model AiScreeningPackage {
 }
 
 model AiScreeningSession {
+  taraInterview Json?
+  taraDeadlineAt DateTime?
+  taraAdvanceAt DateTime?
   voice VoiceInterview?
   id String @id @default(cuid())
   legacyKey String? @unique
@@ -86,6 +89,8 @@ model AiScreeningSession {
   evaluation AiScreeningEvaluation?
   @@index([jobId, profileId])
   @@index([status, updatedAt])
+  @@index([taraDeadlineAt, status])
+  @@index([taraAdvanceAt, status])
 }
 
 model AiScreeningQuestion {
@@ -2802,6 +2807,7 @@ model ScreeningInvitation {
 
 
 model VoiceInterview {
+  taraInterview Json?
   id String @id @default(cuid())
   sessionId String? @unique
   session AiScreeningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)

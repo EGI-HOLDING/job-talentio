@@ -2,15 +2,17 @@
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect,useState } from 'react';
 import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
+import { TaraInterviewNotes } from '@/components/screening/TaraInterviewNotes';
 import type { Evidence,ScreeningEvaluation,Report } from './screening-view';
 import s from './ScreeningPanel.module.css';
 export type { ScreeningEvaluation } from './screening-view';
-export function ScreeningResult({result,claims,questions=[],onEvidence,focusClaim}:{result:ScreeningEvaluation;claims:Array<{id:string;statement:string;quote:string}>;questions?:Report['questions'];onEvidence?:(claimId:string,evidence:Evidence)=>void;focusClaim?:string}){
+export function ScreeningResult({result,claims,questions=[],onEvidence,onNoteContext,focusClaim}:{result:ScreeningEvaluation;claims:Array<{id:string;statement:string;quote:string}>;questions?:Report['questions'];onEvidence?:(claimId:string,evidence:Evidence)=>void;onNoteContext?:(topicId:string,ref:string,answer:boolean)=>void;focusClaim?:string}){
  const uiCopy=useHrCopy();
  const [expanded,setExpanded]=useState(result.claims?.[0]?.claimId??'');
  useEffect(()=>{if(focusClaim)setExpanded(focusClaim);},[focusClaim]);
  return <div className={s.results}>
  <section><h4>Ringkasan</h4><p>{result.summary||'Belum ada ringkasan yang tersedia.'}</p></section>
+ {result.taraInterview && <TaraInterviewNotes notes={result.taraInterview} onContext={onNoteContext}/>}
  <div className={s.findings}><section><h4 className={s.inlineTitle}><WorkspaceIcon kind="layers"/>{uiCopy("Penjelasan yang didukung")}</h4>{result.strengths?.length?<ul>{result.strengths.map((v,i)=><li key={i}>{v}</li>)}</ul>:<p className={s.muted}>Belum ada penjelasan yang cukup untuk dirangkum.</p>}</section><section><h4 className={s.inlineTitle}><WorkspaceIcon kind="info"/>{uiCopy("Perlu didalami")}</h4>{result.gaps?.length?<ul>{result.gaps.map((v,i)=><li key={i}>{v}</li>)}</ul>:<p className={s.muted}>Tidak ada catatan tambahan dari evaluator.</p>}</section></div>
  <section><div className={s.sectionTitle}><h4>{uiCopy("Klaim yang diperiksa")}</h4>{result.voice&&<small>{result.voice.testedClaims} diuji &#xb7; {result.voice.totalClaims-result.voice.testedClaims} belum diuji</small>}</div>
  <div className={s.claimList}>{result.claims?.map((claim,i)=>{const source=claims.find(c=>c.id===claim.claimId);return <details key={claim.claimId} data-claim={claim.claimId} open={expanded===claim.claimId} onToggle={e=>{if(e.currentTarget.open)setExpanded(claim.claimId);}}>

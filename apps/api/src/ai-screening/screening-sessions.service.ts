@@ -10,10 +10,11 @@ import { registerCvVersion } from '../profiles/cv-evidence';
 import { freezeHrSubmission } from '../matching/recruiter-evidence';
 import { enqueueWork, ScreeningPackets } from './screening-packets.service';
 import { answerDeadline, isExpired, json, MAX_ANSWER_CHARS, SESSION_LEASE_MS, screeningEnabled } from './screening.policy';
-import type { CandidatePayload } from './screening.schemas';
+import type { CandidatePayload, PackagePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
-import { CURRENT_CONVERSATION, conversationPolicy, publicConversationPolicy } from './conversation.policy';
+import { newConversationPolicy, conversationPolicy, publicConversationPolicy, usesSkillInterview, usesTimedInterview } from './conversation.policy';
+import { advanceTara, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
 const sessionInclude = { invitation: { include: { candidate: { select: { stage:true, company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
@@ -72,10 +73,11 @@ export class ScreeningSessions {
         return { id: row.id, invitation: row.invitation ? { id: row.invitation.id, mode: row.invitation.mode, status: row.invitation.status } : null, status: row.status, startedAt: row.startedAt, completedAt: row.completedAt, applicationId: row.applicationId,
             resumeId: row.resumeId, cv: cv?.resume ? { id: cv.resume.id, title: cv.resume.title, parseStatus: row.resumeVersion?.parseStatus } : null,
             coverLetter: row.coverLetter ?? '', coverFilename: row.coverFilename, source: row.source, revision: row.revision, serverTime: new Date().toISOString(),
+            ...(row.taraDeadlineAt ? {interviewDeadlineAt:row.taraDeadlineAt} : {}),
             packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
             preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
             preparation,
-            conversationPolicy: publicConversationPolicy(row.package ? conversationPolicy(row.package.conversationPolicy) : CURRENT_CONVERSATION),
+            conversationPolicy: publicConversationPolicy(row.package ? conversationPolicy(row.package.conversationPolicy) : newConversationPolicy()),
             recoveryRequired: requiresRecovery,
             job: { id: row.job.id, title: row.job.title, companyName: row.job.isAnonymous ? 'Perusahaan dirahasiakan' : row.job.company.name, city: row.job.city?.name ?? '' },
             questions: row.questions.filter(q => !active || q.position <= active.position).map(q => ({ id: q.id, text: q.text, draft: q.draft, answer: q.answer, shownAt: q.shownAt, deadlineAt: q.deadlineAt, answeredAt: q.answeredAt, timedOut: q.timedOut })),
@@ -117,7 +119,14 @@ export class ScreeningSessions {
         });
         return this.state(user,id);
     }
-    async state(user: AuthUser, id: string) { return this.public(await this.owned(user, id)); }
+    async state(user: AuthUser, id: string) {
+        const row = await this.owned(user, id);
+        if (row.taraDeadlineAt && ['ACTIVE','GENERATING'].includes(row.status) &&
+            (+row.taraDeadlineAt - (TARA_SESSION_MS - TARA_COMPLETE_MS) <= Date.now() || row.taraAdvanceAt && +row.taraAdvanceAt <= Date.now())) {
+            if (await this.advanceTimedChat(id, new Date(), row.revision)) return this.public(await this.owned(user, id));
+        }
+        return this.public(row);
+    }
     async save(user: AuthUser, id: string, data: {
         resumeId?: string;
         coverLetter?: string;
@@ -224,10 +233,15 @@ export class ScreeningSessions {
             if (version.fileKey !== resume.fileKey)
                 throw new ConflictException('CV berubah. Pilih ulang CV sebelum mulai.');
             const profile = await tx.employeeProfile.findUniqueOrThrow({ where: { id: row.profileId }, include: { languages: { include: { language: true } }, certifications: true } });
+            const policy = conversationPolicy(session.package?.conversationPolicy);
+            const skillInterview = usesSkillInterview(policy), timed = usesTimedInterview(policy);
+            const topics = skillInterview && transport === 'TEXT'
+                ? taraTopics(payload, fresh.package?.payload as unknown as PackagePayload, timed) : null;
             const now = new Date(), snapshot = { resume: { id: resume.id, title: resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
-            await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 } } });
+            await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 }, ...(topics ? { taraInterview: json(startTara(topics, timed)) } : {}) } });
             if (row.invitation) await tx.screeningInvitation.update({ where: { id: row.invitation.id }, data: { status: 'STARTED' } });
-            await tx.aiScreeningQuestion.createMany({ data: payload.claims.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: c.question })) });
+            const startingQuestions = topics ? topics.slice(0, 1) : skillInterview ? [] : payload.claims;
+            if (startingQuestions.length) await tx.aiScreeningQuestion.createMany({ data: startingQuestions.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: c.question })) });
         });
         return this.state(user, id);
     }
@@ -241,7 +255,16 @@ export class ScreeningSessions {
                 throw new ConflictException('Pertanyaan sudah berganti.');
             if (!q.shownAt) {
                 const now = new Date();
-                await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { shownAt: now, deadlineAt: answerDeadline(now, conversationPolicy(session.package?.conversationPolicy)) } });
+                const policy = conversationPolicy(session.package?.conversationPolicy);
+                let deadlineAt = answerDeadline(now, policy);
+                if (usesTimedInterview(policy)) {
+                    const deadline = session.taraDeadlineAt ?? new Date(+now + TARA_SESSION_MS);
+                    const closeAt = +deadline - (TARA_SESSION_MS - TARA_COMPLETE_MS);
+                    if (+now >= closeAt) return;
+                    if (!session.taraDeadlineAt) await tx.aiScreeningSession.update({where:{id},data:{taraDeadlineAt:deadline}});
+                    deadlineAt = new Date(Math.min(+deadlineAt, closeAt));
+                }
+                await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { shownAt: now, deadlineAt } });
             }
         });
         return this.state(user, id);
@@ -255,7 +278,7 @@ export class ScreeningSessions {
         return this.state(user, id);
     }
     private async recordAnswer(id: string, profileId: string, questionId: string, answer: string, submit: boolean, clientId?: string) {
-        await this.db.$transaction(async (tx) => {
+        const timed = await this.db.$transaction(async (tx) => {
             const session = await this.lock(tx, id, profileId, clientId);
             const q = session.questions.find(q => q.id === questionId);
             if (!q || q.answer !== null)
@@ -270,17 +293,80 @@ export class ScreeningSessions {
                 return;
             }
             // Requests arriving after the deadline cannot replace the last server-saved draft.
-            await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { draft: expired ? q.draft : answer, answer: (expired ? q.draft : answer).trim(), answeredAt: new Date(), timedOut: expired } });
+            const now = new Date();
+            await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { draft: expired ? q.draft : answer, answer: (expired ? q.draft : answer).trim(), answeredAt: now, timedOut: expired } });
             const next = session.questions.find(v => v.position > q.position && v.answer === null), revision = session.revision + 1;
-            await tx.aiScreeningSession.update({ where: { id }, data: { status: next ? 'ACTIVE' : 'GENERATING', revision, error: null, leaseExpiresAt: new Date(Date.now() + SESSION_LEASE_MS) } });
+            const advanceAt = session.taraDeadlineAt && !next ? new Date(+now + TARA_CHAT_REVIEW_MS) : null;
+            await tx.aiScreeningSession.update({ where: { id }, data: { status: next ? 'ACTIVE' : 'GENERATING', revision, error: null, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), ...(advanceAt ? {taraAdvanceAt:advanceAt} : {}) } });
             if (!next)
                 await enqueueWork(tx, 'ADVANCE', id, 'ADVANCE:' + id + ':' + revision);
+            if (advanceAt) return {advanceAt, revision};
         });
+        if (timed) {
+            const timer = setTimeout(() => void this.advanceTimedChat(id, new Date(), timed.revision).catch(() => undefined), Math.max(0, +timed.advanceAt - Date.now()));
+            timer.unref();
+        }
     }
     async expireAnswers() {
+        const now = new Date();
+        const due = await this.db.aiScreeningSession.findMany({where:{
+            OR:[{status:'GENERATING',taraAdvanceAt:{lte:now}},
+                {status:{in:['ACTIVE','GENERATING']},taraDeadlineAt:{lte:new Date(+now + TARA_SESSION_MS - TARA_COMPLETE_MS)}}],
+        },select:{id:true,revision:true},take:50});
+        for (const row of due) await this.advanceTimedChat(row.id, now, row.revision).catch(() => undefined);
         const questions = await this.db.aiScreeningQuestion.findMany({ where: { answer: null, deadlineAt: { lte: new Date() }, session: { status: 'ACTIVE' } }, include: { session: { select: { profileId: true } } }, take: 50 });
         for (const q of questions)
             await this.recordAnswer(q.sessionId, q.session.profileId, q.id, q.draft, true).catch(() => undefined);
+    }
+    async advanceTimedChat(id: string, now: Date, revision: number, decision?: TaraDecision) {
+        return this.db.$transaction(async tx => {
+            const invitation = await tx.screeningInvitation.findUnique({where:{sessionId:id},select:{id:true}});
+            if (invitation) await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${invitation.id} FOR UPDATE`);
+            await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${id} FOR UPDATE`);
+            const row = await tx.aiScreeningSession.findUnique({where:{id},include:sessionInclude});
+            if (!row?.taraDeadlineAt || row.revision !== revision || !['ACTIVE','GENERATING'].includes(row.status) ||
+                row.invitation?.status === 'CANCELLED' || !usesTimedInterview(conversationPolicy(row.package?.conversationPolicy))) return false;
+            const start = +row.taraDeadlineAt - TARA_SESSION_MS, closeAt = start + TARA_COMPLETE_MS;
+            const closing = +now >= closeAt;
+            if (!closing && (row.status !== 'GENERATING' || !row.taraAdvanceAt || !decision && +now < +row.taraAdvanceAt)) return false;
+            if (row.taraAdvanceAt && +now >= +row.taraAdvanceAt) decision = undefined;
+            const topics = taraTopics(row.currentPlan!.payload as unknown as CandidatePayload, row.package!.payload as unknown as PackagePayload, true);
+            const progress = row.taraInterview as unknown as TaraProgress;
+            const last = row.questions.at(-1)!;
+            const previous = row.questions.filter(q => q.claimId === topics[progress.active].id);
+            const answer = last.answer ?? (last.shownAt ? last.draft.trim() : '');
+            if (last.answer === null && last.shownAt) await tx.aiScreeningQuestion.update({where:{id:last.id},data:{answer,answeredAt:now,timedOut:true}});
+            const remaining = Math.max(0, topics.length - progress.active - 1);
+            const window = 60_000 + TARA_CHAT_REVIEW_MS;
+            const next = advanceTara(progress, topics, {
+                questionRef:last.shownAt ? last.id : undefined, answerRefs:answer ? [last.id] : [], answered:!!answer,
+                previous:previous.map(q=>q.text), decision, timedOut:closing || last.timedOut,
+                answers:answer ? [{ref:last.id,text:answer}] : [],
+                opportunity:last.shownAt ? {questionRef:last.id,openedAt:+last.shownAt,closedAt:+(last.answeredAt ?? now),delivery:'CHAT'} : undefined,
+            }, {
+                canContinue: !closing,
+                canClarify:+now + window <= Math.min(closeAt, start + TARA_FIRST_PASS_MS - remaining * window),
+                canRevisit:+now + window <= closeAt,
+            });
+            await tx.aiScreeningSession.update({where:{id},data:{
+                taraInterview:json(next.progress),taraAdvanceAt:null,revision:{increment:1},error:null,
+                ...(next.question ? {status:'ACTIVE'} : {status:'COMPLETED',completedAt:now}),
+            }});
+            if (!next.question) {
+                if (invitation) {
+                    await tx.screeningInvitation.update({where:{id:invitation.id},data:{status:'COMPLETED'}});
+                    await tx.aiScreeningEvaluation.upsert({where:{sessionId:id},create:{sessionId:id,promptVersion:row.currentPlan!.promptVersion},update:{}});
+                    await enqueueWork(tx,'EVALUATE',id);
+                }
+                return true;
+            }
+            const active = topics[next.progress.active], depth = next.progress.topics[next.progress.active].depth;
+            const root = row.questions.find(q=>q.claimId === active.id && q.kind === 'CORE');
+            const parent = row.questions.filter(q=>q.claimId === active.id).at(-1);
+            await tx.aiScreeningQuestion.create({data:{sessionId:id,position:row.questions.length,claimId:active.id,criterionId:active.criterionId,
+                kind:depth ? 'FOLLOW_UP' : 'CORE',rootQuestionId:depth ? root?.id : null,parentQuestionId:depth ? parent?.id : null,depth,text:next.question}});
+            return true;
+        });
     }
     async retry(user: AuthUser, id: string) {
         const row = await this.owned(user, id);

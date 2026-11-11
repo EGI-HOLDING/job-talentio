@@ -7,6 +7,18 @@ import type { AuthUser } from '../common/auth.decorators';
 import type { RecruiterBreakdown } from '../matching/recruiter-matching';
 import { conversationPolicy, assessmentVersion } from './conversation.policy';
 import { rankScreening, SCREENING_PROMPT_VERSION, SCREENING_RANKING_VERSION, hash } from './screening.policy';
+import type { EvaluationPayload } from './screening.schemas';
+
+function taraScoreReason(evaluation?: {result: unknown; screeningScore: number | null; cvScore: number | null; status: string} | null) {
+    if (evaluation?.status === 'FAILED') return 'EVALUATION_FAILED';
+    if (!evaluation?.result) return null;
+    const result = evaluation.result as EvaluationPayload;
+    if (result.taraInterview?.topics.some(topic => topic.alternative)) return 'NO_RELEVANT_CV_CLAIMS';
+    if (evaluation.screeningScore === null && evaluation.status === 'NEEDS_REVIEW' && result.taraInterview?.endedReason)
+        return 'TARA_PARTIAL_EVIDENCE';
+    if (evaluation.screeningScore === null) return 'LEGACY_INSUFFICIENT_EVIDENCE';
+    return evaluation.cvScore === null ? 'CV_SCORE_UNAVAILABLE' : null;
+}
 export type TaraSummary = {
     methodology: string;
     assessedClaims: number;
@@ -60,7 +72,7 @@ export class ScreeningHr {
             const s = row.screeningSession, e = s?.evaluation;
             const result = e?.result as { claims?: unknown[] } | null;
             info.set(row.id, { methodology: e?.promptVersion ?? 'legacy', assessedClaims: result?.claims?.length ?? 0,
-                scoreReason: e?.result && e.screeningScore !== null && e.cvScore === null ? 'CV_SCORE_UNAVAILABLE' : e?.status === 'FAILED' ? 'EVALUATION_FAILED' : e?.result && e.screeningScore === null ? 'LEGACY_INSUFFICIENT_EVIDENCE' : null,
+                scoreReason: taraScoreReason(e),
                 status: s ? (e?.status ?? 'PENDING') : 'LEGACY', packageId: s?.packageId ?? null, version: s?.package?.version ?? null,
                 cvScore: e?.cvScore ?? (base.scores.get(row.id)?.assessable ? base.scores.get(row.id)!.total : null), screeningScore: e?.screeningScore ?? null, finalScore: e?.finalScore ?? null, rank: null, pdfReady: Boolean(e?.pdfKey),
                 summary: (e?.result as {
@@ -84,7 +96,7 @@ export class ScreeningHr {
         let chosen = rows.filter(r => !opts.screeningVersion || opts.screeningVersion === 'all' || (info.get(r.id)!.packageId ?? 'legacy') === opts.screeningVersion || (info.get(r.id)!.packageId + ':' + info.get(r.id)!.methodology) === opts.screeningVersion);
         if (opts.minMatch !== undefined)
             chosen = chosen.filter(r => { const score = opts.sort === 'cv' ? info.get(r.id)!.cvScore : info.get(r.id)!.finalScore; return score !== null && score >= opts.minMatch!; });
-        const rank = rankScreening(chosen.map(r => ({ id: r.id, createdAt: r.createdAt, methodology: info.get(r.id)!.methodology, packageId: info.get(r.id)!.packageId, finalScore: info.get(r.id)!.finalScore, status: info.get(r.id)!.status })));
+        const rank = rankScreening(chosen.filter(r => !['NO_RELEVANT_CV_CLAIMS','TARA_PARTIAL_EVIDENCE'].includes(info.get(r.id)!.scoreReason??'')).map(r => ({ id: r.id, createdAt: r.createdAt, methodology: info.get(r.id)!.methodology, packageId: info.get(r.id)!.packageId, finalScore: info.get(r.id)!.finalScore, status: info.get(r.id)!.status })));
         for (const [id, n] of rank.ranks)
             info.get(id)!.rank = n;
         chosen.sort((a, b) => {
@@ -117,7 +129,7 @@ export class ScreeningHr {
         const revisions = e ? await this.db.aiScreeningEvaluationRevision.findMany({ where: { evaluationId: e.id }, select: { id: true, promptVersion: true, createdAt: true }, orderBy: { createdAt: 'desc' } }) : [];
         return { status: e?.status ?? 'PENDING', cvScore: e?.cvScore ?? null, screeningScore: e?.screeningScore ?? null, finalScore: e?.finalScore ?? null, result: e?.result ?? null,
             methodology: e?.promptVersion ?? null, reevaluationStatus: reevaluation?.status ?? null, assessedClaims: (e?.result as { claims?: unknown[] } | null)?.claims?.length ?? 0,
-            scoreReason: e?.result && e.screeningScore !== null && e.cvScore === null ? 'CV_SCORE_UNAVAILABLE' : e?.status === 'FAILED' ? 'EVALUATION_FAILED' : e?.result && e.screeningScore === null ? 'LEGACY_INSUFFICIENT_EVIDENCE' : null, revisions,
+            scoreReason: taraScoreReason(e), revisions,
             version: s.package?.version, promptVersion: e?.promptVersion, pdfReady: Boolean(e?.pdfKey), coverFilename: s.coverFilename,
             rubric: s.package?.payload, plan: s.currentPlan?.payload, questions: s.questions.map(q => ({ id: q.id, question: q.text, answer: q.answer, timedOut: q.timedOut })) };
     }

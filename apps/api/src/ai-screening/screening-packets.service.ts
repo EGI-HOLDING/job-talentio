@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { recruiterJobInclude } from '../matching/recruiter-matching.service';
 import { hash, json, normalizedText, SCREENING_PROMPT_VERSION, screeningEnabled, PDF_TEMPLATE_VERSION } from './screening.policy';
 import { freezePromptRegistry } from './prompts/registry';
-import { CURRENT_CONVERSATION, CONVERSATION_VERSION } from './conversation.policy';
+import { newConversationPolicy, usesSkillInterview } from './conversation.policy';
 export async function enqueueWork(db: Pick<Prisma.TransactionClient, 'aiScreeningWork'>, kind: string, subjectId: string, key = kind + ':' + subjectId) {
     return db.aiScreeningWork.upsert({ where: { key }, create: { key, kind, subjectId }, update: {} });
 }
@@ -31,16 +31,18 @@ export class ScreeningPackets {
                 return null;
             const document = await tx.aiCompanyDocument.findFirst({ where: { companyId: job.companyId, status: 'READY' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
             const company = { name: job.company.name, description: job.company.description, industryId: job.company.industryId, profile: document?.text ?? null, profileChecksum: document?.checksum ?? null };
+            const policy = newConversationPolicy();
             const source = { title: normalizedText(job.title), description: normalizedText(job.description), jobTitleId: job.jobTitleId, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin,
+                ...(usesSkillInterview(policy) ? { responsibilities: job.responsibilities.map(normalizedText) } : {}),
                 skills: job.jobSkills.map(s => ({ skillId: s.skillId, name: s.skill.name, isRequired: s.isRequired, minLevel: s.minLevel })).sort((a, b) => a.skillId.localeCompare(b.skillId)),
                 languages: job.jobLanguages.map(l => ({ code: l.language.code, minLevel: l.minLevel, isRequired: l.isRequired, provenance: l.provenance })).sort((a, b) => a.code.localeCompare(b.code)), company };
-            const promptSnapshot = freezePromptRegistry();
-            const fingerprint = hash([source, CONVERSATION_VERSION, promptSnapshot, CURRENT_CONVERSATION]);
+            const promptSnapshot = freezePromptRegistry(policy);
+            const fingerprint = hash([source, policy.version, promptSnapshot, policy]);
             const found = await tx.aiScreeningPackage.findUnique({ where: { jobId_fingerprint: { jobId, fingerprint } } });
             if (found)
                 return found;
             const previous = await tx.aiScreeningPackage.aggregate({ where: { jobId }, _max: { version: true } });
-            const packet = await tx.aiScreeningPackage.create({ data: { jobId, fingerprint, version: (previous._max.version ?? 0) + 1, jobSnapshot: json(job), companySnapshot: json(company), promptVersion: CONVERSATION_VERSION, promptSnapshot: json(promptSnapshot), conversationPolicy: json(CURRENT_CONVERSATION) } });
+            const packet = await tx.aiScreeningPackage.create({ data: { jobId, fingerprint, version: (previous._max.version ?? 0) + 1, jobSnapshot: json(job), companySnapshot: json(company), promptVersion: policy.version, promptSnapshot: json(promptSnapshot), conversationPolicy: json(policy) } });
             await enqueueWork(tx, 'PREPARE', packet.id);
             return packet;
         }, { timeout: 15000 });

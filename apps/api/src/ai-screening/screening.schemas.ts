@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { normalizedText } from './screening.policy';
-import { CURRENT_CONVERSATION, type ConversationPolicy } from './conversation.policy';
+import { CURRENT_CONVERSATION, usesSkillInterview, usesTimedInterview, type ConversationPolicy } from './conversation.policy';
 import { openConversation } from './prompts/shared/conversation-opening';
+import type { taraInterviewReport } from './tara-interview';
+import { normalizeSkillKey } from '../common/skill-resolve';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
 export const answerSchema = leaseSchema.extend({ questionId: z.string().min(1), answer: z.string().max(1200) }).strict();
@@ -24,10 +26,15 @@ export type Claim = {
     lineStart: number;
     lineEnd: number;
     question: string;
+    skill?: string;
+    scope?: 'GENERAL' | 'CONTEXTUAL';
+    relevance?: 'CORE' | 'SUPPORTING';
+    extraEvidence?: Array<{field: 'CONTEXT' | 'RESULT' | 'ROLE_BOUNDARY'; cvQuote: string}>;
 };
 export type CandidatePayload = {
     claims: Claim[];
     limitations: string[];
+    alternativeCriterionId?: string | null;
 };
 export type FollowUpPayload = {
     stop: boolean;
@@ -66,6 +73,7 @@ export type EvaluationPayload = {
     interviewQuestions: string[];
     criteria: CriterionResult[];
     claims: ClaimResult[];
+    taraInterview?: ReturnType<typeof taraInterviewReport>;
 };
 export type AnswerSource = {
     id: string;
@@ -103,6 +111,20 @@ export function conversationSchemas(policy: ConversationPolicy) {
     candidate.properties!.claims.maxItems = policy.maxCore;
     candidate.properties!.claims.items!.properties!.question = question;
     candidate.properties!.limitations.maxItems = 3;
+    if (usesSkillInterview(policy)) {
+        const item = candidate.properties!.claims.items!;
+        Object.assign(item.properties!, {
+            skill: str, scope: { type: 'string', enum: ['GENERAL', 'CONTEXTUAL'] },
+            relevance: { type: 'string', enum: ['CORE', 'SUPPORTING'] },
+        });
+        item.required!.push('skill', 'scope', 'relevance');
+        if (usesTimedInterview(policy)) {
+            item.properties!.extraEvidence = { ...arr(obj({ field: { type: 'string', enum: ['CONTEXT', 'RESULT', 'ROLE_BOUNDARY'] }, cvQuote: { type: 'string', maxLength: 180 } })), maxItems: 3 };
+            item.required!.push('extraEvidence');
+        }
+        candidate.properties!.alternativeCriterionId = nullable(str);
+        candidate.required!.push('alternativeCriterionId');
+    }
     return { candidate, followUp: obj({ stop: { type: 'boolean' }, question: nullable(question) }) };
 }
 export const FOLLOW_UP_SCHEMA = obj({ stop: { type: 'boolean' }, question: nullable(str) });
@@ -179,15 +201,47 @@ export function validatePackage(value: unknown, requirements?: string): PackageP
     }
     return p;
 }
-export function validateCandidate(value: unknown, p: PackagePayload, cvText: string, policy: ConversationPolicy = CURRENT_CONVERSATION): CandidatePayload {
-    assertSchema(CANDIDATE_SCHEMA, value);
+export function validateCandidate(value: unknown, p: PackagePayload, cvText: string, policy: ConversationPolicy = CURRENT_CONVERSATION,
+    requestedSkills: Array<{skill?:{name: string; aliases?:Array<{aliasKey:string}>}}> = []): CandidatePayload {
+    const skillInterview = usesSkillInterview(policy);
+    assertSchema(skillInterview ? conversationSchemas(policy).candidate : CANDIDATE_SCHEMA, value);
     const plan = structuredClone(value) as CandidatePayload, lines = cvText.split('\n');
-    if (/^tara-conversation-v[56]\./.test(policy.version) && plan.claims[0])
+    if (skillInterview) {
+        const seen = new Set<string>();
+        const aliases = new Map<string, Set<string>>();
+        for (const {skill} of requestedSkills) {
+            if (!skill) continue;
+            const canonical = normalizeSkillKey(skill.name);
+            for (const alias of [canonical, ...(skill.aliases ?? []).map(row => normalizeSkillKey(row.aliasKey))]) {
+                const matches = aliases.get(alias) ?? new Set<string>();
+                matches.add(canonical);
+                aliases.set(alias, matches);
+            }
+        }
+        plan.claims = plan.claims.sort((a,b) => Number(b.relevance === 'CORE') - Number(a.relevance === 'CORE')).filter(claim => {
+            const skill = normalizedText(claim.skill!);
+            const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (!skill || skill.length > 100 || !new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(normalizedText(claim.quote)))
+                throw new Error('Ungrounded CV skill');
+            const labelKey = normalizeSkillKey(skill);
+            const matches = aliases.get(labelKey);
+            const key = matches?.size === 1 ? [...matches][0] : labelKey;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        if (plan.claims.length ? plan.alternativeCriterionId !== null
+            : !p.criteria.some(criterion => criterion.id === plan.alternativeCriterionId)) throw new Error('Invalid alternative criterion');
+    }
+    if ((skillInterview || /^tara-conversation-v[56]\./.test(policy.version)) && plan.claims[0])
         plan.claims[0].question = openConversation(plan.claims[0].question);
-    if (plan.claims.length < 1 || plan.claims.length > policy.maxCore || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
+    if (!skillInterview && plan.claims.length < 1 || plan.claims.length > policy.maxCore || new Set(plan.claims.map(c => c.id)).size !== plan.claims.length || plan.limitations.length > 3 || plan.limitations.some(l => l.length > 220))
         throw new Error('Invalid candidate plan');
     for (const c of plan.claims) {
-        if (!idOk(c.id) || !p.criteria.some(x => x.id === c.criterionId) || !c.statement.trim() || c.statement.length > 300 || !c.quote.trim() || c.quote.length > 500 || !validQuestion(c.question, policy))
+        if (usesTimedInterview(policy) && (new Set(c.extraEvidence!.map(item => item.field)).size !== c.extraEvidence!.length ||
+            c.extraEvidence!.some(item => !item.cvQuote.trim() || !normalizedText(c.quote).includes(normalizedText(item.cvQuote)))))
+            throw new Error('Ungrounded evidence requirement');
+        if (!idOk(c.id) || !p.criteria.some(x => x.id === c.criterionId) || !c.statement.trim() || c.statement.length > 300 || !c.quote.trim() || c.quote.length > 500 || !validQuestion(c.question, policy) || skillInterview && (c.question.match(/\?/g)?.length !== 1))
             throw new Error('Invalid CV claim');
         if (c.lineStart < 1 || c.lineEnd < c.lineStart || c.lineEnd > lines.length || !lines.slice(c.lineStart - 1, c.lineEnd).join('\n').includes(c.quote)) {
             // PDF line wrapping is not a factual difference. Resolve only a unique

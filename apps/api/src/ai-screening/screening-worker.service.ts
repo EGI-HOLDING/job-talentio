@@ -30,7 +30,8 @@ import { assertAnswerOpportunities, unansweredEvaluation, validateClaimEvaluatio
 import { enqueueEvaluationPdf, enqueueWork } from './screening-packets.service';
 import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
 import { frozenCvAssessment } from './frozen-cv';
-import { conversationPolicy, conversationTone, isClaimAssessmentVersion, repeatsQuestion } from './conversation.policy';
+import { conversationPolicy, conversationTone, isClaimAssessmentVersion, repeatsQuestion, usesSkillInterview, usesTimedInterview } from './conversation.policy';
+import { advanceTara, taraAssessmentTopics, taraTopics, taraInterviewReport, validTaraDecision, type TaraProgress, type TaraDecision } from './tara-interview';
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -221,7 +222,9 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             return;
         }
         const job = packet.jobSnapshot as Record<string, unknown>, company = packet.companySnapshot;
-        const input = { job: { title: job.title, description: job.description, skills: job.jobSkills, languages: job.jobLanguages, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin }, company };
+        const input = { job: { title: job.title, description: job.description, skills: job.jobSkills, languages: job.jobLanguages, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin,
+            ...(usesSkillInterview(conversationPolicy(packet.conversationPolicy)) ? { responsibilities: job.responsibilities } : {}),
+        }, company };
         const sourceStrings = (value: unknown): string => typeof value === 'string' ? value : Array.isArray(value) ? value.map(sourceStrings).join(' ') : value && typeof value === 'object' ? Object.values(value).map(sourceStrings).join(' ') : '';
         const payload = validatePackage(await this.client.run(workId, id, 'prepare', input, (packet.promptSnapshot as unknown as PromptRegistry).prepare), sourceStrings(input.job));
         await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'READY', payload: json(payload), error: null } });
@@ -275,7 +278,12 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             throw new AiPending();
         const name = plan.session.profile.user.fullName.toLocaleLowerCase().trim();
         const cvLines = source.text.split('\n').map((text, i) => ({ line: i + 1, text })).filter(r => r.text.trim().toLocaleLowerCase() !== name && !/@/.test(r.text) && !/^\s*[+\d ()-]{8,}\s*$/.test(r.text));
-        const payload = validateCandidate(await this.client.run(workId, plan.sessionId, 'candidate', { job: plan.package.payload, cvLines }, (plan.package.promptSnapshot as unknown as PromptRegistry).candidate), plan.package.payload as unknown as PackagePayload, source.text, conversationPolicy(plan.package.conversationPolicy));
+        const policy = conversationPolicy(plan.package.conversationPolicy);
+        const frozenJob = plan.package.jobSnapshot as { description?: string; responsibilities?: string[]; jobSkills?: Parameters<typeof validateCandidate>[4] };
+        const payload = validateCandidate(await this.client.run(workId, plan.sessionId, 'candidate', {
+            job: plan.package.payload, cvLines,
+            ...(usesSkillInterview(policy) ? { duties: frozenJob.responsibilities, description: frozenJob.description, requestedSkills: frozenJob.jobSkills } : {}),
+        }, (plan.package.promptSnapshot as unknown as PromptRegistry).candidate), plan.package.payload as unknown as PackagePayload, source.text, policy, frozenJob.jobSkills);
         await this.db.$transaction(async tx => {
             await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${plan.sessionId} FOR UPDATE`);
             const current = await tx.aiScreeningSession.findUnique({ where: { id: plan.sessionId } });
@@ -286,22 +294,83 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             await tx.aiCandidatePlan.update({ where: { id }, data: { status: 'READY', payload: json(payload), error: null } });
         });
     }
+    private async completeConversation(tx: Prisma.TransactionClient, session: {id: string; revision: number; invitation: {id: string} | null; currentPlan: {promptVersion: string} | null}, progress?: TaraProgress) {
+        if (session.invitation) await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${session.invitation.id} FOR UPDATE`);
+        const changed = await tx.aiScreeningSession.updateMany({
+            where: { id: session.id, status: 'GENERATING', revision: session.revision },
+            data: { status: 'COMPLETED', completedAt: new Date(), error: null, ...(progress ? { taraInterview: json(progress) } : {}) },
+        });
+        if (!changed.count || !session.invitation) return;
+        await tx.screeningInvitation.update({ where: { id: session.invitation.id }, data: { status: 'COMPLETED' } });
+        await tx.aiScreeningEvaluation.upsert({ where: { sessionId: session.id }, create: { sessionId: session.id, promptVersion: session.currentPlan?.promptVersion ?? 'pending' }, update: {} });
+        await enqueueWork(tx, 'EVALUATE', session.id);
+    }
     private async advance(workId: string, id: string) {
         for (let turn = 0; turn < 5; turn++) {
             const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { invitation: true, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' } } } });
             if (!session || session.status !== 'GENERATING' || session.questions.some(q => q.answer === null))
                 return;
+            const policy = conversationPolicy(session.package?.conversationPolicy);
+            if (usesSkillInterview(policy)) {
+                const timed = usesTimedInterview(policy);
+                const plan = session.currentPlan!.payload as unknown as CandidatePayload;
+                const rubric = session.package!.payload as unknown as PackagePayload;
+                const topics = taraTopics(plan, rubric, timed);
+                const progress = session.taraInterview as unknown as TaraProgress;
+                const topic = topics[progress.active], last = session.questions.at(-1)!;
+                const previous = session.questions.filter(q => q.claimId === topic.id);
+                if (timed && (!session.taraAdvanceAt || +session.taraAdvanceAt <= Date.now())) {
+                    await this.sessions.advanceTimedChat(id, new Date(), session.revision);
+                    return;
+                }
+                let decision: TaraDecision | undefined;
+                if (last.answer?.trim()) {
+                    try {
+                        decision = validTaraDecision(await this.client.run(workId, id, 'follow-up', {
+                            topic, claim: plan.claims.find(claim => claim.id === topic.id),
+                            ...(timed ? {assessmentTopics:taraAssessmentTopics(progress, topics)} : {}),
+                            requirement: rubric.criteria.find(criterion => criterion.id === topic.criterionId)?.requirementRef,
+                            chain: previous.map(q => ({ question: q.text, answer: q.answer })),
+                            tonePreference: conversationTone(session.questions), recentTaraMessages: session.questions.slice(-2).map(q => q.text),
+                        }, (session.package!.promptSnapshot as unknown as PromptRegistry)['follow-up'], undefined,
+                        timed ? Math.max(1, +session.taraAdvanceAt! - Date.now()) : undefined), last.answer, previous.map(q => q.text), timed ? topics : undefined);
+                    } catch (error) {
+                        if (error instanceof AiPending && (timed ? +session.taraAdvanceAt! > Date.now() : Date.now() - +last.answeredAt! < 12_000)) throw error;
+                        // Invalid or unavailable analysis cannot close a claim as verified.
+                    }
+                }
+                if (timed) {
+                    await this.sessions.advanceTimedChat(id, new Date(), session.revision, decision);
+                    return;
+                }
+                const next = advanceTara(progress, topics, {
+                    questionRef: last.shownAt ? last.id : undefined, answerRefs: last.answer ? [last.id] : [],
+                    answered: !!last.answer, previous: previous.map(q => q.text), decision, timedOut: last.timedOut,
+                });
+                if (!next.question) {
+                    await this.db.$transaction(tx => this.completeConversation(tx, session, next.progress));
+                    return;
+                }
+                await this.db.$transaction(async tx => {
+                    const changed = await tx.aiScreeningSession.updateMany({
+                        where: { id, status: 'GENERATING', revision: session.revision },
+                        data: { status: 'ACTIVE', taraInterview: json(next.progress), error: null, revision: { increment: 1 } },
+                    });
+                    if (!changed.count) return;
+                    const active = topics[next.progress.active], depth = next.progress.topics[next.progress.active].depth;
+                    const root = session.questions.find(q => q.claimId === active.id && q.kind === 'CORE');
+                    const parent = session.questions.filter(q => q.claimId === active.id).at(-1);
+                    await tx.aiScreeningQuestion.create({ data: {
+                        sessionId: id, position: session.questions.length, claimId: active.id, criterionId: active.criterionId,
+                        kind: depth ? 'FOLLOW_UP' : 'CORE', rootQuestionId: depth ? root?.id : null,
+                        parentQuestionId: depth ? parent?.id : null, depth, text: next.question!,
+                    } });
+                });
+                return;
+            }
             const target = nextProbeTarget(session.questions, conversationPolicy(session.package?.conversationPolicy));
             if (!target) {
-                await this.db.$transaction(async tx => {
-                    if(session.invitation)await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${session.invitation.id} FOR UPDATE`);
-                    const changed=await tx.aiScreeningSession.updateMany({where:{id,status:'GENERATING',revision:session.revision},data:{status:'COMPLETED',completedAt:new Date(),error:null}});
-                    if(changed.count&&session.invitation){
-                        await tx.screeningInvitation.update({where:{id:session.invitation.id},data:{status:'COMPLETED'}});
-                        await tx.aiScreeningEvaluation.upsert({where:{sessionId:id},create:{sessionId:id,promptVersion:session.currentPlan?.promptVersion??'pending'},update:{}});
-                        await enqueueWork(tx,'EVALUATE',id);
-                    }
-                });
+                await this.db.$transaction(tx => this.completeConversation(tx, session));
                 return;
             }
             const plan = session.currentPlan?.payload as unknown as CandidatePayload;
@@ -372,17 +441,32 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const invitedSnapshot = session.invitation?.snapshot as {cvScore?:number|null;cvResult?:unknown}|undefined;
         const cv = invitedSnapshot ? {assessable:typeof invitedSnapshot.cvScore==='number',total:invitedSnapshot.cvScore??0,breakdown:invitedSnapshot.cvResult} : frozenCv ?? await this.cvAssessment(session, session.package.jobSnapshot);
         const answers = session.questions.map(q => ({ id: q.id, claimId: q.claimId, criterionId: q.criterionId, rootQuestionId: q.rootQuestionId, parentQuestionId: q.parentQuestionId, depth: q.depth, kind: q.kind, question: q.text, answer: q.answer, shownAt: q.shownAt, answeredAt: q.answeredAt, timedOut: q.timedOut }));
-        assertAnswerOpportunities(plan, answers);
         const policy = conversationPolicy(session.package.conversationPolicy);
+        const timed = usesTimedInterview(policy);
+        const taraInterview = usesSkillInterview(policy)
+            ? taraInterviewReport(session.taraInterview as unknown as TaraProgress, taraTopics(plan, rubric, timed)) : undefined;
+        let incomplete = false;
+        if (plan.claims.length || !taraInterview) {
+            try { assertAnswerOpportunities(plan, answers); }
+            catch (error) { if (!timed) throw error; incomplete = true; }
+        }
         const frozen = policy.probeOrder === 'breadth-first' ? (session.package.promptSnapshot as unknown as PromptRegistry).evaluate : undefined;
         const { input: _input, ...preset } = composePrompt('evaluate', {}, frozen, policy);
         const assessmentVersion = currentResult ? session.evaluation!.promptVersion : preset.version;
         const model = preset.model ?? screeningModel();
-        const fingerprint = hash([assessmentVersion, model, preset, session.currentPlan.fingerprint, answers, cv?.total]);
+        const fingerprint = hash([assessmentVersion, model, preset, session.currentPlan.fingerprint, answers, cv?.total, ...(taraInterview ? [taraInterview] : [])]);
         let result: EvaluationPayload;
         if (currentResult) {
             // Restore CV/composite deterministically; the accepted Tara result is unchanged.
             result = currentResult;
+        }
+        else if (incomplete) {
+            result = {summary:'Sebagian topik belum mendapat kesempatan menjawab. Catatan wawancara yang tersimpan tersedia untuk ditinjau.',
+                claims:[],criteria:[],strengths:[],gaps:[],interviewQuestions:[]};
+        }
+        else if (taraInterview && !plan.claims.length) {
+            result = { summary: 'Tidak ada klaim keahlian relevan di CV. Pengalaman alternatif dicatat terpisah.',
+                claims: [], criteria: [], strengths: [], gaps: [], interviewQuestions: [] };
         }
         else if (!answers.some(a => a.answer?.trim())) {
             result = unansweredEvaluation(rubric, plan, answers);
@@ -404,8 +488,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             if (previous?.result) await tx.aiScreeningEvaluationRevision.upsert({
                 where: { evaluationId_inputHash: { evaluationId: previous.id, inputHash: previous.inputHash ?? hash(previous.result) } },
                 create: { evaluationId: previous.id, inputHash: previous.inputHash ?? hash(previous.result), promptVersion: previous.promptVersion, snapshot: json(previous) }, update: {} });
-            const data = { promptVersion: assessmentVersion, status: session.invitation ? 'READY' : final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: fingerprint, model,
-                result: json(result), cvScore, cvBreakdown: cv ? json(cv) : Prisma.DbNull, screeningScore: screening, finalScore: final, error: null, pdfKey: null, pdfVersion: null };
+            const data = { promptVersion: assessmentVersion, status: incomplete ? 'NEEDS_REVIEW' : session.invitation || taraInterview && !plan.claims.length ? 'READY' : final === null ? 'NEEDS_REVIEW' : 'READY', inputHash: fingerprint, model,
+                result: json(taraInterview ? { ...result, taraInterview } : result), cvScore, cvBreakdown: cv ? json(cv) : Prisma.DbNull, screeningScore: screening, finalScore: final, error: null, pdfKey: null, pdfVersion: null };
             const current = await tx.aiScreeningEvaluation.upsert({ where: { sessionId: id }, create: { sessionId: id, ...data }, update: data });
             await tx.aiScreeningEvaluationRevision.upsert({ where: { evaluationId_inputHash: { evaluationId: current.id, inputHash: fingerprint } },
                 create: { evaluationId: current.id, inputHash: fingerprint, promptVersion: assessmentVersion, snapshot: json({ ...current, promptSnapshot: preset }) }, update: {} });

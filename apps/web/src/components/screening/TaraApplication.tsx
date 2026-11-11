@@ -30,6 +30,7 @@ type State = {
     recoveryRequired?: boolean;
     requestOrder?: number;
     serverTime: string;
+    interviewDeadlineAt?: string;
     error: string | null;
     questions: Question[];
     job: {
@@ -216,8 +217,9 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
     }, [step, current?.id, current?.shownAt, tabReady, state?.status, state?.id, accept, now, requestState]);
     useEffect(() => { const clock = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(clock); }, []);
     const policy = state?.conversationPolicy ?? { version: 'legacy', questionSeconds: 60, maxQuestions: 15 };
-    const casual = /^tara-conversation-v[456]\./.test(policy.version);
+    const casual = /^tara-conversation-v[45678]\./.test(policy.version);
     const remaining = current?.deadlineAt ? Math.min(policy.questionSeconds, Math.max(0, Math.ceil((Date.parse(current.deadlineAt) - now - offset.current) / 1000))) : policy.questionSeconds;
+    const sessionRemaining = state?.interviewDeadlineAt ? Math.max(0, Math.ceil((Date.parse(state.interviewDeadlineAt) - now - offset.current) / 1000)) : null;
     const saveAnswer = useCallback((value: string, questionId: string) => {
         const id = sessionRef.current?.id;
         if (!id)
@@ -336,7 +338,7 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
    {step === 4 && <>
     <h2 className={s.srOnly} ref={heading} tabIndex={-1}>{uiCopy("Interview bersama Tara")}</h2>
     {state.status === 'DRAFT' ? <TaraPreparation invited casual={casual} preparation={preparation} variant="waiting" onRetry={() => void retry()} onChangeCv={contactHr} busy={busy}/> : <div className={s.focusChat}>
-     <div className={s.chatIdentity}><Image data-tara src="/images/tara/avatar.png" width={56} height={56} alt=""/><div><strong>Tara</strong><span>{uiCopy("Asisten screening AI")}</span></div></div>
+     <div className={s.chatIdentity}><Image data-tara src="/images/tara/avatar.png" width={56} height={56} alt=""/><div><strong>Tara</strong><span>{uiCopy("Asisten screening AI")}</span>{sessionRemaining!==null&&state.status!=='COMPLETED'&&<span role="timer">Sisa sesi {Math.floor(sessionRemaining/60)}:{String(sessionRemaining%60).padStart(2,'0')}</span>}</div></div>
      <div ref={messages} className={s.messages} onScroll={() => { const el = messages.current; if (el) nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }} role="log" aria-label={uiCopy("Percakapan dengan Tara")} aria-live="polite" aria-relevant="additions">
       {state.questions.map(q => <div key={q.id}><div ref={q.id === current?.id ? questionRef : undefined} className={s.taraMessage}><Image data-tara src="/images/tara/avatar.png" width={48} height={48} alt=""/><p>{q.text}</p></div>{q.answer !== null && <div className={s.candidateMessage}><p>{q.answer || 'Waktu menjawab selesai; belum ada jawaban tersimpan.'}</p></div>}</div>)}
       {state.status === 'GENERATING' && (state.error ? <div className={s.callout} role="status"><p>{state.error}</p>{state.recoveryRequired ? <p>Progresmu tersimpan. Tim kami perlu memeriksa sambungannya; kamu bisa kembali lagi nanti.</p> : <button className={s.primary} disabled={busy} onClick={() => void retry()}>{uiCopy("Coba lagi")}</button>}</div> : <TaraThinking casual={casual}/>)}
