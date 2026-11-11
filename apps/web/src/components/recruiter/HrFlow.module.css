@@ -40,3 +40,30 @@
 .aiSkillPreview strong{flex:1;min-width:0}
 .aiSkillPreview span{padding:3px 7px;border-radius:20px;background:#f2edff;color:#6030d6;font-size:11px;line-height:1.4;white-space:nowrap}
 @media(max-width:600px){.aiFieldHeading{align-items:flex-start}.aiSkillPreview{flex-wrap:wrap}.aiSkillPreview strong{flex-basis:100%}}
+.groupScope {
+  display: grid;
+  gap: .65rem;
+  padding: .75rem;
+  border: 1px solid var(--border, #ddd7f2);
+  border-radius: .75rem;
+  background: #f8f6ff;
+}
+.groupScopeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.groupScope p { margin: 0; font-size: .85rem; }
+.groupScopeMembers {
+  display: grid;
+  gap: .5rem;
+  max-height: 14rem;
+  overflow: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.groupScopeMembers li { display: grid; gap: .1rem; padding: .4rem; }
+.groupScopeMembers small { color: #59536b; }

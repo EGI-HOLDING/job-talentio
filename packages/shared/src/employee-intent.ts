@@ -42,6 +42,8 @@ export type EmployeeEligibility = {
     selectionBasis?: 'EXACT' | 'GROUP' | 'RELATED';
     selectedGroupId?: string;
     selectedGroupName?: string;
+    vacancyGroupId?: string;
+    vacancyGroupName?: string;
     groupReleaseVersion?: string;
     groupMembership?: {reference:string;method:string;sourceUri?:string;tasks:string[]};
     selectedRoleId?: string;

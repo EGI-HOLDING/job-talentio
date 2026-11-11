@@ -5,6 +5,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { CandidateCache } from '../common/candidate-cache';
 import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { createHash } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { EMPLOYEE_INTENT_VERSION, EMPLOYEE_RELATED_RANKING_VERSION, type EmployeeRecommendationState, type EmployeeEvidenceState, type EmployeeEligibility } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { liveJobWhere } from '../benefits/benefit-policy';
@@ -16,10 +17,13 @@ import { VacancyTasksService, type VacancySelection } from './vacancy-tasks.serv
 import {PositionGroupService} from './position-group.service';
 import {PositionGroupOccupationIndex} from './position-group-index';
 import {compileHierarchy, EmployeeHierarchyIndex, employeeHierarchyMode, loadHierarchyManifest} from './employee-hierarchy';
-export const employeeIntentJobSelect = { ...candidateExperienceSelect, id: true, updatedAt:true, title: true, jobTitleId: true, jobTitle:{select:currentRoleSelect}, companyId: true, publishedAt: true, countryId: true, cityId: true, workMode: true, experienceYearsMin: true, experienceLevel: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { select: { province: { select: { countryId: true } } } }, jobSkills: { include: { skill: { select: { name: true, matchingKind: true } } } }, jobLanguages: { include: { language: { select: { code: true, name: true } } } } } as const;
-export const intentRoleScope = (context:{allowedIds:string[];vacancies?:VacancySelection}) =>
-  context.vacancies ? {id:{in:[...context.vacancies.decisions.keys()]}} : {jobTitleId:{in:context.allowedIds}};
-export const intentJobScope = (context:{allowedIds:string[];vacancies?:VacancySelection;practicalSelection?:{mainIds:string[]}}) =>
+import { effectiveJobGroup, jobGroupCatalog, jobGroupSelect, jobGroupWhere, matchJobGroup } from './job-group-scope';
+export const employeeIntentJobSelect = { ...candidateExperienceSelect, ...jobGroupSelect, id: true, updatedAt:true, title: true, jobTitleId: true, jobTitle:{select:currentRoleSelect}, companyId: true, publishedAt: true, countryId: true, cityId: true, workMode: true, experienceYearsMin: true, experienceLevel: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { select: { province: { select: { countryId: true } } } }, jobSkills: { include: { skill: { select: { name: true, matchingKind: true } } } }, jobLanguages: { include: { language: { select: { code: true, name: true } } } } } as const;
+type IntentRoleScope = {allowedIds:string[];vacancies?:VacancySelection;groupJobs?:Prisma.JobPostWhereInput[]};
+export const intentRoleScope = (context:IntentRoleScope): Prisma.JobPostWhereInput => ({
+  OR: [context.vacancies ? {id:{in:[...context.vacancies.decisions.keys()]}} : {jobTitleId:{in:context.allowedIds}}, ...context.groupJobs??[]],
+});
+export const intentJobScope = (context:IntentRoleScope&{practicalSelection?:{mainIds:string[]}}) =>
   context.practicalSelection ? {id:{in:context.practicalSelection.mainIds}} : intentRoleScope(context);
 export const practicalJobSelect = {countryId:true,city:{select:{province:{select:{countryId:true}}}},salaryMin:true,salaryMax:true,currency:true,salaryPeriod:true} as const;
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -89,7 +93,7 @@ export class EmployeeIntentService {
         const groupIds=(profile.desiredGroups??[]).map(g=>g.groupId);
         const hierarchyMode=employeeHierarchyMode();
         const groupResolution=groupIds.length&&this.positionGroups&&!hierarchyMode?await this.positionGroups.resolve(roles,explicitIds,groupIds):null;
-        const groupSnapshot=hierarchyMode?await this.positionGroups?.snapshot(roles):groupResolution?.snapshot;
+        const groupSnapshot=groupResolution?.snapshot??await this.positionGroups?.snapshot(roles);
         const groups=groupSnapshot?.choices.filter(group=>groupIds.includes(group.id))??[];
         let hierarchyRevision:string|null=null;
         if(hierarchyMode){
@@ -113,6 +117,17 @@ export class EmployeeIntentService {
         } else if(groupResolution)index=groupResolution.index;
         const selectedIds=index instanceof PositionGroupOccupationIndex?index.expandedIds:explicitIds;
         const groupReleaseVersion=groupSnapshot?.releaseId??null;
+        const vacancyGroups=jobGroupCatalog(groupSnapshot?.choices);
+        const groupIntent={
+            groups:new Set(groupIds),
+            roles:new Map(explicitIds.flatMap(id=>{
+                const identity=index.identity(id);
+                if(!identity)return [];
+                const root=identity.canonicalRoleId;
+                return [[root,groupSnapshot?.labels.get(root)??index.roles.get(root)?.name??root] as const];
+            })),
+        };
+        const groupJobs=jobGroupWhere(vacancyGroups,groupIntent,groupReleaseVersion);
         const groupUnavailable=groupIds.some(id=>!groups.some(group=>group.id===id&&group.members.length));
         const preferenceWarnings= [...(!profile.matchingPreferencesReviewed||explicitIds.length!==rawSelectedIds.length?['PREFERENCES_REVIEW_REQUIRED']:[]),...(groupUnavailable?['POSITION_GROUP_UNAVAILABLE']:[])];
         const preferences = { ...profile, selectedIds };
@@ -141,7 +156,7 @@ export class EmployeeIntentService {
         const practicalEnabled = employeePracticalEnabled();
         let practicalSelection:{mainIds:string[];unknownIds:string[];roleCandidateCount:number}|undefined;
         if (practicalEnabled && includeVacancies && prepareSearchScope && state === 'READY') {
-          const candidates=await this.db.jobPost.findMany({where:{...liveJobWhere(),...intentRoleScope({allowedIds,vacancies}),applications:{none:{profileId}}},select:{id:true,...practicalJobSelect}});
+          const candidates=await this.db.jobPost.findMany({where:{...liveJobWhere(),AND:[intentRoleScope({allowedIds,vacancies,groupJobs})],applications:{none:{profileId}}},select:{id:true,...practicalJobSelect}});
           practicalSelection={mainIds:[],unknownIds:[],roleCandidateCount:candidates.length};
           for (const job of candidates) {
             const fit=practicalFit(preferences,job);
@@ -150,7 +165,7 @@ export class EmployeeIntentService {
           }
         }
         const preferencesOnly = !hasEmployeeCareerEvidence(facts) && !facts.languages.length;
-        return { selectionRevision,taskVersion,relationReleaseId,relatedCatalogTotal,groupReleaseVersion,groupIds,groupUnavailable,experienceCache, experiencePolicyEnabled, profile, preferences, index, facts, state, allowedIds, vacancies, practicalEnabled, practicalSelection, evidenceState, preferenceWarnings, preferencesOnly, cvSource: { versionId: version?.id ?? null, status: version?.parseStatus ?? 'NONE', evidenceRevision: stored?.revision ?? null }, fingerprint: digest([selectionRevision,groupReleaseVersion,groupIds,profile.preferencesRevision,employeeExperienceRevision(),EMPLOYEE_INTENT_VERSION, EMPLOYEE_RELATED_RANKING_VERSION, profile, catalog.recommendationRevision,state,evidenceState,'partial-evidence-v1',vacancies?.revision,EMPLOYEE_PRACTICAL_POLICY_VERSION]) };
+        return { selectionRevision,taskVersion,relationReleaseId,relatedCatalogTotal,groupReleaseVersion,groupIds,groupUnavailable,experienceCache, experiencePolicyEnabled, profile, preferences, index, facts, state, allowedIds, vacancies, groupJobs, vacancyGroups, groupIntent, practicalEnabled, practicalSelection, evidenceState, preferenceWarnings, preferencesOnly, cvSource: { versionId: version?.id ?? null, status: version?.parseStatus ?? 'NONE', evidenceRevision: stored?.revision ?? null }, fingerprint: digest([selectionRevision,groupReleaseVersion,groupSnapshot?.revision,groupJobs.length>0,groupIds,profile.preferencesRevision,employeeExperienceRevision(),EMPLOYEE_INTENT_VERSION, EMPLOYEE_RELATED_RANKING_VERSION, profile, catalog.recommendationRevision,state,evidenceState,'partial-evidence-v1',vacancies?.revision,EMPLOYEE_PRACTICAL_POLICY_VERSION]) };
     }
     async status(userId:string) {
         const profile = await this.db.employeeProfile.findUnique({where:{userId},select:{id:true}});
@@ -167,22 +182,22 @@ export class EmployeeIntentService {
         if (context.state !== 'READY')
             return result;
         const requested=new Set(ids);
-        const scope=context.vacancies
-          ? {id:{in:[...context.vacancies.decisions.keys()].filter(id=>requested.has(id))}}
-          : {id:{in:ids},jobTitleId:{in:context.allowedIds}};
-        const jobs = await this.db.jobPost.findMany({ where: { ...scope,...liveJobWhere(),applications:{none:{profileId}} }, select: employeeIntentJobSelect });
+        const jobs = await this.db.jobPost.findMany({ where: { ...liveJobWhere(),id:{in:ids},AND:[intentRoleScope(context)],applications:{none:{profileId}} }, select: employeeIntentJobSelect });
         for (const job of jobs) {
             if(!requested.has(job.id))continue;
             const current = job.jobTitle === undefined ? context.index.identity(job.jobTitleId || '') : currentRoleIdentity(job.jobTitle);
-            if(!current)continue;
+            if(!job.positionGroupId&&!current)continue;
             const e = this.evaluate(context,job);
             if (e.eligibility.eligible && practicalFit(context.preferences,job,context.practicalEnabled).group==='MAIN')
                 result.set(job.id, e);
         }
         return result;
     }
-    private eligibility(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:{id:string;jobTitleId:string|null;updatedAt?:Date;jobTitle?:Parameters<typeof currentRoleIdentity>[0]}) {
+    private eligibility(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:{id:string;jobTitleId:string|null;updatedAt?:Date;jobTitle?:Parameters<typeof currentRoleIdentity>[0]}&Partial<Prisma.JobPostGetPayload<{select:typeof jobGroupSelect}>>) {
         const unreviewed={eligible:false,reason:'POSITION_MISMATCH'} as const;
+        if(job.positionGroupId)return matchJobGroup({
+            positionGroupId:job.positionGroupId,positionGroup:job.positionGroup??null,approvedPositionMembers:job.approvedPositionMembers??[],
+        },context.vacancyGroups,context.groupIntent,context.groupReleaseVersion);
         const isCurrent=(decision:EmployeeEligibility)=>{
             if(!(context.index instanceof EmployeeHierarchyIndex)||job.jobTitle===undefined||!decision.eligible)return true;
             const identity=currentRoleIdentity(job.jobTitle);
@@ -195,8 +210,11 @@ export class EmployeeIntentService {
         const row=context.vacancies.decisions.get(job.id);
         return row&&row.roleId===job.jobTitleId&&row.updatedAt.getTime()===job.updatedAt?.getTime()&&isCurrent(row.eligibility)?row.eligibility:unreviewed;
     }
-    evaluate(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:Parameters<typeof evaluateIntent>[2]&{updatedAt?:Date},now=new Date()) {
-        const evaluation=evaluateIntent(context.preferences,context.facts,job,context.index,now,this.eligibility(context,job),context.experiencePolicyEnabled,context.experienceCache);
+    evaluate(context:Awaited<ReturnType<EmployeeIntentService['context']>>,job:Parameters<typeof evaluateIntent>[2]&{updatedAt?:Date}&Partial<Prisma.JobPostGetPayload<{select:typeof jobGroupSelect}>>,now=new Date()) {
+        const group=job.positionGroupId?effectiveJobGroup({
+            positionGroupId:job.positionGroupId,positionGroup:job.positionGroup??null,approvedPositionMembers:job.approvedPositionMembers??[],
+        },context.vacancyGroups):null;
+        const evaluation=evaluateIntent(context.preferences,context.facts,job,context.index,now,this.eligibility(context,job),context.experiencePolicyEnabled,context.experienceCache,group?.members);
         if(context.preferencesOnly){evaluation.tier=1;evaluation.score=0;evaluation.optionalScore=0;evaluation.insights={...evaluation.insights,mode:'PREFERENCES_BASED',evidence:evaluation.insights.evidence.filter(e=>e.kind==='ROLE')};}
         if(context.groupReleaseVersion)evaluation.insights={...evaluation.insights,groupReleaseVersion:context.groupReleaseVersion,groupPolicyVersion:'position-groups-v1',selectionBasis:evaluation.eligibility.matchType};
         if(context.practicalEnabled)evaluation.insights={...evaluation.insights,practicalFit:practicalFit(context.preferences,job)};
@@ -217,16 +235,16 @@ export class EmployeeIntentService {
         if (context.state !== 'READY')
             return empty(context.state);
         const compute=async()=>{
-          const jobs = await this.db.jobPost.findMany({ where: { ...liveJobWhere(now), ...intentRoleScope(context), applications: { none: { profileId } } }, select: employeeIntentJobSelect });
+          const jobs = await this.db.jobPost.findMany({ where: { ...liveJobWhere(now), AND:[intentRoleScope(context)], applications: { none: { profileId } } }, select: employeeIntentJobSelect });
           new Logger('EmployeeIntent').log(JSON.stringify({policy:'related-roles-v32',stage:'retrieval',allowedTitles:context.allowedIds.length,retrieved:jobs.length,evidenceState:context.evidenceState}));
           return jobs.map(job => ({ job:{id:job.id,companyId:job.companyId,jobTitleId:job.jobTitleId,publishedAt:job.publishedAt,updatedAt:job.updatedAt?.toISOString()}, evaluation: this.evaluate(context,job,now) })).filter(row => row.evaluation.eligibility.eligible).sort((a, b) => compareIntent(a.evaluation, b.evaluation) || (b.job.publishedAt?.getTime() ?? 0) - (a.job.publishedAt?.getTime() ?? 0) || a.job.id.localeCompare(b.job.id));
         };
         let ranked=this.cache?await this.cache.ranked(['intent-v3',profileId,context.fingerprint,new Date().toISOString().slice(0,10)],compute):await compute();
         {
-          const live=await this.db.jobPost.findMany({where:{...liveJobWhere(now),id:{in:ranked.map(r=>r.job.id)},applications:{none:{profileId}}},select:{id:true,updatedAt:true,jobTitleId:true,jobTitle:{select:currentRoleSelect},...practicalJobSelect}});
+          const live=await this.db.jobPost.findMany({where:{...liveJobWhere(now),id:{in:ranked.map(r=>r.job.id)},AND:[intentRoleScope(context)],applications:{none:{profileId}}},select:{id:true,updatedAt:true,jobTitleId:true,jobTitle:{select:currentRoleSelect},...jobGroupSelect,...practicalJobSelect}});
           const revisions=new Map(ranked.map(r=>[r.job.id,r.job.updatedAt]));
           if(live.some(j=>revisions.get(j.id)!==j.updatedAt?.toISOString()))ranked=await compute();
-          const allowed=new Set(live.filter(j=>currentRoleIdentity(j.jobTitle)&&this.eligibility(context,j).eligible).map(j=>j.id));
+          const allowed=new Set(live.filter(j=>(j.positionGroupId||currentRoleIdentity(j.jobTitle))&&this.eligibility(context,j).eligible).map(j=>j.id));
           const fits=new Map(live.map(job=>[job.id,practicalFit(context.preferences,job,context.practicalEnabled)]));
           ranked=ranked.filter(r=>allowed.has(r.job.id)).map(row=>({...row,evaluation:{...row.evaluation,insights:{...row.evaluation.insights,...(context.practicalEnabled?{practicalFit:fits.get(row.job.id)}:{})}}}));
         }
@@ -252,7 +270,7 @@ export class EmployeeIntentService {
             if(section.length)return empty('NO_ELIGIBLE_JOBS','PRACTICAL_PREFERENCES');
             if(roleTotal)return empty('NO_ELIGIBLE_JOBS','NO_RELEVANT_JOBS');
             const [activeInScope,inventory,knownTasks]=await Promise.all([
-              this.db.jobPost.count({where:{...liveJobWhere(now),...intentRoleScope(context)}}),
+              this.db.jobPost.count({where:{...liveJobWhere(now),AND:[intentRoleScope(context)]}}),
               this.db.jobPost.count({where:liveJobWhere(now)}),
               context.selectionRevision&&context.taskVersion?this.db.jobOccupationTaskEvidence.count({where:{version:context.taskVersion,state:{in:['RECOGNIZED','PARTIAL']},job:liveJobWhere(now)}}):Promise.resolve(null),
             ]);
@@ -263,8 +281,8 @@ export class EmployeeIntentService {
         const total = ranked.length, totalPages = Math.max(1, Math.ceil(total / limit));
         page = Math.min(Math.max(1, page), totalPages);
         const selected = ranked.slice((page - 1) * limit, page * limit);
-        const [full, promotions] = await Promise.all([this.db.jobPost.findMany({ where: { AND:[{id:{in:selected.map(r=>r.job.id)}},intentRoleScope(context)], ...liveJobWhere(now),applications:{none:{profileId}} }, select: { id: true, updatedAt:true, countryId:true, jobTitleId:true, title: true, companyId: true, isAnonymous: true, locale: true, createdAt: true, publishedAt: true, employmentType: true, workMode: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { include: { province: true } }, country: true, category: true, company: { select: { id: true, name: true, slug: true, logoUrl: true } } } }), loadJobPromotions(this.db, selected.map(r => r.job.id), now)]);
-        const byId = new Map(full.filter(j=>this.eligibility(context,j).eligible&&practicalFit(context.preferences,j,context.practicalEnabled).group===(feed==='salary-unverified'?'SALARY_UNVERIFIED':'MAIN')).map(({updatedAt:_updatedAt,jobTitleId:_jobTitleId,...job}) => [job.id, job]));
+        const [full, promotions] = await Promise.all([this.db.jobPost.findMany({ where: { AND:[{id:{in:selected.map(r=>r.job.id)}},intentRoleScope(context)], ...liveJobWhere(now),applications:{none:{profileId}} }, select: { ...jobGroupSelect, id: true, updatedAt:true, countryId:true, jobTitleId:true, title: true, companyId: true, isAnonymous: true, locale: true, createdAt: true, publishedAt: true, employmentType: true, workMode: true, salaryMin: true, salaryMax: true, currency: true, salaryPeriod: true, city: { include: { province: true } }, country: true, category: true, company: { select: { id: true, name: true, slug: true, logoUrl: true } } } }), loadJobPromotions(this.db, selected.map(r => r.job.id), now)]);
+        const byId = new Map(full.filter(j=>this.eligibility(context,j).eligible&&practicalFit(context.preferences,j,context.practicalEnabled).group===(feed==='salary-unverified'?'SALARY_UNVERIFIED':'MAIN')).map(({updatedAt:_updatedAt,jobTitleId:_jobTitleId,positionGroup:_positionGroup,approvedPositionMembers:_members,...job}) => [job.id, job]));
         const items = selected.flatMap(row => { const job = byId.get(row.job.id); return job ? [{ job: { ...job, ...publicJobPromotion(promotions, job.id), placement: 'ORGANIC' as const }, selectionBasis:row.evaluation.eligibility.matchType,selectedGroupId:row.evaluation.eligibility.selectedGroupId,selectedGroupName:row.evaluation.eligibility.selectedGroupName,groupReleaseVersion:context.groupReleaseVersion,recommendationType:row.evaluation.eligibility.matchType||'EXACT' as const, matchScore: context.preferencesOnly?null:row.evaluation.score, matchType:row.evaluation.eligibility.matchType,selectedRoleId:row.evaluation.eligibility.selectedRoleId,selectedRoleName:row.evaluation.eligibility.selectedRoleName,relationReference:row.evaluation.eligibility.relationReference, matchInsights: row.evaluation.insights, eligibility: row.evaluation.eligibility }] : []; });
         if (!items.length)
             return empty('NO_ELIGIBLE_JOBS');
@@ -284,7 +302,9 @@ export class EmployeeIntentService {
     }
     async explain(profileId: string, jobId: string) {
         const context = await this.context(profileId);
-        const job = await this.db.jobPost.findFirst({ where: { id: jobId,...liveJobWhere(),applications:{none:{profileId}} }, select: employeeIntentJobSelect });
+        const job = await this.db.jobPost.findFirst({ where: { id: jobId,...liveJobWhere(),applications:{none:{profileId}},
+            AND:[{OR:[{positionGroupId:null},...context.groupJobs]}],
+        }, select: employeeIntentJobSelect });
         const eligibility = job ? this.eligibility(context,job) : context.index.eligibility(context.preferences.selectedIds,null);
         if (context.state !== 'READY' || !job || !eligibility.eligible)
             return { state: context.state === 'READY' ? 'NO_ELIGIBLE_JOBS' : context.state, eligibility, matchScore: null, matchInsights: null };
@@ -298,7 +318,7 @@ export class EmployeeIntentService {
           this.db.jobPost.count({where:{id:jobId,...liveJobWhere()}}),
           this.db.application.count({where:{profileId,jobPostId:jobId}}),
         ]);
-        const catalog=context.index.eligibility(context.preferences.selectedIds,job.jobTitleId);
+        const catalog=job.positionGroupId?this.eligibility(context,job):context.index.eligibility(context.preferences.selectedIds,job.jobTitleId);
         return {version:EMPLOYEE_INTENT_VERSION,selectionRevision:context.selectionRevision,graphReleaseId:context.relationReleaseId,rankingRevision:context.fingerprint,
           jobId,jobTitleId:job.jobTitleId,selectedRoleIds:context.preferences.selectedIds,state:context.state,evidenceState:context.evidenceState,
           catalog,task:await this.vacancyTasks?.traceJob(context.index,context.preferences.selectedIds,context.allowedIds,job,context.relationReleaseId,context.taskVersion),

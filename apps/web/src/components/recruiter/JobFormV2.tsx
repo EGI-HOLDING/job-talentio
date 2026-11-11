@@ -9,12 +9,14 @@ import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import s from './HrFlow.module.css';
 import { HrAddItemButton } from './HrFlowPresentation';
+import { JobPositionGroupScope } from './JobPositionGroupScope';
 import { JobContentAiButton, JobContentAiHelp, JobContentAiPreview, type JobContentAiSkill, type JobContentAiSuggestion, type JobContentAiTarget } from './JobContentAi';
 
 import { cleanHrDraft, type HrDraft, type HrDraftIssue } from './hrDraftValidation';
 export { cleanHrDraft, type HrDraft } from './hrDraftValidation';
 export const initialHrDraft=(job?:any):HrDraft=>job?{
-  title:job.title,description:job.description,positionEntryMode:job.positionEntryMode==='MANUAL'||!job.jobTitleId?'MANUAL':'CATALOG',jobTitleId:job.jobTitleId,
+  title:job.title,description:job.description,positionEntryMode:job.positionGroupId?'GROUP':job.positionEntryMode==='MANUAL'||!job.jobTitleId?'MANUAL':'CATALOG',jobTitleId:job.jobTitleId,
+  positionGroupId:job.positionGroupId,positionGroupScopeRevision:job.positionGroupScopeRevision,
   seniorityLevelCode:job.seniorityLevelCode??null,experienceRangeMin:job.experienceRangeMin??job.seniorityYearsMin??null,experienceRangeMax:job.experienceRangeSource?job.experienceRangeMax:job.seniorityYearsMax??null,
   responsibilities:job.responsibilities??[],kpis:job.kpis??[],specificExpectations:job.specificExpectations??'',
   countryId:job.countryId??job.city?.province?.countryId??null,citySlug:job.city?.slug??'',workMode:job.workMode,employmentType:job.employmentType,
@@ -25,11 +27,13 @@ export const initialHrDraft=(job?:any):HrDraft=>job?{
 }:{title:'',description:'',positionEntryMode:'MANUAL',jobTitleId:null,seniorityLevelCode:null,responsibilities:[],kpis:[],specificExpectations:'',countryId:null,citySlug:'',workMode:'ONSITE',employmentType:'FULL_TIME',salaryMin:null,salaryMax:null,currency:'IDR',salaryPeriod:'MONTHLY',skills:[],languages:[],benefits:[]};
 
 type Level={code:string;name:string;nameId:string;yearsMin:number;yearsMax:number|null};
-export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,validationIssues=[]}:{draft:HrDraft;onChange:(patch:HrDraft)=>void;companyId:string;initialCity?:any;disabled?:boolean;validationIssues?:HrDraftIssue[]}){
+export function JobFormV2({draft,onChange,companyId,initialCity,approvedMembers,disabled=false,validationIssues=[]}:{draft:HrDraft;onChange:(patch:HrDraft)=>void;companyId:string;initialCity?:any;approvedMembers?:Array<{jobTitleId:string}>;disabled?:boolean;validationIssues?:HrDraftIssue[]}){
   const c=useHrCopy();
   const [manualTitle, setManualTitle] = useState<boolean | null>(null);
   const editingManualTitle = manualTitle ?? (draft.positionEntryMode === 'MANUAL' && Boolean(draft.title));
+  const groupId=draft.positionEntryMode==='GROUP'?draft.positionGroupId:undefined;
   const catalogTitle = usePositionLabels(!editingManualTitle && draft.jobTitleId ? 'ROLE:' + draft.jobTitleId : '')?.[0]?.name;
+  const clearedGroup={positionGroupId:null,positionGroupScopeRevision:null};
   const fieldErrors=(field:string)=>validationIssues.filter(issue=>issue.field===field).map(issue=><p className={s.error} role="alert" key={issue.path}>{c(issue.message)}</p>);
   const descriptionId=useId();
   const aiRequestInFlight=useRef(false);
@@ -96,16 +100,18 @@ export function JobFormV2({draft,onChange,companyId,initialCity,disabled=false,v
       <div className={s.field} data-job-field="title">
         {editingManualTitle ? <label className={s.field}><span>{c("Posisi yang dicari *")}</span>
           <input required name="title" maxLength={200} value={draft.title ?? ''}
-            onChange={event => onChange({ title: event.target.value, jobTitleId: null, positionEntryMode: 'MANUAL' })} />
-        </label> : <CatalogPositionPicker label={c("Posisi yang dicari *")} disabled={disabled}
-          value={draft.jobTitleId ? [{ id: draft.jobTitleId, kind: 'ROLE', name: catalogTitle ?? draft.title ?? draft.jobTitleId }] : []}
-          onChange={([position]) => onChange(position
-            ? { title: position.name, jobTitleId: position.id, positionEntryMode: 'CATALOG' }
-            : { title: '', jobTitleId: null, positionEntryMode: 'MANUAL' })} />}
-        <button type="button" className={s.secondary} onClick={() => {
+            onChange={event => onChange({ ...clearedGroup, title: event.target.value, jobTitleId: null, positionEntryMode: 'MANUAL' })} />
+        </label> : <CatalogPositionPicker scope="hr" label={c("Posisi yang dicari *")} disabled={disabled}
+          value={groupId ? [{ id: groupId, kind: 'GROUP', name: draft.title || groupId }]
+            : draft.jobTitleId ? [{ id: draft.jobTitleId, kind: 'ROLE', name: catalogTitle ?? draft.title ?? draft.jobTitleId }] : []}
+          onChange={([position]) => onChange(position?.kind==='GROUP'
+            ? {title:position.name,jobTitleId:null,positionEntryMode:'GROUP',positionGroupId:position.id,positionGroupScopeRevision:null}
+            : { ...clearedGroup, title:position?.name??'',jobTitleId:position?.id??null,positionEntryMode:position?'CATALOG':'MANUAL' })} />}
+        {groupId && <JobPositionGroupScope key={groupId} id={groupId} confirmed={draft.positionGroupScopeRevision}
+          approved={approvedMembers} disabled={disabled} onConfirm={revision=>onChange({positionGroupScopeRevision:revision})}/>}
+        <button type="button" className={s.secondary} disabled={disabled} onClick={() => {
           setManualTitle(!editingManualTitle);
-          if (!editingManualTitle) onChange({ jobTitleId: null, positionEntryMode: 'MANUAL' });
-          else onChange({ title: '', jobTitleId: null, positionEntryMode: 'MANUAL' });
+          onChange({ ...clearedGroup, title: editingManualTitle?'':draft.title, jobTitleId: null, positionEntryMode: 'MANUAL' });
         }}>{editingManualTitle ? c("Pilih dari katalog") : c("Ketik posisi manual")}</button>
       </div>
       <label className={s.field} data-job-field="seniorityLevelCode"><span>{c("Senioritas")}</span><select aria-label={c("Senioritas")} name="seniorityLevelCode" value={draft.seniorityLevelCode??''} onChange={e=>void chooseLevel(e.target.value)}><option value="">{c("Pilih senioritas")}</option>{levels.map(v=><option value={v.code} key={v.code}>{locale==='id'?(v.nameId??v.name):v.name}</option>)}</select></label>

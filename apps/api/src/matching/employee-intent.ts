@@ -80,7 +80,7 @@ const weighted = (values: Array<[
     number,
     number
 ]>) => { const sum = values.reduce((n, [w]) => n + w, 0); return sum ? 100 * values.reduce((n, [w, v]) => n + w * v, 0) / sum : 50; };
-export function evaluateIntent(preferences: IntentPreferences, facts: IntentFacts, job: IntentJob, index: EmployeeOccupationIndex, now = new Date(), resolved?:VacancyEligibility,experiencePolicyEnabled=employeeExperiencePolicyEnabled(),experienceCache?:IntentExperienceCache): IntentEvaluation {
+export function evaluateIntent(preferences: IntentPreferences, facts: IntentFacts, job: IntentJob, index: EmployeeOccupationIndex, now = new Date(), resolved?:VacancyEligibility,experiencePolicyEnabled=employeeExperiencePolicyEnabled(),experienceCache?:IntentExperienceCache,groupMembers?:string[]): IntentEvaluation {
     const eligibility = resolved ?? index.eligibility(preferences.selectedIds, job.jobTitleId);
     const evidence: MatchEvidence[] = [];
     const required: Array<'MET' | 'UNKNOWN' | 'UNMET'> = [];
@@ -91,7 +91,9 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
     let optionalScore = 0;
     if (!eligibility.eligible)
         return { score: 0, positiveCore: false, optionalScore: 0, tier: 2, practical: [], eligibility, insights: { version: EMPLOYEE_INTENT_VERSION, mode: 'LATEST', evidence, reviewExperienceIds: [] } };
-    evidence.push({ kind: 'ROLE', label: eligibility.selectedGroupName || eligibility.selectedRoleName || job.title, status: 'MET', required: false, ...(eligibility.matchType==='GROUP'?{selectionBasis:'GROUP' as const}:{}),code: eligibility.matchType==='RELATED'||eligibility.matchType==='GROUP'?'RELATED_ROLE':'ROLE_MATCH', evidenceRefs: [`jobTitle:${eligibility.canonicalRoleId}`, `family:${eligibility.familyId}`, ...(eligibility.relationReference?[eligibility.relationReference]:[])] });
+    evidence.push({ kind: 'ROLE', label: eligibility.vacancyGroupName || eligibility.selectedGroupName || eligibility.selectedRoleName || job.title, status: 'MET', required: false, ...(eligibility.matchType==='GROUP'?{selectionBasis:'GROUP' as const}:{}),groupMemberName:eligibility.vacancyGroupId?eligibility.selectedRoleName:undefined,code: eligibility.matchType==='RELATED'||eligibility.matchType==='GROUP'?'RELATED_ROLE':'ROLE_MATCH', evidenceRefs: eligibility.vacancyGroupId
+        ? [`positionGroup:${eligibility.vacancyGroupId}`, ...(eligibility.selectedRoleId?[`jobTitle:${eligibility.selectedRoleId}`]:[])]
+        : [`jobTitle:${eligibility.canonicalRoleId}`, `family:${eligibility.familyId}`, ...(eligibility.relationReference?[eligibility.relationReference]:[])] });
     const hard = job.jobSkills.filter(s => s.skill.matchingKind === 'PROFESSIONAL');
     const authored = hard.filter(s => s.isRequired);
     const scored = authored.length ? authored : hard;
@@ -119,10 +121,14 @@ export function evaluateIntent(preferences: IntentPreferences, facts: IntentFact
         parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.skillPresence, presence / total]);
     if (levelTotal)
         parts.push([EMPLOYEE_PROFESSIONAL_WEIGHTS.skillLevel, levelValue / levelTotal]);
-    const day=Math.floor(now.getTime()/86400000),roleKey=eligibility.canonicalRoleId??job.jobTitleId??job.id;
+    const day=Math.floor(now.getTime()/86400000),roleKey=groupMembers?'job-group:'+job.id:eligibility.canonicalRoleId??job.jobTitleId??job.id;
     let career=experienceCache?.get(roleKey);
     if(!career||career.facts!==facts||career.index!==index||career.day!==day){
-      career={facts,index,day,relevant:facts.experiences.filter(e => e.jobTitleId && index.identity(e.jobTitleId)?.canonicalRoleId === eligibility.canonicalRoleId)};
+      const members=groupMembers?new Set(groupMembers):null;
+      career={facts,index,day,relevant:facts.experiences.filter(e => {
+        const role=e.jobTitleId&&index.identity(e.jobTitleId)?.canonicalRoleId;
+        return members?!!role&&members.has(role):!!e.jobTitleId&&role===eligibility.canonicalRoleId;
+      })};
       experienceCache?.set(roleKey,career);
     }
     const relevant=career.relevant;

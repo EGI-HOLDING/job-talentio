@@ -5,7 +5,7 @@ import { OccupationIndex, experienceNeedsReview, type EmployeeMatchJob, type Emp
 
 export const RECRUITER_MATCH_VERSION = 'hr-evidence-v1';
 export type RecruiterProfile = EmployeeMatchProfile;
-export type RecruiterJob = EmployeeMatchJob;
+export type RecruiterJob = EmployeeMatchJob & {positionGroupId?: string | null; effectivePositionMemberIds?: string[]};
 type Status = 'MET' | 'UNMET' | 'UNKNOWN';
 export type RecruiterBreakdown = {
   version: string; evaluatedAt: string; total: number; assessable: boolean; positiveCore: boolean;
@@ -41,15 +41,21 @@ export function evaluateRecruiter(profile: RecruiterProfile, job: RecruiterJob, 
   const parts: Array<{ key: string; weight: number; fraction: number; known: number }> = [];
   const review = profile.experiences.filter(row => experienceNeedsReview(row,now));
   const valid = profile.experiences.filter(row => !experienceNeedsReview(row,now));
-  const preferences = profile.cvSource ? [] : [profile.desiredPosition, ...(profile.desiredPositions ?? [])];
+  const group = !!job.positionGroupId;
+  const preferences = profile.cvSource || group ? [] : [profile.desiredPosition, ...(profile.desiredPositions ?? [])];
   const roleTexts = [profile.headline, ...preferences, ...valid.filter(row=>row.isCurrent).map(row=>row.title)].filter((v): v is string=>Boolean(v));
   const roleIds = new Set(roleTexts.flatMap(text=>[...index.resolve(text)]));
-  const jobIds = job.jobTitleId ? new Set([job.jobTitleId]) : index.resolve(job.title);
-  const direct = !job.jobTitleId && roleTexts.some(text=>normalizeJobTitleKey(text)===normalizeJobTitleKey(job.title));
+  const jobIds = group ? new Set(job.effectivePositionMemberIds) : job.jobTitleId ? new Set([job.jobTitleId]) : index.resolve(job.title);
+  const direct = !group && !job.jobTitleId && roleTexts.some(text=>normalizeJobTitleKey(text)===normalizeJobTitleKey(job.title));
   const exact = overlaps(roleIds,jobIds) || direct;
-  const related = !exact && [...roleIds].some(from=>[...jobIds].some(to=>index.related(from,to)));
-  const relevant = valid.filter(row=>overlaps(index.resolve(row.title),jobIds) || (!job.jobTitleId && normalizeJobTitleKey(row.title)===normalizeJobTitleKey(job.title)));
-  const history = relevant.length > 0 || (profile.cvRoleTitles??[]).some(title=>overlaps(index.resolve(title),jobIds)||(!job.jobTitleId&&normalizeJobTitleKey(title)===normalizeJobTitleKey(job.title)));
+  const related = !group && !exact && [...roleIds].some(from=>[...jobIds].some(to=>index.related(from,to)));
+  const matchesTitle = (title: string) => {
+    const ids = index.resolve(title);
+    if (group) return ids.size === 1 && overlaps(ids, jobIds);
+    return overlaps(ids, jobIds) || (!job.jobTitleId && normalizeJobTitleKey(title)===normalizeJobTitleKey(job.title));
+  };
+  const relevant = valid.filter(row=>matchesTitle(row.title));
+  const history = relevant.length > 0 || (profile.cvRoleTitles??[]).some(matchesTitle);
   const roleFraction = exact ? 1 : related || history ? 0.5 : 0;
   parts.push({key:'title',weight:15,fraction:roleFraction,known:roleFraction ? 1 : 0});
   evidence.push({kind:'ROLE',label:job.title,required:false,status:roleFraction ? 'MET' : 'UNKNOWN',code:exact?'ROLE_MATCH':history?'PAST_ROLE':related?'RELATED_ROLE':'NOT_LISTED',evidenceRefs:[`job:${job.id}:title`,`profile:${profile.id}:roles`]});

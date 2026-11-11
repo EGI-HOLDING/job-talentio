@@ -3,7 +3,7 @@ import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect, useRef, useState } from 'react';
 import { startCandidateImport } from '@/lib/candidateImports';
 import { api, getSession } from '@/lib/api';
-import { validateHrDraft, focusHrDraftIssue, type HrDraftIssue } from './hrDraftValidation';
+import { validateHrDraft, focusHrDraftIssue, hrJobError, type HrDraftIssue } from './hrDraftValidation';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
 import { PackageCatalog, PackageCode, money } from '@/lib/jobCommerce';
@@ -105,7 +105,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     timer=setTimeout(poll,5000);document.addEventListener('visibilitychange',visible);
     return()=>{cancelled=true;clearTimeout(timer);document.removeEventListener('visibilitychange',visible);};
   },[phase,session?.id,session?.order?.status]);
-  async function run(work:()=>Promise<void>){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await work();}catch(reason){if(alive.current)setError(reason instanceof Error?reason.message:String(reason));}finally{lock.current=false;if(alive.current)setBusy(false);}}
+  async function run(work:()=>Promise<void>){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await work();}catch(reason){if(alive.current)setError(c(hrJobError(reason)));}finally{lock.current=false;if(alive.current)setBusy(false);}}
   async function go(next:string){
     await queue.current.catch(()=>undefined);
     if(phase==='JOB')await saveDraft();

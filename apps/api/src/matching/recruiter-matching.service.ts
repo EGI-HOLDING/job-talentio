@@ -7,6 +7,7 @@ import { cvSourceInclude, discoveryVersion, withCvFacts } from '../profiles/cv-e
 import { hrEnabled, evaluateHr, HR_PARSER, type HrProfile } from './recruiter-ranking';
 import { loadHrCatalog } from './recruiter-ranking.service';
 import { freezeHrSubmission, hrApplicationProfile } from './recruiter-evidence';
+import { withRecruiterGroupScope } from './job-group-scope';
 
 export const recruiterProfileInclude = {
   ...cvSourceInclude,
@@ -26,10 +27,11 @@ export class RecruiterMatchingService {
     return new OccupationIndex(await db.jobTitle.findMany({select:{id:true,name:true,nameId:true,nameUz:true,nameRu:true,normalizedKey:true,matchingMetadata:true,aliases:{select:{alias:true,aliasKey:true}}}}));
   }
   async scoreInputs(profile:RecruiterProfile,job:RecruiterJob,db:Prisma.TransactionClient=this.db) {
+    job=await withRecruiterGroupScope(db,job);
     if(hrEnabled())return evaluateHr(profile as HrProfile,job,await loadHrCatalog(db));
     return evaluateRecruiter(profile,job,await this.index(db));
   }
-  async historicalInputs(profile:RecruiterProfile,job:RecruiterJob,db:Prisma.TransactionClient=this.db){return evaluateRecruiter(profile,job,await this.index(db));}
+  async historicalInputs(profile:RecruiterProfile,job:RecruiterJob,db:Prisma.TransactionClient=this.db){return evaluateRecruiter(profile,await withRecruiterGroupScope(db,job),await this.index(db));}
   async databaseInputs(profiles:RecruiterProfile[]){
     const catalog=await loadHrCatalog(this.db);
     const inputs=profiles.map(profile=>'cvSource' in profile?profile:withCvFacts(profile,discoveryVersion(profile as typeof profile & Parameters<typeof discoveryVersion>[0])));
@@ -39,12 +41,15 @@ export class RecruiterMatchingService {
     return inputs.map(p=>{const v=byId.get(p.cvSource?.versionId??''),s=freezeHrSubmission(v??null,{},new Date(new Date().toISOString().slice(0,10))),source=hrApplicationProfile(p,s,v,v?.recruiterEvidence[0],catalog);source.hr!.source='DATABASE_CV';return source;});
   }
   async databaseProfiles(profiles:RecruiterProfile[],jobId:string){
-    const [inputs,catalog,job]=await Promise.all([this.databaseInputs(profiles),loadHrCatalog(this.db),this.db.jobPost.findUniqueOrThrow({where:{id:jobId},include:recruiterJobInclude})]);
+    const [inputs,catalog,job]=await Promise.all([this.databaseInputs(profiles),loadHrCatalog(this.db),this.job(jobId)]);
     return inputs.map(p=>evaluateHr(p,job,catalog));
   }
   async context(jobId:string) {
-    const [job,index] = await Promise.all([this.db.jobPost.findUniqueOrThrow({where:{id:jobId},include:recruiterJobInclude}),this.index()]);
+    const [job,index] = await Promise.all([this.job(jobId),this.index()]);
     return {job,index,now:new Date()};
+  }
+  private async job(jobId:string) {
+    return withRecruiterGroupScope(this.db,await this.db.jobPost.findUniqueOrThrow({where:{id:jobId},include:recruiterJobInclude}));
   }
   async forProfile(profileId:string,jobId:string) {
     if(hrEnabled()){const p=await this.db.employeeProfile.findUniqueOrThrow({where:{id:profileId},include:recruiterProfileInclude});return (await this.databaseProfiles([p],jobId))[0];}
@@ -57,7 +62,7 @@ export class RecruiterMatchingService {
     return profiles.map(profile=>evaluateRecruiter('cvSource' in profile ? profile : withCvFacts(profile,discoveryVersion(profile as typeof profile & Parameters<typeof discoveryVersion>[0])),context.job,context.index,context.now));
   }
   async forEvidence(profiles:RecruiterProfile[],jobId:string){
-    if(hrEnabled()){const [catalog,job]=await Promise.all([loadHrCatalog(this.db),this.db.jobPost.findUniqueOrThrow({where:{id:jobId},include:recruiterJobInclude})]);return profiles.map(p=>evaluateHr(p as HrProfile,job,catalog));}
+    if(hrEnabled()){const [catalog,job]=await Promise.all([loadHrCatalog(this.db),this.job(jobId)]);return profiles.map(p=>evaluateHr(p as HrProfile,job,catalog));}
     const context=await this.context(jobId);
     return profiles.map(profile=>evaluateRecruiter(profile,context.job,context.index,context.now));
   }

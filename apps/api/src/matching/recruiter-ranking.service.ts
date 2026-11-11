@@ -7,6 +7,7 @@ import { historicalHrSubmission, hrApplicationProfile } from './recruiter-eviden
 import { recruiterJobInclude } from './recruiter-matching.service';
 import type { ApplicantFilters } from '../applications/applicant-filter';
 import { parseLanguagesCsv, languageLevelRank } from '@job-talentio/shared';
+import { withRecruiterGroupScope } from './job-group-scope';
 
 let epoch=0;
 let catalogEpoch=0;
@@ -48,7 +49,7 @@ function passes(row:PoolRow,p:HrProfile,input:Options,c:HrCatalog){
 const poolCache=new WeakMap<object,Map<string,{expires:number;promise:Promise<{scores:Map<string,HrBreakdown>;profiles:Map<string,HrProfile>}>}>>();
 export async function rankHrApplications(db:PrismaService,where:Prisma.ApplicationWhereInput,jobId:string,options:Options={}):Promise<HrWindow>{
   const authorizedWhere={AND:[where,{jobPostId:jobId}]};
-  const [job,catalog,rows]=await Promise.all([db.jobPost.findUniqueOrThrow({where:{id:jobId},include:recruiterJobInclude}),loadHrCatalog(db),db.application.findMany({where:authorizedWhere,include:{resumeVersion:true,profile:{include:{user:{select:{fullName:true}},city:{include:{province:{include:{country:true}}}},residenceCountry:true}}},orderBy:[{createdAt:'desc'},{id:'asc'}]})]);
+  const [job,catalog,rows]=await Promise.all([db.jobPost.findUniqueOrThrow({where:{id:jobId},include:recruiterJobInclude}).then(job=>withRecruiterGroupScope(db,job)),loadHrCatalog(db),db.application.findMany({where:authorizedWhere,include:{resumeVersion:true,profile:{include:{user:{select:{fullName:true}},city:{include:{province:{include:{country:true}}}},residenceCountry:true}}},orderBy:[{createdAt:'desc'},{id:'asc'}]})]);
   const versionIds=[...new Set(rows.flatMap(r=>r.resumeVersionId?[r.resumeVersionId]:[]))];
   const projections=versionIds.length?await db.resumeRecruiterEvidence.findMany({where:{versionId:{in:versionIds},parserVersion:HR_PARSER,catalogRevision:catalog.revision}}):[];
   const byVersion=new Map(projections.map(p=>[p.versionId,p]));

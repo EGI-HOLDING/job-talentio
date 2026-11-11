@@ -1,6 +1,7 @@
 import { invalidateCvScores, scoringJob, scoreJobInclude } from '../ai-screening/recruitment/cv-job-context';
 import { jobChatPeers } from '../chat/job-chat-peer';
-import { resolveHrPosition, effectiveExperience, structuredJobFields } from '../hr-flow/job-input';
+import { assertJobPositionFields, resolveHrPosition, effectiveExperience, structuredJobFields } from '../hr-flow/job-input';
+import { approveJobGroup, jobGroupsEnabled } from '../matching/job-group-scope';
 import { ScreeningPackets } from '../ai-screening/screening-packets.service';
 import { screeningEnabled } from '../ai-screening/screening.policy';
 import { employeeApplicationChatAllowed } from '../chat/application-chat-access';
@@ -216,6 +217,7 @@ export class JobsService {
   } as const;
 
   private jobInclude = {
+    approvedPositionMembers: { select: { jobTitleId: true } },
     translations: {
       select: { locale: true, title: true, description: true, isMachine: true },
     },
@@ -387,7 +389,8 @@ export class JobsService {
     // Remote: city is optional hub/region — never invent a fake "Remote" city
     const { cityId, countryId } = await resolveJobLocation(db, data);
     const categoryId = await this.resolveCategoryId(data.categorySlug as string | undefined, db);
-    const explicitPosition=['CATALOG','MANUAL'].includes(String(data.positionEntryMode))?await resolveHrPosition(db,data):null;
+    assertJobPositionFields(data);
+    const explicitPosition=['CATALOG','MANUAL','GROUP'].includes(String(data.positionEntryMode))?await resolveHrPosition(db,data):null;
     const resolvedTitle = explicitPosition?{jobTitle:{id:explicitPosition.jobTitleId,name:explicitPosition.title},inferredLevel:null}:await resolveJobTitle(db, {
       name: String(data.title).trim(),
       slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
@@ -426,6 +429,8 @@ export class JobsService {
         ...effectiveExperience(data,seniority),
         ...structuredJobFields(data),
         positionEntryMode:explicitPosition?.positionEntryMode,
+        positionGroupId:explicitPosition?.positionGroupId,
+        positionGroupScopeRevision:explicitPosition?.positionGroupScopeRevision,
         experienceLevel,
         isAnonymous: data.isAnonymous === true,
         locale: pickStoredLocale({
@@ -460,7 +465,9 @@ export class JobsService {
     const job=await db.jobPost.findUniqueOrThrow({where:{id:jobId}});
     await this.recruiterOnboarding?.beforePublish(user,job.companyId,db);
     this.assertLocationRules(job.workMode,job.cityId,true);
-    if(job.positionEntryMode!=='MANUAL'){
+    if(job.positionEntryMode==='GROUP'){
+      await approveJobGroup(db, job.id, job.positionGroupId!, job.positionGroupScopeRevision);
+    }else if(job.positionEntryMode!=='MANUAL'){
       const role=job.jobTitleId?await db.jobTitle.findUnique({where:{id:job.jobTitleId},select:currentRoleSelect}):null;
       if(!currentRoleIdentity(role))throw new BadRequestException('POSITION_UNAVAILABLE');
     }
@@ -482,7 +489,10 @@ export class JobsService {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${job.companyId} FOR UPDATE`);
       return this.updateInside(user, jobId, data, db);
     }, { timeout: 30000 });
-    if (updated) { void this.jobsSearch.syncJob(jobId); }
+    if (updated) {
+      if (job.positionGroupId || updated.positionGroupId) await this.candidateCache?.invalidate(false);
+      void this.jobsSearch.syncJob(jobId);
+    }
     return updated;
   }
   private async updateInside(user: AuthUser, jobId: string, data: Record<string, unknown>, db: Prisma.TransactionClient) {
@@ -507,9 +517,20 @@ export class JobsService {
     let title = job.title;
     let jobTitleId = job.jobTitleId;
     let inferredLevel: typeof job.experienceLevel = null;
-    const explicitPosition=['CATALOG','MANUAL'].includes(String(data.positionEntryMode))?await resolveHrPosition(db,{...data,title:data.title??job.title}):null;
+    assertJobPositionFields(data);
+    if(job.positionEntryMode==='GROUP'&&!data.positionEntryMode
+      && (data.title!==undefined||data.jobTitleId!==undefined||data.jobTitleSlug!==undefined)) {
+      throw new BadRequestException('POSITION_ENTRY_MODE_REQUIRED');
+    }
+    const sameGroup=job.positionEntryMode==='GROUP'&&data.positionEntryMode==='GROUP'&&job.positionGroupId===data.positionGroupId;
+    const explicitPosition=['CATALOG','MANUAL','GROUP'].includes(String(data.positionEntryMode))
+      && !(sameGroup&&job.positionGroupApprovedAt&&data.positionGroupScopeRevision==null)
+      ? await resolveHrPosition(db,{...data,title:data.title??job.title}) : null;
+    const approveScope=explicitPosition?.positionGroupId
+      && (job.status==='PUBLISHED'||!!job.positionGroupApprovedAt||!!job.publishedAt);
+    const resetApproval=!!explicitPosition&&(!sameGroup||!explicitPosition.positionGroupId);
     if(explicitPosition){title=explicitPosition.title;jobTitleId=explicitPosition.jobTitleId;}
-    else if (data.title !== undefined || data.jobTitleSlug !== undefined) {
+    else if (!sameGroup && (data.title !== undefined || data.jobTitleSlug !== undefined)) {
       const resolvedTitle = await resolveJobTitle(db, {
         name: data.title !== undefined ? String(data.title).trim() : job.title,
         slug: data.jobTitleSlug ? String(data.jobTitleSlug) : undefined,
@@ -568,6 +589,9 @@ export class JobsService {
         ...effectiveExperience(data,seniority,job),
         ...structuredJobFields(data),
         positionEntryMode:explicitPosition?.positionEntryMode,
+        positionGroupId:explicitPosition?.positionGroupId,
+        positionGroupScopeRevision:explicitPosition?.positionGroupScopeRevision,
+        ...(resetApproval?{positionGroupReleaseId:null,positionGroupApprovedAt:null}:{}),
         experienceLevel: nextExperienceLevel as never,
         isAnonymous: typeof data.isAnonymous === 'boolean' ? data.isAnonymous : undefined,
         locale: data.locale===undefined?undefined:
@@ -594,6 +618,8 @@ export class JobsService {
     if (data.screeningQuestions !== undefined) await this.syncQuestions(jobId, data.screeningQuestions, db);
 
     await invalidateCvScores(db,jobId,user.id,scoringJob(job));
+    if(approveScope)await approveJobGroup(db, jobId, explicitPosition!.positionGroupId!, explicitPosition!.positionGroupScopeRevision);
+    else if(resetApproval&&job.positionGroupId)await db.jobPositionGroupMember.deleteMany({where:{jobId}});
     const updated = await db.jobPost.findUnique({
       where: { id: jobId },
       include: this.jobInclude,
@@ -699,7 +725,10 @@ export class JobsService {
         throw new ConflictException('Job changed. Refresh and try again.');
       }
       if (status === 'PUBLISHED') {
-        if (true) {
+        if (current.positionEntryMode==='GROUP') {
+          if(!jobGroupsEnabled())throw new BadRequestException('JOB_POSITION_GROUPS_UNAVAILABLE');
+          if(!current.positionGroupApprovedAt)await approveJobGroup(tx, jobId, current.positionGroupId!, current.positionGroupScopeRevision);
+        } else {
           await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock_shared(742159744)`);
           const role=current.jobTitleId?await tx.jobTitle.findUnique({where:{id:current.jobTitleId},select:currentRoleSelect}):null;
           if(!currentRoleIdentity(role)&&current.positionEntryMode!=='MANUAL')throw new BadRequestException('Select a reviewed position from the catalog before publishing');
@@ -737,6 +766,7 @@ export class JobsService {
     }, { maxWait: 10_000, timeout: 15_000 });
     const updated = result.updated;
     if (!result.changed) return this.withResolvedIcons(updated);
+    if (updated.positionGroupId) await this.candidateCache?.invalidate(false);
 
     if (status === 'PUBLISHED' && !job.publishedAt) {
       for (const follower of updated.isAnonymous ? [] : job.company.followers) {
@@ -1223,8 +1253,7 @@ export class JobsService {
       .filter(Boolean);
     const selections = parsePositionRefs(query.positions);
     if (this.positionCatalog && (selections.length || jobTitleSlugs.length)) {
-      const ids = await this.positionCatalog.jobTitleIds(selections, jobTitleSlugs);
-      and.push({ jobTitleId: { in: ids } });
+      and.push(await this.positionCatalog.jobPositionWhere(selections, jobTitleSlugs));
     } else if (selections.length) {
       and.push({ jobTitleId: { in: [] } });
     } else if (jobTitleSlugs.length) {
@@ -1807,7 +1836,7 @@ export class JobsService {
     if (!['CLOSED','EXPIRED'].includes(source.status) && !(benefit?.expiresAt && benefit.expiresAt <= new Date())) throw new ConflictException('Close the original job before copying it');
     const job = await this.prisma.$transaction(async db => {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id=${source.companyId} FOR UPDATE`);
-      const {seniorityVersion,seniorityYearsMin,seniorityYearsMax,experienceRangeSource,...copy}=source;
+      const {seniorityVersion,seniorityYearsMin,seniorityYearsMax,experienceRangeSource,positionGroupScopeRevision,...copy}=source;
       const created = await this.createInside(user,source.companyId,{ ...copy, citySlug: source.city?.slug, categorySlug: source.category?.slug, skills: source.jobSkills.map(row=>({name:row.skill.name,isRequired:row.isRequired,weight:row.weight,minLevel:row.minLevel})), benefits: source.benefits.map(row=>({name:row.benefit.name})), languages:source.jobLanguages.map(row=>({code:row.language.code,minLevel:row.minLevel,isRequired:row.isRequired,confirmed:row.provenance==='EMPLOYER_CONFIRMED'})) },db);
       if (!created) throw new NotFoundException();
       await this.syncQuestions(created.id,source.questions.map(({question,type,isRequired,sortOrder})=>({question,type,isRequired,sortOrder})),db);

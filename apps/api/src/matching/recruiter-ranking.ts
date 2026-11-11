@@ -61,8 +61,11 @@ export function legacyHrFacts(profile:RecruiterProfile,index:EmployeeOccupationI
   return facts;
 }
 
-export function hrYears(facts:HrFacts,role:string|null,index:EmployeeOccupationIndex,asOf:Date){
-  const rows=facts.experiences.filter(e=>role&&e.jobTitleId&&index.identity(e.jobTitleId)?.canonicalRoleId===role);
+export function hrYears(facts:HrFacts,role:string|null,index:EmployeeOccupationIndex,asOf:Date,memberIds?:ReadonlySet<string>){
+  const rows=facts.experiences.filter(e=>{
+    const identity=e.jobTitleId&&index.identity(e.jobTitleId);
+    return !!identity&&(memberIds?memberIds.has(identity.canonicalRoleId):identity.canonicalRoleId===role);
+  });
   const intervals=rows.flatMap(e=>{const start=e.startDate?+new Date(e.startDate):NaN,end=e.isCurrent?+asOf:e.endDate?+new Date(e.endDate):NaN;
     return Number.isFinite(start)&&Number.isFinite(end)&&start<=end&&end<=+asOf?[[start,end]]:[];}).sort((a,b)=>a[0]-b[0]);
   let duration=0,last=-Infinity;for(const [start,end]of intervals){duration+=Math.max(0,end-Math.max(start,last));last=Math.max(last,end);}
@@ -76,7 +79,8 @@ export function evaluateHr(profile:HrProfile,job:RecruiterJob,catalog:HrCatalog,
   const h=profile.hr;
   const facts=h?.facts??legacyHrFacts(profile,catalog.index);
   const asOf=h?new Date(h.asOf):now;
-  const role=job.jobTitleId?catalog.index.identity(job.jobTitleId)?.canonicalRoleId??null:catalog.index.resolve(job.title);
+  const members=job.positionGroupId?new Set(job.effectivePositionMemberIds):undefined;
+  const role=members?null:job.jobTitleId?catalog.index.identity(job.jobTitleId)?.canonicalRoleId??null:catalog.index.resolve(job.title);
   const evidence:MatchEvidence[]=[],warnings:string[]=[];
   const parts:Array<{key:string;maximum:number;earned:number}>=[];
   const required:RequirementStatus[]=[];
@@ -85,9 +89,13 @@ export function evaluateHr(profile:HrProfile,job:RecruiterJob,catalog:HrCatalog,
     if(isRequired)required.push(status);
   };
   const part=(key:string,weight:number,statuses:RequirementStatus[])=>{if(statuses.length)parts.push({key,maximum:weight,earned:weight*statuses.reduce((s,v)=>s+fraction(v),0)/statuses.length});};
-  const roleFit=Number(Boolean(role&&[...facts.roles.map(r=>r.jobTitleId),...facts.experiences.map(e=>e.jobTitleId)].some(id=>id&&catalog.index.identity(id)?.canonicalRoleId===role)));
-  add('ROLE',job.title,roleFit?'MET':'UNKNOWN',false,[...facts.roles,...facts.experiences].filter(r=>r.jobTitleId&&catalog.index.identity(r.jobTitleId)?.canonicalRoleId===role).map(r=>'cvEvidence:'+r.key),roleFit?'ROLE_MATCH':'NOT_LISTED');
-  if(!role)warnings.push('ROLE_MAPPING_REQUIRED');
+  const roleEvidence=[...facts.roles,...facts.experiences].filter(row=>{
+    const identity=row.jobTitleId&&catalog.index.identity(row.jobTitleId);
+    return !!identity&&(members?members.has(identity.canonicalRoleId):identity.canonicalRoleId===role);
+  });
+  const roleFit=Number(roleEvidence.length>0);
+  add('ROLE',job.title,roleFit?'MET':'UNKNOWN',false,roleEvidence.map(r=>'cvEvidence:'+r.key),roleFit?'ROLE_MATCH':'NOT_LISTED');
+  if(members?!members.size:!role)warnings.push('ROLE_MAPPING_REQUIRED');
   const skillCounts={met:0,unknown:0,unmet:0,total:0};
   const presence:RequirementStatus[]=[],proficiency:RequirementStatus[]=[];
   let complementary=0,observed=false;
@@ -106,10 +114,10 @@ export function evaluateHr(profile:HrProfile,job:RecruiterJob,catalog:HrCatalog,
     else if(found){complementary+=Math.min(10,Math.max(0,req.weight||1))*(status==='MET'?1:0);if(classification!=='GENERAL')observed=true;}
   }
   part('skills',HR_CONFIG.presence,presence);part('skillLevel',HR_CONFIG.level,proficiency);
-  const experience=hrYears(facts,role,catalog.index,asOf);
+  const experience=hrYears(facts,role,catalog.index,asOf,members);
   if(experience.intervals.length)observed=true;
   const minimum=job.experienceYearsMin!=null&&job.experienceYearsMin>0?job.experienceYearsMin:null;
-  if(minimum){const status:RequirementStatus=experience.years>=minimum?'MET':facts.experienceComplete?'UNMET':'UNKNOWN';
+  if(minimum){const status:RequirementStatus=experience.years>=minimum?'MET':facts.experienceComplete&&(!members||members.size>0)?'UNMET':'UNKNOWN';
     add('EXPERIENCE',String(minimum),status,true,experience.rows.map(r=>'cvEvidence:'+r.key));part('experience',HR_CONFIG.experience,[status]);}
   if(job.experienceLevel){const target=seniorities.indexOf(job.experienceLevel),grades=experience.rows.filter(r=>r.confirmed&&r.seniority).map(r=>seniorities.indexOf(r.seniority!)).filter(n=>n>=0);
     const status:RequirementStatus=!grades.length||target<0?'UNKNOWN':Math.max(...grades)>=target?'MET':'UNMET';

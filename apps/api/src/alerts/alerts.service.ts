@@ -294,9 +294,7 @@ export class AlertsService {
       if (alert.categoryId) and.push({ categoryId: alert.categoryId });
       const selections = desiredSelectionsSchema.parse(alert.positionSelections);
       if (selections.length) {
-        const ids = await this.positions.jobTitleIds(selections);
-        if (!ids.length) continue;
-        and.push({ jobTitleId: { in: ids } });
+        and.push(await this.positions.jobPositionWhere(selections));
       }
       if (alert.skills.length) {
         and.push({

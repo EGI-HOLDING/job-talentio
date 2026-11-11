@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { DesiredSelection } from '@job-talentio/shared';
+import type { Prisma } from '@prisma/client';
+import { jobGroupCatalog, jobGroupsEnabled, jobGroupWhere, previewJobGroup } from './job-group-scope';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
 import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { PositionGroupService } from './position-group.service';
@@ -8,7 +10,7 @@ import { PositionSearchIndex } from './position-search-index';
 import { PrismaService } from '../prisma/prisma.service';
 import { liveJobWhere } from '../benefits/benefit-policy';
 
-export type PositionScope = 'candidate' | 'role' | 'directory' | 'admin';
+export type PositionScope = 'candidate' | 'role' | 'directory' | 'admin' | 'hr';
 type Option = DesiredSelection & { name: string; selectable: boolean; slug?: string; family?: string };
 type Entry = Option & { key: string; label: string; aliases: string[] };
 const normalize = catalogTitleIdentityKey;
@@ -85,7 +87,8 @@ export class PositionCatalogService implements OnModuleInit, OnModuleDestroy {
     const revision = createHash('sha256').update(JSON.stringify(['positions-v1', ordered, group?.releaseId])).digest('hex').slice(0, 24);
     const documents = ordered.map(row => ({ id: row.key, name: row.label.replace(/-/g, ' '),
       aliases: row.aliases.map(alias => alias.replace(/-/g, ' ')), kind: row.kind, selectable: row.selectable, revision }));
-    return { ordered, entries, members, canonicalRows, canonicalOf, slugs, revision, documents, groupReleaseVersion: group?.releaseId ?? null };
+    return { ordered, entries, members, canonicalRows, canonicalOf, slugs, revision, documents,
+      jobGroups: jobGroupCatalog(group?.choices), groupReleaseVersion: group?.releaseId ?? null };
   }
 
   async snapshot() {
@@ -107,10 +110,11 @@ export class PositionCatalogService implements OnModuleInit, OnModuleDestroy {
     if (input.groupId && !memberIds) throw new BadRequestException('Unknown active group');
     const selected = input.selections ? new Set(input.selections.map(row => ref(row.kind === 'ROLE'
       ? { ...row, id: catalog.canonicalOf.get(row.id) ?? row.id } : row))) : undefined;
+    const showGroups = input.scope === 'candidate' || input.scope === 'hr' && jobGroupsEnabled();
     const local = input.q.trim() && !query ? [] : catalog.ordered.filter(row => (!input.reviewedOnly || row.selectable)
       && (!memberIds || row.kind === 'ROLE' && memberIds.has(row.id))
-      && (!selected || selected.has(ref(row))) && (input.scope === 'candidate' || row.kind === 'ROLE'));
-    const fuzzy = query && !selected ? await this.meili.search(catalog.revision, query.replace(/-/g, ' '), input.scope !== 'candidate' || Boolean(memberIds)) : [];
+      && (!selected || selected.has(ref(row))) && (showGroups || row.kind === 'ROLE'));
+    const fuzzy = query && !selected ? await this.meili.search(catalog.revision, query.replace(/-/g, ' '), !showGroups || Boolean(memberIds)) : [];
     const fuzzyRank = new Map(fuzzy?.map((key, index) => [key, index]));
     const ranked = local.flatMap(row => {
       const tier = positionMatchTier(query, row.label, row.aliases);
@@ -118,7 +122,9 @@ export class PositionCatalogService implements OnModuleInit, OnModuleDestroy {
         : fuzzyRank.has(row.key) ? [{ row, tier: 3, rank: fuzzyRank.get(row.key)! }] : [];
     }).sort((a, b) => a.tier - b.tier || a.rank - b.rank || compare(a.row, b.row));
     const items = ranked.slice((input.page - 1) * input.limit, input.page * input.limit)
-      .map(({ row }) => ({ ...option(row), selectable: input.scope === 'admin' || row.selectable, reviewed: row.selectable }));
+      .map(({ row }) => ({ ...option(row),
+        selectable: input.scope === 'admin' || row.selectable && (input.scope !== 'hr' || row.kind !== 'GROUP' || !!catalog.members.get(row.id)?.size),
+        reviewed: row.selectable }));
     const counts = input.scope === 'directory' && items.length ? await this.prisma.jobPost.groupBy({
       by: ['jobTitleId'],
       where: { ...liveJobWhere(), jobTitleId: { in: items.flatMap(row => catalog.canonicalRows.get(row.id) ?? []) },
@@ -150,14 +156,22 @@ export class PositionCatalogService implements OnModuleInit, OnModuleDestroy {
     return selections;
   }
 
-  async jobTitleIds(selections: DesiredSelection[], slugs: string[] = []) {
+  async jobPositionWhere(selections: DesiredSelection[], slugs: string[] = []): Promise<Prisma.JobPostWhereInput> {
     const catalog = await this.snapshot();
-    const roots = new Set(slugs.flatMap(slug => catalog.slugs.get(slug) ?? []));
+    const explicit = slugs.flatMap(slug => catalog.slugs.get(slug) ?? []);
+    const groups = new Set<string>();
     for (const selection of selections) {
-      if (selection.kind === 'ROLE') roots.add(catalog.canonicalOf.get(selection.id) ?? selection.id);
-      else for (const member of catalog.members.get(selection.id) ?? []) roots.add(member);
+      if (selection.kind === 'ROLE') explicit.push(catalog.canonicalOf.get(selection.id) ?? selection.id);
+      else groups.add(selection.id);
     }
-    return [...roots].flatMap(root => catalog.canonicalRows.get(root) ?? []);
+    const roles = new Map(explicit.map(id => [id, catalog.entries.get('ROLE:' + id)?.name ?? id]));
+    const roots = new Set(explicit);
+    for (const group of groups) for (const member of catalog.members.get(group) ?? []) roots.add(member);
+    const ids = [...roots].flatMap(root => catalog.canonicalRows.get(root) ?? []);
+    return { OR: [{ jobTitleId: { in: ids } }, ...jobGroupWhere(catalog.jobGroups, { groups, roles }, catalog.groupReleaseVersion)] };
   }
 
+  previewJobGroup(id: string) {
+    return previewJobGroup(this.prisma, id);
+  }
 }

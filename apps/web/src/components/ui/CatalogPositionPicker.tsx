@@ -27,7 +27,7 @@ export function CatalogPositionPicker({ label, value, onChange, scope = 'role', 
   label: string;
   value: PositionValue[];
   onChange: (value: PositionValue[]) => void;
-  scope?: 'candidate' | 'role';
+  scope?: 'candidate' | 'role' | 'hr';
   max?: number;
   disabled?: boolean;
 }) {
@@ -39,7 +39,8 @@ export function CatalogPositionPicker({ label, value, onChange, scope = 'role', 
     failed: t('jobTitleLoadError'),
     retry: t('workspace.retry'),
     limited: locale === 'id' ? 'Saran salah ketik sedang terbatas.' : 'Typo suggestions are temporarily limited.',
-    group: locale === 'id' ? 'Semua posisi dalam kelompok' : 'All positions in this group',
+    group: scope === 'hr' ? (locale === 'id' ? 'Kelompok posisi' : 'Position group')
+      : (locale === 'id' ? 'Semua posisi dalam kelompok' : 'All positions in this group'),
     role: locale === 'id' ? 'Posisi spesifik' : 'Specific position',
     unavailable: locale === 'id' ? 'Belum tersedia untuk dipilih' : 'Unavailable for selection',
     needsReview: locale === 'id' ? 'Perlu ditinjau' : 'Needs review',

@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { JwtAuthGuard, Roles, RolesGuard } from '../common/auth.decorators';
 import { RawLocaleNames } from '../common/locale.interceptor';
@@ -9,7 +9,7 @@ const requestSchema = z.object({
   q: z.string().max(160).default(''),
   page: z.coerce.number().int().min(1).max(100000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(24),
-  scope: z.enum(['candidate', 'role', 'directory']).default('candidate'),
+  scope: z.enum(['candidate', 'role', 'directory', 'hr']).default('candidate'),
   groupId: z.string().min(1).max(100).optional(),
   ids: z.string().max(1300).optional(),
   slugs: z.string().max(2000).optional(),
@@ -25,6 +25,13 @@ export function parsePositionRefs(value: string | undefined) {
 @RawLocaleNames()
 export class PositionCatalogController {
   constructor(private catalog: PositionCatalogService) {}
+
+  @Get('groups/:id/job-scope')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'SUPER_ADMIN')
+  jobGroupScope(@Param('id') id: string) {
+    return this.catalog.previewJobGroup(id);
+  }
 
   @Get('search')
   async search(@Query() query: unknown) {

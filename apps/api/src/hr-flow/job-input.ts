@@ -2,9 +2,26 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
 import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
+import { previewJobGroup } from '../matching/job-group-scope';
+
+export function assertJobPositionFields(data: Record<string, unknown>) {
+  if (data.positionEntryMode === 'GROUP') {
+    if (typeof data.positionGroupId !== 'string' || data.jobTitleId != null || data.jobTitleSlug != null) {
+      throw new BadRequestException('INVALID_GROUP_POSITION');
+    }
+  } else if (data.positionGroupId != null || data.positionGroupScopeRevision != null) {
+    throw new BadRequestException('INVALID_GROUP_POSITION');
+  }
+}
 
 /** The new path never creates or edits catalog entries, or strips occupation words. */
 export async function resolveHrPosition(db: Prisma.TransactionClient, data: Record<string, unknown>) {
+  assertJobPositionFields(data);
+  if (data.positionEntryMode === 'GROUP') {
+    const scope = await previewJobGroup(db, data.positionGroupId as string);
+    return { title: scope.name, jobTitleId: null, positionEntryMode: 'GROUP', positionGroupId: scope.id,
+      positionGroupScopeRevision: typeof data.positionGroupScopeRevision === 'string' ? data.positionGroupScopeRevision : null };
+  }
   const text=String(data.title??'').trim();
   if(data.positionEntryMode==='CATALOG') {
     const role=typeof data.jobTitleId==='string'?await db.jobTitle.findUnique({where:{id:data.jobTitleId},select:{
@@ -12,7 +29,7 @@ export async function resolveHrPosition(db: Prisma.TransactionClient, data: Reco
       positionGroupLabels:{where:{release:{states:{some:{id:'indonesia'}}}},select:{nameEn:true},take:1},
     }}):null;
     if(!currentRoleIdentity(role))throw new BadRequestException('POSITION_UNAVAILABLE: Choose another position');
-    return {title:role!.positionGroupLabels[0]?.nameEn??role!.name,jobTitleId:role!.id,positionEntryMode:'CATALOG'};
+    return {title:role!.positionGroupLabels[0]?.nameEn??role!.name,jobTitleId:role!.id,positionEntryMode:'CATALOG',positionGroupId:null,positionGroupScopeRevision:null};
   }
   if(text.length<3||text.length>200)throw new BadRequestException('INVALID_POSITION');
   const candidates=await db.jobTitle.findMany({where:{archivedAt:null,OR:[
@@ -22,7 +39,7 @@ export async function resolveHrPosition(db: Prisma.TransactionClient, data: Reco
   const identities=candidates.map(r=>({id:r.id,identity:currentRoleIdentity(r)}));
   const unique=new Set(identities.map(r=>r.identity?.canonicalRoleId??'unresolved'));
   const id=identities.length&&unique.size===1&&identities[0].identity?identities[0].identity.canonicalRoleId:null;
-  return {title:text,jobTitleId:id,positionEntryMode:'MANUAL'};
+  return {title:text,jobTitleId:id,positionEntryMode:'MANUAL',positionGroupId:null,positionGroupScopeRevision:null};
 }
 
 export function effectiveExperience(input:Record<string,unknown>,snapshot:{seniorityLevelCode?:string|null;seniorityYearsMin?:number|null;seniorityYearsMax?:number|null},existing?:{seniorityLevelCode:string|null;seniorityYearsMin?:number|null;seniorityYearsMax?:number|null;experienceRangeMin:number|null;experienceRangeMax:number|null;experienceRangeSource:string|null}) {

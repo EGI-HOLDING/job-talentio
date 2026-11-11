@@ -2,8 +2,15 @@ import { jobPostSchema, catalogLabelIssue } from '@job-talentio/shared';
 
 export type HrDraft = Record<string, any>;
 export type HrDraftIssue = { field: string; path: string; message: string };
+export function hrJobError(error: unknown) {
+  const message=error instanceof Error?error.message:String(error);
+  if(message.includes('POSITION_GROUP_SCOPE_CHANGED'))return 'Cakupan kelompok berubah. Buka cakupan, tinjau daftar terbaru, lalu konfirmasi lagi.';
+  if(message.includes('POSITION_GROUP_HAS_NO_VERIFIED_MEMBERS'))return 'Kelompok ini belum memiliki posisi terverifikasi.';
+  if(message.includes('POSITION_GROUP_UNAVAILABLE')||message.includes('JOB_POSITION_GROUPS_UNAVAILABLE'))return 'Kelompok posisi ini sedang tidak tersedia.';
+  return message;
+}
 const draftKeys = new Set([
-  'title','description','positionEntryMode','jobTitleId','seniorityLevelCode','experienceRangeMin','experienceRangeMax','responsibilities','kpis','specificExpectations','countryId','citySlug','workMode','employmentType','salaryMin','salaryMax','salaryPeriod','currency','skills','languages','benefits',
+  'title','description','positionEntryMode','jobTitleId','positionGroupId','positionGroupScopeRevision','seniorityLevelCode','experienceRangeMin','experienceRangeMax','responsibilities','kpis','specificExpectations','countryId','citySlug','workMode','employmentType','salaryMin','salaryMax','salaryPeriod','currency','skills','languages','benefits',
 ]);
 
 // A manual lookup intentionally returns slug: ''. Omit absent catalog identifiers
@@ -44,6 +51,9 @@ export function validateHrDraft(draft: HrDraft) {
     if(issue.code==='invalid_type') detail=issue.expected==='number'?'masukkan angka yang valid.':'isi dengan nilai yang valid.';
     return {field,path:issue.path.join('.'),message:`${label}: ${detail}`};
   });
+  if(body.positionEntryMode==='GROUP'&&(!body.positionGroupId||!body.positionGroupScopeRevision)){
+    issues.push({field:'title',path:'positionGroupScopeRevision',message:'Tinjau dan konfirmasi cakupan kelompok posisi sebelum menerbitkan.'});
+  }
   for(const field of ['skills','benefits','languages']) {
     if(!Array.isArray(body[field]))continue;
     body[field].forEach((row: Record<string,any>,index:number)=>{

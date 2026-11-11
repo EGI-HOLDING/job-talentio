@@ -1,6 +1,7 @@
 export type RequirementStatus = 'MET' | 'UNMET' | 'UNKNOWN';
 export type MatchEvidence = {
   selectionBasis?: 'EXACT'|'GROUP'|'RELATED';
+  groupMemberName?: string;
   kind: 'ROLE' | 'SKILL' | 'EXPERIENCE' | 'LANGUAGE' | 'LOCATION' | 'EDUCATION';
   label: string;
   labels?: { en:string; id?:string | null; uz?:string | null; ru?:string | null };

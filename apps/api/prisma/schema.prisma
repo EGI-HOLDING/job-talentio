@@ -909,6 +909,7 @@ model BenefitAlias {
 
 /// Canonical role title (no seniority — use JobPost.experienceLevel).
 model JobTitle {
+  approvedJobGroupScopes JobPositionGroupMember[]
   positionGroupMemberships PositionGroupMembership[]
   positionGroupLabels PositionGroupRoleLabel[]
   positionGroupHeads PositionGroup[]
@@ -1229,6 +1230,13 @@ model JobPost {
   candidateImports CandidateImport[]
   recruitmentCandidates RecruitmentCandidate[]
   positionEntryMode String @default("LEGACY")
+  positionGroupId String?
+  positionGroupReleaseId String?
+  positionGroupScopeRevision String?
+  positionGroupApprovedAt DateTime?
+  positionGroup PositionGroup? @relation(fields: [positionGroupId], references: [id], onDelete: Restrict)
+  positionGroupRelease PositionGroupRelease? @relation(fields: [positionGroupReleaseId], references: [id], onDelete: Restrict)
+  approvedPositionMembers JobPositionGroupMember[]
   responsibilities String[] @default([])
   kpis String[] @default([])
   specificExpectations String?
@@ -1302,6 +1310,7 @@ model JobPost {
   @@index([categoryId])
   @@index([jobTitleId])
   @@index([experienceLevel])
+  @@index([positionGroupId, status])
   @@index([companyId, fingerprint])
   @@index([companyId, contentHash])
 }
@@ -1745,6 +1754,7 @@ model PositionGroup {
   archivedAt DateTime?
   memberships PositionGroupMembership[]
   selectedBy EmployeeDesiredGroup[]
+  jobs JobPost[]
   createdAt DateTime @default(now())
 }
 
@@ -1759,6 +1769,16 @@ model PositionGroupRelease {
   memberships PositionGroupMembership[]
   labels PositionGroupRoleLabel[]
   states PositionGroupState[]
+  jobs JobPost[]
+}
+
+model JobPositionGroupMember {
+  jobId String
+  jobTitleId String
+  job JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobTitle JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  @@id([jobId, jobTitleId])
+  @@index([jobTitleId, jobId])
 }
 
 model PositionGroupMembership {

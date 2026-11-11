@@ -43,10 +43,11 @@ async function main() {
     const known = await positions.search({ q: 'AI Engineer', page: 1, limit: 1, scope: 'role', groupId: 'group:engineer' });
     assert.equal(known.items[0]?.name, 'Artificial Intelligence Engineer');
     const ai = known.items[0];
-    const memberIds = await positions.jobTitleIds([{ kind: 'GROUP', id: 'group:engineer' }, { kind: 'ROLE', id: ai.id }]);
+    const where = await positions.jobPositionWhere([{ kind: 'GROUP', id: 'group:engineer' }, { kind: 'ROLE', id: ai.id }]);
+    const memberIds = (where.OR?.[0]?.jobTitleId as {in:string[]}).in;
     assert(memberIds.includes(ai.id));
     assert.equal(new Set(memberIds).size, memberIds.length);
-    assert.deepEqual(await positions.jobTitleIds([{ kind: 'GROUP', id: 'group:missing' }]), []);
+    assert.deepEqual(await positions.jobPositionWhere([{ kind: 'GROUP', id: 'group:missing' }]), {OR:[{jobTitleId:{in:[]}}]});
     assert.equal((await positions.search({ q: 'Artificial Intelligence Engineer', page: 1, limit: 1, scope: 'candidate' })).searchState, 'DEGRADED');
 
     if (process.env.MEILI_HOST) {

@@ -145,7 +145,9 @@ export const jobScreeningQuestionSchema = z.object({
 });
 
 export const jobPostSchema = z.object({
-  positionEntryMode: z.enum(['CATALOG', 'MANUAL']).optional(),
+  positionEntryMode: z.enum(['CATALOG', 'MANUAL', 'GROUP']).optional(),
+  positionGroupId: z.string().min(1).max(100).nullable().optional(),
+  positionGroupScopeRevision: z.string().regex(/^[a-f0-9]{64}$/).nullable().optional(),
   jobTitleId: z.string().min(1).max(100).nullable().optional(),
   responsibilities: z.array(z.string().trim().min(1).max(1000)).max(30).optional(),
   kpis: z.array(z.string().trim().min(1).max(1000)).max(30).optional(),
