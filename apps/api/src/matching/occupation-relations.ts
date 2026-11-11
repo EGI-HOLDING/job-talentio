@@ -1,17 +1,12 @@
 import {createHash} from 'node:crypto';
 import {catalogTitleIdentityKey as key} from '../common/title-resolve';
 import {EmployeeOccupationIndex,type IntentRole} from './employee-occupation';
+import {buildTaskDictionary,hasSpecificTaskOutput,independentTaskIds,taskKind,type TaskSkill,TASK_CONCEPT_VERSION} from './task-concepts';
 
-export const PROFESSION_RELATION_ALGORITHM='talentio-occupation-tasks-v3-reciprocal-evidence-compact-basis';
-// Offline profession-vector similarity, never a threshold on a candidate's CV.
-const MIN_PROFESSION_SIMILARITY=0.2;
-const MIN_TARGET_TASK_COVERAGE = 0.30;
-// Directional target coverage is useful for ranking but can hide a strong reverse
-// relation when one profession has a narrower ESCO task profile than the other.
-// Only mirror an already-qualified RELATED edge when both roles share multiple
-// specific essential tasks and their full task vectors are substantially alike.
-const MIN_RECIPROCAL_SIMILARITY = 0.30;
-const MIN_RECIPROCAL_ESSENTIAL_TASKS = 2;
+export const PROFESSION_RELATION_ALGORITHM='talentio-core-tasks-v1@'+TASK_CONCEPT_VERSION;
+const MIN_SHARED_CORE_TASKS=2;
+const MIN_NARROWER_CORE_COVERAGE=0.25;
+const MIN_BROADER_CORE_COVERAGE=0.08;
 export const professionDigest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export type LocalProfessionDefinition = {
   titles: readonly string[];
@@ -25,7 +20,7 @@ export type ProfessionWorkScope = {
   outputs: readonly string[];
   titles: readonly string[];
 };
-export type ProfessionSource={source:string;sourceVersion:string;sourceUrl:string;occupations:Array<{uri:string;label:string;aliases:string[];description:string;scopeNote:string;essential:Array<{uri:string;label:string}>;optional:Array<{uri:string;label:string}>}>;skills:Array<{uri:string;label:string;reuse:string;type:string}>;localDefinitions?:readonly LocalProfessionDefinition[];workScopes?:readonly ProfessionWorkScope[]};
+export type ProfessionSource={source:string;sourceVersion:string;sourceUrl:string;taskVocabularyDigest?:string;occupations:Array<{uri:string;label:string;aliases:string[];description:string;scopeNote:string;essential:Array<{uri:string;label:string}>;optional:Array<{uri:string;label:string}>}>;skills:TaskSkill[];localDefinitions?:readonly LocalProfessionDefinition[];workScopes?:readonly ProfessionWorkScope[]};
 export function professionCatalogRevision(roles:IntentRole[]){return professionDigest([...roles].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>[r.id,r.name,r.nameId,r.nameUz,r.nameRu,r.canonicalRoleId,r.familyId,r.matchingApproved,!!r.archivedAt,!!r.family?.archivedAt,r.matchingMetadata,r.aliases.map(a=>[a.alias,a.matchingApproved]).sort()]));}
 
 /** No candidate, CV, employer or live-job data is an input to this graph. */
@@ -102,6 +97,7 @@ export function buildProfessionGraph(roles:IntentRole[],source:ProfessionSource)
        essential:mapped?.definition?.coreTasks?.map(task=>({uri:'urn:talentio:occupation-task:'+task.id,label:task.label}))??mapped?.profile.essential??[],
        optional:mapped?.definition?.coreTasks?[]:mapped?.profile.optional??[],
        evidence:mapped?.definition?.evidence??null,
+       primaryTaskIds:[] as string[],
      },
    };
  });
@@ -132,52 +128,42 @@ export function buildProfessionGraph(roles:IntentRole[],source:ProfessionSource)
  }
  const df=new Map<string,number>();
  // Count unique source professions, so local aliases never change skill rarity.
- for(const p of source.occupations)for(const uri of new Set([...p.essential,...p.optional].map(s=>s.uri)))df.set(uri,(df.get(uri)||0)+1);
+ for(const p of source.occupations)for(const uri of new Set(p.essential.map(s=>s.uri)))df.set(uri,(df.get(uri)||0)+1);
  const weight=(uri:string)=>1+Math.log((source.occupations.length+1)/((df.get(uri)||0)+1));
  // A shared tool, knowledge topic, or general soft skill is not evidence of shared work.
- const specific=(uri:string)=>skillInfo.get(uri)?.type==='skill'&&['sector-specific','occupation-specific','cross-sector'].includes(skillInfo.get(uri)?.reuse||'');
+ const specific=(uri:string)=>{const skill=skillInfo.get(uri);return !!skill&&taskKind(skill)==='TASK';};
  const anchors=new Map<string,Set<string>>(),postings=new Map<string,string[]>();
  for(const r of roots){const p=mapped.get(r.id);if(!p)continue;const ids=new Set(p.facts.essential.filter(s=>specific(s.uri)).map(s=>s.uri));anchors.set(r.id,ids);for(const uri of ids){const ids=postings.get(uri)||[];ids.push(r.id);postings.set(uri,ids);}}
- const vectors=new Map([...mapped].map(([id,p])=>[id,new Map([...p.facts.optional.map(s=>[s.uri,0.5] as const),...p.facts.essential.map(s=>[s.uri,1] as const)])]));
- const norms=new Map([...vectors].map(([id,v])=>[id,[...v].reduce((n,[uri,value])=>n+value*weight(uri),0)]));
+ const norms=new Map([...anchors].map(([id,set])=>[id,[...set].reduce((sum,uri)=>sum+weight(uri),0)]));
+ const outputFrequencyLimit=Math.max(10,Math.ceil(source.occupations.length*.02));
+ const withOutput=new Set([...skillInfo.values()].filter(skill=>hasSpecificTaskOutput(skill)&&(df.get(skill.uri)||0)<=outputFrequencyLimit).map(skill=>skill.uri));
+ const dictionary=buildTaskDictionary([...skillInfo.values()]);
+ const primaryTasks=new Map([...anchors].map(([id,set])=>[id,dictionary.match(mapped.get(id)!.description,set)]));
+ for(const [id,tasks] of primaryTasks)mapped.get(id)!.facts.primaryTaskIds=[...tasks].sort();
  const relations:Array<{fromRoleId:string;toRoleId:string;score:number;basis:{method:string;kind:'RELATED'|'CAREER_PATH';sourceVersion:string;sharedEssentialSkills:Array<{uri:string;label:string}>;sharedEssentialSkillCount:number;targetEssentialCoverage:number;similarity:number;evidenceMode:'DIRECTIONAL_TASK_COVERAGE'|'SYMMETRIC_ESSENTIAL_TASK_OVERLAP';reciprocalTaskCount?:number;reciprocalSimilarityThreshold?:number}}>=[];
  for(const r of roots){const from=mapped.get(r.id),anchor=anchors.get(r.id);if(!from||!anchor?.size)continue;
-  const workTasks=new Set([...from.facts.essential,...from.facts.optional].filter(s=>specific(s.uri)).map(s=>s.uri));
+  const workTasks=anchor;
   const candidates=new Set([...workTasks].flatMap(uri=>postings.get(uri)||[]));candidates.delete(r.id);
-  const fromSkills=vectors.get(r.id)!;
-  for(const toRoleId of [...candidates].sort()){const to=mapped.get(toRoleId)!;const shared=[...workTasks].filter(uri=>anchors.get(toRoleId)?.has(uri));if(!shared.length)continue;
-   const targetVector=vectors.get(toRoleId)!;let overlap=0;for(const [uri,value]of fromSkills)overlap+=Math.min(value,targetVector.get(uri)||0)*weight(uri);
-   const similarity=2*overlap/((norms.get(r.id)||0)+(norms.get(toRoleId)||0));if(similarity<MIN_PROFESSION_SIMILARITY)continue;
-   const essential=to.facts.essential;const denominator=essential.reduce((n,s)=>n+weight(s.uri),0);const covered=essential.reduce((n,s)=>n+(fromSkills.get(s.uri)||0)*weight(s.uri),0);const score=denominator?covered/denominator:0;
+  for(const toRoleId of [...candidates].sort()){const shared=independentTaskIds([...workTasks].filter(uri=>anchors.get(toRoleId)?.has(uri)),skillInfo);if(shared.length<MIN_SHARED_CORE_TASKS||!shared.some(uri=>withOutput.has(uri)))continue;
+   const covered=shared.reduce((n,uri)=>n+weight(uri),0),denominator=norms.get(toRoleId)!;
+   const similarity=2*covered/(norms.get(r.id)!+denominator);
+   const score=denominator?covered/denominator:0;
+   const reverseCoverage=covered/norms.get(r.id)!;
    const sameWorkScope=overlapsWorkScope(r.id,toRoleId);
-   const kind=score>=MIN_TARGET_TASK_COVERAGE&&sameWorkScope?'RELATED':'CAREER_PATH';
+   // A common primary output can be independently documented in both role
+   // descriptions even when one role also has several other core outputs.
+   const primaryOverlap=shared.filter(uri=>withOutput.has(uri)&&primaryTasks.get(r.id)?.has(uri)&&primaryTasks.get(toRoleId)?.has(uri));
+   const sufficientCoverage=Math.max(score,reverseCoverage)>=MIN_NARROWER_CORE_COVERAGE&&Math.min(score,reverseCoverage)>=MIN_BROADER_CORE_COVERAGE;
+   const kind=sameWorkScope&&(sufficientCoverage||primaryOverlap.length>0)?'RELATED':'CAREER_PATH';
    // Keep the two stable explanation tasks; the complete overlap already contributes
    // to selection and scoring, while retaining every repeated label per edge made
    // the production graph exceed the bounded API worker heap.
-   const orderedShared=shared.sort();
-   relations.push({fromRoleId:r.id,toRoleId,score,basis:{method:'Talentio derived occupational competency overlap; not ESCO equivalence',kind,sourceVersion:source.sourceVersion,sharedEssentialSkills:orderedShared.slice(0,2).map(uri=>({uri,label:skillInfo.get(uri)?.label||uri})),sharedEssentialSkillCount:orderedShared.length,targetEssentialCoverage:score,similarity,evidenceMode:'DIRECTIONAL_TASK_COVERAGE'}});
+   const orderedShared=shared.sort((a,b)=>Number(primaryOverlap.includes(b))-Number(primaryOverlap.includes(a))||weight(b)-weight(a)||a.localeCompare(b));
+   relations.push({fromRoleId:r.id,toRoleId,score,basis:{method:'Talentio direct essential work-task overlap; not ESCO equivalence',kind,sourceVersion:source.sourceVersion,sharedEssentialSkills:orderedShared.slice(0,2).map(uri=>({uri,label:skillInfo.get(uri)?.label||uri})),sharedEssentialSkillCount:orderedShared.length,targetEssentialCoverage:score,similarity,evidenceMode:'SYMMETRIC_ESSENTIAL_TASK_OVERLAP',reciprocalTaskCount:shared.length}});
   }
  }
- // Preserve the original directed decision. Add the reverse RELATED result only
- // when that directed edge already passed its work-scope and coverage checks,
- // and the pair independently shares strong, specific essential-task evidence.
- const byPair=new Map(relations.map(row=>[row.fromRoleId+'|'+row.toRoleId,row]));
- for(const relation of relations){
-   if(relation.basis.kind!=='RELATED')continue;
-   const reverse=byPair.get(relation.toRoleId+'|'+relation.fromRoleId);
-   if(!reverse||reverse.basis.kind==='RELATED')continue;
-   const fromEssential=anchors.get(relation.fromRoleId)??new Set<string>();
-   const toEssential=anchors.get(relation.toRoleId)??new Set<string>();
-   const sharedEssential=[...fromEssential].filter(uri=>toEssential.has(uri));
-   if(sharedEssential.length<MIN_RECIPROCAL_ESSENTIAL_TASKS||relation.basis.similarity<MIN_RECIPROCAL_SIMILARITY)continue;
-   if(!overlapsWorkScope(relation.fromRoleId,relation.toRoleId)||!overlapsWorkScope(relation.toRoleId,relation.fromRoleId))continue;
-   for(const edge of [relation,reverse]){
-     edge.basis.kind='RELATED';
-     edge.basis.evidenceMode='SYMMETRIC_ESSENTIAL_TASK_OVERLAP';
-     edge.basis.reciprocalTaskCount=sharedEssential.length;
-     edge.basis.reciprocalSimilarityThreshold=MIN_RECIPROCAL_SIMILARITY;
-   }
- }
+ // Each direction was evaluated directly. Optional skills never enter a
+ // denominator and no pre-existing edge is required to recover its reverse.
  relations.sort((a,b)=>a.fromRoleId.localeCompare(b.fromRoleId)||a.toRoleId.localeCompare(b.toRoleId));
  const catalogRevision=professionCatalogRevision(roles),sourceDigest=professionDigest(source),id=professionDigest([PROFESSION_RELATION_ALGORITHM,catalogRevision,sourceDigest]);
  const related=relations.filter(r=>r.basis.kind==='RELATED');

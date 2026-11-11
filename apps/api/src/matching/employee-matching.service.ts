@@ -8,7 +8,7 @@ type IntentContext=Awaited<ReturnType<EmployeeIntentService['context']>>;
 export class EmployeeMatchingService {
   constructor(private prisma:PrismaService,private intent:EmployeeIntentService=new EmployeeIntentService(prisma)) {}
   async warmCatalog(){await this.intent.catalog();}
-  intentSearchScope(profileId:string){return this.intent.context(profileId);}
+  intentSearchScope(profileId:string){return this.intent.context(profileId,true,true);}
   intentExplanation(profileId:string,jobId:string){return this.intent.explain(profileId,jobId);}
   compare(a:unknown,b:unknown){return a&&b?compareIntent(a as IntentEvaluation,b as IntentEvaluation):Number(!!b)-Number(!!a);}
   scoreJobsForProfile(profileId:string,ids:string[],provided?:IntentContext|null){return this.intent.scoreJobsForProfile(profileId,ids,provided||undefined);}

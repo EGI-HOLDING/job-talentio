@@ -25,7 +25,8 @@ function specialty(
   };
 }
 
-const cardiacCare = ['cardiac-care', 'Assess cardiovascular conditions and plan specialist cardiac care'] as const;
+const cardiacAssessment = ['cardiac-assessment', 'Assess cardiovascular conditions'] as const;
+const cardiacCare = ['cardiac-care', 'Plan specialist cardiac care'] as const;
 const cardiacSurgery = ['cardiac-surgery', 'Plan and perform heart surgery and direct postoperative care'] as const;
 const tissueDiagnosis = ['tissue-diagnosis', 'Examine tissue samples to establish a pathological diagnosis'] as const;
 const vascularSurgery = ['vascular-surgery', 'Plan surgical treatment of blood vessel conditions'] as const;
@@ -167,8 +168,8 @@ export const indonesiaProfessionDefinitions: readonly LocalProfessionDefinition[
   // and a shared medical classification do not establish transferable practice.
   specialty('specialised doctor', 'Dermatologist and Venereologist', [['dermatology', 'Diagnose and treat skin and venereal conditions']]),
   specialty('specialist dentist', 'Periodontist', [['periodontal-care', 'Diagnose and treat conditions of the gums and supporting tooth structures']]),
-  specialty('specialised doctor', 'Cardiologist', [cardiacCare]),
-  specialty('specialised doctor', 'Interventional Cardiologist', [cardiacCare, ['cardiac-intervention', 'Perform catheter-based cardiovascular procedures']]),
+  specialty('specialised doctor', 'Cardiologist', [cardiacAssessment,cardiacCare]),
+  specialty('specialised doctor', 'Interventional Cardiologist', [cardiacAssessment,cardiacCare, ['cardiac-intervention', 'Perform catheter-based cardiovascular procedures']]),
   specialty('specialised doctor', 'Nephrologist', [['nephrology', 'Diagnose renal conditions and direct specialist kidney care']]),
   specialty('specialised doctor', 'Pediatric Surgeon', [['pediatric-surgery', 'Plan and perform surgery for children and manage their perioperative care']]),
   specialty('specialised doctor', 'Geriatrician', [['geriatrics', 'Assess complex health conditions in older adults and coordinate their care']]),
@@ -238,11 +239,14 @@ export const professionWorkScopes: readonly ProfessionWorkScope[] = [
   scope('kitchen-output', 'outlet-operations', 'Restaurant Manager|Catering Manager'),
   scope('kitchen-output', 'industrial-food', 'Industrial Cook|Food Production Operator|Food Production Manager'),
   scope('guest-service', 'tour-guiding', 'Tourist Guide'),
-  scope('guest-service', 'tour-operations', 'Tour Organiser|Tour Operator Manager'),
+  scope('guest-service', 'tour-operations', 'Tour Organiser|Tour Operator Manager|Tourism Product Manager'),
   scope('guest-service', 'bookings', 'Travel Agent|Travel Consultant'),
   scope('guest-service', 'guest-reception', 'Hospitality Establishment Receptionist|Restaurant Host/restaurant Hostess'),
   scope('guest-service', 'visitor-information', 'Tourist Information Officer'),
   scope('guest-service', 'table-service', 'Waiter/waitress|Food Service Worker'),
+  scope('guest-service', 'beverage-preparation', 'Barista'),
+  scope('clinical-output', 'nursing-care', 'Nurse Responsible for General Care|Specialist Nurse'),
+  scope('clinical-output', 'pharmaceutical-care', 'Pharmacist|Industrial Pharmacist|Hospital Pharmacist'),
   scope('inventory-output', 'stock-control', 'Inventory Coordinator|Warehouse Manager|Warehouse Worker'),
   scope('inventory-output', 'sourcing', 'Purchaser|Purchase Planner|Procurement Support Officer|Procurement Category Specialist'),
   scope('inventory-output', 'manufacturing-plans', 'Food Production Planner'),

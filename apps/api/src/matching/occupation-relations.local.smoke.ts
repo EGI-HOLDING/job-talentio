@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { gunzipSync } from 'node:zlib';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
-import { buildProfessionGraph, type ProfessionSource } from './occupation-relations';
+import { buildProfessionGraph } from './occupation-relations';
+import { loadProfessionSource } from './occupation-relations.service';
 import { indonesiaProfessionDefinitions, professionWorkScopes } from './indonesia-profession-definitions';
 import type { IntentRole } from './employee-occupation';
 
 const directory = path.resolve(__dirname, '../../prisma/data');
-const source = JSON.parse(gunzipSync(fs.readFileSync(path.join(directory, 'occupation-profiles/esco-v1.2.1.json.gz'))).toString()) as ProfessionSource;
+const source = loadProfessionSource();
 const audit = JSON.parse(fs.readFileSync(path.join(directory, 'job-titles/audit-2026-10-24.json'), 'utf8').replace(/^\uFEFF/, ''));
 const officialFamilies = new Map<string, string>(audit.rows.filter((row: any) => row.source?.uri?.startsWith('http://data.europa.eu/esco/occupation/') && row.source?.isco08).map((row: any) => [row.source.uri, row.source.isco08.slice(0, 3)]));
 const roles = new Map<string, IntentRole>();
@@ -33,6 +33,7 @@ for (const name of ['Koki Dapur Dingin','Koki Dapur Panas','Koki Salad dan Hidan
 
 const graph = buildProfessionGraph([...roles.values()], { ...source, localDefinitions: indonesiaProfessionDefinitions, workScopes: professionWorkScopes });
 const related = new Set(graph.relations.filter(edge => edge.basis.kind === 'RELATED').map(edge => edge.fromRoleId + '|' + edge.toRoleId));
+const decisions = new Map(graph.relations.map(edge => [edge.fromRoleId+'|'+edge.toRoleId,edge.basis]));
 const cases: ReadonlyArray<readonly [string, readonly string[], readonly string[]]> = [
   ['Chef', [
     'Koki Persiapan Dapur Panas', 'Koki Dapur Panas', 'Sous Chef Dapur Panas',
@@ -74,7 +75,10 @@ for (const [from, include, exclude] of cases) {
     for (const to of targets) {
       const fromId = catalogTitleIdentityKey(from), toId = catalogTitleIdentityKey(to);
       assert.ok(roles.has(fromId) && roles.has(toId), 'Benchmark role unavailable: '+from+' / '+to);
-      if (related.has(fromId + '|' + toId) !== expected) failures.push((expected ? 'Missing ' : 'Leaked ') + from + ' → ' + to);
+      if (related.has(fromId + '|' + toId) !== expected) {
+        const basis=decisions.get(fromId+'|'+toId);
+        failures.push((expected ? 'Missing ' : 'Leaked ') + from + ' → ' + to + (basis ? ' ['+basis.sharedEssentialSkills.map(t=>t.label).join(', ')+']' : ' [no shared core tasks]'));
+      }
       else if (expected) positive++;
       else negative++;
     }

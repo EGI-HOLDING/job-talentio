@@ -1,7 +1,10 @@
 import type { EmployeeEligibility } from '@job-talentio/shared';
 import { createHash } from 'node:crypto';
+import {buildTaskDictionary,type TaskSkill,TASK_CONCEPT_VERSION} from './task-concepts';
 
-export const VACANCY_TASK_VERSION = 'vacancy-tasks-v4';
+export const VACANCY_TASK_VERSION = 'vacancy-tasks-v5@'+TASK_CONCEPT_VERSION;
+export const LEGACY_VACANCY_TASK_VERSION = 'vacancy-tasks-v4';
+export const vacancyTaskEvidenceVersion = (digest?:string) => VACANCY_TASK_VERSION+(digest?'@'+digest.slice(0,16):'');
 export const vacancyTaskText=(posting:{description:string;responsibilities?:readonly string[]})=>posting.responsibilities?.length?[posting.description,'Responsibilities',...posting.responsibilities].join('\n'):posting.description;
 
 // Concepts describe work products and responsibility. A domain name or a
@@ -69,31 +72,11 @@ const concepts = [
 ] as const;
 
 export type TaskEvidence = { key: string; excerpt: string };
+export type TaskEvidenceState = 'RECOGNIZED'|'PARTIAL'|'UNRECOGNIZED'|'STALE'|'FAILED';
 const lookup = new Map(concepts.map(([key, dimension, output]) => [key as string, {dimension,output}]));
 const normalized = (s:string) => s.normalize('NFKC').replace(/&nbsp;|&#160;/gi,' ').trim();
-const words = (s:string) => normalized(s).toLowerCase().match(/[\p{L}\p{N}]+/gu)??[];
 
-export function escoTaskDictionary(skills:ReadonlyArray<{uri:string;label:string;type:string;reuse:string}>) {
-  const byStart=new Map<string,Array<{key:string;tokens:string[]}>>();
-  const keys=new Set<string>();
-  for(const skill of skills){
-    if(skill.type!=='skill'||skill.reuse!=='occupation-specific')continue;
-    const tokens=words(skill.label);
-    if(tokens.length<2)continue;
-    const entries=byStart.get(tokens[0]!)??[];
-    entries.push({key:skill.uri,tokens});
-    byStart.set(tokens[0]!,entries);
-    keys.add(skill.uri);
-  }
-  return {keys, match(text:string) {
-    const tokens=words(text);
-    const matches=new Set<string>();
-    for(let i=0;i<tokens.length;i++)
-      for(const entry of byStart.get(tokens[i]!)??[])
-        if(entry.tokens.every((token,j)=>tokens[i+j]===token))matches.add(entry.key);
-    return matches;
-  }};
-}
+export function escoTaskDictionary(skills:ReadonlyArray<TaskSkill>) { return buildTaskDictionary(skills); }
 export type EscoTaskDictionary=ReturnType<typeof escoTaskDictionary>;
 
 type VacancySection='UNKNOWN'|'DUTIES'|'EXCLUDED';
@@ -119,11 +102,12 @@ function beforeExcludedInlineHeading(line:string){
   return boundary?line.slice(0,boundary.index).replace(/[.!?;\s]+$/u,'').trim():line;
 }
 
-export function taskEvidence(description: string,dictionary?:EscoTaskDictionary): TaskEvidence[] {
+export function projectTaskEvidence(description:string,dictionary?:EscoTaskDictionary) {
   const lines = description.slice(0, 40_000).replace(/<li\b[^>]*>/gi,'\n- ')
     .replace(/<\/(?:p|li|h[1-6]|div|tr)>|<br\s*\/?\s*>/gi,'\n')
     .replace(/([•▪◦])/gu,'\n$1 ').replace(/<[^>]*>/g,' ').split(/[\n]+/).map(normalized).filter(Boolean);
   const found = new Map<string,TaskEvidence>();
+  let recognizedClauses=0,unrecognizedClauses=0;
   let section:VacancySection='UNKNOWN';
   for (const line of lines) {
     const text=line.replace(/^\s*(?:[-*]|\d+[.)])\s+/u,'').trim();
@@ -137,14 +121,19 @@ export function taskEvidence(description: string,dictionary?:EscoTaskDictionary)
     const actionLed=ACTION_START.test(scanText);
     if(section!=='DUTIES'&&!(section==='UNKNOWN'&&actionLed))continue;
     for (const sentence of scanText.split(/(?<=[.!?;])\s+/)) {
-      if (/\b(?:tidak bertugas|tidak perlu|tidak akan|bukan bertanggung jawab|does not|will not|not responsible|nice to have)\b/i.test(sentence)) continue;
-      for (const [key,,,pattern] of concepts)
-        if (!found.has(key) && pattern.test(sentence)) found.set(key,{key,excerpt:sentence.slice(0,240)});
-      for(const key of dictionary?.match(sentence)??[])
-        if(!found.has(key))found.set(key,{key,excerpt:sentence.slice(0,240)});
+      if (!sentence||/\b(?:tidak bertugas|tidak perlu|tidak akan|bukan bertanggung jawab|does not|will not|not responsible|nice to have|must have|prior experience|experience (?:in|with)|ability to|berpengalaman|kemampuan untuk)\b/i.test(sentence)) continue;
+      const keys=new Set(dictionary?.match(sentence)??[]);
+      for (const [key,,,pattern] of concepts) if(pattern.test(sentence))keys.add(key);
+      if(keys.size)recognizedClauses++;else unrecognizedClauses++;
+      for(const key of keys)if(!found.has(key))found.set(key,{key,excerpt:sentence.slice(0,240)});
     }
   }
-  return [...found.values()];
+  const state:TaskEvidenceState=!recognizedClauses?'UNRECOGNIZED':unrecognizedClauses?'PARTIAL':'RECOGNIZED';
+  return {evidence:[...found.values()],state,recognizedClauses,unrecognizedClauses};
+}
+
+export function taskEvidence(description: string,dictionary?:EscoTaskDictionary): TaskEvidence[] {
+  return projectTaskEvidence(description,dictionary).evidence;
 }
 
 export function professionTaskKeys(labels: readonly string[]): string[] {
@@ -160,17 +149,20 @@ export function primaryTaskScope(keys: readonly string[]) {
   return scope;
 }
 
-export function taskCompatibility(source: readonly string[], vacancy: readonly string[], primary:ReadonlySet<string>=new Set()) {
+type OfficialTaskPolicy = { specific:ReadonlySet<string>; primary:ReadonlySet<string>; independent:(ids:Iterable<string>)=>string[] };
+const isOfficialTask=(key:string)=>key.startsWith('http://data.europa.eu/esco/skill/')||key.startsWith('urn:talentio:occupation-task:');
+
+export function taskCompatibility(source: readonly string[], vacancy: readonly string[], primary:ReadonlySet<string>=new Set(), state:TaskEvidenceState='RECOGNIZED',policy?:OfficialTaskPolicy) {
   const vacancySet = new Set(vacancy);
   const shared = [...new Set(source)].filter(key=>vacancySet.has(key));
   const expected = source.map(key=>lookup.get(key)).filter(x=>x!==undefined);
   const observed = vacancy.map(key=>lookup.get(key)).filter(x=>x!==undefined);
   const byDimension = new Set(expected.map(x=>x.dimension));
   const explicitConflict=primary.size>0 && observed.length>=2 && !observed.some(value=>primary.has(value.dimension+':'+value.output));
-  const conflict = explicitConflict || [...byDimension].some(dimension=>{
+  const conflict = state==='RECOGNIZED'&&(explicitConflict || [...byDimension].some(dimension=>{
     const actual = observed.filter(x=>x.dimension===dimension);
     return actual.length>=2 && !actual.some(x=>expected.some(y=>y.dimension===dimension&&y.output===x.output));
-  });
+  }));
   const outputs=new Map<string,number>();
   for(const key of shared){
     const task=lookup.get(key);
@@ -179,9 +171,18 @@ export function taskCompatibility(source: readonly string[], vacancy: readonly s
     outputs.set(id,(outputs.get(id)??0)+1);
   }
   const anchored=[...outputs.values()].some(n=>n>=2);
-  const official=shared.filter(key=>key.startsWith('http://data.europa.eu/esco/skill/')).length>=2;
+  const officialOverlap=shared.filter(isOfficialTask);
+  const independent=policy?policy.independent(officialOverlap):officialOverlap;
+  const coreCount=policy?.independent(source.filter(isOfficialTask)).length??0;
+  // Shared methods alone do not establish a shared work product. Require a
+  // specific output grounded in the profession overview and enough of its core
+  // work, without using optional skills or counting a concept's parent twice.
+  const official=independent.length>=2&&(!policy||(
+    independent.some(key=>policy.specific.has(key)&&policy.primary.has(key))
+    &&independent.length/Math.max(coreCount,1)>=.15
+  ));
   return {shared,conflict,strong:(anchored||official)&&!conflict};
 }
 
-export type VacancyEligibility = EmployeeEligibility & { sharedTasks?: string[] };
+export type VacancyEligibility = EmployeeEligibility & { sharedTasks?: string[]; selectionEvidence?:'PROFESSION_GRAPH'|'VACANCY_TASKS'; taskConceptIds?:string[] };
 export const taskDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');

@@ -53,6 +53,7 @@ export function currentRoleIdentity(role: {id:string;familyId:string|null;canoni
 export class EmployeeOccupationIndex {
     readonly roles: Map<string, IntentRole>;
     private labels = new Map<string, Set<string>>();
+    private relatedBySource = new Map<string,{metadata:unknown;targets:Map<string,ReturnType<typeof reviewedRelatedRoles>[number]>}>();
     constructor(roles: IntentRole[], readonly allowRelated = false) {
         this.roles = new Map(roles.map(role => [role.id, role]));
         for (const role of roles) {
@@ -66,6 +67,15 @@ export class EmployeeOccupationIndex {
                 this.labels.set(key, ids);
             }
         }
+    }
+    private relatedTo(source:IntentRole,targetId:string) {
+        let cached=this.relatedBySource.get(source.id);
+        if(!cached||cached.metadata!==source.matchingMetadata){
+            const targets=new Map<string,ReturnType<typeof reviewedRelatedRoles>[number]>();
+            for(const relation of reviewedRelatedRoles(source))if(!targets.has(relation.id))targets.set(relation.id,relation);
+            cached={metadata:source.matchingMetadata,targets};this.relatedBySource.set(source.id,cached);
+        }
+        return targetId!==source.id?cached.targets.get(targetId):undefined;
     }
     identity(id: string): {
         canonicalRoleId: string;
@@ -112,7 +122,7 @@ export class EmployeeOccupationIndex {
         const relatedMatches:EmployeeEligibility[]=[];
         if(this.allowRelated)for(const choice of choices){
           const source=this.roles.get(choice.canonicalRoleId)!;
-          const relation=reviewedRelatedRoles(source).find(r=>r.id===job.canonicalRoleId && r.id!==source.id && this.identity(r.id)?.canonicalRoleId===r.id);
+          const relation=this.relatedTo(source,job.canonicalRoleId);
           if(relation)relatedMatches.push({eligible:true,reason:'MATCH',...job,matchType:'RELATED',selectedRoleId:source.id,selectedRoleName:source.name,relationReference:relation.reference,relationScore:relation.score});
         }
         if(relatedMatches.length)return relatedMatches.sort((a,b)=>(b.relationScore||0)-(a.relationScore||0)||a.selectedRoleId!.localeCompare(b.selectedRoleId!))[0];

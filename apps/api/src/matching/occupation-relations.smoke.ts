@@ -5,12 +5,12 @@ let passed=0;const check=(v:unknown,m:string)=>{assert.ok(v,m);passed++;};
 const roles:IntentRole[]=[],source:ProfessionSource={source:'Deterministic occupational task fixtures',sourceVersion:'v1.2.1',sourceUrl:'fixture',occupations:[],skills:[{uri:'communication',label:'Communication',reuse:'transversal',type:'skill'},{uri:'knowledge',label:'General subject knowledge',reuse:'sector-specific',type:'knowledge'}]};
 const families=['343','241','251','214','222','234','833','514','216','741'];
 for(let n=0;n<families.length;n++){
- const task='task:'+n;source.skills.push({uri:task,label:'Specific work task '+n,reuse:'occupation-specific',type:'skill'});
- for(const suffix of ['a','b']){const id=n+suffix,uri='http://data.europa.eu/esco/occupation/'+id;roles.push({id,name:'Profession '+id,familyId:suffix==='a'?families[n]:'related:'+families[n],family:{id:suffix==='a'?families[n]:'related:'+families[n],name:'Family',archivedAt:null},canonicalRoleId:null,matchingApproved:true,matchingMetadata:{sources:[{uri}]},aliases:[]});source.occupations.push({uri,label:'Profession '+id,aliases:[],description:'Profession work description '+id,scopeNote:'',essential:[{uri:task,label:task},{uri:'communication',label:'Communication'},{uri:'knowledge',label:'General knowledge'}],optional:[]});}
+ const tasks=[{uri:'task:'+n,label:'Design product '+n,reuse:'cross-sector',type:'skill'},{uri:'inspect:'+n,label:'Inspect product '+n,reuse:'occupation-specific',type:'skill'}];source.skills.push(...tasks);
+ for(const suffix of ['a','b']){const id=n+suffix,uri='http://data.europa.eu/esco/occupation/'+id;roles.push({id,name:'Profession '+id,familyId:suffix==='a'?families[n]:'related:'+families[n],family:{id:suffix==='a'?families[n]:'related:'+families[n],name:'Family',archivedAt:null},canonicalRoleId:null,matchingApproved:true,matchingMetadata:{sources:[{uri}]},aliases:[]});source.occupations.push({uri,label:'Profession '+id,aliases:[],description:'Profession work description '+id,scopeNote:'',essential:[...tasks,{uri:'communication',label:'Communication'},{uri:'knowledge',label:'General knowledge'}],optional:[]});}
 }
 const graph=buildProfessionGraph(roles,source),pairs=new Set(graph.relations.map(r=>r.fromRoleId+':'+r.toRoleId));
 for(let n=0;n<families.length;n++){check(pairs.has(n+'a:'+n+'b'),'shared essential work tasks link professions in family '+families[n]);check(!pairs.has(n+'a:'+((n+1)%10)+'b'),'communication and knowledge alone never link unrelated professions');}
-const baseEvidence=graph.relations.find(r=>r.fromRoleId==='0a'&&r.toRoleId==='0b')!.basis;check(baseEvidence.sharedEssentialSkillCount===1&&baseEvidence.sharedEssentialSkills.length===1,'persisted evidence count matches the complete overlap');
+const baseEvidence=graph.relations.find(r=>r.fromRoleId==='0a'&&r.toRoleId==='0b')!.basis;check(baseEvidence.sharedEssentialSkillCount===2&&baseEvidence.sharedEssentialSkills.length===2,'persisted evidence count includes the cross-sector core task');
 check(graph.report.positionsProcessed===20&&graph.report.crossFamily===20,'all ten families are processed and cross-family links are supported');
 check(graph.id===buildProfessionGraph([...roles].reverse(),source).id,'catalog ordering does not affect graph release identity');
 const projected=roles.map(r=>({...r,matchingMetadata:{relatedRoles:graph.relations.filter(e=>e.fromRoleId===r.id).map(e=>({id:e.toRoleId,kind:'RELATED',approved:true,reference:'fixture:task-evidence'}))}}));
@@ -20,21 +20,22 @@ check(index.eligibility(['0a','1a','2a','3a','4a'],'4b').eligible&&!index.eligib
 const asymmetric=structuredClone(source);asymmetric.skills.push({uri:'extra',label:'Additional target task',reuse:'occupation-specific',type:'skill'});asymmetric.occupations.find(p=>p.label==='Profession 0b')!.essential.push({uri:'extra',label:'Extra task'});const directed=buildProfessionGraph(roles,asymmetric);check(directed.relations.find(r=>r.fromRoleId==='0a'&&r.toRoleId==='0b')!.score<directed.relations.find(r=>r.fromRoleId==='0b'&&r.toRoleId==='0a')!.score,'directional target competency coverage is evaluated independently');
 const asymmetricProfile=(includeSecondSharedEssential:boolean)=>{
  const data=structuredClone(source),roleA=data.occupations.find(p=>p.label==='Profession 0a')!,roleB=data.occupations.find(p=>p.label==='Profession 0b')!;
- if(includeSecondSharedEssential){const shared={uri:'task:shared-essential-0',label:'Specific shared essential task'};data.skills.push({...shared,reuse:'occupation-specific',type:'skill'});roleA.essential.push(shared);roleB.essential.push(shared);}
+ if(!includeSecondSharedEssential){const task=roleB.essential.find(x=>x.uri==='inspect:0')!;roleB.essential=roleB.essential.filter(x=>x!==task);roleB.optional.push(task);}
  for(let n=0;n<20;n++){
    const skill={uri:'task:common-transversal-'+n,label:'Common transversal capability '+n,reuse:'transversal',type:'skill'};data.skills.push(skill);
-   for(const profile of data.occupations){if(profile.uri===source.occupations.find(p=>p.label==='Profession 0a')!.uri)continue;(profile.uri===roleB.uri?profile.essential:profile.optional).push({uri:skill.uri,label:skill.label});}
+   roleB.optional.push({uri:skill.uri,label:skill.label});
  }
  return data;
 };
 const oneShared=buildProfessionGraph(roles,asymmetricProfile(false)),oneSharedKinds=new Map(oneShared.relations.map(r=>[r.fromRoleId+':'+r.toRoleId,r.basis.kind]));
-check(oneSharedKinds.get('0b:0a')==='RELATED'&&oneSharedKinds.get('0a:0b')==='CAREER_PATH','a strong directional path with only one shared essential task is not promoted to a reciprocal relation');
+check(oneSharedKinds.get('0b:0a')!=='RELATED'&&oneSharedKinds.get('0a:0b')!=='RELATED','one core task and one optional task do not form a related profession');
 const oneSharedIndex=new EmployeeOccupationIndex(roles.map(role=>({...role,matchingMetadata:{relatedRoles:oneShared.relations.filter(edge=>edge.fromRoleId===role.id&&edge.basis.kind==='RELATED').map(edge=>({id:edge.toRoleId,kind:'RELATED',approved:true,reference:'fixture:directed-task-evidence',score:edge.score}))}})),true);
 check(!oneSharedIndex.eligibility(['0a'],'0b').eligible,'a weak reverse path does not leak into candidate recommendations');
 const twoShared=buildProfessionGraph(roles,asymmetricProfile(true)),twoSharedEdges=new Map(twoShared.relations.map(r=>[r.fromRoleId+':'+r.toRoleId,r]));
-check(twoSharedEdges.get('0b:0a')?.basis.kind==='RELATED'&&twoSharedEdges.get('0a:0b')?.basis.kind==='RELATED','asymmetric coverage is reciprocal when two specific essential tasks and strong symmetric similarity support it');
+check(twoSharedEdges.get('0b:0a')?.basis.kind==='RELATED'&&twoSharedEdges.get('0a:0b')?.basis.kind==='RELATED','unrelated optional skills do not suppress either direction');
+check(twoSharedEdges.get('0a:0b')?.score===graph.relations.find(r=>r.fromRoleId==='0a'&&r.toRoleId==='0b')?.score,'optional skills do not dilute the core task score');
 check(twoSharedEdges.get('0a:0b')?.basis.evidenceMode==='SYMMETRIC_ESSENTIAL_TASK_OVERLAP'&&twoSharedEdges.get('0a:0b')?.basis.reciprocalTaskCount===2,'reciprocal relation basis records the evidence and threshold provenance');
-const threeShared=structuredClone(source),threeA=threeShared.occupations.find(p=>p.label==='Profession 0a')!,threeB=threeShared.occupations.find(p=>p.label==='Profession 0b')!;for(let n=0;n<2;n++){const task={uri:'task:additional-shared-'+n,label:'Additional shared essential task '+n};threeShared.skills.push({...task,reuse:'occupation-specific',type:'skill'});threeA.essential.push(task);threeB.essential.push(task);}const compacted=buildProfessionGraph(roles,threeShared).relations.find(r=>r.fromRoleId==='0a'&&r.toRoleId==='0b')!.basis;check(compacted.sharedEssentialSkillCount===3&&compacted.sharedEssentialSkills.length===2,'the complete task overlap is counted while only two explanation tasks are persisted');
+const threeShared=structuredClone(source),threeA=threeShared.occupations.find(p=>p.label==='Profession 0a')!,threeB=threeShared.occupations.find(p=>p.label==='Profession 0b')!;const task={uri:'task:additional-shared',label:'Maintain product 0'};threeShared.skills.push({...task,reuse:'occupation-specific',type:'skill'});threeA.essential.push(task);threeB.essential.push(task);const compacted=buildProfessionGraph(roles,threeShared).relations.find(r=>r.fromRoleId==='0a'&&r.toRoleId==='0b')!.basis;check(compacted.sharedEssentialSkillCount===3&&compacted.sharedEssentialSkills.length===2,'the complete task overlap is counted while only two explanation tasks are persisted');
 const twoSharedIndex=new EmployeeOccupationIndex(roles.map(role=>({...role,matchingMetadata:{relatedRoles:twoShared.relations.filter(edge=>edge.fromRoleId===role.id&&edge.basis.kind==='RELATED').map(edge=>({id:edge.toRoleId,kind:'RELATED',approved:true,reference:'fixture:symmetric-task-evidence',score:edge.score}))}})),true);
 check(twoSharedIndex.eligibility(['0a'],'0b').matchType==='RELATED','the reciprocal graph edge is eligible in the candidate V3.2 profession selector');
 const missing=structuredClone(roles);missing[0].name='Local profession without a source';missing[0].matchingMetadata={};const incomplete=buildProfessionGraph(missing,source);check(incomplete.report.positionsProcessed===20&&incomplete.report.sourceMissing.some(r=>r.id==='0a'),'missing source is reported without dropping the profession from coverage');
@@ -42,11 +43,11 @@ const canonical={...roles[0],id:'alias',canonicalRoleId:roles[0].id,name:'Offici
 const unavailable=structuredClone(roles);unavailable[0].matchingMetadata={professionSourceUri:'http://data.europa.eu/esco/occupation/unavailable'};check(buildProfessionGraph(unavailable,source).profiles[0].sourceUri===null,'an explicit source binding is never silently replaced by a title guess');
 const newRole:IntentRole={...roles[0],id:'new-local-title',name:'New regional occupation',matchingMetadata:{
   professionSourceUri:source.occupations[0].uri,
-  professionTaskProfile:{scope:'Carry out the defined specific work task.',evidence:'Verified occupational description',skillUris:['task:0']},
+  professionTaskProfile:{scope:'Design and inspect the specific work product.',evidence:'Verified occupational description',skillUris:['task:0','inspect:0']},
 }};
 const added=buildProfessionGraph([...roles,newRole],source);
 const scopedProfile=added.profiles.find(row=>row.jobTitleId===newRole.id);
-check(scopedProfile?.mappingMethod==='ADMIN_TASK_PROFILE'&&scopedProfile.facts.essential.length===1,'new titles use the same graph with a scoped source profile');
+check(scopedProfile?.mappingMethod==='ADMIN_TASK_PROFILE'&&scopedProfile.facts.essential.length===2,'new titles use the same graph with a scoped source profile');
 check(added.relations.some(row=>row.fromRoleId==='0a'&&row.toRoleId===newRole.id&&row.basis.kind==='RELATED'),'new sourced roles gain relations without pair approvals');
 const invalid={...newRole,matchingMetadata:{...newRole.matchingMetadata as object,professionTaskProfile:{scope:'Incompatible task outside the source reference',evidence:'Fixture',skillUris:['task:9']}}};
 check(buildProfessionGraph([...roles,invalid],source).profiles.find(row=>row.jobTitleId===newRole.id)?.sourceUri===null,'a mismatched skill cannot be borrowed from an unrelated occupation');

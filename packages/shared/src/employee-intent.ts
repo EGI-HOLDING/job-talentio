@@ -6,7 +6,7 @@ export const desiredSelectionsSchema = z.array(z.object({kind:z.enum(['GROUP','R
 export type DesiredSelection = z.infer<typeof desiredSelectionsSchema>[number];
 export const POSITION_GROUP_POLICY_VERSION = 'position-groups-v1';
 export type EmployeeRecommendationType = 'EXACT' | 'GROUP' | 'RELATED' | 'EXPLORATION';
-export type EmployeeEmptyReason = 'UNRECOGNIZED_PREFERENCES' | 'NO_ACTIVE_JOBS' | 'ALL_APPLIED' | 'SERVICE_UNAVAILABLE' | 'PRACTICAL_PREFERENCES';
+export type EmployeeEmptyReason = 'UNRECOGNIZED_PREFERENCES' | 'NO_ACTIVE_JOBS' | 'NO_RELEVANT_JOBS' | 'TASK_COVERAGE_INCOMPLETE' | 'ALL_APPLIED' | 'SERVICE_UNAVAILABLE' | 'PRACTICAL_PREFERENCES';
 export type EmployeeRecommendationFeed = 'recommendations' | 'related' | 'exploration' | 'salary-unverified';
 export type EmployeePracticalFit = {
     version: string; active: boolean;

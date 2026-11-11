@@ -1699,7 +1699,7 @@ export class JobsService {
 
     let emptyReason:import('@job-talentio/shared').EmployeeEmptyReason|undefined;
     if(intentScope&&total===0){
-      emptyReason=intentScope.state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':intentScope.state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_ACTIVE_JOBS';
+      emptyReason=intentScope.state==='UNAVAILABLE'?'SERVICE_UNAVAILABLE':intentScope.state.startsWith('PREFERENCES')?'UNRECOGNIZED_PREFERENCES':'NO_RELEVANT_JOBS';
       if(intentScope.state==='READY'){
         const active=await this.prisma.jobPost.count({where:{AND:and.map(clause=>clause===intentFilter?intentJobScope(intentScope):clause)}});
         if(active)emptyReason='ALL_APPLIED';
@@ -1711,7 +1711,7 @@ export class JobsService {
         const {employeeEvaluation:_evaluation,employeeCore:_core,...publicJob}=job as typeof job & {employeeEvaluation?:unknown;employeeCore?:boolean};
         return maskAnonymousCompany(this.withContentLocale(this.withResolvedIcons(publicJob), locale), locale);
       }),
-      ...(intentScope?{state:intentScope.state==='READY'?(total?'READY':'NO_ELIGIBLE_JOBS'):intentScope.state,evidenceState:intentScope.evidenceState,preferenceWarnings:intentScope.preferenceWarnings,emptyReason,mode:intentScope.preferencesOnly?'PREFERENCES_BASED':'PERSONALIZED'}:{}),
+      ...(intentScope?{selectionRevision:intentScope.selectionRevision,state:intentScope.state==='READY'?(total?'READY':'NO_ELIGIBLE_JOBS'):intentScope.state,evidenceState:intentScope.evidenceState,preferenceWarnings:intentScope.preferenceWarnings,emptyReason,mode:intentScope.preferencesOnly?'PREFERENCES_BASED':'PERSONALIZED'}:{}),
       total,
       matchedTotal,
       truncated,

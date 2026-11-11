@@ -5,7 +5,6 @@ import { VacancyTasksService } from '../matching/vacancy-tasks.service';
 import { EmployeeCatalogSnapshot } from '../matching/employee-catalog-snapshot';
 import { OccupationRelationsService } from '../matching/occupation-relations.service';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
-import { VACANCY_TASK_VERSION } from '../matching/vacancy-tasks';
 
 // Judgments for the Indonesian inventory, based on duties. Missing postings
 // are excluded from the denominator. Unjudged postings are reported separately.
@@ -33,10 +32,14 @@ async function main(db:PrismaService) {
   if(process.argv.includes('--index')){
     for(let batches=0;batches<1000;batches++)if(await tasks.refresh()===0)break;
   }
-  const {index,roles}=await new EmployeeCatalogSnapshot(db,undefined,relations).get(true);
+  const snapshot=await new EmployeeCatalogSnapshot(db,undefined,relations).get(true);
+  const {index,roles}=snapshot;
+  const graphRelease='relationReleaseId' in snapshot?snapshot.relationReleaseId as string|null|undefined:undefined;
+  const activeVersion='taskVersion' in snapshot?snapshot.taskVersion as string|undefined:undefined;
+  const version=dryRun||process.argv.includes('--index')?tasks.evidenceVersion():activeVersion??tasks.evidenceVersion();
   const base={id:true,jobTitleId:true,updatedAt:true,publishedAt:true} as const;
-  const postings=dryRun?await db.jobPost.findMany({where:liveJobWhere(),select:{...base,description:true}}):null;
-  const jobs=postings?postings.map(({description:_description,...job})=>({...job,occupationTaskEvidence:[] as Array<{jobUpdatedAt:Date;coreKeys:string[]}>})):await db.jobPost.findMany({where:liveJobWhere(),select:{...base,occupationTaskEvidence:{where:{version:VACANCY_TASK_VERSION},select:{jobUpdatedAt:true,coreKeys:true}}}});
+  const postings=dryRun?await db.jobPost.findMany({where:liveJobWhere(),select:{...base,description:true,responsibilities:true}}):null;
+  const jobs=postings?postings.map(({description:_description,responsibilities:_responsibilities,...job})=>({...job,occupationTaskEvidence:[] as Array<{jobUpdatedAt:Date;coreKeys:string[]}>})):await db.jobPost.findMany({where:liveJobWhere(),select:{...base,occupationTaskEvidence:{where:{version},select:{jobUpdatedAt:true,coreKeys:true}}}});
   const preview=postings?.map(job=>tasks.project(job));
   const previewById=new Map(preview?.map(row=>[row.id,row.keys]));
   const families=new Map<string,{live:number;indexed:number;withTaskEvidence:number}>();
@@ -56,7 +59,7 @@ async function main(db:PrismaService) {
     const positives=new Set<string>(positive.map(catalogTitleIdentityKey));
     const negatives=new Set<string>(negative.map(catalogTitleIdentityKey));
     const allowed=roles.filter(role=>index.eligibility([id],role.id).eligible).map(role=>role.id);
-    const projected=await tasks.select(index,[id],allowed,undefined,preview);
+    const projected=await tasks.select(index,[id],allowed,graphRelease,preview,version);
     const counts=()=>({tp:0,fp:0,fn:0,tn:0,unjudged:0});
     const baseline=counts(),candidate=counts();
     const misses:string[]=[],leaks:string[]=[];
@@ -94,7 +97,7 @@ async function main(db:PrismaService) {
     results.push({title,family:index.identity(id)?.familyId,baseline:b,candidate:c,top10:{baseline:top(false),candidate:top(true)},misses,leaks,...(title==='Sales Manager'?{chosen}:{} )});
   }
   const aggregate=[...families.values()].reduce((sum,row)=>({indexed:sum.indexed+row.indexed,withTaskEvidence:sum.withTaskEvidence+row.withTaskEvidence}),{indexed:0,withTaskEvidence:0});
-  console.log(JSON.stringify({version:VACANCY_TASK_VERSION,catalogPositions:roles.length,liveJobs:jobs.length,...aggregate,families:Object.fromEntries([...families].sort()),results,regressions}));
+  console.log(JSON.stringify({version,catalogPositions:roles.length,liveJobs:jobs.length,...aggregate,families:Object.fromEntries([...families].sort()),results,regressions}));
   if(regressions.length||aggregate.indexed!==jobs.length)process.exitCode=1;
 }
 const db=new PrismaService();

@@ -1312,6 +1312,11 @@ model JobOccupationTaskEvidence {
   jobUpdatedAt  DateTime
   coreKeys      String[]
   evidence      Json
+  state         String @default("UNRECOGNIZED")
+  recognizedClauses Int @default(0)
+  unrecognizedClauses Int @default(0)
+  sourceDigest  String?
+  processedAt   DateTime @default(now())
   job           JobPost @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@id([jobId, version])
@@ -1663,6 +1668,20 @@ model OccupationRelationRelease {
   createdAt DateTime @default(now())
   profiles OccupationProfessionProfile[]
   relations OccupationProfessionRelation[]
+  employeeSelection EmployeeSelectionRelease?
+}
+
+/// The existing graph pointer selects this manifest and its task evidence together.
+model EmployeeSelectionRelease {
+  id String @id
+  graphReleaseId String @unique
+  graphRelease OccupationRelationRelease @relation(fields: [graphReleaseId], references: [id], onDelete: Cascade)
+  dictionaryVersion String
+  taskEvidenceVersion String
+  policyVersion String
+  sourceDigest String
+  validation Json
+  createdAt DateTime @default(now())
 }
 
 model OccupationRelationState {
