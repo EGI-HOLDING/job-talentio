@@ -1,8 +1,9 @@
 import {EmployeeOccupationIndex,type IntentRole} from './employee-occupation';
 import {professionDigest,professionCatalogRevision,type ProfessionSource} from './occupation-relations';
 import {catalogTitleIdentityKey as key} from '../common/title-resolve';
+import {primaryGroupWork} from './position-group-evidence';
 
-export const POSITION_GROUP_ALGORITHM='position-groups-v1';
+export const POSITION_GROUP_ALGORITHM='position-groups-v2';
 export const groupDigest=(value:unknown):string=>{const stable=(input:unknown):unknown=>Array.isArray(input)?input.map(stable):input&&typeof input==='object'?Object.fromEntries(Object.entries(input).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,stable(v)])):input;return professionDigest(stable(value));};
 export const positionRoleRevision=(role:IntentRole)=>{const {relatedRoles,...metadata}=(role.matchingMetadata??{}) as Record<string,unknown>;return professionDigest([role.id,role.name,role.familyId,role.canonicalRoleId,role.matchingApproved,role.archivedAt,metadata,[...role.aliases].sort((a,b)=>a.alias.localeCompare(b.alias))]);};
 export type GroupDefinition={id:string;code:string;nameEn:string;definition:string;scope:string;source:unknown;sourceRoleId:string|null;seeds:string[];candidate:string|null;exclude:string|null;task:string|null};
@@ -17,16 +18,17 @@ export function buildPositionGroups(roles:IntentRole[],source:ProfessionSource,h
   const local=new Map((source.localDefinitions??[]).flatMap(d=>d.titles.map(title=>[key(title),d] as const)));
   const resolve=(role:IntentRole)=>{
     const definition=local.get(key(role.name));
-    if(definition){const profile=preferred.get(key(definition.referenceOccupation));return profile?{profile,description:definition.taskScope,reference:definition.evidence,local:true}:null;}
+    if(definition){const profile=preferred.get(key(definition.referenceOccupation));return profile?{profile,description:definition.taskScope,reference:definition.evidence,local:true,coreTasks:definition.coreTasks??[]}:null;}
     const metadata=role.matchingMetadata as {professionSourceUri?:string;sources?:Array<{uri:string}>}|null;
     const uris=new Set([...(metadata?.sources??[]).map(s=>s.uri),metadata?.professionSourceUri].filter((uri):uri is string=>!!uri&&byUri.has(uri)));
     if(!uris.size)for(const label of [role.name,role.nameId,...role.aliases.filter(a=>a.matchingApproved).map(a=>a.alias)])for(const uri of aliases.get(key(label??''))??[])uris.add(uri);
     if(uris.size!==1)return null;
     const profile=byUri.get([...uris][0])!;
-    return {profile,description:profile.description,reference:profile.uri,local:false};
+    return {profile,description:profile.description,reference:profile.uri,local:false,coreTasks:[]};
   };
   const skillInfo=new Map(source.skills.map(s=>[s.uri,s]));
   const workTasks=(p:SourceProfile)=>p.essential.filter(s=>skillInfo.get(s.uri)?.type==='skill'&&['occupation-specific','sector-specific','cross-sector'].includes(skillInfo.get(s.uri)?.reuse??''));
+  const directRetailScopes=['specialised seller','ticket sales agent'].flatMap(label=>preferred.get(key(label))?.code??[]);
   const roots=roles.filter(r=>index.identity(r.id)?.canonicalRoleId===r.id).sort((a,b)=>a.id.localeCompare(b.id));
   const mapped=new Map(roots.map(role=>[role.id,resolve(role)]));
   const memberships:Array<{groupId:string;jobTitleId:string;basis:Record<string,unknown>}>=[];
@@ -51,34 +53,58 @@ export function buildPositionGroups(roles:IntentRole[],source:ProfessionSource,h
       let basis:Record<string,unknown>|undefined;
       const forbidden=exclude?.test(roleLabel)||exclude?.test(role.name);
       if(!forbidden&&headIdentity?.canonicalRoleId===role.id)basis={method:'EXISTING_HEAD_IDENTITY',source:head.source};
+      let reviewRequired=false;
       if(!basis&&resolved&&!forbidden){
         const p=resolved.profile,tasks=workTasks(p),taskIds=new Set(tasks.map(t=>t.uri));
+        const ownTasks=resolved.local?resolved.coreTasks.map(t=>t.label)
+          :head.id==='group:machine-operator'?tasks.map(t=>t.label):[];
+        // ESCO's retail and ticket-selling specialties can state their direct
+        // selling duty in the essential tasks rather than the short overview.
+        const retailProof=head.id==='group:sales'&&!resolved.local
+          && directRetailScopes.some(code=>p.code===code||p.code?.startsWith(code+'.'))
+          ? tasks.find(t=>/^(?:carry out active selling|sell .+)$/i.test(t.label))?.label:undefined;
+        const primary=retailProof??primaryGroupWork(head.id,resolved.description,ownTasks);
+        const scoped=!task||task.test(resolved.description);
         for(const seed of seeds){
           const same=p.uri===seed.uri;
           const narrower=!!p.code&&!!seed.code&&p.code.startsWith(seed.code+'.');
           const shared=workTasks(seed).filter(s=>taskIds.has(s.uri));
-          const scoped=!task||task.test(resolved.description);
           const specificShared=shared.some(s=>['occupation-specific','sector-specific'].includes(skillInfo.get(s.uri)?.reuse??''));
-          if((same||narrower)&&(same||specificShared)&&scoped&&resolved.description.trim()){
-            basis={method:same?'SOURCED_OCCUPATION_SCOPE':'OCCUPATION_SCOPE_AND_SHARED_TASKS',sourceUri:p.uri,headSourceUri:seed.uri,sourceVersion:source.sourceVersion,description:resolved.description,reference:resolved.reference,sharedTasks:shared};break;
+          const proved=resolved.local
+            ? scoped&&(same&&primary!==null||narrower&&!!primary)
+            : scoped&&(same||narrower&&specificShared&&(!candidate||primary!==null));
+          if(proved&&resolved.description.trim()){
+            basis={method:resolved.local?'LOCAL_PRIMARY_WORK':same?'SOURCED_OCCUPATION_SCOPE':'OCCUPATION_SCOPE_AND_SHARED_TASKS',
+              sourceUri:p.uri,headSourceUri:seed.uri,sourceVersion:source.sourceVersion,description:resolved.description,reference:resolved.reference,
+              ...(primary?{workEvidence:primary}:{}),...(resolved.local?{tasks:resolved.coreTasks}:{sharedTasks:shared})};break;
           }
+          if(same||narrower)reviewRequired=true;
         }
-        // Synthetic generic roles require both a profession label and occupational task evidence.
-        if(!basis&&candidate&&(candidate.test(p.label)||candidate.test(roleLabel))&&task?.test(resolved.description)&&tasks.some(t=>task.test(t.label))){
-          basis={method:'GENERIC_ROLE_WITH_TASK_EVIDENCE',sourceUri:p.uri,sourceVersion:source.sourceVersion,description:resolved.description,tasks:tasks.slice(0,8),reference:resolved.reference};
+        if(!basis&&candidate&&(candidate.test(p.label)||candidate.test(roleLabel))){
+          if(scoped&&primary){
+            basis={method:'VERIFIED_PRIMARY_WORK',sourceUri:p.uri,sourceVersion:source.sourceVersion,description:resolved.description,workEvidence:primary,
+              ...(resolved.local?{tasks:resolved.coreTasks}:{}),reference:resolved.reference};
+          }else reviewRequired=true;
         }
       }
       if(basis)memberships.push({groupId:head.id,jobTitleId:role.id,basis});
-      const entries=decisions.get(role.id)??[];entries.push({groupId:head.id,accepted:!!basis,reason:basis?String(basis.method):forbidden?'INCOMPATIBLE_WORK_SCOPE':resolved?'NO_DIRECT_SCOPE_EVIDENCE':'SOURCE_NOT_AVAILABLE'});decisions.set(role.id,entries);
+      const entries=decisions.get(role.id)??[];entries.push({groupId:head.id,accepted:!!basis,reason:basis?String(basis.method):forbidden?'INCOMPATIBLE_WORK_SCOPE':reviewRequired?'PRIMARY_WORK_REVIEW_REQUIRED':resolved?'NO_DIRECT_SCOPE_EVIDENCE':'SOURCE_NOT_AVAILABLE'});decisions.set(role.id,entries);
     }
   }
   // Corrections are direct edges and have their own audit provenance.
   for(const correction of corrections){
     if(!heads.some(h=>h.id===correction.groupId)||index.identity(correction.jobTitleId)?.canonicalRoleId!==correction.jobTitleId)throw new Error('Invalid group correction target');
+    const decision=decisions.get(correction.jobTitleId)?.find(row=>row.groupId===correction.groupId);
+    const proof=correction.source as {workScope?:unknown;reference?:unknown;roleRevision?:unknown}|null;
+    if(correction.enabled&&!(typeof proof?.workScope==='string'&&proof.workScope.trim().length>=12
+      &&typeof proof.reference==='string'&&proof.reference.trim().length>=5
+      &&proof.roleRevision===positionRoleRevision(index.roles.get(correction.jobTitleId)!))){
+      if(decision&&!decision.accepted)decision.reason='CORRECTION_REVIEW_REQUIRED';
+      continue;
+    }
     const at=memberships.findIndex(m=>m.groupId===correction.groupId&&m.jobTitleId===correction.jobTitleId);
     if(at>=0)memberships.splice(at,1);
     if(correction.enabled)memberships.push({groupId:correction.groupId,jobTitleId:correction.jobTitleId,basis:{method:'CATALOG_CORRECTION',reason:correction.reason,source:correction.source}});
-    const decision=decisions.get(correction.jobTitleId)?.find(row=>row.groupId===correction.groupId);
     if(decision){decision.accepted=correction.enabled;decision.reason='CATALOG_CORRECTION: '+correction.reason;}
   }
   const rolesById=new Map(roles.map(role=>[role.id,role]));

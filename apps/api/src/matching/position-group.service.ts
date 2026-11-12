@@ -9,6 +9,7 @@ import {intentRoleInclude,type IntentRole,EmployeeOccupationIndex} from './emplo
 import {professionCatalogRevision,professionDigest} from './occupation-relations';
 import {buildPositionGroups,groupDigest,positionRoleRevision,type GroupDefinition} from './position-groups';
 import {PositionGroupOccupationIndex,type GroupChoice} from './position-group-index';
+import {compileHierarchy, employeeHierarchyMode, loadHierarchyManifest} from './employee-hierarchy';
 
 export const positionGroupsEnabled=()=>process.env.POSITION_GROUPS_ENABLED==='true';
 type GroupSnapshot={releaseId:string;revision:number;groups:PositionGroup[];choices:GroupChoice[];labels:Map<string,string>;memberships:PositionGroupMembership[]};
@@ -89,6 +90,22 @@ export class PositionGroupService implements OnModuleInit,OnModuleDestroy {
       if(checksum!==release.checksum)throw new ConflictException('Staged group release checksum mismatch');
       const roles=await tx.jobTitle.findMany({include:intentRoleInclude,orderBy:{id:'asc'}});
       if(release.catalogRevision!==professionCatalogRevision(roles))throw new ConflictException('Catalog changed after staging');
+      if(employeeHierarchyMode()==='strict'){
+        const active=await tx.positionGroup.findMany({where:{archivedAt:null},select:{id:true}});
+        const groupIds=new Set(active.map(group=>group.id));
+        const members=new Map<string,string[]>();
+        for(const row of release.memberships){
+          if(!groupIds.has(row.groupId))continue;
+          const ids=members.get(row.groupId)??[];
+          ids.push(row.jobTitleId);
+          members.set(row.groupId,ids);
+        }
+        const choices=(report.headDefinitions??[]).map(head=>({id:head.id,nameEn:head.nameEn,members:members.get(head.id)??[]}));
+        const hierarchy=compileHierarchy(new EmployeeOccupationIndex(roles),choices,loadHierarchyManifest());
+        if(hierarchy.reasons.length)throw new ConflictException({
+          message:'POSITION_GROUP_RELEASE_BREAKS_RELATED_HIERARCHY',reasons:hierarchy.reasons,
+        });
+      }
       const state=await tx.positionGroupState.upsert({where:{id:'indonesia'},create:{id:'indonesia'},update:{}});
       if(state.revision!==expectedRevision)throw new ConflictException('Active group release changed');
       const next=await tx.positionGroupState.update({where:{id:'indonesia',revision:expectedRevision},data:{activeReleaseId:id,revision:{increment:1}}});
@@ -97,13 +114,13 @@ export class PositionGroupService implements OnModuleInit,OnModuleDestroy {
       await tx.auditLog.create({data:{actorId,action:'ACTIVATE_POSITION_GROUPS',entityType:'PositionGroupRelease',entityId:id,metadata:{previousReleaseId:state.activeReleaseId,revision:next.revision}}});
       return next;
     },{timeout:120000,isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
-    await this.cache?.invalidate(false);return result;
+    await this.cache?.invalidateAndWait(false);return result;
   }
   async rollback(id:string,expectedRevision:number,actorId:string){
     // Older releases retain only memberships whose role revision is still current at read time.
     const release=await this.db.positionGroupRelease.findUnique({where:{id}});if(!release)throw new BadRequestException('Unknown group release');
     const result=await this.db.$transaction(async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(7749932)`;const state=await tx.positionGroupState.findUniqueOrThrow({where:{id:'indonesia'}});if(state.revision!==expectedRevision)throw new ConflictException('Active group release changed');const next=await tx.positionGroupState.update({where:{id:'indonesia',revision:expectedRevision},data:{activeReleaseId:id,revision:{increment:1}}});if(state.activeReleaseId&&state.activeReleaseId!==id)await tx.positionGroupRelease.update({where:{id:state.activeReleaseId},data:{status:'RETIRED'}});await tx.positionGroupRelease.update({where:{id},data:{status:'ACTIVE'}});await tx.auditLog.create({data:{actorId,action:'ROLLBACK_POSITION_GROUPS',entityType:'PositionGroupRelease',entityId:id,metadata:{previousReleaseId:state.activeReleaseId}}});return next;});
-    await this.cache?.invalidate(false);return result;
+    await this.cache?.invalidateAndWait(false);return result;
   }
   onModuleInit(){if(!positionGroupsEnabled())return;const work=async()=>{if(this.busy)return;this.busy=true;try{const state=await this.db.positionGroupState.findUnique({where:{id:'indonesia'},include:{activeRelease:true}});if(!state?.activeRelease)return;const roles=await this.db.jobTitle.findMany({include:intentRoleInclude,orderBy:{id:'asc'}});if(state.activeRelease.catalogRevision===professionCatalogRevision(roles))return;const built=await this.build(false);await this.activate(built.id,state.revision,null);}catch(e){new Logger('PositionGroups').warn('Catalog enrichment pending: '+(e as Error).message);}finally{this.busy=false;}};this.timer=setInterval(()=>void work(),60000);this.timer.unref();}
   onModuleDestroy(){if(this.timer)clearInterval(this.timer);}

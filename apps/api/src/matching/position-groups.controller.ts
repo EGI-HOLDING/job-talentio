@@ -8,6 +8,8 @@ import {EmployeeCatalogSnapshot} from './employee-catalog-snapshot';
 import {PositionGroupService} from './position-group.service';
 import { PositionCatalogService } from './position-catalog.service';
 import {catalogTitleIdentityKey} from '../common/title-resolve';
+import {intentRoleInclude} from './employee-occupation';
+import {positionRoleRevision} from './position-groups';
 
 const querySchema=z.object({q:z.string().max(160).default(''),page:z.coerce.number().int().min(1).max(100000).default(1),limit:z.coerce.number().int().min(1).max(100).default(30)});
 @Controller('meta/position-groups')
@@ -38,5 +40,16 @@ export class PositionGroupsAdminController {
   @Patch('labels/:roleId')async label(@Param('roleId')jobTitleId:string,@Body()input:unknown,@CurrentUser()user:AuthUser){const q=parseDto(z.object({nameEn:z.string().trim().min(1).max(160),reason:z.string().trim().min(5).max(1000),source:z.record(z.unknown())}).strict(),input);const role=await this.db.jobTitle.findUnique({where:{id:jobTitleId}});if(!role||role.archivedAt||role.canonicalRoleId)throw new BadRequestException('Select an active canonical role');const correction=await this.db.positionGroupCorrection.create({data:{groupId:'label:en',jobTitleId,enabled:true,reason:q.reason,source:{...q.source,nameEn:q.nameEn} as never,actorId:user.id}});return {correction,state:'PENDING_RELEASE'};}
   @Post(':id/activate')activate(@Param('id')id:string,@Body()input:unknown,@CurrentUser()user:AuthUser){const q=parseDto(z.object({expectedRevision:z.number().int().nonnegative()}).strict(),input);return this.service.activate(id,q.expectedRevision,user.id);}
   @Post(':id/rollback')rollback(@Param('id')id:string,@Body()input:unknown,@CurrentUser()user:AuthUser){const q=parseDto(z.object({expectedRevision:z.number().int().nonnegative()}).strict(),input);return this.service.rollback(id,q.expectedRevision,user.id);}
-  @Patch(':groupId/:roleId')async correct(@Param('groupId')groupId:string,@Param('roleId')jobTitleId:string,@Body()input:unknown,@CurrentUser()user:AuthUser){const q=parseDto(z.object({enabled:z.boolean(),reason:z.string().trim().min(5).max(1000),source:z.record(z.unknown())}).strict(),input);const [group,role]=await Promise.all([this.db.positionGroup.findUnique({where:{id:groupId}}),this.db.jobTitle.findUnique({where:{id:jobTitleId}})]);if(!group||!role||role.archivedAt||role.canonicalRoleId)throw new BadRequestException('Select an active group and canonical role');return this.db.positionGroupCorrection.create({data:{groupId,jobTitleId,enabled:q.enabled,reason:q.reason,source:q.source as never,actorId:user.id}});}
+  @Patch(':groupId/:roleId')
+  async correct(@Param('groupId')groupId:string,@Param('roleId')jobTitleId:string,@Body()input:unknown,@CurrentUser()user:AuthUser){
+    const q=parseDto(z.object({enabled:z.boolean(),reason:z.string().trim().min(5).max(1000),source:z.record(z.unknown())}).strict(),input);
+    const [group,role]=await Promise.all([
+      this.db.positionGroup.findUnique({where:{id:groupId}}),
+      this.db.jobTitle.findUnique({where:{id:jobTitleId},include:intentRoleInclude}),
+    ]);
+    if(!group||group.archivedAt||!role||role.archivedAt||role.canonicalRoleId)throw new BadRequestException('Select an active group and canonical role');
+    const proof=z.object({workScope:z.string().trim().min(12).max(4000),reference:z.string().trim().min(5).max(1000)});
+    const source=q.enabled?{...q.source,...parseDto(proof,q.source),roleRevision:positionRoleRevision(role)}:q.source;
+    return this.db.positionGroupCorrection.create({data:{groupId,jobTitleId,enabled:q.enabled,reason:q.reason,source:source as never,actorId:user.id}});
+  }
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {gunzipSync} from 'node:zlib';
-import {buildPositionGroups,type GroupDefinition} from './position-groups';
+import {buildPositionGroups,positionRoleRevision,type GroupDefinition} from './position-groups';
 import {PositionGroupOccupationIndex} from './position-group-index';
 import {EmployeeOccupationIndex,type IntentRole} from './employee-occupation';
 import {indonesiaProfessionDefinitions,professionWorkScopes} from './indonesia-profession-definitions';
@@ -16,6 +16,11 @@ const source={...JSON.parse(gunzipSync(readFileSync(join(directory,'occupation-p
 const heads=JSON.parse(readFileSync(join(directory,'position-groups/heads-v1.json'),'utf8')).heads as GroupDefinition[];
 const labels=JSON.parse(readFileSync(join(directory,'position-groups/english-labels-v1.json'),'utf8'));
 const roles:IntentRole[]=audit.rows.map((r:any)=>{const code=r.source?.isco08??'9999';return {id:r.targetId,name:r.name,nameId:r.nameId,familyId:'isco:'+code.slice(0,3),family:{id:'isco:'+code.slice(0,3),name:'Source family',archivedAt:null},canonicalRoleId:null,matchingApproved:true,aliases:(r.aliases??[]).map((alias:string)=>({alias,matchingApproved:true})),matchingMetadata:{sources:r.source?.uri?[r.source]:[]}};});
+for(const name of ['Admin Pesanan Produk Pangan','Eksekutif Penjualan Armada','Koordinator Proyek Energi','Insinyur Proyek Tenaga Surya']){
+  if(roles.some(role=>role.name===name))continue;
+  const familyId='local-fixture';
+  roles.push({id:'fixture:'+name,name,familyId,family:{id:familyId,name:'Fixture family',archivedAt:null},canonicalRoleId:null,matchingApproved:true,aliases:[]});
+}
 let checks=0;
 const check=(value:unknown,message:string)=>{assert.ok(value,message);checks++;};
 const graph=buildPositionGroups(roles,source,heads,labels);
@@ -32,8 +37,15 @@ for(const head of heads){check(Boolean(head.definition&&head.scope),'group has o
 for(const title of ['Chef','Head Chef','Pastry Chef'])check(member('group:chef',title),'Chef includes '+title);
 for(const title of ['Cook','Diet Cook','Fish Cook'])check(member('group:cook',title),'Cook includes '+title);
 check(!member('group:chef','Cook')&&!member('group:cook','Chef'),'Chef and Cook remain separate');
-for(const title of ['Sales Manager','Commercial Sales Representative','Sales Engineer','Medical Sales Representative'])check(member('group:sales',title),'Sales includes the selling occupation '+title);
-for(const title of ['After-sales Service Technician','Aftersales Service Manager','Accountant','Pharmacist','Sales Processor','Sales Support Assistant'])check(!member('group:sales',title),'Sales rejects unrelated/support task '+title);
+for(const title of ['Sales Manager','Commercial Sales Representative','Sales Engineer','Medical Sales Representative','Sales Assistant','Computer And Accessories Specialised Seller','Eksekutif Penjualan Armada'])check(member('group:sales',title),'Sales includes the selling occupation '+title);
+for(const title of ['After-sales Service Technician','Aftersales Service Manager','Accountant','Pharmacist','Sales Processor','Sales Support Assistant','Admin Pesanan Produk Pangan','Commercial Art Gallery Manager'])check(!member('group:sales',title),'Sales rejects unrelated/support task '+title);
+check(member('group:engineer','Insinyur Proyek Tenaga Surya')&&!member('group:engineer','Koordinator Proyek Energi'),'Engineering delivery owns the engineered output; schedule coordination does not');
+check(!member('group:engineer','Gambling Quality Assurance Engineer'),'Operating tests on gambling products is not engineering');
+check(member('group:machine-operator','Textile Finishing Machine Operator')&&!member('group:machine-operator','Vending Machine Operator')&&!member('group:machine-operator','Machine Operator Supervisor'),'Actual production machinery operation is required');
+const admin=byName.get('admin pesanan produk pangan')!;
+const reviewed={groupId:'group:sales',jobTitleId:admin.id,enabled:true,reason:'Reviewed occupational scope',source:{workScope:'Documented ownership of customer sales and negotiations.',reference:'fixture:source',roleRevision:positionRoleRevision(admin)}};
+check(buildPositionGroups(roles,source,heads,labels,[reviewed]).memberships.some(m=>m.jobTitleId===admin.id&&m.groupId===reviewed.groupId),'a positive catalog correction records role-specific work proof');
+check(!buildPositionGroups(roles,source,heads,labels,[{...reviewed,source:{...reviewed.source,roleRevision:'stale'}}]).memberships.some(m=>m.jobTitleId===admin.id&&m.groupId===reviewed.groupId),'an old correction cannot widen the scope after the role revision changes');
 check(member('group:doctor','General Practitioner')&&!member('group:doctor','Medical Sales Representative'),'doctor work differs from selling medical products');
 check(!member('group:nurse','Nursing Lecturer'),'nursing teaching is not patient nursing');
 check(!member('group:designer','Database Designer'),'generic design scope does not include database architecture through its title');

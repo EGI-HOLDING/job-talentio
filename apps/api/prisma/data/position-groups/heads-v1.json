@@ -780,7 +780,7 @@
       "id": "group:devops-engineer",
       "code": "devops-engineer",
       "nameEn": "DevOps Engineer",
-      "definition": "Exact English catalog title and assigned family are present in the live catalog; retain as candidate-selectable role head.",
+      "definition": "Automate software delivery and infrastructure operations, and maintain the reliability of deployment environments.",
       "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
       "source": {
         "version": "talentio-position-heads-2026-11-10",
@@ -834,7 +834,7 @@
       "id": "group:driver",
       "code": "driver",
       "nameEn": "Driver",
-      "definition": "Drive road vehicles to transport passengers or deliver goods safely.",
+      "definition": "Drive road or rail vehicles to transport passengers or goods safely.",
       "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
       "source": {
         "version": "talentio-position-heads-2026-11-10",
@@ -1501,7 +1501,7 @@
       "id": "group:logistics-coordinator",
       "code": "logistics-coordinator",
       "nameEn": "Logistics Coordinator",
-      "definition": "Exact English catalog title and assigned family are present in the live catalog; retain as candidate-selectable role head.",
+      "definition": "Coordinate the movement and delivery of goods, manage shipment records and resolve transport exceptions.",
       "scope": "Direct occupational scope and verified specializations; shared industry, family or title tokens alone do not establish membership.",
       "source": {
         "version": "talentio-position-heads-2026-11-10",
@@ -2018,7 +2018,8 @@
         "sales account manager",
         "sales engineer",
         "technical sales representative",
-        "advertising sales agent"
+        "advertising sales agent",
+        "sales assistant"
       ],
       "candidate": "sales|seller|selling|commercial",
       "exclude": "after.?sales|sales process(?:ing|or)|sales support|sales admin",
