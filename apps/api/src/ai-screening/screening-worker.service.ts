@@ -24,9 +24,12 @@ import { ScreeningSessions } from './screening-sessions.service';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { ScreeningClient, AiPending, AiUncertain } from './screening.client';
 import { hash, json, screeningEnabled, WORK_LEASE_MS, PDF_TEMPLATE_VERSION } from './screening.policy';
-import { validatePackage, validateCandidate, type PackagePayload, type CandidatePayload, type EvaluationPayload } from './screening.schemas';
+import { validatePackage, type PackagePayload, type CandidatePayload, type EvaluationPayload } from './screening.schemas';
 import { renderScreeningReport } from './screening-report';
 import { currentTaraPrompt, type PromptRegistry } from './prompts/registry';
+import { composePrompt } from './prompts/compose';
+import { buildCandidatePreparation, CANDIDATE_PREPARATION_MS } from './candidate-preparation';
+import { candidatePreparationInclude, candidatePreparationInput, pendingCandidateDraft, publishCandidatePreparation } from './screening-candidate-recovery';
 import { enqueueEvaluationPdf, enqueueWork } from './screening-packets.service';
 import { conversationTone, isCurrentConversation, requireCurrentConversation } from './conversation.policy';
 import { taraAssessmentTopics, taraTopics, taraInterviewReport, validTaraDecision, type TaraProgress, type TaraDecision } from './tara-interview';
@@ -103,7 +106,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             const now = new Date();
             const due = { OR: [{ status: 'PENDING', availableAt: { lte: now } }, { status: 'RUNNING', leaseUntil: { lte: now } }] };
             // CV imports must not fill the delivery window ahead of live interview follow-ups.
-            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE'];
+            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE', 'CANDIDATE_RESPONSE'];
             const [interactive, imports] = await Promise.all([
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { notIn: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { in: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
@@ -164,7 +167,9 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             else if (work.kind === 'CV_SOURCE')
                 await this.cvSource(work.subjectId);
             else if (work.kind === 'CANDIDATE')
-                await this.candidate(id, work.subjectId);
+                await this.candidate(id, work.subjectId, owner);
+            else if (work.kind === 'CANDIDATE_RESPONSE')
+                await this.reconcileCandidateResponse(work.subjectId);
             else if (work.kind === 'ADVANCE')
                 await this.advance(id, work.subjectId);
             else if (work.kind === 'EVALUATE')
@@ -177,16 +182,17 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         }
         catch (error) {
             if (error instanceof AiPending || error instanceof CvWorkDelay) {
-                await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'PENDING', availableAt: new Date(Date.now() + (error instanceof CvWorkDelay ? error.delayMs : 2000)), leaseUntil: null, leaseOwner: null } });
+                const delay = error instanceof CvWorkDelay ? error.delayMs : work.kind === 'CANDIDATE_RESPONSE' ? 10_000 : 2000;
+                await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'PENDING', availableAt: new Date(Date.now() + delay), leaseUntil: null, leaseOwner: null } });
                 return;
             }
             const message = work.cvPolicy ? 'CV_WORKER_ERROR' : error instanceof Error ? error.message : 'TARA_PROCESSING_FAILED';
             const uncertain = error instanceof AiUncertain;
-            if (!uncertain && !work.cvPolicy)
+            if (!uncertain && !work.cvPolicy && !['CANDIDATE', 'CANDIDATE_RESPONSE'].includes(work.kind))
                 await this.db.aiScreeningCall.updateMany({ where: { workId: id, status: 'COMPLETED' }, data: { status: 'INVALID', error: 'DOMAIN_VALIDATION_FAILED' } });
             const retry = !uncertain && work.attempts < 2 && message !== 'CV_UNREADABLE' && message !== 'NO_CV_CLAIMS' && !message.includes('RETIRED_');
-            await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: retry ? 'PENDING' : 'FAILED', attempts: { increment: 1 }, availableAt: new Date(Date.now() + 10000), leaseUntil: null, leaseOwner: null, error: message.slice(0, 180) } });
-            if (!retry)
+            const changed = await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: retry ? 'PENDING' : 'FAILED', attempts: { increment: 1 }, availableAt: new Date(Date.now() + 10000), leaseUntil: null, leaseOwner: null, error: message.slice(0, 180) } });
+            if (changed.count && !retry)
                 await this.failure(work.kind, work.subjectId, message, work.key);
             this.logger.warn('Tara ' + work.kind + ' ' + (retry ? 'retry scheduled' : 'needs recovery') + ' (' + message.slice(0, 80) + ')');
         }
@@ -202,7 +208,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (kind === 'PREPARE')
             await this.db.aiScreeningPackage.updateMany({ where: { id }, data: { status: 'FAILED', error } });
         if (kind === 'CANDIDATE')
-            await this.db.aiCandidatePlan.updateMany({ where: { id }, data: { status: 'FAILED', error } });
+            await this.db.aiCandidatePlan.updateMany({ where: { id, status: { in: ['PENDING', 'RUNNING'] } }, data: { status: 'FAILED', error } });
         if (kind === 'ADVANCE')
             await this.db.aiScreeningSession.updateMany({ where: { id }, data: { error } });
         if (kind === 'EVALUATE')
@@ -259,12 +265,12 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         await this.db.aiCvSource.update({ where: { versionId }, data: { status: 'READY', text: extracted.text, checksum, error: null } });
         await this.db.resumeVersion.updateMany({ where: { id: versionId, checksum: null }, data: { checksum } });
     }
-    private async candidate(workId: string, id: string) {
-        const plan = await this.db.aiCandidatePlan.findUnique({ where: { id }, include: { package: true, session: { include: { profile: { select: { user: { select: { fullName: true } } } } } }, resumeVersion: { include: { screeningSource: true } } } });
+    private async candidate(workId: string, id: string, owner: string) {
+        const plan = await this.db.aiCandidatePlan.findUnique({ where: { id }, include: candidatePreparationInclude });
         if (!plan || plan.status === 'READY')
             return;
         if (plan.session.status !== 'DRAFT' || plan.session.currentPlanId !== id) {
-            await this.db.aiCandidatePlan.update({ where: { id }, data: { status: 'SUPERSEDED' } });
+            await this.db.aiCandidatePlan.updateMany({ where: { id, status: { in: ['PENDING', 'RUNNING'] } }, data: { status: 'SUPERSEDED' } });
             return;
         }
         if (plan.package.status === 'SUPERSEDED' || !isCurrentConversation(plan.package.conversationPolicy)) {
@@ -275,28 +281,57 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             throw new Error('JOB_CONTEXT_FAILED');
         if (plan.package.status !== 'READY')
             throw new AiPending();
+        if (!pendingCandidateDraft(plan)) return;
         const source = plan.resumeVersion.screeningSource;
-        if (source?.status === 'FAILED')
+        if (source?.status === 'FAILED' || source?.status === 'READY' && !source.text?.trim())
             throw new Error('CV_UNREADABLE');
-        if (!source?.text || source.status !== 'READY')
+        const context = candidatePreparationInput(plan);
+        if (!context)
             throw new AiPending();
-        const name = plan.session.profile.user.fullName.toLocaleLowerCase().trim();
-        const cvLines = source.text.split('\n').map((text, i) => ({ line: i + 1, text })).filter(r => r.text.trim().toLocaleLowerCase() !== name && !/@/.test(r.text) && !/^\s*[+\d ()-]{8,}\s*$/.test(r.text));
-        const policy = requireCurrentConversation(plan.package.conversationPolicy);
-        const frozenJob = plan.package.jobSnapshot as { description?: string; responsibilities?: string[]; jobSkills?: Parameters<typeof validateCandidate>[4] };
-        const payload = validateCandidate(await this.client.run(workId, plan.sessionId, 'candidate', {
-            job: plan.package.payload, cvLines,
-            duties: frozenJob.responsibilities, description: frozenJob.description, requestedSkills: frozenJob.jobSkills,
-        }, currentTaraPrompt(plan.package.promptSnapshot, 'candidate')), plan.package.payload as unknown as PackagePayload, source.text, policy, frozenJob.jobSkills);
-        await this.db.$transaction(async tx => {
-            await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${plan.sessionId} FOR UPDATE`);
-            const current = await tx.aiScreeningSession.findUnique({ where: { id: plan.sessionId } });
-            if (current?.status !== 'DRAFT' || current.currentPlanId !== id) {
-                await tx.aiCandidatePlan.update({ where: { id }, data: { status: 'SUPERSEDED' } });
-                return;
+        const calls = await this.db.aiScreeningCall.findMany({ where: { workId, task: 'candidate', subjectId: plan.sessionId },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+        const responses: unknown[] = calls.filter(call => ['COMPLETED', 'INVALID', 'RECOVERED'].includes(call.status) && call.result).map(call => call.result);
+        const pending = calls.filter(call => call.status === 'RUNNING' || call.status === 'UNCERTAIN' && call.responseId);
+        const deadline = calls.length ? +calls[0].createdAt + CANDIDATE_PREPARATION_MS : Date.now() + CANDIDATE_PREPARATION_MS;
+        let alternativeOnly = !responses.length && pending.length > 0 && Date.now() >= deadline;
+        if (context.segments.length && !responses.length && !alternativeOnly) {
+            try {
+                if (!calls.length) {
+                    const { input: _input, ...preset } = composePrompt('candidate', {});
+                    const model = currentTaraPrompt(plan.package.promptSnapshot, 'candidate').model;
+                    responses.push(await this.client.run(workId, plan.sessionId, 'candidate', {
+                        job: context.rubric, cvSegments: context.segments, duties: context.job.responsibilities,
+                        description: context.job.description, requestedSkills: context.job.jobSkills,
+                    }, { ...preset, model }, undefined, CANDIDATE_PREPARATION_MS));
+                } else if (pending.length) {
+                    if (!pending[0].responseId) throw new AiPending('TARA_CALL_IN_FLIGHT');
+                    responses.push(await this.client.pollCandidate(pending[0], Math.max(1, Math.min(12_000, deadline - Date.now()))));
+                }
+            } catch (error) {
+                if (error instanceof AiPending) {
+                    if (Date.now() < deadline) throw error;
+                    alternativeOnly = true;
+                } else if (!(error instanceof AiUncertain) && !(error instanceof Error &&
+                    /^(TARA_INVALID_OUTPUT|TARA_PROVIDER_NOT_CONFIGURED|TARA_RESPONSE_FAILED|TARA_PROVIDER_HTTP_\d+|TARA_CANDIDATE_ALREADY_SUBMITTED|TARA_RETRY_LIMIT|SESSION_ERASED)$/.test(error.message))) throw error;
             }
-            await tx.aiCandidatePlan.update({ where: { id }, data: { status: 'READY', payload: json(payload), error: null } });
-        });
+        }
+        const unresolved = await this.db.aiScreeningCall.findMany({ where: { workId, task: 'candidate', status: { in: ['RUNNING', 'UNCERTAIN'] },
+            responseId: { not: null } }, select: { id: true } });
+        const prepared = buildCandidatePreparation(context.segments, context.rubric, context.job, responses, { recoverStored: calls.length > 0, alternativeOnly });
+        const outcome = await publishCandidatePreparation(this.db, plan, workId, prepared, { owner, reconcileIds: unresolved.map(call => call.id) });
+        if (outcome === 'CHANGED') throw new AiPending('TARA_DRAFT_CHANGED');
+        if (outcome === 'READY') this.logger.log(`Tara preparation ready claims=${prepared.payload.claims.length} rejected=${prepared.rejected} waitMs=${Math.max(0, Date.now() - deadline + CANDIDATE_PREPARATION_MS)}`);
+    }
+
+    private async reconcileCandidateResponse(id: string) {
+        const call = await this.db.aiScreeningCall.findUnique({ where: { id } });
+        if (!call?.responseId || call.task !== 'candidate' || !['RUNNING', 'UNCERTAIN'].includes(call.status)) return;
+        try { await this.client.pollCandidate(call, 12_000); }
+        catch (error) {
+            if (error instanceof AiPending && Date.now() - +call.createdAt > 900_000) throw new AiUncertain('TARA_RESPONSE_REQUIRES_REVIEW');
+            if (error instanceof Error && ['TARA_INVALID_OUTPUT', 'TARA_RESPONSE_FAILED', 'SESSION_ERASED'].includes(error.message)) return;
+            throw error;
+        }
     }
     private async advance(workId: string, id: string) {
         const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: {
@@ -320,7 +355,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 decision = validTaraDecision(await this.client.run(workId, id, 'follow-up', {
                     topic, claim: plan.claims.find(claim => claim.id === topic.id),
                     assessmentTopics: taraAssessmentTopics(progress, topics),
-                    requirement: rubric.criteria.find(criterion => criterion.id === topic.criterionId)?.requirementRef,
+                    requirement: topic.requirementRef,
                     chain: previous.map(q => ({ question: q.text, answer: q.answer })),
                     tonePreference: conversationTone(session.questions), recentTaraMessages: session.questions.slice(-2).map(q => q.text),
                 }, currentTaraPrompt(session.package!.promptSnapshot, 'follow-up'), undefined,

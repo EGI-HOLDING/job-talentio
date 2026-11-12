@@ -26,7 +26,8 @@ export class ScreeningPackets {
             return null;
         return this.db.$transaction(async (tx) => {
             await tx.$queryRaw(Prisma.sql `SELECT id FROM "JobPost" WHERE id=${jobId} FOR UPDATE`);
-            const job = await tx.jobPost.findUnique({ where: { id: jobId }, include: { ...recruiterJobInclude, company: true, benefit: true } });
+            const job = await tx.jobPost.findUnique({ where: { id: jobId }, include: { ...recruiterJobInclude, company: true, benefit: true,
+                jobSkills: { include: { skill: { include: { aliases: { select: { alias: true, aliasKey: true } } } } } } } });
             if (!job || job.company.isBanned || job.company.anonymizedAt || !invited && (job.status !== 'PUBLISHED' || Boolean(job.benefit?.expiresAt && job.benefit.expiresAt <= new Date())))
                 return null;
             const document = await tx.aiCompanyDocument.findFirst({ where: { companyId: job.companyId, status: 'READY' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
@@ -34,7 +35,8 @@ export class ScreeningPackets {
             const policy = newConversationPolicy();
             const source = { title: normalizedText(job.title), description: normalizedText(job.description), jobTitleId: job.jobTitleId, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin,
                 responsibilities: job.responsibilities.map(normalizedText),
-                skills: job.jobSkills.map(s => ({ skillId: s.skillId, name: s.skill.name, isRequired: s.isRequired, minLevel: s.minLevel })).sort((a, b) => a.skillId.localeCompare(b.skillId)),
+                skills: job.jobSkills.map(s => ({ skillId: s.skillId, name: s.skill.name, isRequired: s.isRequired, minLevel: s.minLevel,
+                    aliases: s.skill.aliases.map(alias => alias.alias).sort() })).sort((a, b) => a.skillId.localeCompare(b.skillId)),
                 languages: job.jobLanguages.map(l => ({ code: l.language.code, minLevel: l.minLevel, isRequired: l.isRequired, provenance: l.provenance })).sort((a, b) => a.code.localeCompare(b.code)), company };
             const promptSnapshot = freezePromptRegistry();
             const fingerprint = hash([source, policy.version, promptSnapshot, policy]);

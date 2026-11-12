@@ -13,6 +13,7 @@ import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { ScreeningSessions } from './screening-sessions.service';
 import { ScreeningWorker } from './screening-worker.service';
 import { ScreeningHr } from './screening-hr.service';
+import { recoverFailedCandidatePreparations } from './screening-candidate-recovery';
 import { ScreeningClient, AiPending } from './screening.client';
 import { validateCandidate, validateEvaluation, type CandidatePayload, type PackagePayload, type EvaluationPayload } from './screening.schemas';
 import { TIMED_CONVERSATION, V4_CONVERSATION } from './conversation.policy';
@@ -52,11 +53,10 @@ async function main() {
                 return rubric;
             if (task === 'candidate') {
                 if (candidateHook) await candidateHook();
-                return { claims: input.cvLines.filter((l: any) => l.text.includes('Membantu')).slice(0, 3).map((l: any, i: number) => ({
-                    id: 'claim' + i, criterionId: 'c' + i, statement: l.text, quote: l.text, lineStart: l.line, lineEnd: l.line,
-                    skill: ['layanan pelanggan','mencatat proses','menilai hasil'][i], scope: 'GENERAL', relevance: 'CORE', extraEvidence: [],
-                    question: 'Di CV lu nulis soal ' + l.text + '. Bagian apa yang lu kerjain sendiri?'
-                })), limitations: [], alternativeCriterionId: null };
+                return { claims: input.cvSegments.filter((l: any) => l.text.includes('Membantu')).slice(0, 3).map((l: any, i: number) => ({
+                    sourceRef: l.id, criterionId: 'c' + i,
+                    skillText: ['layanan pelanggan','mencatat proses','menilai hasil'][i], relevance: 'CORE',
+                })) };
             }
             if (task === 'follow-up') {
                 const answer = input.chain.at(-1).answer;
@@ -68,6 +68,9 @@ async function main() {
             return { claims: Object.fromEntries(input.claims.map((c: any) => [c.id,
                 cite ? { level: 'CONCRETE', reason: 'Kandidat menjelaskan perannya.', evidence: [{ quoteRef: cite.id, fields: ['TASK','ACTION'] }],
                     discrepancyRef: null } : null])) };
+        }, pollCandidate: async (call: { id: string }) => {
+            await db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'COMPLETED', result: json({ claims: [] }) } });
+            return { claims: [] };
         } };
     const worker = new ScreeningWorker(db, config, storage as never, matching, packets, sessions, plans, provider as never);
     const job = await db.jobPost.create({ data: { id: 'job', companyId: company.id, title: 'Customer Service', description: 'Menangani layanan pelanggan, mencatat proses dan mengukur hasil layanan pelanggan.', status: 'PUBLISHED' } });
@@ -80,7 +83,7 @@ async function main() {
             assert.equal(after.status, 'DONE', after.error ?? kind + ' should finish');
         }
     }
-    async function candidate(id: string, claimText = 'Membantu tim menangani layanan pelanggan') {
+    async function candidate(id: string, claimText = 'Membantu tim menangani layanan pelanggan', variant?: 'recovery' | 'deadline') {
         const user = await db.user.create({ data: { id, fullName: 'Synthetic ' + id, role: 'EMPLOYEE' } }) as any;
         await db.employeeProfile.create({ data: { id, userId: id, phone: '+62812345678' + id.charCodeAt(0) } });
         const resume = await db.resume.create({ data: { id: 'r' + id, profileId: id, title: 'CV ' + id, fileKey: 'fixture/' + id + '.pdf', parseStatus: 'READY', parseGeneration: 1, parsedData: { headline: 'Customer Service', skills: [], experiences: [], educations: [] } } });
@@ -119,11 +122,46 @@ async function main() {
         await deliver('PREPARE');
         await deliver('CV_SOURCE');
         check((await db.aiCvSource.findUniqueOrThrow({ where: { versionId: row.resumeVersionId! } })).text?.includes('Membantu'), 'local PDF extraction preserves CV claims');
-        await deliver('CANDIDATE');
+        if (!variant) await deliver('CANDIDATE');
+        else {
+            const work = await db.aiScreeningWork.findUniqueOrThrow({ where: { key: 'CANDIDATE:' + row.currentPlanId } });
+            const before = calls.length;
+            if (variant === 'recovery') {
+                const error = 'Ungrounded CV skill';
+                await db.aiCandidatePlan.update({ where: { id: row.currentPlanId! }, data: { status: 'FAILED', error } });
+                await db.aiScreeningWork.update({ where: { id: work.id }, data: { status: 'FAILED', attempts: 3, error } });
+                await db.aiScreeningCall.createMany({ data: [claimText, 'missing', claimText].map((quote, i) => ({
+                    key: 'archived-' + i, subjectId: row.id, workId: work.id, model: 'synthetic', task: 'candidate', inputHash: 'same',
+                    promptVersion: TIMED_CONVERSATION.version, status: 'INVALID', error: 'DOMAIN_VALIDATION_FAILED',
+                    result: json({ claims: [{ skill: i === 1 ? 'unknown' : 'layanan pelanggan', quote, criterionId: 'c0', relevance: 'CORE', lineStart: 1, lineEnd: 1 }] }),
+                })) });
+                const dry = await recoverFailedCandidatePreparations(db, false);
+                check(dry.eligible === 1 && dry.storedResponses === 3 && dry.claims === 1 && dry.recovered === 0, 'dry run salvages one grounded topic from three attempts without changing draft');
+                check((await sessions.state(user, row.id)).preparation.status === 'FAILED', 'dry run is read-only');
+                check((await recoverFailedCandidatePreparations(db, true)).recovered === 1, 'archived preparation is repaired in place');
+                check((await recoverFailedCandidatePreparations(db, true)).eligible === 0, 'repair is idempotent');
+                check(await db.aiScreeningCall.count({ where: { workId: work.id } }) === 3, 'all historical attempts are preserved');
+            } else {
+                const call = await db.aiScreeningCall.create({ data: { key: work.id + ':candidate', subjectId: row.id, workId: work.id,
+                    model: 'synthetic', task: 'candidate', inputHash: 'same', promptVersion: TIMED_CONVERSATION.version, status: 'RUNNING',
+                    responseId: 'resp_synthetic_late', createdAt: new Date(Date.now() - 61_000) } });
+                await deliver('CANDIDATE', row.currentPlanId!);
+                const ready = await db.aiCandidatePlan.findUniqueOrThrow({ where: { id: row.currentPlanId! } });
+                check((ready.payload as unknown as CandidatePayload).claims.length === 0, '60-second deadline publishes the alternative');
+                await deliver('CANDIDATE_RESPONSE', call.id);
+                check((await db.aiScreeningCall.findUniqueOrThrow({ where: { id: call.id } })).status === 'COMPLETED', 'late response reconciles by the same ID');
+                check(JSON.stringify((await db.aiCandidatePlan.findUniqueOrThrow({ where: { id: ready.id } })).payload) === JSON.stringify(ready.payload), 'late response does not replace prepared topics');
+            }
+            const ready = await sessions.state(user, row.id);
+            check(ready.preparation.status === 'READY' && !ready.startedAt && ready.questions.length === 0, 'preparation is ready before the interview clock starts');
+            check(calls.length === before, 'recovery and deadline do not submit AI requests');
+        }
         return { user, resume, id: d.id };
     }
     try {
         const a = await candidate('a'), b = await candidate('b', 'Membantu tim belajar layanan pelanggan melalui magang');
+        await candidate('c', undefined, 'recovery');
+        await candidate('d', undefined, 'deadline');
         const pa = await db.aiScreeningSession.findUniqueOrThrow({ where: { id: a.id }, include: { currentPlan: true } }), pb = await db.aiScreeningSession.findUniqueOrThrow({ where: { id: b.id }, include: { currentPlan: true } });
         const plan = pa.currentPlan!.payload as unknown as CandidatePayload;
         check(JSON.stringify(pa.currentPlan!.payload) !== JSON.stringify(pb.currentPlan!.payload), 'different CV produces grounded personal questions');

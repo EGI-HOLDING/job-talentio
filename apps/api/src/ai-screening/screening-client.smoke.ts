@@ -34,6 +34,26 @@ async function main(){
   row={...row,status:'RUNNING',responseId:null,updatedAt:new Date(Date.now()-60000)};await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);assert.equal(row.status,'RUNNING','long create is not prematurely declared uncertain');
   row.status='UNCERTAIN';await assert.rejects(client.run('w','s','evaluate',{},preset),AiUncertain);assert.equal(creates,1,'unknown creation cannot silently duplicate');
   row=null;globalThis.fetch=(async()=>new Response('{broken')) as any;await assert.rejects(client.run('w','s','evaluate',{},preset),AiUncertain);assert.equal(row.status,'UNCERTAIN','unreadable creation acknowledgement stays protected');
+  const complete=(result:string)=>new Response(JSON.stringify({id:'resp_candidate',status:'completed',output:[{type:'message',content:[{type:'output_text',text:result}]}]}));
+  for(const content of ['{"claims":[null,{"sourceRef":"cv-2-1","skillText":"Figma","criterionId":"design","relevance":"CORE"}]}','{"invalid":true}','{broken']){
+   row=null;let submissions=0,gets=0;
+   globalThis.fetch=(async(url:string,init:RequestInit)=>{
+    if(init.method==='POST'){
+     submissions++;return new Response(JSON.stringify({id:'resp_candidate',status:'queued'}));
+    }
+    assert.ok(url.endsWith('/resp_candidate'));
+    if(init.method==='DELETE')return new Response(null,{status:204});
+    return ++gets===1?new Response('{}',{status:503}):complete(content);
+   }) as any;
+   await assert.rejects(client.run('candidate-w','candidate-s','candidate',{},preset),AiPending);
+   await assert.rejects(client.pollCandidate(row,100),AiPending);
+   if(content.startsWith('{"claims"'))assert.deepEqual(await client.pollCandidate(row,100),JSON.parse(content));
+   else{
+    await assert.rejects(client.pollCandidate(row,100),/TARA_INVALID_OUTPUT/);
+    await assert.rejects(client.run('candidate-w','candidate-s','candidate',{},preset),/TARA_CANDIDATE_ALREADY_SUBMITTED/);
+   }
+   assert.equal(submissions,1,'mixed or malformed content uses a single submission');
+  }
   console.log('Screening client transport recovery passed; paid API calls: 0.');
  }finally{globalThis.fetch=original;AbortSignal.timeout=timeout;}
 }

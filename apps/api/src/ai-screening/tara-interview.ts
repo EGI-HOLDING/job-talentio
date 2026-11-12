@@ -65,7 +65,7 @@ export type TaraProgress = {
 export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed = false): TaraTopic[] {
     if (plan.claims.length) return plan.claims.map(claim => ({
         id: claim.id, criterionId: claim.criterionId, label: claim.skill ?? claim.statement, question: claim.question, alternative: false,
-        ...(timed ? {cvQuote: claim.quote, requirementRef: rubric.criteria.find(row => row.id === claim.criterionId)?.requirementRef,
+        ...(timed ? {cvQuote: claim.quote, requirementRef: claim.requirementRef ?? rubric.criteria.find(row => row.id === claim.criterionId)?.requirementRef,
             priority: claim.relevance, fields: ['TASK', 'ACTION', ...(claim.extraEvidence ?? []).map(entry => entry.field)] as EvidenceField[]} : {}),
     }));
     const criterion = rubric.criteria.find(row => row.id === plan.alternativeCriterionId);
@@ -74,8 +74,8 @@ export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed
     return [{
         id: ALTERNATIVE_TOPIC, criterionId: criterion.id, label: criterion.name,
         ...(timed ? {requirementRef: criterion.requirementRef, priority:'CORE' as const, fields:['TASK', 'ACTION'] as EvidenceField[]} : {}),
-        question: 'Oke, kita mulai ya 😄 Pernah ada proyek atau kegiatan yang berkaitan sama ' +
-            (label && label.length <= 65 ? label : 'tugas utama posisi ini') + '?',
+        question: plan.alternativeQuestion ?? ('Oke, kita mulai ya 😄 Pernah ada proyek atau kegiatan yang berkaitan sama ' +
+            (label && label.length <= 65 ? label : 'tugas utama posisi ini') + '?'),
         alternative: true,
     }];
 }

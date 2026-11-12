@@ -74,14 +74,14 @@ export class ScreeningSessions {
             resumeId: row.resumeId, cv: cv?.resume ? { id: cv.resume.id, title: cv.resume.title, parseStatus: row.resumeVersion?.parseStatus } : null,
             coverLetter: row.coverLetter ?? '', coverFilename: row.coverFilename, source: row.source, revision: row.revision, serverTime: new Date().toISOString(),
             ...(row.taraDeadlineAt ? {interviewDeadlineAt:row.taraDeadlineAt} : {}),
-            packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
+            packetReady: preparation.status === 'READY',
             preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
             preparation,
             conversationPolicy: publicConversationPolicy(row.startedAt && row.package ? conversationPolicy(row.package.conversationPolicy) : newConversationPolicy()),
             recoveryRequired: requiresRecovery,
             job: { id: row.job.id, title: row.job.title, companyName: row.job.isAnonymous ? 'Perusahaan dirahasiakan' : row.job.company.name, city: row.job.city?.name ?? '' },
             questions: row.questions.filter(q => !active || q.position <= active.position).map(q => ({ id: q.id, text: q.text, draft: q.draft, answer: q.answer, shownAt: q.shownAt, deadlineAt: q.deadlineAt, answeredAt: q.answeredAt, timedOut: q.timedOut })),
-            error: row.currentPlan?.error === 'CV_UNREADABLE' ? 'CV belum bisa dibaca. Coba unggah PDF atau DOCX yang teksnya jelas, ya.' : row.error || row.currentPlan?.error ? 'Tara sedang mengalami kendala. Progresmu aman, coba lanjutkan sebentar lagi.' : null };
+            error: preparation.reason === 'CV_UNREADABLE' ? 'CV belum bisa dibaca. Gunakan PDF atau DOCX dengan teks yang jelas.' : row.error || preparation.status === 'FAILED' ? 'Tara sedang mengalami kendala. Progresmu aman, coba lanjutkan sebentar lagi.' : null };
     }
     async draft(user: AuthUser, jobId: string) {
         const [profile] = await Promise.all([this.profile(user), this.packets.available(jobId)]);

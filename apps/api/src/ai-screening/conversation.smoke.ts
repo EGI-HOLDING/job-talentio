@@ -75,12 +75,13 @@ const root: ProbeQuestion = { id: 'r', position: 0, kind: 'CORE', claimId: 'c', 
 assert.equal(nextProbeTarget([{ ...root, answer: null }]), null);
 assert.equal(nextProbeTarget([{ ...root, probeClosed: true }]), null);
 assert.equal(nextProbeTarget([root, { ...root, id: 'p', position: 1, kind: 'FOLLOW_UP', rootQuestionId: root.id, depth: 1, answer: '' }]), null);
-for (const task of ['candidate', 'follow-up'] as const) {
-    const prompt = composePrompt(task, {});
-    assert.equal(prompt.version, newConversationPolicy().version);
-    assert.match(prompt.instructions, /gue\/lu/);
-    assert.match(prompt.instructions, /35 kata dan 280 karakter/);
-}
+const candidate = composePrompt('candidate', {});
+assert.equal(candidate.version, newConversationPolicy().version);
+assert.deepEqual(candidate.schema.properties!.claims.items!.required, ['sourceRef', 'skillText', 'criterionId', 'relevance']);
+const followUp = composePrompt('follow-up', {});
+assert.equal(followUp.version, newConversationPolicy().version);
+assert.match(followUp.instructions, /gue\/lu/);
+assert.match(followUp.instructions, /35 kata dan 280 karakter/);
 const assessment = composePrompt('evaluate', {});
 assert.equal(assessment.version, 'taka-interview-evidence-v1');
 assert.ok(!assessment.instructions.includes('Ngobrol pakai gue/lu'));

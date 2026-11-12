@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { AiScreeningCall } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { composePrompt, type ScreeningTask, type PromptPreset } from './prompts/compose';
 import { assertSchema } from './screening.schemas';
@@ -69,11 +70,19 @@ export class ScreeningClient {
             throw new AiUncertain('TARA_CALL_UNCERTAIN');
         }
         if (!call || ['FAILED', 'INVALID'].includes(call.status)) {
+            if (task === 'candidate' && (call || await this.db.aiScreeningCall.count({ where: { workId, task } })))
+                throw new Error('TARA_CANDIDATE_ALREADY_SUBMITTED');
             const count = await this.db.aiScreeningCall.count({ where: { workId, inputHash } });
             const activeCount = await this.db.aiScreeningCall.count({ where: { workId, inputHash, status: { not: 'RECOVERED' } } });
             if (activeCount >= 3)
                 throw new Error('TARA_RETRY_LIMIT');
-            call = await this.db.aiScreeningCall.create({ data: { key: workId + ':' + inputHash + ':' + count, workId, subjectId, task, model, inputHash, promptVersion: prompt.version, status: 'RUNNING' } });
+            try {
+                call = await this.db.aiScreeningCall.create({ data: { key: task === 'candidate' ? workId + ':candidate' : workId + ':' + inputHash + ':' + count,
+                    workId, subjectId, task, model, inputHash, promptVersion: prompt.version, status: 'RUNNING' } });
+            } catch (error) {
+                if (task === 'candidate' && (error as { code?: string })?.code === 'P2002') throw new AiPending('TARA_CALL_IN_FLIGHT');
+                throw error;
+            }
             let response: Response;
             try {
                 response = await this.request('', { method: 'POST', body: JSON.stringify({
@@ -105,8 +114,16 @@ export class ScreeningClient {
             call = await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { responseId: body.id, usage: json({ providerTiming: { acknowledgedAt: new Date().toISOString() } }) } });
             return this.consume(call, body, prompt.schema);
         }
-        if (!call.responseId)
-            throw new AiUncertain('TARA_CALL_UNCERTAIN');
+        return this.poll(call, prompt.schema, timeoutMs);
+    }
+
+    async pollCandidate(call: AiScreeningCall, timeoutMs: number) {
+        if (call.task !== 'candidate' || !['RUNNING', 'UNCERTAIN'].includes(call.status)) return;
+        return this.poll(call, undefined, timeoutMs);
+    }
+
+    private async poll(call: AiScreeningCall, schema: Parameters<typeof assertSchema>[0] | undefined, timeoutMs?: number) {
+        if (!call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId)) throw new AiUncertain('TARA_CALL_UNCERTAIN');
         let response: Response;
         try { response = await this.request('/' + call.responseId, {}, timeoutMs); }
         catch { throw new AiPending('TARA_RESPONSE_POLL_RETRY'); }
@@ -122,13 +139,14 @@ export class ScreeningClient {
         let body: ResponseBody;
         try { body = await response.json() as ResponseBody; }
         catch { throw new AiPending('TARA_RESPONSE_POLL_RETRY'); }
-        return this.consume(call, body, prompt.schema);
+        return this.consume(call, body, schema);
     }
     private async consume(call: {
         id: string;
         responseId: string | null;
         usage?: unknown;
-    }, body: ResponseBody, schema: Parameters<typeof assertSchema>[0]) {
+        task: string;
+    }, body: ResponseBody, schema: Parameters<typeof assertSchema>[0] | undefined) {
         const timing = responseTiming(call.usage, body);
         if (body.status === 'queued' || body.status === 'in_progress') {
             const previous = call.usage && typeof call.usage === 'object' ? (call.usage as { providerTiming?: ProviderTiming }).providerTiming : undefined;
@@ -156,21 +174,31 @@ export class ScreeningClient {
             throw new Error('TARA_RESPONSE_FAILED');
         }
         const content = (body.output ?? []).filter(o => o.type === 'message').flatMap(o => o.content ?? []);
+        let result: unknown;
         try {
             if (content.some(c => c.type === 'refusal'))
                 throw new Error('PROVIDER_REFUSAL');
-            const result: unknown = JSON.parse(content.filter(c => c.type === 'output_text').map(c => c.text ?? '').join(''));
-            assertSchema(schema, result);
-            const saved = await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'COMPLETED', error: null, result: json(result) } });
-            if (!saved.count)
-                throw new Error('SESSION_ERASED');
-            if (call.responseId)
-                await this.request('/' + call.responseId, { method: 'DELETE' }).catch(() => undefined);
-            return result;
+            result = JSON.parse(content.filter(c => c.type === 'output_text').map(c => c.text ?? '').join(''));
+            if (call.task === 'candidate') {
+                // Store the envelope so each proposal can be grounded independently.
+                if (!result || typeof result !== 'object' || !('claims' in result) || !Array.isArray(result.claims))
+                    throw new Error('TARA_INVALID_CANDIDATE_ENVELOPE');
+                result = { claims: result.claims.slice(0, 8) };
+            } else {
+                if (!schema) throw new Error('MISSING_SCREENING_PROMPT');
+                assertSchema(schema, result);
+            }
         }
         catch (error) {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'INVALID', error: 'INVALID_PROVIDER_OUTPUT' } });
+            if (call.task === 'candidate' && call.responseId)
+                await this.request('/' + call.responseId, { method: 'DELETE' }, 2000).catch(() => undefined);
             throw new Error('TARA_INVALID_OUTPUT');
         }
+        const saved = await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'COMPLETED', error: null, result: json(result) } });
+        if (!saved.count) throw new Error('SESSION_ERASED');
+        if (call.responseId)
+            await this.request('/' + call.responseId, { method: 'DELETE' }, call.task === 'candidate' ? 2000 : undefined).catch(() => undefined);
+        return result;
     }
 }

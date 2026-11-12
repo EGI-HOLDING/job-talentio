@@ -5,10 +5,12 @@ import { api,apiBlob,getSession,getToken } from '@/lib/api';
 import { localeUrl } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useScreeningFocus } from './ApplicationPresentation';
+import type { Preparation } from './TaraPreparation';
 import s from './VoiceInterview.module.css';
 type Turn={id:string;speaker:string;text:string;startMs:number;endMs:number};
 type Playback={revision:number;text:string;kind:'QUESTION'|'SIGNOFF';state:'PREPARING'|'AUDIO'|'TEXT'|'AUDIO_PLAYED'|'TEXT_SHOWN'|'FAILED'};
 type LiveState={id:string;status:string;startedAt:string;endedAt:string|null;serverNow:string;warningAt:string|null;closingAt:string|null;closeReason:string|null;transcriptComplete:boolean;error:string|null;transcript?:Turn[];controlledPlayback?:boolean;clockRunning?:boolean;playback?:Playback|null};
+type PreparationResponse={preparation?:Preparation;preparationStatus?:string;packetReady:boolean;error:string|null;recoveryRequired?:boolean};
 const finished=(state:LiveState|null)=>Boolean(state&&['ENDED','FAILED','CREATE_UNCERTAIN'].includes(state.status));
 const time=(seconds:number)=>`${Math.floor(Math.max(0,seconds)/60).toString().padStart(2,'0')}:${Math.floor(Math.max(0,seconds)%60).toString().padStart(2,'0')}`;
 function Icon({name}:{name:string}){
@@ -35,7 +37,12 @@ async function waitForConnection(peer:RTCPeerConnection){
 export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:string;jobTitle:string;companyName:string}){
  const uiCopy=useHrCopy();
  useScreeningFocus(true);const {locale}=useI18n();
- const [state,setState]=useState<LiveState|null>(null),[loaded,setLoaded]=useState(false),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[connected,setConnected]=useState(false),[muted,setMuted]=useState(false),[captions,setCaptions]=useState(true),[transcript,setTranscript]=useState(false),[settings,setSettings]=useState(false),[confirmEnd,setConfirmEnd]=useState(false),[help,setHelp]=useState(false),[speaking,setSpeaking]=useState(false),[caption,setCaption]=useState(''),[devices,setDevices]=useState<MediaDeviceInfo[]>([]),[deviceId,setDeviceId]=useState(''),[volume,setVolume]=useState(1),[now,setNow]=useState(Date.now());
+ const [state,setState]=useState<LiveState|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[connected,setConnected]=useState(false),[muted,setMuted]=useState(false),[captions,setCaptions]=useState(true),[transcript,setTranscript]=useState(false),[settings,setSettings]=useState(false),[confirmEnd,setConfirmEnd]=useState(false),[help,setHelp]=useState(false),[speaking,setSpeaking]=useState(false),[caption,setCaption]=useState(''),[devices,setDevices]=useState<MediaDeviceInfo[]>([]),[deviceId,setDeviceId]=useState(''),[volume,setVolume]=useState(1),[now,setNow]=useState(Date.now());
+ const [preparation,setPreparation]=useState<Preparation|null>(null);
+ const [preparationError,setPreparationError]=useState('');
+ const [checking,setChecking]=useState(false);
+ const refreshPreparation=useRef<(retry?:boolean)=>Promise<void>>(async()=>{});
+ const ready=preparation?.status==='READY';
  const [joiningStep,setJoiningStep]=useState('Menghubungkan\u2026');
  const generation=useRef(0),disconnectTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
  const controlled=useRef(false),latest=useRef<LiveState|null>(null);
@@ -52,7 +59,50 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
   latest.current=value;setState(value);
   if(value){if(value.error)setError(value.error);offset.current=Date.parse(value.serverNow)-Date.now();if(finished(value)){cleanup();setError(value.error??'');}}
  }
- useEffect(()=>{generation.current++;startLock.current=false;latest.current=null;controlled.current=false;setBusy(false);setState(null);setLoaded(false);setReady(false);setError('');const stored=sessionStorage.getItem('voice-client:'+sessionId);clientId.current=stored??crypto.randomUUID();sessionStorage.setItem('voice-client:'+sessionId,clientId.current);let mounted=true;let polling=false;const load=async()=>{if(polling)return;polling=true;try{const [current,session]=await Promise.all([api<LiveState|null>(voice,{cacheMode:'no-store'}),api<{packetReady:boolean;error:string|null}>(base,{cacheMode:'no-store'})]);if(!mounted)return;apply(current);setReady(session.packetReady);if(session.error)setError(session.error);setLoaded(true);}catch(e){if(mounted){setError(e instanceof Error?e.message:'Interview belum bisa dimuat.');setLoaded(true);}}finally{polling=false;}};void load();const timer=setInterval(()=>void load(),2000);return()=>{mounted=false;generation.current++;clearInterval(timer);cleanup();};},[sessionId]);
+ useEffect(()=>{
+  const version=++generation.current;
+  startLock.current=false;latest.current=null;controlled.current=false;
+  setBusy(false);setState(null);setPreparation(null);setPreparationError('');setChecking(false);setError('');
+  const storageKey='voice-client:'+sessionId;
+  clientId.current=sessionStorage.getItem(storageKey)??crypto.randomUUID();
+  sessionStorage.setItem(storageKey,clientId.current);
+  let pending:Promise<void>|null=null,readingVoice=false;
+  async function loadPreparation(retry=false){
+   if(pending){
+    if(!retry)return pending;
+    await pending;
+    if(version!==generation.current||pending)return;
+   }
+   pending=(async()=>{
+    if(retry)setChecking(true);
+    try{
+     const row=await api<PreparationResponse>(retry?base+'/retry':base,retry?{method:'POST',body:'{}'}:{cacheMode:'no-store'});
+     if(version!==generation.current)return;
+     const next=row.preparation??{status:row.packetReady?'READY':row.preparationStatus==='FAILED'?'FAILED':'PROCESSING',planId:null,
+      reason:row.recoveryRequired?'RECOVERY_REQUIRED':null};
+     setPreparation(next);
+     setPreparationError(next.status==='FAILED'?(row.error??'Tara belum bisa menyiapkan interview.'): '');
+    }catch(e){
+     if(version===generation.current)setPreparationError(e instanceof Error?e.message:'Status interview belum bisa diperiksa.');
+    }finally{if(version===generation.current&&retry)setChecking(false);}
+   })().finally(()=>{pending=null;});
+   return pending;
+  }
+  function load(){
+   if(!latest.current)void loadPreparation();
+   if(readingVoice||finished(latest.current))return;
+   readingVoice=true;
+   void api<LiveState|null>(voice,{cacheMode:'no-store'}).then(value=>{
+    if(version===generation.current)apply(value);
+   }).catch(e=>{
+    if(version===generation.current&&latest.current)setError(e instanceof Error?e.message:'Status sesi suara belum bisa diperiksa.');
+   }).finally(()=>{readingVoice=false;});
+  }
+  refreshPreparation.current=loadPreparation;
+  load();
+  const timer=setInterval(load,2000);
+  return()=>{generation.current++;clearInterval(timer);cleanup();};
+ },[sessionId]);
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()+offset.current),1000);return()=>clearInterval(timer);},[]);
  useEffect(()=>{if(!state||finished(state))return;const version=generation.current;const timer=setInterval(()=>{if(!live.current)return;void api<LiveState>(voice+'/heartbeat',{method:'POST',body:JSON.stringify({clientId:clientId.current})}).then(value=>{if(version===generation.current)apply(value);}).catch(e=>{if(version===generation.current)setError(e.message);});},8000);return()=>clearInterval(timer);},[state?.id,state?.status,sessionId]);
  useEffect(()=>{if(audio.current)audio.current.volume=volume;},[volume]);
@@ -136,11 +186,25 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
  async function changeDevice(id:string){const version=generation.current;setDeviceId(id);if(!live.current)return;try{const media=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id},echoCancellation:true}});if(version!==generation.current){media.getTracks().forEach(t=>t.stop());return;}const track=media.getAudioTracks()[0];track.enabled=!muted;await pc.current?.getSenders().find(sender=>sender.track?.kind==='audio')?.replaceTrack(track);stream.current?.getTracks().forEach(t=>t.stop());stream.current=media;}catch{setError('Mikrofon belum bisa diganti. Periksa izin browser.');}}
  function toggleMic(){const next=!muted;setMuted(next);stream.current?.getAudioTracks().forEach(track=>{track.enabled=!next;});}
  const ended=finished(state),started=Boolean(state),showPrejoin=!ended&&!connected,stranded=started&&!live.current&&!busy,remaining=state&&state.clockRunning!==false?Math.max(0,900-Math.floor(Math.max(0,(state.endedAt?Date.parse(state.endedAt):now)-Date.parse(state.startedAt))/1000)):900;
+ const needsCv=preparation?.status==='WAITING_CV'||preparation?.reason==='CV_UNREADABLE';
+ const needsHelp=preparation?.reason==='RECOVERY_REQUIRED';
+ const preparationFailed=preparation?.status==='FAILED';
+ const preparationMessage=needsCv?'CV undangan ini belum tersedia atau belum bisa dibaca. Hubungi HR untuk memperbarui berkasnya.':
+  needsHelp?'Progresmu tersimpan. Periksa status atau hubungi HR jika interview masih belum bisa dimulai.':preparationError;
  const textFallback=clip?.state==='TEXT'||clip?.state==='TEXT_SHOWN';
  const currentCaption=state?.controlledPlayback?clip?.state!=='PREPARING'?clip?.text:undefined:caption;
  return <div className={s.meeting} ref={panel}><audio ref={audio} autoPlay/><header className={s.header}><img src="/brand/talentio-logo-white.webp" alt="Talentio" className={s.logo}/><div className={s.heading}><h1>{uiCopy("Interview bersama Tara")}</h1><p>{jobTitle} &#xb7; {companyName}</p></div><span className={s.recording}><Icon name="transcript"/>{connected?'Transkripsi aktif':ended?'Transkrip tersimpan':'Transkripsi otomatis'}</span><span className={s.connection}><i className={connected?s.online:''}/>{connected?'Terhubung':ended?'Selesai':started?'Menghubungkan':'Siap bergabung'}</span><span className={s.clock}><Icon name="clock"/>Sisa <strong>{time(remaining)}</strong></span><button className={s.expand} type="button" aria-label={uiCopy("Layar penuh")} onClick={()=>{if(document.fullscreenElement)void document.exitFullscreen();else void panel.current?.requestFullscreen();}}><Icon name="expand"/></button></header>
  <div className={s.content}><main className={`${s.stage} ${speaking?s.activeSpeaker:''}`}><div className={s.persona}><img src="/images/hr-onboarding/generated/tara-interviewer.webp" alt="Tara, asisten interview AI"/><div className={s.speaking}><span className={speaking?s.wave:s.waveIdle}>{[0,1,2,3,4].map(i=><i key={i} style={{animationDelay:`${i*110}ms`}}/>)}</span>{speaking?'Sedang berbicara':connected?'Mendengarkan':ended?'Interview selesai':'Tara'}</div></div>
- {showPrejoin&&<div className={s.prejoin} aria-busy={busy}><h2>{busy?joiningStep:stranded?'Sesi interview sudah dimulai':started?'Koneksi suara terputus':'Siap ngobrol bersama Tara?'}</h2><p>{stranded?'Lanjutkan di tab yang masih terhubung. Jika tab itu sudah tertutup, kamu bisa mengakhiri sesi di bawah; percakapan yang tersedia tetap tersimpan untuk HR.':started&&!busy?'Periksa jaringan. Percakapan yang tersedia tetap tersimpan. Kamu bisa mengakhiri sesi melalui tombol Akhiri.':'Siapkan mikrofon dan tempat yang nyaman. Percakapan direkap untuk evaluasi HR. Sesi maksimal 15 menit.'}</p>{error&&<div className={s.joinError} role="alert">{error}</div>}{!started||busy?<button type="button" disabled={!loaded||!ready||busy} onClick={()=>void start()}>{busy?joiningStep:!loaded?'Memuat sesi\u2026':!ready?'Tara menyiapkan interview\u2026':error?'Coba gabung lagi':'Gabung interview'}</button>:null}</div>}
+ {showPrejoin&&<div className={s.prejoin} aria-busy={busy||checking}><h2>{busy?joiningStep:stranded?'Sesi interview sudah dimulai':started?'Koneksi suara terputus':'Siap ngobrol bersama Tara?'}</h2><p>{stranded?'Lanjutkan di tab yang masih terhubung. Jika tab itu sudah tertutup, kamu bisa mengakhiri sesi di bawah; percakapan yang tersedia tetap tersimpan untuk HR.':started&&!busy?'Periksa jaringan. Percakapan yang tersedia tetap tersimpan. Kamu bisa mengakhiri sesi melalui tombol Akhiri.':'Siapkan mikrofon dan tempat yang nyaman. Percakapan direkap untuk evaluasi HR. Sesi maksimal 15 menit.'}</p>
+  {(error||!started&&preparationMessage)&&<div className={s.joinError} role="alert">{error||preparationMessage}</div>}
+  {(!started||busy)&&(preparationFailed||needsCv||!preparation&&preparationError?
+   <button type="button" disabled={checking} onClick={()=>void refreshPreparation.current(preparationFailed&&!needsHelp&&!needsCv)}>
+    {checking?'Memeriksa status…':preparationFailed&&!needsHelp&&!needsCv?'Coba pulihkan':'Periksa status'}
+   </button>:
+   <button type="button" disabled={!ready||busy} onClick={()=>void start()}>
+    {busy?joiningStep:!preparation?'Memuat sesi…':!ready?'Tara menyiapkan interview…':error?'Coba gabung lagi':'Gabung interview'}
+   </button>)}
+ </div>}
  {ended&&<div className={s.prejoin}><h2>{uiCopy("Terima kasih sudah berbagi")}</h2><p>{state?.closeReason==='CANDIDATE_ENDED'?'Kamu mengakhiri interview lebih awal. Hasil diberikan berdasarkan percakapan yang tersedia.':['CONNECTION_FAILED','CONNECTION_LOST','TRANSCRIPT_CONNECTION_LOST','CANDIDATE_DISCONNECTED','PROVIDER_ERROR','SERVER_RESTART'].includes(state?.closeReason??'')?'Interview berakhir karena koneksi mengalami kendala. Percakapan yang tersedia disimpan untuk ditinjau tim HR.':'Percakapan yang tersedia telah disimpan untuk ditinjau tim HR.'}</p><a href={localeUrl(locale,'/messages')}>{uiCopy("Kembali ke Pesan Talentio")}</a></div>}
  <div className={s.taraLabel}><span>▥</span> Tara <small>AI</small></div>{(captions||textFallback)&&started&&!ended&&currentCaption&&<div className={s.caption} data-tara-playback={clip?.state}><strong>{textFallback?'Tara · Pertanyaan teks':'Tara'}</strong><p>{state?.controlledPlayback?currentCaption:currentCaption.slice(-260)}</p></div>}<div className={s.self}><span className={s.initials}>{initials}</span><div>{name.split(' ')[0]} (Anda)<span aria-label={muted?'Mikrofon nonaktif':'Mikrofon aktif'}><Icon name={muted?"mic-off":"mic"}/></span></div></div>
  {state?.warningAt&&!ended&&<p className={s.notice}>{state.closingAt?'Tara sedang menutup interview. Terima kasih sudah berbagi.':'Sisa 5 menit lagi. Tara akan segera menyelesaikan interview.'}</p>}

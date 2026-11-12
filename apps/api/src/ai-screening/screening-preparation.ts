@@ -1,4 +1,4 @@
-type Dependency = { status: string; error?: string | null } | null | undefined;
+type Dependency = { status: string; error?: string | null; text?: string | null } | null | undefined;
 export function screeningPreparation(row: {
     resumeId: string | null;
     package?: Dependency;
@@ -8,6 +8,8 @@ export function screeningPreparation(row: {
     const planId = row.currentPlan?.id ?? null;
     if (!row.resumeId) return { status: 'WAITING_CV' as const, planId, reason: null };
     const source = row.resumeVersion?.screeningSource;
+    if (source?.status === 'READY' && 'text' in source && !source.text?.trim())
+        return { status: 'FAILED' as const, planId, reason: 'CV_UNREADABLE' };
     const dependencies = [row.package, source, row.currentPlan];
     const failed = dependencies.filter(d => d?.status === 'FAILED');
     if (failed.length) {

@@ -54,18 +54,21 @@ async function main(){
   calls++;
   if(task==='prepare')return rubric;
   if(task==='candidate'&&input.duties){
-   const line=input.cvLines.find((row:{text:string})=>row.text.includes('Node.js'));
-   return {claims:alternativeSkillFixture?[]:['Node.js','API'].map((skill,i)=>({
-    id:'skill-'+i,criterionId:'c0',statement:line.text,quote:line.text,lineStart:line.line,lineEnd:line.line,
-    question:`Bagian mana yang lu kerjain sendiri pakai ${skill} di proyek itu?`,
-    skill,scope:'CONTEXTUAL',relevance:'CORE',...(preset?.version==='tara-conversation-v8.0.0'?{extraEvidence:[]}:{}),
-   })),limitations:[],alternativeCriterionId:alternativeSkillFixture?'c0':null};
+   const line=input.cvSegments.find((row:{text:string})=>row.text.includes('Node.js'));
+   return {claims:alternativeSkillFixture?[]:[
+    {sourceRef:line.id,skillText:'Node.js',criterionId:'c0',relevance:'CORE'},
+    {sourceRef:'unknown-line',skillText:'Unstated skill',criterionId:'c0',relevance:'CORE'},
+    {sourceRef:line.id,skillText:'API',criterionId:'c0',relevance:'CORE'},
+   ]};
   }
   if(task==='follow-up'&&input.topic){
    const answer=input.chain.at(-1).answer;
    const unrelated=answer.includes('mengelola gudang');
    return {outcome:unrelated?'OFF_TOPIC':'EXAMPLE',answerQuote:answer,question:'Gue tarik balik dikit ya. Bagian mana yang lu kerjain pakai keahlian tadi?',
-    ...(input.assessmentTopics?{evidence:unrelated?[]:input.assessmentTopics.map((topic:any)=>({topicId:topic.id,quote:answer,fields:['TASK','ACTION']}))}:{})};
+    ...(input.assessmentTopics?{evidence:unrelated?[]:input.assessmentTopics.map((topic:any)=>({
+     topicId:topic.id,quote:answer,fields:answer.includes('mendokumentasikan perubahan')||
+      topic.id==='skill-0'&&answer.includes('menulis dokumentasi API')?topic.fields:['TASK','ACTION'],
+    }))}:{})};
   }
   if(task==='evaluate'&&preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
   throw Error('Unexpected task '+task);

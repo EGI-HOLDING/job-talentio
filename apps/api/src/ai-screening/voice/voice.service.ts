@@ -247,7 +247,7 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
    }
    chain.push({question,answer});
    const input={topic,claim:guide.plan.claims.find(claim=>claim.id===topic.id),
-    requirement:guide.rubric.criteria.find(criterion=>criterion.id===topic.criterionId)?.requirementRef,
+    requirement:topic.requirementRef,
     assessmentTopics:taraAssessmentTopics(guide.turns.progress,guide.turns.topics),ongoing,
     chain,tonePreference:conversationTone(turns.filter(turn=>turn.speaker==='CANDIDATE').map(turn=>({answer:turn.text})))};
    const until=Date.now()+7000;

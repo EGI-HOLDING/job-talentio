@@ -138,8 +138,8 @@ export function takaEvaluationRequest(preset: PromptPreset, input: Input, reques
     return {
         preset: { ...preset, schema: object({ claims: object(Object.fromEntries(requested.map(claim => [claim.id, judgement]))) }) },
         data: {
-            claims: requested.map(({ id, criterionId, statement, quote, scope, extraEvidence }) => ({
-                id, statement, quote, scope, extraEvidence, requirementRef: input.requirements.get(criterionId), askedFields: input.askedFields.get(id),
+            claims: requested.map(({ id, criterionId, statement, quote, scope, extraEvidence, requirementRef }) => ({
+                id, statement, quote, scope, extraEvidence, requirementRef: requirementRef ?? input.requirements.get(criterionId), askedFields: input.askedFields.get(id),
             })),
             turns: input.turns.filter(turn => turn.answers.length).map(({ claimId, questionRef, question, answers, resolution }) => ({
                 claimId, questionRef, question, resolution, answerRefs: answers.map(answer => answer.id),

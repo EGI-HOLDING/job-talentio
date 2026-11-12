@@ -28,6 +28,7 @@ export type Claim = {
     lineEnd: number;
     question: string;
     skill?: string;
+    requirementRef?: string;
     scope?: 'GENERAL' | 'CONTEXTUAL';
     relevance?: 'CORE' | 'SUPPORTING';
     extraEvidence?: Array<{field: 'CONTEXT' | 'RESULT' | 'ROLE_BOUNDARY'; cvQuote: string}>;
@@ -36,6 +37,7 @@ export type CandidatePayload = {
     claims: Claim[];
     limitations: string[];
     alternativeCriterionId?: string | null;
+    alternativeQuestion?: string;
 };
 export type FollowUpPayload = {
     stop: boolean;
