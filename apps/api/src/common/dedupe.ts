@@ -81,9 +81,6 @@ export function titlesNearlyIdentical(a: string, b: string): boolean {
   return false;
 }
 
-/** Statuses that the unique fingerprint index treats as one live opening. */
-export const ACTIVE_JOB_DUPLICATE_STATUSES = ['DRAFT', 'PUBLISHED', 'PAUSED'] as const;
-
 const FORGED_FINGERPRINT_RE = /^([a-f0-9]{64})(?::[a-z0-9]{1,16})?$/i;
 
 /**

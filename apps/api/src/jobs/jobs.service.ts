@@ -39,12 +39,7 @@ import { intentJobScope, type RecommendationOptions } from '../matching/employee
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify, parseDto } from '../common/utils';
-import {
-  contentHash,
-  jobFingerprint,
-  normalizeJobTitle,
-  titlesNearlyIdentical,
-} from '../common/dedupe';
+import { contentHash, jobFingerprint } from '../common/dedupe';
 import { resolveSkill } from '../common/skill-resolve';
 import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
@@ -85,8 +80,6 @@ type JobLanguageInput = {
   minLevel?: LanguageLevel | string;
   isRequired?: boolean;
 };
-
-const ACTIVE_JOB_STATUSES: JobStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
 /** Swaps one screening question for its version in the reader's language. */
 function localizeQuestion<
@@ -140,76 +133,6 @@ export class JobsService {
         'City is required for onsite/hybrid jobs. Remote jobs may omit city or set a hiring-region hub.',
       );
     }
-  }
-
-  private async assertNoDuplicateJob(opts: {
-    companyId: string;
-    title: string;
-    description: string;
-    workMode: string;
-    cityId: string | null;
-    excludeJobId?: string;
-  }, db: Prisma.TransactionClient = this.prisma) {
-    const fp = jobFingerprint({
-      title: opts.title,
-      workMode: opts.workMode,
-      cityId: opts.cityId,
-    });
-    const hash = contentHash(opts.description);
-
-    const sameFingerprint = await db.jobPost.findFirst({
-      where: {
-        companyId: opts.companyId,
-        fingerprint: fp,
-        status: { in: ACTIVE_JOB_STATUSES },
-        AND: [{OR:[{benefit:{is:null}},{benefit:{expiresAt:null}},{benefit:{expiresAt:{gt:new Date()}}}]}],
-        ...(opts.excludeJobId ? { id: { not: opts.excludeJobId } } : {}),
-      },
-      select: { id: true, title: true, status: true },
-    });
-    if (sameFingerprint) {
-      throw new ConflictException(
-        `Duplicate job blocked: an active ${sameFingerprint.status} opening with the same title, work mode, and location already exists ("${sameFingerprint.title}"). Close or edit that post instead.`,
-      );
-    }
-
-    const sameContent = await db.jobPost.findFirst({
-      where: {
-        companyId: opts.companyId,
-        contentHash: hash,
-        status: { in: ACTIVE_JOB_STATUSES },
-        AND: [{OR:[{benefit:{is:null}},{benefit:{expiresAt:null}},{benefit:{expiresAt:{gt:new Date()}}}]}],
-        ...(opts.excludeJobId ? { id: { not: opts.excludeJobId } } : {}),
-      },
-      select: { id: true, title: true },
-    });
-    if (sameContent) {
-      throw new ConflictException(
-        `Duplicate job blocked: description matches an active post ("${sameContent.title}"). Reuse that listing or change the content substantially.`,
-      );
-    }
-
-    // Near-title soft check among active company jobs (covers missing fingerprint on legacy rows)
-    const candidates = await db.jobPost.findMany({
-      where: {
-        companyId: opts.companyId,
-        status: { in: ACTIVE_JOB_STATUSES },
-        AND: [{OR:[{benefit:{is:null}},{benefit:{expiresAt:null}},{benefit:{expiresAt:{gt:new Date()}}}]}],
-        workMode: opts.workMode as WorkMode,
-        cityId: opts.cityId,
-        ...(opts.excludeJobId ? { id: { not: opts.excludeJobId } } : {}),
-      },
-      select: { id: true, title: true },
-      take: 50,
-    });
-    const near = candidates.find((j) => titlesNearlyIdentical(j.title, opts.title));
-    if (near) {
-      throw new ConflictException(
-        `Duplicate job blocked: title is nearly identical to active post "${near.title}".`,
-      );
-    }
-
-    return { fingerprint: fp, contentHash: hash, titleNormalized: normalizeJobTitle(opts.title) };
   }
 
   private translationSelect = {
@@ -382,7 +305,7 @@ export class JobsService {
     ]);
     this.companies.assertOpen(company);
     const seniority=await resolveSeniority(db,data,undefined,frozenSeniorityVersion);
-    // Release partial unique indexes for expired openings even if the worker is late.
+    // Expire overdue openings even if the worker is late.
     await db.jobPost.updateMany({where:{companyId,status:{in:['PUBLISHED','PAUSED']},benefit:{expiresAt:{lte:new Date()}}},data:{status:'EXPIRED'}});
     this.assertSalaryRange(data.salaryMin as number | null | undefined, data.salaryMax as number | null | undefined);
     const workMode = ((data.workMode as string) || 'ONSITE') as WorkMode;
@@ -400,14 +323,6 @@ export class JobsService {
     if (description.length < 20) throw new BadRequestException("Description must contain at least 20 characters");
     const experienceLevel =
       (data.experienceLevel as never) ?? resolvedTitle.inferredLevel ?? null;
-
-    const hashes = await this.assertNoDuplicateJob({
-      companyId,
-      title,
-      description,
-      workMode,
-      cityId,
-    }, db);
 
     const job = await db.jobPost.create({
       data: {
@@ -438,8 +353,8 @@ export class JobsService {
           explicit: typeof data.locale === 'string' ? data.locale : null,
         }) ?? undefined,
         status: 'DRAFT',
-        fingerprint: hashes.fingerprint,
-        contentHash: hashes.contentHash,
+        fingerprint: jobFingerprint({ title, workMode, cityId }),
+        contentHash: contentHash(description),
       },
     });
 
@@ -544,16 +459,7 @@ export class JobsService {
     if (description.length < 20) throw new BadRequestException("Description must contain at least 20 characters");
     const resolvedCityId = cityId === undefined ? job.cityId : cityId;
 
-    const hashes = await this.assertNoDuplicateJob({
-      companyId: job.companyId,
-      title,
-      description,
-      workMode,
-      cityId: resolvedCityId,
-      excludeJobId: jobId,
-    }, db);
-
-    if (ACTIVE_JOB_STATUSES.includes(job.status) && job.status === 'PUBLISHED') {
+    if (job.status === 'PUBLISHED') {
       this.assertLocationRules(workMode, resolvedCityId, true);
     }
 
@@ -600,8 +506,8 @@ export class JobsService {
             explicit: typeof data.locale === 'string' ? data.locale : null,
             existing: job.locale,
           }) ?? undefined,
-        fingerprint: hashes.fingerprint,
-        contentHash: hashes.contentHash,
+        fingerprint: jobFingerprint({ title, workMode, cityId: resolvedCityId }),
+        contentHash: contentHash(description),
       },
     });
 
@@ -683,18 +589,6 @@ export class JobsService {
 
     if (!canTransition(job.status, status)) {
       throw new BadRequestException(transitionError(job.status, status));
-    }
-
-    // Becoming active again (incl. reopen CLOSED → DRAFT/PUBLISHED) must pass dedupe
-    if (ACTIVE_JOB_STATUSES.includes(status)) {
-      await this.assertNoDuplicateJob({
-        companyId: job.companyId,
-        title: job.title,
-        description: job.description,
-        workMode: job.workMode,
-        cityId: job.cityId,
-        excludeJobId: job.id,
-      });
     }
 
     const result = await this.prisma.$transaction(async (tx) => {

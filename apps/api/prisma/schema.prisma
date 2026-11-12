@@ -1287,9 +1287,9 @@ model JobPost {
   closedAt           DateTime?
   boostWeight        Float            @default(0)
   boostUntil         DateTime?
-  /// SHA-256 of normalized title|workMode|cityId. Never suffix with a job id.
+  /// SHA-256 of normalized title|workMode|cityId. Multiple postings can share it.
   fingerprint        String?
-  /// SHA-256 of normalized description — blocks copy-paste duplicate posts
+  /// SHA-256 of normalized description.
   contentHash        String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
