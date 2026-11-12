@@ -3,6 +3,7 @@ import { normalizedText } from './screening.policy';
 import { CURRENT_CONVERSATION, usesSkillInterview, usesTimedInterview, type ConversationPolicy } from './conversation.policy';
 import { openConversation } from './prompts/shared/conversation-opening';
 import type { taraInterviewReport } from './tara-interview';
+import type { TakaClaimScope, TakaCoverage } from './taka-interview';
 import { normalizeSkillKey } from '../common/skill-resolve';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
@@ -57,7 +58,8 @@ export type SourceQuote = {
 };
 export type ClaimResult = {
     claimId: string;
-    score?: number;
+    score?: number | null;
+    assessment?: TakaClaimScope;
     status: 'SUPPORTED' | 'INSUFFICIENT' | 'CLARIFY';
     reason: string;
     evidence: Evidence[];
@@ -74,6 +76,7 @@ export type EvaluationPayload = {
     criteria: CriterionResult[];
     claims: ClaimResult[];
     taraInterview?: ReturnType<typeof taraInterviewReport>;
+    interviewAssessment?: TakaCoverage;
 };
 export type AnswerSource = {
     id: string;

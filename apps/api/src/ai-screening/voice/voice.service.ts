@@ -24,6 +24,8 @@ import type { PromptRegistry } from '../prompts/registry';
 import { taraAssessmentTopics, taraHasEvidence, taraTopics, taraInterviewReport, TARA_SESSION_MS, validTaraDecision, type TaraProgress } from '../tara-interview';
 import { TaraLiveTurns, TaraVoiceOutput, taraVerbalStop, TARA_CLOSE_MS } from './voice-turns';
 import { TaraPlayback } from './voice-playback';
+import { frozenTakaInterview, liveTakaTurns } from '../taka-interview';
+import { evaluateTakaInterview } from '../taka-evaluation';
 
 type Channel=ReturnType<VoiceProvider['attach']>;
 type Guided={turns:TaraLiveTurns;fragments:Fragment[];plan:CandidatePayload;rubric:PackagePayload;preset:PromptRegistry['follow-up'];lastCandidateAt?:number;lastSavedProgress?:string};
@@ -293,7 +295,7 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
      live.controlled?Math.max(1,until-Date.now()):undefined),answer,previous,live.controlled?guide.turns.topics:undefined);}
     catch(error){if(!(error instanceof AiPending))return;await new Promise(resolve=>setTimeout(resolve,400));}
    }while(!live.finishing&&Date.now()<until);
-  });
+  }, Boolean(live.controlled?.listening && !live.captureFailed && now - +row.heartbeatAt < 30_000));
   if(!next){
    if(live.controlled){
     const snapshot=hash(guide.turns.progress);
@@ -370,7 +372,7 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
    await enqueueWork(tx,'VOICE_EVALUATE',session.id);
   });
  }
- async evaluate(workId:string,sessionId:string){
+ async evaluate(workId:string,sessionId:string,owner?:string){
   const voice=await this.db.voiceInterview.findUnique({where:{sessionId},include:{fragments:{orderBy:{id:'asc'}},session:{include:{currentPlan:true,invitation:true,package:true,evaluation:true}}}});
   if(!voice||!terminal.includes(voice.status)||!voice.session?.invitation||!voice.session.currentPlan)return;
   if(voice.session.evaluation?.status==='READY'||voice.session.evaluation?.status==='NEEDS_REVIEW')return;
@@ -380,6 +382,18 @@ export class VoiceService implements OnModuleInit,OnModuleDestroy {
   const progress=voice.taraInterview as unknown as TaraProgress|null;
   const timed=!!progress?.policyVersion;
   const topics=progress?taraTopics(plan,voice.session.package?.payload as unknown as PackagePayload,timed):undefined;
+  const takaPreset = frozenTakaInterview(voice.session.invitation.snapshot);
+  if (takaPreset) {
+   if (!voice.session.package) return;
+   const notes = progress && topics ? taraInterviewReport(progress, topics) : undefined;
+   return evaluateTakaInterview(this.db, this.client, workId, voice.session, voice.session.invitation, takaPreset, plan,
+    liveTakaTurns(turns, voice.startedAt, voice.transcriptComplete, notes), {
+     owner, notes, rubric: voice.session.package.payload as unknown as PackagePayload,
+     interrupted: !['TIME_LIMIT','TARA_FINISHED'].includes(voice.closeReason ?? '') || !voice.transcriptComplete,
+     voice: {closeReason: voice.closeReason, transcriptComplete: voice.transcriptComplete,
+      durationSeconds: Math.max(0, Math.round(((voice.endedAt?.getTime() ?? +voice.startedAt) - +voice.startedAt) / 1000))},
+    });
+  }
   if(progress&&partial&&progress.stage!=='DONE'){
    const note=progress.topics[progress.active].note;
    note.outcome=timed&&note.questionRefs.length&&taraHasEvidence(topics![progress.active],note)?'CONCRETE_EXAMPLE':'TECHNICAL_INTERRUPTION';

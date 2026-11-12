@@ -68,7 +68,20 @@ async function main(){
  assert.equal(report.creates,2);assert.equal(await page.getByText('15:01',{exact:true}).count(),0,'countdown cannot exceed 15 minutes');await page.getByRole('button',{name:'Nonaktifkan mikrofon',exact:true}).click();await page.getByRole('button',{name:'Aktifkan mikrofon',exact:true}).waitFor();await page.getByRole('button',{name:'Aktifkan mikrofon',exact:true}).click();
  await page.getByRole('button',{name:'Transkrip',exact:true}).click();await page.getByText('Saya mengerjakan pipeline data dan evaluasi model.',{exact:true}).waitFor({timeout:10000});await page.screenshot({path:path.join(out,'03-transcript.png')});await page.getByRole('button',{name:'Tutup transkrip',exact:true}).click();
  await page.getByRole('button',{name:'Pengaturan audio',exact:true}).click();await page.getByRole('heading',{name:'Pengaturan audio',exact:true}).waitFor();await page.getByRole('button',{name:'Selesai',exact:true}).click();
- await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'04-meeting-mobile.png')});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ for (const width of [390, 320]) {
+  await page.setViewportSize({width, height:844});
+  const controls = await page.locator('footer[class*="controls"] button').evaluateAll(buttons => buttons.map(button => {
+   const rect = button.getBoundingClientRect();
+   return { left: rect.left, right: rect.right, top: rect.top, height: rect.height };
+  }));
+  assert.equal(controls.length, 6);
+  assert.ok(controls.every(control => control.left >= -1 && control.right <= width + 1), 'all call controls fit at ' + width + 'px');
+  assert.ok(controls.every(control => Math.abs(control.height - 44) <= 1), 'call controls share a 44px height');
+  assert.ok(Math.max(...controls.map(control => control.top)) - Math.min(...controls.map(control => control.top)) <= 2, 'call controls share a top edge');
+  await page.screenshot({path:path.join(out,width===390?'04-meeting-mobile.png':'04-meeting-narrow.png')});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ }
+ await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Akhiri',exact:true}).click();await page.getByRole('button',{name:'Lanjut interview',exact:true}).click();assert.equal(report.ends,0);await page.getByRole('button',{name:'Akhiri',exact:true}).click();await page.getByRole('button',{name:'Akhiri interview',exact:true}).click();await page.getByRole('heading',{name:'Terima kasih sudah berbagi',exact:true}).waitFor();assert.equal(report.ends,1);const frozen=await page.locator('header strong').last().textContent();await page.waitForTimeout(2100);assert.equal(await page.locator('header strong').last().textContent(),frozen,'ended timer stays frozen');await page.screenshot({path:path.join(out,'05-completed.png')});assert.deepEqual(report.errors,[]);
  await page.setViewportSize({width:1672,height:941});state=null;await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('button',{name:'Buka interview',exact:true}).click();await page.getByRole('button',{name:'Gabung interview',exact:true}).click();
  for(let attempt=0;attempt<3;attempt++)await page.getByRole('button',{name:'Coba gabung lagi',exact:true}).click();

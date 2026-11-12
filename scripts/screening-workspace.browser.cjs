@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 let pw;try{pw=require('playwright');}catch{pw=require(path.join(process.env.USERPROFILE||'C:/Users/egi_i','.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
 const out=path.resolve('output/screening-workspace');fs.mkdirSync(out,{recursive:true});
 const base=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';
+const takaCoverage={version:'taka-interview-evidence-v1',state:'PARTIAL',plannedClaims:4,assessedClaims:2,openScopeClaims:1,interrupted:true};
 async function samplePdf(){const {createRequire}=require('node:module'),req=createRequire(path.resolve('apps/api/package.json')),PDFDocument=req('pdfkit');return new Promise(resolve=>{const chunks=[],doc=new PDFDocument({margin:42});doc.on('data',chunk=>chunks.push(chunk));doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.fontSize(23).text('Dinda Pramesti').moveDown(.4).fontSize(13).text('Machine Learning Engineer').moveDown(1).fontSize(16).text('Ringkasan Profesional').moveDown(.4).fontSize(11).text('Machine Learning Engineer dengan pengalaman mengembangkan model dan layanan data.').moveDown(1).fontSize(16).text('Pengalaman').moveDown(.4).fontSize(11).text('Mengembangkan model machine learning dengan Python.\nMembantu tim melakukan deployment dan evaluasi model.').moveDown(1).fontSize(16).text('Keahlian').moveDown(.4).fontSize(11).text('Python, PyTorch, SQL');doc.addPage().fontSize(18).text('Proyek dan pendidikan').moveDown().fontSize(12).text('Proyek machine learning dan pendidikan kandidat.');doc.end();});}
 const names=['Dinda Pramesti','Rizky Aditya','Nadya Putri','Fajar Saputra','Kevin Wijaya','Salsabila Rahma','Bima Pratama','Alya Maharani','Reza Firmansyah','Citra Lestari'];
 const company={id:'co',name:'Lintas Awan Teknologi',logoUrl:'/brand/talentio-logo-4k.png',city:{name:'Kota Denpasar'}};
@@ -78,11 +79,20 @@ async function main(){
    body.claims=names.map((statement,i)=>({id:i===0?'forecast':'claim-'+i,statement,quote:statement+' untuk analisis data.'}));
    const first=body.evaluation.result.claims[0];body.evaluation.result.claims=names.map((_,i)=>i===0?first:{claimId:'claim-'+i,status:'INSUFFICIENT',score:i===3||i===4?null:i===1?0:2,asked:i!==3&&i!==4,reason:i===3||i===4?'Belum sempat diuji.':'Perlu memperjelas kontribusi pribadi.',evidence:[]});
    body.evaluation.result.strengths=['Kontribusi forecasting terbatas pada EDA.','Memahami pemeriksaan kelengkapan data.'];body.evaluation.result.gaps=['Langkah kerja dan tanggung jawab pribadi.','Validasi hasil dan metrik proyek.'];body.evaluation.result.interviewQuestions=['Langkah EDA apa yang kamu lakukan sendiri?','Bagaimana kamu mengevaluasi hasil forecasting?','Bagaimana validasi rekomendasi asisten klaim dilakukan?'];
+   if(p.split('/')[3]==='invite-1'){
+    body.evaluation.score=87.5;body.claims=body.claims.slice(0,4);body.evaluation.result.interviewAssessment=takaCoverage;
+    body.evaluation.result.claims=body.evaluation.result.claims.slice(0,4).map((claim,index)=>({...claim,
+     score:[4,3,null,null][index],status:index<2?'SUPPORTED':'INSUFFICIENT',asked:index<2,
+     assessment:{state:index<2?'ASSESSED':'NOT_ASKED',basis:index<2?'DIRECT':undefined,questionRefs:index===0?['v1']:[],askedFields:[],openFields:index===0?['RESULT']:[]}
+    }));
+   }
    body.voice.transcript=[{id:'intro',speaker:'TARA',text:'Hai, gue Tara. Ceritain dulu proyek forecasting yang pernah lu kerjakan.',startMs:8000},{id:'intro-answer',speaker:'CANDIDATE',text:'Saya ikut membantu proyek forecasting. Bagian yang saya kerjakan lebih banyak di EDA.',startMs:25000},{id:'data',speaker:'TARA',text:'Oke, kita fokus ke bagian lu. Data apa yang lu periksa waktu itu?',startMs:49000},{id:'data-answer',speaker:'CANDIDATE',text:'Ada data curah hujan. Saya melihat periode dataset dan mengecek kelengkapannya.',startMs:65000},...body.voice.transcript,{id:'follow-answer',speaker:'CANDIDATE',text:'Detail langkahnya sudah agak lupa, tapi saya ikut pemeriksaan data awal.',startMs:148000},{id:'last',speaker:'TARA',text:'Kalau proyek lain, kontribusi apa yang paling lu ingat dan bisa lu jelaskan langkahnya?',startMs:199000}];
   }
   return route.fulfill({status:200,headers,json:body});
  });
  invitations.push({id:'invite-1',mode:'VOICE',status:'COMPLETED',recipientEmail:rows[0].email,emailStatus:'SENT',messageStatus:'SENT',createdAt:'2026-11-09T09:00:00Z',expiresAt:'2026-12-01T00:00:00Z',session:{id:'voice',status:'COMPLETED',startedAt:'2026-11-09T09:43:00Z',completedAt:'2026-11-09T09:46:49Z',evaluation:{status:'NEEDS_REVIEW',screeningScore:37.5,result:{summary:'Kontribusi pada EDA disebutkan.',voice:{testedClaims:4,totalClaims:6,partial:true,durationSeconds:229,transcriptComplete:false}}}}},{id:'invite-active',mode:'TEXT',status:'INVITED',recipientEmail:rows[0].email,emailStatus:'SENT',messageStatus:'SENT',createdAt:'2026-11-09T08:00:00Z',expiresAt:'2026-12-01T00:00:00Z',session:null},{id:'invite-older',mode:'VOICE',status:'COMPLETED',recipientEmail:rows[0].email,emailStatus:'SENT',messageStatus:'SENT',createdAt:'2026-11-08T08:00:00Z',expiresAt:'2026-12-01T00:00:00Z',session:{id:'older',status:'COMPLETED',completedAt:'2026-11-08T08:04:00Z',evaluation:{status:'READY',screeningScore:50,result:{summary:'Ringkasan sesi sebelumnya.'}}}});
+ invitations[0].session.evaluation.screeningScore=87.5;
+ invitations[0].session.evaluation.result.interviewAssessment=takaCoverage;
  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));
  await page.goto(base+'/id/dashboard/recruiter/jobs/job?company=co',{waitUntil:'domcontentloaded',timeout:120000});
  await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).waitFor({timeout:60000});
@@ -97,7 +107,13 @@ async function main(){
  await page.getByRole('button',{name:'Screening',exact:true}).click();
  await page.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).waitFor();
  await page.addStyleTag({content:'nextjs-portal{display:none!important}'});
- await page.getByText('37,5',{exact:true}).first().waitFor();await page.getByText('4 dari 6 klaim diuji',{exact:true}).waitFor();
+ const screening = page.getByRole('region', {name:'Screening kandidat'});
+ await screening.locator('table[class*="history"] tbody tr').first().locator('td').nth(4).filter({hasText:'87,5'}).waitFor();
+ await screening.getByText('2 dari 4 klaim dinilai',{exact:true}).first().waitFor();
+ await screening.getByText('Hasil parsial',{exact:true}).first().waitFor();
+ await screening.getByText('Belum dibahas · Hasil',{exact:true}).waitFor();
+ assert.equal(await screening.getByText('Belum dibahas',{exact:true}).count(),2);
+ report.checks.push('Taka partial score 87.5 displays with 2/4 coverage and untested details');
  await page.setViewportSize({width:1586,height:2220});await page.getByRole('dialog',{name:'Dinda Pramesti'}).screenshot({path:path.join(out,'01-overview.png')});await page.setViewportSize({width:1586,height:992});
  const reads=invitationReads;invitations[1].status='STARTED';await page.getByText('Sedang berlangsung',{exact:true}).first().waitFor({timeout:12000});assert.ok(invitationReads>reads,'sent waiting invitation is refreshed');report.checks.push('Active invitation transitions without reopening drawer');
  const notes=page.getByRole('region',{name:'Catatan wawancara Tara',exact:true});
@@ -123,7 +139,30 @@ async function main(){
  report.checks.push('Expired signed report URL is renewed before download');
  await page.getByRole('button',{name:'← Ringkasan screening',exact:true}).click();
  const choices=page.getByRole('button',{name:/Lihat Interview suara/});await choices.last().click();await choices.first().click();await page.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).waitFor();await page.waitForTimeout(700);assert.equal(await page.getByText('Ringkasan sesi sebelumnya.',{exact:true}).count(),0,'slow report response cannot overwrite newly selected session');report.checks.push('Out-of-order reports cannot overwrite the selected session');
- await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'04-mobile.png')});assert.ok(await page.getByRole('dialog',{name:'Dinda Pramesti'}).evaluate(e=>e.scrollWidth<=e.clientWidth),'mobile drawer has no horizontal overflow');
+ for (const width of [390, 320]) {
+  await page.setViewportSize({width, height:844});
+  const drawer = page.getByRole('dialog', {name:'Dinda Pramesti'});
+  assert.ok(await drawer.evaluate(el => el.scrollWidth <= el.clientWidth), 'mobile drawer has no horizontal overflow');
+  const actions = drawer.locator('header [class*="drawerActions"]');
+  assert.ok(await actions.evaluate(row => {
+   const bounds = row.getBoundingClientRect();
+   return [...row.querySelectorAll('button, select')].every(control => {
+    const rect = control.getBoundingClientRect();
+    return rect.left >= bounds.left && rect.right <= bounds.right && Math.abs(rect.top - bounds.top) < 1 && rect.height === 44;
+   });
+  }), 'candidate header actions align and fit at ' + width + 'px');
+  const history = drawer.locator('table[class*="history"]');
+  const visibleActions = await history.evaluate(table => {
+   const frame = table.parentElement.getBoundingClientRect();
+   return [...table.querySelectorAll('tbody button')].every(button => {
+    const rect = button.getBoundingClientRect();
+    return rect.left >= frame.left && rect.right <= frame.right && rect.height >= 44;
+   }) && table.parentElement.scrollWidth <= table.parentElement.clientWidth;
+  });
+  assert.ok(visibleActions, 'screening status and actions fit without sideways scrolling at ' + width + 'px');
+  await page.screenshot({path:path.join(out,width===390?'04-mobile.png':'04-mobile-narrow.png')});
+ }
+ await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Kandidat berikutnya',exact:true}).click();
  const nextCandidate=page.getByRole('dialog',{name:'Rizky Aditya',exact:true});
  await nextCandidate.waitFor();

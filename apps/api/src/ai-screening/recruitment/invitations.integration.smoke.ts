@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import { VoiceService } from '../voice/voice.service';
 import { voiceClock,voiceTurns } from '../voice/voice.policy';
 import { UserErasureService } from '../../users/user-erasure.service';
+import { TAKA_INTERVIEW_VERSION } from '../taka-interview';
 
 const db=new PrismaService();
 async function main(){
@@ -35,7 +36,17 @@ async function main(){
  let mailUncertain=false;
  const candidates=new RecruitmentService(db,storage as never,companies as never),mail={send:async(to:string,_subject:string,html:string)=>{emails.push({to,html});return mailUncertain?null:{id:'mock-email'};}};
  const invitations=new InvitationsService(db,config,candidates,storage as never,plans,sessions,mail as never,packets);
- let calls=0, alternativeSkillFixture=false;
+ let calls=0, alternativeSkillFixture=false, corruptTakaRef=false;
+ const takaRequests: string[][] = [];
+ function takaJudgement(input: { claims: Array<{id:string}>; evidenceCatalog: Array<{id:string;text:string}> }) {
+  takaRequests.push(input.claims.map(c=>c.id));
+  const evidence=input.evidenceCatalog.find(row=>row.text.includes('menulis endpoint Node.js'));
+  const quoteRef=corruptTakaRef?'answer:other-session:0':evidence?.id;
+  corruptTakaRef=false;
+  return { claims:Object.fromEntries(input.claims.map(c=>[c.id,c.id==='skill-0'&&quoteRef
+   ? {level:'STRONG',reason:'Kandidat menjelaskan bagian endpoint yang ia kerjakan.',evidence:[{quoteRef,fields:['TASK','ACTION']}],discrepancyRef:null}
+   : null])) };
+ }
  const rubric={context:'Layanan backend',criteria:['API','Dokumentasi','Pengujian'].map((name,i)=>({id:'c'+i,name,requirementRef:'API',anchors:['Tidak tersedia','Terbatas','Sebagian','Jelas','Lengkap']}))};
  const provider={run:async(_work:string,_subject:string,task:string,input:any,preset?:{version:string})=>{
   calls++;
@@ -56,6 +67,7 @@ async function main(){
     ...(input.assessmentTopics?{evidence:unrelated?[]:input.assessmentTopics.map((topic:any)=>({topicId:topic.id,quote:answer,fields:['TASK','ACTION']}))}:{})};
   }
   if(task==='follow-up')return {stop:false,question:input.targetDepth===1?'Bagaimana lu memastikan hasil kerja lu sesuai kebutuhan proyek?':'Apa yang lu perbaiki setelah melihat hasil pengujian itu?'};
+  if(task==='evaluate'&&preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
   if(task==='evaluate')return {summary:'Kandidat menjelaskan kontribusi pribadi pada proyek.',strengths:['Pengalaman API dijelaskan.'],gaps:[],interviewQuestions:[],claims:input.claims.map((claim:any)=>{const answer=input.answers.find((a:any)=>a.claimId===claim.id);return {claimId:claim.id,judgement:{level:'CONCRETE',detail:'NONE',detailRef:null},status:'SUPPORTED',reason:'Ada penjelasan kontribusi pribadi.',evidence:[{questionId:answer.id,quoteRef:input.evidenceCatalog.find((e:any)=>e.source==='ANSWER'&&e.ref===answer.id).id}],contradictions:[]};})};
   throw Error('Unexpected task '+task);
  }};
@@ -165,7 +177,9 @@ async function main(){
  let holdCreate:Promise<void>|null=null,holdOpen:Promise<void>|null=null;
  let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[];
  const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.responses.model,'gpt-6-luna');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.ok(body.session.instructions.includes('Jangan memberikan jawaban'));return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
- const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any)=>{const question=input.transcript.find((t:any)=>t.speaker==='TARA'),answer=input.transcript.find((t:any)=>t.speaker==='CANDIDATE');return {summary:'Kontribusi API dijelaskan; klaim lain belum diuji.',strengths:['Kontribusi pribadi pada API'],gaps:['Cakupan terbatas'],interviewQuestions:['Konfirmasikan proyek berikutnya.'],claims:input.claims.map((c:any,i:number)=>({claimId:c.id,asked:i===0,opportunities:i===0?[{questionRef:question.id,answerRefs:[answer.id]}]:[],level:i===0?'CONCRETE':'NONE',detail:'NONE',reason:i===0?'Kandidat menjelaskan tindakan pada API.':'Belum ditanyakan.'}))};}};
+ const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
+  if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
+  const question=input.transcript.find((t:any)=>t.speaker==='TARA'),answer=input.transcript.find((t:any)=>t.speaker==='CANDIDATE');return {summary:'Kontribusi API dijelaskan; klaim lain belum diuji.',strengths:['Kontribusi pribadi pada API'],gaps:['Cakupan terbatas'],interviewQuestions:['Konfirmasikan proyek berikutnya.'],claims:input.claims.map((c:any,i:number)=>({claimId:c.id,asked:i===0,opportunities:i===0?[{questionRef:question.id,answerRefs:[answer.id]}]:[],level:i===0?'CONCRETE':'NONE',detail:'NONE',reason:i===0?'Kandidat menjelaskan tindakan pada API.':'Belum ditanyakan.'}))};}};
  const voiceService=new VoiceService(db,config,sessions,{
   ...liveProvider,render:async(text:string)=>({audio:Buffer.from('fixture audio'),durationMs:25,transcript:text}),
  } as never,voiceEvaluator as never);
@@ -434,6 +448,72 @@ async function main(){
  assert.equal(controlledNotes.topics[0].note.opportunities[0].delivery,'AUDIO');
  assert.equal(controlledNotes.topics[1].note.opportunities[0].delivery,'TEXT_FALLBACK');
  assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:controlledVoice.sessionId}}),1);
+
+ process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='true';
+ const takaText=await prepareSkillInvite('TEXT','taka-evidence-text-test');
+ const takaVoice=await prepareSkillInvite('VOICE','taka-evidence-voice-test');
+ process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
+ const takaAnswer='Saya menulis endpoint Node.js.';
+ await sessions.claim(user,takaText.sessionId,clientId);
+ guidedText=await sessions.start(user,takaText.sessionId,clientId);
+ await submitText(takaAnswer);
+ assert.equal(guidedText.questions.at(-1)?.shownAt,null);
+ await db.aiScreeningSession.update({where:{id:takaText.sessionId},data:{taraDeadlineAt:new Date(Date.now()+59_000)}});
+ assert.equal((await sessions.state(user,takaText.sessionId)).status,'COMPLETED');
+ corruptTakaRef=true;
+ const takaTextWork=await deliver('EVALUATE',takaText.sessionId);
+ assert.deepEqual(takaRequests,[['skill-0','skill-1'],['skill-0']],'only the claim with an invalid citation is repaired');
+ await deliver('PDF',takaText.sessionId);
+ const takaTextReport=await invitations.report(hr,takaText.invitationId);
+ assert.equal(takaTextReport.evaluation?.score,100);
+ assert.equal(takaTextReport.evaluation?.status,'NEEDS_REVIEW');
+ assert.equal(takaTextReport.pdfStatus,'READY');
+ await assert.rejects(invitations.report({...hr,id:'foreign-hr'},takaText.invitationId));
+
+ const voicePilot=await voiceService.create(user,takaVoice.sessionId,clientId,'v=0 taka evidence mock SDP offer');
+ onEvent({type:'session.started',event_id:'taka-evidence-start'});
+ const pilotReady=await voiceService.playback(user,takaVoice.sessionId,clientId,'READY');
+ const pilotRevision=pilotReady!.playback!.revision;
+ await voiceService.playback(user,takaVoice.sessionId,clientId,'AUDIO_FAILED',pilotRevision);
+ await voiceService.playback(user,takaVoice.sessionId,clientId,'TEXT_SHOWN',pilotRevision);
+ onEvent({type:'session.input_transcript.delta',event_id:'taka-evidence-answer',delta:takaAnswer,start_ms:600,end_ms:900});
+ await (voiceService as any).active.get(voicePilot.id).pending;
+ await voiceService.end(user,takaVoice.sessionId,clientId,'CONNECTION_LOST');
+ const voiceWork=await db.aiScreeningWork.findFirstOrThrow({where:{kind:'VOICE_EVALUATE',subjectId:takaVoice.sessionId}});
+ const restartedWorker=new ScreeningWorker(db,config,storage as never,new MatchingService(db),packets,sessions,plans,provider as never,
+    undefined,candidates,invitations,voiceService);
+ await restartedWorker.process(voiceWork.id);
+ await deliver('PDF',takaVoice.sessionId);
+ const takaVoiceReport=await invitations.report(hr,takaVoice.invitationId);
+ assert.equal(takaVoiceReport.evaluation?.score,takaTextReport.evaluation?.score);
+ const documents=await Promise.all([takaText.sessionId,takaVoice.sessionId].map(sessionId=>db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId}})));
+ const extract=(new Function('specifier','return import(specifier)')) as (specifier:string)=>Promise<typeof import('pdfjs-dist')>;
+ const pdfjs=await extract('pdfjs-dist/legacy/build/pdf.mjs');
+ for(const result of documents){
+  const payload=result.result as unknown as {interviewAssessment:{version:string;plannedClaims:number;assessedClaims:number;state:string};claims:Array<{score:number|null;evidence:Array<{quote:string}>}>};
+  assert.equal(result.promptVersion,TAKA_INTERVIEW_VERSION);
+  assert.equal(result.cvScore,87.5);
+  assert.equal(result.finalScore,null);
+  assert.deepEqual(payload.claims.map(row=>row.score),[4,null]);
+  assert.equal(payload.claims[0].evidence[0].quote,takaAnswer);
+  assert.deepEqual([payload.interviewAssessment.assessedClaims,payload.interviewAssessment.plannedClaims,payload.interviewAssessment.state],[1,2,'PARTIAL']);
+  assert.ok(objects.get(result.pdfKey!)?.subarray(0,5).equals(Buffer.from('%PDF-')));
+  const loading=pdfjs.getDocument({data:new Uint8Array(objects.get(result.pdfKey!)!),verbosity:0});
+  try{
+   const cover=await (await (await loading.promise).getPage(1)).getTextContent();
+   const text=cover.items.flatMap(item=>'str' in item?[item.str]:[]).join(' ');
+   assert.match(text,/100\s*\/\s*100/);
+   assert.match(text,/Hasil parsial/);
+   assert.match(text,/1 dari 2 klaim dinilai/);
+  }finally{await loading.destroy();}
+ }
+ assert.deepEqual(takaRequests,[['skill-0','skill-1'],['skill-0'],['skill-0','skill-1']]);
+ await db.aiScreeningWork.update({where:{id:takaTextWork.id},data:{status:'PENDING',availableAt:new Date(0)}});
+ await restartedWorker.process(takaTextWork.id);
+ assert.equal(takaRequests.length,3,'same evaluation after restart incurs no second provider request');
+ assert.equal(await db.aiScreeningEvaluationRevision.count({where:{evaluationId:documents[0].id}}),1);
+ assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:takaText.sessionId}}),1);
+ console.log('Taka evidence integration passed: frozen flag, text fallback, partial Chat and Live parity, scoped retry, matching PDF coverage, tenant isolation and restart deduplication. Paid calls: 0.');
  process.env.TARA_TIMED_INTERVIEW_ENABLED='false';
  console.log('Tara timed integration passed: server clock, cross-skill notes, bounded fallback, partial PDF, protected audio, deduplication and preserved Taka scoring.');
 

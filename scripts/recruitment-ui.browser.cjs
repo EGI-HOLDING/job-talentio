@@ -12,6 +12,7 @@ let rows=Array.from({length:500},(_,i)=>({id:'candidate-'+i,companyId:'co',jobId
 const poolRows=[{...rows[0],id:'pool-candidate',jobId:null,cvScore:null,scoreStatus:'EXTRACTED'}];
 const report={checks:[],errors:[],writes:[]};
 let importState=null,importReady=false;
+let cvStatusReads=0;
 const invitations=[];let followupBatch=null;const appointments=[];
 function filtered(filter){return (filter.jobId?rows:poolRows).filter(r=>(!filter.q||r.fullName.toLowerCase().includes(filter.q.toLowerCase()))&&(!filter.stage||r.stage===filter.stage)&&(filter.phase==='review'?r.stage==='NEW':filter.phase==='progress'?['IN_REVIEW','INTERVIEW','OFFER'].includes(r.stage):filter.phase==='finished'?['HIRED','REJECTED','WITHDRAWN'].includes(r.stage):true));}
 async function main(){
@@ -38,6 +39,12 @@ async function main(){
   else if(/^\/recruitment\/candidates\/uploaded-\d+\/upload-url$/.test(p))body={uploadUrl:'https://private.test/upload',status:'UPLOADING'};
   else if(/^\/recruitment\/candidates\/uploaded-\d+\/upload-complete$/.test(p))body={scoreStatus:'PENDING'};
   else if(p==='/recruitment/companies/co/members')body=[{user:{id:'hr',fullName:'Nadia HR'}}];
+  else if(p==='/recruitment/companies/co/cv-status'){
+   cvStatusReads++;
+   const phase=cvStatusReads===1?'DELAYED':'READY';
+   Object.assign(rows[0],{scoreStatus:phase==='READY'?'READY':'PROCESSING',cvScore:phase==='READY'?96:null,cvProgress:{phase,updatedAt:new Date().toISOString()}});
+   body=rows.filter(r=>url.searchParams.get('ids')?.split(',').includes(r.id)).map(({id,scoreStatus,cvScore,cvProgress,error})=>({id,scoreStatus,cvScore,cvProgress,error,revision:0}));
+  }
   else if(p==='/recruitment/candidates/candidate-0/invitations'){
    if(method==='POST'){const input=request.postDataJSON();report.writes.push({invitation:input});invitations.push({id:'invite-1',mode:input.mode,status:'INVITED',recipientEmail:input.email,emailStatus:'SENT',messageStatus:'SENT',expiresAt:'2026-12-01T00:00:00Z',createdAt:new Date().toISOString(),session:null});body=invitations[0];}else body=invitations;
   }
@@ -62,14 +69,33 @@ async function main(){
   return route.fulfill({status:200,headers,json:body});
  });
  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));
+ Object.assign(rows[0],{scoreStatus:'PROCESSING',cvScore:null,cvProgress:{phase:'READING',updatedAt:new Date().toISOString()}});
  await page.goto(base+'/id/dashboard/recruiter/jobs/job?company=co',{waitUntil:'domcontentloaded',timeout:120000});
  await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).waitFor({timeout:60000});
  await page.evaluate(()=>document.fonts.ready);
  assert.equal(await page.getByRole('link',{name:/Kanban/}).count(),0);report.checks.push('Kanban removed from job workspace');
  assert.equal(await page.getByRole('columnheader',{name:'Sumber',exact:true}).count(),0);report.checks.push('No guessed portal source');
  await page.screenshot({path:path.join(out,'01-candidates-desktop.png')});
+ const candidateName=page.getByRole('button',{name:'Dinda Pramesti',exact:true});
+ await candidateName.hover();
+ await page.waitForFunction(()=>{
+  const button=[...document.querySelectorAll('button')].find(item=>item.textContent.trim()==='Dinda Pramesti');
+  if(!button?.matches(':hover'))return false;
+  const style=getComputedStyle(button);
+  return style.backgroundColor==='rgba(0, 0, 0, 0)'&&style.textDecorationLine.includes('underline');
+ });
+ await candidateName.focus();
+ await page.keyboard.press('Shift+Tab');
+ await page.keyboard.press('Tab');
+ assert.ok(await candidateName.evaluate(button=>button.matches(':focus-visible')&&getComputedStyle(button).outlineStyle==='solid'));
+ report.checks.push('Candidate name stays transparent on hover and shows keyboard focus');
  await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).click();
  await page.getByRole('dialog',{name:'Dinda Pramesti'}).waitFor();
+ const drawer=page.getByRole('dialog',{name:'Dinda Pramesti'});
+ await drawer.getByText('Penilaian masih berjalan',{exact:true}).waitFor({timeout:15000});
+ await drawer.getByText('96%',{exact:true}).waitFor({timeout:15000});
+ assert.equal(cvStatusReads,2,'a shared status poll updates list and detail with no duplicate polling');
+ report.checks.push('Taka delayed status and final score update in the open HR drawer without reload');
  await page.getByText('Python dan PyTorch sesuai kebutuhan lowongan.',{exact:true}).waitFor();
  const cvCanvas=page.locator('canvas[data-rendered="true"]');await cvCanvas.waitFor({timeout:60000});assert.ok(await cvCanvas.evaluate(canvas=>{const p=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let ink=0;for(let i=0;i<p.length;i+=4)if(p[i]<100&&p[i+1]<100&&p[i+2]<100)ink++;return ink>100;}),'CV preview contains rendered text, not a blank frame');await page.getByRole('button',{name:'Halaman CV berikutnya',exact:true}).click();await page.getByText('Halaman 2 dari 2',{exact:true}).waitFor();await cvCanvas.waitFor();await page.getByRole('button',{name:'Halaman CV sebelumnya',exact:true}).click();await page.getByText('Halaman 1 dari 2',{exact:true}).waitFor();await cvCanvas.waitFor();report.checks.push('Private PDF CV is actually rendered with working multiple-page navigation');
  await page.screenshot({path:path.join(out,'02-candidate-drawer.png')});

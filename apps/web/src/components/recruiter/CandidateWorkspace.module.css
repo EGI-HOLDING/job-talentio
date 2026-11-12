@@ -27,3 +27,17 @@
 .pdfNavigation select{width:90px}.pdfNavigation button:hover{background:#f3effb;color:#58358b}
 
 .drawerFooterHint{font-size:11px;color:#69768d;align-self:center}@media(max-width:640px){.drawerFooterHint{display:none}}
+
+@media (max-width: 640px) {
+  .drawerActions { justify-content: flex-start; gap: 6px; }
+  .drawerActions .square { flex: 0 0 34px; }
+  .drawerActions select {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    margin-left: 0;
+    padding-inline: 8px 18px;
+  }
+  .drawerActions .secondary { flex: 0 0 auto; padding-inline: 8px; }
+  .drawerActions :is(button, select) { height: 44px; }
+}

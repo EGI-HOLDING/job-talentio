@@ -13,13 +13,15 @@ export function validateCvDocxArchive(buffer: Buffer) {
   if (end < 0 || buffer.readUInt16LE(end + 4) || buffer.readUInt16LE(end + 6)) throw invalid();
   const count = buffer.readUInt16LE(end + 10), size = buffer.readUInt32LE(end + 12), start = buffer.readUInt32LE(end + 16);
   if (!count || count > 2000 || start + size !== end || buffer.readUInt16LE(end + 8) !== count) throw invalid();
-  let cursor = start, total = 0;
+  let cursor = start, total = 0, hasMedia = false;
   for (let n = 0; n < count; n++) {
     if (cursor + 46 > end || buffer.readUInt32LE(cursor) !== 0x02014b50) throw invalid();
     const flags = buffer.readUInt16LE(cursor + 8), method = buffer.readUInt16LE(cursor + 10);
     const compressed = buffer.readUInt32LE(cursor + 20), uncompressed = buffer.readUInt32LE(cursor + 24);
     const name = buffer.readUInt16LE(cursor + 28), extra = buffer.readUInt16LE(cursor + 30), comment = buffer.readUInt16LE(cursor + 32);
     const local = buffer.readUInt32LE(cursor + 42);
+    if (cursor + 46 + name + extra + comment > end) throw invalid();
+    hasMedia ||= /^word\/(media|drawings|embeddings)\//i.test(buffer.toString('utf8', cursor + 46, cursor + 46 + name));
     if ((flags & 1) || ![0, 8].includes(method) || uncompressed > MAX_ENTRY || total + uncompressed > MAX_TOTAL || local + 30 > start || buffer.readUInt32LE(local) !== 0x04034b50) throw invalid();
     const data = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28);
     if (data + compressed > start) throw invalid();
@@ -31,4 +33,5 @@ export function validateCvDocxArchive(buffer: Buffer) {
     if (cursor > end) throw invalid();
   }
   if (cursor !== end) throw invalid();
+  return { hasMedia };
 }

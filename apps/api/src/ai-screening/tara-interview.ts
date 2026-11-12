@@ -23,7 +23,7 @@ export const taraOutcomeLabel: Record<TaraOutcome, string> = {
     ANSWER_CUT_SHORT: 'Jawaban belum sempat ditinjau saat giliran berakhir',
 };
 type TurnJudgment = 'EXAMPLE' | 'NEEDS_DETAIL' | 'OFF_TOPIC' | 'DISCREPANCY';
-type EvidenceField = 'TASK' | 'ACTION' | 'CONTEXT' | 'RESULT' | 'ROLE_BOUNDARY';
+export type EvidenceField = 'TASK' | 'ACTION' | 'CONTEXT' | 'RESULT' | 'ROLE_BOUNDARY';
 type TurnEvidence = {topicId: string; quote: string; fields: EvidenceField[]};
 export type TaraDecision = { outcome: TurnJudgment; answerQuote: string; question: string | null; evidence?: TurnEvidence[] };
 export type TaraTopic = {
@@ -31,7 +31,12 @@ export type TaraTopic = {
     cvQuote?: string; requirementRef?: string; priority?: 'CORE' | 'SUPPORTING'; fields?: EvidenceField[];
 };
 type TaraCitation = Omit<TurnEvidence, 'topicId'> & {answerRef: string; fromTopic: string};
-type TaraOpportunity = {questionRef: string; openedAt?: number; closedAt?: number; delivery: 'CHAT' | 'AUDIO' | 'TEXT_FALLBACK'};
+export type TaraOpportunity = {
+    questionRef: string; openedAt?: number; closedAt?: number; delivery: 'CHAT' | 'AUDIO' | 'TEXT_FALLBACK';
+    resolution?: 'ANSWERED' | 'WINDOW_EXPIRED' | 'CUT_SHORT' | 'INTERRUPTED';
+    redirected?: boolean;
+    connected?: boolean;
+};
 export type TaraNote = {
     topicId: string;
     outcome: TaraOutcome;

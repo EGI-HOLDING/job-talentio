@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { json } from '../screening.policy';
+import { queueCvProviderCleanup } from './cv-assessment-store';
 
 export const scoreJobInclude = { jobSkills: { include: { skill: true } }, jobLanguages: { include: { language: true } } } satisfies Prisma.JobPostInclude;
 export function scoringJob(job: Prisma.JobPostGetPayload<{ include: typeof scoreJobInclude }>) {
@@ -25,8 +26,10 @@ export async function invalidateCvScores(tx: Prisma.TransactionClient, jobId: st
   await tx.recruitmentCandidate.updateMany({where:{jobId,scoreStatus:'UPLOADING'},data:{jobSnapshot:json(next),revision:{increment:1}}});
   const rows=await tx.recruitmentCandidate.findMany({where:{jobId,scoreStatus:{notIn:['UPLOADING','DUPLICATE','ERASED']}},select:{id:true}});
   if(!rows.length)return 0;
-  await tx.recruitmentCandidate.updateMany({where:{id:{in:rows.map(r=>r.id)}},data:{scoreStatus:'STALE',cvScore:null,jobSnapshot:json(next),revision:{increment:1},error:'Kriteria lowongan berubah. Nilai ulang CV agar skor sesuai kriteria terbaru.'}});
-  await tx.aiScreeningWork.updateMany({where:{kind:'CV_SCORE',subjectId:{in:rows.map(r=>r.id)},status:{in:['PENDING','FAILED']}},data:{status:'DONE',error:'JOB_CRITERIA_CHANGED'}});
+  const ids = rows.map(row => row.id);
+  await tx.recruitmentCandidate.updateMany({where:{id:{in:ids}},data:{scoreStatus:'STALE',cvScore:null,cvProgress:Prisma.DbNull,jobSnapshot:json(next),revision:{increment:1},error:'Kriteria lowongan berubah. Nilai ulang CV agar skor sesuai kriteria terbaru.'}});
+  await tx.aiScreeningWork.updateMany({where:{kind:'CV_SCORE',subjectId:{in:ids},status:{in:['PENDING','FAILED']}},data:{status:'DONE',error:'JOB_CRITERIA_CHANGED',cvCheckpoint:Prisma.DbNull}});
+  await queueCvProviderCleanup(tx, { subjectId: { in: ids } });
   await tx.candidateActivity.createMany({data:rows.map(row=>({candidateId:row.id,actorUserId,kind:'CV_CRITERIA_CHANGED'}))});
   return rows.length;
 }

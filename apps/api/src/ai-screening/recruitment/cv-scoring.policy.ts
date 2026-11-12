@@ -25,13 +25,13 @@ export const CV_RESULT_SCHEMA = obj({
   limitations: { type: 'array', items: str },
 });
 const normalize = (text: string) => text.normalize('NFKC').replace(/\s+/gu, ' ').trim();
-export function validateCvResult(value: unknown, scored: boolean) {
+export function validateCvResult(value: unknown, scored: boolean, minimumTextLength = 40) {
   const result = cvResultSchema.parse(value);
   if (!result.readable) {
     if (result.criteria.length) throw Error('UNREADABLE_CV_HAS_SCORES');
     return { result, score: null };
   }
-  if (normalize(result.cvText).length < 40) throw Error('CV_TEXT_MISSING');
+  if (normalize(result.cvText).length < minimumTextLength) throw Error('CV_TEXT_MISSING');
   if (!scored && result.criteria.length) throw Error('UNASSIGNED_CV_HAS_SCORES');
   if (scored && (result.criteria.length !== CV_RUBRIC.length || new Set(result.criteria.map(c => c.criterionId)).size !== CV_RUBRIC.length || result.criteria.some(c => !CV_RUBRIC.some(r => r.id === c.criterionId)))) throw Error('CV_CRITERIA_MISMATCH');
   for (const row of result.criteria) {

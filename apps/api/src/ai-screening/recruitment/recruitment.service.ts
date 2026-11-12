@@ -1,4 +1,4 @@
-import { resumeKnownCvScore } from './cv-score-recovery';
+import { enqueueCvAssessment, resumeKnownCvScore, retryCvAssessmentV2, type CvOperatorAction } from './cv-score-recovery';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -7,14 +7,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { CompaniesService } from '../../companies/companies.service';
 import type { AuthUser } from '../../common/auth.decorators';
-import { enqueueWork } from '../screening-packets.service';
 import { hash, json } from '../screening.policy';
 import { candidateBulkSchema, candidateImportSchema, candidateListSchema, type CandidateList } from './recruitment.schemas';
 import { CV_MAX_BYTES, CV_SCORING_VERSION, fileChecksum, validateCvBytes } from './cv-scoring.policy';
+import { CV_ALERT_MS, CV_RECOVERY_VERSION } from './cv-assessment';
 
 const safeSelect = { id: true, companyId: true, jobId: true, applicationId: true, importId: true, importFileId: true,
   filename: true, sizeBytes: true, contentType: true, fullName: true, email: true, phone: true, headline: true,
-  stage: true, enteredProcessAt: true, scoreStatus: true, cvScore: true, error: true, revision: true, createdAt: true,
+  stage: true, enteredProcessAt: true, scoreStatus: true, cvScore: true, cvProgress: true, error: true, revision: true, createdAt: true,
   assignedTo: { select: { id: true, fullName: true } }, job: { select: { id: true, title: true } },
   interviews:{where:{status:'SCHEDULED',nativeInterviewId:null},orderBy:{scheduledAt:'asc'},take:1,select:{id:true,scheduledAt:true,meetingUrl:true}},
   application: { select: { interviews: { where: { status: 'SCHEDULED' }, orderBy: { scheduledAt: 'asc' }, take: 1, select: { id: true, scheduledAt: true, meetingUrl: true } } } },
@@ -33,6 +33,11 @@ export class RecruitmentService {
     return this.db.companyMember.findMany({where:{companyId,user:{isBanned:false,anonymizedAt:null}},select:{user:{select:{id:true,fullName:true}}},orderBy:{createdAt:'asc'}});
   }
   async jobs(user:AuthUser,companyId:string){await this.access(user,companyId);return this.db.jobPost.findMany({where:{companyId},select:{id:true,title:true,status:true},orderBy:{updatedAt:'desc'}});}
+  async cvStatus(user: AuthUser, companyId: string, ids: string[]) {
+    await this.access(user, companyId);
+    return this.db.recruitmentCandidate.findMany({ where: { companyId, id: { in: ids } },
+      select: { id: true, revision: true, scoreStatus: true, cvScore: true, cvProgress: true, error: true } });
+  }
   async owned(user: AuthUser, id: string) {
     const row = await this.db.recruitmentCandidate.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Kandidat tidak ditemukan.');
@@ -95,7 +100,7 @@ export class RecruitmentService {
         const currentJob=current.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:current.jobId},include:scoreJobInclude}):null;
         const claimed = await tx.recruitmentCandidate.updateMany({ where: { id, scoreStatus: 'UPLOADING' }, data: { fileKey, checksum, contentType, dedupeKey, uploadKey: null, scoreStatus: 'PENDING', error: null, ...(currentJob?{jobSnapshot:json(scoringJob(currentJob))}:{}) } });
         if (!claimed.count) return false;
-        await enqueueWork(tx, 'CV_SCORE', id, 'CV_SCORE:' + id + ':' + current.revision);
+        await enqueueCvAssessment(tx, current);
         await tx.candidateActivity.create({ data: { candidateId: id, actorUserId: user.id, kind: 'CV_RECEIVED' } });
         return true;
       });
@@ -123,7 +128,7 @@ export class RecruitmentService {
         scoreStatus: fileKey ? 'PENDING' : 'FAILED', error: fileKey ? null : 'CV tidak tersedia.', jobSnapshot: json(scoringJob(app.jobPost)), scoringVersion: CV_SCORING_VERSION, createdAt: app.createdAt,
         activities: { create: { kind: 'APPLICATION_RECEIVED' } },
       } });
-      if (fileKey) await enqueueWork(tx, 'CV_SCORE', row.id, 'CV_SCORE:' + row.id + ':0');
+      if (fileKey) await enqueueCvAssessment(tx, row);
       return row;
     });
   }
@@ -183,16 +188,36 @@ export class RecruitmentService {
   }
   async retry(user: AuthUser, id: string) {
     const row = await this.owned(user, id);
-    if (!row.fileKey || !['FAILED','UNREADABLE','STALE'].includes(row.scoreStatus)) throw new BadRequestException('CV ini belum dapat diproses ulang.');
     return this.db.$transaction(async tx => {
+      if (row.fileKey) {
+        const v2 = await retryCvAssessmentV2(tx, row, user.id);
+        if (v2) return v2;
+      }
+      if (!row.fileKey || !['FAILED','UNREADABLE','STALE'].includes(row.scoreStatus)) throw new BadRequestException('CV ini belum dapat diproses ulang.');
       if (await resumeKnownCvScore(tx, row, user.id)) return { status: 'PENDING' };
       const job=row.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:row.jobId},include:scoreJobInclude}):null;
-      const claim = await tx.recruitmentCandidate.updateMany({ where: { id, revision: row.revision, scoreStatus: row.scoreStatus }, data: { scoreStatus: 'PENDING', cvScore:null, ...(job?{jobSnapshot:json(scoringJob(job))}:{}), error: null, revision: { increment: 1 } } });
+      const claim = await tx.recruitmentCandidate.updateMany({ where: { id, revision: row.revision, scoreStatus: row.scoreStatus }, data: { scoreStatus: 'PENDING', cvScore:null, cvProgress: Prisma.DbNull, ...(job?{jobSnapshot:json(scoringJob(job))}:{}), error: null, revision: { increment: 1 } } });
       if (!claim.count) throw new ConflictException('Proses ulang sudah dimulai.');
-      await enqueueWork(tx, 'CV_SCORE', id, 'CV_SCORE:' + id + ':' + (row.revision + 1));
+      await enqueueCvAssessment(tx, { ...row, revision: row.revision + 1 });
       await tx.candidateActivity.create({ data: { candidateId: id, actorUserId: user.id, kind: 'CV_RETRY' } });
       return { status: 'PENDING' };
     });
+  }
+  async recoverCv(user: AuthUser, id: string, operation: CvOperatorAction) {
+    if (user.role !== 'SUPER_ADMIN') throw new NotFoundException();
+    const row = await this.db.recruitmentCandidate.findUnique({ where: { id } });
+    if (!row?.fileKey) throw new NotFoundException();
+    const result = await this.db.$transaction(tx => retryCvAssessmentV2(tx, row, user.id, operation));
+    if (!result) throw new NotFoundException('Penilaian CV tidak tersedia untuk pemulihan.');
+    return result;
+  }
+  async cvRecoveryQueue(user: AuthUser) {
+    if (user.role !== 'SUPER_ADMIN') throw new NotFoundException();
+    return this.db.aiScreeningWork.findMany({ where: { cvPolicy: CV_RECOVERY_VERSION, OR: [
+      { status: 'FAILED', error: { notIn: ['CV_FILE_INVALID', 'CV_DOCUMENT_UNREADABLE'] } },
+      { status: { in: ['PENDING', 'RUNNING'] }, createdAt: { lte: new Date(Date.now() - CV_ALERT_MS) } },
+    ] }, orderBy: { updatedAt: 'asc' }, take: 100,
+      select: { id: true, subjectId: true, status: true, error: true, createdAt: true, updatedAt: true } });
   }
   async bulk(user: AuthUser, input: z.infer<typeof candidateBulkSchema>) {
     await this.access(user,input.companyId);
@@ -209,14 +234,15 @@ export class RecruitmentService {
       if(rows.length!==expected)throw new ConflictException('Daftar kandidat berubah. Perbarui pilihan lalu coba lagi.');
       if(input.action.kind==='rescore'){
         const sources=await tx.recruitmentCandidate.findMany({where:{id:{in:rows.map(r=>r.id)}}});
-        const eligible=sources.filter(r=>r.fileKey&&['STALE','FAILED','UNREADABLE'].includes(r.scoreStatus));
+        const eligible=sources.filter(r=>r.fileKey&&['STALE','FAILED','UNREADABLE'].includes(r.scoreStatus)&&
+          (r.cvProgress as { phase?: string } | null)?.phase !== 'RECOVERING');
         if(!eligible.length)throw new BadRequestException('Tidak ada CV yang memerlukan penilaian ulang dalam pilihan ini.');
         for(const source of eligible){
           if (await resumeKnownCvScore(tx, source, user.id)) continue;
           const job=source.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:source.jobId},include:scoreJobInclude}):null;
-          const claimed=await tx.recruitmentCandidate.updateMany({where:{id:source.id,revision:source.revision,scoreStatus:source.scoreStatus},data:{scoreStatus:'PENDING',cvScore:null,error:null,revision:{increment:1},...(job?{jobSnapshot:json(scoringJob(job))}:{})}});
+          const claimed=await tx.recruitmentCandidate.updateMany({where:{id:source.id,revision:source.revision,scoreStatus:source.scoreStatus},data:{scoreStatus:'PENDING',cvScore:null,cvProgress:Prisma.DbNull,error:null,revision:{increment:1},...(job?{jobSnapshot:json(scoringJob(job))}:{})}});
           if(!claimed.count)throw new ConflictException('Status penilaian berubah. Perbarui daftar kandidat.');
-          await enqueueWork(tx,'CV_SCORE',source.id,'CV_SCORE:'+source.id+':'+(source.revision+1));
+          await enqueueCvAssessment(tx, { ...source, revision: source.revision + 1 });
           await tx.candidateActivity.create({data:{candidateId:source.id,actorUserId:user.id,kind:'CV_RETRY'}});
         }return {count:eligible.length};
       }
@@ -227,7 +253,7 @@ export class RecruitmentService {
         let count=0;
         for(const source of sources){const dedupeKey=hash([source.companyId,job.id,source.checksum]);const exists=await tx.recruitmentCandidate.findUnique({where:{dedupeKey}});if(exists)continue;
           const added=await tx.recruitmentCandidate.create({data:{companyId:source.companyId,jobId:job.id,filename:source.filename,contentType:source.contentType,sizeBytes:source.sizeBytes,fileKey:source.fileKey,checksum:source.checksum,dedupeKey,fullName:source.fullName,email:source.email,phone:source.phone,headline:source.headline,scoreStatus:'PENDING',scoringVersion:CV_SCORING_VERSION,jobSnapshot:json(scoringJob(job))}});
-          await enqueueWork(tx,'CV_SCORE',added.id);await tx.candidateActivity.create({data:{candidateId:added.id,actorUserId:user.id,kind:'CV_ADDED_TO_JOB',detail:json({poolCandidateId:source.id})}});count++;
+          await enqueueCvAssessment(tx, added);await tx.candidateActivity.create({data:{candidateId:added.id,actorUserId:user.id,kind:'CV_ADDED_TO_JOB',detail:json({poolCandidateId:source.id})}});count++;
         }return{count};
       }
       if(input.action.kind==='move'&&rows.some(row=>['OFFER','HIRED','REJECTED','WITHDRAWN'].includes(row.stage)))throw new BadRequestException('Kandidat dalam penawaran atau tahap selesai perlu ditindaklanjuti melalui detail kandidat.');

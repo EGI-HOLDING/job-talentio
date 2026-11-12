@@ -16,11 +16,12 @@ import { RecruitmentService } from './recruitment.service';
 import { ScreeningCandidatePlans } from '../screening-candidate-plans.service';
 import { ScreeningSessions } from '../screening-sessions.service';
 import { enqueueEvaluationPdf, enqueueWork, ScreeningPackets } from '../screening-packets.service';
-import { conversationPolicy, publicConversationPolicy } from '../conversation.policy';
+import { conversationPolicy, publicConversationPolicy, usesTimedInterview } from '../conversation.policy';
 import { json, screeningEnabled, PDF_TEMPLATE_VERSION } from '../screening.policy';
 import { registerCvVersion } from '../../profiles/cv-evidence';
 import { CV_MAX_BYTES, fileChecksum } from './cv-scoring.policy';
 import { voiceTurns } from '../voice/voice.policy';
+import { freezeTakaInterview } from '../taka-interview';
 import { invitationCreateSchema, invitationId, invitationNonce, invitationToken, INVITATION_TTL_MS, tokenHash, validInvitationToken } from './invitation.policy';
 
 type FrozenInvitation={filename:string;fileKey:string;checksum:string;contentType:string;cvText:string;cvScore:number|null;cvResult:unknown;job:unknown;jobId:string;jobTitle:string;companyName:string};
@@ -52,6 +53,8 @@ export class InvitationsService {
   if(active)return this.safe(active);
   const packet=await this.packets.sync(candidate.jobId,true);
   if(!packet)throw new BadRequestException('Konteks lowongan belum tersedia.');
+  const takaInterviewAssessment = process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED === 'true' && usesTimedInterview(conversationPolicy(packet.conversationPolicy))
+   ? freezeTakaInterview() : undefined;
   const id=randomUUID(),tokenNonce=invitationNonce(),token=this.token({id,tokenNonce});
   const row=await this.db.$transaction(async tx=>{
    await tx.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id=${candidate.companyId} FOR UPDATE`);
@@ -62,7 +65,7 @@ export class InvitationsService {
    const currentJob=await tx.jobPost.findUniqueOrThrow({where:{id:candidate.jobId!},include:scoreJobInclude});
    if(current.scoreStatus!=='READY'||current.revision!==candidate.revision||!sameScoringJob(current.jobSnapshot,scoringJob(currentJob)))throw new ConflictException('Penilaian CV perlu diperbarui sebelum membuat undangan baru.');
    if(!sameScoringJob(scoringJob(packet.jobSnapshot as never),scoringJob(currentJob)))throw new ConflictException('Lowongan baru saja berubah. Coba buat undangan lagi.');
-   const created=await tx.screeningInvitation.create({data:{id,candidateId,packageId:packet.id,mode:input.mode,recipientEmail:email,createdById:user.id,requestKey:input.requestKey,tokenNonce,tokenHash:tokenHash(token),expiresAt:new Date(Date.now()+INVITATION_TTL_MS),snapshot:json({filename:details.filename,fileKey:details.fileKey,checksum:details.checksum,contentType:details.contentType,cvText:text,cvScore:details.cvScore,cvResult:details.cvResult,job:details.jobSnapshot,jobId:details.jobId,jobTitle:details.job!.title,companyName:details.job!.isAnonymous?'Perusahaan dirahasiakan':details.company.name})},include:inviteInclude});
+   const created=await tx.screeningInvitation.create({data:{id,candidateId,packageId:packet.id,mode:input.mode,recipientEmail:email,createdById:user.id,requestKey:input.requestKey,tokenNonce,tokenHash:tokenHash(token),expiresAt:new Date(Date.now()+INVITATION_TTL_MS),snapshot:json({filename:details.filename,fileKey:details.fileKey,checksum:details.checksum,contentType:details.contentType,cvText:text,cvScore:details.cvScore,cvResult:details.cvResult,job:details.jobSnapshot,jobId:details.jobId,jobTitle:details.job!.title,companyName:details.job!.isAnonymous?'Perusahaan dirahasiakan':details.company.name,takaInterviewAssessment})},include:inviteInclude});
    const restored=await tx.aiScreeningPackage.updateMany({where:{id:packet.id,status:'SUPERSEDED'},data:{status:'PENDING'}});
    if(restored.count)await tx.aiScreeningWork.updateMany({where:{key:'PREPARE:'+packet.id,status:'DONE'},data:{status:'PENDING',availableAt:new Date()}});
    await enqueueWork(tx,'INVITE_DELIVERY',id);

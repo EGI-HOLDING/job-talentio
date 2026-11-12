@@ -14,7 +14,7 @@ import type { CandidatePayload, PackagePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
 import { newConversationPolicy, conversationPolicy, publicConversationPolicy, usesSkillInterview, usesTimedInterview } from './conversation.policy';
-import { advanceTara, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
+import { advanceTara, recordTaraOpportunity, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
 const sessionInclude = { invitation: { include: { candidate: { select: { stage:true, company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
@@ -297,7 +297,17 @@ export class ScreeningSessions {
             await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { draft: expired ? q.draft : answer, answer: (expired ? q.draft : answer).trim(), answeredAt: now, timedOut: expired } });
             const next = session.questions.find(v => v.position > q.position && v.answer === null), revision = session.revision + 1;
             const advanceAt = session.taraDeadlineAt && !next ? new Date(+now + TARA_CHAT_REVIEW_MS) : null;
-            await tx.aiScreeningSession.update({ where: { id }, data: { status: next ? 'ACTIVE' : 'GENERATING', revision, error: null, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), ...(advanceAt ? {taraAdvanceAt:advanceAt} : {}) } });
+            const tara = advanceAt ? session.taraInterview as unknown as TaraProgress | null : null;
+            if (tara && q.deadlineAt) {
+                const topic = tara.topics[tara.active];
+                if (topic?.note.topicId === q.claimId) recordTaraOpportunity(topic.note, {
+                    questionRef: q.id, openedAt: +q.shownAt, closedAt: expired ? +q.deadlineAt : +now, delivery: 'CHAT',
+                    redirected: topic.focus === 'OFF_TOPIC',
+                    connected: Boolean(session.leaseExpiresAt && +session.leaseExpiresAt >= (expired ? +q.deadlineAt : +now)),
+                    resolution: !expired ? 'ANSWERED' : +q.deadlineAt - +q.shownAt >= 60_000 ? 'WINDOW_EXPIRED' : 'CUT_SHORT',
+                });
+            }
+            await tx.aiScreeningSession.update({ where: { id }, data: { status: next ? 'ACTIVE' : 'GENERATING', revision, error: null, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), ...(advanceAt ? {taraAdvanceAt:advanceAt} : {}), ...(tara ? {taraInterview:json(tara)} : {}) } });
             if (!next)
                 await enqueueWork(tx, 'ADVANCE', id, 'ADVANCE:' + id + ':' + revision);
             if (advanceAt) return {advanceAt, revision};
@@ -342,7 +352,10 @@ export class ScreeningSessions {
                 questionRef:last.shownAt ? last.id : undefined, answerRefs:answer ? [last.id] : [], answered:!!answer,
                 previous:previous.map(q=>q.text), decision, timedOut:closing || last.timedOut,
                 answers:answer ? [{ref:last.id,text:answer}] : [],
-                opportunity:last.shownAt ? {questionRef:last.id,openedAt:+last.shownAt,closedAt:+(last.answeredAt ?? now),delivery:'CHAT'} : undefined,
+                opportunity:last.shownAt && !progress.topics[progress.active].note.opportunities?.some(item=>item.questionRef===last.id)
+                    ? {questionRef:last.id,openedAt:+last.shownAt,closedAt:+(last.answeredAt ?? now),delivery:'CHAT',
+                        ...(last.answer === null ? {resolution:'CUT_SHORT' as const} : {}),
+                        redirected:progress.topics[progress.active].focus === 'OFF_TOPIC'} : undefined,
             }, {
                 canContinue: !closing,
                 canClarify:+now + window <= Math.min(closeAt, start + TARA_FIRST_PASS_MS - remaining * window),

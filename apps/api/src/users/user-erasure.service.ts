@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { queueCvProviderCleanup } from '../ai-screening/recruitment/cv-assessment-store';
 import {
   ANONYMIZED_DISPLAY_NAME,
   eraseBlockedByOpenCompany,
@@ -134,7 +135,9 @@ export class UserErasureService {
       const affected=await tx.recruitmentCandidate.findMany({where:{OR:[{id:{in:linkedCandidates.map(c=>c.id)}},{fileKey:{in:cvKeys}}]},select:{id:true,fileKey:true}});
       const candidateIds=affected.map(c=>c.id),invitations=await tx.screeningInvitation.findMany({where:{OR:[{claimedUserId:userId},{candidateId:{in:candidateIds}}]},select:{id:true}});
       const removedSubjects=[...candidateIds,...invitations.map(i=>i.id)];
-      await tx.aiScreeningWork.updateMany({where:{subjectId:{in:removedSubjects}},data:{status:'CANCELLED',leaseOwner:null,leaseUntil:null,error:'ACCOUNT_ERASED'}});
+      if (candidateIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM "RecruitmentCandidate" WHERE id IN (${Prisma.join(candidateIds)}) ORDER BY id FOR UPDATE`);
+      await tx.aiScreeningWork.updateMany({where:{subjectId:{in:removedSubjects}},data:{status:'CANCELLED',leaseOwner:null,leaseUntil:null,error:'ACCOUNT_ERASED',cvCheckpoint:Prisma.DbNull}});
+      await queueCvProviderCleanup(tx, { subjectId: { in: candidateIds } });
       await tx.aiScreeningCall.updateMany({where:{subjectId:{in:removedSubjects}},data:{status:'ERASED',result:Prisma.DbNull,error:null}});
       await tx.screeningInvitation.updateMany({where:{id:{in:invitations.map(i=>i.id)}},data:{status:'CANCELLED',snapshot:{erased:true},recipientEmail:'erased@example.invalid',error:null}});
       const candidateMessages=await tx.candidateMessage.findMany({where:{OR:[{candidateId:{in:candidateIds}},{recipientUserId:userId}]},select:{id:true,messageId:true}});
@@ -145,7 +148,7 @@ export class UserErasureService {
       await tx.candidateMessageBatch.updateMany({where:{messages:{some:{id:{in:candidateMessageIds}},every:{id:{in:candidateMessageIds}}}},data:{subject:'Pesan dihapus',bodyTemplate:'Message removed'}});
       await tx.candidateInterview.deleteMany({where:{candidateId:{in:candidateIds}}});
       await tx.candidateActivity.deleteMany({where:{candidateId:{in:candidateIds}}});
-      await tx.recruitmentCandidate.updateMany({where:{id:{in:candidateIds}},data:{fullName:ANONYMIZED_DISPLAY_NAME,email:null,phone:null,headline:'',filename:'CV dihapus',fileKey:null,checksum:null,cvScore:null,cvResult:Prisma.DbNull,jobSnapshot:Prisma.DbNull,dedupeKey:null,scoreStatus:'ERASED',stage:'WITHDRAWN',error:null,revision:{increment:1}}});
+      await tx.recruitmentCandidate.updateMany({where:{id:{in:candidateIds}},data:{fullName:ANONYMIZED_DISPLAY_NAME,email:null,phone:null,headline:'',filename:'CV dihapus',fileKey:null,checksum:null,cvScore:null,cvResult:Prisma.DbNull,cvProgress:Prisma.DbNull,jobSnapshot:Prisma.DbNull,dedupeKey:null,scoreStatus:'ERASED',stage:'WITHDRAWN',error:null,revision:{increment:1}}});
       taraKeys=[...new Set([...taraKeys,...cvKeys])];
       const voiceRows=profile?await tx.voiceInterview.findMany({where:{session:{profileId:profile.id}},select:{id:true}}):[];
       const voiceIds=voiceRows.map(v=>v.id);

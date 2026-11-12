@@ -3,6 +3,8 @@ import { VoiceService } from './voice/voice.service';
 import { InvitationsService } from './recruitment/invitations.service';
 import { RecruitmentService } from './recruitment/recruitment.service';
 import { CvScoringService } from './recruitment/cv-scoring.service';
+import { CvAssessmentService } from './recruitment/cv-assessment.service';
+import { CvWorkDelay } from './recruitment/cv-assessment';
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -32,6 +34,8 @@ import { evidenceCatalog, resolveEvidence } from './evidence-catalog';
 import { frozenCvAssessment } from './frozen-cv';
 import { conversationPolicy, conversationTone, isClaimAssessmentVersion, repeatsQuestion, usesSkillInterview, usesTimedInterview } from './conversation.policy';
 import { advanceTara, taraAssessmentTopics, taraTopics, taraInterviewReport, validTaraDecision, type TaraProgress, type TaraDecision } from './tara-interview';
+import { chatTakaTurns, frozenTakaInterview } from './taka-interview';
+import { evaluateTakaInterview } from './taka-evaluation';
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -47,7 +51,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private lastMessageReconcile=0;
     private reconcilingMessages=false;
     private active = new Set<string>();
-    constructor(private db: PrismaService, private config: ConfigService, private storage: StorageService, private matching: MatchingService, private packets: ScreeningPackets, private sessions: ScreeningSessions, private candidates: ScreeningCandidatePlans, private client: ScreeningClient, @Optional() private cvScoring?: CvScoringService, @Optional() private recruitment?: RecruitmentService, @Optional() private invitations?: InvitationsService, @Optional() private voice?: VoiceService, @Optional() private actions?: CandidateActions) { }
+    constructor(private db: PrismaService, private config: ConfigService, private storage: StorageService, private matching: MatchingService, private packets: ScreeningPackets, private sessions: ScreeningSessions, private candidates: ScreeningCandidatePlans, private client: ScreeningClient, @Optional() private cvScoring?: CvScoringService, @Optional() private recruitment?: RecruitmentService, @Optional() private invitations?: InvitationsService, @Optional() private voice?: VoiceService, @Optional() private actions?: CandidateActions, @Optional() private cvRecovery?: CvAssessmentService) { }
     async onModuleInit() {
         this.stopping = false;
         const exists = await this.db.$queryRaw<Array<{
@@ -103,7 +107,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             const now = new Date();
             const due = { OR: [{ status: 'PENDING', availableAt: { lte: now } }, { status: 'RUNNING', leaseUntil: { lte: now } }] };
             // CV imports must not fill the delivery window ahead of live interview follow-ups.
-            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION'];
+            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE'];
             const [interactive, imports] = await Promise.all([
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { notIn: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { in: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
@@ -114,7 +118,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                     break;
                 if (this.queue) {
                     try {
-                        await this.queue.add('deliver', { workId: work.id }, { jobId: work.id, priority: ['CV_SCORE','CAPTURE_APPLICATION'].includes(work.kind) ? 10 : 1 });
+                        await this.queue.add('deliver', { workId: work.id }, { jobId: work.id, priority: bulkKinds.includes(work.kind) ? 10 : 1 });
                         continue;
                     }
                     catch { }
@@ -146,13 +150,17 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             if (work.kind === 'CANDIDATE_DELIVERY')
                 await this.actions!.deliver(work.subjectId);
             else if (work.kind === 'VOICE_EVALUATE')
-                await this.voice?.evaluate(id, work.subjectId);
+                await this.voice?.evaluate(id, work.subjectId, owner);
             else if (work.kind === 'INVITE_DELIVERY')
                 await this.invitations!.deliver(work.subjectId);
             else if (work.kind === 'CAPTURE_APPLICATION')
                 await this.recruitment!.captureApplication(work.subjectId);
             else if (work.kind === 'CV_SCORE')
-                await this.cvScoring!.process(id, work.subjectId);
+                await this.cvScoring!.process(id, work.subjectId, owner);
+            else if (work.kind === 'CV_PROVIDER_EVENT')
+                await this.cvRecovery!.receiveProviderEvent(work.subjectId);
+            else if (work.kind === 'CV_PROVIDER_DELETE')
+                await this.cvRecovery!.deleteProviderResult(work.subjectId);
             else if (work.kind === 'PREPARE')
                 await this.prepare(id, work.subjectId);
             else if (work.kind === 'DOCUMENT')
@@ -164,7 +172,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             else if (work.kind === 'ADVANCE')
                 await this.advance(id, work.subjectId);
             else if (work.kind === 'EVALUATE')
-                await this.evaluate(id, work.subjectId);
+                await this.evaluate(id, work.subjectId, owner);
             else if (work.kind === 'PDF')
                 await this.pdf(work.subjectId);
             else
@@ -172,29 +180,29 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'DONE', leaseUntil: null, leaseOwner: null, error: null } });
         }
         catch (error) {
-            if (error instanceof AiPending) {
-                await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'PENDING', availableAt: new Date(Date.now() + 2000), leaseUntil: null, leaseOwner: null } });
+            if (error instanceof AiPending || error instanceof CvWorkDelay) {
+                await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'PENDING', availableAt: new Date(Date.now() + (error instanceof CvWorkDelay ? error.delayMs : 2000)), leaseUntil: null, leaseOwner: null } });
                 return;
             }
-            const message = error instanceof Error ? error.message : 'TARA_PROCESSING_FAILED';
+            const message = work.cvPolicy ? 'CV_WORKER_ERROR' : error instanceof Error ? error.message : 'TARA_PROCESSING_FAILED';
             const uncertain = error instanceof AiUncertain;
-            if (!uncertain)
+            if (!uncertain && !work.cvPolicy)
                 await this.db.aiScreeningCall.updateMany({ where: { workId: id, status: 'COMPLETED' }, data: { status: 'INVALID', error: 'DOMAIN_VALIDATION_FAILED' } });
             const retry = !uncertain && work.attempts < 2 && message !== 'CV_UNREADABLE' && message !== 'NO_CV_CLAIMS';
             await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: retry ? 'PENDING' : 'FAILED', attempts: { increment: 1 }, availableAt: new Date(Date.now() + 10000), leaseUntil: null, leaseOwner: null, error: message.slice(0, 180) } });
             if (!retry)
-                await this.failure(work.kind, work.subjectId, message, work.key);
+                await this.failure(work.kind, work.subjectId, message, work.key, Boolean(work.cvPolicy));
             this.logger.warn('Tara ' + work.kind + ' ' + (retry ? 'retry scheduled' : 'needs recovery') + ' (' + message.slice(0, 80) + ')');
         }
         finally {
             clearInterval(heartbeat);
         }
     }
-    private async failure(kind: string, id: string, error: string, workKey?:string) {
+    private async failure(kind: string, id: string, error: string, workKey?:string, cvRecovery = false) {
         if (kind === 'CANDIDATE_DELIVERY') await this.actions?.failure(id);
-        if (kind === 'VOICE_EVALUATE') await this.db.aiScreeningEvaluation.updateMany({where:{sessionId:id},data:{status:'FAILED',error}});
+        if (kind === 'VOICE_EVALUATE') await this.db.aiScreeningEvaluation.updateMany({where:{sessionId:id,result:{equals:Prisma.DbNull}},data:{status:'FAILED',error}});
         if (kind === 'INVITE_DELIVERY') await this.invitations?.failure(id);
-        if (kind === 'CV_SCORE') await this.cvScoring?.failure(id, error, workKey);
+        if (kind === 'CV_SCORE') await this.cvScoring?.failure(id, error, workKey, cvRecovery);
         if (kind === 'PREPARE')
             await this.db.aiScreeningPackage.updateMany({ where: { id }, data: { status: 'FAILED', error } });
         if (kind === 'CANDIDATE')
@@ -426,10 +434,20 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const profile = { id: session.profileId, languages: snapshot.submission.languages, certifications: snapshot.submission.certifications };
         return this.matching.scoreHistoricalInputs(withCvFacts(profile, version) as never, job as never);
     }
-    private async evaluate(workId: string, id: string) {
+    private async evaluate(workId: string, id: string, owner?: string) {
         const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { invitation: true, package: true, currentPlan: true, evaluation: true, questions: { orderBy: { position: 'asc' } } } });
         if (!session || (!session.applicationId && !session.invitation) || !session.currentPlan || !session.package)
             return;
+        const takaPreset = frozenTakaInterview(session.invitation?.snapshot);
+        if (takaPreset && session.invitation?.mode === 'TEXT') {
+            if (session.status !== 'COMPLETED') return;
+            const plan = session.currentPlan.payload as unknown as CandidatePayload;
+            const rubric = session.package.payload as unknown as PackagePayload;
+            const progress = session.taraInterview as unknown as TaraProgress | null;
+            const notes = progress ? taraInterviewReport(progress, taraTopics(plan, rubric, true)) : undefined;
+            return evaluateTakaInterview(this.db, this.client, workId, session, session.invitation, takaPreset, plan,
+                chatTakaTurns(session.questions, notes), { rubric, notes, owner, interrupted: progress?.endedReason === 'INTERRUPTED' });
+        }
         const revisions = session.evaluation && session.evaluation.cvScore === null ? await this.db.aiScreeningEvaluationRevision.findMany({ where: { evaluationId: session.evaluation.id }, select: { snapshot: true }, orderBy: { createdAt: 'asc' } }) : [];
         const frozenCv = frozenCvAssessment(session.evaluation, revisions);
         const currentResult = session.evaluation?.result && isClaimAssessmentVersion(session.evaluation.promptVersion) ? session.evaluation.result as unknown as EvaluationPayload : null;

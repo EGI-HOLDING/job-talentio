@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { CV_MAX_BYTES } from './cv-scoring.policy';
+export const cvStatusIds = z.string().max(6000).transform(value => [...new Set(value.split(','))])
+  .pipe(z.array(z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/)).min(1).max(100));
+export const cvOperatorRecovery = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('RESUME') }).strict(),
+  z.object({ action: z.literal('CONFIRM_NOT_ACCEPTED'), reference: z.string().regex(/^[a-zA-Z0-9_-]{5,100}$/) }).strict(),
+]);
 export const candidateImportSchema = z.object({
   companyId: z.string().min(1), jobId: z.string().min(1).optional(), requestKey: z.string().min(10).max(100),
   files: z.array(z.object({ clientId: z.string().min(1).max(100), filename: z.string().min(1).max(240).regex(/\.(pdf|docx?)$/i), size: z.number().int().min(1).max(CV_MAX_BYTES), contentType: z.enum(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']) }).strict()).min(1).max(1000),

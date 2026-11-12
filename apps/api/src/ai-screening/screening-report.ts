@@ -28,6 +28,11 @@ function fonts() {
     return { regular: join(root, 'NotoSans-Regular.ttf'), bold: join(root, 'NotoSans-Bold.ttf'), logo: join(root, '..', 'brand', 'talentio.png') };
 }
 const claimLabels = { SUPPORTED: 'Didukung penjelasan kandidat', INSUFFICIENT: 'Belum cukup bukti', CLARIFY: 'Perlu konfirmasi HR' };
+const coverageLabels = {
+    NOT_ASKED: 'Belum dibahas', INSUFFICIENT_OPPORTUNITY: 'Kesempatan belum cukup',
+    TECHNICAL_INTERRUPTION: 'Kesempatan terpotong', ASSESSMENT_UNAVAILABLE: 'Penilaian perlu ditinjau',
+};
+const fieldLabels = { TASK: 'tugas', ACTION: 'tindakan pribadi', CONTEXT: 'konteks pengalaman', RESULT: 'hasil', ROLE_BOUNDARY: 'batas tanggung jawab' };
 const val = (n: number | null) => n === null ? '—' : n.toLocaleString('id-ID', { maximumFractionDigits: 1 });
 export async function renderScreeningReport(data: ScreeningReport): Promise<Buffer> {
     const f = fonts(), doc = new PDFDocument({ size: 'A4', margin: 44, bufferPages: true, autoFirstPage: true, info: { Title: 'Laporan screening Tara — ' + data.name, Author: 'Talentio', Subject: 'Dukungan klaim CV dan kecocokan pekerjaan' } });
@@ -58,7 +63,10 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     y += text((data.independentScores?data.company+' · ':'Lamaran ')+data.submittedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })+(data.independentScores?'':' · Kebutuhan lowongan v'+data.jobVersion),44,y,width,9,false,muted)+16;
     const voice=(data.result as unknown as {voice?:{partial:boolean;testedClaims:number;totalClaims:number;durationSeconds:number;transcriptComplete:boolean}}).voice;
     const alternative=data.result.taraInterview?.topics.some(topic=>topic.alternative);
-    if(voice?.partial){doc.roundedRect(44,y,222,23,5).fill('#fff2dc');text('Hasil parsial — perlu ditinjau HR',52,y+5,206,9,true,'#96621c');y+=33;}
+    const assessment=data.result.interviewAssessment;
+    const notice=assessment?.state==='NO_ASSESSABLE_CLAIMS'?'Belum ada klaim yang dapat dinilai':
+        assessment?.state==='PARTIAL'||!assessment&&voice?.partial?'Hasil parsial — perlu ditinjau HR':null;
+    if(notice){doc.roundedRect(44,y,230,23,5).fill('#fff2dc');text(notice,52,y+5,214,9,true,'#96621c');y+=33;}
     const scores = data.independentScores ? [['Kecocokan CV',data.cvScore],['Dukungan klaim CV',data.screeningScore]] : [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]];
     const gap = 12, card = (width - (scores.length - 1) * gap) / scores.length;
     for (const [i, [label, n]] of scores.entries()) {
@@ -69,10 +77,14 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     y += 98;
     if(data.independentScores){
-        if(voice){const duration=Math.floor(voice.durationSeconds/60)+':'+String(voice.durationSeconds%60).padStart(2,'0');y+=text((alternative?'Pengalaman di luar CV':voice.testedClaims+'/'+voice.totalClaims+' klaim diuji')+' · Durasi '+duration+(voice.transcriptComplete?'':' · Transkrip tidak lengkap'),44,y,width,9,false,muted)+14;}
+        const duration=voice?' · Durasi '+Math.floor(voice.durationSeconds/60)+':'+String(voice.durationSeconds%60).padStart(2,'0')+(voice.transcriptComplete?'':' · Transkrip tidak lengkap'):'';
+        if(assessment){
+            const label=assessment.state==='ALTERNATIVE'?'Pengalaman di luar CV':assessment.assessedClaims+' dari '+assessment.plannedClaims+' klaim dinilai';
+            y+=text(label+duration+' · '+assessment.version,44,y,width,9,false,muted)+14;
+        }else if(voice)y+=text((alternative?'Pengalaman di luar CV':voice.testedClaims+'/'+voice.totalClaims+' klaim diuji')+duration,44,y,width,9,false,muted)+14;
         heading('Ringkasan',y);y+=22;y+=text(data.result.summary,44,y,width,10)+16;
         heading('Bukti terpilih',y);y+=24;
-        const selected=data.result.claims.filter(c=>(c as unknown as {asked?:boolean}).asked!==false).slice(0,3);
+        const selected=data.result.claims.filter(c=>assessment?c.score!=null:(c as unknown as {asked?:boolean}).asked!==false).slice(0,3);
         for(const claim of selected){
             const source=data.plan.claims.find(c=>c.id===claim.claimId),title=source?.statement??'Klaim CV',evidence=claim.evidence[0];
             const body=evidence?'Jawaban: '+evidence.quote.slice(0,155)+(evidence.quote.length>155?'…':''):claim.reason;
@@ -124,8 +136,11 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     const excerpt = (value: string, n = 90) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
     const modern = data.result.claims.length > 0 && data.result.claims.every(c => 'score' in c);
-    const records = modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null, reason: result.reason,
-        quote: data.plan.claims.find(c => c.id === result.claimId)?.quote, evidence: result.evidence[0], status: claimLabels[result.status], pair: result.contradictions[0] })) :
+    const records = modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null,
+        reason: result.reason + (result.score != null && result.assessment?.openFields.length
+            ? '\nBelum dibahas · ' + result.assessment.openFields.map(field => fieldLabels[field]).join(', ') : ''),
+        quote: data.plan.claims.find(c => c.id === result.claimId)?.quote, evidence: result.evidence[0],
+        status: result.assessment && result.assessment.state !== 'ASSESSED' ? coverageLabels[result.assessment.state] : claimLabels[result.status], pair: result.contradictions[0] })) :
         data.result.criteria.map(c => ({ title: data.rubric.criteria.find(r => r.id === c.criterionId)?.name ?? 'Kompetensi', score: c.score, reason: c.reason, quote: undefined as string | undefined, evidence: c.evidence[0], status: 'Metodologi sebelumnya', pair: undefined as EvaluationPayload['claims'][number]['contradictions'][number] | undefined }));
     const columns = records.length > 3 ? 2 : 1;
     for (let index = 0; index < records.length; index += columns) {

@@ -5,6 +5,7 @@ const DELIVERY_MS = 25_000;
 const PAUSE_MS = 1_800;
 const REVIEW_MS = 8_000;
 const CHECKPOINTS_MS = [35_000, 75_000];
+const MIN_SILENT_WINDOW_MS = 35_000;
 const CLOSE_MS = 14 * 60_000;
 const TRANSITION_ACK_MS = 1200;
 const TRANSITION_LIMIT_MS = 12_000;
@@ -59,11 +60,12 @@ export class TaraLiveTurns {
         if (this.timed) {
             const note = this.progress.topics[this.progress.active].note;
             note.questionRefs.push(ref);
-            recordTaraOpportunity(note, {questionRef:ref,openedAt:at,delivery:mode});
+            recordTaraOpportunity(note, {questionRef:ref,openedAt:at,delivery:mode,
+                redirected:this.progress.topics[this.progress.active].focus === 'OFF_TOPIC'});
         }
     }
 
-    tick(turns: VoiceTurn[], now: number, closeAt: number, inspect: (topic: TaraTopic, question: string, answer: string, serial: number, source: number, previous: string[], dialogue: VoiceTurn[], ongoing: boolean) => Promise<TaraDecision | undefined>) {
+    tick(turns: VoiceTurn[], now: number, closeAt: number, inspect: (topic: TaraTopic, question: string, answer: string, serial: number, source: number, previous: string[], dialogue: VoiceTurn[], ongoing: boolean) => Promise<TaraDecision | undefined>, connected = false) {
         if (!this.issued || this.progress.stage === 'DONE') return;
         const issued = this.issued;
         const source = Math.max(0, ...turns.flatMap(turn => turn.fragmentIds));
@@ -120,7 +122,11 @@ export class TaraLiveTurns {
             decision: ready ? this.decision?.value : undefined,
             technical: deliveryFailed, timedOut: timeout,
             ...(this.timed ? {answers:answers.map(turn => ({ref:turn.id,text:turn.text.trim()})),
-                opportunity:issued.delivered ? {questionRef:issued.delivered.ref,openedAt:issued.delivered.at,closedAt:now,delivery:issued.delivered.mode} : undefined} : {}),
+                opportunity:issued.delivered ? {
+                    questionRef:issued.delivered.ref, openedAt:issued.delivered.at, closedAt:now, delivery:issued.delivered.mode, connected,
+                    resolution: !answer && timeout && this.topicDeadline - issued.delivered.at >= MIN_SILENT_WINDOW_MS
+                        ? 'WINDOW_EXPIRED' : answer && paused ? 'ANSWERED' : 'CUT_SHORT',
+                } : undefined} : {}),
         }, { canClarify: this.topicDeadline - now >= (this.timed ? 35_000 : 15_000),
             canRevisit: closeAt - now >= (this.timed ? 45_000 : 30_000),
             canContinue: !this.timed || closeAt > now });
@@ -142,7 +148,8 @@ export class TaraLiveTurns {
         state.answerRefs = [...new Set([...state.answerRefs, ...answers])];
         if (this.timed && this.issued.delivered) {
             const delivery = this.issued.delivered;
-            recordTaraOpportunity(state,{questionRef:delivery.ref,openedAt:delivery.at,closedAt:now,delivery:delivery.mode});
+            recordTaraOpportunity(state,{questionRef:delivery.ref,openedAt:delivery.at,closedAt:now,delivery:delivery.mode,
+                resolution:technical?'INTERRUPTED':'CUT_SHORT'});
         }
         if (this.timed && delivered && taraHasEvidence(this.topics[this.progress.active], state)) state.outcome = 'CONCRETE_EXAMPLE';
         else if (technical) state.outcome = 'TECHNICAL_INTERRUPTION';

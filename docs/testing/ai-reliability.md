@@ -75,6 +75,22 @@ node scripts/recruitment-http.cjs --live-cv-formats
 
 The observation can continue beyond 180 seconds to recover the same response. An unresolved synthetic call keeps its disposable database and bucket; inspect its retained-provider manifest before retrying.
 
+**Taka CV scoring recovery**
+
+- Run `node scripts/recruitment-local.cjs --taka-only` against the disposable local database. It covers evidence repair, missed pages, simulated provider delays, retries, webhook reconciliation, tenant isolation, and batches of 1, 10 and 1,000. The HR browser regression covers the transition from processing to delayed to scored while the detail drawer is open.
+- In the current CV response format the model tags evidence on source blocks and the application assigns their IDs. Page recovery uses retained evidence and, when the PDF can be split, sends only the pages still needed. The same response can complete scoring. A completed repair that adds no valid grade or resolves no additional page is handed to the operator with the saved evidence.
+- After the API build, run `node scripts/recruitment-http.cjs --taka-v2` for the Nest/JWT, S3, status and webhook routes with the synthetic provider. This also exercises a Tara invitation using a v2 CV result.
+- The separate document check is `node apps/api/node_modules/tsx/dist/cli.mjs --tsconfig apps/api/tsconfig.json apps/api/src/ai-screening/recruitment/cv-document.smoke.ts`. Set `TAKA_LOCAL_RENDERER` to the loopback renderer's `/render` endpoint to exercise real Word conversion and verify that the rendered PDF still contains embedded images.
+- The synthetic real-provider check is `cv-assessment.live.ts` with `TAKA_CV_LIVE=1` and the local OpenAI key. It submits at most two requests, for a two-column PDF and an image-only PDF. It logs timings and checks against the known content of each fixture. Use the deterministic checks for fault injection.
+- Apply the additive migration before enabling `CV_SCORING_V2_ENABLED=true`. Set `CV_SCORING_V2_COMPANIES` to the initial company IDs, comma separated. An empty list enables the new policy for all newly queued assessments. Disable the flag to stop admitting new work while already queued work retains its version. Keep a v2-aware worker until those jobs drain. Review project retention and the RPM/TPM settings before increasing the pilot.
+- Configure the OpenAI webhook at `/api/recruitment/provider/openai` using `OPENAI_CV_WEBHOOK_SECRET` and the terminal response events. Use the renderer Compose overlay with the stack that defines the API. If the main Compose file sits outside the repository Docker directory, set `CV_RENDERER_CONTEXT` to the absolute path of `infra/cv-renderer`.
+- Operators can list delayed and failed work via `GET /api/recruitment/cv-recovery` and resume it with `POST /api/recruitment/candidates/:id/cv-recovery` and `{"action":"RESUME"}`. For an unconfirmed POST, use the attempt ID and OpenAI request trace. `CONFIRM_NOT_ACCEPTED` requires a provider investigation reference and only applies to an unconfirmed request without a response ID.
+
+**Taka assessment of Tara interviews**
+
+- Run `node scripts/recruitment-local.cjs --taka-interview-only` for the scored subset, Live/Chat parity, cited evidence, recovery, historical behavior, tenant access, and generated PDF on disposable data. The HR browser check is `node scripts/screening-workspace.browser.cjs` with a local preview and mocked responses.
+- `TAKA_INTERVIEW_EVIDENCE_ENABLED=true` freezes the new evaluator on newly created v8 invitations. A later flag change affects future invitations. Activation requires evidence and rubric calibration with synthetic transcripts, separately from the deterministic tests. Track evaluation status, coverage, retry, and unexpected references without logging candidate text.
+
 **Current production acceptance still requires**
 
 The remaining gates include real AI latency across multiple companies, other supported CV formats, live voice fault and language coverage, deployment verification on the primary domain, and a full rehearsal. These gates remain separate from fixture-based browser acceptance and must have their own evidence before declaring the mission complete.

@@ -1,0 +1,24 @@
+# Overlay for the application Compose project. The renderer has no published port.
+services:
+  api:
+    environment:
+      CV_WORD_RENDERER_URL: http://cv-renderer:8080/render
+    networks:
+      default: {}
+      cv-render: {}
+  cv-renderer:
+    build:
+      context: ${CV_RENDERER_CONTEXT:-../infra/cv-renderer}
+    networks:
+      cv-render: {}
+    read_only: true
+    tmpfs:
+      - /tmp:size=96m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 64
+    cpus: 1.0
+networks:
+  cv-render:
+    internal: true

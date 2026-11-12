@@ -21,6 +21,9 @@ import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { ScreeningClient } from './screening.client';
 import { ScreeningWorker } from './screening-worker.service';
 import { ScreeningHr } from './screening-hr.service';
-@Module({ imports: [PrismaModule, StorageModule, CompaniesModule, MatchingModule, MailModule], controllers: [CandidateActionsController, VoiceController, ScreeningController, RecruitmentController, InvitationsController], providers: [CandidateActions, VoiceService, VoiceProvider, InvitationsService, CvScoringService, RecruitmentService, ScreeningSessions, ScreeningPackets, ScreeningCandidatePlans, ScreeningClient, ScreeningWorker, ScreeningHr], exports: [InvitationsService, RecruitmentService, ScreeningSessions, ScreeningPackets, ScreeningHr] })
+import { CvAssessmentService } from './recruitment/cv-assessment.service';
+import { CvProvider } from './recruitment/cv-provider';
+import { CvWebhookController } from './recruitment/cv-webhook.controller';
+@Module({ imports: [PrismaModule, StorageModule, CompaniesModule, MatchingModule, MailModule], controllers: [CandidateActionsController, VoiceController, ScreeningController, RecruitmentController, InvitationsController, CvWebhookController], providers: [CandidateActions, VoiceService, VoiceProvider, InvitationsService, CvScoringService, CvAssessmentService, CvProvider, RecruitmentService, ScreeningSessions, ScreeningPackets, ScreeningCandidatePlans, ScreeningClient, ScreeningWorker, ScreeningHr], exports: [InvitationsService, RecruitmentService, ScreeningSessions, ScreeningPackets, ScreeningHr] })
 export class ScreeningModule {
 }
