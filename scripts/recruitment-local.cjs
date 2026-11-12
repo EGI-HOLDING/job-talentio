@@ -15,7 +15,7 @@ try{
   execFileSync('docker',['exec','jt-postgres','createdb','-U',user,name],{windowsHide:true});
   run(req.resolve('prisma/build/index.js'),['migrate','deploy','--schema','apps/api/prisma/schema.prisma'],true);
   if (process.argv.includes('--taka-interview-only')) {
-    ['taka-interview.smoke.ts','tara-timed-interview.smoke.ts','voice/voice-evidence.smoke.ts','recruitment/invitations.integration.smoke.ts'].forEach(screeningTest);
+    ['taka-interview.smoke.ts','tara-timed-interview.smoke.ts','voice/voice-evidence.smoke.ts','voice/voice-native.smoke.ts','recruitment/invitations.integration.smoke.ts'].forEach(screeningTest);
   } else {
     if (!process.argv.includes('--taka-only')) {
       ['voice/voice-evidence.smoke.ts','taka-interview.smoke.ts'].forEach(screeningTest);

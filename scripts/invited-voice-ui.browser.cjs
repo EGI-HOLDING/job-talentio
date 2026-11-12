@@ -3,21 +3,20 @@ const {createRequire}=require('node:module'),path=require('node:path'),fs=requir
 const runtime=process.env.CODEX_RUNTIME_NODE_MODULES||'C:/Users/egi_i/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules';
 const {chromium}=createRequire(path.join(runtime,'playwright/package.json'))('playwright');
 const origin=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';if(!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))throw Error('Local browser only');
-const timed=process.env.TARA_BROWSER_TIMED_INTERVIEW==='1';
 const alternative=process.env.TARA_BROWSER_ALTERNATIVE==='1';
-const out=path.resolve(alternative?'output/invited-voice-ui-alternative':timed?'output/invited-voice-ui-v8':'output/invited-voice-ui');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(alternative?'output/invited-voice-ui-alternative':'output/invited-voice-ui-native');fs.mkdirSync(out,{recursive:true});
 const controlledQuestion=alternative?'Pernah ada proyek atau kegiatan yang berkaitan sama tanggung jawab utama posisi ini?':'Di proyek terakhir, bagian mana yang lu kerjakan sendiri?';
-const alternateQuestion='Apa yang lu lakukan untuk mengecek hasil model?';
-function fixtureWave(){
- const data=Buffer.alloc(48000);data.write('RIFF');data.writeUInt32LE(data.length-8,4);data.write('WAVEfmt ',8);
- data.writeUInt32LE(16,16);data.writeUInt16LE(1,20);data.writeUInt16LE(1,22);data.writeUInt32LE(24000,24);data.writeUInt32LE(48000,28);
- data.writeUInt16LE(2,32);data.writeUInt16LE(16,34);data.write('data',36);data.writeUInt32LE(data.length-44,40);return data;
-}
 const auth={accessToken:'synthetic-voice-ui',user:{id:'voice-ui',role:'EMPLOYEE',fullName:'Dinda Pramesti',email:'dinda@example.test',emailVerified:true,phone:'+6281234567890',employeeOnboarding:{status:'COMPLETED',step:3}}},token='voice-ui-token.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP';
 async function main(){
- const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--autoplay-policy=no-user-gesture-required']}),context=await browser.newContext({viewport:{width:1672,height:941},permissions:['microphone'],reducedMotion:'reduce'}),report={errors:[],creates:0,ends:0,playback:[],preparation:[]};let state=null,rejectProviderOnce=true,preparation='FAILED';
+ const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--autoplay-policy=no-user-gesture-required']}),context=await browser.newContext({viewport:{width:1672,height:941},permissions:['microphone'],reducedMotion:'reduce'}),report={errors:[],creates:0,ends:0,media:[],preparation:[]};let state=null,rejectProviderOnce=true,preparation='FAILED';
  try{
- await context.addInitScript(auth=>{localStorage.setItem('jt_token',auth.accessToken);localStorage.setItem('jt_session',JSON.stringify(auth));const getMedia=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);let mediaAttempts=0;navigator.mediaDevices.getUserMedia=async options=>{const errors=['NotAllowedError','NotFoundError','NotReadableError'];const failure=errors[mediaAttempts++];if(failure)throw new DOMException('synthetic microphone failure',failure);return getMedia(options);};class Peer{constructor(){window.mockVoicePeer=this;}connectionState='new';iceGatheringState='complete';localDescription=null;onconnectionstatechange=null;senders=[];addTrack(track){this.senders.push({track,replaceTrack:async()=>{}});}getSenders(){return this.senders;}createDataChannel(){const channel={onmessage:null};window.mockVoiceChannel=channel;return channel;}async createOffer(){return{type:'offer',sdp:'v=0 mocked browser voice offer'};}async setLocalDescription(value){this.localDescription=value;}async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();setTimeout(()=>window.mockVoiceChannel.onmessage?.({data:JSON.stringify({type:'session.output_transcript.delta',delta:'Di proyek terakhir, bagian mana yang lu kerjakan sendiri?'})}),100);}close(){this.connectionState='closed';}addEventListener(){}}window.RTCPeerConnection=Peer;},auth);
+ await context.addInitScript(({auth,controlledQuestion})=>{localStorage.setItem('jt_token',auth.accessToken);localStorage.setItem('jt_session',JSON.stringify(auth));const getMedia=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);let audioAttempts=0; const play=HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play=function(){if(!audioAttempts++)return Promise.reject(new DOMException('synthetic speaker block','NotAllowedError')); return play.call(this);};let mediaAttempts=0;navigator.mediaDevices.getUserMedia=async options=>{const errors=['NotAllowedError','NotFoundError','NotReadableError'];const failure=errors[mediaAttempts++];if(failure)throw new DOMException('synthetic microphone failure',failure);return getMedia(options);};class Peer{constructor(){window.mockVoicePeer=this;}connectionState='new';iceGatheringState='complete';localDescription=null;onconnectionstatechange=null;senders=[];addTrack(track){this.senders.push({track,replaceTrack:async()=>{}});}getSenders(){return this.senders;}createDataChannel(){const channel={onmessage:null};window.mockVoiceChannel=channel;return channel;}async createOffer(){return{type:'offer',sdp:'v=0 mocked browser voice offer'};}async setLocalDescription(value){this.localDescription=value;}async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();
+ const ac=new AudioContext(),osc=ac.createOscillator(),destination=ac.createMediaStreamDestination();
+ osc.connect(destination);osc.start();window.mockRemoteAudio=ac;
+ const track=destination.stream.getAudioTracks()[0];
+ this.ontrack?.({track,streams:[destination.stream]});
+ setTimeout(()=>osc.stop(),2600);
+ setTimeout(()=>window.mockVoiceChannel.onmessage?.({data:JSON.stringify({type:'session.output_transcript.delta',delta:controlledQuestion})}),100);}close(){this.connectionState='closed';}addEventListener(){}}window.RTCPeerConnection=Peer;},{auth,controlledQuestion});
  await context.route('**/api/**',async route=>{const req=route.request(),p=new URL(req.url()).pathname.replace(/^\/api/,''),method=req.method(),headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,OPTIONS'};if(method==='OPTIONS')return route.fulfill({status:204,headers});let body={};
  if(p==='/auth/me')body=auth;else if(p==='/profiles/me/onboarding')body={status:'COMPLETED',profile:{phone:auth.user.phone}};
  else if(p==='/recruitment/invitations/open/'+token)body={mode:'VOICE',status:'INVITED',jobTitle:'Machine Learning Engineer',companyName:'Lintas Awan Teknologi',expiresAt:'2026-12-01T00:00:00Z'};
@@ -29,18 +28,13 @@ async function main(){
   report.preparation.push(preparation);
   if(method==='POST')setTimeout(()=>{preparation='READY';},250);
  }
- else if(p==='/ai-screening/sessions/voice-session/voice'&&method==='POST'){report.creates++;if(rejectProviderOnce){rejectProviderOnce=false;return route.fulfill({status:503,headers,json:{message:'Koneksi suara belum tersedia. Silakan coba lagi sebentar.'}});}state={id:'voice',status:'ACTIVE',startedAt:new Date().toISOString(),endedAt:null,serverNow:new Date().toISOString(),warningAt:null,closingAt:null,closeReason:null,transcriptComplete:false,error:null,transcript:[{id:'v1',speaker:'TARA',text:controlledQuestion,startMs:2000,endMs:4000},{id:'v2',speaker:'CANDIDATE',text:'Saya mengerjakan pipeline data dan evaluasi model.',startMs:5000,endMs:7000}]};if(timed)Object.assign(state,{controlledPlayback:true,clockRunning:false,playback:null});body={...state,sdp:'v=0 mock answer'};}
- else if(p.endsWith('/voice/playback')&&timed){
-  const {event,revision}=req.postDataJSON();report.playback.push(event);
-  if(event==='READY'){state.clockRunning=true;state.playback={revision:1,text:controlledQuestion,kind:'QUESTION',state:'AUDIO'};}
-  if(event==='AUDIO_PLAYED'&&revision===1)state.playback={revision:2,text:alternateQuestion,kind:'QUESTION',state:'AUDIO'};
-  if(event==='AUDIO_FAILED'&&revision===2)state.playback.state='TEXT';
-  if(event==='TEXT_SHOWN'&&revision===2)state.playback.state='TEXT_SHOWN';
+ else if(p==='/ai-screening/sessions/voice-session/voice'&&method==='POST'){report.creates++;if(rejectProviderOnce){rejectProviderOnce=false;return route.fulfill({status:503,headers,json:{message:'Koneksi suara belum tersedia. Silakan coba lagi sebentar.'}});}state={id:'voice',status:'ACTIVE',startedAt:new Date().toISOString(),endedAt:null,serverNow:new Date().toISOString(),warningAt:null,closingAt:null,closeReason:null,transcriptComplete:false,error:null,transcript:[{id:'v1',speaker:'TARA',text:controlledQuestion,startMs:2000,endMs:4000},{id:'v2',speaker:'CANDIDATE',text:'Saya mengerjakan pipeline data dan evaluasi model.',startMs:5000,endMs:7000}]};Object.assign(state,{voiceMode:'NATIVE',clockRunning:false});body={...state,sdp:'v=0 mock answer'};}
+ else if(p.endsWith('/voice/media')){
+  const {event,sequence}=req.postDataJSON();report.media.push(event);assert.ok(sequence>0);
+  if(event==='AUDIBLE'){state.clockRunning=true;state.deadlineAt=new Date(Date.now()+900000).toISOString();}
   body={...state,serverNow:new Date().toISOString()};
  }
- else if(p.endsWith('/voice/playback/1')&&timed){assert.ok(req.headers()['x-tara-client']);return route.fulfill({status:200,headers,contentType:'audio/wav',body:fixtureWave()});}
- else if(p.endsWith('/voice/playback/2')&&timed)return route.fulfill({status:502,headers,json:{message:'Klip tidak tersedia'}});
- else if(p.endsWith('/voice/end')){report.ends++;state={...state,status:'ENDED',closeReason:req.postDataJSON().reason??'CANDIDATE_ENDED',endedAt:new Date().toISOString(),serverNow:new Date().toISOString(),transcriptComplete:true};body=state;}
+ else if(p.includes('/voice/playback'))throw Error('Retired audio clip endpoint requested'); else if(p.endsWith('/voice/end')){report.ends++;state={...state,status:'ENDED',closeReason:req.postDataJSON().reason??'CANDIDATE_ENDED',endedAt:new Date().toISOString(),serverNow:new Date().toISOString(),transcriptComplete:true};body=state;}
  else if(p.includes('/voice'))body=state?{...state,serverNow:new Date().toISOString()}:null;
  else if(p.includes('/notifications'))body=p.includes('unread')?{count:0}:[];else if(p.startsWith('/meta/'))body=[];
  return route.fulfill({status:200,headers,json:body});});
@@ -66,18 +60,10 @@ async function main(){
  await page.getByRole('button',{name:'Coba gabung lagi',exact:true}).click();
  await page.getByRole('alert').filter({hasText:'Koneksi suara belum tersedia'}).waitFor();assert.equal(report.creates,1);
  await page.getByRole('button',{name:'Coba gabung lagi',exact:true}).click();await page.getByText('Terhubung',{exact:true}).waitFor({timeout:20000});await page.getByText(controlledQuestion,{exact:true}).waitFor();await page.waitForFunction(()=>[...document.images].filter(i=>i.offsetWidth).every(i=>i.complete&&i.naturalWidth));await page.screenshot({path:path.join(out,'02-meeting-desktop.png')});
- if(timed){
-  await page.evaluate(()=>{
-   window.mockVoicePeer.ontrack?.({streams:[new MediaStream()]});
-   window.mockVoiceChannel.onmessage?.({data:JSON.stringify({type:'session.output_transcript.delta',delta:'Pertanyaan liar yang tidak boleh muncul'})});
-  });
-  await page.getByText(alternateQuestion,{exact:true}).waitFor();
-  await page.locator('[data-tara-playback="TEXT_SHOWN"]').waitFor();
-  assert.equal(await page.getByText('Pertanyaan liar yang tidak boleh muncul').count(),0);
-  assert.ok(await page.locator('audio').evaluate(audio=>audio.srcObject===null));
-  assert.deepEqual(report.playback.slice(0,4),['READY','AUDIO_PLAYED','AUDIO_FAILED','TEXT_SHOWN']);
- }
- await page.evaluate(()=>{window.mockVoicePeer.connectionState='disconnected';window.mockVoicePeer.onconnectionstatechange();});
+ await page.waitForFunction(()=>!!document.querySelector('audio').srcObject); await page.getByRole('button',{name:'Aktifkan suara',exact:true}).click();
+ await page.getByText('Sedang berbicara',{exact:true}).waitFor();
+ await page.getByText('Mendengarkan',{exact:true}).waitFor();
+ assert.deepEqual(report.media.slice(0,3),['READY','AUDIBLE','QUIET']); await page.evaluate(()=>{window.mockVoicePeer.connectionState='disconnected';window.mockVoicePeer.onconnectionstatechange();});
  await page.getByText('Koneksi suara terputus',{exact:true}).waitFor();assert.equal(report.ends,0,'transient disconnect cannot end the interview');
  await page.evaluate(()=>{window.mockVoicePeer.connectionState='connected';window.mockVoicePeer.onconnectionstatechange();});await page.getByText('Terhubung',{exact:true}).waitFor();
  assert.equal(report.creates,2);assert.equal(await page.getByText('15:01',{exact:true}).count(),0,'countdown cannot exceed 15 minutes');await page.getByRole('button',{name:'Nonaktifkan mikrofon',exact:true}).click();await page.getByRole('button',{name:'Aktifkan mikrofon',exact:true}).waitFor();await page.getByRole('button',{name:'Aktifkan mikrofon',exact:true}).click();

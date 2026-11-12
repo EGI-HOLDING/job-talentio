@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { advanceTara, startTara, taraBudget, taraInterviewReport, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS,
     TARA_SESSION_MS, validTaraDecision, type TaraDecision, type TaraTopic } from './tara-interview';
 import { TaraLiveTurns } from './voice/voice-turns';
-import { TaraPlayback, type TaraClip } from './voice/voice-playback';
 import type { VoiceTurn } from './voice/voice.policy';
 
 const topics: TaraTopic[] = ['SQL', 'Python', 'Dashboard', 'Experiment design'].map((label, i) => ({
@@ -115,38 +114,9 @@ function reserveTimeForEveryClaim() {
     assert.ok(live.progress.topics.every(topic=>topic.note.reason==='TIME_LIMIT' && topic.note.opportunities?.length===1));
 }
 
-async function playbackEdges() {
-    const pending: Array<{resolve:(value:TaraClip)=>void;signal:AbortSignal}>=[];
-    const playback=new TaraPlayback((_,signal)=>new Promise(resolve=>pending.push({resolve,signal})));
-    const clip=(transcript:string):TaraClip=>({transcript,durationMs:4000,audio:Buffer.from('fixture')});
-    playback.offer('Pertanyaan pertama?');
-    playback.offer('Pertanyaan kedua?');
-    assert.ok(pending[0].signal.aborted);
-    pending[0].resolve(clip('Pertanyaan pertama?'));
-    pending[1].resolve(clip('Pertanyaan kedua? Ada pertanyaan tambahan?'));
-    await playback.ready();
-    assert.equal(playback.status()?.state,'TEXT');
-    assert.equal(playback.read(1,1000),undefined);
-    assert.equal(playback.read(2,1000),undefined);
-    assert.ok(playback.confirm(2,'TEXT_SHOWN',1000));
-    playback.delivered('TEXT_SHOWN');
-    assert.ok(!playback.confirm(2,'TEXT_SHOWN',1000));
-    playback.offer('Pertanyaan ketiga?');
-    pending[2].resolve(clip('Pertanyaan ketiga.'));
-    await playback.ready();
-    assert.ok(!playback.confirm(3,'AUDIO_PLAYED',1000));
-    assert.ok(playback.read(3,1000));
-    assert.ok(!playback.confirm(3,'AUDIO_PLAYED',2000));
-    assert.ok(playback.confirm(3,'AUDIO_PLAYED',5000));
-    playback.delivered('AUDIO_PLAYED');
-    assert.equal(playback.read(3,5000),undefined);
-    playback.clear();
-}
-
 async function main() {
     conversationEdges();
     reserveTimeForEveryClaim();
-    await playbackEdges();
     const baseline=await replay(false), improved=await replay(true);
     assert.ok(improved.ended<baseline.ended);
     assert.ok(improved.opportunities.every(at=>at-1000 <= TARA_FIRST_PASS_MS));

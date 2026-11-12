@@ -200,13 +200,13 @@ async function main(){
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'PENDING'}});await deliver('INVITE_DELIVERY',uncertainInvite.id);await invitations.cancel(hr,uncertainInvite.id);
  let holdCreate:Promise<void>|null=null,holdOpen:Promise<void>|null=null;
  let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[];
- const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.responses.model,'gpt-6-luna');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.ok(body.session.instructions.includes('Tetap diam'));return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
+ const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.deepEqual(body.session.delegation,{type:'client'});assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.match(body.session.instructions,/segera tanggapi isi jawabannya/);return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
   if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
   throw Error('Retired voice evaluator invoked');
  }};
  const voiceService=new VoiceService(db,config,sessions,{
-  ...liveProvider,render:async(text:string)=>({audio:Buffer.from('fixture audio'),durationMs:25,transcript:text}),
+  ...liveProvider,
  } as never,voiceEvaluator as never);
  async function nextVoice(key:string){const inv=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:key}),row=await db.screeningInvitation.findUniqueOrThrow({where:{id:inv.id}}),claimed=await invitations.claim(user,invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!));const plan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});await deliver('CANDIDATE',plan.id);return voiceService.create(user,claimed.session.id,clientId,'v=0 fault recovery mock SDP offer');}
  let releaseCreate:()=>void=()=>{};holdCreate=new Promise<void>(resolve=>{releaseCreate=resolve;});
@@ -223,8 +223,8 @@ async function main(){
  releaseOpen();holdOpen=null;await creating;await voiceService.end(user,slowClaim.session.id,clientId);
  assert.equal((await voiceService.heartbeat(user,slowClaim.session.id,clientId))?.status,'ENDED','late heartbeat after finalization returns the saved terminal state');
  const technical=await nextVoice('voice-technical-end-test');const technicalRow=await db.voiceInterview.findUniqueOrThrow({where:{id:technical.id}});await voiceService.end(user,technicalRow.sessionId!,clientId,'CONNECTION_LOST');assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:technical.id}})).closeReason,'CONNECTION_LOST','connection failure cannot be recorded as candidate ending');
- const hard=await nextVoice('voice-hard-ceiling-test'),hardNow=new Date();await db.voiceInterview.update({where:{id:hard.id},data:{startedAt:new Date(+hardNow-900000),heartbeatAt:hardNow}});await voiceService.tick(hardNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:hard.id}})).status,'ENDED','hard 15-minute ceiling closes actual durable session without earlier watchdog ticks');
- const lost=await nextVoice('voice-sideband-lost-test');onLost();for(let i=0;i<80&&(await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}})).status!=='ENDED';i++)await new Promise(r=>setTimeout(r,25));for(let i=0;i<80&&(voiceService as any).active.has(lost.id);i++)await new Promise(r=>setTimeout(r,25));const lostRow=await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}});assert.equal(lostRow.status,'ENDED');assert.equal(lostRow.closeReason,'TRANSCRIPT_CONNECTION_LOST');assert.equal(lostRow.transcriptComplete,false);
+ const hard=await nextVoice('voice-hard-ceiling-test'),hardNow=new Date(); (voiceService as any).active.get(hard.id).delivery.firstAudible=+hardNow-900000;await db.voiceInterview.update({where:{id:hard.id},data:{startedAt:new Date(+hardNow-900000),heartbeatAt:hardNow}});await voiceService.tick(hardNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:hard.id}})).status,'ENDED','hard 15-minute ceiling closes actual durable session without earlier watchdog ticks');
+ const lost=await nextVoice('voice-sideband-lost-test');onLost();await voiceService.tick(new Date(+lost.startedAt+61_000));for(let i=0;i<80&&(await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}})).status!=='ENDED';i++)await new Promise(r=>setTimeout(r,25));for(let i=0;i<80&&(voiceService as any).active.has(lost.id);i++)await new Promise(r=>setTimeout(r,25));const lostRow=await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}});assert.equal(lostRow.status,'ENDED');assert.equal(lostRow.closeReason,'CANDIDATE_DISCONNECTED');assert.equal(lostRow.transcriptComplete,false);
  const remote=await nextVoice('voice-provider-remote-hangup-test');
  onEvent({type:'session.closed',event_id:'remote-hangup',usage:{seconds:31},reason:'remote_hangup'});
  for(let i=0;i<80&&(await db.voiceInterview.findUniqueOrThrow({where:{id:remote.id}})).status!=='ENDED';i++)await new Promise(r=>setTimeout(r,25));
@@ -324,41 +324,41 @@ async function main(){
  assert.equal(partialReport.evaluation!.score,null);
  await deliver('PDF',partial.sessionId);
 
- const controlledVoice=await prepareSkillInvite('VOICE','voice-controlled-playback-test');
- const controlled=await voiceService.create(user,controlledVoice.sessionId,clientId,'v=0 controlled mock SDP offer');
- assert.equal(controlled.clockRunning,false);
- onEvent({type:'session.started',event_id:'controlled-start'});
- const opened=await voiceService.playback(user,controlledVoice.sessionId,clientId,'READY');
- const rev=opened!.playback!.revision;
- assert.ok(opened!.clockRunning);
- assert.equal((await voiceService.playback(user,controlledVoice.sessionId,clientId,'READY'))!.startedAt.toISOString(),opened!.startedAt.toISOString());
- await assert.rejects(voiceService.clip(wrong,controlledVoice.sessionId,clientId,rev));
- await assert.rejects(voiceService.clip(user,controlledVoice.sessionId,'another-owner-tab',rev));
- await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_PLAYED',rev);
- assert.equal((await voiceService.state(user,controlledVoice.sessionId))!.playback!.state,'AUDIO');
- await voiceService.clip(user,controlledVoice.sessionId,clientId,rev);
- await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_PLAYED',rev);
- await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_PLAYED',rev);
- onEvent({type:'session.output_transcript.delta',event_id:'unsolicited-model-output',delta:'Pertanyaan yang tidak boleh disampaikan?',start_ms:150,end_ms:500});
- onEvent({type:'session.input_transcript.delta',event_id:'controlled-answer',delta:'Saya menulis endpoint Node.js.',start_ms:600,end_ms:900});
- await (voiceService as any).active.get(controlled.id).pending;
- assert.equal(await db.voiceFragment.count({where:{voiceId:controlled.id}}),2);
- const transitionAt=new Date(+opened!.startedAt+181_000);
- await db.voiceInterview.update({where:{id:controlled.id},data:{heartbeatAt:transitionAt}});
+ const nativeVoice=await prepareSkillInvite('VOICE','voice-native-playback-test');
+ const native=await voiceService.create(user,nativeVoice.sessionId,clientId,'v=0 native mock SDP offer');
+ assert.equal(native.voiceMode,'NATIVE');
+ assert.equal(native.clockRunning,false);
+ const openingBefore=commands.filter(c=>c.event_id==='tara-opening').length;
+ await assert.rejects(voiceService.media(wrong,nativeVoice.sessionId,clientId,'READY',1,0));
+ await assert.rejects(voiceService.media(user,nativeVoice.sessionId,'another-owner-tab','READY',1,0));
+ await voiceService.media(user,nativeVoice.sessionId,clientId,'READY',1,0);
+ await voiceService.media(user,nativeVoice.sessionId,clientId,'READY',1,0);
+ await new Promise(resolve=>setTimeout(resolve,1550));
+ assert.equal(commands.filter(c=>c.event_id==='tara-opening').length,openingBefore+1);
+ const opened=await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',2,0);
+ assert.ok(opened.clockRunning);
+ assert.equal((await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',2,0)).startedAt.toISOString(),opened.startedAt.toISOString());
+ onEvent({type:'session.output_transcript.delta',event_id:'native-question',delta:'Soal Node.js, bagian mana yang lu kerjain sendiri?',start_ms:100,end_ms:260});
+ onEvent({type:'session.input_transcript.delta',event_id:'native-answer',delta:'Saya menulis endpoint Node.js.',start_ms:620,end_ms:900});
+ onEvent({type:'session.input_transcript.delta',event_id:'native-answer',delta:'Duplicate fragment',start_ms:620,end_ms:900});
+ await new Promise(resolve=>setTimeout(resolve,240));
+ await voiceService.media(user,nativeVoice.sessionId,clientId,'QUIET',3,0);
+ onEvent({type:'session.delegation.created',delegation:{id:'del_fixture'}});
+ onEvent({type:'session.delegation.created',delegation:{id:'del_fixture'}});
+ assert.equal(commands.filter(c=>c.event_id==='tara-unexpected-delegation').length,1);
+ const transitionAt=new Date(+opened.startedAt+181_000);
+ await db.voiceInterview.update({where:{id:native.id},data:{heartbeatAt:transitionAt}});
  await voiceService.tick(transitionAt);
- const secondClip=(await voiceService.state(user,controlledVoice.sessionId))!.playback!;
- assert.equal(secondClip.revision,rev+1);
- await assert.rejects(voiceService.clip(user,controlledVoice.sessionId,clientId,rev));
- await voiceService.playback(user,controlledVoice.sessionId,clientId,'AUDIO_FAILED',secondClip.revision);
- const fallback=await voiceService.playback(user,controlledVoice.sessionId,clientId,'TEXT_SHOWN',secondClip.revision);
- assert.equal(fallback!.playback!.state,'TEXT_SHOWN');
- assert.equal(commands.at(-1)?.type,'session.input_audio.unmute');
- await voiceService.end(user,controlledVoice.sessionId,clientId,'CONNECTION_LOST');
- const controlledNotes=(await db.voiceInterview.findUniqueOrThrow({where:{id:controlled.id}})).taraInterview as {topics:Array<{note:{opportunities:Array<{delivery:string}>}}>};
- assert.equal(controlledNotes.topics[0].note.opportunities[0].delivery,'AUDIO');
- assert.equal(controlledNotes.topics[1].note.opportunities[0].delivery,'TEXT_FALLBACK');
- assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:controlledVoice.sessionId}}),1);
-
+ await (voiceService as any).active.get(native.id).pending;
+ await voiceService.tick(transitionAt);
+ assert.equal(commands.filter(c=>c.event_id==='tara-coverage-2').length,1);
+ assert.equal(await db.aiScreeningWork.count({where:{subjectId:nativeVoice.sessionId,kind:'VOICE_TURN'}}),0);
+ assert.equal(await db.voiceFragment.count({where:{voiceId:native.id}}),2);
+ await voiceService.end(user,nativeVoice.sessionId,clientId,'CONNECTION_LOST');
+ const nativeNotes=(await db.voiceInterview.findUniqueOrThrow({where:{id:native.id}})).taraInterview as {topics:Array<{note:{opportunities?:Array<{delivery:string}>}}>};
+ assert.equal(nativeNotes.topics[0].note.opportunities?.[0].delivery,'AUDIO');
+ assert.equal(nativeNotes.topics[1].note.opportunities,undefined);
+ assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:nativeVoice.sessionId}}),1);
  process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
  takaRequests.length=0;
  const takaText=await prepareSkillInvite('TEXT','taka-evidence-text-test');
@@ -383,12 +383,13 @@ async function main(){
 
  const voicePilot=await voiceService.create(user,takaVoice.sessionId,clientId,'v=0 taka evidence mock SDP offer');
  onEvent({type:'session.started',event_id:'taka-evidence-start'});
- const pilotReady=await voiceService.playback(user,takaVoice.sessionId,clientId,'READY');
- const pilotRevision=pilotReady!.playback!.revision;
- await voiceService.playback(user,takaVoice.sessionId,clientId,'AUDIO_FAILED',pilotRevision);
- await voiceService.playback(user,takaVoice.sessionId,clientId,'TEXT_SHOWN',pilotRevision);
+ await voiceService.media(user,takaVoice.sessionId,clientId,'READY',1,0);
+ await voiceService.media(user,takaVoice.sessionId,clientId,'AUDIBLE',2,0);
+ onEvent({type:'session.output_transcript.delta',event_id:'taka-evidence-question',delta:'Soal Node.js, bagian mana yang lu kerjain sendiri?',start_ms:100,end_ms:260});
  onEvent({type:'session.input_transcript.delta',event_id:'taka-evidence-answer',delta:takaAnswer,start_ms:600,end_ms:900});
- await (voiceService as any).active.get(voicePilot.id).pending;
+ await new Promise(resolve=>setTimeout(resolve,240));
+ await voiceService.media(user,takaVoice.sessionId,clientId,'QUIET',3,0);
+ await new Promise(resolve=>setTimeout(resolve,700));
  await voiceService.end(user,takaVoice.sessionId,clientId,'CONNECTION_LOST');
  const voiceWork=await db.aiScreeningWork.findFirstOrThrow({where:{kind:'VOICE_EVALUATE',subjectId:takaVoice.sessionId}});
  const restartedWorker=new ScreeningWorker(db,config,storage as never,new MatchingService(db),packets,sessions,plans,provider as never,
