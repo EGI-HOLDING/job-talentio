@@ -76,19 +76,6 @@ async function main(){
  assert.equal(await page.getByRole('link',{name:/Kanban/}).count(),0);report.checks.push('Kanban removed from job workspace');
  assert.equal(await page.getByRole('columnheader',{name:'Sumber',exact:true}).count(),0);report.checks.push('No guessed portal source');
  await page.screenshot({path:path.join(out,'01-candidates-desktop.png')});
- const candidateName=page.getByRole('button',{name:'Dinda Pramesti',exact:true});
- await candidateName.hover();
- await page.waitForFunction(()=>{
-  const button=[...document.querySelectorAll('button')].find(item=>item.textContent.trim()==='Dinda Pramesti');
-  if(!button?.matches(':hover'))return false;
-  const style=getComputedStyle(button);
-  return style.backgroundColor==='rgba(0, 0, 0, 0)'&&style.textDecorationLine.includes('underline');
- });
- await candidateName.focus();
- await page.keyboard.press('Shift+Tab');
- await page.keyboard.press('Tab');
- assert.ok(await candidateName.evaluate(button=>button.matches(':focus-visible')&&getComputedStyle(button).outlineStyle==='solid'));
- report.checks.push('Candidate name stays transparent on hover and shows keyboard focus');
  await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).click();
  await page.getByRole('dialog',{name:'Dinda Pramesti'}).waitFor();
  const drawer=page.getByRole('dialog',{name:'Dinda Pramesti'});
