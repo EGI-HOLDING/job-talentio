@@ -17,6 +17,8 @@ import { RecruiterJobEditor } from './RecruiterJobEditor';
 import { hrFlowV2Enabled } from './HrCreationFlow';
 import s from './RecruiterWorkspace.module.css';
 import { RecruiterJobRow } from './RecruiterJobRow';
+import { JobTemplateDialog } from './JobTemplateDialog';
+import { hrJobError } from './hrDraftValidation';
 import table from './RecruiterJobTable.module.css';
 import bar from './RecruiterJobsToolbar.module.css';
 
@@ -39,7 +41,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
     api<any[]>('/hr-flow/sessions?companyId='+encodeURIComponent(companyId),{signal:abort.signal,cache:'no-store'}).then(setSessions).catch(()=>undefined);
     return()=>abort.abort();
   },[companyId,actualJobs,editing]);
-  const jobs=useMemo(()=>[...actualJobs,...sessions.map(session=>({id:'creation:'+session.id,_creationSessionId:session.id,title:session.draft?.title||'Lowongan baru',status:'DRAFT',createdAt:session.createdAt,updatedAt:session.updatedAt,city:company?.city,benefit:session.order?.status==='PAID'?{code:session.order.code,selectionConfirmedAt:session.updatedAt}:null,_count:{applications:0,views:0}}))],[actualJobs,sessions,company]);
+  const jobs=useMemo(()=>[...actualJobs,...sessions.map(session=>({id:'creation:'+session.id,_creationSessionId:session.id,_templateIssue:session.templateIssue,title:session.draft?.title||'Lowongan baru',status:'DRAFT',createdAt:session.createdAt,updatedAt:session.updatedAt,city:company?.city,benefit:session.order?.status==='PAID'?{code:session.order.code,selectionConfirmedAt:session.updatedAt}:null,_count:{applications:0,views:0}}))],[actualJobs,sessions,company]);
   const [busyId, setBusyId] = useState('');
   useLiveRefresh('applications', async()=>{await onReload(true);}, !loading && !busyId && !editing, companyId);
   const actionLock = useRef(false);
@@ -49,8 +51,12 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
   if (currentCompany.current !== companyId) { currentCompany.current = companyId; ++contextVersion.current; }
   const refreshingRows = useRef<Promise<void> | null>(null);
   const [opening, setOpening] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const templatesTrigger = useRef<HTMLButtonElement>(null);
+  const templateKeys = useRef<Record<string,string>>({});
+  const companyOpen = !company?.anonymizedAt && !company?.isBanned;
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useEffect(() => { setEditing(createRequested ? 'new' : null); setOpening(false); setBusyId(''); actionLock.current = false; refreshingRows.current = null; }, [companyId]);
+  useEffect(() => { setEditing(createRequested ? 'new' : null); setOpening(false); setTemplatesOpen(false); templateKeys.current = {}; setBusyId(''); actionLock.current = false; refreshingRows.current = null; }, [companyId]);
   function refreshRows() {
     if (!refreshingRows.current) {
       const request = onReload(); refreshingRows.current = request;
@@ -103,23 +109,64 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
     } catch (error) { if (alive.current && contextVersion.current === requested) onFlash(error instanceof Error ? error.message : t('ew.loadFailed'), 'error'); }
     finally { if (alive.current && contextVersion.current === requested) { actionLock.current = false; setBusyId(''); } }
   }
+  async function saveTemplate(jobId: string) {
+    if (actionLock.current) return;
+    const context = contextVersion.current;
+    actionLock.current = true;
+    setBusyId(jobId);
+    try {
+      await api('/hr-flow/job-templates', { method: 'POST', body: JSON.stringify({ companyId, jobId }) });
+      if (alive.current && contextVersion.current === context) onFlash(uiCopy('Template lowongan tersimpan.'), 'success');
+    } catch (reason) {
+      if (alive.current && contextVersion.current === context) onFlash(uiCopy(hrJobError(reason)), 'error');
+    } finally {
+      if (alive.current && contextVersion.current === context) {
+        actionLock.current = false;
+        setBusyId('');
+      }
+    }
+  }
+  async function useTemplate(templateId: string) {
+    if (actionLock.current) return;
+    const context = contextVersion.current;
+    actionLock.current = true;
+    setBusyId(templateId);
+    const key = templateKeys.current[templateId] ??= crypto.randomUUID();
+    try {
+      const session = await api<{ id: string }>('/hr-flow/sessions', {
+        method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify({ companyId, templateId }),
+      });
+      if (!alive.current || contextVersion.current !== context) return;
+      delete templateKeys.current[templateId];
+      setTemplatesOpen(false);
+      setEditing({ id: 'creation:' + session.id, _creationSessionId: session.id });
+    } catch (reason) {
+      throw new Error(uiCopy(hrJobError(reason)));
+    } finally {
+      if (alive.current && contextVersion.current === context) {
+        actionLock.current = false;
+        setBusyId('');
+      }
+    }
+  }
   function closeEditor() { setEditing(null);if(hrFlowV2Enabled){const url=new URL(window.location.href);url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);} onCloseCreate(); }
   if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}><DirectionalIcon direction="left" size={17} /> Kembali ke lowongan</button><h1>{uiCopy("Kumpulan CV perusahaan")}</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>
+    {templatesOpen && <JobTemplateDialog companyId={companyId} busy={Boolean(busyId)} onClose={() => setTemplatesOpen(false)} onUse={useTemplate} returnFocus={templatesTrigger} />}
     <div className={bar.root} data-jobs-toolbar>
       <dl className={bar.metrics} aria-label={t('hr.freeStats')}>
         {[[jobs.filter(job => job.status === 'PUBLISHED').length, t('rw.published')], [jobs.reduce((sum, job) => sum + (job._count?.applications || 0), 0), t('applications')], [jobs.reduce((sum, job) => sum + (job._count?.views || 0), 0), t('rec.viewsWord')]].map(([value, label]) => <div key={label}><dt>{label}</dt><dd>{new Intl.NumberFormat(locale).format(Number(value))}</dd></div>)}
       </dl>
-      <div className={bar.controls}><button className={s.secondary} onClick={()=>setPool(true)}>Kumpulan CV</button><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobsCompact')} /><WorkspaceSelect className={bar.package} value={packageFilter} options={[{ value: 'ALL', label: t('jr.allPackages') }, { value: 'PREMIUM', label: t('hr.package.PREMIUM') }, { value: 'STANDARD', label: t('hr.package.STANDARD') }, { value: 'FREE', label: t('hr.package.FREE') }]} label={t('jr.package')} onChange={setPackageFilter} /><WorkspaceSelect className={bar.sort} value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} /><button type="button" className={s.primary + ' ' + bar.create} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
+      <div className={bar.controls}><button className={s.secondary} onClick={()=>setPool(true)}>Kumpulan CV</button><SearchField value={query} onChange={setQuery} placeholder={t('rw.searchJobsCompact')} /><WorkspaceSelect className={bar.package} value={packageFilter} options={[{ value: 'ALL', label: t('jr.allPackages') }, { value: 'PREMIUM', label: t('hr.package.PREMIUM') }, { value: 'STANDARD', label: t('hr.package.STANDARD') }, { value: 'FREE', label: t('hr.package.FREE') }]} label={t('jr.package')} onChange={setPackageFilter} /><WorkspaceSelect className={bar.sort} value={sort} options={[{ value: 'newest', label: t('rw.newest') }, { value: 'applications', label: t('applications') }]} label={t('sortBy')} onChange={setSort} />{hrFlowV2Enabled && companyOpen && <button ref={templatesTrigger} type="button" className={s.secondary + ' ' + bar.templates} disabled={Boolean(busyId)} onClick={() => setTemplatesOpen(true)}>{uiCopy('Template lowongan')}</button>}<button type="button" className={s.primary + ' ' + bar.create} onClick={() => setEditing('new')}><WorkspaceIcon kind="plus" />{t('postAJob')}</button></div>
     </div>
     <nav className={s.tabs} aria-label={t('jobs')}>{[['ALL', 'rw.allJobs'], ['PUBLISHED', 'rw.published'], ['DRAFT', 'rw.drafts'], ['PAUSED', 'rw.paused'], ['CLOSED', 'rw.closed'], ['EXPIRED', 'hr.expired']].map(([key, label]) => <button key={key} type="button" aria-current={status === key ? 'page' : undefined} onClick={() => setStatus(key)}>{t(label)}<span className={s.count}>{key === 'ALL' ? jobs.length : jobs.filter((job) => job.status === key).length}</span></button>)}</nav>
 
     {loading ? <WorkspaceLoading /> : !filtered.length ? <WorkspaceEmpty title={t(jobs.length ? 'rw.noResults' : 'rw.noJobs')} hint={jobs.length ? undefined : t('rw.noJobsHint')}>{jobs.length ? <button className={s.secondary} onClick={() => { setQuery(''); setStatus('ALL'); setPackageFilter('ALL'); }}>{t('clearFilters')}</button> : <button className={s.primary} onClick={() => setEditing('new')}>{t('postAJob')}</button>}</WorkspaceEmpty> : <div className={table.wrap} data-jobs-table><table className={table.table}>
       <colgroup><col className={table.titleCol} /><col className={table.statusCol} /><col className={table.packageCol} /><col className={table.locationCol} /><col className={table.performanceCol} /><col className={table.periodCol} /><col className={table.boostCol} /><col className={table.actionsCol} /></colgroup>
       <thead><tr>{['jobTitleFilter', 'status', 'jr.package', 'city', 'jr.performance', 'jr.period', 'jr.boost', 'rw.actions'].map(key => <th key={key} scope="col">{t(key)}</th>)}</tr></thead>
-      <tbody>{filtered.slice((safePage - 1) * 10, safePage * 10).map(job => job._creationSessionId?<tr className={table.row} key={job.id} data-creation-session={job._creationSessionId}><td><button type="button" className={table.jobTitle} style={{border:0,background:'transparent',textAlign:'left'}} onClick={()=>setEditing(job)}>{job.title}</button></td><td><span className={table.status} data-status="DRAFT">Draf</span></td><td>{job.benefit?.code??t('jr.unselected')}</td><td>{company?.city?.name??'\u2014'}</td><td>{'\u2014'}</td><td>{t('jr.notPublished')}</td><td>{'\u2014'}</td><td><button type="button" className={s.secondary} onClick={()=>setEditing(job)}>{t('commerce.continue')}</button></td></tr>:<RecruiterJobRow key={companyId + ':' + job.id} job={job} companyId={companyId} companyOpen={!company?.anonymizedAt && !company?.isBanned} busy={Boolean(busyId)} onEdit={() => void openEditor(job)} onReviewPublish={() => void openEditor(job, 3)} onDuplicate={() => void duplicate(job)} onStatus={next => void change(job, next)} onApplicants={() => onApplicants(job.id)} onPeriodExpired={refreshRows} onFlash={onFlash} />)}</tbody>
+      <tbody>{filtered.slice((safePage - 1) * 10, safePage * 10).map(job => job._creationSessionId?<tr className={table.row} key={job.id} data-creation-session={job._creationSessionId}><td><button type="button" className={table.jobTitle} style={{border:0,background:'transparent',textAlign:'left'}} onClick={()=>setEditing(job)}>{job.title}</button></td><td><span className={table.status} data-status="DRAFT">Draf</span></td><td>{job.benefit?.code??t('jr.unselected')}</td><td>{company?.city?.name??'\u2014'}</td><td>{'\u2014'}</td><td>{t('jr.notPublished')}</td><td>{'\u2014'}</td><td><button type="button" className={s.secondary} onClick={()=>setEditing(job)}>{job._templateIssue ? uiCopy('Perbaiki draf') : t('commerce.continue')}</button></td></tr>:<RecruiterJobRow key={companyId + ':' + job.id} job={job} companyId={companyId} companyOpen={companyOpen} busy={Boolean(busyId)} onEdit={() => void openEditor(job)} onReviewPublish={() => void openEditor(job, 3)} onDuplicate={() => void duplicate(job)} onSaveTemplate={hrFlowV2Enabled && companyOpen && job.publishedAt && ['PUBLISHED', 'PAUSED', 'CLOSED', 'EXPIRED'].includes(job.status) ? () => void saveTemplate(job.id) : undefined} onStatus={next => void change(job, next)} onApplicants={() => onApplicants(job.id)} onPeriodExpired={refreshRows} onFlash={onFlash} />)}</tbody>
     </table></div>}
 
     {!loading && filtered.length > 0 && <Pagination page={safePage} total={filtered.length} onChange={setPage} />}

@@ -1121,6 +1121,7 @@ model Company {
   industryGroup BusinessIndustryGroup? @relation(fields: [industryGroupId], references: [id], onDelete: Restrict)
   members          CompanyMember[]
   jobPosts         JobPost[]
+  jobPostingTemplates JobPostingTemplate[]
   subscription     Subscription?
   payments         Payment[]
   followers        CompanyFollower[]
@@ -1313,6 +1314,7 @@ model JobPost {
   occupationTaskEvidence JobOccupationTaskEvidence[]
   linkedInPreviews LinkedInPreview[]
   linkedInPosts LinkedInSocialPost[]
+  postingTemplates JobPostingTemplate[]
 
   @@index([companyId, status])
   @@index([countryId])
@@ -2303,6 +2305,23 @@ model JobPurchaseOrder {
 
 /// Only verified provider adapters may settle an order. Raw payment credentials
 /// and client-supplied "paid" statuses never enter this table.
+model JobPostingTemplate {
+  id String @id @default(cuid())
+  companyId String
+  sourceJobId String?
+  title String
+  location String?
+  draft Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceJob JobPost? @relation(fields: [sourceJobId], references: [id], onDelete: SetNull)
+  sessions JobCreationSession[]
+
+  @@unique([companyId, sourceJobId])
+  @@index([companyId, updatedAt])
+}
+
 model JobCreationSession {
   id String @id @default(cuid())
   companyId String
@@ -2312,9 +2331,14 @@ model JobCreationSession {
   draft Json @default("{}")
   orderId String? @unique
   jobId String? @unique
+  templateId String?
+  templateIssue String?
+  templateNextAttemptAt DateTime?
+  template JobPostingTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([companyId, updatedAt])
+  @@index([templateId])
 }
 
 model CompanyProfileDocument {

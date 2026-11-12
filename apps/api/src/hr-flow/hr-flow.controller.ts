@@ -12,17 +12,31 @@ export const creationDraftSchema=jobPostSchema.omit({isAnonymous:true,screeningQ
   title:z.string().max(200).optional(),description:z.string().max(20000).optional(),
   responsibilities:z.array(z.string().max(1000)).max(30).optional(),kpis:z.array(z.string().max(1000)).max(30).optional(),
 }).strict();
+const idSchema=z.string().min(1).max(100);
 @Controller('hr-flow')
 @UseGuards(JwtAuthGuard,RolesGuard)
 @Roles('RECRUITER','SUPER_ADMIN')
 export class HrFlowController {
   constructor(private flow:HrFlowService){}
   @Get('capabilities') capabilities(){return {enabled:hrFlowEnabled(),version:2};}
-  @Post('sessions') create(@CurrentUser() user:AuthUser,@Body() body:unknown,@Headers('idempotency-key') key?:string){return this.flow.create(user,parseDto(z.object({companyId:z.string().min(1).max(100)}).strict(),body).companyId,key);}
+  @Get('job-templates') listTemplates(@CurrentUser() user:AuthUser,@Query('companyId') companyId:string){
+    return this.flow.listTemplates(user,parseDto(idSchema,companyId));
+  }
+  @Post('job-templates') saveTemplate(@CurrentUser() user:AuthUser,@Body() body:unknown){
+    const {companyId,jobId}=parseDto(z.object({companyId:idSchema,jobId:idSchema}).strict(),body);
+    return this.flow.saveTemplate(user,companyId,jobId);
+  }
+  @Post('sessions') create(@CurrentUser() user:AuthUser,@Body() body:unknown,@Headers('idempotency-key') key?:string){
+    const {companyId,templateId}=parseDto(z.object({companyId:idSchema,templateId:idSchema.optional()}).strict(),body);
+    return this.flow.create(user,companyId,key,templateId);
+  }
   @Get('sessions') list(@CurrentUser() user:AuthUser,@Query('companyId') companyId:string){return this.flow.list(user,parseDto(z.string().min(1).max(100),companyId));}
   @Get('sessions/:id') get(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.flow.get(user,id);}
   @Patch('sessions/:id') patch(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.flow.patch(user,id,parseDto(z.object({revision:z.number().int().nonnegative(),draft:creationDraftSchema.optional(),phase:z.enum(['PACKAGE','CHECKOUT','JOB']).optional(),packageCode:z.enum(['FREE','STANDARD','PREMIUM']).optional()}).strict(),body));}
   @Post('sessions/:id/publish') publish(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown,@Headers('idempotency-key') key?:string){return this.flow.publish(user,id,parseDto(z.object({revision:z.number().int().nonnegative()}).strict(),body).revision,key);}
+  @Post('sessions/:id/publish-template') publishTemplate(@CurrentUser() user:AuthUser,@Param('id') id:string){
+    return this.flow.publishTemplate(user,id);
+  }
   @Post('documents')
   @UseInterceptors(FileInterceptor('file',resumeUploadOptions))
   upload(@CurrentUser() user:AuthUser,@UploadedFile() file:Express.Multer.File){return this.flow.upload(user,file);}

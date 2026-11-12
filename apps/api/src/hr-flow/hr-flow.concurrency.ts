@@ -19,9 +19,10 @@ process.env.HR_CREATION_V2_ENABLED='true';process.env.HR_FLOW_MARKET='id';
 const db=new PrismaClient();let assertions=0;
 const same=(a:unknown,b:unknown)=>{assert.deepEqual(a,b);assertions++;};
 async function main(){
- const tag='hr-flow-race-'+randomUUID();let companyId:string|undefined,userId:string|undefined;
+ const tag='hr-flow-race-'+randomUUID();let companyId:string|undefined,userId:string|undefined,outsiderId:string|undefined,applicantId:string|undefined;
  const search:any={syncJob:async()=>{},enabled:false};let deleted:string[]=[];
  let failDelete=false;const storage:any={delete:async(key:string)=>{if(failDelete)throw Error('simulated storage failure');deleted.push(key);}};
+ const announcements=new Map<string,string>(), notifications: unknown[]=[];
  let checkouts=0,fail=false;
  const provider:any={name:'test-recovery',available:true,checkout:async(order:any)=>{checkouts++;await new Promise(r=>setTimeout(r,40));if(fail)throw Error('simulated timeout');return {redirectUrl:'https://app.sandbox.midtrans.com/snap/'+order.id,reference:order.id};},queryStatus:async(id:string)=>{const order=await db.jobPurchaseOrder.findUniqueOrThrow({where:{id}});return {orderId:id,eventId:'recovery-'+id,reference:'receipt-'+id,amount:order.amount,currency:order.currency,status:'PAID'};}};
  try{
@@ -31,8 +32,8 @@ async function main(){
   const company=await db.company.create({data:{name:tag,slug:tag,description:'A complete company description for concurrent transaction verification.',cityId:city.id,size:'SIZE_1_10',industryGroupId:group.id,members:{create:{userId:user.id,role:'OWNER'}}}});companyId=company.id;
   const operations=new OperationsService(db as any),benefits=new BenefitsService(db as any,operations),commerce=new JobCommerceService(db as any,benefits,operations,provider);
   const companies=new CompaniesService(db as any,storage,{} as any,{} as any,new ConfigService(),search),onboarding=new RecruiterOnboardingService(db as any,benefits,storage);
-  const jobs=new JobsService(db as any,companies,new MatchingService(db as any),{create:async()=>{}} as any,search,{announceJob:async()=>{}} as any,undefined,benefits,undefined,undefined,onboarding);
-  const flow=new HrFlowService(db as any,storage,jobs,benefits,operations,commerce),worker=new HrFlowWorker(db as any,storage,commerce,provider);
+  const jobs=new JobsService(db as any,companies,new MatchingService(db as any),{create:async(notification:unknown)=>{notifications.push(notification);}} as any,search,{announceJob:async(job:{id:string;companyName:string})=>{announcements.set(job.id,job.companyName);}} as any,undefined,benefits,undefined,undefined,onboarding);
+  const flow=new HrFlowService(db as any,storage,jobs,benefits,operations,commerce),worker=new HrFlowWorker(db as any,storage,commerce,provider,flow);
   const key=randomUUID(),created=await Promise.all([flow.create(actor,company.id,key),flow.create(actor,company.id,key)]);same(created[0].id,created[1].id);
   const id=created[0].id,free=await Promise.all([commerce.create(actor,{creationSessionId:id,code:'FREE',intent:'PURCHASE'},randomUUID()),commerce.create(actor,{creationSessionId:id,code:'FREE',intent:'PURCHASE'},randomUUID())]);same(free[0].id,free[1].id);
   const current=await flow.get(actor,id),draft={title:'Principal Race Verification Profession',description:tag+' actual responsibilities for a locally verified transaction.',positionEntryMode:'MANUAL',workMode:'ONSITE',citySlug:city.slug,seniorityLevelCode:'L6',experienceRangeMin:3,experienceRangeMax:null};
@@ -61,6 +62,79 @@ async function main(){
   await assert.rejects(()=>commerce.cancel(actor,timeoutOrder.id),/reconciliation/);assertions++;
   await assert.rejects(()=>commerce.create(actor,{creationSessionId:timeoutSession.id,code:'FREE',intent:'PURCHASE'},randomUUID()),/existing checkout/);assertions++;
   await worker.tick();same((await commerce.get(actor,timeoutOrder.id)).status,'PAID');same((await commerce.get(actor,order.id)).status,'PAID');
+  // Reusing a template copies a snapshot and keeps the source and billing independent.
+  const sourceId=secondPost.jobId;
+  await jobs.update(actor,sourceId,{isAnonymous:true,salaryMin:12_000_000,salaryMax:17_000_000,currency:'IDR'});
+  const outsider=await db.user.create({data:{role:'RECRUITER',fullName:tag+' outsider'}});
+  outsiderId=outsider.id;
+  const outside:AuthUser={id:outsider.id,role:'RECRUITER',fullName:outsider.fullName,isBanned:false,email:null};
+  await db.companyFollower.create({data:{userId:outsider.id,companyId}});
+  const applicant=await db.user.create({data:{role:'EMPLOYEE',fullName:tag+' applicant'}});
+  applicantId=applicant.id;
+  const applicantProfile=await db.employeeProfile.create({data:{userId:applicant.id}});
+  const originalApplication=await db.application.create({data:{jobPostId:sourceId,profileId:applicantProfile.id}});
+  const templates=await Promise.all([flow.saveTemplate(actor,company.id,sourceId),flow.saveTemplate(actor,company.id,sourceId)]);
+  same(templates[0].id,templates[1].id);
+  const templateId=templates[0].id;
+  await assert.rejects(()=>flow.listTemplates(outside,company.id),/membership/);
+  await assert.rejects(()=>flow.saveTemplate(outside,company.id,sourceId),/membership/);
+  await assert.rejects(()=>flow.create(outside,company.id,randomUUID(),templateId),/membership/);
+  assertions+=3;
+  const sessionKey=randomUUID();
+  const templateSession=await flow.create(actor,company.id,sessionKey,templateId);
+  same((await flow.create(actor,company.id,sessionKey,templateId)).id,templateSession.id);
+  await jobs.update(actor,sourceId,{description:draft.description+' Updated after selecting the template.'});
+  same((await jobs.changeStatus(actor,sourceId,'CLOSED')).status,'CLOSED');
+  same((await flow.saveTemplate(actor,company.id,sourceId)).id,templateId);
+  same((await flow.listTemplates(actor,company.id)).length,1);
+  const templateFreeOrder=await commerce.create(actor,{creationSessionId:templateSession.id,code:'FREE',intent:'PURCHASE'},randomUUID());
+  const freeCopies=await Promise.all([flow.publishTemplate(actor,templateSession.id),flow.publishTemplate(actor,templateSession.id),worker.publishPaidTemplates()]);
+  const freeJobId=freeCopies[0].jobId!;
+  assert.ok(freeJobId&&freeJobId!==sourceId);assertions++;
+  same(freeCopies[1].jobId,freeJobId);
+  const copied=await db.jobPost.findUniqueOrThrow({where:{id:freeJobId}});
+  same([copied.description,copied.cityId,copied.salaryMin,copied.salaryMax,copied.experienceRangeMin,copied.isAnonymous],[draft.description,city.id,12_000_000,17_000_000,3,true]);
+  same((await db.jobPurchaseOrder.findUniqueOrThrow({where:{id:templateFreeOrder.id}})).jobId,freeJobId);
+  same((await db.jobPost.findUniqueOrThrow({where:{id:sourceId}})).status,'CLOSED');
+  same(notifications.length,0);
+  same((await db.application.findUniqueOrThrow({where:{id:originalApplication.id}})).jobPostId,sourceId);
+  same(await db.application.count({where:{jobPostId:freeJobId}}),0);
+  assert.ok(announcements.get(freeJobId)&&announcements.get(freeJobId)!==company.name);assertions++;
+
+  const nextTemplateSession=await flow.create(actor,company.id,randomUUID(),templateId);
+  const nextPaidOrder=await commerce.create(actor,{creationSessionId:nextTemplateSession.id,code:'STANDARD',intent:'PURCHASE'},randomUUID());
+  await worker.publishPaidTemplates();
+  same((await flow.get(actor,nextTemplateSession.id)).jobId,null);
+  const verification={orderId:nextPaidOrder.id,eventId:'template:'+nextPaidOrder.id,reference:'verified:'+nextPaidOrder.id,amount:nextPaidOrder.amount,currency:nextPaidOrder.currency,status:'PAID' as const};
+  await Promise.all([commerce.settle(provider.name,verification),commerce.settle(provider.name,verification)]);
+  await worker.publishPaidTemplates();
+  await worker.publishPaidTemplates();
+  const paidCopy=await flow.get(actor,nextTemplateSession.id);
+  assert.ok(paidCopy.jobId&&paidCopy.jobId!==freeJobId);assertions++;
+  same((await db.jobPost.findUniqueOrThrow({where:{id:paidCopy.jobId!}})).description,draft.description+' Updated after selecting the template.');
+  same(await db.jobPaymentEvent.count({where:{orderId:nextPaidOrder.id}}),1);
+  same(await db.jobPost.count({where:{companyId}}),4);
+
+  const failedSession=await flow.create(actor,company.id,randomUUID(),templateId);
+  const failedOrder=await commerce.create(actor,{creationSessionId:failedSession.id,code:'STANDARD',intent:'PURCHASE'},randomUUID());
+  await commerce.settle(provider.name,{...verification,orderId:failedOrder.id,eventId:'failed:'+failedOrder.id,reference:'failed:'+failedOrder.id,status:'FAILED'});
+  await worker.publishPaidTemplates();
+  same((await flow.get(actor,failedSession.id)).jobId,null);
+
+  const staleSession=await flow.create(actor,company.id,randomUUID(),templateId);
+  const staleOrder=await commerce.create(actor,{creationSessionId:staleSession.id,code:'STANDARD',intent:'PURCHASE'},randomUUID());
+  await commerce.settle(provider.name,{...verification,orderId:staleOrder.id,eventId:'repair:'+staleOrder.id,reference:'repair:'+staleOrder.id});
+  await db.city.update({where:{id:city.id},data:{archivedAt:new Date()}});
+  try{
+    await assert.rejects(()=>flow.create(actor,company.id,randomUUID(),templateId),/city/i);assertions++;
+    await worker.publishPaidTemplates();
+    const needsRepair=await flow.get(actor,staleSession.id);
+    same([needsRepair.jobId,needsRepair.templateIssue,needsRepair.order?.status],[null,'JOB_TEMPLATE_REVIEW_REQUIRED','PAID']);
+    const repaired=await flow.patch(actor,staleSession.id,{revision:needsRepair.revision,draft:{...draft,citySlug:'',workMode:'REMOTE'}});
+    const repairedJob=await flow.publish(actor,staleSession.id,repaired.revision,randomUUID());
+    same((await db.jobPurchaseOrder.findUniqueOrThrow({where:{id:staleOrder.id}})).jobId,repairedJob.jobId);
+    same((await db.jobPost.findUniqueOrThrow({where:{id:repairedJob.jobId}})).isAnonymous,true);
+  }finally{await db.city.update({where:{id:city.id},data:{archivedAt:null}});}
   const orphan=await db.companyProfileDocument.create({data:{ownerId:user.id,kind:'DOCUMENT',fileKey:tag+'/orphan',filename:'old.pdf',contentType:'application/pdf',checksum:'test',sizeBytes:100,createdAt:new Date(Date.now()-8*86400000)}});
   const referenced=await db.companyProfileDocument.create({data:{ownerId:user.id,kind:'DOCUMENT',fileKey:tag+'/referenced',filename:'saved.pdf',contentType:'application/pdf',checksum:'test',sizeBytes:100,createdAt:new Date(Date.now()-8*86400000)}});
   await db.recruiterOnboarding.upsert({where:{userId:user.id},create:{userId:user.id,companyDraft:{profileDocumentId:referenced.id}},update:{companyDraft:{profileDocumentId:referenced.id}}});
@@ -72,6 +146,8 @@ async function main(){
  }finally{
   // Only this test's IDs and unique operation scopes are removed.
   if(companyId){const orders=await db.jobPurchaseOrder.findMany({where:{companyId},select:{id:true}});await db.jobPaymentEvent.deleteMany({where:{orderId:{in:orders.map(o=>o.id)}}});await db.jobCreationSession.updateMany({where:{companyId},data:{jobId:null,orderId:null}});await db.jobPurchaseOrder.deleteMany({where:{companyId}});await db.jobCreationSession.deleteMany({where:{companyId}});await db.recruiterOnboarding.deleteMany({where:{userId}});await db.companyProfileDocument.deleteMany({where:{ownerId:userId}});await db.jobPost.deleteMany({where:{companyId}});await db.companyMember.deleteMany({where:{companyId}});await db.company.delete({where:{id:companyId}});await db.operationKey.deleteMany({where:{OR:[{scope:{endsWith:':'+userId}},{scope:'job-payment-session',key:{in:orders.map(o=>o.id)}}]}});}
+  if(applicantId)await db.user.delete({where:{id:applicantId}});
+  if(outsiderId)await db.user.delete({where:{id:outsiderId}});
   if(userId){await db.auditLog.deleteMany({where:{actorId:userId}});await db.user.delete({where:{id:userId}});}await db.$disconnect();
  }
 }

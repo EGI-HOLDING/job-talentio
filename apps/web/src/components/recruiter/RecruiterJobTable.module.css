@@ -87,3 +87,8 @@
   .periodButton { padding-block:3px; }.location { max-width:100%; }
 }
 @media(max-width:600px) { .row { padding:21px 16px; gap:16px 20px; }.jobTitle { font-size:.83rem; }.dialogHeader { padding:20px; }.dialogBody { padding:20px; }.dialogFooter { padding:15px 20px; }.facts > div { flex-wrap:wrap; gap:5px 16px; }.facts dt { min-width:42%; }.facts dd { flex:1; }.backdrop { padding:14px; }.dialog { max-height:calc(100dvh - 28px); } }
+
+.templateList { display:grid; gap:8px; list-style:none; max-height:55vh; margin:0; padding:2px; overflow:auto; }
+.templateList li { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px 16px; padding:12px 14px; border:1px solid #e1e5ef; border-radius:10px; }
+.templateList strong,.templateList small { display:block; overflow-wrap:anywhere; }
+.templateList small { margin-top:4px; color:#56637d; }

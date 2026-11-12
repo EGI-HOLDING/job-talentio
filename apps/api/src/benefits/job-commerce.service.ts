@@ -8,6 +8,7 @@ import { PACKAGE_ORDER, BenefitPolicy } from './benefit-policy';
 import { localCheckoutEnabled, PACKAGE_CATALOG_VERSION, PACKAGE_PRICES, packageAmount, PurchaseIntent } from './package-catalog';
 import { JobPaymentProvider, VerifiedJobPayment } from './job-payment.provider';
 import { assertHrFlowEnabled, hrFlowEnabled } from '../hr-flow/hr-flow.policy';
+import { validateTemplateDraft } from '../hr-flow/job-posting-template';
 
 @Injectable()
 export class JobCommerceService {
@@ -88,11 +89,13 @@ export class JobCommerceService {
         return previous;
       }
       if(previous?.status==='REVIEW')throw new ConflictException('The existing payment needs reconciliation');
+      if(session.templateId)await validateTemplateDraft(db,session.draft);
       if(previous?.status==='PENDING'&&previous.expiresAt>new Date()&&previous.code===code)return previous;
       if(previous?.status==='PENDING'&&(previous.paymentRedirectUrl||await db.operationKey.findUnique({where:{scope_key:{scope:'job-payment-session',key:previous.id}}})))throw new ConflictException('Cancel or finish the existing checkout before choosing another package');
       if(previous?.status==='PENDING')await db.jobPurchaseOrder.update({where:{id:previous.id},data:{status:'CANCELLED'}});
       const policy=await this.benefits.policy(code,db),amount=PACKAGE_PRICES[code];
-      const order=await db.jobPurchaseOrder.create({data:{creationSessionId:sessionId,companyId:company.id,createdById:actor.id,code,intent:'PURCHASE',amount,catalogVersion:PACKAGE_CATALOG_VERSION,policyVersion:policy.version,policySnapshot:policy.settings,companyName:company.name,jobTitle:'Lowongan baru',expiresAt:new Date(Date.now()+86400000),...(amount===0?{status:'PAID',provider:'free',providerReference:'free:'+sessionId,paidAt:new Date()}:{})}});
+      const jobTitle=session.templateId?String((session.draft as Record<string,unknown>).title):'Lowongan baru';
+      const order=await db.jobPurchaseOrder.create({data:{creationSessionId:sessionId,companyId:company.id,createdById:actor.id,code,intent:'PURCHASE',amount,catalogVersion:PACKAGE_CATALOG_VERSION,policyVersion:policy.version,policySnapshot:policy.settings,companyName:company.name,jobTitle,expiresAt:new Date(Date.now()+86400000),...(amount===0?{status:'PAID',provider:'free',providerReference:'free:'+sessionId,paidAt:new Date()}:{})}});
       await db.jobCreationSession.update({where:{id:sessionId},data:{orderId:order.id,phase:amount===0?'JOB':'CHECKOUT',revision:{increment:1}}});
       return order;
     })).value;
@@ -252,6 +255,13 @@ export class JobCommerceService {
       await this.benefits.member(actor,before.companyId,db);
       const order=await db.jobPurchaseOrder.findUniqueOrThrow({where:{id}});
       if(order.status!=='PENDING'||order.expiresAt<=new Date())throw new ConflictException('This order cannot be paid');
+      if(order.creationSessionId){
+        const session=await db.jobCreationSession.findUniqueOrThrow({where:{id:order.creationSessionId}});
+        if(session.templateId){
+          if(session.orderId!==order.id||session.jobId)throw new ConflictException('This checkout is no longer active');
+          await validateTemplateDraft(db,session.draft);
+        }
+      }
       if(order.paymentRedirectUrl)return {redirectUrl:order.paymentRedirectUrl,reference:order.id};
       if(!order.creationSessionId){
         if(!order.jobId)throw new ConflictException('Missing order subject');

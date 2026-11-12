@@ -1,22 +1,65 @@
-import { Injectable,Logger,OnModuleInit,OnModuleDestroy } from '@nestjs/common';
+import { ForbiddenException,Injectable,Logger,OnModuleInit,OnModuleDestroy,Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { JobCommerceService } from '../benefits/job-commerce.service';
 import { JobPaymentProvider } from '../benefits/job-payment.provider';
 import { hrFlowEnabled } from './hr-flow.policy';
+import { HrFlowService } from './hr-flow.service';
 
 @Injectable()
 export class HrFlowWorker implements OnModuleInit,OnModuleDestroy {
   private timer?:ReturnType<typeof setInterval>;
+  private templateTimer?:ReturnType<typeof setInterval>;
+  private publishingTemplates=false;
   private working=false;
   private lastCleanup=0;
   private readonly logger=new Logger(HrFlowWorker.name);
-  constructor(private db:PrismaService,private storage:StorageService,private commerce:JobCommerceService,private provider:JobPaymentProvider){}
+  constructor(private db:PrismaService,private storage:StorageService,private commerce:JobCommerceService,private provider:JobPaymentProvider,@Optional() private flow?:HrFlowService){}
   onModuleInit(){
     if(!hrFlowEnabled()&&!this.provider.configured&&!this.provider.available)return;
     this.timer=setInterval(()=>void this.tick().catch(()=>this.logger.warn('HR maintenance will retry')),60000);this.timer.unref();
+    if(hrFlowEnabled()&&this.flow){
+      this.templateTimer=setInterval(()=>void this.publishPaidTemplates().catch(()=>this.logger.warn('Paid template publication will retry')),5000);
+      this.templateTimer.unref();
+    }
   }
-  onModuleDestroy(){if(this.timer)clearInterval(this.timer);}
+  onModuleDestroy(){
+    if(this.timer)clearInterval(this.timer);
+    if(this.templateTimer)clearInterval(this.templateTimer);
+  }
+  async publishPaidTemplates(){
+    if(this.publishingTemplates||!this.flow||!hrFlowEnabled())return;
+    const flow=this.flow;
+    this.publishingTemplates=true;
+    try{
+      const sessions=await this.db.$transaction(async tx=>{
+        const rows=await tx.$queryRaw<Array<{id:string;actorId:string;orderId:string;revision:number}>>`
+          SELECT s.id, o."createdById" AS "actorId", o.id AS "orderId", s.revision
+          FROM "JobCreationSession" s JOIN "JobPurchaseOrder" o ON o.id=s."orderId"
+          WHERE s."templateId" IS NOT NULL AND s."jobId" IS NULL AND s."templateIssue" IS NULL AND s.phase='JOB'
+            AND o.status='PAID' AND o."fulfilledAt" IS NULL AND o."creationSessionId"=s.id AND o."companyId"=s."companyId"
+            AND (s."templateNextAttemptAt" IS NULL OR s."templateNextAttemptAt"<=NOW())
+          ORDER BY s."templateNextAttemptAt" NULLS FIRST, s."updatedAt"
+          LIMIT 10 FOR UPDATE OF s SKIP LOCKED`;
+        await tx.jobCreationSession.updateMany({where:{id:{in:rows.map(row=>row.id)}},data:{templateNextAttemptAt:new Date(Date.now()+30000)}});
+        return rows;
+      });
+      for(const row of sessions){
+        try{
+          const actor=await this.db.user.findUnique({where:{id:row.actorId},select:{id:true,role:true,fullName:true,email:true,isBanned:true,anonymizedAt:true}});
+          if(!actor||actor.isBanned||actor.anonymizedAt||!['RECRUITER','SUPER_ADMIN'].includes(actor.role))throw new ForbiddenException();
+          await flow.publishTemplate(actor,row.id);
+        }catch(error){
+          if(error instanceof ForbiddenException){
+            await this.db.jobCreationSession.updateMany({
+              where:{id:row.id,revision:row.revision,jobId:null,templateIssue:null,orderId:row.orderId},
+              data:{templateIssue:'JOB_TEMPLATE_REVIEW_REQUIRED',templateNextAttemptAt:null,revision:{increment:1}},
+            });
+          }else this.logger.warn('Paid template publication will retry: '+row.id);
+        }
+      }
+    }finally{this.publishingTemplates=false;}
+  }
   async tick(){
     if(this.working)return;this.working=true;
     try{

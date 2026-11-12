@@ -395,7 +395,7 @@ export class JobsService {
     for(const follower of job.isAnonymous?[]:job.company.followers){
       await this.notifications.create({userId:follower.userId,type:'NEW_JOB_MATCH',title:`New job at ${job.company.name}`,body:job.title,titleKey:'notify.newJobAtCompany.title',params:{company:job.company.name},linkUrl:`/jobs/${job.id}`}).catch(()=>undefined);
     }
-    void this.telegram.announceJob({id:job.id,title:job.title,locale:job.locale,companyName:job.company.name,cityName:job.city?.name??job.country?.name??null,workMode:job.workMode,employmentType:job.employmentType,salaryMin:job.salaryMin,salaryMax:job.salaryMax,currency:job.currency,skills:job.jobSkills.map(s=>s.skill.name)}).catch(()=>undefined);
+    void this.telegram.announceJob({id:job.id,title:job.title,locale:job.locale,companyName:displayCompanyName(job,job.company.name,job.locale),cityName:job.city?.name??job.country?.name??null,workMode:job.workMode,employmentType:job.employmentType,salaryMin:job.salaryMin,salaryMax:job.salaryMax,currency:job.currency,skills:job.jobSkills.map(s=>s.skill.name)}).catch(()=>undefined);
   }
 
   async update(user: AuthUser, jobId: string, data: Record<string, unknown>) {

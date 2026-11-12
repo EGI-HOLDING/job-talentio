@@ -72,3 +72,7 @@
 }
 .groupScopeMembers li { display: grid; gap: .1rem; padding: .4rem; }
 .groupScopeMembers small { color: #59536b; }
+
+.templateSummary { display:flex; align-items:center; gap:12px; margin:16px 0; padding:12px 16px; border:1px solid #e5dff5; border-radius:10px; background:#f8f6ff; }
+.templateSummary > svg { flex:none; color:var(--primary,#5925ef); }
+.templateSummary p { margin:4px 0 0; color:#54617a; font-size:.875rem; }

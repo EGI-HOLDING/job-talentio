@@ -40,7 +40,8 @@ export function RecruiterJobEditor(props: Props) {
       company={props.company}
       sessionId={props.job?._creationSessionId}
       onClose={props.onClose}
-      onPublished={() => {
+      onPublished={(id, fromTemplate) => {
+        if (fromTemplate && props.onPublished) { props.onPublished(id); return; }
         void props.onSaved('Lowongan berhasil dipublikasikan.')
           .finally(() => props.onClose())
           .catch(() => undefined);

@@ -15,3 +15,7 @@
 @media(min-width:1101px) and (max-width:1350px) { .root { gap:20px; }.metrics > div { padding-inline:16px; gap:7px; }.metrics dt { font-size:.7rem; }.metrics dd { font-size:1.25rem; }.controls > label { min-width:180px; }.controls .sort,.controls .package { min-width:132px; max-width:190px; } }
 @media(max-width:1100px) { .root { flex-wrap:wrap; gap:18px; }.controls { flex-basis:100%; flex-wrap:wrap; }.controls > label { max-width:none; }.controls .sort,.controls .package { flex:1 1 150px; } }
 @media(max-width:600px) { .root { padding:16px; gap:16px; }.metrics { width:100%; justify-content:space-between; }.metrics > div { flex-direction:column; align-items:flex-start; gap:4px; padding-inline:16px; }.metrics dt { font-size:.67rem; }.metrics dd { font-size:1.3rem; }.controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }.controls > label { grid-column:1 / -1; width:100%; min-width:0; }.controls .sort,.controls .package { width:100%; max-width:none; min-width:0; }.controls .create { grid-column:1 / -1; width:100%; justify-content:center; padding-inline:12px; font-size:.73rem; } }
+
+.controls .templates { min-height:42px; white-space:nowrap; font-size:.78rem; }
+@media(max-width:1450px) { .controls { flex-wrap:wrap; } }
+@media(max-width:600px) { .controls .templates { min-width:0; justify-content:center; white-space:normal; } .controls:has(.templates) .create { grid-column:auto; } }

@@ -7,6 +7,8 @@ export function hrJobError(error: unknown) {
   if(message.includes('POSITION_GROUP_SCOPE_CHANGED'))return 'Cakupan kelompok berubah. Buka cakupan, tinjau daftar terbaru, lalu konfirmasi lagi.';
   if(message.includes('POSITION_GROUP_HAS_NO_VERIFIED_MEMBERS'))return 'Kelompok ini belum memiliki posisi terverifikasi.';
   if(message.includes('POSITION_GROUP_UNAVAILABLE')||message.includes('JOB_POSITION_GROUPS_UNAVAILABLE'))return 'Kelompok posisi ini sedang tidak tersedia.';
+  if(message.includes('JOB_TEMPLATE_REVIEW_REQUIRED'))return 'Periksa isi draf sebelum menerbitkan. Paket yang sudah dikonfirmasi tetap bisa digunakan.';
+  if(message.includes('JOB_TEMPLATE_REQUIRES_PUBLISHED_SOURCE'))return 'Hanya lowongan yang pernah terbit yang bisa dijadikan template.';
   return message;
 }
 const draftKeys = new Set([

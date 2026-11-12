@@ -6,6 +6,7 @@ import { Link } from '@/lib/navigation';
 import { employerWorkspaceHref, jobDetailHref } from '@/lib/accountNavigation';
 import { packageHref } from '@/lib/jobCommerce';
 import { useI18n } from '@/lib/i18n';
+import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { JobRowIcon } from './JobRowIcon';
 import type { JobRowPolicy } from './jobRowPolicy';
 import s from './RecruiterJobTable.module.css';
@@ -15,11 +16,13 @@ type Props = {
   benefitPhase: 'loading' | 'ready' | 'error' | 'unavailable';
   triggerRef?: RefObject<HTMLButtonElement | null>;
   onDuplicate: () => void; onEdit: () => void; onReviewPublish: () => void;
+  onSaveTemplate?: () => void;
   onStatus: (next: string) => void; onBoost: () => void; onCopy: () => void; onRetry: () => void;
 };
 
-export function RecruiterJobActions({ job, companyId, busy, policy, benefitPhase, triggerRef, onEdit, onReviewPublish, onStatus, onDuplicate, onBoost, onCopy, onRetry }: Props) {
+export function RecruiterJobActions({ job, companyId, busy, policy, benefitPhase, triggerRef, onEdit, onReviewPublish, onStatus, onDuplicate, onSaveTemplate, onBoost, onCopy, onRetry }: Props) {
   const { t } = useI18n();
+  const c=useHrCopy();
   const id = useId(), ownTrigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null);
   const trigger = triggerRef || ownTrigger;
   const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
@@ -68,6 +71,7 @@ export function RecruiterJobActions({ job, companyId, busy, policy, benefitPhase
         <button type="button" role="menuitem" onClick={() => act(onEdit)}><JobRowIcon kind="edit" />{t('rec.edit')}</button>
         <Link role="menuitem" href={jobDetailHref(job.id, employerWorkspaceHref('jobs', companyId))} onClick={() => close(false)}><JobRowIcon kind="eye" />{t(policy.publicVisible ? 'rec.publicPage' : 'jr.preview')}</Link>
         {policy.publicVisible && <button type="button" role="menuitem" onClick={() => act(onCopy)}><JobRowIcon kind="copy" />{t('jr.copyLink')}</button>}
+        {onSaveTemplate && <button type="button" role="menuitem" onClick={() => act(onSaveTemplate)}><JobRowIcon kind="document" />{c('Jadikan template')}</button>}
       </div>
       <div role="group" aria-label={t('jr.packageGroup')} className={s.menuGroup}><span className={s.menuHeading}>{t('jr.packageGroup')}</span>
         {benefitPhase === 'loading' ? <button type="button" role="menuitem" disabled><JobRowIcon kind="clock" />{t('loading')}</button> : benefitPhase !== 'ready' ? <button type="button" role="menuitem" onClick={() => act(onRetry)}><JobRowIcon kind="info" />{t('jr.retryBenefits')}</button> : <>
