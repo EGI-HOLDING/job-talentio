@@ -1,4 +1,4 @@
-import { enqueueCvAssessment, resumeKnownCvScore, retryCvAssessmentV2, type CvOperatorAction } from './cv-score-recovery';
+import { assertNoUnresolvedCvSubmission, enqueueCvAssessment, retryCvAssessmentV2, type CvOperatorAction } from './cv-score-recovery';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -9,7 +9,7 @@ import { CompaniesService } from '../../companies/companies.service';
 import type { AuthUser } from '../../common/auth.decorators';
 import { hash, json } from '../screening.policy';
 import { candidateBulkSchema, candidateImportSchema, candidateListSchema, type CandidateList } from './recruitment.schemas';
-import { CV_MAX_BYTES, CV_SCORING_VERSION, fileChecksum, validateCvBytes } from './cv-scoring.policy';
+import { CV_MAX_BYTES, fileChecksum, validateCvBytes } from './cv-scoring.policy';
 import { CV_ALERT_MS, CV_RECOVERY_VERSION } from './cv-assessment';
 
 const safeSelect = { id: true, companyId: true, jobId: true, applicationId: true, importId: true, importFileId: true,
@@ -56,7 +56,7 @@ export class RecruitmentService {
       }
       return tx.candidateImport.create({ data: { companyId: input.companyId, jobId: input.jobId, requestKey: input.requestKey, createdById: user.id,
         candidates: { create: input.files.map(f => ({ companyId: input.companyId, jobId: input.jobId, filename: f.filename, fullName: f.filename.replace(/\.[^.]+$/, ''), sizeBytes: f.size, contentType: f.contentType,
-          importFileId: f.clientId, uploadKey: 'cvs/import-pending/' + randomUUID(), jobSnapshot: job ? json(scoringJob(job)) : Prisma.DbNull, scoringVersion: CV_SCORING_VERSION })) } }, include: { candidates: true } });
+          importFileId: f.clientId, uploadKey: 'cvs/import-pending/' + randomUUID(), jobSnapshot: job ? json(scoringJob(job)) : Prisma.DbNull, scoringVersion: CV_RECOVERY_VERSION })) } }, include: { candidates: true } });
     });
     return { id: batch.id, files: await Promise.all(batch.candidates.map(async c => ({ id: c.id, clientId: c.importFileId, status: c.scoreStatus,
       uploadUrl: c.scoreStatus === 'UPLOADING' && c.uploadKey ? await this.storage.getPresignedPutUrl(c.uploadKey, c.contentType) : null }))) };
@@ -125,7 +125,7 @@ export class RecruitmentService {
         headline: app.profile.headline ?? '', filename: snapshot?.title ?? fileKey?.split('/').at(-1) ?? 'CV.pdf',
         contentType: fileKey?.toLowerCase().endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileKey?.toLowerCase().endsWith('.doc') ? 'application/msword' : 'application/pdf',
         fileKey, sizeBytes: 0, checksum: app.resumeVersion?.checksum, stage: app.status, enteredProcessAt: app.kanbanEnteredAt,
-        scoreStatus: fileKey ? 'PENDING' : 'FAILED', error: fileKey ? null : 'CV tidak tersedia.', jobSnapshot: json(scoringJob(app.jobPost)), scoringVersion: CV_SCORING_VERSION, createdAt: app.createdAt,
+        scoreStatus: fileKey ? 'PENDING' : 'FAILED', error: fileKey ? null : 'CV tidak tersedia.', jobSnapshot: json(scoringJob(app.jobPost)), scoringVersion: CV_RECOVERY_VERSION, createdAt: app.createdAt,
         activities: { create: { kind: 'APPLICATION_RECEIVED' } },
       } });
       if (fileKey) await enqueueCvAssessment(tx, row);
@@ -194,7 +194,7 @@ export class RecruitmentService {
         if (v2) return v2;
       }
       if (!row.fileKey || !['FAILED','UNREADABLE','STALE'].includes(row.scoreStatus)) throw new BadRequestException('CV ini belum dapat diproses ulang.');
-      if (await resumeKnownCvScore(tx, row, user.id)) return { status: 'PENDING' };
+      await assertNoUnresolvedCvSubmission(tx, row.id);
       const job=row.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:row.jobId},include:scoreJobInclude}):null;
       const claim = await tx.recruitmentCandidate.updateMany({ where: { id, revision: row.revision, scoreStatus: row.scoreStatus }, data: { scoreStatus: 'PENDING', cvScore:null, cvProgress: Prisma.DbNull, ...(job?{jobSnapshot:json(scoringJob(job))}:{}), error: null, revision: { increment: 1 } } });
       if (!claim.count) throw new ConflictException('Proses ulang sudah dimulai.');
@@ -238,7 +238,7 @@ export class RecruitmentService {
           (r.cvProgress as { phase?: string } | null)?.phase !== 'RECOVERING');
         if(!eligible.length)throw new BadRequestException('Tidak ada CV yang memerlukan penilaian ulang dalam pilihan ini.');
         for(const source of eligible){
-          if (await resumeKnownCvScore(tx, source, user.id)) continue;
+          await assertNoUnresolvedCvSubmission(tx, source.id);
           const job=source.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:source.jobId},include:scoreJobInclude}):null;
           const claimed=await tx.recruitmentCandidate.updateMany({where:{id:source.id,revision:source.revision,scoreStatus:source.scoreStatus},data:{scoreStatus:'PENDING',cvScore:null,cvProgress:Prisma.DbNull,error:null,revision:{increment:1},...(job?{jobSnapshot:json(scoringJob(job))}:{})}});
           if(!claimed.count)throw new ConflictException('Status penilaian berubah. Perbarui daftar kandidat.');
@@ -252,7 +252,7 @@ export class RecruitmentService {
         if(sources.some(r=>r.jobId||!r.fileKey||!r.checksum||r.scoreStatus!=='EXTRACTED'))throw new BadRequestException('Pilih CV yang sudah selesai dibaca dari kumpulan CV perusahaan.');
         let count=0;
         for(const source of sources){const dedupeKey=hash([source.companyId,job.id,source.checksum]);const exists=await tx.recruitmentCandidate.findUnique({where:{dedupeKey}});if(exists)continue;
-          const added=await tx.recruitmentCandidate.create({data:{companyId:source.companyId,jobId:job.id,filename:source.filename,contentType:source.contentType,sizeBytes:source.sizeBytes,fileKey:source.fileKey,checksum:source.checksum,dedupeKey,fullName:source.fullName,email:source.email,phone:source.phone,headline:source.headline,scoreStatus:'PENDING',scoringVersion:CV_SCORING_VERSION,jobSnapshot:json(scoringJob(job))}});
+          const added=await tx.recruitmentCandidate.create({data:{companyId:source.companyId,jobId:job.id,filename:source.filename,contentType:source.contentType,sizeBytes:source.sizeBytes,fileKey:source.fileKey,checksum:source.checksum,dedupeKey,fullName:source.fullName,email:source.email,phone:source.phone,headline:source.headline,scoreStatus:'PENDING',scoringVersion:CV_RECOVERY_VERSION,jobSnapshot:json(scoringJob(job))}});
           await enqueueCvAssessment(tx, added);await tx.candidateActivity.create({data:{candidateId:added.id,actorUserId:user.id,kind:'CV_ADDED_TO_JOB',detail:json({poolCandidateId:source.id})}});count++;
         }return{count};
       }

@@ -6,11 +6,9 @@ import { json } from '../screening.policy';
 export type CvOperatorAction = { action: 'RESUME' } | { action: 'CONFIRM_NOT_ACCEPTED'; reference: string };
 
 export async function enqueueCvAssessment(tx: Pick<Prisma.TransactionClient, 'aiScreeningWork'>,
-  row: { id: string; companyId: string; revision: number }) {
-  const pilot = (process.env.CV_SCORING_V2_COMPANIES ?? '').split(',').map(code => code.trim()).filter(Boolean);
-  const cvPolicy = process.env.CV_SCORING_V2_ENABLED === 'true' && (!pilot.length || pilot.includes(row.companyId)) ? CV_RECOVERY_VERSION : undefined;
+  row: { id: string; revision: number }) {
   const key = 'CV_SCORE:' + row.id + ':' + row.revision;
-  await tx.aiScreeningWork.createMany({ data: { key, kind: 'CV_SCORE', subjectId: row.id, cvPolicy }, skipDuplicates: true });
+  await tx.aiScreeningWork.createMany({ data: { key, kind: 'CV_SCORE', subjectId: row.id, cvPolicy: CV_RECOVERY_VERSION }, skipDuplicates: true });
   return tx.aiScreeningWork.findUniqueOrThrow({ where: { key } });
 }
 
@@ -51,20 +49,11 @@ export async function retryCvAssessmentV2(tx: Prisma.TransactionClient, row: { i
   return { status: 'PENDING' };
 }
 
-// Resume the exact revision and provider response. Never authorize another billed creation.
-export async function resumeKnownCvScore(tx: Prisma.TransactionClient, row: { id: string; revision: number; scoreStatus: string }, actorUserId: string) {
-  const statuses = row.scoreStatus === 'FAILED' ? ['RUNNING', 'UNCERTAIN'] : ['UNCERTAIN'];
-  const unresolved = await tx.aiScreeningCall.findMany({ where: { subjectId: row.id, status: { in: statuses } }, select: { workId: true, responseId: true } });
-  if (!unresolved.length) return false;
-  const work = await tx.aiScreeningWork.findUnique({ where: { key: 'CV_SCORE:' + row.id + ':' + row.revision } });
-  if (row.scoreStatus !== 'FAILED' || !work || work.kind !== 'CV_SCORE' || work.subjectId !== row.id || work.status !== 'FAILED' ||
-      unresolved.some(call => call.workId !== work.id || !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
+// A retired request with an unknown outcome must be reconciled before any new submission.
+export async function assertNoUnresolvedCvSubmission(tx: Prisma.TransactionClient, id: string) {
+  if (await tx.aiScreeningCall.count({ where: { subjectId: id, OR: [
+    { status: { in: ['SENDING', 'UNCERTAIN'] } },
+    { status: 'RUNNING', OR: [{ task: { not: CV_PROVIDER_TASK } }, { responseId: null }] },
+  ] } }))
     throw new ConflictException('Proses AI memerlukan pemeriksaan operator sebelum dicoba ulang.');
-  }
-  const claimed = await tx.recruitmentCandidate.updateMany({ where: { id: row.id, revision: row.revision, scoreStatus: 'FAILED' }, data: { scoreStatus: 'PENDING', error: null } });
-  if (!claimed.count) throw new ConflictException('Proses ulang sudah dimulai.');
-  const resumed = await tx.aiScreeningWork.updateMany({ where: { id: work.id, status: 'FAILED' }, data: { status: 'PENDING', availableAt: new Date(), leaseUntil: null, leaseOwner: null, error: null } });
-  if (!resumed.count) throw new ConflictException('Proses ulang sudah dimulai.');
-  await tx.candidateActivity.create({ data: { candidateId: row.id, actorUserId, kind: 'CV_RETRY', detail: { recovery: 'RESUME_EXISTING_RESPONSE' } } });
-  return true;
 }

@@ -4,9 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JobsService } from '../../jobs/jobs.service';
 import { RecruitmentService } from './recruitment.service';
+import { saveCvAssessment } from './cv-assessment-store';
+import { CV_PROVIDER_TASK,CV_RECOVERY_VERSION } from './cv-assessment';
 import { CvScoringService } from './cv-scoring.service';
 import { scoringJob,scoreJobInclude,sameScoringJob } from './cv-job-context';
-import { CV_RUBRIC,fileChecksum } from './cv-scoring.policy';
+import { CV_RUBRIC,fileChecksum,validateCvResult } from './cv-scoring.policy';
 import { InvitationsService } from './invitations.service';
 import { ScreeningPackets } from '../screening-packets.service';
 
@@ -41,12 +43,23 @@ async function main(){
  assert.equal(JSON.stringify((await db.screeningInvitation.findUniqueOrThrow({where:{id:invitation.id}})).snapshot),frozen,'existing invitation retains original job and score');
  let release!:()=>void,started!:()=>void,calls=0;
  const gate=new Promise<void>(r=>release=r),begun=new Promise<void>(r=>started=r);
- const provider={run:async()=>{calls++;started();await gate;return {readable:true,fullName:'Synthetic Candidate',email:'stale@example.test',phone:null,headline:'Developer',summary:'Pengalaman API.',cvText:text,criteria:CV_RUBRIC.map(c=>({criterionId:c.id,level:3,reason:'Tertulis di CV.',evidence:[text]})),limitations:[]};}};
- const scorer=new CvScoringService(db,storage as never,provider as never,new ConfigService({}));
+ const scorer=new CvScoringService(db,{
+  supersede:async()=>{},
+  process:async(work:{id:string;cvPolicy:string},_:string,row:Parameters<typeof saveCvAssessment>[1])=>{
+   calls++;assert.equal(work.cvPolicy,CV_RECOVERY_VERSION);started();await gate;
+   const checked=validateCvResult({readable:true,fullName:'Synthetic Candidate',email:'stale@example.test',phone:null,headline:'Developer',summary:'Pengalaman API.',cvText:text,
+    criteria:CV_RUBRIC.map(c=>({criterionId:c.id,level:3,reason:'Tertulis di CV.',evidence:[text]})),limitations:[]},true);
+   await db.$transaction(tx=>saveCvAssessment(tx,row,work.id,row.checksum!,checked,CV_RECOVERY_VERSION));
+  },
+ } as never);
+ const processScore=async(work:{id:string},id:string)=>{
+  await db.aiScreeningWork.update({where:{id:work.id},data:{status:'RUNNING',leaseOwner:'synthetic-owner'}});
+  return scorer.process(work.id,id,'synthetic-owner');
+ };
  await service.retry(hr,row.id);
  const work=await db.aiScreeningWork.findUniqueOrThrow({where:{key:'CV_SCORE:'+row.id+':2'}});
- const running=scorer.process(work.id,row.id);await begun;
- const pendingCall=await db.aiScreeningCall.create({data:{key:'stale-running-provider-call',workId:work.id,subjectId:row.id,task:'cv-score',model:'gpt-6-luna',promptVersion:'test',inputHash:'old-criteria',status:'RUNNING',responseId:'resp_stale_criteria'}});
+ const running=processScore(work,row.id);await begun;
+ const pendingCall=await db.aiScreeningCall.create({data:{key:'stale-running-provider-call',workId:work.id,subjectId:row.id,task:CV_PROVIDER_TASK,model:'gpt-6-luna',promptVersion:'test',inputHash:'old-criteria',status:'RUNNING',responseId:'resp_stale_criteria'}});
 
  await jobs.update(hr,job.id,{description:'Mengembangkan layanan data Python, PostgreSQL, dan Apache Kafka.'});
  saved=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}});
@@ -61,16 +74,16 @@ async function main(){
 
  await scorer.failure(row.id,'OLD_FAILURE',work.key);
  saved=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}});assert.equal(saved.scoreStatus,'PENDING','old worker failure cannot fail a new revision');
- await scorer.process(work.id,row.id);assert.equal(calls,1,'obsolete durable work cannot spend on a newer revision');
+ await processScore(work,row.id);assert.equal(calls,1,'obsolete durable work cannot spend on a newer revision');
  const latest=await db.aiScreeningWork.findUniqueOrThrow({where:{key:'CV_SCORE:'+row.id+':4'}});
- await scorer.process(latest.id,row.id);assert.equal(calls,2);assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}})).cvScore,75);
+ await processScore(latest,row.id);assert.equal(calls,2);assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:row.id}})).cvScore,75);
  const batch=await service.createImport(hr,{companyId:company.id,jobId:job.id,requestKey:'stale-upload-request',files:[{clientId:'one',filename:'Other.pdf',size:bytes.length,contentType:'application/pdf'}]});
  const uploading=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:batch.files[0].id}});objects.set(uploading.uploadKey!,bytes);
  await jobs.update(hr,job.id,{description:'Mengembangkan layanan data Python, PostgreSQL, Kafka, dan Redis.'});
  await service.completeUpload(hr,uploading.id);
  const uploaded=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:uploading.id}});
  const uploadWork=await db.aiScreeningWork.findUniqueOrThrow({where:{key:'CV_SCORE:'+uploaded.id+':'+uploaded.revision}});
- await scorer.process(uploadWork.id,uploaded.id);assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:uploaded.id}})).scoreStatus,'READY','upload spanning a job edit uses latest job snapshot and revision');
+ await processScore(uploadWork,uploaded.id);assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:uploaded.id}})).scoreStatus,'READY','upload spanning a job edit uses latest job snapshot and revision');
  console.log('CV staleness integration passed: actual JobsService edits, relevant criteria only, no automatic AI spending, frozen invitation/idempotency, in-flight result/failure isolation, bulk rescore, and upload spanning job edit. Paid calls: 0.');
 }
 main().finally(()=>db.$disconnect()).catch(e=>{console.error(e);process.exitCode=1;});

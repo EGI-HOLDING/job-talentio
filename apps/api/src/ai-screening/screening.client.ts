@@ -48,10 +48,11 @@ export class ScreeningClient {
     private async request(path: string, init: RequestInit = {}, timeoutMs?: number) {
         return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(timeoutMs ?? (init.method === 'POST' ? 120000 : 20000)) });
     }
-    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset?: PromptPreset, files?: Array<{ filename: string; file_data: string }>, timeoutMs?: number): Promise<unknown> {
+    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset: PromptPreset, files?: Array<{ filename: string; file_data: string }>, timeoutMs?: number): Promise<unknown> {
         if (!this.configured)
             throw new Error('TARA_PROVIDER_NOT_CONFIGURED');
-        const prompt = composePrompt(task, input, preset), model = preset?.model ?? screeningModel(), inputHash = hash([prompt, model, files]);
+        if (!preset) throw new Error('MISSING_SCREENING_PROMPT');
+        const prompt = composePrompt(task, input, preset), model = preset.model ?? screeningModel(), inputHash = hash([prompt, model, files]);
         let call = await this.db.aiScreeningCall.findFirst({ where: { workId, inputHash, status: { not: 'RECOVERED' } }, orderBy: { createdAt: 'desc' } });
         if (!call && await this.db.aiScreeningCall.count({ where: { workId, status: { in: ['RUNNING', 'UNCERTAIN'] } } }))
             throw new AiUncertain('TARA_CALL_INPUT_CHANGED_REQUIRES_REVIEW');

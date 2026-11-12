@@ -1,5 +1,4 @@
 // Disposable local PostgreSQL only. Integration uses mocked AI and no application secrets.
-// Explicit --live/--quality/--conversation-quality children read the local API key for provider checks.
 const {execFileSync,spawnSync}=require('node:child_process');
 const {createRequire}=require('node:module');const path=require('node:path');
 const root=path.resolve(__dirname,'..'),req=createRequire(path.join(root,'apps/api/package.json'));
@@ -9,5 +8,5 @@ const name='talentio_tara_it_'+Date.now(),user=settings.POSTGRES_USER||'postgres
 if(!/^talentio_tara_it_\d+$/.test(name)||port!=='5434')throw Error('Disposable local DB guard failed');
 const env={...process.env,NODE_ENV:'test',DATABASE_URL:`postgresql://${encodeURIComponent(user)}:${encodeURIComponent(settings.POSTGRES_PASSWORD)}@127.0.0.1:${port}/${name}`,TARA_SCREENING_ENABLED:'true',TARA_SCREENING_MARKET:'id',HR_RANKING_V2_MODE:'off',EMPLOYEE_INTENT_V3_MODE:'off',OPENAI_API_KEY:'',TELEGRAM_BOT_TOKEN:'',RESEND_API_KEY:''};
 function run(file,args){const r=spawnSync(process.execPath,[file,...args],{cwd:root,env,stdio:'inherit',windowsHide:true});if(r.status!==0)throw Error('Tara check failed ('+r.status+')');}
-try{execFileSync('docker',['exec','jt-postgres','createdb','-U',user,name],{windowsHide:true});run(req.resolve('prisma/build/index.js'),['migrate','deploy','--schema','apps/api/prisma/schema.prisma']);if(process.argv.includes('--conversation-quality')){env.TARA_RUN_QUALITY='true';run(req.resolve('tsx/cli'),['--tsconfig','apps/api/tsconfig.json','apps/api/src/ai-screening/conversation-quality.ts']);}else if(process.argv.includes('--quality')){env.TARA_RUN_QUALITY='true';run(req.resolve('tsx/cli'),['--tsconfig','apps/api/tsconfig.json','apps/api/src/ai-screening/screening-quality.ts']);}else{run(req.resolve('tsx/cli'),['--tsconfig','apps/api/tsconfig.json','apps/api/src/ai-screening/screening.integration.smoke.ts']);if(process.argv.includes('--live')){env.TARA_RUN_LIVE='true';run(req.resolve('tsx/cli'),['--tsconfig','apps/api/tsconfig.json','apps/api/src/ai-screening/screening-live.smoke.ts']);}}}
+try{execFileSync('docker',['exec','jt-postgres','createdb','-U',user,name],{windowsHide:true});run(req.resolve('prisma/build/index.js'),['migrate','deploy','--schema','apps/api/prisma/schema.prisma']);run(req.resolve('tsx/cli'),['--tsconfig','apps/api/tsconfig.json','apps/api/src/ai-screening/screening.integration.smoke.ts']);}
 finally{execFileSync('docker',['exec','jt-postgres','dropdb','-U',user,'--force','--if-exists',name],{windowsHide:true});}

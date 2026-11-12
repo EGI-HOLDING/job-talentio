@@ -32,6 +32,8 @@ export class CvAssessmentService {
     let checkpoint = work.cvCheckpoint as CvCheckpoint | null;
     const call = await this.db.aiScreeningCall.findFirst({ where: { workId: work.id, task: CV_PROVIDER_TASK },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    if (checkpoint && checkpoint.responseFormat !== CV_RESPONSE_FORMAT || call && !checkpoint)
+      return this.halt(run, 'CV_RETIRED_FORMAT_REQUIRES_REVIEW');
     if (call && checkpoint && checkpoint.consumed !== call.id) {
       if (pendingStatus.includes(call.status)) return this.observe(run, checkpoint, call);
       return this.consume(run, checkpoint, call);
@@ -48,7 +50,7 @@ export class CvAssessmentService {
       try {
         const buffer = await this.storage.getObjectBuffer(row.fileKey!, CV_MAX_BYTES);
         const canRecoverWordImages = checkpoint?.stage === 'READ' && checkpoint.wordVisualFallback;
-        const targets = checkpoint?.stage === 'READ' && checkpoint.responseFormat && !canRecoverWordImages
+        const targets = checkpoint?.stage === 'READ' && !canRecoverWordImages
           ? cvReadTargets(checkpoint.source, checkpoint.expectedPages) : [];
         document = await prepareCvDocument(buffer, row.filename, row.fileKey!, this.config.get('CV_WORD_RENDERER_URL'),
           canRecoverWordImages ? undefined : checkpoint?.fileKind, targets);
@@ -196,7 +198,7 @@ export class CvAssessmentService {
       }
       if (['PROVIDER_OUTPUT_LIMIT', 'INVALID_PROVIDER_OUTPUT'].includes(call.error ?? '')) {
         if (next.stage === 'INITIAL') next.stage = 'READ';
-        else if (checkpoint.responseFormat) {
+        else {
           if (await this.store(run, next)) return this.halt(run, call.error!);
           return;
         }
@@ -214,7 +216,7 @@ export class CvAssessmentService {
           const empty = pages?.length && pages.every(row => row.status === 'EMPTY') && !cvReadTargets(next.source, next.expectedPages).length;
           if (empty) return this.halt(run, 'CV_DOCUMENT_EMPTY', true);
           if ((next.unreadableReads ?? 0) >= 2 && !next.source?.blocks.length) return this.halt(run, 'CV_DOCUMENT_UNREADABLE', true);
-          if (checkpoint.stage === 'READ' && checkpoint.responseFormat &&
+          if (checkpoint.stage === 'READ' &&
             (!next.source || (checkpoint.source && cvReadTargets(next.source, next.expectedPages).length >= targets.length))) {
             if (await this.store(run, next)) return this.halt(run, 'CV_READ_REPAIR_NO_PROGRESS');
             return;
@@ -226,7 +228,7 @@ export class CvAssessmentService {
         }
       } else {
         next.grades = mergeCvGrades(next.source!, next.grades, grades);
-        if (checkpoint.responseFormat && next.grades.length === checkpoint.grades.length) {
+        if (next.grades.length === checkpoint.grades.length) {
           if (await this.store(run, next)) return this.halt(run, 'CV_GRADE_REPAIR_NO_PROGRESS');
           return;
         }

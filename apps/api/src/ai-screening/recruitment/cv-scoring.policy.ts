@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { JsonSchema } from '../screening.schemas';
 
-export const CV_SCORING_VERSION = 'talentio-cv-luna-v1';
 export const CV_MAX_BYTES = 5 * 1024 * 1024;
 export const CV_RUBRIC = Object.freeze([
   { id: 'skills', name: 'Keterampilan yang relevan', weight: 40 },
@@ -16,14 +14,6 @@ export const cvResultSchema = z.object({
   criteria: z.array(criterion).max(3), limitations: z.array(z.string().max(600)).max(5),
 }).strict();
 export type CvResult = z.infer<typeof cvResultSchema>;
-const str: JsonSchema = { type: 'string' };
-const nullable = (value: JsonSchema): JsonSchema => ({ anyOf: [value, { type: 'null' }] });
-const obj = (properties: Record<string, JsonSchema>): JsonSchema => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
-export const CV_RESULT_SCHEMA = obj({
-  readable: { type: 'boolean' }, fullName: nullable(str), email: nullable(str), phone: nullable(str), headline: str, summary: str, cvText: str,
-  criteria: { type: 'array', items: obj({ criterionId: str, level: { type: 'integer', enum: [0, 1, 2, 3, 4] }, reason: str, evidence: { type: 'array', items: str } }) },
-  limitations: { type: 'array', items: str },
-});
 const normalize = (text: string) => text.normalize('NFKC').replace(/\s+/gu, ' ').trim();
 export function validateCvResult(value: unknown, scored: boolean, minimumTextLength = 40) {
   const result = cvResultSchema.parse(value);

@@ -6,7 +6,7 @@ import { StorageService } from '../storage/storage.service';
 import type { AuthUser } from '../common/auth.decorators';
 import type { RecruiterBreakdown } from '../matching/recruiter-matching';
 import { conversationPolicy, assessmentVersion } from './conversation.policy';
-import { rankScreening, SCREENING_PROMPT_VERSION, SCREENING_RANKING_VERSION, hash } from './screening.policy';
+import { rankScreening, SCREENING_RANKING_VERSION, hash } from './screening.policy';
 import type { EvaluationPayload } from './screening.schemas';
 
 function taraScoreReason(evaluation?: {result: unknown; screeningScore: number | null; cvScore: number | null; status: string} | null) {

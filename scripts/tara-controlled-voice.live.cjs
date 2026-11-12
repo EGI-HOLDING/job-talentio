@@ -97,7 +97,7 @@ async function main(){
    return pc.localDescription.sdp;
   },wav.toString('base64'));
   playback.offer(first);
-  const created=await provider.create(createVoiceRequest({model:'gpt-live-1',reasoningModel:'gpt-6-luna',voice:'marin',job:{},plan:{claims:[],limitations:[]},jobTitle:'Designer',companyName:'Synthetic',guided:true,captureOnly:true},sdp));
+  const created=await provider.create(createVoiceRequest({model:'gpt-live-1',reasoningModel:'gpt-6-luna',voice:'marin'},sdp));
   providerId=created.session.id;
   channel=provider.attach(providerId,event=>{
    if(event.type==='session.started')channel.send({type:'session.input_audio.mute'});

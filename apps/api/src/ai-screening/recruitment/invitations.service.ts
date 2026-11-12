@@ -16,12 +16,12 @@ import { RecruitmentService } from './recruitment.service';
 import { ScreeningCandidatePlans } from '../screening-candidate-plans.service';
 import { ScreeningSessions } from '../screening-sessions.service';
 import { enqueueEvaluationPdf, enqueueWork, ScreeningPackets } from '../screening-packets.service';
-import { conversationPolicy, publicConversationPolicy, usesTimedInterview } from '../conversation.policy';
+import { newConversationPolicy, publicConversationPolicy } from '../conversation.policy';
 import { json, screeningEnabled, PDF_TEMPLATE_VERSION } from '../screening.policy';
 import { registerCvVersion } from '../../profiles/cv-evidence';
 import { CV_MAX_BYTES, fileChecksum } from './cv-scoring.policy';
 import { voiceTurns } from '../voice/voice.policy';
-import { freezeTakaInterview } from '../taka-interview';
+import { freezeTakaInterview, TAKA_INTERVIEW_VERSION } from '../taka-interview';
 import { invitationCreateSchema, invitationId, invitationNonce, invitationToken, INVITATION_TTL_MS, tokenHash, validInvitationToken } from './invitation.policy';
 
 type FrozenInvitation={filename:string;fileKey:string;checksum:string;contentType:string;cvText:string;cvScore:number|null;cvResult:unknown;job:unknown;jobId:string;jobTitle:string;companyName:string};
@@ -53,8 +53,7 @@ export class InvitationsService {
   if(active)return this.safe(active);
   const packet=await this.packets.sync(candidate.jobId,true);
   if(!packet)throw new BadRequestException('Konteks lowongan belum tersedia.');
-  const takaInterviewAssessment = process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED === 'true' && usesTimedInterview(conversationPolicy(packet.conversationPolicy))
-   ? freezeTakaInterview() : undefined;
+  const takaInterviewAssessment = freezeTakaInterview();
   const id=randomUUID(),tokenNonce=invitationNonce(),token=this.token({id,tokenNonce});
   const row=await this.db.$transaction(async tx=>{
    await tx.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id=${candidate.companyId} FOR UPDATE`);
@@ -120,9 +119,9 @@ export class InvitationsService {
    if(!works.length)throw new ConflictException('Tidak ada proses gagal yang perlu diulang.');
    const unresolved = await tx.aiScreeningCall.findMany({
     where: { workId: { in: works.map(work => work.id) }, status: { in: ['RUNNING', 'UNCERTAIN'] } },
-    select: { responseId: true },
+    select: { responseId: true, promptVersion: true },
    });
-   if (unresolved.some(call => !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
+   if (unresolved.some(call => call.promptVersion !== TAKA_INTERVIEW_VERSION || !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
     throw new ConflictException('Status panggilan AI perlu diperiksa operator sebelum dicoba ulang.');
    }
    await tx.aiScreeningCall.updateMany({where:{workId:{in:works.map(w=>w.id)},status:{in:['FAILED','INVALID']}},data:{status:'RECOVERED'}});
@@ -140,7 +139,7 @@ export class InvitationsService {
   if(row.expiresAt<=new Date()&&!row.session?.startedAt)throw new ConflictException('Undangan sudah kedaluwarsa. Hubungi HR untuk undangan baru.');
   return row;
  }
- async preview(token:string){const row=await this.fromToken(token),snapshot=row.snapshot as unknown as FrozenInvitation;return {mode:row.mode,jobTitle:snapshot.jobTitle,companyName:snapshot.companyName,expiresAt:row.expiresAt,status:row.status,conversationPolicy:publicConversationPolicy(conversationPolicy(row.package.conversationPolicy))};}
+ async preview(token:string){const row=await this.fromToken(token),snapshot=row.snapshot as unknown as FrozenInvitation;return {mode:row.mode,jobTitle:snapshot.jobTitle,companyName:snapshot.companyName,expiresAt:row.expiresAt,status:row.status,conversationPolicy:publicConversationPolicy(newConversationPolicy())};}
  async claim(user:AuthUser,token:string){
   if(user.role!=='EMPLOYEE')throw new ForbiddenException('Gunakan akun kandidat untuk mengikuti screening.');
   const row=await this.fromToken(token),account=await this.db.user.findUnique({where:{id:user.id},select:{id:true,email:true,emailVerified:true,isBanned:true,anonymizedAt:true}});

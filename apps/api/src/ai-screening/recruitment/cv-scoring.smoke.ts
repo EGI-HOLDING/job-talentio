@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import { CV_MAX_BYTES, CV_RUBRIC, validateCvResult, validateCvBytes, fileChecksum } from './cv-scoring.policy';
 import { candidateImportSchema, candidateListSchema } from './recruitment.schemas';
-import { composePrompt } from '../prompts/compose';
-import { assertSchema } from '../screening.schemas';
 const cvText = 'Dinda Pramesti\nMengembangkan API Node.js selama 4 tahun.\nMembantu tim menjalankan layanan pelanggan.';
 const sample = { readable: true, fullName: 'Dinda Pramesti', email: null, phone: null, headline: 'Backend Developer', summary: 'Pengalaman API.', cvText,
   criteria: CV_RUBRIC.map(c => ({ criterionId: c.id, level: 3, reason: 'Bukti relevan tersedia.', evidence: ['Mengembangkan API Node.js selama 4 tahun.'] })), limitations: [] };
@@ -27,10 +25,6 @@ maxSizePdf.write('%PDF-');
 assert.equal(validateCvBytes(maxSizePdf, 'cv.pdf'), 'application/pdf');
 assert.throws(() => validateCvBytes(Buffer.concat([maxSizePdf, Buffer.alloc(1)]), 'cv.pdf'), /CV_FILE_SIZE/);
 assert.equal(fileChecksum(Buffer.from('same')), fileChecksum(Buffer.from('same')));
-const prompt=composePrompt('cv-score', {job:{title:'Developer'}});
-assertSchema(prompt.schema,sample);
-for (const rule of ['tidak tepercaya','usia','gender','bukan verifikasi','skor saya 100']) assert.ok(prompt.instructions.includes(rule),rule);
-assert.ok(!prompt.instructions.includes('gue/lu'), 'CV assessment has no conversational humor');
 const file={clientId:'f1',filename:'cv.pdf',size:100,contentType:'application/pdf'};
 assert.throws(()=>candidateImportSchema.parse({companyId:'co',requestKey:'request-0001',files:[file,file]}));
 assert.throws(()=>candidateImportSchema.parse({companyId:'co',requestKey:'request-0001',files:[{...file,size:99999999}]}));

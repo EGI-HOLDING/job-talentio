@@ -51,10 +51,10 @@ export function freezeTakaInterview(): PromptPreset {
     };
 }
 
-export function frozenTakaInterview(snapshot: unknown): PromptPreset | undefined {
-    const preset = (snapshot as { takaInterviewAssessment?: PromptPreset } | null)?.takaInterviewAssessment;
+export function frozenTakaInterview(snapshot: unknown, packagePreset?: PromptPreset): PromptPreset {
+    const preset = (snapshot as { takaInterviewAssessment?: PromptPreset } | null)?.takaInterviewAssessment ?? packagePreset;
     if (preset && preset.version !== TAKA_INTERVIEW_VERSION) throw new Error('UNKNOWN_TAKA_INTERVIEW_ASSESSMENT');
-    return preset;
+    return preset ?? freezeTakaInterview();
 }
 
 export function chatTakaTurns(questions: ChatQuestion[], notes?: Notes): Turn[] {

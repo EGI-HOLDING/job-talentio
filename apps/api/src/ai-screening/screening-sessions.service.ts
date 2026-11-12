@@ -13,7 +13,7 @@ import { answerDeadline, isExpired, json, MAX_ANSWER_CHARS, SESSION_LEASE_MS, sc
 import type { CandidatePayload, PackagePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
-import { newConversationPolicy, conversationPolicy, publicConversationPolicy, usesSkillInterview, usesTimedInterview } from './conversation.policy';
+import { newConversationPolicy, conversationPolicy, publicConversationPolicy, requireCurrentConversation, isCurrentConversation } from './conversation.policy';
 import { advanceTara, recordTaraOpportunity, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
 const sessionInclude = { invitation: { include: { candidate: { select: { stage:true, company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
@@ -77,7 +77,7 @@ export class ScreeningSessions {
             packetReady: row.package?.status === 'READY' && row.currentPlan?.status === 'READY',
             preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
             preparation,
-            conversationPolicy: publicConversationPolicy(row.package ? conversationPolicy(row.package.conversationPolicy) : newConversationPolicy()),
+            conversationPolicy: publicConversationPolicy(row.startedAt && row.package ? conversationPolicy(row.package.conversationPolicy) : newConversationPolicy()),
             recoveryRequired: requiresRecovery,
             job: { id: row.job.id, title: row.job.title, companyName: row.job.isAnonymous ? 'Perusahaan dirahasiakan' : row.job.company.name, city: row.job.city?.name ?? '' },
             questions: row.questions.filter(q => !active || q.position <= active.position).map(q => ({ id: q.id, text: q.text, draft: q.draft, answer: q.answer, shownAt: q.shownAt, deadlineAt: q.deadlineAt, answeredAt: q.answeredAt, timedOut: q.timedOut })),
@@ -120,7 +120,11 @@ export class ScreeningSessions {
         return this.state(user,id);
     }
     async state(user: AuthUser, id: string) {
-        const row = await this.owned(user, id);
+        let row = await this.owned(user, id);
+        if (row.status === 'DRAFT' && row.resumeId && !isCurrentConversation(row.package?.conversationPolicy)) {
+            await this.plans.request(id);
+            row = await this.owned(user, id);
+        }
         if (row.taraDeadlineAt && ['ACTIVE','GENERATING'].includes(row.status) &&
             (+row.taraDeadlineAt - (TARA_SESSION_MS - TARA_COMPLETE_MS) <= Date.now() || row.taraAdvanceAt && +row.taraAdvanceAt <= Date.now())) {
             if (await this.advanceTimedChat(id, new Date(), row.revision)) return this.public(await this.owned(user, id));
@@ -233,14 +237,13 @@ export class ScreeningSessions {
             if (version.fileKey !== resume.fileKey)
                 throw new ConflictException('CV berubah. Pilih ulang CV sebelum mulai.');
             const profile = await tx.employeeProfile.findUniqueOrThrow({ where: { id: row.profileId }, include: { languages: { include: { language: true } }, certifications: true } });
-            const policy = conversationPolicy(session.package?.conversationPolicy);
-            const skillInterview = usesSkillInterview(policy), timed = usesTimedInterview(policy);
-            const topics = skillInterview && transport === 'TEXT'
-                ? taraTopics(payload, fresh.package?.payload as unknown as PackagePayload, timed) : null;
+            requireCurrentConversation(session.package?.conversationPolicy);
+            const topics = transport === 'TEXT'
+                ? taraTopics(payload, fresh.package?.payload as unknown as PackagePayload, true) : null;
             const now = new Date(), snapshot = { resume: { id: resume.id, title: resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
-            await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 }, ...(topics ? { taraInterview: json(startTara(topics, timed)) } : {}) } });
+            await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 }, ...(topics ? { taraInterview: json(startTara(topics, true)) } : {}) } });
             if (row.invitation) await tx.screeningInvitation.update({ where: { id: row.invitation.id }, data: { status: 'STARTED' } });
-            const startingQuestions = topics ? topics.slice(0, 1) : skillInterview ? [] : payload.claims;
+            const startingQuestions = topics?.slice(0, 1) ?? [];
             if (startingQuestions.length) await tx.aiScreeningQuestion.createMany({ data: startingQuestions.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: c.question })) });
         });
         return this.state(user, id);
@@ -255,15 +258,12 @@ export class ScreeningSessions {
                 throw new ConflictException('Pertanyaan sudah berganti.');
             if (!q.shownAt) {
                 const now = new Date();
-                const policy = conversationPolicy(session.package?.conversationPolicy);
-                let deadlineAt = answerDeadline(now, policy);
-                if (usesTimedInterview(policy)) {
-                    const deadline = session.taraDeadlineAt ?? new Date(+now + TARA_SESSION_MS);
-                    const closeAt = +deadline - (TARA_SESSION_MS - TARA_COMPLETE_MS);
-                    if (+now >= closeAt) return;
-                    if (!session.taraDeadlineAt) await tx.aiScreeningSession.update({where:{id},data:{taraDeadlineAt:deadline}});
-                    deadlineAt = new Date(Math.min(+deadlineAt, closeAt));
-                }
+                const policy = requireCurrentConversation(session.package?.conversationPolicy);
+                const deadline = session.taraDeadlineAt ?? new Date(+now + TARA_SESSION_MS);
+                const closeAt = +deadline - (TARA_SESSION_MS - TARA_COMPLETE_MS);
+                if (+now >= closeAt) return;
+                if (!session.taraDeadlineAt) await tx.aiScreeningSession.update({where:{id},data:{taraDeadlineAt:deadline}});
+                const deadlineAt = new Date(Math.min(+answerDeadline(now, policy), closeAt));
                 await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { shownAt: now, deadlineAt } });
             }
         });
@@ -286,6 +286,7 @@ export class ScreeningSessions {
             const current = session.questions.find(q => q.answer === null);
             if (current?.id !== questionId || !q.shownAt || session.status !== 'ACTIVE')
                 throw new ConflictException('Pertanyaan belum aktif.');
+            requireCurrentConversation(session.package?.conversationPolicy);
             const expired = isExpired(q.deadlineAt);
             if (!submit && !expired) {
                 await tx.aiScreeningQuestion.update({ where: { id: q.id }, data: { draft: answer } });
@@ -335,7 +336,7 @@ export class ScreeningSessions {
             await tx.$queryRaw(Prisma.sql`SELECT id FROM "AiScreeningSession" WHERE id=${id} FOR UPDATE`);
             const row = await tx.aiScreeningSession.findUnique({where:{id},include:sessionInclude});
             if (!row?.taraDeadlineAt || row.revision !== revision || !['ACTIVE','GENERATING'].includes(row.status) ||
-                row.invitation?.status === 'CANCELLED' || !usesTimedInterview(conversationPolicy(row.package?.conversationPolicy))) return false;
+                row.invitation?.status === 'CANCELLED' || !isCurrentConversation(row.package?.conversationPolicy)) return false;
             const start = +row.taraDeadlineAt - TARA_SESSION_MS, closeAt = start + TARA_COMPLETE_MS;
             const closing = +now >= closeAt;
             if (!closing && (row.status !== 'GENERATING' || !row.taraAdvanceAt || !decision && +now < +row.taraAdvanceAt)) return false;

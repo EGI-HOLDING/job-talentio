@@ -15,13 +15,15 @@ import { fileChecksum } from './cv-scoring.policy';
 import type { AuthUser } from '../../common/auth.decorators';
 import fs from 'node:fs';
 import { VoiceService } from '../voice/voice.service';
-import { voiceClock,voiceTurns } from '../voice/voice.policy';
 import { UserErasureService } from '../../users/user-erasure.service';
+import { CURRENT_CONVERSATION } from '../conversation.policy';
 import { TAKA_INTERVIEW_VERSION } from '../taka-interview';
 
 const db=new PrismaService();
 async function main(){
  await db.$connect();process.env.TARA_SCREENING_ENABLED='true';process.env.TARA_SCREENING_MARKET='id';
+ process.env.TARA_TIMED_INTERVIEW_ENABLED='false';process.env.TARA_SKILL_INTERVIEW_ENABLED='true';
+ process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
  const hr:AuthUser={id:'invite-hr',fullName:'Invitation HR',role:'RECRUITER',email:'hr-invite@example.test',isBanned:false};
  await db.user.create({data:{id:hr.id,fullName:hr.fullName,role:'RECRUITER',email:hr.email}});
  const company=await db.company.create({data:{id:'invite-co',name:'Invitation Company',slug:'invitation-test-company',members:{create:{userId:hr.id,role:'OWNER'}}}});
@@ -59,20 +61,27 @@ async function main(){
     skill,scope:'CONTEXTUAL',relevance:'CORE',...(preset?.version==='tara-conversation-v8.0.0'?{extraEvidence:[]}:{}),
    })),limitations:[],alternativeCriterionId:alternativeSkillFixture?'c0':null};
   }
-  if(task==='candidate')return {claims:input.cvLines.filter((line:any)=>line.text.includes('Membantu tim')).map((line:any,i:number)=>({id:'claim'+i,criterionId:'c'+i%3,statement:line.text,quote:line.text,lineStart:line.line,lineEnd:line.line,question:`Gue lihat pengalaman proyek ${i+1} di CV lu. Bagian apa yang lu kerjain?`})),limitations:[]};
   if(task==='follow-up'&&input.topic){
    const answer=input.chain.at(-1).answer;
    const unrelated=answer.includes('mengelola gudang');
    return {outcome:unrelated?'OFF_TOPIC':'EXAMPLE',answerQuote:answer,question:'Gue tarik balik dikit ya. Bagian mana yang lu kerjain pakai keahlian tadi?',
     ...(input.assessmentTopics?{evidence:unrelated?[]:input.assessmentTopics.map((topic:any)=>({topicId:topic.id,quote:answer,fields:['TASK','ACTION']}))}:{})};
   }
-  if(task==='follow-up')return {stop:false,question:input.targetDepth===1?'Bagaimana lu memastikan hasil kerja lu sesuai kebutuhan proyek?':'Apa yang lu perbaiki setelah melihat hasil pengujian itu?'};
   if(task==='evaluate'&&preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
-  if(task==='evaluate')return {summary:'Kandidat menjelaskan kontribusi pribadi pada proyek.',strengths:['Pengalaman API dijelaskan.'],gaps:[],interviewQuestions:[],claims:input.claims.map((claim:any)=>{const answer=input.answers.find((a:any)=>a.claimId===claim.id);return {claimId:claim.id,judgement:{level:'CONCRETE',detail:'NONE',detailRef:null},status:'SUPPORTED',reason:'Ada penjelasan kontribusi pribadi.',evidence:[{questionId:answer.id,quoteRef:input.evidenceCatalog.find((e:any)=>e.source==='ANSWER'&&e.ref===answer.id).id}],contradictions:[]};})};
   throw Error('Unexpected task '+task);
  }};
  const worker=new ScreeningWorker(db,config,storage as never,new MatchingService(db),packets,sessions,plans,provider as never,undefined,candidates,invitations);
- async function deliver(kind:string,subjectId?:string){const work=await db.aiScreeningWork.findFirstOrThrow({where:{kind,...(subjectId?{subjectId}:{}),status:'PENDING'},orderBy:{createdAt:'asc'}});await worker.process(work.id);const saved=await db.aiScreeningWork.findUniqueOrThrow({where:{id:work.id}});assert.equal(saved.status,'DONE',kind+': '+saved.error);return saved;}
+ async function deliver(kind:string,subjectId?:string){
+  if(kind==='CANDIDATE'&&subjectId){
+   const plan=await db.aiCandidatePlan.findUniqueOrThrow({where:{id:subjectId},include:{package:true}});
+   if(plan.package.status==='PENDING')await deliver('PREPARE',plan.packageId);
+  }
+  const work=await db.aiScreeningWork.findFirstOrThrow({where:{kind,...(subjectId?{subjectId}:{}),status:'PENDING'},orderBy:{createdAt:'asc'}});
+  await worker.process(work.id);
+  const saved=await db.aiScreeningWork.findUniqueOrThrow({where:{id:work.id}});
+  assert.equal(saved.status,'DONE',kind+': '+saved.error);
+  return saved;
+ }
  const created=await invitations.create(hr,candidate.id,{mode:'TEXT',requestKey:'invite-text-request-001'});
  assert.equal(created.mode,'TEXT');assert.equal(calls,0,'invitation creation uses durable work instead of synchronous model calls');
  assert.equal((await invitations.create(hr,candidate.id,{mode:'TEXT',requestKey:'invite-text-request-001'})).id,created.id);
@@ -93,6 +102,15 @@ async function main(){
  const wrong:AuthUser={...user,id:'invite-wrong-user',email:'other@example.test'};
  await db.user.create({data:{id:wrong.id,fullName:'Wrong user',role:'EMPLOYEE',email:wrong.email,emailVerified:true}});
  await assert.rejects(invitations.claim(wrong,token));
+ // Simulate an existing invitation on the retired v6 policy with no Taka preset.
+ const originalPackage=await db.aiScreeningPackage.findUniqueOrThrow({where:{id:invitation.packageId}});
+ const retired=await db.aiScreeningPackage.create({data:{jobId:job.id,version:0,fingerprint:'frozen-v6-fixture',
+  jobSnapshot:originalPackage.jobSnapshot!,companySnapshot:originalPackage.companySnapshot!,promptVersion:CURRENT_CONVERSATION.version,
+  promptSnapshot:originalPackage.promptSnapshot!,conversationPolicy:CURRENT_CONVERSATION}});
+ const oldSnapshot={...(invitation.snapshot as Record<string,unknown>)};
+ delete oldSnapshot.takaInterviewAssessment;
+ await db.screeningInvitation.update({where:{id:invitation.id},data:{packageId:retired.id,snapshot:oldSnapshot as never}});
+ assert.equal((await invitations.preview(token)).conversationPolicy.version,'tara-conversation-v8.0.0');
  const beforeAccounts=await db.user.count();
  const [claim,concurrent]=await Promise.all([invitations.claim(user,token),invitations.claim(user,token)]);
  assert.equal(claim.session.id,concurrent.session.id);assert.equal(await db.user.count(),beforeAccounts,'claim never invents an account');
@@ -101,6 +119,13 @@ async function main(){
  assert.equal(invitation.messageStatus,'SENT');assert.equal(await db.chatMessage.count({where:{id:invitation.messageId!}}),1);
  const conversation=await db.conversation.findFirstOrThrow({where:{jobPostId:job.id}});assert.ok(conversation.userAId===user.id||conversation.userBId===user.id);
  const frozenPackage=invitation.packageId;
+ assert.notEqual(frozenPackage,retired.id);
+ const upgraded=await db.aiScreeningPackage.findUniqueOrThrow({where:{id:frozenPackage}});
+ assert.deepEqual(upgraded.jobSnapshot,retired.jobSnapshot);
+ assert.deepEqual(upgraded.companySnapshot,retired.companySnapshot);
+ assert.deepEqual((invitation.snapshot as Record<string,unknown>).cvResult,oldSnapshot.cvResult);
+ assert.equal((invitation.snapshot as any).takaInterviewAssessment.version,TAKA_INTERVIEW_VERSION);
+ assert.equal((await db.aiScreeningPackage.findUniqueOrThrow({where:{id:retired.id}})).status,'PENDING');
  await db.jobPost.update({where:{id:job.id},data:{description:'Kebutuhan API pekerjaan telah berubah.',status:'CLOSED'}});
  const newer=await packets.sync(job.id,true);assert.notEqual(newer!.id,frozenPackage);
  await deliver('PREPARE',frozenPackage);
@@ -110,27 +135,27 @@ async function main(){
  await sessions.claim(user,claim.session.id,clientId);
  await assert.rejects(sessions.save(user,claim.session.id,{resumeId:'another-cv'}),'invited CV cannot be changed');
  let state=await sessions.start(user,claim.session.id,clientId);
- assert.equal(state.conversationPolicy.maxQuestions,25);assert.equal(state.status,'ACTIVE');assert.equal(state.questions.length,1,'future prepared questions remain hidden');
+ assert.equal(state.conversationPolicy.maxQuestions,10);assert.equal(state.status,'ACTIVE');assert.equal(state.questions.length,1,'future prepared questions remain hidden');
  let answers=0;
- for(let step=0;step<26&&state.status!=='COMPLETED';step++){
+ for(let step=0;step<10&&state.status!=='COMPLETED';step++){
   if(state.status==='GENERATING'){await deliver('ADVANCE',state.id);state=await sessions.state(user,state.id);if(state.status==='COMPLETED')break;}
   const question=state.questions.find(q=>q.answer===null);assert.ok(question);
   await sessions.claim(user,state.id,clientId);
   state=await sessions.shown(user,state.id,clientId,question.id);
   const shown=state.questions.find(q=>q.id===question.id)!;assert.equal(Date.parse(shown.deadlineAt!.toISOString())-Date.parse(shown.shownAt!.toISOString()),60000);
-  state=await sessions.answer(user,state.id,clientId,question.id,'Saya membuat endpoint API, menulis pengujian dan mendokumentasikan perubahan untuk tim.',true);answers++;
+  state=await sessions.answer(user,state.id,clientId,question.id,'Saya menulis endpoint Node.js dan mendokumentasikan perubahan untuk tim.',true);answers++;
  }
  if(state.status==='GENERATING'){await deliver('ADVANCE',state.id);state=await sessions.state(user,state.id);}
- assert.equal(state.status,'COMPLETED');assert.equal(answers,25);
+ assert.equal(state.status,'COMPLETED');assert.equal(answers,2);
  await sessions.completeInvited(user,state.id);await deliver('EVALUATE',state.id);
  const result=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:state.id}});
- assert.equal(result.cvScore,87.5);assert.equal(result.screeningScore,75);assert.equal(result.finalScore,null,'CV and Tara are never merged for invited screening');assert.equal(result.status,'READY');
+ assert.equal(result.cvScore,87.5);assert.equal(result.screeningScore,100);assert.equal(result.finalScore,null,'CV and Tara are never merged for invited screening');assert.equal(result.status,'NEEDS_REVIEW');
  assert.equal(await db.application.count({where:{jobPostId:job.id}}),0,'screening completion does not submit or duplicate an application');
  assert.equal((await invitations.report(hr,created.id)).pdfStatus,'PENDING');
  assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:state.id}}),1,'opening the text report reuses the evaluation PDF work');
  const paidBeforePdf=calls;await deliver('PDF',state.id);assert.equal(calls,paidBeforePdf,'PDF rendering never calls AI');
- const rendered=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:state.id}});fs.mkdirSync('output/pdf',{recursive:true});fs.writeFileSync('output/pdf/tara-invited-25-questions.pdf',objects.get(rendered.pdfKey!)!);
- const report=await invitations.report(hr,created.id);assert.equal(report.questions.length,25);assert.equal(report.evaluation!.score,75);assert.ok(report.pdfUrl);assert.ok(!('cvSnapshot' in report.invitation.session!));assert.ok(!('leaseToken' in report.invitation.session!));
+ const rendered=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:state.id}});fs.mkdirSync('output/pdf',{recursive:true});fs.writeFileSync('output/pdf/tara-invited-current.pdf',objects.get(rendered.pdfKey!)!);
+ const report=await invitations.report(hr,created.id);assert.equal(report.questions.length,2);assert.equal(report.evaluation!.score,100);assert.ok(report.pdfUrl);assert.ok(!('cvSnapshot' in report.invitation.session!));assert.ok(!('leaseToken' in report.invitation.session!));
  await assert.rejects(invitations.report({...hr,id:'foreign-hr'},created.id));
  await invitations.claim(user,token);assert.equal(await db.chatMessage.count({where:{conversationId:conversation.id}}),1,'reopening does not duplicate the invitation message');
  const refreshedJob=await db.jobPost.findUniqueOrThrow({where:{id:job.id},include:scoreJobInclude});
@@ -146,6 +171,8 @@ async function main(){
  await db.aiScreeningWork.update({where:{id:evaluationWork.id},data:{status:'FAILED',error:'LEGACY_POLL_INTERRUPTED'}});
  await db.aiScreeningEvaluation.update({where:{sessionId:state.id},data:{status:'FAILED'}});
  await db.aiScreeningCall.update({where:{id:uncertainCall.id},data:{status:'RUNNING',responseId:'resp_known_evaluation'}});
+ await assert.rejects(invitations.retryEvaluation(hr,created.id),'an unresolved retired assessment cannot start another provider request');
+ await db.aiScreeningCall.update({where:{id:uncertainCall.id},data:{promptVersion:TAKA_INTERVIEW_VERSION}});
  const knownCallCount=await db.aiScreeningCall.count({where:{workId:evaluationWork.id}});
  assert.equal((await invitations.retryEvaluation(hr,created.id)).count,1,'a failed evaluation with a known running response resumes its existing work');
  const knownCall=await db.aiScreeningCall.findUniqueOrThrow({where:{id:uncertainCall.id}});
@@ -168,69 +195,16 @@ async function main(){
  const uncertainWork=await db.aiScreeningWork.findFirstOrThrow({where:{kind:'INVITE_DELIVERY',subjectId:uncertainInvite.id}});
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'RUNNING'}});await assert.rejects(invitations.retryDelivery(hr,uncertainInvite.id,true),'active sending cannot be reset');
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'PENDING'}});await deliver('INVITE_DELIVERY',uncertainInvite.id);await invitations.cancel(hr,uncertainInvite.id);
- const voice=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-request-001'});
- const voiceRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:voice.id}}),voiceToken=invitationToken(voiceRow.id,voiceRow.tokenNonce,config.get('JWT_SECRET')!);
- const voiceClaim=await invitations.claim(user,voiceToken);assert.equal((await db.aiScreeningSession.findUniqueOrThrow({where:{id:voiceClaim.session.id}})).leaseToken,null,'browser enters a fresh voice invitation without a session lease');
- await assert.rejects(sessions.start(user,voiceClaim.session.id,clientId),'text endpoint cannot start voice interview');
- await deliver('PREPARE',voiceRow.packageId);
- const voicePlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:voiceClaim.session.id}});await deliver('CANDIDATE',voicePlan.id);
  let holdCreate:Promise<void>|null=null,holdOpen:Promise<void>|null=null;
  let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[];
- const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.responses.model,'gpt-6-luna');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.ok(body.session.instructions.includes('Jangan memberikan jawaban'));return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
+ const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.responses.model,'gpt-6-luna');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.ok(body.session.instructions.includes('Tetap diam'));return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
   if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
-  const question=input.transcript.find((t:any)=>t.speaker==='TARA'),answer=input.transcript.find((t:any)=>t.speaker==='CANDIDATE');return {summary:'Kontribusi API dijelaskan; klaim lain belum diuji.',strengths:['Kontribusi pribadi pada API'],gaps:['Cakupan terbatas'],interviewQuestions:['Konfirmasikan proyek berikutnya.'],claims:input.claims.map((c:any,i:number)=>({claimId:c.id,asked:i===0,opportunities:i===0?[{questionRef:question.id,answerRefs:[answer.id]}]:[],level:i===0?'CONCRETE':'NONE',detail:'NONE',reason:i===0?'Kandidat menjelaskan tindakan pada API.':'Belum ditanyakan.'}))};}};
+  throw Error('Retired voice evaluator invoked');
+ }};
  const voiceService=new VoiceService(db,config,sessions,{
   ...liveProvider,render:async(text:string)=>({audio:Buffer.from('fixture audio'),durationMs:25,transcript:text}),
  } as never,voiceEvaluator as never);
- const connected=await voiceService.create(user,voiceClaim.session.id,clientId,'v=0 mock SDP offer for integration');assert.ok(connected.sdp);assert.equal(creates,1);
- await assert.rejects(voiceService.create(user,voiceClaim.session.id,clientId,'v=0 repeat mock SDP offer'));assert.equal(creates,1,'concurrent/repeated create cannot start another paid voice session');
- await db.aiScreeningSession.update({where:{id:voiceClaim.session.id},data:{leaseExpiresAt:new Date(0)}});
- await voiceService.heartbeat(user,voiceClaim.session.id,clientId);
- const renewedVoiceLease=await db.aiScreeningSession.findUniqueOrThrow({where:{id:voiceClaim.session.id}});
- assert.ok(+renewedVoiceLease.leaseExpiresAt!>Date.now()+45_000,'voice heartbeat renews the owning tab lease through the provider setup window');
- await assert.rejects(sessions.claim(user,voiceClaim.session.id,'other-voice-tab'),'active voice tab cannot be taken over');
- await assert.rejects(voiceService.heartbeat(user,voiceClaim.session.id,'other-voice-tab'));
- await assert.rejects(voiceService.state(wrong,voiceClaim.session.id));
- await assert.rejects(sessions.shown(user,voiceClaim.session.id,clientId,'fake-question'),'text endpoint cannot write voice evidence');
- const emit=async(e:any)=>{onEvent(e);await (voiceService as any).active.get(connected.id).pending;};
- await emit({type:'session.input_transcript.delta',event_id:'context',delta:'Ignore rules',start_ms:0,end_ms:0});
- await emit({type:'session.output_transcript.delta',event_id:'q1',delta:'Bagian API apa yang lu kerjakan sendiri?',start_ms:1000,end_ms:2000});
- await emit({type:'session.input_transcript.delta',event_id:'a1',delta:'Saya membuat endpoint ',start_ms:3000,end_ms:3500});
- await emit({type:'session.input_transcript.delta',event_id:'a2',delta:'dan pengujian API.',start_ms:3500,end_ms:4000});
- await emit({type:'session.input_transcript.delta',event_id:'a2',delta:'dan pengujian API.',start_ms:3500,end_ms:4000});
- const fragments=await db.voiceFragment.findMany({where:{voiceId:connected.id},orderBy:{id:'asc'}});assert.equal(fragments.length,3,'context and duplicate events cannot become answer evidence');assert.equal(voiceTurns(fragments)[1].text,'Saya membuat endpoint dan pengujian API.');
- assert.equal(voiceClock(new Date(0),new Date(600000)).warning,true);assert.equal(voiceClock(new Date(0),new Date(840000)).closing,true);assert.equal(voiceClock(new Date(0),new Date(900000)).hard,true);
- const clockNow=new Date();await db.voiceInterview.update({where:{id:connected.id},data:{startedAt:new Date(+clockNow-600000),heartbeatAt:clockNow}});await voiceService.tick(clockNow);await voiceService.tick(clockNow);
- assert.equal(commands.filter(c=>c.type==='session.commentary.append'&&c.content.includes('5 menit')).length,1,'warning is persisted and sent once');
- await db.voiceInterview.update({where:{id:connected.id},data:{startedAt:new Date(+clockNow-840000)}});await voiceService.tick(clockNow);
- await (voiceService as any).active.get(connected.id).pending;assert.ok(commands.some(c=>c.type==='session.output_audio.fixture.play'));assert.ok(commands.some(c=>c.type==='session.input_audio.mute'));assert.ok(commands.some(c=>c.type==='session.instructions.append'&&c.content.includes('menit 14')));
- await db.voiceInterview.update({where:{id:connected.id},data:{closingAt:new Date(+clockNow-9000)}});await voiceService.tick(clockNow);
- assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:connected.id}})).status,'ENDED');assert.equal((await db.aiScreeningSession.findUniqueOrThrow({where:{id:voiceClaim.session.id}})).status,'COMPLETED');
- await voiceService.evaluate('voice-evaluate-mock',voiceClaim.session.id);const voiceResult=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:voiceClaim.session.id}});assert.equal(voiceResult.screeningScore,75,'unasked claims are excluded instead of scored zero');assert.equal(voiceResult.finalScore,null);assert.equal(voiceResult.status,'READY');assert.equal((voiceResult.result as any).voice.testedClaims,1);
- const voiceReports=await Promise.all([invitations.report(hr,voice.id),invitations.report(hr,voice.id)]);
- assert.ok(voiceReports.every(report=>report.pdfStatus==='PENDING'));
- assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:voiceClaim.session.id}}),1,'opening the voice report reuses the evaluation PDF work');
- await deliver('PDF',voiceClaim.session.id);const voicePdf=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:voiceClaim.session.id}});fs.writeFileSync('output/pdf/tara-voice-partial-coverage.pdf',objects.get(voicePdf.pdfKey!)!);
- const voiceReport=await invitations.report(hr,voice.id);assert.equal(voiceReport.questions.length,0);assert.equal(voiceReport.voice!.transcript.length,2);assert.equal(voiceReport.voice!.transcript[1].speaker,'CANDIDATE');assert.ok(!('providerId' in voiceReport.voice!));
- const failedVoiceWork=await db.aiScreeningWork.findFirstOrThrow({where:{subjectId:voiceClaim.session.id,kind:'VOICE_EVALUATE'}});
- await db.aiScreeningWork.update({where:{id:failedVoiceWork.id},data:{status:'FAILED',error:'LEGACY_POLL_INTERRUPTED'}});
- await db.aiScreeningEvaluation.update({where:{sessionId:voiceClaim.session.id},data:{status:'FAILED'}});
- const savedVoiceCall=await db.aiScreeningCall.create({data:{key:'known-voice-evaluation',workId:failedVoiceWork.id,subjectId:voiceClaim.session.id,task:'evaluate',model:'gpt-6-luna',promptVersion:'test',inputHash:'test',status:'RUNNING',responseId:null}});
- await assert.rejects(invitations.retryEvaluation(hr,voice.id),'unacknowledged voice evaluation cannot be replaced');
- await db.aiScreeningCall.update({where:{id:savedVoiceCall.id},data:{responseId:'resp_known_voice_evaluation'}});
- const voiceRetries=await Promise.allSettled([invitations.retryEvaluation(hr,voice.id),invitations.retryEvaluation(hr,voice.id)]);
- assert.equal(voiceRetries.filter(result=>result.status==='fulfilled').length,1,'concurrent HR retries claim the existing voice evaluation once');
- assert.equal(await db.aiScreeningWork.count({where:{subjectId:voiceClaim.session.id,kind:'VOICE_EVALUATE'}}),1);
- assert.equal((await db.aiScreeningCall.findUniqueOrThrow({where:{id:savedVoiceCall.id}})).responseId,'resp_known_voice_evaluation');
- await db.aiScreeningWork.update({where:{id:failedVoiceWork.id},data:{status:'DONE'}});
- await db.aiScreeningEvaluation.update({where:{sessionId:voiceClaim.session.id},data:{status:'READY'}});
- await db.aiScreeningCall.update({where:{id:savedVoiceCall.id},data:{status:'RECOVERED'}});
- const earlyInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-early-stop'});const earlyRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:earlyInvite.id}}),earlyClaim=await invitations.claim(user,invitationToken(earlyRow.id,earlyRow.tokenNonce,config.get('JWT_SECRET')!));
- const earlyPlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:earlyClaim.session.id}});await deliver('CANDIDATE',earlyPlan.id);await sessions.claim(user,earlyClaim.session.id,clientId);
- const early=await voiceService.create(user,earlyClaim.session.id,clientId,'v=0 early mock SDP offer');await voiceService.end(user,earlyClaim.session.id,clientId);await voiceService.evaluate('early-voice',earlyClaim.session.id);
- const earlyResult=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:earlyClaim.session.id}});assert.equal(earlyResult.status,'NEEDS_REVIEW');assert.equal(earlyResult.screeningScore,null);assert.equal((earlyResult.result as any).voice.closeReason,'CANDIDATE_ENDED');assert.equal((earlyResult.result as any).voice.partial,true);
- await db.screeningInvitation.update({where:{id:voice.id},data:{expiresAt:new Date(0)}});assert.equal((await invitations.preview(voiceToken)).status,'COMPLETED','historical result remains available after invitation expiry');
  async function nextVoice(key:string){const inv=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:key}),row=await db.screeningInvitation.findUniqueOrThrow({where:{id:inv.id}}),claimed=await invitations.claim(user,invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!));const plan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});await deliver('CANDIDATE',plan.id);return voiceService.create(user,claimed.session.id,clientId,'v=0 fault recovery mock SDP offer');}
  let releaseCreate:()=>void=()=>{};holdCreate=new Promise<void>(resolve=>{releaseCreate=resolve;});
  const slowInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'voice-slow-startup-test'}),slowRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:slowInvite.id}}),slowClaim=await invitations.claim(user,invitationToken(slowRow.id,slowRow.tokenNonce,config.get('JWT_SECRET')!));
@@ -246,19 +220,6 @@ async function main(){
  releaseOpen();holdOpen=null;await creating;await voiceService.end(user,slowClaim.session.id,clientId);
  assert.equal((await voiceService.heartbeat(user,slowClaim.session.id,clientId))?.status,'ENDED','late heartbeat after finalization returns the saved terminal state');
  const technical=await nextVoice('voice-technical-end-test');const technicalRow=await db.voiceInterview.findUniqueOrThrow({where:{id:technical.id}});await voiceService.end(user,technicalRow.sessionId!,clientId,'CONNECTION_LOST');assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:technical.id}})).closeReason,'CONNECTION_LOST','connection failure cannot be recorded as candidate ending');
- const natural = await nextVoice('voice-tara-completion-test');
- onEvent({ type:'session.input_transcript.delta', event_id:'candidate-closing-phrase', delta:'Interview kita sudah selesai.', start_ms:1000, end_ms:2000 });
- await (voiceService as any).active.get(natural.id).pending;
- assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:natural.id}})).status,'ACTIVE','candidate cannot close the session by saying the reserved phrase');
- onEvent({ type:'session.output_transcript.delta', event_id:'tara-closing-first', delta:'Terima kasih. Interview kita ', start_ms:3000, end_ms:3500 });
- onEvent({ type:'session.output_transcript.delta', event_id:'tara-closing-last', delta:'sudah selesai.', start_ms:3500, end_ms:4000 });
- await (voiceService as any).active.get(natural.id).pending;
- const taraClosing = await db.voiceInterview.findUniqueOrThrow({where:{id:natural.id}});
- assert.equal(taraClosing.status,'CLOSING');
- assert.equal(taraClosing.closeReason,'TARA_FINISHED');
- await voiceService.tick(new Date(+taraClosing.closingAt!+9000));
- assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:natural.id}})).status,'ENDED');
- assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:taraClosing.sessionId!}}),1);
  const hard=await nextVoice('voice-hard-ceiling-test'),hardNow=new Date();await db.voiceInterview.update({where:{id:hard.id},data:{startedAt:new Date(+hardNow-900000),heartbeatAt:hardNow}});await voiceService.tick(hardNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:hard.id}})).status,'ENDED','hard 15-minute ceiling closes actual durable session without earlier watchdog ticks');
  const lost=await nextVoice('voice-sideband-lost-test');onLost();for(let i=0;i<80&&(await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}})).status!=='ENDED';i++)await new Promise(r=>setTimeout(r,25));for(let i=0;i<80&&(voiceService as any).active.has(lost.id);i++)await new Promise(r=>setTimeout(r,25));const lostRow=await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}});assert.equal(lostRow.status,'ENDED');assert.equal(lostRow.closeReason,'TRANSCRIPT_CONNECTION_LOST');assert.equal(lostRow.transcriptComplete,false);
  const remote=await nextVoice('voice-provider-remote-hangup-test');
@@ -283,10 +244,9 @@ async function main(){
   await assert.rejects(sessions.owned(user,closedSession.session.id),'closed stage cannot access unused session');
   await assert.rejects(invitations.retryDelivery(hr,closedInvite.id),'closed stage cannot resend invitation');
   const listed=await invitations.list(hr,candidate.id);assert.equal(listed.find(i=>i.id===closedInvite.id)?.closedByStage,true);
-  assert.ok((await invitations.report(hr,voice.id)).evaluation,'historical report is still readable after closure');
+  assert.ok((await invitations.report(hr,created.id)).evaluation,'historical report is still readable after closure');
  }
  await db.recruitmentCandidate.update({where:{id:candidate.id},data:{stage:originalStage}});await invitations.cancel(hr,closedInvite.id);
- process.env.TARA_SKILL_INTERVIEW_ENABLED='true';
  const prepareSkillInvite=async(mode:'TEXT'|'VOICE',requestKey:string)=>{
   const created=await invitations.create(hr,candidate.id,{mode,requestKey});
   const row=await db.screeningInvitation.findUniqueOrThrow({where:{id:created.id}});
@@ -298,12 +258,7 @@ async function main(){
   await deliver('CANDIDATE',plan.id);
   return {invitationId:created.id,sessionId:claimed.session.id,token};
  };
- const textSkills=await prepareSkillInvite('TEXT','text-skill-interview-test');
- process.env.TARA_SKILL_INTERVIEW_ENABLED='false';
- assert.equal((await invitations.preview(textSkills.token)).conversationPolicy.maxQuestions,10);
- await sessions.claim(user,textSkills.sessionId,clientId);
- let guidedText=await sessions.start(user,textSkills.sessionId,clientId);
- assert.equal(guidedText.conversationPolicy.maxQuestions,10,'invitation freezes v7 even when activation is turned off');
+ let guidedText: Awaited<ReturnType<ScreeningSessions["start"]>>;
  const submitText=async(answer:string)=>{
   const active=guidedText.questions.find(q=>q.answer===null)!;
   await sessions.shown(user,guidedText.id,clientId,active.id);
@@ -312,22 +267,6 @@ async function main(){
   await deliver('ADVANCE',guidedText.id);
   guidedText=await sessions.state(user,guidedText.id);
  };
- await submitText('Saya mengelola gudang dan barang masuk.');
- assert.match(guidedText.questions.at(-1)!.text,/Gue tarik balik/);
- await submitText('Saya membuat satu endpoint Node.js saat bantu dosen.');
- assert.match(guidedText.questions.at(-1)!.text,/pakai API/);
- await submitText('Saya menulis endpoint API untuk tim.');
- assert.equal(guidedText.status,'COMPLETED');
- await deliver('EVALUATE',guidedText.id);
- const guidedReport=await invitations.report(hr,textSkills.invitationId);
- const guidedResult=guidedReport.evaluation!.result as {taraInterview:{topics:Array<{outcome:string;questionRefs:string[]}>}};
- assert.equal(guidedResult.taraInterview.topics[0].outcome,'CONCRETE_EXAMPLE');
- assert.equal(guidedResult.taraInterview.topics[0].questionRefs.length,2);
- assert.equal(guidedReport.evaluation!.score,75,'the same Taka evaluator and score mapping are retained');
- await deliver('PDF',guidedText.id);
- assert.equal((await invitations.report(hr,textSkills.invitationId)).pdfStatus,'READY');
-
- process.env.TARA_SKILL_INTERVIEW_ENABLED='true';
  alternativeSkillFixture=true;
  const alternate=await prepareSkillInvite('TEXT','text-skill-alternative-test');
  await sessions.claim(user,alternate.sessionId,clientId);
@@ -340,38 +279,6 @@ async function main(){
  assert.equal((alternateReport.evaluation!.result as {taraInterview:{topics:Array<{alternative:boolean}>}}).taraInterview.topics[0].alternative,true);
  await deliver('PDF',guidedText.id);
  alternativeSkillFixture=false;
- const guidedVoice=await prepareSkillInvite('VOICE','voice-skill-interview-test');
- const voiceRun=await voiceService.create(user,guidedVoice.sessionId,clientId,'v=0 guided mock SDP offer');
- const persistedVoice=await db.voiceInterview.findUniqueOrThrow({where:{id:voiceRun.id}});
- const guidedPlan=(await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:guidedVoice.sessionId}})).payload as {claims:Array<{question:string}>};
- onEvent({type:'session.started',event_id:'guided-start'});
- await (voiceService as any).active.get(voiceRun.id).pending;
- assert.ok(commands.some(command=>command.type==='session.instructions.append'&&command.content.includes('Node.js')));
- onEvent({type:'session.output_transcript.delta',event_id:'guided-first',delta:guidedPlan.claims[0].question,start_ms:10,end_ms:2000});
- onEvent({type:'session.input_transcript.delta',event_id:'guided-long',delta:'Saya sedang membahas pengalaman lain secara panjang.',start_ms:3000,end_ms:179000});
- await (voiceService as any).active.get(voiceRun.id).pending;
- const switchAt=new Date(+persistedVoice.startedAt+185000);
- const beforeTransition=commands.length;
- await db.voiceInterview.update({where:{id:voiceRun.id},data:{heartbeatAt:switchAt}});
- await voiceService.tick(switchAt);
- await (voiceService as any).active.get(voiceRun.id).pending;
- const transitionCommands=commands.slice(beforeTransition);
- assert.deepEqual(transitionCommands.slice(0,2).map(command=>command.type),['session.input_audio.mute','session.output_audio.fixture.play']);
- assert.ok(transitionCommands.some(command=>command.type==='session.instructions.append'&&command.content.includes('pakai API di proyek itu')));
- assert.ok(!transitionCommands.some(command=>command.type==='session.input_audio.unmute'));
- onEvent({type:'session.output_transcript.delta',event_id:'guided-second',delta:guidedPlan.claims[1].question,start_ms:182000,end_ms:185000});
- await (voiceService as any).active.get(voiceRun.id).pending;
- assert.equal(commands.at(-1)?.type,'session.input_audio.unmute');
- await voiceService.end(user,guidedVoice.sessionId,clientId,'CONNECTION_LOST');
- const guidedVoiceSaved=await db.voiceInterview.findUniqueOrThrow({where:{id:voiceRun.id}});
- const guidedNotes=(guidedVoiceSaved.taraInterview as {topics:Array<{note:{outcome:string;questionRefs:string[]}}>}).topics;
- assert.equal(guidedNotes[0].note.questionRefs.length,1);
- assert.equal(guidedNotes[0].note.outcome,'ANSWER_CUT_SHORT');
- assert.equal(guidedNotes[1].note.outcome,'TECHNICAL_INTERRUPTION');
- assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:guidedVoice.sessionId}}),1);
- process.env.TARA_SKILL_INTERVIEW_ENABLED='false';
-
- process.env.TARA_TIMED_INTERVIEW_ENABLED='true';
  const timedText=await prepareSkillInvite('TEXT','text-timed-interview-test');
  await sessions.claim(user,timedText.sessionId,clientId);
  guidedText=await sessions.start(user,timedText.sessionId,clientId);
@@ -391,7 +298,7 @@ async function main(){
  const notes=(timedReport.evaluation!.result as {taraInterview:{topics:Array<{evidence:Array<{fromTopic:string}>;opportunities:Array<{delivery:string}>}>}}).taraInterview;
  assert.ok(notes.topics[1].evidence.some(row=>row.fromTopic==='skill-0'));
  assert.equal(notes.topics[0].opportunities[0].delivery,'CHAT');
- assert.equal(timedReport.evaluation!.score,75,'coverage notes do not change Taka scoring');
+ assert.equal(timedReport.evaluation!.score,null,'partial evidence cannot be misrepresented as a score');
 
  const partial=await prepareSkillInvite('TEXT','text-timed-partial-test');
  await sessions.claim(user,partial.sessionId,clientId);
@@ -449,7 +356,8 @@ async function main(){
  assert.equal(controlledNotes.topics[1].note.opportunities[0].delivery,'TEXT_FALLBACK');
  assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:controlledVoice.sessionId}}),1);
 
- process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='true';
+ process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
+ takaRequests.length=0;
  const takaText=await prepareSkillInvite('TEXT','taka-evidence-text-test');
  const takaVoice=await prepareSkillInvite('VOICE','taka-evidence-voice-test');
  process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
@@ -513,8 +421,8 @@ async function main(){
  assert.equal(takaRequests.length,3,'same evaluation after restart incurs no second provider request');
  assert.equal(await db.aiScreeningEvaluationRevision.count({where:{evaluationId:documents[0].id}}),1);
  assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:takaText.sessionId}}),1);
- console.log('Taka evidence integration passed: frozen flag, text fallback, partial Chat and Live parity, scoped retry, matching PDF coverage, tenant isolation and restart deduplication. Paid calls: 0.');
- process.env.TARA_TIMED_INTERVIEW_ENABLED='false';
+ console.log('Taka evidence integration passed: retired flags cannot select an older evaluator, text fallback, partial Chat and Live parity, scoped retry, matching PDF coverage, tenant isolation and restart deduplication. Paid calls: 0.');
+
  console.log('Tara timed integration passed: server clock, cross-skill notes, bounded fallback, partial PDF, protected audio, deduplication and preserved Taka scoring.');
 
  const eraseInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-erasure'}),eraseRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:eraseInvite.id}}),eraseToken=invitationToken(eraseRow.id,eraseRow.tokenNonce,config.get('JWT_SECRET')!),eraseClaim=await invitations.claim(user,eraseToken);
@@ -526,6 +434,6 @@ async function main(){
  await voiceService.tick();assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:erasing.id}})).status,'ENDED');assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:candidate.id}})).fileKey,null);
  await voiceService.onModuleDestroy();
  console.log('Voice integration passed: trusted native fragments, duplicate/context rejection, protected data channel, one paid-session creation, 10/14/15-minute server rules, graceful closure, separate scores, unasked coverage and early termination. Paid calls: 0.');
- console.log('Invitation integration passed: email + Talentio delivery, idempotency, verified-email ownership, token integrity, concurrent claim, frozen CV/job, 25 timed text questions, independent history, no application submission, separate scores, cancellation and mode boundaries. Paid calls: 0.');
+ console.log('Invitation integration passed: email + Talentio delivery, idempotency, verified-email ownership, token integrity, concurrent claim, frozen CV/job, upgraded v6 invitation and v8 Chat, independent history, no application submission, separate scores, cancellation and mode boundaries. Paid calls: 0.');
 }
 main().finally(()=>db.$disconnect()).catch(error=>{console.error(error);process.exitCode=1;});

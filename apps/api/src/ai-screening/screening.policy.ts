@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { CURRENT_CONVERSATION, type ConversationPolicy } from './conversation.policy';
-export const SCREENING_PROMPT_VERSION = 'tara-cv-claims-v3.0.0';
 export const SCREENING_RANKING_VERSION = 'tara-cv-claims-composite-v3';
 export const PDF_TEMPLATE_VERSION = 'tara-report-v5';
 export const QUESTION_SECONDS = CURRENT_CONVERSATION.questionSeconds;

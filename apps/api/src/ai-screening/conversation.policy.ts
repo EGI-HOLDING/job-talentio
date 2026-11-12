@@ -22,8 +22,15 @@ export const TIMED_CONVERSATION: ConversationPolicy = Object.freeze({
 });
 export const usesTimedInterview = (policy: ConversationPolicy) => policy.version === TIMED_CONVERSATION.version;
 export const usesSkillInterview = (policy: ConversationPolicy) => policy.version === SKILL_CONVERSATION.version || usesTimedInterview(policy);
-export const newConversationPolicy = () => process.env.TARA_TIMED_INTERVIEW_ENABLED === 'true'
-    ? TIMED_CONVERSATION : process.env.TARA_SKILL_INTERVIEW_ENABLED === 'true' ? SKILL_CONVERSATION : CURRENT_CONVERSATION;
+export const newConversationPolicy = () => TIMED_CONVERSATION;
+export function isCurrentConversation(snapshot: unknown) {
+    return (snapshot as Partial<ConversationPolicy> | null)?.version === TIMED_CONVERSATION.version;
+}
+
+export function requireCurrentConversation(snapshot: unknown) {
+    if (!isCurrentConversation(snapshot)) throw new Error('RETIRED_TARA_CONVERSATION');
+    return conversationPolicy(snapshot);
+}
 export const V5_CONVERSATION: ConversationPolicy = Object.freeze({
     version: 'tara-conversation-v5.0.0', questionSeconds: 60, maxCore: 3, maxFollowUp: 5,
     maxPerRoot: 2, probeOrder: 'breadth-first', maxWords: 35, maxCharacters: 280,

@@ -118,7 +118,7 @@ const provider = {
   async delete() { changed++; return { status: 204 }; },
 };
 const recovery = new CvAssessmentService(db, storage as never, config, provider as never);
-const scorer = new CvScoringService(db, storage as never, {} as never, config, recovery);
+const scorer = new CvScoringService(db, recovery);
 const worker = () => new ScreeningWorker(db, config, storage as never, {} as never, {} as never, {} as never, {} as never,
   {} as never, scorer, undefined, undefined, undefined, undefined, recovery);
 const hr = { id: 'cv-hr', fullName: 'HR', role: 'RECRUITER', email: null, isBanned: false } as const;
@@ -145,7 +145,6 @@ function pdf(extraPages = 0, replacement = false) {
 
 async function main() {
   assert.match(process.env.DATABASE_URL ?? '', /@127\.0\.0\.1:5434\/talentio_recruitment_it_\d+/);
-  process.env.CV_SCORING_V2_ENABLED = 'true';
   assert.equal(cvBackoff(1, '10', 0, 0), 10000);
   assert.equal(cvRejection({ status: 429, body: { error: { code: 'insufficient_quota' } } }), 'BLOCKED');
   assert.equal(cvRejection({ status: 502 }), 'UNCONFIRMED');

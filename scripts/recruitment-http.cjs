@@ -11,7 +11,6 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
  const env={...process.env,NODE_ENV:'test',RECRUITMENT_HTTP_CHILD:'1',DATABASE_URL:`postgresql://${encodeURIComponent(user)}:${encodeURIComponent(pgEnv.POSTGRES_PASSWORD)}@127.0.0.1:${port}/${dbName}`,JWT_SECRET:'recruitment-http-synthetic-signing-key-only',OPENAI_API_KEY:'',TARA_SCREENING_ENABLED:'true',TARA_SCREENING_MARKET:'id',TELEGRAM_BOT_TOKEN:'',RESEND_API_KEY:'',SUPERADMIN_PASSWORD:'',MEILI_HOST:'',REDIS_URL:'',HR_RANKING_V2_MODE:'off',EMPLOYEE_INTENT_V3_MODE:'off',S3_ENDPOINT:s3,S3_PUBLIC_URL:s3+'/'+bucket,S3_BUCKET:bucket,S3_ACCESS_KEY:minioEnv.MINIO_ROOT_USER||'minioadmin',S3_SECRET_KEY:minioEnv.MINIO_ROOT_PASSWORD||'minioadmin',S3_REGION:'us-east-1',S3_FORCE_PATH_STYLE:'true',SMTP_HOST:'127.0.0.1',SMTP_PORT:mailpit.NetworkSettings.Ports['1025/tcp'][0].HostPort,SMTP_USER:'',SMTP_PASS:'',SMTP_SECURE:'false',WEB_URL:'http://127.0.0.1:3035',SMTP_FROM:'Talentio Tests <recruitment@synthetic.test>',RECRUITMENT_MAILPIT_URL:'http://127.0.0.1:'+mailpit.NetworkSettings.Ports['8025/tcp'][0].HostPort};
  if (process.argv.includes('--onboarding') || process.argv.includes('--onboarding-live-draft')) { env.HR_CREATION_V2_ENABLED = 'true'; env.HR_FLOW_MARKET = 'id'; }
  if (process.argv.includes('--taka-v2')) {
-  env.CV_SCORING_V2_ENABLED='true'; env.CV_SCORING_V2_COMPANIES='http-co';
   env.OPENAI_CV_WEBHOOK_SECRET='whsec_'+Buffer.alloc(32,81).toString('base64');
  }
  if (['--live-draft', '--live-voice', '--live-text', '--live-cv-formats', '--onboarding-live-draft'].some(mode => process.argv.includes(mode))) {

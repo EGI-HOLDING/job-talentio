@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { CURRENT_CONVERSATION as current, V4_CONVERSATION as v4, LEGACY_CONVERSATION as legacy, conversationPolicy, conversationTone, repeatsQuestion } from './conversation.policy';
+import { CURRENT_CONVERSATION as current, V4_CONVERSATION as v4, LEGACY_CONVERSATION as legacy, newConversationPolicy, requireCurrentConversation, conversationPolicy, conversationTone, repeatsQuestion } from './conversation.policy';
 import { answerDeadline, nextProbeTarget, type ProbeQuestion } from './screening.policy';
 import { assertSchema, conversationSchemas, validateCandidate, validateFollowUp, validQuestion, type CandidatePayload, type PackagePayload } from './screening.schemas';
 import { composePrompt } from './prompts/compose';
@@ -22,6 +22,8 @@ assert.equal(conversationTone([{ answer: 'Saya mengerjakan tugas tersebut.' }]),
 assert.ok(repeatsQuestion('Pas ngecek keterbacaan harga, lu mulai dari bagian mana dulu?', ['Lu ngecek keterbacaan harga itu biasanya dari bagian mana dulu? wkwk']));
 assert.equal(repeatsQuestion('Kenapa lu memilih urutan itu?', ['Bagaimana lu menjalankan urutan itu?']), false);
 assert.equal(conversationPolicy(null), legacy);
+assert.throws(() => requireCurrentConversation(legacy), /RETIRED_TARA_CONVERSATION/);
+assert.equal(requireCurrentConversation(newConversationPolicy()), newConversationPolicy());
 assert.deepEqual(conversationPolicy(JSON.parse(JSON.stringify(current))), current);
 assert.equal(conversationPolicy({ ...v4, version: 'tara-conversation-v4.0.0' }).version, 'tara-conversation-v4.0.0');
 assert.throws(() => conversationPolicy({ ...current, questionSeconds: 1 }));
@@ -75,14 +77,12 @@ assert.equal(nextProbeTarget([{ ...root, probeClosed: true }]), null);
 assert.equal(nextProbeTarget([root, { ...root, id: 'p', position: 1, kind: 'FOLLOW_UP', rootQuestionId: root.id, depth: 1, answer: '' }]), null);
 for (const task of ['candidate', 'follow-up'] as const) {
     const prompt = composePrompt(task, {});
-    assert.equal(prompt.version, current.version);
+    assert.equal(prompt.version, newConversationPolicy().version);
     assert.match(prompt.instructions, /gue\/lu/);
     assert.match(prompt.instructions, /35 kata dan 280 karakter/);
 }
 const assessment = composePrompt('evaluate', {});
-assert.equal(assessment.version, 'tara-cv-claims-v3.0.3');
-assert.equal(composePrompt('evaluate', {}, undefined, legacy).version, 'tara-cv-claims-v3.0.0');
-assert.ok(!composePrompt('evaluate', {}, undefined, legacy).instructions.includes('Urutan keputusan tetap'));
+assert.equal(assessment.version, 'taka-interview-evidence-v1');
 assert.ok(!assessment.instructions.includes('Ngobrol pakai gue/lu'));
 console.log('Conversation policy: schema limits, 30/60-second deadlines, legacy compatibility, ' + combinations + ' probe matrices, message format and prompt separation passed.');
 

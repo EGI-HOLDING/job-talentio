@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "nest start --watch",
     "test:tara": "tsx src/ai-screening/conversation.smoke.ts && tsx src/ai-screening/screening.smoke.ts && tsx src/ai-screening/claim-assessment.smoke.ts && tsx src/ai-screening/tara-interview.smoke.ts && tsx src/ai-screening/tara-timed-interview.smoke.ts",
-    "test:tara:conversation:live": "node ../../scripts/tara-screening-local.cjs --conversation-quality",
     "test:tara:local": "node ../../scripts/tara-screening-local.cjs",
     "test:tara:pdf": "tsx src/ai-screening/screening-report.smoke.ts",
     "test:job-content-ai": "tsx src/job-content-ai/job-content-ai.smoke.ts",

@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MatchingService } from '../matching/matching.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { UserErasureService } from '../users/user-erasure.service';
+import { freezePromptRegistry } from './prompts/registry';
 import { ScreeningPackets } from './screening-packets.service';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { ScreeningSessions } from './screening-sessions.service';
@@ -14,8 +15,9 @@ import { ScreeningWorker } from './screening-worker.service';
 import { ScreeningHr } from './screening-hr.service';
 import { ScreeningClient, AiPending } from './screening.client';
 import { validateCandidate, validateEvaluation, type CandidatePayload, type PackagePayload, type EvaluationPayload } from './screening.schemas';
-import { CURRENT_CONVERSATION, V4_CONVERSATION, LEGACY_CONVERSATION } from './conversation.policy';
+import { TIMED_CONVERSATION, V4_CONVERSATION } from './conversation.policy';
 import { Prisma } from '@prisma/client';
+import { TAKA_INTERVIEW_VERSION } from './taka-interview';
 import { combineScores, rankScreening, scoreScreening, json } from './screening.policy';
 async function main() {
     const url = new URL(process.env.DATABASE_URL!);
@@ -50,11 +52,22 @@ async function main() {
                 return rubric;
             if (task === 'candidate') {
                 if (candidateHook) await candidateHook();
-                return { claims: input.cvLines.filter((l: any) => l.text.includes('Membantu')).slice(0, 3).map((l: any, i: number) => ({ id: 'claim' + i, criterionId: 'c' + i, statement: l.text, quote: l.text, lineStart: l.line, lineEnd: l.line, question: 'Di CV kamu menyebut ' + l.text + '. Bagian apa yang kamu kerjakan sendiri?' })), limitations: [] };
+                return { claims: input.cvLines.filter((l: any) => l.text.includes('Membantu')).slice(0, 3).map((l: any, i: number) => ({
+                    id: 'claim' + i, criterionId: 'c' + i, statement: l.text, quote: l.text, lineStart: l.line, lineEnd: l.line,
+                    skill: ['layanan pelanggan','mencatat proses','menilai hasil'][i], scope: 'GENERAL', relevance: 'CORE', extraEvidence: [],
+                    question: 'Di CV lu nulis soal ' + l.text + '. Bagian apa yang lu kerjain sendiri?'
+                })), limitations: [], alternativeCriterionId: null };
             }
-            if (task === 'follow-up')
-                return { stop: false, question: input.targetDepth === 1 ? 'Kamu menyebut ' + input.chain[0].answer + '. Bagaimana urutan tindakanmu?' : 'Tadi kamu menjelaskan ' + input.chain[1].answer + '. Bagaimana kamu mengukur hasilnya?' };
-            return { summary: 'Kandidat menjelaskan kontribusi dengan contoh konkret.', strengths: ['Kontribusi pribadi dijelaskan.'], gaps: ['Konfirmasikan hasil saat wawancara.'], interviewQuestions: ['Bagaimana kamu mengukur hasil pekerjaanmu?'], claims: input.claims.map((c: any) => ({ claimId: c.id, ...(preset?.schema?.properties?.claims?.items?.properties?.judgement ? { judgement: { level: 'CONCRETE', detail: 'NONE', detailRef: null } } : { score: 3 }), status: 'SUPPORTED', reason: 'Jawaban menjelaskan peran kandidat.', evidence: [{ questionId: input.answers.find((a: any) => a.claimId === c.id).id, quoteRef: input.evidenceCatalog.find((s: any) => s.source === 'ANSWER' && s.ref === input.answers.find((a: any) => a.claimId === c.id).id).id }], contradictions: [] })) };
+            if (task === 'follow-up') {
+                const answer = input.chain.at(-1).answer;
+                return { outcome: 'EXAMPLE', answerQuote: answer, question: 'Bagian mana yang lu kerjain sendiri?',
+                    evidence: [{ topicId: input.topic.id, quote: answer, fields: ['TASK','ACTION'] }] };
+            }
+            assert.equal(preset?.version, TAKA_INTERVIEW_VERSION);
+            const cite = input.evidenceCatalog[0];
+            return { claims: Object.fromEntries(input.claims.map((c: any) => [c.id,
+                cite ? { level: 'CONCRETE', reason: 'Kandidat menjelaskan perannya.', evidence: [{ quoteRef: cite.id, fields: ['TASK','ACTION'] }],
+                    discrepancyRef: null } : null])) };
         } };
     const worker = new ScreeningWorker(db, config, storage as never, matching, packets, sessions, plans, provider as never);
     const job = await db.jobPost.create({ data: { id: 'job', companyId: company.id, title: 'Customer Service', description: 'Menangani layanan pelanggan, mencatat proses dan mengukur hasil layanan pelanggan.', status: 'PUBLISHED' } });
@@ -147,33 +160,25 @@ async function main() {
         await db.aiScreeningSession.update({ where: { id: legacy.id }, data: { currentPlanId: legacyPlan.id } });
         const legacyQuestion = await db.aiScreeningQuestion.create({ data: { sessionId: legacy.id, position: 0, claimId: plan.claims[0].id, criterionId: 'c0', kind: 'CORE', text: 'Bagian apa yang kamu kerjakan sendiri?' } });
         await sessions.claim(b.user, legacy.id, 'legacy-tab-unique');
-        await sessions.shown(b.user, legacy.id, 'legacy-tab-unique', legacyQuestion.id);
+        const beforeRetired = calls.length;
+        await assert.rejects(sessions.shown(b.user, legacy.id, 'legacy-tab-unique', legacyQuestion.id), /RETIRED_TARA_CONVERSATION/);
+        check(calls.length === beforeRetired, 'retired live execution fails before a provider call');
         const legacyState = await sessions.state(b.user, legacy.id);
-        check(legacyState.conversationPolicy.questionSeconds === 60 && legacyState.conversationPolicy.maxQuestions === 15, 'legacy response preserves the old limits');
-        check(+legacyState.questions[0].deadlineAt! - +legacyState.questions[0].shownAt! === 60000, 'legacy active timer stays at 60 seconds');
-        check((await sessions.draft(b.user, legacyJob.id) as any).id === legacy.id, 'reopening legacy active session keeps its identity');
-        check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: legacy.id } })).packageId === legacyPacket.id, 'legacy active package is never replaced');
-        await sessions.answer(b.user, legacy.id, 'legacy-tab-unique', legacyQuestion.id, 'Saya menangani pelanggan.', true);
-        await deliver('ADVANCE', legacy.id);
-        const legacyFollow = (await sessions.state(b.user, legacy.id)).questions.find(q => q.answer === null)!;
-        await sessions.shown(b.user, legacy.id, 'legacy-tab-unique', legacyFollow.id);
-        await sessions.answer(b.user, legacy.id, 'legacy-tab-unique', legacyFollow.id, 'Saya mencatat hasilnya.', true);
-        await deliver('ADVANCE', legacy.id);
-        check(calls.filter(c => c.task === 'follow-up' && c.preset?.instructions === 'LEGACY_VOICE_FIXTURE').length === 2, 'legacy followups use the exact frozen voice preset');
-        check((await db.aiScreeningQuestion.count({ where: { sessionId: legacy.id } })) === 3, 'legacy per-root second followup is preserved');
+        check(legacyState.conversationPolicy.maxQuestions === 15, 'retired conversation metadata is readable');
+        check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: legacy.id } })).packageId === legacyPacket.id, 'history keeps the original packet');
         const v4job = await db.jobPost.create({ data: { companyId: company.id, title: 'v4 customer service', description: job.description, status: 'PUBLISHED' } });
         const v4packet = await db.aiScreeningPackage.create({ data: { jobId: v4job.id, fingerprint: 'v4-policy-fixture', version: 1, status: 'READY', jobSnapshot: basePacket.jobSnapshot!, companySnapshot: basePacket.companySnapshot!, promptSnapshot: json(legacyPrompts), promptVersion: V4_CONVERSATION.version, payload: json(rubric), conversationPolicy: json(V4_CONVERSATION) } });
         const v4session = await db.aiScreeningSession.create({ data: { jobId: v4job.id, profileId: b.user.id, legacyKey: 'legacy:'+v4job.id+':'+b.user.id, packageId: v4packet.id, status: 'ACTIVE', startedAt: new Date() } });
         const v4question = await db.aiScreeningQuestion.create({ data: { sessionId: v4session.id, position: 0, criterionId: 'c0', claimId: plan.claims[0].id, kind: 'CORE', text: 'Bagian apa yang lu kerjakan?' } });
         await sessions.claim(b.user, v4session.id, 'v4-tab-unique');
-        await sessions.shown(b.user, v4session.id, 'v4-tab-unique', v4question.id);
+        await assert.rejects(sessions.shown(b.user, v4session.id, 'v4-tab-unique', v4question.id), /RETIRED_TARA_CONVERSATION/);
         const v4state = await sessions.state(b.user, v4session.id);
-        check(v4state.conversationPolicy.questionSeconds === 30 && +v4state.questions[0].deadlineAt! - +v4state.questions[0].shownAt! === 30000, 'active v4 session keeps 30-second policy');
+        check(v4state.conversationPolicy.questionSeconds === 30 && v4state.questions[0].shownAt === null, 'v4 timing remains readable without running the retired conversation');
         await sessions.draft(b.user, v4job.id);
         check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: v4session.id } })).packageId === v4packet.id, 'active v4 session never upgrades its packet');
         const legacyDraft = await db.aiScreeningSession.create({ data: { jobId: legacyJob.id, profileId: a.user.id, legacyKey: 'legacy:'+legacyJob.id+':'+a.user.id, resumeId: a.resume.id, packageId: legacyPacket.id, resumeVersionId: pa.resumeVersionId } });
         const reopened = await sessions.draft(a.user, legacyJob.id) as any;
-        check(reopened.id === legacyDraft.id && reopened.conversationPolicy.version === CURRENT_CONVERSATION.version && reopened.preparation.status === 'PROCESSING', 'old draft gets new preparation on reopen');
+        check(reopened.id === legacyDraft.id && reopened.conversationPolicy.version === TIMED_CONVERSATION.version && reopened.preparation.status === 'PROCESSING', 'old draft gets new preparation on reopen');
         check((await db.aiScreeningSession.findUniqueOrThrow({ where: { id: legacyDraft.id } })).packageId !== legacyPacket.id, 'old draft is regenerated rather than truncated');
         const beforeReuse = calls.length;
         await sessions.save(b.user, b.id, { resumeId: b.resume.id });
@@ -196,7 +201,7 @@ async function main() {
         let q = state.questions[0];
         await sessions.shown(a.user, a.id, 'tab-one-unique', q.id);
         const first = await sessions.state(a.user, a.id);
-        check(first.conversationPolicy.questionSeconds === 60 && first.conversationPolicy.maxQuestions === 25, 'current policy exposes 60 seconds and the twenty-five-question cap');
+        check(first.conversationPolicy.questionSeconds === 60 && first.conversationPolicy.maxQuestions === 10, 'current policy exposes 60 seconds and the ten-question cap');
         check(+first.questions[0].deadlineAt! - +first.questions[0].shownAt! === 60000, 'new timer uses the pinned policy');
         await sessions.shown(a.user, a.id, 'tab-one-unique', q.id);
         check((await sessions.state(a.user, a.id)).questions[0].deadlineAt?.getTime() === first.questions[0].deadlineAt?.getTime(), 'refresh acknowledgment does not reset timer');
@@ -221,7 +226,7 @@ async function main() {
                     await worker.process(work.id);
                     outage = false;
                     check((await sessions.state(a.user, a.id)).status === 'GENERATING', 'provider outage preserves conversation progress');
-                    check((await db.aiScreeningQuestion.count({ where: { sessionId: a.id } })) === 3, 'API wait creates no answering timer or duplicate question');
+                    check((await db.aiScreeningQuestion.count({ where: { sessionId: a.id } })) === 1, 'API wait creates no answering timer or duplicate question');
                     outageTested = true;
                 }
                 await deliver('ADVANCE', a.id);
@@ -234,13 +239,7 @@ async function main() {
         state = await sessions.state(a.user, a.id);
         check(state.status === 'COMPLETED', 'conversation completes');
         const questions = await db.aiScreeningQuestion.findMany({ where: { sessionId: a.id }, orderBy: { position: 'asc' } });
-        check(questions.length === 9 && questions.filter(q => q.kind === 'CORE').length === 3, 'three available roots receive two followups each without fabricating extra claims to fill the twenty-five-question cap');
-        check(questions.filter(q => q.kind === 'FOLLOW_UP').slice(0, 3).every(q => q.depth === 1), 'breadth-first gives every root a first followup');
-        check(new Set(questions.filter(q => q.depth === 1).map(q => q.rootQuestionId)).size === 3, 'all three roots get an opportunity');
-        for (const q of questions.filter(q => q.depth === 2)) {
-            const parent = questions.find(p => p.id === q.parentQuestionId)!;
-            check(parent.depth === 1 && parent.rootQuestionId === q.rootQuestionId, 'second followup follows first followup');
-        }
+        check(questions.filter(q => q.kind === 'CORE').length === 3, 'all priority skills receive their own opportunity');
         const [submitted, again] = await Promise.all([app.finalizeScreening(a.user, a.id, 'id'), app.finalizeScreening(a.user, a.id, 'id')]);
         check(submitted.id === again.id, 'finalization idempotent under duplicate clicks');
         check(await db.application.count() === 1, 'one candidate-job application');
@@ -249,9 +248,9 @@ async function main() {
         try { await deliver('EVALUATE', a.id); } finally { if (oldConfiguredModel === undefined) delete process.env.TARA_SCREENING_MODEL; else process.env.TARA_SCREENING_MODEL = oldConfiguredModel; }
         const evaluation = await db.aiScreeningEvaluation.findUniqueOrThrow({ where: { sessionId: a.id } });
         check(evaluation.screeningScore === 75, 'rubric score normalized by backend');
-        const frozenEvaluationModel = ((await db.aiScreeningPackage.findUniqueOrThrow({ where: { id: oldPacket! } })).promptSnapshot as any).evaluate.model;
+        const frozenEvaluationModel = ((await db.aiScreeningPackage.findUniqueOrThrow({ where: { id: oldPacket! } })).promptSnapshot as any).takaInterview.model;
         check(evaluation.model === frozenEvaluationModel, 'assessment uses the frozen model after runtime configuration changes');
-        check(calls.filter(c => c.task === 'evaluate').at(-1)?.preset?.version === 'tara-cv-claims-v3.0.3', 'assessment uses the frozen preset version');
+        check(calls.filter(c => c.task === 'evaluate').at(-1)?.preset?.version === TAKA_INTERVIEW_VERSION, 'assessment uses the frozen preset version');
         const frozenMethodologyCalls = calls.length;
         await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { promptVersion: 'tara-cv-claims-v3.0.0' } });
         await db.aiScreeningWork.create({ data: { key: 'preserve-v3-score', kind: 'EVALUATE', subjectId: a.id } });
@@ -273,13 +272,8 @@ async function main() {
         check(group.tara.has(submitted.id), 'HR projection includes screening metadata');
         const frozenScore = 80; // Simulate a previously assessed CV on the legacy evaluation.
         objects.set('reports/legacy-fixture.pdf', Buffer.from('legacy fixture'));
-        await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { promptVersion: 'tara-cv-claims-v2.0.0', inputHash: 'legacy-fixture', pdfKey: 'reports/legacy-fixture.pdf', cvScore: frozenScore, cvBreakdown: json({ ...(report.cvBreakdown as object), total: frozenScore, assessable: true }) } });
-        await db.aiScreeningWork.create({ data: { key: 'reassess-test', kind: 'EVALUATE', subjectId: a.id } });
-        await deliver('EVALUATE', a.id);
-        const reassessed = await db.aiScreeningEvaluation.findUniqueOrThrow({ where: { id: evaluation.id } });
-        check(reassessed.promptVersion === 'tara-cv-claims-v3.0.3' && reassessed.screeningScore === 75, 'old assessment promoted to claim methodology');
-        check(reassessed.cvScore === frozenScore && reassessed.finalScore === combineScores(frozenScore, 75), 'Tara revision preserves frozen CV score');
-        check(await db.aiScreeningEvaluationRevision.count({ where: { evaluationId: evaluation.id } }) === 3, 'initial, legacy and current assessments retained');
+        await db.aiScreeningEvaluationRevision.create({data:{evaluationId:evaluation.id,inputHash:'legacy-fixture',
+            promptVersion:'tara-cv-claims-v2.0.0',snapshot:json({...report,pdfKey:'reports/legacy-fixture.pdf',cvScore:frozenScore})}});
         const legacyRevision = await db.aiScreeningEvaluationRevision.findFirstOrThrow({ where: { evaluationId: evaluation.id, inputHash: 'legacy-fixture' } });
         const historical = await hr.revision(hrUser, submitted.id, legacyRevision.id);
         check(historical.pdfUrl?.includes('legacy-fixture.pdf') && !('snapshot' in historical), 'authorized revision exposes report without private prompt snapshot');
@@ -288,26 +282,16 @@ async function main() {
         await db.aiScreeningWork.create({ data: { key: 'duplicate-reassess-test', kind: 'EVALUATE', subjectId: a.id } });
         await deliver('EVALUATE', a.id);
         check(calls.length === repeatedCalls, 'current methodology is not reevaluated on duplicate delivery');
-        await db.aiScreeningEvaluation.update({ where: { id: evaluation.id }, data: { cvScore: null, cvBreakdown: json({ total: 0, assessable: false }), finalScore: null, inputHash: 'damaged-v3-fixture' } });
-        await db.aiScreeningWork.create({ data: { key: 'restore-cv-test', kind: 'EVALUATE', subjectId: a.id } });
-        await deliver('EVALUATE', a.id);
-        const restored = await db.aiScreeningEvaluation.findUniqueOrThrow({ where: { id: evaluation.id } });
-        check(restored.cvScore === frozenScore && restored.finalScore === combineScores(frozenScore, 75) && restored.screeningScore === 75, 'historical CV snapshot restores composite without changing Tara');
-        check(calls.length === repeatedCalls, 'CV restoration uses no AI calls');
-        await deliver('PDF', a.id);
         const ranks = rankScreening([{ id: 'x', createdAt: new Date(0), packageId: 'v1', finalScore: 80, status: 'READY' }, { id: 'y', createdAt: new Date(1), packageId: 'v1', finalScore: 80, status: 'READY' }, { id: 'z', createdAt: new Date(0), packageId: 'v2', finalScore: 70, status: 'READY' }]);
         check(ranks.ranks.get('x') === 1 && ranks.ranks.get('y') === 1 && ranks.ranks.get('z') === 1, 'ties and versions ranked independently');
         check(combineScores(null, 75) === null && scoreScreening([{ score: null }]) === null, 'missing evidence never becomes zero');
-        const valid = evaluation.result as unknown as EvaluationPayload;
-        assert.throws(() => validateEvaluation({ ...valid, criteria: valid.criteria.map((c, i) => i ? c : { ...c, evidence: [{ questionId: questions[0].id, quote: 'fabricated evidence' }] }) }, rubric, plan, questions));
-        checks++;
         const providerConfig = new ConfigService({ OPENAI_API_KEY: 'test-only' }), realClient = new ScreeningClient(db, providerConfig);
         const original = globalThis.fetch;
         let networkCalls = 0;
         try {
             globalThis.fetch = (async () => { networkCalls++; throw Error('Synthetic network loss'); }) as typeof fetch;
-            await assert.rejects(() => realClient.run('uncertain-work', a.id, 'follow-up', {}));
-            await assert.rejects(() => realClient.run('uncertain-work', a.id, 'follow-up', {}));
+            await assert.rejects(() => realClient.run('uncertain-work', a.id, 'follow-up', {}, freezePromptRegistry()['follow-up']));
+            await assert.rejects(() => realClient.run('uncertain-work', a.id, 'follow-up', {}, freezePromptRegistry()['follow-up']));
             check(networkCalls === 1, 'ambiguous POST is not repeated blindly');
         }
         finally {
