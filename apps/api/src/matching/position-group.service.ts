@@ -116,7 +116,7 @@ export class PositionGroupService implements OnModuleInit,OnModuleDestroy {
     },{timeout:120000,isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
     await this.cache?.invalidateAndWait(false);return result;
   }
-  async rollback(id:string,expectedRevision:number,actorId:string){
+  async rollback(id:string,expectedRevision:number,actorId:string|null){
     // Older releases retain only memberships whose role revision is still current at read time.
     const release=await this.db.positionGroupRelease.findUnique({where:{id}});if(!release)throw new BadRequestException('Unknown group release');
     const result=await this.db.$transaction(async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(7749932)`;const state=await tx.positionGroupState.findUniqueOrThrow({where:{id:'indonesia'}});if(state.revision!==expectedRevision)throw new ConflictException('Active group release changed');const next=await tx.positionGroupState.update({where:{id:'indonesia',revision:expectedRevision},data:{activeReleaseId:id,revision:{increment:1}}});if(state.activeReleaseId&&state.activeReleaseId!==id)await tx.positionGroupRelease.update({where:{id:state.activeReleaseId},data:{status:'RETIRED'}});await tx.positionGroupRelease.update({where:{id},data:{status:'ACTIVE'}});await tx.auditLog.create({data:{actorId,action:'ROLLBACK_POSITION_GROUPS',entityType:'PositionGroupRelease',entityId:id,metadata:{previousReleaseId:state.activeReleaseId}}});return next;});
