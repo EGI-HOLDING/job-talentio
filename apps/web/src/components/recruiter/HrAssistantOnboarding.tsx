@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -14,9 +15,6 @@ import s from './HrAssistantOnboarding.module.css';
 const asset = (name: string) => `/images/hr-onboarding/generated/${name}.${name.startsWith('tara-chat-') || name.startsWith('candidate-') ? 'browser.png' : 'webp'}`;
 const preload = ['taka-wave', 'taka-collect', 'taka-ranking', 'taka-proud', 'tara-wave', 'taka-chat', 'taka-interview', 'taka-upload', 'tara-chat-header', 'tara-chat-thinking', 'tara-chat-notes', 'tara-interviewer', 'candidate-chat', 'candidate-1', 'candidate-2', 'candidate-3', 'cv-sheet', 'cv-stack', 'talentio-tray', 'upload-cloud'];
 
-function Arrow({ back = false }: { back?: boolean }) {
-  return <svg aria-hidden="true" viewBox="0 0 28 24"><path d={back ? 'M25 12H3m9-9-9 9 9 9' : 'M3 12h22m-9-9 9 9-9 9'} /></svg>;
-}
 function Microphone() {
   return <svg aria-hidden="true" viewBox="0 0 30 36"><rect x="9" y="2" width="12" height="21" rx="6" /><path d="M3 16v3a12 12 0 0 0 24 0v-3M15 31v4M9 35h12" /></svg>;
 }
@@ -262,11 +260,11 @@ export function HrAssistantOnboarding({
       </div>}
     </div>
     <footer className={s.footer} data-final={isFinalScene || undefined}>
-      <button type="button" className={s.back} disabled={busy || Boolean(pendingAction)} onClick={back}><Arrow back/>{c('Kembali')}</button>
+      <button type="button" className={s.back} disabled={busy || Boolean(pendingAction)} onClick={back}><DirectionalIcon direction="left" size={17} />{c('Kembali')}</button>
       {isFinalScene ? <>
         <button type="button" className={s.skip} disabled={busy || pendingAction === 'upload'} onClick={skip}>{c('Lewati')}</button>
-        <button type="button" className={s.next} disabled={busy || pendingAction === 'skip' || selectedFiles.length === 0} onClick={() => void finish('upload')}>{c('Upload')}<Arrow/></button>
-      </> : <button type="button" className={s.next} disabled={busy} onClick={() => navigate(1)}>{c('Lanjut')}<Arrow/></button>}
+        <button type="button" className={s.next} disabled={busy || pendingAction === 'skip' || selectedFiles.length === 0} onClick={() => void finish('upload')}>{c('Upload')}</button>
+      </> : <button type="button" className={s.next} disabled={busy} onClick={() => navigate(1)}>{c('Lanjut')}<DirectionalIcon direction="right" size={17} /></button>}
     </footer>
     {showSkipConfirm && <ConfirmModal
       tone="danger"

@@ -66,7 +66,7 @@ export function RecruiterJobActions({ job, companyId, busy, policy, benefitPhase
     {position && createPortal(<div ref={menu} id={id} className={s.menu} role="menu" aria-label={job.title} style={position}>
       <div role="group" aria-label={t('jr.jobGroup')} className={s.menuGroup}><span className={s.menuHeading}>{t('jr.jobGroup')}</span>
         <button type="button" role="menuitem" onClick={() => act(onEdit)}><JobRowIcon kind="edit" />{t('rec.edit')}</button>
-        <Link role="menuitem" href={jobDetailHref(job.id, employerWorkspaceHref('jobs', companyId))} onClick={() => close(false)}><JobRowIcon kind="external" />{t(policy.publicVisible ? 'rec.publicPage' : 'jr.preview')}</Link>
+        <Link role="menuitem" href={jobDetailHref(job.id, employerWorkspaceHref('jobs', companyId))} onClick={() => close(false)}><JobRowIcon kind="eye" />{t(policy.publicVisible ? 'rec.publicPage' : 'jr.preview')}</Link>
         {policy.publicVisible && <button type="button" role="menuitem" onClick={() => act(onCopy)}><JobRowIcon kind="copy" />{t('jr.copyLink')}</button>}
       </div>
       <div role="group" aria-label={t('jr.packageGroup')} className={s.menuGroup}><span className={s.menuHeading}>{t('jr.packageGroup')}</span>

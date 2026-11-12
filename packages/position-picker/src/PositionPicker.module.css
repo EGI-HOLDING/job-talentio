@@ -10,7 +10,7 @@
 .list button:hover, .list button[data-highlighted=true], .list button[aria-selected=true] { background: #f0ebff; }
 .list button[aria-disabled=true] { color: #5e6980; cursor: default; }
 .optionName { min-width: 0; font-size: .9rem; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-.optionMeta { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .4rem; min-width: 0; color: #69758c; font-size: .75rem; line-height: 1.3; }
+.optionMeta { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .4rem; min-width: 0; color: #56627a; font-size: .75rem; line-height: 1.3; }
 .optionBadge { display: inline-flex; align-items: center; border-radius: 999px; padding: .08rem .38rem; background: #f0ebff; color: #5632c5; font-size: .7rem; font-weight: 600; line-height: 1.4; }
 .optionBadge[data-tone=warning] { background: #fff4dd; color: #855300; }
 .optionBadge[data-tone=muted] { background: #eef1f6; color: #5e6980; }

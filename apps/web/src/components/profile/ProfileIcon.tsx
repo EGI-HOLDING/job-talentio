@@ -20,10 +20,8 @@ export function ProfileIcon({ kind = 'document' }: { kind?: string }) {
     upload: <><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6" /></>,
     download: <><path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4" /></>,
     more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
-    chevron: <path d="m6 9 6 6 6-6" />,
     trash: <><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></>,
     info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6m0-10v.01" /></>,
-    arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
     external: <path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7" />,
     star: <path d="m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z" />,
   };

@@ -37,10 +37,10 @@ export function PackagePricing({catalog: supplied, onChoose, current, preferred,
       <h2>{label(p.code)}</h2>{preferred === p.code && <span className={s.preferred} data-preferred={p.code}>{label('preferred')}</span>}<p className={s.cardHint}>{label(p.code === 'FREE' ? 'freeHint' : p.code === 'STANDARD' ? 'standardHint' : 'premiumHint')}</p>
       <div className={s.price}>{money(upgradeFrom && p.amount > upgradeFrom.amount ? p.amount - upgradeFrom.amount : p.amount, locale, p.currency)}</div><span className={s.period}>{label(upgradeFrom && p.amount > upgradeFrom.amount ? 'upgrade' : 'perJob')}</span>
       {onChoose ? <button className={p.code === 'STANDARD' ? s.primary : s.secondary} disabled={busy || disabledCodes.includes(p.code)} onClick={() => onChoose(p.code)}>
-        {current === p.code ? label('current') : label(p.code === 'FREE' ? 'continueFree' : 'choose')} {current !== p.code && '→'}
+        {current === p.code ? label('current') : label(p.code === 'FREE' ? 'continueFree' : 'choose')}
       </button> : <Link className={p.code === 'STANDARD' ? s.primary : s.secondary}
         href={'/register?' + new URLSearchParams({role: 'RECRUITER', next: withPackagePreference('/dashboard/recruiter?tab=jobs', p.code)})}
-        onClick={event => {if (getSession()?.user.role === 'RECRUITER') {event.preventDefault(); router.push(withPackagePreference('/dashboard/recruiter?tab=jobs', p.code));}}}>{label(p.code === 'FREE' ? 'continueFree' : 'choose')} →</Link>}
+        onClick={event => {if (getSession()?.user.role === 'RECRUITER') {event.preventDefault(); router.push(withPackagePreference('/dashboard/recruiter?tab=jobs', p.code));}}}>{label(p.code === 'FREE' ? 'continueFree' : 'choose')}</Link>}
       <ul className={s.features}>
         <li>{check}<span>{label('essentials')}</span></li><li>{p.code === 'FREE' ? check : <span className={s.check} aria-hidden="true">◷</span>}<span>{label('recommendations')} | {recommendation(p)}</span></li><li>{check}<span>{label('stats')}</span></li>
         {p.settings.conversions && <li>{check}<span>{label('conversions')}</span></li>}

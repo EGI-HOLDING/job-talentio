@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect, useState } from 'react';
 import { api, getSession } from '@/lib/api';
@@ -21,7 +22,7 @@ export function CandidateImportProgress(){
   const totalBytes=files.reduce((n,f)=>n+f.size,0),loadedBytes=files.reduce((n,f)=>n+f.loaded,0);
   async function retryAnalysis(id:string){setError('');try{await api('/recruitment/candidates/'+id+'/retry',{method:'POST',body:'{}'});markCandidateProcessing(id);window.dispatchEvent(new Event('candidate-import-updated'));}catch(e){setError(e instanceof Error?e.message:'Coba lagi.');}}
   return <aside className={s.panel} aria-label={uiCopy("Progres impor CV")}>
-    <button type="button" className={s.heading} aria-expanded={expanded} onClick={()=>setExpanded(v=>!v)}><strong>{transferring?'Mengupload CV':processing?'Menilai CV':failed?'Impor CV perlu diperiksa':'Impor CV selesai'}</strong><span>{done}/{files.length} siap {expanded?'⌄':'⌃'}</span></button>
+    <button type="button" className={s.heading} aria-expanded={expanded} onClick={()=>setExpanded(v=>!v)}><strong>{transferring?'Mengupload CV':processing?'Menilai CV':failed?'Impor CV perlu diperiksa':'Impor CV selesai'}</strong><span>{done}/{files.length} siap <DirectionalIcon direction={expanded ? "down" : "up"} size={16} /></span></button>
     <div className={s.summary}><span>{uploaded} diupload &#xb7; {done} siap{failed?` \u00b7 ${failed} perlu diperiksa`:''}</span><progress value={loadedBytes} max={totalBytes||1} aria-label={uiCopy("Progres transfer berkas")}/></div>
     {transferring&&<p className={s.hint}>Kamu bisa lanjut bekerja. Biarkan tab ini terbuka hingga upload selesai.</p>}
     {error&&<p role="alert">{error}</p>}

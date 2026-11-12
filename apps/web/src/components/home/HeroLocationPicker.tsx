@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -156,7 +157,7 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
     >
       <LocationIcon />
       <span className={s.triggerCopy}><span>{t('landing.locationLabel')}</span><strong>{selected.label}</strong></span>
-      <svg className={s.chevron} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      <DirectionalIcon direction={open ? "up" : "down"} size={18} className={s.chevron} />
     </button>
     {open && position && createPortal(
       <div ref={panel} id={`${id}-panel`} className={s.panel} role="dialog" aria-label={t('landing.chooseLocation')} style={position}>

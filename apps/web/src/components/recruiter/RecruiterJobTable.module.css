@@ -26,7 +26,7 @@
 .periodButton { display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:5px 0; border:0; background:transparent; color:#6b7b94; font-size:.72rem !important; text-align:start; white-space:nowrap; }
 .periodButton svg { width:13px; height:13px; color:#a1a9ba; flex-shrink:0; }
 .periodButton:hover { background:transparent; color:#5635e8; }
-.boostIndicator { display:inline-flex; align-items:center; gap:5px; max-width:100%; padding:5px 7px; border:1px solid #e7e5ed; border-radius:6px; background:#fff; color:#7b7590; font-size:.66rem !important; white-space:nowrap; }
+.boostIndicator { display:inline-flex; align-items:center; gap:5px; max-width:100%; padding:5px 7px; border:1px solid #e7e5ed; border-radius:6px; background:#fff; color:#69627e; font-size:.66rem !important; white-space:nowrap; }
 .boostIndicator span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .boostIndicator svg { width:13px; height:13px; flex-shrink:0; }
 .boostIndicator[data-active=true] { background:#f2edff; color:#714bce; border-color:#e7ddfa; }

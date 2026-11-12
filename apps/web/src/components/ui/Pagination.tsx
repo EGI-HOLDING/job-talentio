@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useI18n } from '@/lib/i18n';
 import { buildPageWindow, clampPage, pageRangeLabel } from '@/lib/pagination';
 
@@ -54,7 +55,7 @@ export function Pagination({
           aria-label={t('ui.firstPage')}
           title={t('ui.firstPage')}
         >
-          «
+          <DirectionalIcon direction="left" variant="double" size={16} />
         </button>
         <button
           type="button"
@@ -63,7 +64,7 @@ export function Pagination({
           onClick={() => onPageChange(current - 1)}
           aria-label={t('ui.previousPage')}
         >
-          ‹ {t('ui.prev')}
+          <DirectionalIcon direction="left" size={16} /> {t('ui.prev')}
         </button>
 
         <div className="pagination-pages" role="list">
@@ -95,7 +96,7 @@ export function Pagination({
           onClick={() => onPageChange(current + 1)}
           aria-label={t('ui.nextPage')}
         >
-          {t('ui.next')} ›
+          {t('ui.next')} <DirectionalIcon direction="right" size={16} />
         </button>
         <button
           type="button"
@@ -105,7 +106,7 @@ export function Pagination({
           aria-label={t('ui.lastPage')}
           title={t('ui.lastPage')}
         >
-          »
+          <DirectionalIcon direction="right" variant="double" size={16} />
         </button>
       </div>
 

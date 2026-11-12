@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { JobsIcon } from './JobsIcon';
@@ -65,7 +66,7 @@ export function WorkspaceSelect({ value, options, label, onChange, className = '
       } else if (event.key === 'Escape') { event.preventDefault(); setOpen(false); }
       else if (event.key === 'Tab') setOpen(false);
       else if (open && (event.key === 'Home' || event.key === 'End')) { event.preventDefault(); setActive(event.key === 'Home' ? 0 : options.length - 1); }
-    }}><span>{selected?.label || value}</span><JobsIcon kind="chevron" /></button>
+    }}><span>{selected?.label || value}</span><DirectionalIcon direction={open ? "up" : "down"} /></button>
     {open && position && createPortal(<div ref={panel} id={id} role="listbox" aria-label={label} className={s.panel} style={position}>{options.map((option, index) => <div key={option.value} id={`${id}-${index}`} role="option" aria-selected={value === option.value} className={`${s.option} ${active === index ? s.active : ''}`} onPointerMove={(event) => { if (event.pointerType === 'mouse') setActive(index); }} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(option)}><span>{option.label}</span>{value === option.value && <JobsIcon kind="check" />}</div>)}</div>, document.body)}
   </>;
 }

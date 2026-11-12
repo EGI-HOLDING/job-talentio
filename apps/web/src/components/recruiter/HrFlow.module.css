@@ -40,6 +40,11 @@
 .aiSkillPreview strong{flex:1;min-width:0}
 .aiSkillPreview span{padding:3px 7px;border-radius:20px;background:#f2edff;color:#6030d6;font-size:11px;line-height:1.4;white-space:nowrap}
 @media(max-width:600px){.aiFieldHeading{align-items:flex-start}.aiSkillPreview{flex-wrap:wrap}.aiSkillPreview strong{flex-basis:100%}}
+.field .positionPicker { gap: 8px; }
+.field .positionPicker > label { font-size: 14px; font-weight: 650; line-height: 20px; }
+.positionField :is(input[role="combobox"], input[name="title"]),
+.seniorityField > select { height: 48px; }
+
 .groupScope {
   display: grid;
   gap: .65rem;

@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { TaraRunner } from '@/components/screening/TaraPreparation';
 import { positionPreferenceSelections } from '@/lib/employeePositionPreferences';
 
@@ -529,7 +530,7 @@ export function EmployeeOnboarding() {
             disabled={busy || uploading}
             onClick={() => void navigate(step - 1)}
           >
-            ← {t("back")}
+            <DirectionalIcon direction="left" size={17} /> {t("back")}
           </button>
         )}
         <div className={s.footerRight}>
@@ -551,7 +552,7 @@ export function EmployeeOnboarding() {
             disabled={busy || uploading || (step === 5 && !form.resumeId)}
             onClick={() => (step < 5 ? void navigate(step + 1) : void finish())}
           >
-            {busy ? t("saving") : t(step === 5 ? "finish" : "next")} →
+            {busy ? t("saving") : t(step === 5 ? "finish" : "next")}{!busy && step !== 5 && <DirectionalIcon direction="right" size={17} />}
           </button>
         </div>
       </footer>

@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -42,7 +43,7 @@ export function JobPackageSelection() {
     } catch (e) {if (alive.current && currentContext.current === requestContext) {setError(e instanceof Error ? e.message : String(e)); setBusy(false); submitting.current = false;}}
   }
   if (!data || data.job.id !== id) return <div className={s.page + ' ' + s.workspace}>{error ? <div className={s.error} role="alert">{error}<br/><button className={s.text} onClick={() => setRetry(n => n + 1)}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>}</div>;
-  return <div className={s.page + ' ' + s.workspace}><Link className={s.text} href={returnTo}>← {t('commerce.back')}</Link>
+  return <div className={s.page + ' ' + s.workspace}><Link className={s.text} href={returnTo}><DirectionalIcon direction="left" size={17} /> {t('commerce.back')}</Link>
     <header className={s.intro}><span className={s.eyebrow}>{t('commerce.packageFor')}</span><h1>{t('commerce.' + (highest ? 'current' : intent === 'UPGRADE' ? 'upgrade' : intent === 'RENEW' ? 'renew' : 'pricing'))}</h1><p>{t('commerce.' + (highest ? 'highest' : intent === 'UPGRADE' ? 'upgradeHint' : intent === 'RENEW' ? 'renewalHint' : 'subtitle'))}</p></header>
     <div className={s.context}><div><strong>{data.job.title}</strong><p>{data.job.company?.name}</p></div>{data.benefit.selected && <span className={s.status}>{t('commerce.current')} | {t('commerce.' + data.benefit.code)}</span>}</div>
     {error && <div className={s.error} role="alert">{error}</div>}

@@ -97,11 +97,11 @@ export function JobFormV2({draft,onChange,companyId,initialCity,approvedMembers,
   const rangeInvalid=draft.seniorityLevelCode&&(draft.experienceRangeMin==null||draft.experienceRangeMax!=null&&draft.experienceRangeMax<draft.experienceRangeMin);
   return <fieldset disabled={disabled} style={{border:0,padding:0,margin:0,minWidth:0}}>
     <section className={s.section}><h2>{c("Posisi & pengalaman")}</h2><div className={s.grid}>
-      <div className={s.field} data-job-field="title">
+      <div className={`${s.field} ${s.positionField}`} data-job-field="title">
         {editingManualTitle ? <label className={s.field}><span>{c("Posisi yang dicari *")}</span>
           <input required name="title" maxLength={200} value={draft.title ?? ''}
             onChange={event => onChange({ ...clearedGroup, title: event.target.value, jobTitleId: null, positionEntryMode: 'MANUAL' })} />
-        </label> : <CatalogPositionPicker scope="hr" label={c("Posisi yang dicari *")} disabled={disabled}
+        </label> : <CatalogPositionPicker scope="hr" className={s.positionPicker} label={c("Posisi yang dicari *")} disabled={disabled}
           value={groupId ? [{ id: groupId, kind: 'GROUP', name: draft.title || groupId }]
             : draft.jobTitleId ? [{ id: draft.jobTitleId, kind: 'ROLE', name: catalogTitle ?? draft.title ?? draft.jobTitleId }] : []}
           onChange={([position]) => onChange(position?.kind==='GROUP'
@@ -114,7 +114,7 @@ export function JobFormV2({draft,onChange,companyId,initialCity,approvedMembers,
           onChange({ ...clearedGroup, title: editingManualTitle?'':draft.title, jobTitleId: null, positionEntryMode: 'MANUAL' });
         }}>{editingManualTitle ? c("Pilih dari katalog") : c("Ketik posisi manual")}</button>
       </div>
-      <label className={s.field} data-job-field="seniorityLevelCode"><span>{c("Senioritas")}</span><select aria-label={c("Senioritas")} name="seniorityLevelCode" value={draft.seniorityLevelCode??''} onChange={e=>void chooseLevel(e.target.value)}><option value="">{c("Pilih senioritas")}</option>{levels.map(v=><option value={v.code} key={v.code}>{locale==='id'?(v.nameId??v.name):v.name}</option>)}</select></label>
+      <label className={`${s.field} ${s.seniorityField}`} data-job-field="seniorityLevelCode"><span>{c("Senioritas")}</span><select aria-label={c("Senioritas")} name="seniorityLevelCode" value={draft.seniorityLevelCode??''} onChange={e=>void chooseLevel(e.target.value)}><option value="">{c("Pilih senioritas")}</option>{levels.map(v=><option value={v.code} key={v.code}>{locale==='id'?(v.nameId??v.name):v.name}</option>)}</select></label>
     </div>
     {fieldErrors("title")}{fieldErrors("jobTitleId")}{fieldErrors("seniorityLevelCode")}{fieldErrors("experienceRangeMin")}{fieldErrors("experienceRangeMax")}
     {draft.title&&draft.positionEntryMode==='MANUAL'&&<span className={s.hint}>{c("Posisi manual tetap dapat digunakan. Kecocokan profesi hanya ditampilkan jika pemetaannya tersedia.")}</span>}

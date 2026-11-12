@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useId, useLayoutEffect, useSyncExternalStore } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties } from 'react';
 import s from './HrFlow.module.css';
@@ -34,7 +35,10 @@ export function HrAddItemButton({ children, fullWidth=false, ...props }: ButtonH
   return <button {...props} type="button" className={fullWidth?s.addRow:s.addItem} data-hr-add-item><HrIcon kind="plus" size={16}/><span>{children}</span></button>;
 }
 
-export function HrIcon({ kind, size = 20, style }: { kind: 'building'|'upload'|'file'|'image'|'check'|'arrow'|'back'|'info'|'chevron'|'briefcase'|'shield'|'plus'; size?: number; style?: CSSProperties }) {
+export function HrIcon({ kind, size = 20, style }: { kind: 'building'|'upload'|'file'|'image'|'check'|'next'|'back'|'info'|'chevron'|'briefcase'|'shield'|'plus'; size?: number; style?: CSSProperties }) {
+  if (kind === 'next') return <DirectionalIcon direction="right" size={size} style={style} />;
+  if (kind === 'back') return <DirectionalIcon direction="left" size={size} style={style} />;
+  if (kind === 'chevron') return <DirectionalIcon direction="down" size={size} style={style} />;
   const paths: Record<string, React.ReactNode> = {
     plus: <path d="M12 5v14M5 12h14"/>,
     building: <><path d="M4 21V5l9-2v18M13 9h7v12M2 21h20M7 7h2M7 11h2M7 15h2M16 12h1M16 16h1M8 21v-3"/></>,
@@ -42,9 +46,7 @@ export function HrIcon({ kind, size = 20, style }: { kind: 'building'|'upload'|'
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8M8 17h6"/></>,
     image: <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1"/><path d="m3 16 5-5 4 4 4-6 5 7"/></>,
     check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></>,
-    arrow: <path d="M4 12h16m-6-6 6 6-6 6"/>, back: <path d="M20 12H4m6 6-6-6 6-6"/>,
     info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/></>,
-    chevron: <path d="m6 9 6 6 6-6"/>,
     briefcase: <><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V4h8v3M3 12a22 22 0 0 0 18 0M12 11v4"/></>,
     shield: <><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></>,
   };

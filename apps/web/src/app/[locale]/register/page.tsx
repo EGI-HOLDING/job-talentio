@@ -226,7 +226,7 @@ function RegisterForm() {
             disabled={loading || inviteLoading}
             aria-busy={loading || inviteLoading}
           >
-            {loading ? t('creatingAccount') : t('createAccount')}{!loading && <WorkspaceIcon kind="arrow" />}
+            {loading ? t('creatingAccount') : t('createAccount')}
           </button>
         </form>
         <p className={s.login}>
@@ -235,7 +235,7 @@ function RegisterForm() {
             {t('login')}
           </AuthLink>
         </p>
-        {!useInvite && <div className={s.switchRole}><span>{t(employer ? 'registerUi.seekerSwitchPrompt' : 'registerUi.employerSwitchPrompt')}</span><AuthLink href="/register" accountRole={employer ? 'EMPLOYEE' : 'RECRUITER'} next={null}>{t(employer ? 'registerUi.seekerSwitch' : 'registerUi.employerSwitch')}<WorkspaceIcon kind="right" /></AuthLink></div>}
+        {!useInvite && <div className={s.switchRole}><span>{t(employer ? 'registerUi.seekerSwitchPrompt' : 'registerUi.employerSwitchPrompt')}</span><AuthLink href="/register" accountRole={employer ? 'EMPLOYEE' : 'RECRUITER'} next={null}>{t(employer ? 'registerUi.seekerSwitch' : 'registerUi.employerSwitch')}</AuthLink></div>}
         </div>
       </section>
       </div>

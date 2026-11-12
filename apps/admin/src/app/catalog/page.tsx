@@ -724,7 +724,7 @@ export default function CatalogPage() {
           <>
             <p style={{ marginTop: 0 }}>
               {editing
-                ? `"${rowIdentityKey(editing)}" → "${form.key.trim()}". Profiles and jobs keep the same record; matching on the old key will use an alias.`
+                ? `Rename "${rowIdentityKey(editing)}" to "${form.key.trim()}". Profiles and jobs keep the same record; matching on the old key will use an alias.`
                 : null}
             </p>
             {editUsage && editUsage.total > 0 ? (

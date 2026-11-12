@@ -87,22 +87,16 @@
   border: 1px solid #e8e7f0;
   border-radius: 50%;
   background: rgba(255,255,255,.96);
-  color: #4630c7;
+  color: #23304a;
   box-shadow: 0 3px 12px rgba(26, 20, 68, .1);
   transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
-.arrow:hover { background: #f5f2ff; box-shadow: 0 5px 16px rgba(26, 20, 68, .16); }
+.arrow:hover { color: #4630c7; background: #f5f2ff; box-shadow: 0 5px 16px rgba(26, 20, 68, .16); }
 .arrow:active { transform: translateY(-50%) scale(.96); }
 .arrow:focus-visible { outline: 3px solid #b9aaff; outline-offset: 3px; }
 .arrow svg {
-  position: absolute;
-  top: 50%;
-  left: 50%;
   display: block;
-  flex: none;
-  margin: 0;
-  transform: translate(-50%, -50%);
 }
 .previous { left: .3rem; }
 .next { right: .3rem; }

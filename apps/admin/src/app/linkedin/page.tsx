@@ -39,7 +39,7 @@ export default function LinkedInOperationsPage(){
           {!data.operations.available&&<p role="status">Telemetry is unavailable while delivery is paused or Redis cannot be reached. Database status counts above remain independent.</p>}
         </Card>
         <div className="grid"><Card title="Requests updated today"><ul>{data.daily.map(row=><li key={row.status}>{row.status}: {row._count._all}</li>)}</ul>{!data.daily.length&&<p>No requests updated today.</p>}</Card><Card title="Failure reasons"><ul>{data.failures.map(row=><li key={row.errorCode || 'none'}><code>{row.errorCode || 'UNSPECIFIED'}</code>: {row._count._all}</li>)}</ul>{!data.failures.length&&<p>No failed or uncertain requests.</p>}</Card></div>
-        <Card title="Recovery"><p>UNKNOWN means a final request may have been accepted. Ask the connection owner to inspect their feed and use the job's reconciliation action after the cooldown. Do not force a queue retry or change its state in the database.</p><p>For expired or revoked connections, HR reconnects in Settings → Integrations and reviews a new preview. Existing LinkedIn posts are not removed when a connection is disconnected.</p><Link href="/audit">Open audit log</Link></Card>
+        <Card title="Recovery"><p>UNKNOWN means a final request may have been accepted. Ask the connection owner to inspect their feed and use the job's reconciliation action after the cooldown. Do not force a queue retry or change its state in the database.</p><p>For expired or revoked connections, HR reconnects under Integrations in Settings and reviews a new preview. Existing LinkedIn posts are not removed when a connection is disconnected.</p><Link href="/audit">Open audit log</Link></Card>
       </>}
     </div>
   </>;

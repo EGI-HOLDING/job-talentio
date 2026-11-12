@@ -156,7 +156,7 @@ export function CountryPicker({
               locale,
             )
           : t("searchCountry")}
-        <WorkspaceIcon kind="chevronDown" />
+        <WorkspaceIcon kind={open ? 'chevronUp' : 'chevronDown'} />
       </button>
       {open && position && createPortal(
         <div

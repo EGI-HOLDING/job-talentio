@@ -350,8 +350,15 @@
   grid-template-columns: 1.3fr 1fr 1fr;
   gap: 16px;
 }
-.salaryGrid label {
+.salaryGrid > label {
+  display: grid;
+  gap: 6px;
   min-width: 0;
+}
+.fields .salaryGrid > label > :is(input[type="number"], select) {
+  height: 49px;
+  min-height: 49px;
+  margin-top: 0;
 }
 .check {
   display: flex;

@@ -1,7 +1,7 @@
 'use client';
 import { Link } from '@/lib/navigation';
 import { useEffect, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { accountReturnHref, employerWorkspaceHref, isEmployerRole, jobDetailHref } from '@/lib/accountNavigation';
 import { api, getSession } from '@/lib/api';
 import { DirectoryStatus } from '@/components/public/BrowsePage';
@@ -43,7 +43,6 @@ type Company = {
 
 export default function CompanyPage() {
   const { slug } = useParams<{ slug: string }>();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { t, locale } = useI18n();
   const [company, setCompany] = useState<Company | null>(null);
@@ -52,29 +51,23 @@ export default function CompanyPage() {
   const [retry, setRetry] = useState(0);
   const session = typeof window !== 'undefined' ? getSession() : null;
   const employer = isEmployerRole(session?.user.role);
-  const candidate = session?.user.role === 'EMPLOYEE';
   const ownsCompany = session?.user.memberships?.some((membership) => membership.companyId === company?.id);
   const returnTo = accountReturnHref(session?.user.role, searchParams.get('returnTo'));
   const backHref = returnTo || (employer ? employerWorkspaceHref(ownsCompany ? 'company' : 'jobs', ownsCompany ? company?.id : undefined) : '/jobs');
   const backLabel = returnTo ? t('back') : employer ? t(ownsCompany ? 'company' : 'jobs') : t('home.findJobs');
 
   useEffect(() => {
-    if (candidate) router.replace('/jobs');
-  }, [candidate, router]);
-
-  useEffect(() => {
-    if (candidate) return;
     let active = true;
     setError('');
     setCompany(null);
     api<Company>(`/companies/slug/${slug}`, { auth: false })
-      .then(async (c) => {
+      .then((c) => {
         if (!active) return;
         setCompany(c);
       })
       .catch((e) => { if (active) setError(e.message); });
     return () => { active = false; };
-  }, [slug, locale, retry, candidate]);
+  }, [slug, locale, retry]);
 
   async function machineTranslate() {
     setTranslating(true);
@@ -95,7 +88,6 @@ export default function CompanyPage() {
     }
   }
 
-  if (candidate) return null;
   if (!company && error) return <div className={s.page}><div className={s.status}><p role="alert">{t('public.loadError')}</p><button className={s.primary} onClick={() => setRetry((value) => value + 1)}>{t('workspace.retry')}</button><p><Link href={backHref}>{backLabel}</Link></p></div></div>;
   if (!company) return <div className={s.page}><div className={s.container}><DirectoryStatus loading onRetry={() => setRetry((value) => value + 1)} /></div></div>;
   return <div className={s.page}><div className={s.container}>
@@ -112,12 +104,12 @@ export default function CompanyPage() {
     {error && <p className={s.notice} role="alert">{error}</p>}
     <div className={s.companyBody}>
       <section><h2>{t('public.openPositions').replace('{n}', String(company.jobPosts.length))}</h2>
-        {company.jobPosts.map((job) => <Link key={job.id} href={jobDetailHref(job.id, '/companies/' + company.slug)} className={s.job}><h3>{job.title}</h3><div className={s.meta}>{job.city && <span>{job.city.name}</span>}{job.category && <span>{job.category.name}</span>}<span>{t('landing.viewJob')} {'\u2192'}</span></div><div className={s.skills}>{job.jobSkills?.map((item, index) => <span key={index}>{item.skill.name}</span>)}</div></Link>)}
+        {company.jobPosts.map((job) => <Link key={job.id} href={jobDetailHref(job.id, '/companies/' + company.slug)} className={s.job}><h3>{job.title}</h3><div className={s.meta}>{job.city && <span>{job.city.name}</span>}{job.category && <span>{job.category.name}</span>}<span>{t('landing.viewJob')}</span></div><div className={s.skills}>{job.jobSkills?.map((item, index) => <span key={index}>{item.skill.name}</span>)}</div></Link>)}
         {!company.jobPosts.length && <p className={s.notice}>{t('public.noPositions')}</p>}
       </section>
       <aside className={s.companyAbout}><h2>{t('public.aboutCompany')}</h2>
         {company.description && <UgcText text={company.description} contentLocale={company.contentLocale} isMachineTranslated={company.isMachineTranslated} paragraphs translating={translating} onTranslate={company.canMachineTranslate ? () => void machineTranslate() : undefined} />}
-        {company.website && <p><a href={company.website} target="_blank" rel="noreferrer">{t('public.website')} {'\u2197'}</a></p>}
+        {company.website && <p><a href={company.website} target="_blank" rel="noreferrer">{t('public.website')} <JobsIcon kind="external" /></a></p>}
       </aside>
     </div>
   </div></div>;

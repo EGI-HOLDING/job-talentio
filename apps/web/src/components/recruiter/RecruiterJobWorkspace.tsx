@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/lib/navigation';
@@ -63,7 +64,7 @@ export function RecruiterJobWorkspace() {
     // The marker prevents refreshes from reopening or replacing an active form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[id,locale,data?.job?.id,loading,params]);
-  if(error)return <section className={s.root}><Link href={employerWorkspaceHref()} className={s.back}>← {t('rw.backJobs')}</Link><ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/></section>;
+  if(error)return <section className={s.root}><Link href={employerWorkspaceHref()} className={s.back}><DirectionalIcon direction="left" size={17} /> {t('rw.backJobs')}</Link><ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/></section>;
   if(loading||!data||data.job.id!==id)return <WorkspaceLoading/>;
   const {job,companyId,company,meta}=data;
   if(editing)return <RecruiterJobEditor companyId={companyId} company={company} job={editing} initialStep={editing._initialStep || 0} meta={meta} onClose={()=>setEditing(null)} onSaved={async message=>{await refresh();setNotice(message);}}/>;

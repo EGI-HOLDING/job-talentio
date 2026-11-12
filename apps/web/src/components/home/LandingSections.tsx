@@ -22,10 +22,9 @@ export type LandingJob = {
   city?: { slug?: string; name: string } | null;
 };
 
-export function LandingIcon({ kind = 'arrow', className, icon }: { kind?: string; className?: string; icon?: string | null }) {
+export function LandingIcon({ kind = 'briefcase', className, icon }: { kind?: string; className?: string; icon?: string | null }) {
   if (icon) return <span className={className} aria-hidden="true">{icon}</span>;
   const paths: Record<string, ReactNode> = {
-    arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
     pin: <><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2.4" /></>,
     person: <><circle cx="12" cy="7" r="4" /><path d="M4 21v-3a8 8 0 0 1 16 0v3H4Z" /></>,
     document: <path d="M5 2h9l5 5v15H5V2Zm9 0v6h5M8 12h8m-8 4h6" />,
@@ -37,7 +36,7 @@ export function LandingIcon({ kind = 'arrow', className, icon }: { kind?: string
 }
 
 function Heading({ title, subtitle, href, action }: { title: string; subtitle: string; href: string; action: string }) {
-  return <div className={s.heading}><div><h2>{title}</h2><p>{subtitle}</p></div><Link href={href}>{action}<LandingIcon /></Link></div>;
+  return <div className={s.heading}><div><h2>{title}</h2><p>{subtitle}</p></div><Link href={href}>{action}</Link></div>;
 }
 
 const LOCATION_PHOTOS: Record<string, string> = {
@@ -45,8 +44,8 @@ const LOCATION_PHOTOS: Record<string, string> = {
   bukhara: '/images/location-bukhara.webp', andijan: '/images/location-andijan.webp',
 };
 
-export function LandingSections({ jobs, categories, cities, roles, showEmployerCta = true }: {
-  jobs: LandingJob[]; categories: LandingCategory[]; cities: LandingLocation[]; roles: LandingFacet[]; showEmployerCta?: boolean;
+export function LandingSections({ jobs, categories, cities, roles }: {
+  jobs: LandingJob[]; categories: LandingCategory[]; cities: LandingLocation[]; roles: LandingFacet[];
 }) {
   const { t, locale } = useI18n();
   const [profileHref, setProfileHref] = useState(() => authLink('/register', '/dashboard/employee?tab=profile&section=cvs', 'EMPLOYEE'));
@@ -95,14 +94,14 @@ export function LandingSections({ jobs, categories, cities, roles, showEmployerC
           </div>
           <h3><Link className={s.jobTitleLink} href={`/jobs/${job.id}`}>{sanitizeMojibake(job.title)}</Link></h3>
           <div className={s.jobLocation}>{jobLocation(job) && <span><LandingIcon kind="pin" />{jobLocation(job)}</span>}{job.workMode && <span className={s.workMode}>{t(`enum.workMode.${job.workMode}`)}</span>}</div>
-          <div className={s.jobBottom}><strong>{salary(job)}</strong><span className={s.viewJob}>{t('landing.viewJob')}<LandingIcon /></span></div>
+          <div className={s.jobBottom}><strong>{salary(job)}</strong><span className={s.viewJob}>{t('landing.viewJob')}</span></div>
         </article>)}
         {!jobs.length && <p className="muted">{t('hotJobsEmpty')}</p>}
       </div>
     </section>
 
     <section className={s.candidate}>
-      <div className={s.candidateCopy}><span className={s.eyebrow}>{t('landing.forSeekers')}</span><h2>{t('landing.candidateTitle')}</h2><p>{t('landing.candidateSub')}</p><Link href={profileHref} className={s.primaryButton}>{t('landing.createProfile')}<LandingIcon /></Link></div>
+      <div className={s.candidateCopy}><span className={s.eyebrow}>{t('landing.forSeekers')}</span><h2>{t('landing.candidateTitle')}</h2><p>{t('landing.candidateSub')}</p><Link href={profileHref} className={s.primaryButton}>{t('landing.createProfile')}</Link></div>
       <ol className={s.steps}>{['person', 'document', 'search'].map((icon, index) => <li key={icon}><span className={s.stepIcon}><LandingIcon kind={icon} /></span><div><strong>{index + 1}. {t(`landing.step${index + 1}`)}</strong><span>{t(`landing.step${index + 1}Sub`)}</span></div></li>)}</ol>
       <div className={s.cvArt} aria-hidden="true"><div className={s.cvPaper}><div className={s.cvHeader}><LandingIcon kind="person" /><strong>CV</strong></div><i /><i /><i /><div className={s.cvChecks}><span>{'\u2713'}</span><span>{'\u2713'}</span><span>{'\u2713'}</span></div></div></div>
     </section>
@@ -118,16 +117,14 @@ export function LandingSections({ jobs, categories, cities, roles, showEmployerC
       <Heading title={t('landing.locationTitle')} subtitle={t('landing.locationSub')} href="/explore/cities" action={t('landing.exploreLocations')} />
       <div className={s.locations}>{featuredCities.map((city) => <Link className={s.location} key={city.slug} href={`/jobs?city=${encodeURIComponent(city.slug)}`}>
         {LOCATION_PHOTOS[city.slug] ? <img className={s.cityPhoto} src={LOCATION_PHOTOS[city.slug]} alt="" loading="lazy" /> : <div className={s.cityFallback}><LandingIcon kind="pin" /></div>}
-        <div className={s.locationBody}><div><h3>{city.name}</h3><span>{city.country || countLabel(city.count)}</span></div><LandingIcon /></div>
+        <div className={s.locationBody}><div><h3>{city.name}</h3><span>{city.country || countLabel(city.count)}</span></div></div>
       </Link>)}</div>
-      <div className={s.moreLocations}>{cities.slice(4, 7).map((city) => <Link key={city.slug} href={`/jobs?city=${encodeURIComponent(city.slug)}`}><span>{city.name}{city.country && <small>{city.country}</small>}</span><LandingIcon /></Link>)}<Link href="/jobs?workMode=REMOTE" className={s.remote}><LandingIcon kind="remote" />{t('landing.remoteRoles')}<LandingIcon /></Link></div>
+      <div className={s.moreLocations}>{cities.slice(4, 7).map((city) => <Link key={city.slug} href={`/jobs?city=${encodeURIComponent(city.slug)}`}><span>{city.name}{city.country && <small>{city.country}</small>}</span></Link>)}<Link href="/jobs?workMode=REMOTE" className={s.remote}><LandingIcon kind="remote" />{t('landing.remoteRoles')}</Link></div>
     </section>}
 
     {roles.length > 0 && <section>
       <Heading title={t('landing.roles')} subtitle={t('landing.rolesSub')} href="/explore/titles" action={t('landing.allRoles')} />
-      <div className={s.roles}>{roles.map((role) => <Link key={role.slug} href={`/jobs?jobTitle=${encodeURIComponent(role.slug)}`}><strong>{role.name}</strong><span>{countLabel(role.count)}</span><LandingIcon /></Link>)}</div>
+      <div className={s.roles}>{roles.map((role) => <Link key={role.slug} href={`/jobs?jobTitle=${encodeURIComponent(role.slug)}`}><strong>{role.name}</strong><span>{countLabel(role.count)}</span></Link>)}</div>
     </section>}
-
-    {showEmployerCta && <section className={s.employer}><LandingIcon kind="briefcase" /><div><h2>{t('landing.employerTitle')}</h2><p>{t('landing.employerSub')}</p></div><Link href="/register?role=RECRUITER" className={s.outlineButton}>{t('postAJob')}<LandingIcon /></Link></section>}
   </div>;
 }

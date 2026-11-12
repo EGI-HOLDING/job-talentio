@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Image from 'next/image';
@@ -363,8 +364,8 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
      </form>
     </div>}
    </>}
-   {step === 5 && <div className={s.success}><Image data-tara src="/images/tara/celebrate.png" width={300} height={220} sizes="300px" alt="Tara merayakan selesainya interview"/><h2 ref={heading} tabIndex={-1}>Interview selesai. Makasih sudah cerita!</h2><p>{casual ? 'Makasih udah cerita bareng gue. Semoga kabar baik segera mampir, ' + name + '!' : 'Makasih sudah cerita bareng Tara. Semoga segera dapat kabar baik. Semoga beruntung, ' + name + '!'}</p><div className={s.receipt}><strong>{state.job.title}</strong><p>{state.job.companyName}</p><ul><li>✓ Screening bersama Tara selesai</li></ul></div><p>Jawabanmu sudah tersimpan dan akan ditinjau tim HR. Pantau kabar selanjutnya melalui Pesan Talentio.</p><div className={s.actions}><a className={s.primary} href={url('/messages')}>Buka Pesan Talentio →</a><a className={s.outline} href={url('/jobs')}>{uiCopy("Cari lowongan lain")}</a></div></div>}
-   {step < 4 && <footer className={s.footer}><button className={s.outline} disabled={busy} onClick={() => step > 2 ? setStep(step - 1) : window.location.assign(url('/messages'))}>← Kembali</button><button className={s.primary} disabled={busy} onClick={() => void next()}>{busy ? 'Menyimpan\u2026' : step === 2 ? 'Lihat aturan singkat →' : step === 3 ? 'Siap, yuk mulai! →' : 'Lanjut →'}</button></footer>}
+   {step === 5 && <div className={s.success}><Image data-tara src="/images/tara/celebrate.png" width={300} height={220} sizes="300px" alt="Tara merayakan selesainya interview"/><h2 ref={heading} tabIndex={-1}>Interview selesai. Makasih sudah cerita!</h2><p>{casual ? 'Makasih udah cerita bareng gue. Semoga kabar baik segera mampir, ' + name + '!' : 'Makasih sudah cerita bareng Tara. Semoga segera dapat kabar baik. Semoga beruntung, ' + name + '!'}</p><div className={s.receipt}><strong>{state.job.title}</strong><p>{state.job.companyName}</p><ul><li>✓ Screening bersama Tara selesai</li></ul></div><p>Jawabanmu sudah tersimpan dan akan ditinjau tim HR. Pantau kabar selanjutnya melalui Pesan Talentio.</p><div className={s.actions}><a className={s.primary} href={url('/messages')}>Buka Pesan Talentio</a><a className={s.outline} href={url('/jobs')}>{uiCopy("Cari lowongan lain")}</a></div></div>}
+   {step < 4 && <footer className={s.footer}><button className={s.outline} disabled={busy} onClick={() => step > 2 ? setStep(step - 1) : window.location.assign(url('/messages'))}><DirectionalIcon direction="left" size={17} /> Kembali</button><button className={s.primary} disabled={busy} onClick={() => void next()}>{busy ? 'Menyimpan\u2026' : step === 2 ? 'Lihat aturan singkat' : step === 3 ? 'Siap, yuk mulai!' : 'Lanjut'}{!busy && step !== 3 && <DirectionalIcon direction="right" size={17} />}</button></footer>}
   </>}
  </section>;
 }

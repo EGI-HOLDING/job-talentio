@@ -26,8 +26,8 @@
 .filterSection { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .filterSection > summary, .moreFilters > summary { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: 0 0 9px; list-style: none; font-size: .79rem; font-weight: 600; cursor: pointer; }
 .filterSection > summary::-webkit-details-marker, .moreFilters > summary::-webkit-details-marker, .companyMenu > summary::-webkit-details-marker { display: none; }
-.filterSection > summary svg { width: 14px; height: 14px; color: #7c87a0; transition: transform .15s; }
-.filterSection[open] > summary svg { transform: rotate(180deg); }
+.filterSection > summary svg { width: 16px; height: 16px; color: #475569; transition: transform .15s; }
+.filterSection[open] > summary svg, .companyMenu[open] > summary svg, .moreFilters[open] > summary svg:last-child { transform: rotate(180deg); }
 .filterSection:not([open]) > summary { padding-bottom: 0; }
 .filterCheck { display: flex; align-items: center; gap: 8px; min-height: 30px; margin: 0; color: #3d4a62; font-size: .77rem; line-height: 1.35; cursor: pointer; }
 .filterCheck input { width: 14px; height: 14px; margin: 0; flex-shrink: 0; accent-color: var(--purple); }
@@ -142,7 +142,7 @@
 .primaryButton:hover { background: #4526cb; }
 .outlineButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 16px; border: 1px solid #b7a7f5; border-radius: 7px; background: #fff; color: #6747e8; font-size: .79rem; font-weight: 500; }
 .outlineButton:hover { background: #f4f0ff; color: #4f31bd; }
-.guestNote { color: #9988ca; font-size: .65rem; line-height: 1.5; margin-left: auto; }
+.guestNote { color: #6b5e8b; font-size: .65rem; line-height: 1.5; margin-left: auto; }
 .applied { color: #0b8877; font-size: .77rem; }
 .cvUnavailable { color: #8290a5; font-size: .75rem; }
 .cvError { flex-basis: 100%; color: #b3294e; font-size: .75rem; }
@@ -170,7 +170,6 @@
 .modeBar > a[aria-current=page]::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: var(--purple); border-radius: 3px 3px 0 0; }
 .modeBar > a > span { display: grid; place-items: center; min-width: 22px; padding: 2px 6px; border-radius: 5px; background: #f0ebff; font-size: .65rem; color: #6b4bd8; }
 .modeBar > .profileShortcut { margin-left: auto; font-size: .74rem; font-weight: 400; }
-.profileShortcut svg { width: 14px; height: 14px; }
 .personalized .workspace { grid-template-columns: 270px minmax(0, 1fr); }
 .personalized.withPreview .workspace { grid-template-columns: 240px minmax(340px, .9fr) minmax(420px, 1.1fr); }
 .profileRail { min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 26px 22px 12px; border-right: 1px solid var(--line); background: #fafbfe; scrollbar-width: thin; }
@@ -203,8 +202,10 @@
 .backToRecommendations { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 11px; border: 1px solid #e2def3; border-radius: 7px; background: #fff; color: #5635e8; font-size: .73rem; font-weight: 600; text-decoration: none; transition: border-color .15s, background .15s; }
 .backToRecommendations:hover { border-color: #c8b9ff; background: #f8f5ff; }
 .backToRecommendations svg { width: 14px; height: 14px; }
-.refreshButton { display: grid; place-items: center; width: 34px; height: 34px; padding: 7px; background: #fff; color: #8a94a8; border: 1px solid #e8ecf3; }
-.refreshButton:hover { color: var(--purple); background: #f7f4ff; }
+.refreshButton { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; background: #fff; color: #344054; border: 1px solid #e8ecf3; }
+.refreshButton:hover:not(:disabled) { color: var(--purple); background: #f7f4ff; }
+.refreshButton:focus-visible { outline: 2px solid #5a3dd5; outline-offset: 2px; }
+.refreshButton:disabled { opacity: .5; cursor: default; }
 .personalizeBanner { display: flex; align-items: flex-start; gap: 12px; margin: 20px; padding: 17px 20px; border: 1px solid #ebe5ff; border-radius: 9px; background: #faf8ff; color: #4f3b91; }
 .personalizeBanner > svg { flex-shrink: 0; margin-top: 2px; color: #7f5ee3; }
 .personalizeBanner strong { font-size: .8rem; }
@@ -296,7 +297,18 @@
   .description { font-size: .82rem; }
   .previewActions { padding: 12px 16px; }
   .previewActions .primaryButton { flex: 1; }
-  .guestNote { flex-basis: 100%; text-align: center; margin-left: 0; }
+  .previewActions:has(> .primaryButton + button[aria-pressed]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .previewActions:has(> .primaryButton + button[aria-pressed]) > :is(.primaryButton, button[aria-pressed]) {
+    min-width: 0;
+    min-height: 44px;
+    text-align: center;
+    white-space: normal;
+  }
+  .guestNote { grid-column: 1 / -1; flex-basis: 100%; text-align: center; margin-left: 0; }
   .filtersOpen { top: max(16px, 6dvh); width: 100%; border-radius: 18px 18px 0 0; }
 }
 
@@ -319,10 +331,10 @@
   .recommendationHeading p { font-size: .68rem; line-height: 1.5; }
   .relatedResultsToolbar { min-height: 0; align-items: flex-start; padding-block: 12px; }
   .relatedModeHeading { align-items: flex-start; flex-wrap: wrap; gap: 9px 12px; }
-  .relatedModeCopy { flex: 1 1 180px; }
+  .relatedModeCopy { flex: 1 1 100%; }
   .relatedModeCopy h1 { font-size: .92rem; }
   .relatedModeCopy p { font-size: .7rem; }
-  .backToRecommendations { margin-left: auto; min-height: 32px; padding-inline: 9px; font-size: .69rem; }
+  .backToRecommendations { min-height: 44px; padding-inline: 10px; font-size: .73rem; }
   .personalizeBanner { flex-wrap: wrap; margin: 12px; padding: 14px; gap: 10px; }
   .personalizeBanner > div { flex: 1; }
   .personalizeBanner > a, .personalizeBanner > button { margin-left: 28px; }
@@ -345,13 +357,13 @@
 .recommendationEmpty h2 { max-width:680px; margin:11px auto 0; color:#17213a; font-size:1.02rem; line-height:1.4; letter-spacing:-.02em; }
 .recommendationEmpty p { max-width:660px; margin:5px auto 0; color:#66738d; font-size:.79rem; line-height:1.55; }
 .recommendationExplore { display:inline-flex; align-items:center; gap:7px; margin-top:12px; color:#5b36dc; font-size:.78rem; font-weight:650; }
-.recommendationExplore:hover { color:#3e22aa; }
+.recommendationExplore:hover { color:#3e22aa; text-decoration:underline; text-underline-offset:.18em; }
 .relatedProfessions { padding:19px 20px 22px; border-top:1px solid var(--line); background:#fff; }
 .relatedProfessions > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:13px; }
 .relatedProfessions > header h2 { margin:0; color:#17213a; font-size:.96rem; font-weight:700; letter-spacing:-.02em; }
 .relatedProfessions > header p { margin:4px 0 0; color:#7b859c; font-size:.72rem; line-height:1.45; }
 .relatedProfessions > header > a { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; padding-top:1px; color:#5635e8; font-size:.73rem; font-weight:600; }
-.relatedProfessions > header > a:hover { color:#392199; }
+.relatedProfessions > header > a:hover { color:#392199; text-decoration:underline; text-underline-offset:.18em; }
 .professionGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .professionCard { display:flex; align-items:center; gap:10px; min-width:0; min-height:70px; padding:10px 12px; border:1px solid #e3e6ef; border-radius:8px; background:#fff; color:var(--ink); transition:border-color .15s,background .15s,transform .15s; }
 .professionCard:hover { border-color:#c7b7ff; background:#fbf9ff; transform:translateY(-1px); }
@@ -360,7 +372,6 @@
 .professionCopy { display:flex; flex:1; flex-direction:column; min-width:0; gap:3px; }
 .professionCopy strong { overflow:hidden; color:#17213a; font-size:.76rem; font-weight:650; line-height:1.35; text-overflow:ellipsis; }
 .professionCopy small { color:#7b859c; font-size:.68rem; }
-.professionCard > svg:last-child { width:15px; height:15px; flex:0 0 15px; color:#6550b2; transform:rotate(-90deg); }
 @media (max-width: 760px) {
   .recommendationEmpty { margin:14px; padding:20px 16px; }
   .recommendationEmpty h2 { font-size:.92rem; }

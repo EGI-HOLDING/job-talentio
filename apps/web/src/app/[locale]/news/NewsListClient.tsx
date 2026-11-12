@@ -74,7 +74,7 @@ export function NewsListClient() {
         {loading ? <div className={s.skeleton} role="status" aria-label={t('ui.loading')}><span /><span /></div> : error && !items.length ? <div className={s.message} role="alert">{t('discovery.newsError')}<button className={s.loadButton} type="button" onClick={() => void load(1, false)}>{t('workspace.retry')}</button></div> : !lead ? <p className={s.message}>{t('newsEmpty')}</p> : <>
           <div className={`${s.leadGrid} ${latest.length ? '' : s.soloLead}`}>
             <article className={s.lead}><Link href={`/news/${lead.slug}`} className={s.leadLink}>
-              <ArticleImage item={lead} lead /><ArticleMeta item={lead} /><h2>{lead.title}</h2><p>{lead.excerpt}</p><span className={s.read}>{t('discovery.readArticle')}<JobsIcon kind="back" /></span>
+              <ArticleImage item={lead} lead /><ArticleMeta item={lead} /><h2>{lead.title}</h2><p>{lead.excerpt}</p><span className={s.read}>{t('discovery.readArticle')}</span>
             </Link></article>
             {!!latest.length && <section className={s.latest} aria-labelledby="latest-articles"><h2 id="latest-articles">{t('discovery.latest')}</h2>{latest.map((item) => <CompactStory key={item.slug} item={item} />)}</section>}
           </div>

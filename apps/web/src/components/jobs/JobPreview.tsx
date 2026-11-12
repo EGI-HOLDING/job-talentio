@@ -50,7 +50,7 @@ export function JobPreview({ matchReasons, standalone = false, backHref = '/jobs
     <div className={s.previewToolbar}>
       {standalone ? <Link className={s.textAction} href={backHref}><JobsIcon kind="back" />{t('workspace.back')}</Link> : <><button className={s.backButton} type="button" onClick={onBack}><JobsIcon kind="back" />{t('workspace.back')}</button><strong className={s.detailLabel}>{t('workspace.details')}</strong></>}
       <div className={s.previewTools}>
-        {!standalone && <Link href={`/jobs/${job.id}`} className={s.textAction} aria-label={t('workspace.openFull')}><JobsIcon kind="external" /><span>{t('workspace.openFull')}</span></Link>}
+        {!standalone && <Link href={`/jobs/${job.id}`} className={s.textAction} aria-label={t('workspace.openFull')}><span>{t('workspace.openFull')}</span></Link>}
         <ShareButton path={`/jobs/${job.id}`} title={job.title} className={s.textAction} />
         {!standalone && <button type="button" className={s.closePreview} onClick={onBack} aria-label={t('workspace.closeDetails')}><JobsIcon kind="close" /></button>}
       </div>

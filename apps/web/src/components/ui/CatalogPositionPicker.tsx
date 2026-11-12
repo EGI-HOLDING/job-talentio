@@ -23,13 +23,15 @@ export function usePositionLabels(ids: string, slugs = '') {
   return result?.key === key ? result.rows : undefined;
 }
 
-export function CatalogPositionPicker({ label, value, onChange, scope = 'role', max, disabled }: {
+export function CatalogPositionPicker({ label, value, onChange, scope = 'role', max, disabled, className, selectionPlacement = scope === 'hr' ? 'after' : 'before' }: {
   label: string;
   value: PositionValue[];
   onChange: (value: PositionValue[]) => void;
   scope?: 'candidate' | 'role' | 'hr';
   max?: number;
   disabled?: boolean;
+  className?: string;
+  selectionPlacement?: 'before' | 'after';
 }) {
   const { locale, t } = useI18n();
   const labels = {
@@ -48,7 +50,8 @@ export function CatalogPositionPicker({ label, value, onChange, scope = 'role', 
     more: locale === 'id' ? 'Muat lebih banyak' : 'Load more',
   };
   return <PositionPicker key={scope + ':' + locale} label={label} labels={labels} value={value}
-    onChange={onChange} max={max} disabled={disabled}
+    onChange={onChange} max={max} disabled={disabled} className={className}
+    selectionPlacement={selectionPlacement}
     request={(q, page, signal) => api<PositionResults>('/meta/positions/search?' + new URLSearchParams({
       q, page: String(page), limit: '24', scope,
     }), { auth: false, cacheMode: 'no-store', signal })} />;

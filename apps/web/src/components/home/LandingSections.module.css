@@ -8,7 +8,7 @@
 .heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .heading p { margin: .2rem 0 0; font-size: .94rem; }
 .heading > a { display: inline-flex; align-items: center; gap: .55rem; flex-shrink: 0; font-size: .86rem; color: var(--purple); }
-.heading > a svg { width: 18px; height: 18px; }
+.heading > a:hover { text-decoration: underline; text-underline-offset: .18em; }
 .featured { position: relative; isolation: isolate; }
 .featured::before { content: ''; position: absolute; inset: -1.6rem -1rem; z-index: -1; background: linear-gradient(120deg, #faf9ff, #fbfcff); border-radius: 18px; }
 .jobs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; }
@@ -28,7 +28,6 @@
 .jobBottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .jobBottom strong { font-size: .88rem; font-weight: 650; color: #008578; }
 .viewJob, .readMore { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; color: var(--purple); }
-.viewJob svg, .readMore svg { width: 16px; height: 16px; }
 .categories { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }
 .category { display: flex; align-items: center; gap: 1.1rem; padding: 1.2rem; border: 1px solid #e6e7f1; border-radius: 10px; background: #fff; }
 .category > svg, .category > span:first-child { flex-shrink: 0; width: 38px; height: 38px; color: #5935ff; }
@@ -42,11 +41,9 @@
 .cityFallback svg { width: 64px; height: 64px; }
 .locationBody { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1rem; gap: .5rem; }
 .locationBody span { display: block; margin-top: .15rem; color: var(--muted); font-size: .85rem; }
-.locationBody > svg { width: 18px; height: 18px; color: var(--purple); flex-shrink: 0; }
 .moreLocations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; margin-top: .85rem; }
 .moreLocations > a { display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .75rem 1rem; border: 1px solid #e6e7f1; border-radius: 8px; font-size: .85rem; }
 .moreLocations small { color: var(--muted); display: block; margin-top: .15rem; }
-.moreLocations svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--purple); }
 .moreLocations .remote { color: var(--purple); }
 .roles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; grid-template-rows: repeat(4, auto); padding: .5rem 1.5rem; border: 1px solid #e6e7f1; border-radius: 12px; }
 .roles a { display: flex; align-items: center; gap: .75rem; padding: 1rem .4rem; border-bottom: 1px solid #eff0f5; font-size: .88rem; }
@@ -55,7 +52,6 @@
 .roles a:hover { color: var(--purple); }
 .roles strong { font-weight: 600; }
 .roles span { color: var(--muted); white-space: nowrap; font-size: .8rem; margin-left: auto; }
-.roles svg { width: 16px; height: 16px; color: #8d82bc; flex-shrink: 0; }
 .candidate { position: relative; overflow: hidden; display: grid; grid-template-columns: 1.4fr 1fr .65fr; gap: 2rem; align-items: center; padding: 2rem; border-radius: 16px; background: linear-gradient(115deg, #f5f1ff, #ece8ff); }
 .eyebrow { color: var(--purple); font-size: .71rem; font-weight: 700; letter-spacing: .13em; }
 .candidate .candidateCopy h2 { font-size: clamp(1.5rem, 2.4vw, 2.25rem); margin-top: .6rem; }
@@ -115,7 +111,6 @@
   .heading h2 { font-size: 1.27rem; }
   .heading p { font-size: .83rem; }
   .heading > a { font-size: .73rem; max-width: 90px; gap: .2rem; line-height: 1.4; text-align: right; justify-content: flex-end; }
-  .heading > a svg { width: 14px; height: 14px; flex-shrink: 0; }
   .featured::before { inset: -1.1rem -.3rem; }
   .jobs { grid-template-columns: 1fr; gap: .7rem; }
   .job { padding: 1rem; }

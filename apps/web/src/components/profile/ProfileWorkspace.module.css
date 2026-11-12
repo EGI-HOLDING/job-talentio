@@ -89,7 +89,7 @@
 .cvRow + .cvRow { border-top: 1px solid #e7ebf3; }
 .cvRow { min-height: 103px; font-size: .77rem; }
 .cvIdentity { display: flex; align-items: center; gap: 13px; min-width: 0; }
-.documentThumb { display: grid; place-items: center; flex-shrink: 0; height: 57px; width: 44px; border-radius: 4px; border: 1px solid #e5e8f1; background: #fbfcff; color: #9c92bb; }
+.documentThumb { display: grid; place-items: center; flex-shrink: 0; height: 57px; width: 44px; border-radius: 4px; border: 1px solid #e5e8f1; background: #fbfcff; color: #766696; }
 .documentThumb svg { width: 26px; height: 26px; }
 .cvIdentity strong { font-size: .82rem; overflow-wrap: anywhere; }
 .cvName { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
@@ -328,7 +328,11 @@
 }
 
 /* CV library follows the four visible columns; controls can wrap on small screens. */
-.cvTableHeader, .cvRow { grid-template-columns: minmax(180px, 1.4fr) minmax(160px, 1fr) 130px minmax(160px, auto); }
+.cvTableHeader, .cvRow { grid-template-columns: minmax(180px, 1.4fr) minmax(160px, 1fr) 130px 160px; }
+.cvTableHeader > :last-child { justify-self: end; }
+@media (max-width: 1250px) {
+  .cvTableHeader, .cvRow { grid-template-columns: minmax(180px, 1.4fr) minmax(160px, 1fr) 160px; }
+}
 .cvIdentity, .cvStatus { min-width:0; }
 .cvName strong, .fileSelected > div { overflow-wrap:anywhere; }
 .cvStatus { align-items:flex-start; }

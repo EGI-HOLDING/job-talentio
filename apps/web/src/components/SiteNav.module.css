@@ -20,7 +20,7 @@
 .logo { display: block; width: clamp(132px, 11vw, 166px); height: auto; object-fit: contain; }
 .landing .brand { font-size: 1.7rem; white-space: nowrap; color: #4427c5; }
 .employerBrand { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; line-height: 1.15; }
-.employerBrand small { font-family: var(--font-body); font-size: .48rem; font-weight: 600; letter-spacing: .22em; color: #8b78cb; }
+.employerBrand small { font-family: var(--font-body); font-size: .48rem; font-weight: 600; letter-spacing: .22em; color: #7157b3; }
 .browse { display: flex; align-items: center; gap: clamp(1rem, 2.2vw, 2.4rem); font-size: .95rem; font-weight: 550; color: #171a2e; }
 .browse a { white-space: nowrap; }
 .browse a:hover { color: #5032df; }
@@ -137,7 +137,6 @@
 .accountAttention { box-shadow:0 0 0 3px #fff6e4; }
 .accountMenu { max-height:calc(100dvh - var(--app-nav-height, 70px) - 24px); overflow-y:auto; overscroll-behavior:contain; }
 .accountIdentity .verificationLink { display:flex; align-items:center; gap:7px; margin-top:10px; padding:8px; font-size:.7rem; color:#94621c; background:#fff8e9; border-radius:6px; }
-.verificationLink svg { width:14px; margin-left:auto; flex-shrink:0; }
 .companyChoices { padding:10px 4px; border-bottom:1px solid #edf0f5; margin-bottom:5px; }
 .companyChoices > span { display:block; padding:0 6px 8px; color:#8290a7; font-size:.66rem; font-weight:600; letter-spacing:.04em; }
 .companyChoices > button { display:flex; align-items:center; gap:9px; width:100%; min-height:40px; padding:9px 7px; border:0; border-radius:6px; background:transparent; color:#53617a; text-align:left; font-size:.76rem; }
@@ -147,3 +146,25 @@
 .companyChoices > button:hover { background:#eee9ff; color:#5635e8; }
 .account button:focus-visible,.account a:focus-visible { outline:2px solid #7455df; outline-offset:2px; }
 @media(max-width:760px) { .accountAttention { position:absolute; top:2px; right:2px; border:1px solid #fff; width:8px; height:8px; } }
+
+@media (max-width: 600px) {
+  .landing .landingNav:has(.audienceToggle) {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .landing .landingLinks:has(.audienceToggle) { display: contents; }
+  .landing .landingLinks:has(.audienceToggle) > :global(.lang-switch) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .landing .landingLinks:has(.audienceToggle) > .menuButton {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .landing .audienceToggle {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    margin: 0;
+  }
+  .landing .landingNav:has(.audienceToggle) .mobileMenu { grid-row: 3; }
+}

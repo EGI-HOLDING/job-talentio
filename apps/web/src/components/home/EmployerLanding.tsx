@@ -49,14 +49,14 @@ export function EmployerLanding() {
         <h1 id="employer-title" className={`${hero.title} ${s.title}`}><span>{t('employers.title1')} </span><span>{t('employers.title2')}</span></h1>
         <p className={`${hero.subtitle} ${s.subtitle}`}>{t('employers.subtitle1')}</p>
       </div>
-      <div className={`${hero.search} ${s.search}`}><p>{t('employers.subtitle2')}</p><Link className={hero.searchButton} href={postHref}>{t('postAJob')}<LandingIcon /></Link></div>
+      <div className={`${hero.search} ${s.search}`}><p>{t('employers.subtitle2')}</p><Link className={hero.searchButton} href={postHref}>{t('postAJob')}</Link></div>
     </section>
 
     {companies.length > 0 && <FeaturedCompaniesCarousel companies={companies} />}
 
     <div className={`${sections.sections} ${s.sections}`}>
       <section id="how-it-works" className={`${sections.candidate} ${s.onboarding}`} aria-labelledby="employer-start">
-        <div className={sections.candidateCopy}><span className={sections.eyebrow}>{t('employers.growing')}</span><h2 id="employer-start">{t('employers.start')}</h2><p>{t('employers.startSub')}</p><Link className={sections.primaryButton} href={postHref}>{t('postAJob')}<LandingIcon /></Link></div>
+        <div className={sections.candidateCopy}><span className={sections.eyebrow}>{t('employers.growing')}</span><h2 id="employer-start">{t('employers.start')}</h2><p>{t('employers.startSub')}</p><Link className={sections.primaryButton} href={postHref}>{t('postAJob')}</Link></div>
         <ol className={sections.steps}>{['person', 'briefcase', 'search'].map((icon, index) => <li key={icon}><span className={sections.stepIcon}><LandingIcon kind={icon} /></span><div><strong>{index + 1}. {t(`employers.step${index + 1}`)}</strong><span>{t(`employers.step${index + 1}Sub`)}</span></div></li>)}</ol>
         <div className={sections.cvArt} aria-hidden="true"><div className={sections.cvPaper}><div className={sections.cvHeader}><LandingIcon kind="briefcase" /></div><i /><i /><i /><i /></div></div>
       </section>
@@ -73,14 +73,14 @@ export function EmployerLanding() {
         </figure>
       </section>
 
-      {<section id="hiring-insights" aria-labelledby="employer-insights"><div className={sections.heading}><div><h2 id="employer-insights">{t('employers.insights')}</h2><p>{t('employers.insightsSub')}</p></div><Link href="/news">{t('landing.allArticles')}<LandingIcon /></Link></div>
-        {!news.length && <p className={s.articleEmpty}>{t('employers.insightsSub')} <Link href="/news">{t('landing.allArticles')} →</Link></p>}<div className={sections.news}>{news.map((item) => <Link className={sections.article} key={item.slug} href={`/news/${item.slug}`}>
-          {item.coverUrl && <img src={item.coverUrl} alt="" loading="lazy" />}<div className={sections.articleBody}><div className={sections.articleMeta}><span className={sections.badge}>{t('employers.insights')}</span></div><h3>{item.title}</h3><span className={`${sections.readMore} ${s.articleLink}`}>{t('readMore')}<LandingIcon /></span></div>
+      {<section id="hiring-insights" aria-labelledby="employer-insights"><div className={sections.heading}><div><h2 id="employer-insights">{t('employers.insights')}</h2><p>{t('employers.insightsSub')}</p></div><Link href="/news">{t('landing.allArticles')}</Link></div>
+        {!news.length && <p className={s.articleEmpty}>{t('employers.insightsSub')} <Link href="/news">{t('landing.allArticles')}</Link></p>}<div className={sections.news}>{news.map((item) => <Link className={sections.article} key={item.slug} href={`/news/${item.slug}`}>
+          {item.coverUrl && <img src={item.coverUrl} alt="" loading="lazy" />}<div className={sections.articleBody}><div className={sections.articleMeta}><span className={sections.badge}>{t('employers.insights')}</span></div><h3>{item.title}</h3><span className={`${sections.readMore} ${s.articleLink}`}>{t('readMore')}</span></div>
         </Link>)}</div>
       </section>}
 
       <section id="pricing" aria-labelledby="employer-pricing"><div className={sections.heading}><div><h2 id="employer-pricing">{t('commerce.pricing')}</h2><p>{t('commerce.subtitle')}</p></div></div><PackagePricing/></section>
-      <section className={`${sections.employer} ${s.closing}`}><LandingIcon kind="briefcase" /><div><h2>{t('employers.ready')}</h2><p>{t('employers.readySub')}</p></div><div className={s.closingActions}><Link href={postHref} className={sections.primaryButton}>{t('postAJob')}<LandingIcon /></Link><Link href={authLink('/login', null, 'RECRUITER')} className={sections.outlineButton}>{t('employers.login')}</Link></div></section>
+      <section className={`${sections.employer} ${s.closing}`}><LandingIcon kind="briefcase" /><div><h2>{t('employers.ready')}</h2><p>{t('employers.readySub')}</p></div><div className={s.closingActions}><Link href={postHref} className={sections.primaryButton}>{t('postAJob')}</Link><Link href={authLink('/login', null, 'RECRUITER')} className={sections.outlineButton}>{t('employers.login')}</Link></div></section>
     </div>
   </div></div>;
 }

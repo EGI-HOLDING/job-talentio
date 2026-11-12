@@ -31,7 +31,7 @@
   --radius-sm: 7px;
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
   --row-h: 44px;
-  --icon-chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2393a4bf' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --icon-chevron-down: url('/icons/navigation-disclosure.png');
 }
 
 * {
@@ -551,16 +551,41 @@ tbody tr[data-selected="true"] td {
   align-items: center;
   gap: 0.25rem;
 }
-.th-sort:hover {
+.th-sort:hover:not(:disabled) {
   color: var(--text);
-  background: none;
+  background: transparent;
 }
 .th-sort[data-active="true"] {
   color: var(--accent);
 }
+.th-sort[data-active="true"]:hover:not(:disabled) {
+  color: var(--accent-hover);
+}
 .sort-arrow {
-  font-size: 0.65rem;
-  opacity: 0.9;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  mask: var(--icon-chevron-down) center / contain no-repeat;
+}
+.sort-arrow[data-order="asc"] { rotate: 180deg; }
+:where(summary) { list-style: none; }
+:where(summary)::-webkit-details-marker { display: none; }
+:where(summary)::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-inline-end: .25em;
+  vertical-align: -.14em;
+  background: currentColor;
+  mask: var(--icon-chevron-down) center / contain no-repeat;
+}
+:where(details[open] > summary)::before { rotate: 180deg; }
+@media (forced-colors: active) {
+  .sort-arrow, :where(summary)::before {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
 }
 
 .cell-strong {

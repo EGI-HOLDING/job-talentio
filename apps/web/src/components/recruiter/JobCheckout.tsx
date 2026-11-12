@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -60,14 +61,14 @@ export function JobCheckout() {
     try {const value = await api<JobOrder>('/job-commerce/orders/' + order.id + '/cancel', {method: 'POST'}); if (currentOrder.current === requestedOrder) setOrder(value);}
     catch (e) {if (currentOrder.current === requestedOrder) setError(e instanceof Error ? e.message : String(e));} finally {if (currentOrder.current === requestedOrder) setBusy(false);}
   }
-  if (order.status === 'PAID') return <div className={s.page}><section className={s.success} aria-live="polite"><span className={s.successIcon}>✓</span><span className={s.eyebrow}>{t('commerce.' + order.code)}</span><h1>{t('commerce.success')}</h1><p>{t(order.intent === 'UPGRADE' ? 'commerce.upgradeSuccess' : 'commerce.successHint')}</p><p><strong>{order.jobTitle}</strong><br/>{order.companyName}</p>{order.provider === 'local-test' && <p className={s.notice}>{t('commerce.testMode')} | {t('commerce.testHint')}</p>}<button className={s.primary} onClick={() => router.replace(returnTo)}>{t('commerce.continue')} →</button></section></div>;
-  return <div className={s.page}><Link className={s.text} href={returnTo}>← {t('commerce.back')}</Link><div className={s.checkout}>
+  if (order.status === 'PAID') return <div className={s.page}><section className={s.success} aria-live="polite"><span className={s.successIcon}>✓</span><span className={s.eyebrow}>{t('commerce.' + order.code)}</span><h1>{t('commerce.success')}</h1><p>{t(order.intent === 'UPGRADE' ? 'commerce.upgradeSuccess' : 'commerce.successHint')}</p><p><strong>{order.jobTitle}</strong><br/>{order.companyName}</p>{order.provider === 'local-test' && <p className={s.notice}>{t('commerce.testMode')} | {t('commerce.testHint')}</p>}<button className={s.primary} onClick={() => router.replace(returnTo)}>{t('commerce.continue')}</button></section></div>;
+  return <div className={s.page}><Link className={s.text} href={returnTo}><DirectionalIcon direction="left" size={17} /> {t('commerce.back')}</Link><div className={s.checkout}>
     <section><header className={s.headline}><span className={s.eyebrow}>Talentio | {t('commerce.checkout')}</span><h1>{t('commerce.checkout')}</h1><p>{t('commerce.checkoutHint')}</p></header>
       {error && <div className={s.error} role="alert">{error}</div>}
       <div className={s.panel}><h2>{t('commerce.' + (order.status === 'PENDING' ? catalog.testMode ? 'testMode' : 'PENDING' : order.status))}</h2>
         <p>{t('commerce.' + (order.status === 'REVIEW' ? 'reviewHint' : order.status !== 'PENDING' ? 'orderExpired' : catalog.testMode ? 'testHint' : catalog.paymentAvailable ? 'checkoutHint' : 'paymentUnavailable'))}</p>
-        {order.status === 'PENDING' ? <><button className={s.primary} disabled={busy || (!catalog.testMode && !catalog.paymentAvailable)} onClick={() => void pay()}>{t(busy ? 'saving' : catalog.testMode ? 'commerce.testContinue' : 'commerce.pay')} →</button><p className={s.muted}>{t('commerce.noRecurring')}</p><button className={s.text} disabled={busy} onClick={() => void cancel()}>{t('commerce.cancelOrder')}</button></>
-          : order.status !== 'REVIEW' && <Link className={s.primary} href={packageHref(order.jobId, returnTo)}>{t('commerce.choose')} →</Link>}
+        {order.status === 'PENDING' ? <><button className={s.primary} disabled={busy || (!catalog.testMode && !catalog.paymentAvailable)} onClick={() => void pay()}>{t(busy ? 'saving' : catalog.testMode ? 'commerce.testContinue' : 'commerce.pay')}</button><p className={s.muted}>{t('commerce.noRecurring')}</p><button className={s.text} disabled={busy} onClick={() => void cancel()}>{t('commerce.cancelOrder')}</button></>
+          : order.status !== 'REVIEW' && <Link className={s.primary} href={packageHref(order.jobId, returnTo)}>{t('commerce.choose')}</Link>}
       </div>
     </section>
     <aside className={s.panel + ' ' + s.receipt}><h2>{t('commerce.summary')}</h2><span className={s.status}>{t('commerce.' + order.code)}</span><h3 style={{fontSize: '1.1rem', marginBottom: 6}}>{order.jobTitle}</h3><p style={{marginTop: 0}}>{order.companyName}</p>

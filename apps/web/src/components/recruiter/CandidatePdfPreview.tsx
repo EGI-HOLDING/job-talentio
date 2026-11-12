@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect,useRef,useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
@@ -35,7 +36,7 @@ export function CandidatePdfPreview({url,name,label='CV',allowZoom=false}:{url:s
   return()=>{live=false;render?.cancel();};
  },[pdf,page,width,zoom]);
  return <div ref={container} className={s.pdfPreview}>
-  {pdf&&<nav aria-label={"Halaman "+label} className={s.pdfNavigation}><button type="button" className={s.square} disabled={page<=1||busy} aria-label={"Halaman "+label+" sebelumnya"} onClick={()=>setPage(n=>n-1)}>‹</button><span>Halaman {page} dari {pdf.numPages}</span><button type="button" className={s.square} disabled={page>=pdf.numPages||busy} aria-label={"Halaman "+label+" berikutnya"} onClick={()=>setPage(n=>n+1)}>›</button>{allowZoom&&<select aria-label={uiCopy("Zoom laporan")} value={zoom} onChange={e=>setZoom(Number(e.target.value))}>{[.75,1,1.25,1.5].map(n=><option key={n} value={n}>{n*100}%</option>)}</select>}</nav>}
+  {pdf&&<nav aria-label={"Halaman "+label} className={s.pdfNavigation}><button type="button" className={s.square} disabled={page<=1||busy} aria-label={"Halaman "+label+" sebelumnya"} onClick={()=>setPage(n=>n-1)}><DirectionalIcon direction="left" size={16} /></button><span>Halaman {page} dari {pdf.numPages}</span><button type="button" className={s.square} disabled={page>=pdf.numPages||busy} aria-label={"Halaman "+label+" berikutnya"} onClick={()=>setPage(n=>n+1)}><DirectionalIcon direction="right" size={16} /></button>{allowZoom&&<select aria-label={uiCopy("Zoom laporan")} value={zoom} onChange={e=>setZoom(Number(e.target.value))}>{[.75,1,1.25,1.5].map(n=><option key={n} value={n}>{n*100}%</option>)}</select>}</nav>}
   {busy&&!error&&<p role="status" className={s.muted}>Memuat halaman {label}&#x2026;</p>}
   {error?<div className={s.cvFallback}><p>{error}</p><a href={url} className={s.secondary} target="_blank" rel="noreferrer">Buka {label}</a></div>:<canvas ref={canvas} style={{maxWidth:allowZoom?'none':undefined}} role="img" aria-label={'Halaman '+page+' '+label+' '+name} data-rendered={pdf&&!busy?'true':'false'}/>}
  </div>;

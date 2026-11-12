@@ -126,7 +126,7 @@ export function DataTable<T>({
               </th>
             )}
             {columns.map((col) => (
-              <th key={col.key} style={{ width: col.width, textAlign: col.align ?? 'left' }}>
+              <th key={col.key} aria-sort={col.sortKey && sort === col.sortKey ? (dir === "asc" ? "ascending" : "descending") : undefined} style={{ width: col.width, textAlign: col.align ?? 'left' }}>
                 {col.sortKey && onSort ? (
                   <button
                     type="button"
@@ -136,9 +136,7 @@ export function DataTable<T>({
                     aria-label={`Sort by ${col.label}`}
                   >
                     {col.label}
-                    <span className="sort-arrow" aria-hidden>
-                      {sort === col.sortKey ? (dir === 'asc' ? '^' : 'v') : ''}
-                    </span>
+                    {col.sortKey && sort === col.sortKey && <span className="sort-arrow" data-order={dir} aria-hidden="true" />}
                   </button>
                 ) : (
                   col.label

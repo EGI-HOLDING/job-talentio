@@ -48,7 +48,7 @@ export function CompanyBenefits({ companyId, companySlug }: { companyId: string;
       <div className={s.promotionStatus}><div><span className={s.promotionLabel}>{t('hr.featured')}</span><strong>{t(active ? 'rw.promotionActive' : 'rw.promotionInactive')}</strong></div><span className={s.status} data-status={active ? 'PUBLISHED' : 'EXPIRED'}>{t(active ? 'rw.promotionActiveBadge' : 'rw.promotionInactiveBadge')}</span></div>
       {active && <div className={s.promotionPeriod}><WorkspaceIcon kind="calendar" /><div><span>{t('rw.promotionEnds')}</span><time dateTime={featuredUntil}>{new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(featuredUntil))}</time></div></div>}
       <p className={s.promotionNote}>{t('rw.promotionPackageHint')}</p>
-      <Link className={s.secondary} href={'/companies/' + companySlug}>{t('rec.publicPage')}<WorkspaceIcon kind="external" /></Link>
+      <Link className={s.secondary} href={'/companies/' + companySlug}>{t('rec.publicPage')}</Link>
     </>}
   </section>;
 }
@@ -98,7 +98,7 @@ export function JobBenefits({ jobId, status }: { jobId: string; status: string }
           ? <>{t('hr.expires')} <time dateTime={data.expiresAt}>{new Intl.DateTimeFormat(locale, {day: 'numeric', month: 'short', year: 'numeric'}).format(new Date(data.expiresAt))}</time></>
           : t('hr.startsOnPublish')}
       </span>
-      {(!data.selected || data.code !== 'PREMIUM' || (data.expiresAt && new Date(data.expiresAt) <= new Date())) && <Link className={s.jobPackageLink} href={packageHref(jobId)}>{t('commerce.' + (data.expiresAt && new Date(data.expiresAt) <= new Date() ? 'renew' : !data.selected ? 'choose' : 'upgrade'))}<span aria-hidden="true">→</span></Link>}
+      {(!data.selected || data.code !== 'PREMIUM' || (data.expiresAt && new Date(data.expiresAt) <= new Date())) && <Link className={s.jobPackageLink} href={packageHref(jobId)}>{t('commerce.' + (data.expiresAt && new Date(data.expiresAt) <= new Date() ? 'renew' : !data.selected ? 'choose' : 'upgrade'))}</Link>}
       {data.activeBoost ? (
         <span className={s.jobPackageMeta}>
           {t('hr.boostUntil')} {new Date(data.activeBoost.endsAt).toLocaleString(locale)}

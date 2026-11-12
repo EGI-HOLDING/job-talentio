@@ -153,36 +153,38 @@ export function RecruiterAnalyticsView({
           {t('rw.jobPerformance')}
         </button>
       </nav>
-      <div className={s.toolbar}>
+      <div className={`${s.toolbar} ${c.reportToolbar}`}>
         {view === 'job' && (
           <JobContextSelect jobs={jobs} value={selectedJob} onChange={onSelectJob} />
         )}
-        <label>
-          {t('hr.from')}
-          <input
-            type="date"
-            value={from}
-            max={to || undefined}
-            onChange={(event) => setFrom(event.target.value)}
-          />
-        </label>
-        <label>
-          {t('hr.to')}
-          <input
-            type="date"
-            value={to}
-            min={from || undefined}
-            onChange={(event) => setTo(event.target.value)}
-          />
-        </label>
+        <div className={c.dateFilters}>
+          <label>
+            {t('hr.from')}
+            <input
+              type="date"
+              value={from}
+              max={to || undefined}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </label>
+          <label>
+            {t('hr.to')}
+            <input
+              type="date"
+              value={to}
+              min={from || undefined}
+              onChange={(event) => setTo(event.target.value)}
+            />
+          </label>
+        </div>
         {stats?.capabilities.reports && (
-          <button className={s.secondary} disabled={busy} onClick={() => void download()}>
+          <button className={`${s.secondary} ${c.exportButton}`} disabled={busy} onClick={() => void download()}>
             {t('hr.exportCsv')}
           </button>
         )}
       </div>
       {error && <ResourceError message={error} onRetry={() => setRetry((value) => value + 1)} />}
-      <div className={s.scroll}>
+      <div className={`${s.scroll} ${c.reportContent}`}>
         {!stats ? (
           !error && <WorkspaceLoading />
         ) : (

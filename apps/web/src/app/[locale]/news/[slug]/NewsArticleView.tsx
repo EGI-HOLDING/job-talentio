@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useState } from 'react';
 import { Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
@@ -37,7 +38,7 @@ export function NewsArticleView({ article: initial }: { article: NewsArticleDeta
     <div className={s.page}><div className={s.container}>
       <article className={s.article}>
         <Link href="/news" className={s.back}>
-          {'\u2190'} {t('employers.insights')}
+          <DirectionalIcon direction="left" size={16} /> {t('employers.insights')}
         </Link>
 
         <div className="news-card-meta" style={{ margin: '1rem 0 0.6rem' }}>

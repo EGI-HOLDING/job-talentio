@@ -32,7 +32,6 @@ export function ExploreSection({
         </div>
         <Link href={viewAllHref} className="hiring-view-all">
           {viewAllLabel}
-          <span aria-hidden>→</span>
         </Link>
       </div>
       {bare ? children : <div className={`explore-grid ${gridClassName || ''}`.trim()}>{children}</div>}

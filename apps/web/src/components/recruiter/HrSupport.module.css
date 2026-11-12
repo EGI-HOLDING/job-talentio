@@ -19,14 +19,14 @@
 .secondary { background:#fff; border-color:#dcd5f0; color:#5a3ac9; }
 .secondary:hover { background:#f6f2ff; color:#4626b1; }
 .primary:disabled,.secondary:disabled { opacity:.5; cursor:not-allowed; }
-.priorityNote { display:flex; align-items:center; gap:10px; padding:13px 17px; border:1px solid #e8e3f3; border-radius:9px; background:#f0edfa; color:#75688f; margin-bottom:22px; }
+.priorityNote { display:flex; align-items:center; gap:10px; padding:13px 17px; border:1px solid #e8e3f3; border-radius:9px; background:#f0edfa; color:#645778; margin-bottom:22px; }
 .priorityNote svg { flex-shrink:0; color:#8d7bb2; }
 .priorityNote p { margin:0; font-size:.74rem; line-height:1.7; }
 .workspace { display:grid; grid-template-columns:300px minmax(0,1fr); min-height:510px; border:1px solid #e2e5ef; border-radius:14px; background:#fff; overflow:hidden; box-shadow:0 4px 22px #25325104; }
 .inbox { min-width:0; background:#fcfcff; border-inline-end:1px solid #e8ebf3; padding:22px 0 12px; }
 .inboxHead { display:flex; align-items:center; gap:10px; padding:0 20px 18px; }
 .inboxHead h2 { margin:0; font-size:.87rem; }
-.inboxHead > span { font-size:.68rem; font-weight:600; color:#807393; background:#f0ecf8; padding:3px 7px; border-radius:5px; font-variant-numeric:tabular-nums; }
+.inboxHead > span { font-size:.68rem; font-weight:600; color:#665978; background:#f0ecf8; padding:3px 7px; border-radius:5px; font-variant-numeric:tabular-nums; }
 .filter { display:flex; align-items:center; gap:9px; margin:0 20px 20px; color:#7a8499; font-size:.73rem; line-height:1.5; cursor:pointer; }
 .filter input { appearance:auto; width:15px; height:15px; min-height:0; padding:0; margin:0; flex:0 0 15px; accent-color:#6641df; }
 .ticketList { display:flex; flex-direction:column; max-height:580px; overflow:auto; scrollbar-width:thin; }
@@ -49,7 +49,7 @@
 .inbox > footer { padding:18px 14px 5px; gap:12px; flex-wrap:wrap; font-size:.65rem; border-top:1px solid #edf0f5; margin-top:10px; }
 .detail { min-width:0; padding:28px; }
 .empty,.unavailable { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; min-height:390px; max-width:460px; margin:auto; text-align:center; padding:30px 16px; }
-.emptyIcon { width:66px; height:66px; display:grid; place-items:center; border-radius:20px; background:#f4f1fc; color:#9b86ca; margin-bottom:8px; }
+.emptyIcon { width:66px; height:66px; display:grid; place-items:center; border-radius:20px; background:#f4f1fc; color:#795fb2; margin-bottom:8px; }
 .emptyIcon svg { width:28px; height:28px; }
 .empty h1,.empty h2,.unavailable h2 { margin:0; font-size:1.15rem; letter-spacing:-.025em; }
 .empty p,.unavailable p { font-size:.8rem; color:#8893a8; line-height:1.9; margin:0 0 9px; max-width:350px; }

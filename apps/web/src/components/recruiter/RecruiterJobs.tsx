@@ -1,4 +1,5 @@
 'use client';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { CandidateWorkspace } from './CandidateWorkspace';
 
@@ -103,7 +104,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
     finally { if (alive.current && contextVersion.current === requested) { actionLock.current = false; setBusyId(''); } }
   }
   function closeEditor() { setEditing(null);if(hrFlowV2Enabled){const url=new URL(window.location.href);url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);} onCloseCreate(); }
-  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}>← Kembali ke lowongan</button><h1>{uiCopy("Kumpulan CV perusahaan")}</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
+  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}><DirectionalIcon direction="left" size={17} /> Kembali ke lowongan</button><h1>{uiCopy("Kumpulan CV perusahaan")}</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>

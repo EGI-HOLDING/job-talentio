@@ -52,7 +52,7 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
       <div className={styles.shell}>
         <SeekerHero stats={platformStats} cities={catalog.cities} popularRoles={catalog.titles} />
         {isEmployee && <ForYouJobsSection />}
-        <LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} showEmployerCta={!isEmployee} />
+        <LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} />
       </div>
     </div>
   );

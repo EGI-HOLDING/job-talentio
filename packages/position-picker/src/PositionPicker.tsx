@@ -20,11 +20,13 @@ type Props = {
   onChange: (value: PositionValue[]) => void;
   max?: number;
   disabled?: boolean;
+  className?: string;
+  selectionPlacement?: 'before' | 'after';
 };
 
 const key = (value: PositionValue) => value.kind + ':' + value.id;
 
-export function PositionPicker({ label, labels, request, value, onChange, max = 1, disabled }: Props) {
+export function PositionPicker({ label, labels, request, value, onChange, max = 1, disabled, className, selectionPlacement = 'before' }: Props) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -123,13 +125,16 @@ export function PositionPicker({ label, labels, request, value, onChange, max = 
 
   const portalTarget = open && typeof document !== 'undefined'
     ? input.current?.closest('dialog, [role="dialog"]') ?? document.body : null;
-  return <div className={styles.root}>
-    <label htmlFor={id}>{label}</label>
-    {!!value.length && <div className={styles.selected}>{value.map(row => <span key={key(row)} className={styles.chip}>
+  const selectedChips = value.length > 0 && <div className={styles.selected}>
+    {value.map(row => <span key={key(row)} className={styles.chip}>
       {row.name}{row.kind === 'GROUP' && <small>{labels.group}</small>}
       <button type="button" disabled={disabled} aria-label={labels.remove + ' ' + row.name}
         onClick={() => onChange(value.filter(item => key(item) !== key(row)))}>×</button>
-    </span>)}</div>}
+    </span>)}
+  </div>;
+  return <div className={className ? `${styles.root} ${className}` : styles.root}>
+    <label htmlFor={id}>{label}</label>
+    {selectionPlacement === 'before' && selectedChips}
     <input id={id} ref={input} type="text" role="combobox" autoComplete="off" maxLength={160}
       aria-autocomplete="list" aria-expanded={open && !disabled} aria-controls={id + '-list'}
       aria-activedescendant={open && options[active] ? id + '-option-' + active : undefined}
@@ -162,6 +167,7 @@ export function PositionPicker({ label, labels, request, value, onChange, max = 
           else if (direction > 0) more();
         }
       }} />
+    {selectionPlacement === 'after' && selectedChips}
     {portalTarget && position && !disabled && createPortal(<div className={styles.panel} style={position} ref={panel}
       onScroll={event => {
         const element = event.currentTarget;

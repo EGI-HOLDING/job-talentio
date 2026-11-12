@@ -180,6 +180,21 @@
 .companyIdentity,.companyProfileContent { min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:24px 28px; }
 .companyIdentity { border-right:1px solid #e7ebf3; background:#fcfcff; }
 .companyProfileContent > fieldset { margin:26px 0 0; }
+@media (min-width: 900px) {
+  .companyProfileContent .fields { --location-control-height: 44px; --location-column-gap: 15px; }
+  .companyProfileContent .fieldRow :is(input, select) { height: 44px; }
+  .companyProfileContent .fields label { line-height: 20px; }
+  .companyIdentity :global(.company-logo-tile) + div { flex-direction: column; align-items: stretch; }
+  .companyIdentity :global(.company-logo-tile) + div > :is(label, button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    min-height: 40px;
+    width: 100%;
+    padding-block: 0;
+  }
+}
 .companyTeam { display:grid; gap:20px; }
 .companyTeam :global(.form-stack) { grid-template-columns:2fr 1fr 1fr auto; display:grid; align-items:end; padding-top:22px; border-top:1px solid #e7ebf3; }
 .companyTeam li { padding:16px 0 !important; align-items:center; }

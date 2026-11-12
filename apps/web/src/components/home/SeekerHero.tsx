@@ -20,16 +20,6 @@ type Props = {
   popularRoles: Array<{ slug: string; name: string }>;
 };
 
-function Arrow({ diagonal = false }: { diagonal?: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d={diagonal ? 'M7 17 17 7M7 7h10v10' : 'M4 12h15m-6-6 6 6-6 6'}
-        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 export function SeekerHero({ stats, cities, popularRoles }: Props) {
   const { t } = useI18n();
@@ -88,7 +78,7 @@ export function SeekerHero({ stats, cities, popularRoles }: Props) {
             <HeroLocationPicker cities={cities} />
           </div>
           <button className={styles.searchButton} type="submit">
-            {t('searchJobs')}<Arrow />
+            {t('searchJobs')}
           </button>
         </form>
 
@@ -112,6 +102,7 @@ export function SeekerHero({ stats, cities, popularRoles }: Props) {
           </div>
         ))}
       </dl>
+
     </>
   );
 }

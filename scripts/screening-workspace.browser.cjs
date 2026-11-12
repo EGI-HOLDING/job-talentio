@@ -122,7 +122,7 @@ async function main(){
  await page.locator('[data-turn="v2"][data-highlight="true"]').waitFor();
  await page.getByRole('tab',{name:'Hasil',exact:true}).click();
  report.checks.push('Tara v7 notes distinguish tested claims and link to the stored answer');
- await page.getByRole('button',{name:'Lihat konteks percakapan →',exact:true}).click();
+ await page.locator('details[data-claim]').getByRole('button',{name:'Lihat konteks percakapan',exact:true}).click();
  await page.locator('[data-turn="v2"][data-highlight="true"]').waitFor();await page.getByRole('heading',{name:'Konteks bukti',exact:true}).waitFor();
  await page.getByLabel('Cari dalam percakapan',{exact:true}).fill('metrik');assert.equal(await page.locator('[data-turn]').count(),1);await page.getByLabel('Cari dalam percakapan',{exact:true}).fill('');await page.getByLabel('Filter pembicara',{exact:true}).selectOption('CANDIDATE');assert.equal(await page.locator('[data-turn]').count(),4);await page.getByLabel('Filter pembicara',{exact:true}).selectOption('all');
  const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Unduh transkrip',exact:true}).click();const download=await downloadPromise;assert.ok(download.suggestedFilename().endsWith('.txt'));
@@ -137,7 +137,7 @@ async function main(){
  assert.equal(renewed.suggestedFilename(),'Ringkasan-screening.pdf');
  assert.equal(fs.readFileSync(await renewed.path()).subarray(0,5).toString(),'%PDF-');
  report.checks.push('Expired signed report URL is renewed before download');
- await page.getByRole('button',{name:'← Ringkasan screening',exact:true}).click();
+ await page.getByRole('button',{name:'Ringkasan screening',exact:true}).click();
  const choices=page.getByRole('button',{name:/Lihat Interview suara/});await choices.last().click();await choices.first().click();await page.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).waitFor();await page.waitForTimeout(700);assert.equal(await page.getByText('Ringkasan sesi sebelumnya.',{exact:true}).count(),0,'slow report response cannot overwrite newly selected session');report.checks.push('Out-of-order reports cannot overwrite the selected session');
  for (const width of [390, 320]) {
   await page.setViewportSize({width, height:844});

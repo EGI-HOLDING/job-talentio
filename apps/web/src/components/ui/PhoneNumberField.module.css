@@ -1,5 +1,5 @@
 .field { position: relative; display: grid; gap: 8px; min-width: 0; color: #18233b; }
-.label { font-size: .86rem; font-weight: 650; }
+.label { display: block; font-size: .86rem; font-weight: 650; }
 .label span { color: #6745e8; }
 .control { display: grid; grid-template-columns: minmax(135px, .92fr) minmax(0, 1.15fr); min-height: 52px; border: 1px solid #d8dfec; border-radius: 12px; background: #fff; transition: border-color .16s ease, box-shadow .16s ease; }
 .control:focus-within { border-color: #8061ed; box-shadow: 0 0 0 3px #7655eb1c; }
@@ -10,7 +10,7 @@
 .countryName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #596781; font-size: .82rem; }
 .countryButton strong { flex: 0 0 auto; color: #25314a; font-size: .85rem; font-weight: 700; }
 .countryButton svg { width: 15px; height: 15px; flex: 0 0 auto; fill: none; stroke: #7b879d; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.numberInput { min-width: 0; width: 100%; padding: 0 15px; border: 0; border-radius: 0 11px 11px 0; outline: 0; background: transparent; color: #18233b; font: inherit; font-size: .94rem; letter-spacing: .015em; }
+.field .control > input.numberInput[type="tel"] { min-width: 0; width: 100%; margin: 0; padding: 0 15px; border: 0; border-radius: 0 11px 11px 0; outline: 0; box-shadow: none; background: transparent; color: #18233b; font: inherit; font-size: .94rem; letter-spacing: .015em; }
 .numberInput::placeholder { color: #a0aabc; }
 .numberInput:disabled, .countryButton:disabled { cursor: not-allowed; opacity: .6; }
 .hint, .error { margin: 0; font-size: .76rem; line-height: 1.55; }
@@ -31,5 +31,5 @@
   .countryButton { gap: 6px; padding: 0 8px 0 10px; }
   .countryName { font-size: .72rem; }
   .countryButton strong { font-size: .78rem; }
-  .numberInput { padding: 0 10px; font-size: .86rem; }
+  .field .control > input.numberInput[type="tel"] { padding: 0 10px; font-size: .86rem; }
 }

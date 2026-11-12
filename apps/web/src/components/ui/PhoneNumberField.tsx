@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -58,6 +59,7 @@ export function PhoneNumberField({
   const text = useOnboardingText();
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
+  const control = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const countryButton = useRef<HTMLButtonElement>(null);
   const queryRef = useRef<HTMLInputElement>(null);
@@ -102,7 +104,7 @@ export function PhoneNumberField({
   useLayoutEffect(() => {
     if (!open) { setPosition(null); return; }
     const place = () => {
-      const bounds = root.current?.getBoundingClientRect();
+      const bounds = control.current?.getBoundingClientRect();
       if (bounds) setPosition(floatingPanelPosition(bounds, 360, 390));
     };
     place();
@@ -152,7 +154,7 @@ export function PhoneNumberField({
       <label className={s.label} htmlFor={`${id}-number`}>
         {label}{required && <span aria-hidden="true"> *</span>}
       </label>
-      <div className={`${s.control} ${shownError ? s.invalid : ''}`}>
+      <div ref={control} className={`${s.control} ${shownError ? s.invalid : ''}`}>
         <button
           ref={countryButton}
           type="button"
@@ -170,7 +172,7 @@ export function PhoneNumberField({
         >
           <span className={s.countryName}>{selected.name}</span>
           <strong>{selected.dialCode}</strong>
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
+          <DirectionalIcon direction={open ? "up" : "down"} size={16} />
         </button>
         <input
           id={`${id}-number`}

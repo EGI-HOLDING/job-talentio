@@ -1,5 +1,6 @@
 'use client';
 
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
 import { useMemo, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
 import { Link } from '@/lib/navigation';
@@ -45,17 +46,6 @@ function CompanyLogo({ company }: { company: TopCompany }) {
   );
 }
 
-function Chevron({ direction }: { direction: 'previous' | 'next' }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      {direction === 'previous' ? (
-        <path d="m15.5 5-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      ) : (
-        <path d="m8.5 5 7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      )}
-    </svg>
-  );
-}
 
 export function FeaturedCompaniesCarousel({ companies }: { companies: TopCompany[] }) {
   const { t } = useI18n();
@@ -127,7 +117,7 @@ export function FeaturedCompaniesCarousel({ companies }: { companies: TopCompany
     >
       {pages.length > 1 && (
         <button type="button" className={`${styles.arrow} ${styles.previous}`} aria-label={t('ui.previousPage')} onClick={() => move(-1)}>
-          <Chevron direction="previous" />
+          <DirectionalIcon direction="left" />
         </button>
       )}
       <div
@@ -153,7 +143,7 @@ export function FeaturedCompaniesCarousel({ companies }: { companies: TopCompany
       </div>
       {pages.length > 1 && (
         <button type="button" className={`${styles.arrow} ${styles.next}`} aria-label={t('ui.nextPage')} onClick={() => move(1)}>
-          <Chevron direction="next" />
+          <DirectionalIcon direction="right" />
         </button>
       )}
       {pages.length > 1 && (

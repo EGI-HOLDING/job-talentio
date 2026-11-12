@@ -52,7 +52,7 @@ export function useEmployeeResource<T>(path: string, live = false) {
 
 export function FindJobsAction() {
   const { t } = useI18n();
-  return <Link href="/jobs" className={s.primary}>{t('home.findJobs')}<WorkspaceIcon kind="arrow" /></Link>;
+  return <Link href="/jobs" className={s.primary}>{t('home.findJobs')}</Link>;
 }
 
 export function dateLabel(value: string | null | undefined, locale: string, withTime = false) {
