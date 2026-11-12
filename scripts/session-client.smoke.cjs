@@ -11,7 +11,7 @@ const client = process.argv[2];
 if (!['web', 'admin'].includes(client)) throw new Error('Specify web or admin');
 const prefix = client === 'web' ? 'jt_' : 'jt_admin_';
 
-function loadClient(fetch) {
+function loadClient(fetch, { sameOrigin = false } = {}) {
   const session = { accessToken: 'expired-access', refreshToken: 'valid-refresh', user: { role: 'RECRUITER' } };
   const values = new Map([
     [prefix + 'token', session.accessToken],
@@ -31,8 +31,8 @@ function loadClient(fetch) {
   const context = vm.createContext({
     module, exports: module.exports, localStorage,
     window: { location: { pathname: '/en/settings' } },
-    process: { env: { NEXT_PUBLIC_API_URL: 'http://localhost:4000' } },
-    fetch, Headers, FormData, URLSearchParams, AbortController, DOMException, CustomEvent,
+    process: { env: { NEXT_PUBLIC_API_URL: 'http://localhost:4000', NEXT_PUBLIC_SAME_ORIGIN_API: String(sameOrigin) } },
+    fetch, Headers, FormData, URLSearchParams, AbortController, DOMException, CustomEvent, TypeError, setTimeout,
     require: (name) => {
       if (name === '@/lib/locale') return { DEFAULT_LOCALE: 'en', localeFromPathname: () => 'en' };
       if(name==='./resourceCache') {
@@ -52,6 +52,49 @@ function response(status, body) {
 }
 
 if (client==='web') {
+  test('web: Indonesia can send browser API and token refresh through one origin', async () => {
+    const calls=[];
+    const {api}=loadClient(async (url,init) => {
+      calls.push(url);
+      if (url === '/api/auth/refresh') return response(200,{accessToken:'rotated',user:{role:'RECRUITER'}});
+      return init.headers.get('Authorization') === 'Bearer rotated' ? response(200,{ok:true}) : response(401,{});
+    },{sameOrigin:true});
+    assert.equal((await api('/companies/mine')).ok,true);
+    assert.deepEqual(calls,['/api/companies/mine','/api/auth/refresh','/api/companies/mine']);
+  });
+  test('web: HR report recovers from one transport or gateway interruption', async () => {
+    for (const status of [null, 502, 503, 504]) {
+      let calls=0;
+      const {api}=loadClient(async () => {
+        if (++calls === 2) return response(200,{score:75});
+        if (status === null) throw new TypeError('Failed to fetch');
+        return response(status,{message:'Unavailable'});
+      });
+      assert.equal((await api('/recruitment/invitations/test/report')).score,75);
+      assert.equal(calls,2);
+    }
+  });
+  test('web: a persistent outage has a readable error and writes are never replayed', async () => {
+    let calls=0;
+    const {api}=loadClient(async () => {calls++;throw new TypeError('Failed to fetch');});
+    await assert.rejects(api('/recruitment/invitations/test/report'),{message:'The server connection was interrupted. Please try again.'});
+    assert.equal(calls,2);
+    await assert.rejects(api('/recruitment/candidates/test/invitations',{method:'POST',body:'{}'}),{status:0});
+    assert.equal(calls,3);
+  });
+  test('web: leaving the screen or switching accounts prevents a pending retry', async () => {
+    for (const abort of [true,false]) {
+      let calls=0;
+      const controller=new AbortController();
+      const {api,values}=loadClient(async () => {calls++;throw new TypeError('Failed to fetch');});
+      values.set('jt_session',JSON.stringify({user:{id:'account-a'}}));
+      const report=api('/recruitment/invitations/test/report',{signal:controller.signal});
+      if (abort) controller.abort();
+      else values.set('jt_session',JSON.stringify({user:{id:'account-b'}}));
+      await assert.rejects(report,error=>abort?error.name==='AbortError':error.status===409);
+      assert.equal(calls,1);
+    }
+  });
   test('web: profile and recommendations recover from 304 after one shared token refresh',async()=>{
     const requests=[];let refreshes=0;const reads=new Map();
     const {api}=loadClient(async(url,options)=>{

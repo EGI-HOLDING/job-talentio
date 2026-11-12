@@ -1,8 +1,13 @@
-import { DEFAULT_LOCALE, localeFromPathname } from '@/lib/locale';
+import { DEFAULT_LOCALE, localeFromPathname, type Locale } from '@/lib/locale';
 import { resourceCache } from './resourceCache';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 export const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3001';
+
+function endpoint(path: string) {
+  const base = typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SAME_ORIGIN_API === 'true' ? '' : API_URL;
+  return `${base}/api${path}`;
+}
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -16,9 +21,54 @@ export class ApiError extends Error {
  * every request advertises the active language. Middleware guarantees the URL
  * carries the locale, which keeps this in sync with what the user sees.
  */
-function activeLocale(): string {
+function activeLocale(): Locale {
   if (typeof window === 'undefined') return DEFAULT_LOCALE;
   return localeFromPathname(window.location.pathname) ?? DEFAULT_LOCALE;
+}
+
+function connectionError(status: number) {
+  return new ApiError({
+    id: 'Koneksi ke server terganggu. Silakan coba lagi.',
+    en: 'The server connection was interrupted. Please try again.',
+    ru: 'Связь с сервером прервалась. Попробуйте ещё раз.',
+    uz: 'Server bilan aloqa uzildi. Qayta urinib ko‘ring.',
+  }[activeLocale()], status);
+}
+
+async function requestApi(url: string, init: RequestInit) {
+  init.signal?.throwIfAborted();
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    init.signal?.throwIfAborted();
+    if (!(error instanceof TypeError)) throw error;
+    throw connectionError(0);
+  }
+}
+
+function withReadRecovery(url: string, assertAccount: () => void) {
+  let retried = false;
+  async function request(init: RequestInit): Promise<Response> {
+    const read = ['GET', 'HEAD'].includes((init.method || 'GET').toUpperCase());
+    let status: number;
+    try {
+      const response = await requestApi(url, init);
+      if (![502, 503, 504].includes(response.status)) return response;
+      void response.body?.cancel().catch(() => {});
+      if (response.headers.has('Retry-After')) throw connectionError(response.status);
+      status = response.status;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 0) throw error;
+      status = error.status;
+    }
+    if (!read || retried || typeof window === 'undefined') throw connectionError(status);
+    retried = true;
+    await new Promise<void>(resolve => setTimeout(resolve, 400));
+    init.signal?.throwIfAborted();
+    assertAccount();
+    return request(init);
+  }
+  return request;
 }
 
 export type AuthSession = {
@@ -87,7 +137,7 @@ export async function logout() {
   const refreshToken = getRefreshToken();
   if (refreshToken) {
     try {
-      await fetch(`${API_URL}/api/auth/logout`, {
+      await fetch(endpoint('/auth/logout'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -108,7 +158,7 @@ async function tryRefresh(): Promise<string | null> {
       const refreshToken = getRefreshToken();
       if (!refreshToken) return null;
       try {
-        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+        const res = await requestApi(endpoint('/auth/refresh'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
@@ -191,7 +241,7 @@ export function formatApiError(data: unknown, fallback: string): string {
 
 async function apiNetwork<T>(
   path: string,
-  options: RequestInit & { auth?: boolean } = {},
+  options: Omit<ApiOptions, 'cacheMode'> = {},
 ): Promise<T> {
   const { auth = true, ...requestOptions } = options;
   const headers = new Headers(requestOptions.headers);
@@ -208,7 +258,11 @@ async function apiNetwork<T>(
     const token = getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  let res = await fetch(`${API_URL}/api${path}`, { ...networkOptions, headers });
+  const assertAccount = () => {
+    if (useAuth && actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
+  };
+  const request = withReadRecovery(endpoint(path), assertAccount);
+  let res = await request({ ...networkOptions, headers });
   if (useAuth && actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
 
   // Expired access token: silently rotate once via the refresh token, then retry.
@@ -217,7 +271,7 @@ async function apiNetwork<T>(
     if (actor !== getSession()?.user.id) throw new ApiError('Account changed. Please retry.', 409);
     if (rotated) {
       headers.set('Authorization', `Bearer ${rotated}`);
-      res = await fetch(`${API_URL}/api${path}`, { ...networkOptions, headers });
+      res = await request({ ...networkOptions, headers });
     }
   }
 
@@ -227,7 +281,7 @@ async function apiNetwork<T>(
     headers.delete('If-None-Match');
     headers.delete('If-Modified-Since');
     headers.set('Cache-Control', 'no-cache');
-    res = await fetch(`${API_URL}/api${path}`, { ...networkOptions, cache: 'no-store', headers });
+    res = await request({ ...networkOptions, cache: 'no-store', headers });
   }
 
   const text = await res.text();
@@ -308,7 +362,7 @@ export async function apiUpload<T>(path: string, body: FormData, onProgress?: (p
   const actor = getSession()?.user.id;
   const send = (token: string | null) => new Promise<{ status: number; text: string }>((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open('POST', `${API_URL}/api${path}`);
+    request.open('POST', endpoint(path));
     request.timeout = 120_000;
     request.setRequestHeader('X-Locale', activeLocale());
     if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -316,7 +370,7 @@ export async function apiUpload<T>(path: string, body: FormData, onProgress?: (p
       if (event.lengthComputable) onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)));
     };
     request.onload = () => resolve({ status: request.status, text: request.responseText });
-    request.onerror = () => reject(new ApiError('Network error while uploading files', 0));
+    request.onerror = () => reject(connectionError(0));
     request.ontimeout = () => reject(new ApiError('File upload timed out', 408));
     request.onabort = () => reject(new ApiError('File upload was cancelled', 0));
     request.send(body);
@@ -350,9 +404,10 @@ export async function apiBlob(path:string, options?: {headers?: HeadersInit; sig
   const headers=new Headers(options?.headers);
   headers.set('X-Locale',activeLocale());
   if(getToken())headers.set('Authorization','Bearer '+getToken());
-  let response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store',signal:options?.signal});
+  const request=withReadRecovery(endpoint(path),()=>{if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);});
+  let response=await request({headers,cache:'no-store',signal:options?.signal});
   if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
-  if(response.status===401){const token=await tryRefresh();if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);if(token){headers.set('Authorization','Bearer '+token);response=await fetch(API_URL+'/api'+path,{headers,cache:'no-store',signal:options?.signal});}}
+  if(response.status===401){const token=await tryRefresh();if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);if(token){headers.set('Authorization','Bearer '+token);response=await request({headers,cache:'no-store',signal:options?.signal});}}
   if(actor!==getSession()?.user.id)throw new ApiError('Account changed. Please retry.',409);
   if(!response.ok){const body=await response.json().catch(()=>null);throw new ApiError(formatApiError(body,response.statusText),response.status);}
   const file=await response.blob();
