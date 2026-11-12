@@ -68,11 +68,10 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
   sessionStorage.setItem(storageKey,clientId.current);
   let pending:Promise<void>|null=null,readingVoice=false;
   async function loadPreparation(retry=false){
-   if(pending){
-    if(!retry)return pending;
+   if(retry){
     await pending;
     if(version!==generation.current||pending)return;
-   }
+   }else if(pending)return pending;
    pending=(async()=>{
     if(retry)setChecking(true);
     try{
