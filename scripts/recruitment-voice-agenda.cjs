@@ -32,10 +32,10 @@ function reserveSpend() {
   fs.writeFileSync(reservation, JSON.stringify({ scenario, reserved, prior, total, at: new Date().toISOString() }), { flag: 'wx' });
 }
 
-function loadAudio(dir) {
+function loadAudio(dir, readinessAudio) {
   assert.ok(dir, 'Set RELIABILITY_VOICE_WAV_DIR to a local synthetic fixture directory');
-  return Object.fromEntries([...cases.flatMap(row => [row.id, row.id + '-detail']), 'hello', 'repeat', 'unrelated', 'pause'].map(id =>
-    [id, loadSyntheticAudio(path.join(dir, id + '.wav'))]));
+  return Object.fromEntries([...cases.flatMap(row => [row.id, row.id + '-detail']), 'hello', 'ready', 'repeat', 'unrelated', 'pause'].map(id =>
+    [id, loadSyntheticAudio(id === 'ready' && readinessAudio ? readinessAudio : path.join(dir, id + '.wav'))]));
 }
 
 async function useSyntheticMicrophone(context, files) {
@@ -184,7 +184,9 @@ function percentile95(values) {
   return [...values].sort((a, b) => a - b)[Math.ceil(values.length * .95) - 1];
 }
 
-function heardQuestion(meter, transcript, offset, input) {
+const readyQuestion = /\b(?:(?:bisa|boleh)\s+(?:kita\s+)?mulai|(?:lo|lu|kamu|anda)\s+(?:udah\s+|sudah\s+)?siap|siap\s+(?:untuk\s+)?mulai|(?:kita\s+)?mulai\s+ya)\b/i;
+
+function heardQuestion(meter, transcript, offset, input, seen = new Set()) {
   const after = input?.start ?? -1;
   const range = meter.heard.find(row => row.end >= after);
   const last = meter.heard.at(-1);
@@ -192,9 +194,9 @@ function heardQuestion(meter, transcript, offset, input) {
   // Align provider timestamps to the first sound in the browser. An overlapping
   // question is returned as a measurement, so the test can report the overlap.
   const firstAudio = meter.heard[0].start;
-  const rows = transcript.filter(row => row.speaker === 'TARA' && row.endMs >= offset + range.start - firstAudio - 450 &&
+  const rows = transcript.filter(row => row.speaker === 'TARA' && !seen.has(row.id) && row.endMs >= offset + range.start - firstAudio - 450 &&
     row.startMs <= offset + last.end - firstAudio + 450);
-  const substantive = rows.find(row => /\?|wawancara kita selesai/i.test(row.text));
+  const substantive = rows.find(row => /\?|wawancara kita selesai/i.test(row.text) || readyQuestion.test(row.text));
   if (!substantive) return;
   const projected = firstAudio + substantive.startMs - offset;
   const window = meter.heard.find(row => row.end >= after && row.end >= projected - 250);
@@ -222,6 +224,12 @@ async function verifyVoice({ page, db, worker, call, hr, foreign, sessionId, inv
   const candidate = await processWork(db, worker, 'CANDIDATE', plan.id, allowed);
   const prepared = await db.aiCandidatePlan.findUniqueOrThrow({ where: { id: plan.id } });
   assert.deepEqual(prepared.payload.roleTopics.map(row => row.criterionId), liveAgenda.topics.map(row => row.criterionId));
+  const apiCriterion = criteria[expected.indexOf('api')];
+  const cvTopic = prepared.payload.roleTopics.find(row => row.criterionId === apiCriterion.id);
+  const cvClaim = prepared.payload.claims.find(row => row.id === cvTopic?.cvClaimId);
+  assert.ok(cvClaim?.skill, 'The synthetic CV must have a grounded claim before opening a paid voice session');
+  const { fullName } = await db.user.findUniqueOrThrow({ where: { id: invitation.claimedUserId }, select: { fullName: true } });
+  const firstName = fullName.trim().split(/\s+/)[0];
 
   const scenario = process.env.RELIABILITY_VOICE_SCENARIO;
   const duration = timeLimit();
@@ -229,6 +237,7 @@ async function verifyVoice({ page, db, worker, call, hr, foreign, sessionId, inv
   const read = () => page.evaluate(() => window.taraAgendaTest.readings());
   const play = id => page.evaluate(file => window.taraAgendaTest.play(file), id);
   const getReport = () => call('/recruitment/invitations/' + invitationId + '/report', hr);
+  const seen = new Set();
   const inspectVoice = async () => {
     const current = await getReport();
     report.transcript = current.voice?.transcript || [];
@@ -244,7 +253,9 @@ async function verifyVoice({ page, db, worker, call, hr, foreign, sessionId, inv
       const offset = report.audioOffset ?? voice?.transcript.find(row => row.speaker === 'TARA')?.startMs;
       if (offset === undefined) return false;
       report.audioOffset = offset;
-      return heardQuestion(meter, voice.transcript, offset, input);
+      const heard = heardQuestion(meter, voice.transcript, offset, input, seen);
+      if (heard) heard.rows.forEach(id => seen.add(id));
+      return heard;
     }, 'audible question or farewell', Math.max(1, Math.min(timeout, started + duration - 4500 - Date.now())));
   }
   function currentTopic(text, permitted = expected) {
@@ -278,10 +289,40 @@ async function verifyVoice({ page, db, worker, call, hr, foreign, sessionId, inv
       audio = await hear(hello);
     }
     report.opening = audio.text;
+    assert.ok(audio.text.toLowerCase().replace(/,/g, '').includes('halo ' + firstName.toLowerCase()),
+      'The greeting addresses the candidate by first name');
     assert.match(audio.text, /\b(?:gue|gua) Tara\b/i);
+    assert.match(audio.text, /\bCV\b/i, 'The greeting explains what Tara will discuss');
+    assert.match(audio.text, readyQuestion, 'The greeting asks the candidate to confirm readiness');
+    const invitationToStart = readyQuestion.exec(audio.text);
+    assert.doesNotMatch(audio.text.slice(0, invitationToStart.index), /\?/u, 'Readiness is the only question in the greeting');
+    assert.match(audio.text.slice(invitationToStart.index + invitationToStart[0].length), /^[\s?.!,]*$/,
+      'The greeting ends with the readiness question');
+    // A brief breath after the greeting is not another spoken turn. Verify the
+    // complete transcript and fail on sustained audio without a transcript.
+    await page.waitForTimeout(1750);
+    const greetingPlayback = (await read()).heard;
+    report.audioAfterGreeting = greetingPlayback.filter(window => window.start > audio.end);
+    const beforeReady = (await inspectVoice()).transcript.filter(row => row.speaker === 'TARA').map(row => row.text).join(' ');
+    assert.equal(beforeReady.trim(), report.opening, 'Tara asks nothing further before readiness');
+    assert.ok(report.audioAfterGreeting.every(window => window.end - window.start < 450), 'No sustained audio follows the greeting');
+    await until(async () => {
+      const meter = await read();
+      return meter.now - meter.heard.at(-1).end >= 700;
+    }, 'quiet after greeting', 2500);
+    const ready = await play('ready');
+    audio = await hear(ready);
+    report.firstQuestion = audio.text;
+    report.firstResponseAfterReadyMs = Math.round(audio.start - ready.end);
+    report.readinessOverlap = (await read()).heard.some(window => window.start > ready.start && window.start < ready.end);
+    const skillWords = cvClaim.skill.match(/[\p{L}\p{N}+#]+/gu) ?? [];
+    assert.ok(skillWords.every(word => audio.text.toLowerCase().includes(word.toLowerCase())),
+      'The first question names the grounded skill from the CV');
+    assert.equal((audio.text.match(/\?/g) || []).length, 1, 'The first CV turn asks one question');
+    assert.match(audio.text, /\b(?:contoh|pengalaman|waktu|kapan|pernah|proyek)\b/i, 'The first question asks about actual use');
+    assert.equal(currentTopic(audio.text), 'api', 'The first question starts with the CV skill linked to the API work');
     let topic = currentTopic(audio.text);
-    assert.ok(topic, 'Opening must ask a concrete task from the agenda');
-    report.topics.push({ id: topic, heardMs: 0, text: audio.text });
+    report.topics.push({ id: topic, heardMs: audio.start - (await read()).heard[0].start, text: audio.text });
     async function answer(id) {
       const input = await play(id);
       const next = await hear(input, Math.max(18000, input.end - input.start + 16000));
@@ -295,8 +336,11 @@ async function verifyVoice({ page, db, worker, call, hr, foreign, sessionId, inv
     if (scenario === 'agenda-pace') {
       await answer('repeat');
       assert.equal(currentTopic(audio.text, [topic]), topic, 'Requested repetition should clarify the current question');
+      assert.equal((audio.text.match(/\?/g) || []).length, 1, 'Repeating the question should not add a second question');
       const next = await answer(topic === 'api' ? 'pause' : topic);
-      assert.ok(next.text.length > 25);
+      assert.equal((next.text.match(/\?/g) || []).length, 1, 'The next turn gives one concrete question');
+      assert.doesNotMatch(next.text, /(?:ceritain|ceritakan).{0,16}(?:satu )?contoh waktu (?:lo|lu) pakai(?: itu)?\?/iu,
+        'A concrete CV example must not lead to the same opening question again');
     } else if (scenario === 'agenda-redirect') {
       const redirected = await answer('unrelated');
       assert.equal(redirected.overlap, false, 'Redirect waits until the candidate stops');
@@ -374,6 +418,9 @@ async function verifyVoice({ page, db, worker, call, hr, foreign, sessionId, inv
     select: { task: true, model: true, status: true, inputTokens: true, outputTokens: true, costUsd: true } });
   assert.ok(!report.openingNeededCandidate, 'The automatic opening still requires provider verification');
   assert.deepEqual(report.dialogueFailures, []);
+  assert.ok(report.firstResponseAfterReadyMs >= 0 && report.firstResponseAfterReadyMs <= 1500,
+    'The first CV question starts within 1.5 seconds after the candidate confirms readiness');
+  assert.equal(report.readinessOverlap, false, 'Tara waits until the readiness reply finishes');
   assert.ok(report.turns.every(row => row.fromSpeechEndMs >= 0 && !row.overlap), 'Tara must allow the candidate to finish');
   assert.ok(report.p95SpeechStartMs <= 1500, 'Measured speech-end to browser playback p95 exceeds 1.5 seconds');
   report.steps.push('One GPT-Live session reached the browser with the frozen distinct agenda and retained the actual conversation.');

@@ -2,7 +2,7 @@ import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 import { nativeVoiceTurns, NATIVE_VOICE_VERSION, type NativeDelivery } from './voice-native';
 import type { Fragment, VoiceTurn } from './voice.policy';
 
-import { isIncompleteQuestion } from './voice-redirect';
+import { isIncompleteQuestion, isReadinessCheck } from './voice-redirect';
 
 export const ROLE_VOICE_VERSION = 'tara-voice-role-v1';
 export function isNativeVoice(version: string) {
@@ -36,7 +36,7 @@ function isQuestion(text: string) {
     return /\b(?:apa|bagaimana|gimana|kapan|mengapa|kenapa|siapa|berapa|bagian mana|ceritain|ceritakan|jelasin|jelaskan|sebutin|sebutkan|uraikan|how|why|what|describe)\b/iu.test(text) &&
         (/[?]/u.test(text) || /(?:^|[.!]\s+)(?:jadi\s+|nah\s+)?(?:apa yang|gimana|bagaimana|bagian mana|ceritain|ceritakan|jelasin|jelaskan|sebutin|sebutkan|uraikan|how|what|describe)\b/iu.test(text.trim()));
 }
-const directGenericQuestion = /(?:^|[.!]\s+)\s*(?:(?:gimana|bagaimana) cara (?:lu|lo|kamu) (?:mengerjakan|ngerjain) tugas berikut|(?:gimana|bagaimana)(?: jadinya| caranya)?|(?:lu|lo|kamu) (?:udah |sudah )?siap)\?\s*$/iu;
+const directGenericQuestion = /(?:^|[.!]\s+)\s*(?:(?:gimana|bagaimana) cara (?:lu|lo|kamu) (?:mengerjakan|ngerjain) tugas berikut|(?:gimana|bagaimana)(?: jadinya| caranya)?)\?\s*$/iu;
 function outputSpans(turn: VoiceTurn, byId: Map<number, Fragment>, question: boolean) {
     const rows = turn.fragmentIds.flatMap(id => byId.get(id) ?? []);
     if (!question) return rows;
@@ -78,7 +78,7 @@ export function roleVoiceEvidence(fragments: Fragment[], delivery: NativeDeliver
     const origin = direct && (!delivery.playbackVerified || delivery.firstAudioMs === undefined) ? undefined : playbackOrigin(turns, delivery);
     const repeated = new Map(control?.slots.flatMap(slot => (slot.repeated ?? []).map(row => [row.ref, row.topicId] as const)));
     return { turns, origin, byId, evidence: turns.map(turn => {
-        const question = turn.speaker === 'TARA' && (!direct || !directGenericQuestion.test(turn.text)) &&
+        const question = turn.speaker === 'TARA' && (!direct || !(directGenericQuestion.test(turn.text) || isReadinessCheck(turn.text))) &&
             (direct && /\?\s*$/u.test(turn.text) || isQuestion(turn.text) && !isIncompleteQuestion(turn.text));
         const questionEndMs = question && !direct ? outputSpans(turn, byId, true).at(-1)?.endMs ?? turn.endMs : turn.endMs;
         const audible = turn.speaker === 'TARA' && origin !== undefined && heardRoleSpeech(turn, delivery, origin, byId, question && !direct);

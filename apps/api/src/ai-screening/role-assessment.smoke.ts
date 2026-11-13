@@ -26,12 +26,12 @@ assert.ok(topics.every(topic => topic.alternative));
 const request = createVoiceRequest('marin', 'sdp', topics);
 assert.equal(request.session.model, 'gpt-live-1');
 assert.equal(request.session.delegation.type, 'client');
-assert.match(JSON.stringify(request.session.input), /Halo, gue Tara/);
-const agenda = JSON.parse(request.session.input[0].content[0].text.split('\n')[1]);
+assert.match(JSON.stringify(request.session.input), /gua Tara.*Bisa kita mulai\?/);
+const { topics: agenda } = JSON.parse(request.session.input[0].content[0].text.split('\n')[1]);
 assert.deepEqual(agenda.map((item: { criterionId: string }) => item.criterionId), rubric.interviewIds, 'the full frozen agenda is available at startup');
 assert.ok(agenda.every((item: { context: string }) => item.context === 'WORK_SCENARIO'));
 assert.doesNotMatch(request.session.instructions, /Keluarkan hanya JSON/u, 'the spoken interview must not inherit a JSON-only instruction');
-assert.match(createVoiceRequest('marin', 'sdp', topics).session.instructions, /Tunggu kandidat selesai bicara/u);
+assert.match(request.session.instructions, /Biarkan kandidat menyelesaikan jawabannya/u);
 
 const [demo, proposal, discovery, validation] = rubric.interviewIds;
 const question = (id: string, topicId: string, at: number, opportunity: RoleTranscriptEntry['opportunity'] = 'ANSWERED'): RoleTranscriptEntry =>
@@ -131,4 +131,12 @@ const clarified = directEvidence([specificQuestion, clarification], { ...directD
 assert.equal(clarified[0].heard, true);
 assert.equal(clarified[0].topicId, undefined, 'the playback timeline never assigns a rubric criterion');
 assert.equal(roleLiveTranscript(clarified, false, true)[0].opportunity, 'INTERRUPTED', 'a request for clarification is not an answer');
+const intro: Fragment = { id: 24, speaker: 'TARA', startMs: 100, endMs: 1200, text: 'Halo, Rani. Gua Tara. Gua mau bahas CV lo. Bisa kita mulai?' };
+const ready: Fragment = { id: 25, speaker: 'CANDIDATE', startMs: 1500, endMs: 2100, text: 'Boleh, saya siap.' };
+const skillQuestion: Fragment = { id: 26, speaker: 'TARA', startMs: 2400, endMs: 3900, text: 'Lo nyebut SQL di CV. Bisa ceritain satu contoh waktu lo pakai SQL?' };
+const readyTranscript = roleLiveTranscript(directEvidence([intro, ready, skillQuestion], {
+    ...directDelivery, windows: [window(100, 1200), window(2400, 3900)],
+}), false, true);
+assert.equal(readyTranscript[0].question, undefined, 'the readiness check is never a scored interview question');
+assert.equal(readyTranscript[2].question, true, 'the actual question about a skill still reaches the evaluator');
 console.log('Role assessment passed: frozen criteria, CV aliases, scenarios without CV claims, Live delivery, topic limits, source integrity, cross-topic evidence, and complete-score requirements. Paid calls: 0.');

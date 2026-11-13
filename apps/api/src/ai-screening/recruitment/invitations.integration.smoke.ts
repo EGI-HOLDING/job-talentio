@@ -227,7 +227,16 @@ async function main(){
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'PENDING'}});await deliver('INVITE_DELIVERY',uncertainInvite.id);await invitations.cancel(hr,uncertainInvite.id);
  let holdCreate:Promise<void>|null=null,holdOpen:Promise<void>|null=null;
  let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[], attachments:string[]=[];
- const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.type,'client');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.match(body.session.instructions,/Tunggu kandidat selesai bicara/);return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(id:string,event:any,lost:any)=>{attachments.push(id);onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
+ let lastVoiceRequest: ReturnType<typeof import('../prompts/voice-session').createVoiceRequest> | undefined;
+ const liveProvider={configured:true,create:async(body:NonNullable<typeof lastVoiceRequest>)=>{
+  creates++;lastVoiceRequest=body;if(holdCreate)await holdCreate;
+  assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.type,'client');
+  assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);
+  assert.match(body.session.instructions,/Biarkan kandidat menyelesaikan jawabannya/);
+  assert.match(body.session.input[1].content[0].text,/Bisa kita mulai\?.*Tunggu kandidat menyatakan siap/);
+  assert.equal(JSON.parse(body.session.input[0].content[0].text.split('\n')[1]).candidateName,'Kandidat');
+  return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};
+ },attach:(id:string,event:any,lost:any)=>{attachments.push(id);onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
   if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
   if(preset?.version===ROLE_ASSESSMENT_VERSION)return roleJudgement(input);
@@ -388,6 +397,7 @@ async function main(){
  await voiceService.tick(new Date(Date.now()+4000));
  await voiceService.tick(new Date(Date.now()+4500));
  assert.deepEqual(commands.slice(beforeOpening).map(c=>c.event_id),['tara-opening'],'silent startup can request a single greeting');
+ assert.equal(commands.at(-1).content,lastVoiceRequest!.session.input[1].content[0].text);
  onEvent({type:'session.output_audio.delta',start_ms:100,end_ms:120,delta:voiceDelta});
  const opened=await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',4,0);
  assert.ok(opened.clockRunning);

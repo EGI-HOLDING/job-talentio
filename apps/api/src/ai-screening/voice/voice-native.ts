@@ -1,6 +1,7 @@
 import { recordTaraOpportunity, startTara, type TaraProgress, type TaraTopic } from '../tara-interview';
 import type { Fragment, VoiceTurn } from './voice.policy';
 import type { RoleVoiceControl, VoiceControlEvent } from './voice-role';
+import { isReadinessCheck } from './voice-redirect';
 
 export const NATIVE_VOICE_VERSION = 'tara-voice-native-v1';
 export const NATIVE_STARTUP_MS = 60_000;
@@ -102,7 +103,7 @@ export function nativeInterview(topics: TaraTopic[], turns: VoiceTurn[], deliver
     const firstOutput = turns.find(turn => turn.speaker === 'TARA');
     const firstAudioMs = direct ? delivery.firstAudioMs : delivery.firstAudioMs ?? firstOutput?.startMs;
     const origin = firstAudioMs !== undefined && delivery.firstAudible !== undefined ? delivery.firstAudible - firstAudioMs : delivery.origin;
-    const questions = turns.filter(turn => turn.speaker === 'TARA' && question(turn.text));
+    const questions = turns.filter(turn => turn.speaker === 'TARA' && question(turn.text) && !(direct && isReadinessCheck(turn.text)));
     const evidenceTurns: VoiceTurn[] = [];
     if (origin === undefined || direct && !delivery.playbackVerified) return { progress, evidenceTurns, origin: endedAt };
     for (const [index, turn] of questions.entries()) {

@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { cvCriteria } from './recruitment/cv-assessment';
-import { createVoiceRequest } from './prompts/voice-session';
+import { createVoiceRequest, TARA_LIVE_OPENING } from './prompts/voice-session';
 import { createRoleRubric } from './role-rubric';
-import { taraTopics } from './tara-interview';
-import { attachLiveRoleTopics, liveAgendaRequest, liveAgendaRubric, liveRolePackage, prepareLiveAgenda } from './tara-live-agenda';
+import { attachLiveRoleTopics, liveAgendaRequest, liveAgendaRubric, liveInterviewTopics, liveRolePackage, prepareLiveAgenda } from './tara-live-agenda';
 import type { Claim } from './screening.schemas';
 
 const responsibilities = [
@@ -59,7 +58,9 @@ assert.deepEqual(incomplete.topics.map(row => row.criterionId), [discovery, demo
 assert.deepEqual(incomplete.topics[1].equivalentIds, [sameDemo, anotherDemo]);
 
 const claim = (id: string, criterionId: string, skill: string, quote: string, scope: Claim['scope']): Claim => ({
-    id, criterionId, skill, statement: skill, quote, scope, lineStart: 1, lineEnd: 1, question: 'Kapan lu pernah memakai keahlian itu?',
+    id, criterionId, skill, statement: skill, quote, scope, lineStart: 1, lineEnd: 1,
+    question: scope === 'CONTEXTUAL' ? `Soal ${skill}, bagian mana dari contoh di CV yang lu kerjain sendiri?`
+        : `Oke, kita mulai ya 😄 Soal ${skill} yang lu tulis di CV, bisa ceritain satu contoh waktu lu pakai?`,
 });
 const claims = [claim('claim-demo', demo, 'SQL', 'Keahlian SQL', 'GENERAL'),
     claim('claim-proposal', proposal, 'Penyusunan SLA', 'Menyusun SLA pada proposal teknis. Hubungi kandidat@example.test.', 'CONTEXTUAL'),
@@ -68,17 +69,37 @@ const packet = liveRolePackage(rubric, agenda);
 const plan = attachLiveRoleTopics({ claims, limitations: [] }, rubric, packet.liveAgenda);
 assert.deepEqual(plan.roleTopics?.map(row => row.cvClaimId), [undefined, 'claim-demo', 'claim-proposal', undefined]);
 assert.deepEqual(plan.roleTopics?.map(row => row.question), agenda.topics.map(row => row.question));
-const topics = taraTopics(plan, packet, true).map(topic => ({ ...topic, skill: claims.find(row => row.criterionId === topic.criterionId)?.skill,
-    fields: topic.criterionId === proposal ? [...(topic.fields ?? []), 'CONTEXT' as const] : topic.fields }));
-const live = createVoiceRequest('marin', 'synthetic', topics);
+const topics = liveInterviewTopics(plan, packet);
+const live = createVoiceRequest('marin', 'synthetic', topics, '  Rani Puspita ');
 const data = JSON.parse(live.session.input[0].content[0].text.split('\n')[1]);
-assert.deepEqual(data.map((item: { criterionId: string }) => item.criterionId), liveRubric.interviewIds);
-assert.deepEqual(data.map((item: { context: string }) => item.context), ['WORK_SCENARIO', 'CV_MENTION', 'EXPLICIT_CV_CONTEXT', 'WORK_SCENARIO']);
-assert.equal(data[1].skill, 'SQL');
-assert.doesNotMatch(JSON.stringify(data), /kandidat@example\.test/u);
+assert.deepEqual(data.topics.map((item: { criterionId: string }) => item.criterionId), [demo, proposal, discovery, validation]);
+assert.deepEqual(liveRubric.interviewIds, [discovery, demo, proposal, validation], 'the order of the scoring rubric remains stable');
+assert.deepEqual(data.topics.map((item: { context: string }) => item.context), ['CV_MENTION', 'EXPLICIT_CV_CONTEXT', 'WORK_SCENARIO', 'WORK_SCENARIO']);
+assert.equal(data.topics[0].skill, 'SQL');
+assert.match(data.topics[0].question, /^Soal SQL.*CV.*satu contoh/u);
+assert.equal(data.topics[0].task, responsibilities[0]);
+assert.match(data.topics[1].question, /Penyusunan SLA.*bagian mana dari contoh di CV yang lu kerjain sendiri/u);
+assert.equal(data.topics[2].question, agenda.topics[0].question);
+assert.equal(data.candidateName, 'Rani');
+assert.doesNotMatch(JSON.stringify(data), /kandidat@example\.test|Puspita/u);
+assert.equal(live.session.input[1].content[0].text, TARA_LIVE_OPENING);
+assert.match(TARA_LIVE_OPENING, /gua Tara.*CV lo.*Bisa kita mulai\?.*Tunggu kandidat menyatakan siap/u);
+assert.match(live.session.instructions, /Dari skill yang lo tulis di CV.*Sekarang gua kasih skenario kerja/u);
 assert.match(live.session.instructions, /Jangan menanyakan kembali fakta yang sama dengan kalimat lain/u);
 assert.match(live.session.instructions, /11 menit/u);
 assert.equal(live.session.model, 'gpt-live-1');
 assert.deepEqual(live.session.delegation, { type: 'client' });
+
+const noClaims = liveInterviewTopics(attachLiveRoleTopics({ claims: [], limitations: [] }, rubric, agenda), packet);
+assert.deepEqual(noClaims.map(topic => topic.id), liveRubric.interviewIds);
+assert.ok(noClaims.every(topic => topic.alternative && !topic.cvQuote));
+const staleLink = { ...plan, roleTopics: plan.roleTopics!.map(row => row.criterionId === discovery ? { ...row, cvClaimId: 'claim-demo' } : row) };
+assert.ok(liveInterviewTopics(staleLink, packet).find(row => row.criterionId === discovery)?.alternative);
+assert.equal(JSON.parse(createVoiceRequest('marin', 'synthetic', topics, 'candidate@example.test')
+    .session.input[0].content[0].text.split('\n')[1]).candidateName, null);
+
+const proposalOnly = attachLiveRoleTopics({ claims: claims.slice(1, 2), limitations: [] }, rubric, agenda);
+assert.deepEqual(liveInterviewTopics(proposalOnly, packet).map(topic => topic.id), [proposal, discovery, demo, validation],
+    'a proposal from the CV comes first when the first job requirement has no CV evidence');
 
 console.log('Tara Live agenda: grouped meaning, distinct duties, source IDs, evidence scope, CV revision, fallback and session startup passed. Paid calls: 0.');

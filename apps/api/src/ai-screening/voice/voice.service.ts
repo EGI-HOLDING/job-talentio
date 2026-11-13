@@ -23,7 +23,7 @@ import { VoiceProvider } from './voice.provider';
 import { frozenRoleRubric } from '../role-rubric';
 import { directFarewellAt, isNativeVoice, roleVoiceEvidence, roleVoiceTurns, ROLE_VOICE_VERSION } from './voice-role';
 import { roleLiveTranscript } from '../taka-role-assessment';
-import { liveAgendaRubric } from '../tara-live-agenda';
+import { liveAgendaRubric, liveInterviewTopics } from '../tara-live-agenda';
 
 type Channel = ReturnType<VoiceProvider['attach']>;
 type Captured = Required<Omit<Fragment, 'id'>>;
@@ -114,23 +114,17 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         requireCurrentConversation(session.package.conversationPolicy);
         const plan = session.currentPlan.payload as unknown as CandidatePayload;
         const packet = session.package.payload as unknown as PackagePayload;
-        const topics = taraTopics(plan, packet, true).slice(0, 4).map<TaraTopic>(topic => {
-            const claimId = plan.roleTopics?.find(row => row.criterionId === topic.criterionId)?.cvClaimId ?? topic.id;
-            const claim = plan.claims.find(row => row.id === claimId && row.criterionId === topic.criterionId);
-            const fields = new Set(topic.fields ?? []);
-            if (claim?.scope === 'CONTEXTUAL') fields.add('CONTEXT');
-            for (const evidence of claim?.extraEvidence ?? []) fields.add(evidence.field);
-            return { ...topic, fields: [...fields], skill: claim?.skill };
-        });
+        const topics = liveInterviewTopics(plan, packet);
         const lease = await this.db.aiScreeningSession.updateMany({ where: { id, leaseToken: clientId, status: 'ACTIVE' },
             data: { leaseExpiresAt: new Date(Date.now() + leaseMs) } });
         if (!lease.count) throw new ConflictException('Interview digunakan tab lain.');
-        const request = createVoiceRequest(this.config.get<string>('TARA_LIVE_VOICE') ?? 'marin', sdp, topics);
+        const request = createVoiceRequest(this.config.get<string>('TARA_LIVE_VOICE') ?? 'marin', sdp, topics, user.fullName);
         let row: VoiceInterview;
         try {
             row = await this.db.voiceInterview.create({ data: { sessionId: id, owner: this.owner, leaseUntil: new Date(Date.now() + 15_000),
                 model: TARA_LIVE_MODEL, promptVersion: TARA_LIVE_AUDIO_PROTOCOL,
-                promptSnapshot: json({ instructions: request.session.instructions, mode: 'NATIVE', agendaRevision: packet.liveAgenda?.revision }),
+                promptSnapshot: json({ instructions: request.session.instructions, mode: 'NATIVE', agendaRevision: packet.liveAgenda?.revision,
+                    topicOrder: topics.map(topic => topic.id) }),
                 taraInterview: json(startTara(topics, true)) } });
         } catch (error) {
             if ((error as { code?: string })?.code !== 'P2002') throw error;
@@ -511,7 +505,12 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         const role = roleRubric ? { rubric: direct ? liveAgendaRubric(roleRubric, rubric.liveAgenda) : roleRubric, transcript: roleLiveTranscript(
             roleVoiceEvidence(voice.fragments, delivery, progress?.roleControl, direct).evidence, interrupted, direct),
             ...(direct ? { direct } : {}) } : undefined;
-        const legacyTopics = direct ? topics.slice(0, 4) : topics;
+        const topicOrder = (voice.promptSnapshot as { topicOrder?: string[] } | null)?.topicOrder;
+        let legacyTopics = direct ? topics.slice(0, 4) : topics;
+        if (direct && !role && topicOrder) {
+            const planned = new Map(liveInterviewTopics(plan, rubric).map(topic => [topic.id, topic]));
+            legacyTopics = topicOrder.flatMap(id => planned.get(id) ?? []);
+        }
         const projection = !role && (direct || voice.promptVersion === NATIVE_VOICE_VERSION) ? nativeInterview(legacyTopics,
             direct ? roleVoiceTurns(voice.fragments) : nativeVoiceTurns(voice.fragments), delivery, +(voice.endedAt ?? voice.startedAt), interrupted, direct) : undefined;
         const notes = projection ? taraInterviewReport(projection.progress, legacyTopics) : !role && progress ? taraInterviewReport(progress, topics) : undefined;

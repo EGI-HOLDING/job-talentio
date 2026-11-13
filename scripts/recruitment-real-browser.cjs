@@ -21,7 +21,8 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   fs.mkdirSync(out, { recursive: true });
   const voiceProbe = liveVoice ? require('./recruitment-voice-live.cjs') : null;
   const agenda = agendaVoice ? require('./recruitment-voice-agenda.cjs') : null;
-  const wav = agenda ? agenda.loadAudio(process.env.RELIABILITY_VOICE_WAV_DIR) : voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
+  const wav = agenda ? agenda.loadAudio(process.env.RELIABILITY_VOICE_WAV_DIR, process.env.RELIABILITY_VOICE_READY_WAV)
+    : voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
   const browser = await playwright().chromium.launch({ headless: true, executablePath: process.env.TARA_PROBE_CHROME });
   const contexts = [];
   const interruptedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'interrupted-indonesian';

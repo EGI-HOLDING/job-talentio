@@ -1,8 +1,10 @@
 import type { PromptPreset } from './prompts/compose';
 import { inputTrust } from './prompts/shared/input-trust';
 import { attachRoleTopics, roleInterviewCandidates, type RoleRubric } from './role-rubric';
+import { CONVERSATION_OPENING } from './prompts/shared/conversation-opening';
 import { hash, normalizedText, redactScreeningContacts } from './screening.policy';
 import type { CandidatePayload, JsonSchema, PackagePayload } from './screening.schemas';
+import { taraTopics, type TaraTopic } from './tara-interview';
 
 export const TARA_LIVE_AGENDA_VERSION = 'tara-live-agenda-v1';
 export const LIVE_AGENDA_PREPARATION_MS = 60_000;
@@ -104,4 +106,26 @@ export function attachLiveRoleTopics(plan: CandidatePayload, rubric: RoleRubric 
         question: topic.question,
         cvClaimId: plan.claims.find(claim => claim.criterionId === topic.criterionId)?.id,
     })) };
+}
+
+export function liveInterviewTopics(plan: CandidatePayload, packet: PackagePayload) {
+    const claims = new Map(plan.claims.map(claim => [claim.id, claim]));
+    const roleClaims = new Map(plan.roleTopics?.map(topic => [topic.criterionId, topic.cvClaimId]));
+    return taraTopics(plan, packet, true).map<TaraTopic>(topic => {
+        const claimId = roleClaims.size ? roleClaims.get(topic.criterionId) : topic.id;
+        const claim = claimId === undefined ? undefined : claims.get(claimId);
+        const skill = claim?.skill?.trim();
+        if (!claim || claim.criterionId !== topic.criterionId || !skill || !claim.quote?.trim())
+            return { ...topic, alternative: true, cvQuote: undefined };
+
+        const contextual = claim.scope === 'CONTEXTUAL';
+        const fields = new Set(topic.fields ?? []);
+        for (const evidence of claim.extraEvidence ?? []) fields.add(evidence.field);
+        if (contextual) fields.add('CONTEXT');
+        else fields.delete('CONTEXT');
+        const question = claim.question?.trim();
+        const cvQuestion = question?.startsWith(CONVERSATION_OPENING) ? question.slice(CONVERSATION_OPENING.length).trim() : question;
+        return { ...topic, alternative: false, cvQuote: claim.quote, skill, fields: [...fields],
+            question: cvQuestion || `Di CV lo nyebut ${skill}. Bisa ceritain satu contoh waktu lo pakai skill itu?` };
+    }).sort((a, b) => Number(a.alternative) - Number(b.alternative)).slice(0, MAX_COMPETENCIES);
 }

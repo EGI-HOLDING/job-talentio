@@ -123,7 +123,7 @@ export function roleEvaluationRequest(input: RoleInput, preset: PromptPreset, id
     const criteria = input.criteria.filter(row => ids.includes(row.id));
     return {
         preset: { ...preset, schema: obj({ criteria: obj(Object.fromEntries(criteria.map(row => [row.id, rowSchema]))) }),
-            ...(direct ? { instructions: preset.instructions + '\n\nUntuk Tara Live, petakan makna pertanyaan ke tugas pada rubrik, termasuk parafrasa dan pertanyaan klarifikasi. Pilih questionRef hanya jika pertanyaannya lengkap dan fokus pada kompetensi itu. Arah balik tanpa pertanyaan konkret, permintaan kandidat untuk mengulang, dan pertanyaan yang belum terverifikasi penyampaiannya tidak membuktikan kesempatan menjawab. Bukti positif yang konkret boleh berasal dari jawaban pada topik lain.' } : {}) },
+            ...(direct ? { instructions: preset.instructions + '\n\nUntuk Tara Live, petakan makna pertanyaan ke tugas pada rubrik, termasuk parafrasa dan pertanyaan klarifikasi. Pilih questionRef hanya jika pertanyaannya lengkap dan fokus pada kompetensi itu. Sapaan, konfirmasi siap, arahan balik tanpa pertanyaan konkret, permintaan mengulang, dan pertanyaan yang belum terverifikasi penyampaiannya tidak membuktikan kesempatan menjawab. Bukti positif yang konkret boleh berasal dari jawaban pada topik lain.' } : {}) },
         data: { role: input.rubric.title, criteria: criteria.map(criterion => ({ ...criterion,
             cvClaims: input.plan.claims.filter(claim => claim.criterionId === criterion.id)
                 .map(({ id, quote, scope }) => ({ id, quote: redactScreeningContacts(quote), scope })) })),

@@ -13,3 +13,7 @@ function hasFocusedRequest(text: string) {
 export function isIncompleteQuestion(text: string) {
     return questionOpening.test(text) && !hasFocusedRequest(text);
 }
+
+export function isReadinessCheck(text: string) {
+    return /(?:^|[.!?]\s+|,\s+)(?:(?:bisa|boleh) (?:kita )?(?:mulai|lanjut)|(?:kita )?mulai (?:ya|sekarang)|(?:lo|lu|kamu|anda) (?:(?:udah|sudah) )?siap(?: (?:mulai|untuk mulai))?|(?:(?:udah|sudah) )?siap(?: (?:mulai|untuk mulai))?)[.!?\s]*$/iu.test(text.trim());
+}
