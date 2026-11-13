@@ -15,7 +15,7 @@ import { ScreeningSessions } from '../screening-sessions.service';
 import { evaluateTakaInterview } from '../taka-evaluation';
 import { frozenTakaInterview, liveTakaTurns } from '../taka-interview';
 import { startTara, taraInterviewReport, taraTopics, type TaraTopic } from '../tara-interview';
-import { nativeCoverage, nativeInterview, nativeVoiceTurns, NATIVE_STARTUP_MS, NATIVE_VOICE_VERSION, recordMedia, topicForQuestion,
+import { nativeCoverage, nativeInterview, nativeVoiceTurns, NATIVE_AUDIO_RECOVERY_MS, NATIVE_STARTUP_MS, NATIVE_VOICE_VERSION, recordMedia, topicForQuestion,
     type MediaSignal, type NativeDelivery, type NativeProgress } from './voice-native';
 import { voiceClock, voiceTurns, VOICE_HARD_MS, type Fragment } from './voice.policy';
 import { VoiceProvider } from './voice.provider';
@@ -34,6 +34,8 @@ type Live = {
     closed: boolean; finishing: boolean; ready?: boolean; nativeOutput?: boolean; captureFailed?: boolean; sidebandLost?: boolean;
     usage?: unknown; hardTimer?: ReturnType<typeof setTimeout>; openingTimer?: ReturnType<typeof setTimeout>;
     candidateLastSpeechAt?: number;
+    audioReplay?: { requestedAt: number; sentAt?: number };
+    openingReplayAfterMs?: number;
     droppedOutputAt?: number;
     recoveredOutputAt?: number;
     deliveryRecoveryUntil?: number;
@@ -230,6 +232,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
                 return tx.voiceFragment.createManyAndReturn({ data: batch.map(fragment => ({ ...fragment, voiceId: id })), skipDuplicates: true });
             });
             live.fragments.push(...fragments);
+            if (live.delivery.firstAudible !== undefined && live.delivery.firstAudioMs === undefined &&
+                live.openingReplayAfterMs !== undefined) {
+                const afterMs = live.openingReplayAfterMs;
+                live.delivery.firstAudioMs = fragments.find(fragment => fragment.speaker === 'TARA' && fragment.endMs > afterMs)?.startMs;
+            }
         }).catch(() => {
             live.captureFailed = true;
             this.logger.warn('Tara Live could not persist a transcript batch');
@@ -276,6 +283,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         if (!recordMedia(live.delivery, event, sequence, Math.max(+row.createdAt, now - delayMs), transcriptEventId)) return this.safe(row);
         if (event === 'OUTPUT_DROPPED') {
             live.droppedOutputAt = Math.max(+row.createdAt, now - delayMs);
+            if (first) live.audioReplay ??= { requestedAt: now };
+        }
+        if (event === 'REPLAY') {
+            if (!live.audioReplay || live.audioReplay.sentAt !== undefined && now - live.audioReplay.sentAt >= NATIVE_AUDIO_RECOVERY_MS)
+                live.audioReplay = { requestedAt: now };
             return this.safe(row);
         }
         if (event === 'READY') {
@@ -293,6 +305,12 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
             }
         }
         if (first && live.delivery.firstAudible !== undefined) {
+            const replayEnd = live.openingReplayAfterMs;
+            if (replayEnd !== undefined) {
+                const afterReplay = (fragment: Fragment | Captured) => fragment.speaker === 'TARA' && fragment.endMs > replayEnd;
+                const heard = live.fragments.find(afterReplay) ?? live.queue.find(afterReplay);
+                if (heard) live.delivery.firstAudioMs = heard.startMs;
+            }
             live.hardTimer = setTimeout(() => this.requestFinish(row.id, 'TIME_LIMIT'), Math.max(0, live.delivery.firstAudible + VOICE_HARD_MS - now));
             live.hardTimer.unref();
         }
@@ -350,7 +368,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         }
         await this.db.voiceInterview.updateMany({ where: { id: row.id, owner: this.owner }, data: { leaseUntil: new Date(+now + 15_000) } });
         const live = this.active.get(row.id);
-        if (live) void this.flush(row.id, live);
+        if (live) await this.flush(row.id, live);
         const start = live?.delivery.firstAudible;
         const waiting = start === undefined && isNativeVoice(row.promptVersion);
         if (+now - +row.heartbeatAt > (waiting || row.status !== 'ACTIVE' ? NATIVE_STARTUP_MS : mutedGapMs)) {
@@ -358,7 +376,14 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
             return;
         }
         if (waiting) {
-            if (+now - +row.createdAt >= NATIVE_STARTUP_MS) await this.finish(row.id, 'CONNECTION_FAILED');
+            if (row.status === 'ACTIVE' && live?.ready && !live.finishing && !live.closed) {
+                this.maybeReplayAudio(live, +now);
+            }
+            const replayTime = live?.audioReplay?.sentAt ?? live?.audioReplay?.requestedAt;
+            const startupDeadline = +row.createdAt + NATIVE_STARTUP_MS;
+            const deadline = replayTime === undefined ? startupDeadline :
+                Math.min(startupDeadline + NATIVE_AUDIO_RECOVERY_MS, Math.max(startupDeadline, replayTime + NATIVE_AUDIO_RECOVERY_MS));
+            if (+now >= deadline) await this.finish(row.id, row.status === 'ACTIVE' ? 'AUDIO_UNAVAILABLE' : 'CONNECTION_FAILED');
             return;
         }
         const clock = voiceClock(start === undefined ? row.startedAt : new Date(start), now);
@@ -366,6 +391,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         if (!live || live.closed || live.finishing) return;
         if (clock.warning && !row.warningAt)
             await this.db.voiceInterview.updateMany({ where: { id: row.id, warningAt: null }, data: { warningAt: now } });
+        if (row.status === 'ACTIVE' && !clock.closing && this.maybeReplayAudio(live, +now)) return;
         if (live.roleControl && start !== undefined) {
             await this.watchRole(row, live, start, now, clock.closing);
             return;
@@ -402,6 +428,32 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         } else if (signoff) {
             await this.finish(row.id, 'TARA_FINISHED');
         }
+    }
+
+    private maybeReplayAudio(live: Live, now: number) {
+        const replay = live.audioReplay;
+        if (!replay || replay.sentAt !== undefined || live.roleControl?.close || live.sidebandLost) return false;
+        if ((live.delivery.open ?? 0) >= replay.requestedAt || live.delivery.windows.some(window => window.start >= replay.requestedAt)) {
+            live.audioReplay = undefined; return false;
+        }
+        if (live.delivery.open !== undefined) return false;
+        const end = { TARA: 0, CANDIDATE: 0 };
+        for (const list of [live.fragments, live.queue]) for (const fragment of list)
+            if (fragment.speaker === 'TARA' || fragment.speaker === 'CANDIDATE')
+                end[fragment.speaker] = Math.max(end[fragment.speaker], fragment.endMs);
+        const origin = live.delivery.origin ?? 0;
+        if (now < replay.requestedAt + 800 || now - Math.max(live.candidateLastSpeechAt ?? 0,
+            origin + end.CANDIDATE) < CANDIDATE_PAUSE_MS || now < origin + end.TARA + 1200) return false;
+        const topic = live.topics[live.roleControl?.slot ?? 0];
+        if (!topic) return false;
+        const opening = live.delivery.firstAudible === undefined;
+        if (!opening && !live.roleControl) return false;
+        const question = opening && live.roleControl ? roleVoiceOpening(topic) : roleRedirectQuestion(topic);
+        replay.sentAt = now;
+        if (opening) live.openingReplayAfterMs = end.TARA;
+        live.droppedOutputAt = undefined;
+        this.steer(live, 'replay-audio-' + replay.requestedAt, question, null, 'commentary');
+        return true;
     }
 
     private async watchRole(row: VoiceInterview, live: Live, start: number, now: Date, timeLimit: boolean) {
@@ -493,7 +545,9 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
                 : nativeInterview(live.topics, nativeVoiceTurns(live.fragments), live.delivery, +endedAt, !complete).progress : undefined;
             await this.finalize(id, { status: 'ENDED', endedAt, closeReason, transcriptComplete: complete,
                 ...(live?.usage ? { usage: json(live.usage) } : {}),
-                ...(technical(closeReason) && closeReason !== 'ACCOUNT_ERASED' ? { error: 'Sesi suara terputus. Jawaban yang tersimpan tetap tersedia.' } : {}),
+                ...(technical(closeReason) && closeReason !== 'ACCOUNT_ERASED' ? { error: closeReason === 'AUDIO_UNAVAILABLE'
+                    ? 'Suara Tara tidak berhasil diputar. Jawaban yang tersimpan tetap tersedia.'
+                    : 'Sesi suara terputus. Jawaban yang tersimpan tetap tersedia.' } : {}),
                 ...(progress ? { taraInterview: json(progress) } : {}) });
         } catch {
             await this.db.voiceInterview.updateMany({ where: { id, status: { notIn: terminal } },

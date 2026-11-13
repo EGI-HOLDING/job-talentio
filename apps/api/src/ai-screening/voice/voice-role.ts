@@ -76,7 +76,8 @@ function outputSpans(turn: VoiceTurn, byId: Map<number, Fragment>, question: boo
 
 export function playbackOrigin(turns: VoiceTurn[], delivery: NativeDelivery) {
     const first = turns.find(turn => turn.speaker === 'TARA');
-    return first && delivery.firstAudible !== undefined ? delivery.firstAudible - first.startMs : undefined;
+    const startMs = delivery.firstAudioMs ?? first?.startMs;
+    return startMs !== undefined && delivery.firstAudible !== undefined ? delivery.firstAudible - startMs : undefined;
 }
 
 // A quiet gap can split the playback meter window even though all spoken words

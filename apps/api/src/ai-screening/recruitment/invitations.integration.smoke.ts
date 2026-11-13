@@ -550,6 +550,39 @@ async function main(){
  }
  assert.equal((await invitations.report(hr,takaText.invitationId)).evaluation?.finalScore,null,'new scoring does not replace history');
  await assert.rejects(invitations.report({...hr,id:'foreign-hr'},roleVoice.id));
+
+ const recoverVoice=await roleInvite('VOICE','role-muted-opening');
+ const recovery=await voiceService.create(user,recoverVoice.sessionId,clientId,'v=0 local playback recovery');
+ onEvent({type:'session.started',event_id:'recovery-start'});
+ await voiceService.media(user,recoverVoice.sessionId,clientId,'READY',1,0);
+ onEvent({type:'session.output_transcript.delta',event_id:'recovery-silent-intro',delta:'Halo, gue Tara. Gimana lu membangun API?',start_ms:0,end_ms:3000});
+ await voiceService.media(user,recoverVoice.sessionId,clientId,'OUTPUT_DROPPED',2,0);
+ const recoveryControl=()=>commands.filter(command=>command.event_id?.startsWith('tara-replay-audio-'));
+ const replayCount=recoveryControl().length;
+ const retryAt=Date.now()+5500;
+ await voiceService.tick(new Date(retryAt));
+ assert.equal(recoveryControl().length,replayCount+1,'replay a discarded opener on the same Live session even before a candidate answer');
+ assert.match(recoveryControl().at(-1)!.content,/Halo, gue Tara/);
+ assert.equal((await voiceService.state(user,recoverVoice.sessionId))?.clockRunning,false);
+ await voiceService.media(user,recoverVoice.sessionId,clientId,'REPLAY',3,0);
+ await voiceService.tick(new Date(retryAt+1000));
+ assert.equal(recoveryControl().length,replayCount+1,'a duplicate click does not queue a second replay');
+ onEvent({type:'session.output_transcript.delta',event_id:'recovery-audible-intro',delta:'Halo, gue Tara. Gimana lu membangun API?',start_ms:6000,end_ms:9300});
+ assert.equal((await voiceService.media(user,recoverVoice.sessionId,clientId,'AUDIBLE',4,0)).clockRunning,true);
+ await voiceService.end(user,recoverVoice.sessionId,clientId,'CONNECTION_LOST');
+ const recoveredVoice=await db.voiceInterview.findUniqueOrThrow({where:{id:recovery.id}});
+ assert.equal((recoveredVoice.taraInterview as unknown as NativeProgress).nativeDelivery?.firstAudioMs,6000,'only the replay anchors delivered audio');
+
+ const silentInvite=await roleInvite('VOICE','role-no-speaker');
+ const silentVoice=await voiceService.create(user,silentInvite.sessionId,clientId,'v=0 local silent playback');
+ await voiceService.media(user,silentInvite.sessionId,clientId,'READY',1,0);
+ onEvent({type:'session.output_transcript.delta',event_id:'silent-preserved',delta:'Gimana lu membangun API?',start_ms:0,end_ms:2400});
+ await db.voiceInterview.update({where:{id:silentVoice.id},data:{createdAt:new Date(Date.now()-60_000)}});
+ await voiceService.tick();
+ const silentResult=await voiceService.state(user,silentInvite.sessionId);
+ assert.equal(silentResult?.closeReason,'AUDIO_UNAVAILABLE','silent playback is reported separately from a transport error');
+ assert.equal(silentResult?.transcript[0].text,'Gimana lu membangun API?');
+ assert.equal(silentResult?.transcriptComplete,false);
  process.env.TAKA_ROLE_ASSESSMENT_ENABLED='false';
  console.log('Role scoring integration passed: frozen rubrics, Chat and native Live, whole transcript, consistent final score in list/detail/PDF, preserved history and access checks. Paid calls: 0.');
 
