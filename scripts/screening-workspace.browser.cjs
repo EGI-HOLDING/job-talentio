@@ -185,14 +185,15 @@ async function main(){
  report.checks.push('Candidate navigation keeps screening results scoped to their original candidate');
  await page.keyboard.press('Escape');rows[0].stage='REJECTED';await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).click();await page.getByRole('button',{name:'Screening',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Undang screening',exact:true}).isDisabled(),true);report.checks.push('Closed candidate cannot open invitation action');
  const roleSessions=[true,false].map(complete=>{
-   const assessment={version:'taka-role-assessment-v1',rubricRevision:'b5e2569fabc',state:complete?'COMPLETE':'INCOMPLETE',score:complete?85.3:null,
+   const assessment={version:'taka-role-evidence-v2',rubricRevision:'b5e2569fabc',state:complete?'COMPLETE':'INCOMPLETE',score:complete?85.3:null,
      missing:complete?[]:['COVERAGE'],components:{cv:80,competency:complete?87.5:null,explanation:complete?87.5:null},
      contributions:{cv:24,competency:complete?52.5:null,explanation:complete?8.75:null},weights:{cv:30,competency:60,explanation:10},
-     coverage:{assessed:complete?2:1,total:2,interrupted:!complete},criteria:[{criterionId:'validate',name:'Validasi model',level:4,clarity:4,
+     coverage:{assessed:complete?2:1,total:2,interrupted:!complete},...(complete?{}:{partial:{competency:100,explanation:100}}),
+     criteria:[{criterionId:'validate',name:'Validasi model',level:4,clarity:4,
        reason:'Pemisahan data mengikuti waktu pengamatan.',state:'ASSESSED',questionRefs:['question:role-question'],
        evidence:[{questionId:'answer:role-question',questionRef:'question:role-question',quote:'Saya pisahkan data uji berdasarkan tanggal sebelum menjalankan evaluasi.'}]},
        {criterionId:'document',name:'Dokumentasikan evaluasi',level:complete?3:null,clarity:complete?3:null,
-        reason:complete?'Kandidat menjelaskan dokumentasi.':'Kompetensi belum dibahas.',state:complete?'ASSESSED':'NOT_ASKED',evidence:[],questionRefs:[]}]};
+        reason:complete?'Kandidat menjelaskan dokumentasi.':'Penilaian kompetensi perlu ditinjau.',state:complete?'ASSESSED':'ASSESSMENT_UNAVAILABLE',evidence:[],questionRefs:[]}]};
    const id='invite-role-'+(complete?'full':'partial');
    return {...invitations[0],id,mode:'TEXT',session:{...invitations[0].session,id,evaluation:{status:complete?'READY':'NEEDS_REVIEW',
      screeningScore:complete?87.5:null,finalScore:assessment.score,result:{summary:assessment.coverage.assessed+' dari 2 kompetensi inti dinilai.',roleAssessment:assessment}}}};
@@ -213,7 +214,8 @@ async function main(){
  await page.screenshot({path:path.join(out,'06-role-score.png')});
  await history.nth(1).getByRole('button',{name:/Lihat Interview teks/}).click();
  await rolePanel.getByText('Sebagian kompetensi belum memiliki bukti atau kesempatan menjawab yang cukup.',{exact:true}).waitFor();
- await history.nth(1).locator('td').nth(4).filter({hasText:'Belum lengkap'}).waitFor();
+ await history.nth(1).locator('td').nth(4).filter({hasText:'100 / 100 kompetensi (parsial)'}).waitFor();
+ await rolePanel.getByText('Penilaian perlu ditinjau',{exact:true}).waitFor();
  await page.screenshot({path:path.join(out,'07-role-incomplete-mobile.png')});
  report.checks.push('Role score, component contributions, Chat evidence link and incomplete coverage verified in browser');
  assert.deepEqual(report.writes,[]);assert.deepEqual(report.errors,[]);

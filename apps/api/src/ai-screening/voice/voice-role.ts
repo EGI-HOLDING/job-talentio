@@ -92,6 +92,23 @@ export function roleVoiceEvidence(fragments: Fragment[], delivery: NativeDeliver
     }) };
 }
 
+/** Allows evaluation of the question itself when a preceding recap lacked playback telemetry. */
+export function roleAssessmentVoiceEvidence(fragments: Fragment[], delivery: NativeDelivery) {
+    const { evidence, origin, byId } = roleVoiceEvidence(fragments, delivery, undefined, true);
+    return evidence.map((turn): RoleVoiceEvidence & { playbackInterrupted?: boolean } => {
+        if (!turn.question || origin === undefined) return turn;
+        const spans = outputSpans(turn, byId, true);
+        if (!spans.length) return turn;
+        const start = origin + spans[0].startMs;
+        const questionEndMs = Math.max(...spans.map(span => span.endMs));
+        const end = origin + questionEndMs;
+        const interrupted = delivery.windows.some(window => window.interrupted && window.start < end && window.end >= start);
+        const heard = !interrupted && spans.every(span => delivery.windows.some(window => !window.interrupted &&
+            origin + span.startMs >= window.start - 350 && origin + span.endMs > window.start && origin + span.endMs <= window.end));
+        return { ...turn, heard, questionEndMs, playbackInterrupted: interrupted };
+    });
+}
+
 export function directFarewellAt(fragments: Fragment[], delivery: NativeDelivery) {
     if (delivery.open !== undefined || !delivery.playbackVerified || delivery.firstAudioMs === undefined) return;
     const turns = roleVoiceTurns(fragments);

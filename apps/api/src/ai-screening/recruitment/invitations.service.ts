@@ -25,6 +25,7 @@ import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 import { nativeVoiceTurns, NATIVE_VOICE_VERSION } from '../voice/voice-native';
 import { roleVoiceTurns, ROLE_VOICE_VERSION } from '../voice/voice-role';
 import { freezeTakaInterview, TAKA_INTERVIEW_VERSION } from '../taka-interview';
+import { TAKA_ROLE_EVIDENCE_VERSION } from '../taka-versions';
 import { freezeRoleAssessment } from '../taka-role-assessment';
 import { frozenRoleRubric } from '../role-rubric';
 import { invitationCreateSchema, invitationId, invitationNonce, invitationToken, INVITATION_TTL_MS, tokenHash, validInvitationToken } from './invitation.policy';
@@ -131,10 +132,10 @@ export class InvitationsService {
     where: { workId: { in: works.map(work => work.id) }, status: { in: ['RUNNING', 'UNCERTAIN'] } },
     select: { responseId: true, promptVersion: true },
    });
-   if (unresolved.some(call => call.promptVersion !== TAKA_INTERVIEW_VERSION || !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
+   if (unresolved.some(call => ![TAKA_INTERVIEW_VERSION, TAKA_ROLE_EVIDENCE_VERSION].includes(call.promptVersion) || !call.responseId || !/^resp_[a-zA-Z0-9_-]+$/.test(call.responseId))) {
     throw new ConflictException('Status panggilan AI perlu diperiksa operator sebelum dicoba ulang.');
    }
-   await tx.aiScreeningCall.updateMany({where:{workId:{in:works.map(w=>w.id)},status:{in:['FAILED','INVALID']}},data:{status:'RECOVERED'}});
+   await tx.aiScreeningCall.updateMany({where:{workId:{in:works.map(w=>w.id)},status:{in:['FAILED','INVALID']},promptVersion:{not:TAKA_ROLE_EVIDENCE_VERSION}},data:{status:'RECOVERED'}});
    const claim=await tx.aiScreeningWork.updateMany({where:{id:{in:works.map(w=>w.id)},status:'FAILED'},data:{status:'PENDING',attempts:0,availableAt:new Date(),error:null}});
    if(kind!=='PDF')await tx.aiScreeningEvaluation.updateMany({where:{sessionId,status:'FAILED'},data:{status:'PENDING',error:null}});
    await tx.candidateActivity.create({data:{candidateId:row.candidateId,actorUserId:user.id,kind:'SCREENING_EVALUATION_RETRY',detail:json({invitationId:id,kind})}});

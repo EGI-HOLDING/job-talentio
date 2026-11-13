@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import assert from 'node:assert/strict';
-import { ScreeningClient,AiPending,AiUncertain } from './screening.client';
+import { ScreeningClient,AiEvaluationOutputError,AiPending,AiUncertain } from './screening.client';
+import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
 async function main(){
  const original=globalThis.fetch,timeout=AbortSignal.timeout;let creates=0,polls=0,lastTimeout=0;
  let row:any=null;
@@ -69,6 +70,42 @@ async function main(){
   await assert.rejects(client.pollLiveAgenda(row,preset,100),/TARA_INVALID_OUTPUT/);
   await assert.rejects(client.run('agenda-work','agenda-packet','live-agenda',{},preset),/TARA_LIVE_AGENDA_ALREADY_SUBMITTED/);
   assert.equal(agendaSubmissions,1,'one paid submission per frozen agenda despite polling and invalid results');
+  const records=new Map<string,any>();
+  const persisted={aiScreeningCall:{
+   findUnique:async({where}:any)=>records.get(where.key??where.id),
+   count:async({where}:any)=>[...records.values()].filter(record=>record.workId===where.workId&&
+       (!where.inputHash||record.inputHash===where.inputHash)&&(!where.status?.in||where.status.in.includes(record.status))).length,
+   create:async({data}:any)=>{
+    assert.ok(!records.has(data.key));
+    const record={id:data.key,createdAt:new Date(),updatedAt:new Date(),...data};records.set(record.id,record);return record;
+   },
+   update:async({where,data}:any)=>Object.assign(records.get(where.id),data),
+   updateMany:async({where,data}:any)=>{Object.assign(records.get(where.id),data);return {count:1};},
+  }};
+  const evaluationPreset={...preset,version:TAKA_ROLE_EVIDENCE_VERSION,
+   schema:{properties:{criteria:{properties:{first:{},second:{}}}}}};
+  const makeClient=()=>new ScreeningClient(persisted as any,{get:()=> 'synthetic-key'} as any);
+  let evaluationPosts=0;
+  globalThis.fetch=(async(url:string,init:RequestInit)=>{
+   if(init.method==='DELETE')return new Response(null,{status:204});
+   if(init.method==='POST'){
+    evaluationPosts++;
+    return new Response(JSON.stringify({id:'resp_evaluation_'+evaluationPosts,status:'queued'}));
+   }
+   assert.match(url,/resp_evaluation_[12]$/);
+   return url.endsWith('_1')?complete('{"criteria":{"first":{"level":3},"second":null,"other":"ignore"}}'):
+    complete('{"invalid":true}');
+  }) as typeof fetch;
+  const evaluate=(slot:'primary'|'repair',input=slot as string)=>makeClient().run('role-work','role-session','evaluate',input,evaluationPreset,undefined,undefined,slot);
+  await assert.rejects(evaluate('primary'),AiPending);
+  const first={criteria:{first:{level:3},second:null}};
+  assert.deepEqual(await evaluate('primary'),first);
+  await assert.rejects(evaluate('repair'),AiPending);
+  assert.deepEqual(await evaluate('primary'),first,'restart retains a valid result while repair is pending');
+  await assert.rejects(evaluate('repair'),AiEvaluationOutputError);
+  await assert.rejects(evaluate('repair'),AiEvaluationOutputError);
+  await assert.rejects(evaluate('repair','different input'),AiUncertain);
+  assert.equal(evaluationPosts,2,'two bounded submissions survive a restart and a failed repair');
   console.log('Screening client transport recovery passed; paid API calls: 0.');
  }finally{globalThis.fetch=original;AbortSignal.timeout=timeout;}
 }

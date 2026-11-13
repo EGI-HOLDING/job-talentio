@@ -5,9 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { composePrompt, type ScreeningTask, type PromptPreset } from './prompts/compose';
 import { assertSchema } from './screening.schemas';
 import { hash, json, screeningModel } from './screening.policy';
+import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
 export class AiPending extends Error {
 }
 export class AiUncertain extends Error {
+}
+export class AiEvaluationOutputError extends Error {
 }
 type ResponseBody = {
     id?: string;
@@ -49,12 +52,16 @@ export class ScreeningClient {
     private async request(path: string, init: RequestInit = {}, timeoutMs?: number) {
         return fetch('https://api.openai.com/v1/responses' + path, { ...init, headers: { Authorization: 'Bearer ' + this.config.get<string>('OPENAI_API_KEY'), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(timeoutMs ?? (init.method === 'POST' ? 120000 : 20000)) });
     }
-    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset: PromptPreset, files?: Array<{ filename: string; file_data: string }>, timeoutMs?: number): Promise<unknown> {
+    async run(workId: string, subjectId: string, task: ScreeningTask, input: unknown, preset: PromptPreset, files?: Array<{ filename: string; file_data: string }>, timeoutMs?: number, evaluationSlot?: 'primary' | 'repair'): Promise<unknown> {
         if (!this.configured)
             throw new Error('TARA_PROVIDER_NOT_CONFIGURED');
         if (!preset) throw new Error('MISSING_SCREENING_PROMPT');
         const prompt = composePrompt(task, input, preset), model = preset.model ?? screeningModel(), inputHash = hash([prompt, model, files]);
-        let call = await this.db.aiScreeningCall.findFirst({ where: { workId, inputHash, status: { not: 'RECOVERED' } }, orderBy: { createdAt: 'desc' } });
+        const evaluationKey = evaluationSlot && workId + ':evaluate:' + evaluationSlot;
+        let call = evaluationKey ? await this.db.aiScreeningCall.findUnique({ where: { key: evaluationKey } }) :
+            await this.db.aiScreeningCall.findFirst({ where: { workId, inputHash, status: { not: 'RECOVERED' } }, orderBy: { createdAt: 'desc' } });
+        if (evaluationKey && call && call.inputHash !== inputHash) throw new AiUncertain('TAKA_EVALUATION_INPUT_CHANGED');
+        if (evaluationKey && call && ['FAILED', 'INVALID', 'RECOVERED'].includes(call.status)) throw new AiEvaluationOutputError('TAKA_EVALUATION_OUTPUT_UNAVAILABLE');
         if (!call && await this.db.aiScreeningCall.count({ where: { workId, status: { in: ['RUNNING', 'UNCERTAIN'] } } }))
             throw new AiUncertain('TARA_CALL_INPUT_CHANGED_REQUIRES_REVIEW');
         if (call?.status === 'ERASED')
@@ -78,10 +85,10 @@ export class ScreeningClient {
             if (activeCount >= 3)
                 throw new Error('TARA_RETRY_LIMIT');
             try {
-                call = await this.db.aiScreeningCall.create({ data: { key: singleSubmission ? workId + ':' + task : workId + ':' + inputHash + ':' + count,
+                call = await this.db.aiScreeningCall.create({ data: { key: evaluationKey ?? (singleSubmission ? workId + ':' + task : workId + ':' + inputHash + ':' + count),
                     workId, subjectId, task, model, inputHash, promptVersion: prompt.version, status: 'RUNNING' } });
             } catch (error) {
-                if (singleSubmission && (error as { code?: string })?.code === 'P2002') throw new AiPending('TARA_CALL_IN_FLIGHT');
+                if ((singleSubmission || evaluationKey) && (error as { code?: string })?.code === 'P2002') throw new AiPending('TARA_CALL_IN_FLIGHT');
                 throw error;
             }
             let response: Response;
@@ -99,7 +106,12 @@ export class ScreeningClient {
                 throw new AiUncertain('TARA_CALL_UNCERTAIN');
             }
             if (!response.ok) {
+                if (evaluationKey && (response.status >= 500 || response.status === 408)) {
+                    await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'UNCERTAIN', error: 'CREATE_RESPONSE_UNCONFIRMED' } });
+                    throw new AiUncertain('TARA_CALL_UNCERTAIN');
+                }
                 await this.db.aiScreeningCall.update({ where: { id: call.id }, data: { status: 'FAILED', error: 'PROVIDER_HTTP_' + response.status } });
+                if (evaluationKey) throw new AiEvaluationOutputError('TAKA_PROVIDER_HTTP_' + response.status);
                 throw new Error('TARA_PROVIDER_HTTP_' + response.status);
             }
             let body: ResponseBody;
@@ -152,6 +164,7 @@ export class ScreeningClient {
         responseId: string | null;
         usage?: unknown;
         task: string;
+        promptVersion: string;
     }, body: ResponseBody, schema: Parameters<typeof assertSchema>[0] | undefined) {
         const timing = responseTiming(call.usage, body);
         if (body.status === 'queued' || body.status === 'in_progress') {
@@ -180,6 +193,7 @@ export class ScreeningClient {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'FAILED', error: 'PROVIDER_' + (body.status ?? 'FAILED') } });
             if (call.task === 'live-agenda' && call.responseId)
                 await this.request('/' + call.responseId, { method: 'DELETE' }, 2000).catch(() => undefined);
+            if (call.promptVersion === TAKA_ROLE_EVIDENCE_VERSION) throw new AiEvaluationOutputError('TAKA_RESPONSE_FAILED');
             throw new Error('TARA_RESPONSE_FAILED');
         }
         const content = (body.output ?? []).filter(o => o.type === 'message').flatMap(o => o.content ?? []);
@@ -193,6 +207,12 @@ export class ScreeningClient {
                 if (!result || typeof result !== 'object' || !('claims' in result) || !Array.isArray(result.claims))
                     throw new Error('TARA_INVALID_CANDIDATE_ENVELOPE');
                 result = { claims: result.claims.slice(0, 8) };
+            } else if (call.promptVersion === TAKA_ROLE_EVIDENCE_VERSION) {
+                const rows = (result as { criteria?: unknown } | null)?.criteria;
+                if (!rows || typeof rows !== 'object' || Array.isArray(rows)) throw new Error('TAKA_INVALID_EVALUATION_ENVELOPE');
+                // Keep the requested rows for independent domain validation.
+                result = { criteria: Object.fromEntries(Object.keys(schema?.properties?.criteria?.properties ?? {})
+                    .filter(key => Object.hasOwn(rows, key)).map(key => [key, (rows as Record<string, unknown>)[key]])) };
             } else {
                 if (!schema) throw new Error('MISSING_SCREENING_PROMPT');
                 assertSchema(schema, result);
@@ -202,6 +222,7 @@ export class ScreeningClient {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'INVALID', error: 'INVALID_PROVIDER_OUTPUT' } });
             if (preparation && call.responseId)
                 await this.request('/' + call.responseId, { method: 'DELETE' }, 2000).catch(() => undefined);
+            if (call.promptVersion === TAKA_ROLE_EVIDENCE_VERSION) throw new AiEvaluationOutputError('TAKA_INVALID_OUTPUT');
             throw new Error('TARA_INVALID_OUTPUT');
         }
         const saved = await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'COMPLETED', error: null, result: json(result) } });

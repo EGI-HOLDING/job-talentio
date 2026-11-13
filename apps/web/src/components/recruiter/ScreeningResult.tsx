@@ -4,7 +4,7 @@ import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect,useState } from 'react';
 import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
 import { TaraInterviewNotes } from '@/components/screening/TaraInterviewNotes';
-import { interviewClaimLabel,interviewFieldLabel,number,roleScoreReason,type Evidence,type ScreeningEvaluation,type Report } from './screening-view';
+import { interviewClaimLabel,interviewFieldLabel,number,partialCompetency,roleScoreReason,type Evidence,type ScreeningEvaluation,type Report } from './screening-view';
 import s from './ScreeningPanel.module.css';
 export type { ScreeningEvaluation } from './screening-view';
 export function ScreeningResult({result,claims,questions=[],onEvidence,onNoteContext,focusClaim}:{result:ScreeningEvaluation;claims:Array<{id:string;statement:string;quote:string}>;questions?:Report['questions'];onEvidence?:(claimId:string,evidence:Evidence)=>void;onNoteContext?:(topicId:string,ref:string,answer:boolean)=>void;focusClaim?:string}){
@@ -15,6 +15,7 @@ export function ScreeningResult({result,claims,questions=[],onEvidence,onNoteCon
  if(role)return <div className={s.results}>
    <section><h4>Skor akhir</h4><b className={s.score}>{role.score===null?'Skor akhir belum lengkap':`${number(role.score)} / 100`}</b>
      <p>{role.score===null?roleScoreReason(role):result.summary}</p>
+     {role.partial && <p><strong>{partialCompetency(role)}</strong> · Kejelasan {number(role.partial.explanation)} / 100 (parsial)</p>}
      <dl className={s.findings}>{([['cv','Kecocokan CV'],['competency','Kompetensi kerja'],['explanation','Kejelasan penjelasan']] as const).map(([key,label])=>
        <div key={key}><dt>{label} · {role.weights[key]}%</dt><dd>{role.components[key]===null?'Belum lengkap':`${number(role.components[key])} / 100 · ${role.contributions[key]?.toLocaleString('id-ID',{maximumFractionDigits:2})} poin`}</dd></div>)}</dl>
      <small>{role.coverage.assessed} dari {role.coverage.total} kompetensi dinilai · Rubrik {role.rubricRevision.slice(0,8)} · {role.version}</small>

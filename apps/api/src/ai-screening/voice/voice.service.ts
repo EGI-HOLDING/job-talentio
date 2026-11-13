@@ -20,10 +20,11 @@ import { nativeInterview, nativeVoiceTurns, NATIVE_STARTUP_MS, NATIVE_VOICE_VERS
     type MediaSignal, type NativeDelivery, type NativeProgress } from './voice-native';
 import { voiceClock, voiceTurns, VOICE_HARD_MS, type Fragment } from './voice.policy';
 import { VoiceProvider } from './voice.provider';
-import { frozenRoleRubric } from '../role-rubric';
-import { directFarewellAt, isNativeVoice, roleVoiceEvidence, roleVoiceTurns, ROLE_VOICE_VERSION } from './voice-role';
+import { frozenRoleRubric, ROLE_ASSESSMENT_VERSION } from '../role-rubric';
+import { directFarewellAt, isNativeVoice, roleAssessmentVoiceEvidence, roleVoiceEvidence, roleVoiceTurns, ROLE_VOICE_VERSION } from './voice-role';
 import { roleLiveTranscript } from '../taka-role-assessment';
 import { liveAgendaRubric, liveInterviewTopics } from '../tara-live-agenda';
+import { takaReassessment, takaVoiceInput } from '../taka-reassessment';
 
 type Channel = ReturnType<VoiceProvider['attach']>;
 type Captured = Required<Omit<Fragment, 'id'>>;
@@ -488,12 +489,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         });
     }
 
-    async evaluate(workId: string, sessionId: string, owner?: string) {
-        const voice = await this.db.voiceInterview.findUnique({ where: { sessionId }, include: {
-            fragments: { orderBy: { id: 'asc' } }, session: { include: { currentPlan: true, invitation: true, package: true, evaluation: true } },
-        } });
-        if (!voice || !terminal.includes(voice.status) || !voice.session?.invitation || !voice.session.currentPlan || !voice.session.package ||
-            voice.session.evaluation?.result) return;
+    async evaluate(workId: string, sessionId: string, owner?: string, reassessmentKey?: string) {
+        const voice = await this.db.voiceInterview.findUnique({ where: { sessionId }, include: takaVoiceInput });
+        if (!voice || !terminal.includes(voice.status) || !voice.session?.invitation || !voice.session.currentPlan || !voice.session.package) return;
+        const reassessment = reassessmentKey ? takaReassessment(voice) : null;
+        if (reassessmentKey ? reassessment?.key !== reassessmentKey : voice.session.evaluation?.result) return;
         const plan = voice.session.currentPlan.payload as unknown as CandidatePayload;
         const rubric = voice.session.package.payload as unknown as PackagePayload;
         const progress = voice.taraInterview as unknown as NativeProgress | null;
@@ -502,9 +502,12 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         const interrupted = technical(voice.closeReason ?? '') || !voice.transcriptComplete;
         const delivery = progress?.nativeDelivery ?? { sequence: 0, windows: [] };
         const roleRubric = direct || voice.promptVersion === ROLE_VOICE_VERSION ? frozenRoleRubric(voice.session.package.jobSnapshot) : undefined;
+        const evidenceV2 = Boolean(direct && roleRubric && (reassessment || !await this.db.aiScreeningCall.count({
+            where: { workId, promptVersion: ROLE_ASSESSMENT_VERSION, status: { not: 'RECOVERED' } },
+        })));
         const role = roleRubric ? { rubric: direct ? liveAgendaRubric(roleRubric, rubric.liveAgenda) : roleRubric, transcript: roleLiveTranscript(
-            roleVoiceEvidence(voice.fragments, delivery, progress?.roleControl, direct).evidence, interrupted, direct),
-            ...(direct ? { direct } : {}) } : undefined;
+            evidenceV2 ? roleAssessmentVoiceEvidence(voice.fragments, delivery) : roleVoiceEvidence(voice.fragments, delivery, progress?.roleControl, direct).evidence,
+            interrupted, direct), ...(evidenceV2 ? { evidenceV2 } : {}), ...(direct ? { direct } : {}) } : undefined;
         const topicOrder = (voice.promptSnapshot as { topicOrder?: string[] } | null)?.topicOrder;
         let legacyTopics = direct ? topics.slice(0, 4) : topics;
         if (direct && !role && topicOrder) {
@@ -518,7 +521,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         return evaluateTakaInterview(this.db, this.client, workId, voice.session, voice.session.invitation,
             frozenTakaInterview(voice.session.invitation.snapshot, (voice.session.package.promptSnapshot as unknown as PromptRegistry)?.takaInterview),
             plan, role ? [] : liveTakaTurns(turns, projection ? new Date(projection.origin) : voice.startedAt, voice.transcriptComplete, notes),
-            { owner, notes, rubric, interrupted, role, voice: { closeReason: voice.closeReason, transcriptComplete: voice.transcriptComplete,
+            { owner, notes, rubric, interrupted, role, reassess: reassessment ? { previous: reassessment.previous, verify: async tx => {
+                await tx.$queryRaw`SELECT id FROM "VoiceInterview" WHERE id=${voice.id} FOR UPDATE`;
+                const current = await tx.voiceInterview.findUnique({ where: { id: voice.id }, include: takaVoiceInput });
+                return takaReassessment(current)?.key === reassessment.key;
+            } } : undefined, voice: { closeReason: voice.closeReason, transcriptComplete: voice.transcriptComplete,
                 durationSeconds: Math.max(0, Math.round((+(voice.endedAt ?? voice.startedAt) - +voice.startedAt) / 1000)) } });
     }
 }

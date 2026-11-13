@@ -38,6 +38,8 @@ import { evaluateTakaInterview } from './taka-evaluation';
 import { frozenRoleRubric, rolePackage } from './role-rubric';
 import { roleChatTranscript } from './taka-role-assessment';
 import { LIVE_AGENDA_PREPARATION_MS, liveAgendaRequest, liveRolePackage, prepareLiveAgenda } from './tara-live-agenda';
+import { TAKA_REASSESS_KIND } from './taka-reassessment';
+import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
 
 const agendaProviderError = /^(?:TARA_INVALID_OUTPUT|TARA_PROVIDER_NOT_CONFIGURED|TARA_RESPONSE_FAILED|TARA_PROVIDER_HTTP_\d+|TARA_LIVE_AGENDA_ALREADY_SUBMITTED|TARA_RETRY_LIMIT|SESSION_ERASED)$/;
 @Injectable()
@@ -155,6 +157,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 await this.actions!.deliver(work.subjectId);
             else if (work.kind === 'VOICE_EVALUATE')
                 await this.voice?.evaluate(id, work.subjectId, owner);
+            else if (work.kind === TAKA_REASSESS_KIND)
+                await this.voice?.evaluate(id, work.subjectId, owner, work.key);
             else if (work.kind === 'INVITE_DELIVERY')
                 await this.invitations!.deliver(work.subjectId);
             else if (work.kind === 'CAPTURE_APPLICATION')
@@ -196,7 +200,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             const message = work.cvPolicy ? 'CV_WORKER_ERROR' : error instanceof Error ? error.message : 'TARA_PROCESSING_FAILED';
             const uncertain = error instanceof AiUncertain;
             if (!uncertain && !work.cvPolicy && !['CANDIDATE', 'CANDIDATE_RESPONSE'].includes(work.kind))
-                await this.db.aiScreeningCall.updateMany({ where: { workId: id, status: 'COMPLETED' }, data: { status: 'INVALID', error: 'DOMAIN_VALIDATION_FAILED' } });
+                await this.db.aiScreeningCall.updateMany({ where: { workId: id, status: 'COMPLETED', promptVersion: { not: TAKA_ROLE_EVIDENCE_VERSION } },
+                    data: { status: 'INVALID', error: 'DOMAIN_VALIDATION_FAILED' } });
             const retry = !uncertain && work.attempts < 2 && message !== 'CV_UNREADABLE' && message !== 'NO_CV_CLAIMS' && !message.includes('RETIRED_');
             const changed = await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: retry ? 'PENDING' : 'FAILED', attempts: { increment: 1 }, availableAt: new Date(Date.now() + 10000), leaseUntil: null, leaseOwner: null, error: message.slice(0, 180) } });
             if (changed.count && !retry)

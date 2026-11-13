@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { PDF_TEMPLATE_VERSION } from './screening.policy';
 import type { CandidatePayload, EvaluationPayload, PackagePayload } from './screening.schemas';
 import { taraOutcomeLabel } from './tara-interview';
+import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
 export type ScreeningReport = {
     name: string;
     job: string;
@@ -30,7 +31,7 @@ function fonts() {
 const claimLabels = { SUPPORTED: 'Didukung penjelasan kandidat', INSUFFICIENT: 'Belum cukup bukti', CLARIFY: 'Perlu konfirmasi HR' };
 const coverageLabels = {
     NOT_ASKED: 'Belum dibahas', INSUFFICIENT_OPPORTUNITY: 'Kesempatan belum cukup',
-    TECHNICAL_INTERRUPTION: 'Kesempatan terpotong', ASSESSMENT_UNAVAILABLE: 'Penilaian perlu ditinjau',
+    TECHNICAL_INTERRUPTION: 'Kesempatan terpotong', PLAYBACK_UNVERIFIED: 'Pemutaran belum terverifikasi', ASSESSMENT_UNAVAILABLE: 'Penilaian perlu ditinjau',
 };
 const fieldLabels = { TASK: 'tugas', ACTION: 'tindakan pribadi', CONTEXT: 'konteks pengalaman', RESULT: 'hasil', ROLE_BOUNDARY: 'batas tanggung jawab' };
 const val = (n: number | null) => n === null ? '—' : n.toLocaleString('id-ID', { maximumFractionDigits: 1 });
@@ -73,6 +74,8 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
         const missing = { CV: 'Penilaian CV belum tersedia untuk rubrik ini.', RUBRIC: 'Lowongan belum memiliki kompetensi inti terstruktur.',
             COVERAGE: 'Sebagian kompetensi belum memiliki bukti atau kesempatan menjawab yang cukup.' };
         if (role.missing.length) y += text(role.missing.map(key => missing[key]).join(' '), 44, y, width, 10, false, muted) + 8;
+        if (role.partial) y += text(`${val(role.partial.competency)} / 100 kompetensi (parsial) · Kejelasan ${val(role.partial.explanation)} / 100 (parsial)`,
+            44, y, width, 10, true) + 8;
         y += text(role.coverage.assessed + ' dari ' + role.coverage.total + ' kompetensi inti dinilai · Rubrik ' + role.rubricRevision.slice(0, 8), 44, y, width, 9, false, muted) + 16;
     }
     const labels = [['cv','Kecocokan CV'],['competency','Kompetensi kerja'],['explanation','Kejelasan penjelasan']] as const;
@@ -154,8 +157,11 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     const excerpt = (value: string, n = 90) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
     const modern = data.result.claims.length > 0 && data.result.claims.every(c => 'score' in c);
-    const records = role ? role.criteria.map(row => ({ title: row.name, score: row.level, reason: row.reason,
-        quote: undefined as string | undefined, evidence: row.evidence[0], pair: row.discrepancy,
+    const fullRoleQuotes = role?.version === TAKA_ROLE_EVIDENCE_VERSION;
+    const records: Array<{ title: string; score: number | null; reason: string; quote?: string; evidence?: { questionId: string; quote: string };
+        quotes?: Array<{ questionId: string; quote: string }>; pair?: EvaluationPayload['claims'][number]['contradictions'][number]; status: string }> =
+        role ? role.criteria.map(row => ({ title: row.name, score: row.level, reason: row.reason,
+        quote: undefined as string | undefined, evidence: row.evidence[0], quotes: fullRoleQuotes ? row.evidence : undefined, pair: row.discrepancy,
         status: row.state === 'ASSESSED' ? 'Kejelasan ' + row.clarity + '/4' : coverageLabels[row.state] })) :
         modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null,
         reason: result.reason + (result.score != null && result.assessment?.openFields.length
@@ -171,9 +177,12 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
             // A discrepancy already contains its source evidence. Do not repeat the
             // same CV/answer excerpts and crowd out other claims on the report.
             const pairHasCv = result.pair && [result.pair.left, result.pair.right].some(s => s.source === 'CV');
+            const quotedAnswers = result.quotes?.map(evidence =>
+                (data.questionLabels?.[evidence.questionId] ?? 'Jawaban') + ' · “' + evidence.quote + '”') ?? [];
             const lines = [result.status + ' · ' + result.reason,
                 result.quote && !pairHasCv ? 'CV: “' + excerpt(result.quote, 70) + '”' : null,
-                !result.pair && result.evidence ? (data.questionLabels?.[result.evidence.questionId] ?? 'Jawaban') + ': “' + excerpt(result.evidence.quote, 70) + '”' : !result.pair && modern ? 'Tidak ada jawaban yang dapat dikutip.' : null,
+                ...quotedAnswers,
+                !fullRoleQuotes && !result.pair && result.evidence ? (data.questionLabels?.[result.evidence.questionId] ?? 'Jawaban') + ': “' + excerpt(result.evidence.quote, 70) + '”' : !result.pair && modern ? 'Tidak ada jawaban yang dapat dikutip.' : null,
                 result.pair ? label(result.pair.left) + ': “' + excerpt(result.pair.left.quote, 65) + '”\n' + label(result.pair.right) + ': “' + excerpt(result.pair.right.quote, 65) + '”' : null].filter(Boolean).join('\n');
             const titleHeight = doc.font('Bold').fontSize(10).heightOfString(result.title, { width: cardWidth - 64 });
             const rowHeight = titleHeight + doc.font('Body').fontSize(9.5).heightOfString(lines, { width: cardWidth - 20, lineGap: 0 }) + 20;

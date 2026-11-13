@@ -20,6 +20,8 @@ import { CURRENT_CONVERSATION } from '../conversation.policy';
 import { TAKA_INTERVIEW_VERSION } from '../taka-interview';
 import { frozenRoleRubric, ROLE_ASSESSMENT_VERSION } from '../role-rubric';
 import type { RoleAssessment } from '../taka-role-assessment';
+import { TAKA_ROLE_EVIDENCE_VERSION } from '../taka-versions';
+import { inspectTakaReassessment, queueTakaReassessment, TAKA_REASSESS_KIND } from '../taka-reassessment';
 import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 
 const db=new PrismaService();
@@ -47,6 +49,8 @@ async function main(){
  let calls=0, alternativeSkillFixture=false, corruptTakaRef=false;
  const takaRequests: string[][] = [];
  const roleRequests: Array<{ criteria: string[]; answerCount: number }> = [];
+ let roleRepairFixture = false;
+ const roleRepairAttempts: string[][] = [];
  function roleJudgement(input: { criteria: Array<{ id: string; name: string }>; evidence: Array<{ id: string; ref: string; text: string }>;
   transcript: Array<{ id: string; question?: boolean; topicId?: string }> }) {
   roleRequests.push({ criteria: input.criteria.map(row => row.id), answerCount: new Set(input.evidence.map(row => row.ref)).size });
@@ -240,6 +244,18 @@ async function main(){
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
   if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
   if(preset?.version===ROLE_ASSESSMENT_VERSION)return roleJudgement(input);
+  if(preset?.version===TAKA_ROLE_EVIDENCE_VERSION){
+   const graded = roleJudgement({...input, evidence: input.answers.map((row:any)=>({...row,ref:row.turnId}))});
+   if(roleRepairFixture) roleRepairAttempts.push(input.criteria.map((row:any)=>row.id));
+   return {criteria:Object.fromEntries(Object.entries(graded.criteria).map(([id,row])=>[id,{...row,
+    level:roleRepairFixture&&row.level===3?null:row.level,clarity:roleRepairFixture&&row.level===3?null:row.clarity,
+    basis:roleRepairFixture&&row.level===3?'INSUFFICIENT':row.basis,
+    evidence:roleRepairFixture&&row.level===3?[]:row.evidence,
+    questionRef:roleRepairFixture&&row.level===3?(roleRepairAttempts.length===1?'not-a-question':null):row.level===null?null:id,
+    fit:row.level===null||roleRepairFixture&&row.level===3?null:'DIRECT',
+    actionRef:roleRepairFixture&&row.level===3?null:row.evidence[0]??null,requiresQuestionContext:false,
+   }]))};
+  }
   throw Error('Retired voice evaluator invoked');
  }};
  const voiceService=new VoiceService(db,config,sessions,{
@@ -581,6 +597,50 @@ async function main(){
  }
  assert.equal((await invitations.report(hr,takaText.invitationId)).evaluation?.finalScore,null,'new scoring does not replace history');
  await assert.rejects(invitations.report({...hr,id:'foreign-hr'},roleVoice.id));
+
+ // Give the already completed synthetic session a historical result and the mistaken saved references from the audit.
+ const evaluated = await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId:roleVoice.sessionId}});
+ const originalHash = 'legacy-reference-regression';
+ await db.aiScreeningEvaluation.update({where:{id:evaluated.id},data:{promptVersion:ROLE_ASSESSMENT_VERSION,inputHash:originalHash,
+  status:'NEEDS_REVIEW',screeningScore:null,finalScore:null}});
+ await db.aiScreeningEvaluationRevision.create({data:{evaluationId:evaluated.id,inputHash:originalHash,promptVersion:ROLE_ASSESSMENT_VERSION,
+  snapshot:{pdfKey:evaluated.pdfKey,pdfVersion:evaluated.pdfVersion,tag:'frozen'}}});
+ await db.aiScreeningCall.create({data:{key:'past-role-reference-regression',workId:'past-role-work',subjectId:roleVoice.sessionId,task:'evaluate',
+  promptVersion:ROLE_ASSESSMENT_VERSION,model:'gpt-6-luna',inputHash:'fixture',status:'COMPLETED',
+  result:{criteria:Object.fromEntries(frozenRole.interviewIds.map(id=>[id,{questionRef:id,level:3}]))}}});
+ const dryRun = await inspectTakaReassessment(db,roleVoice.sessionId);
+ assert.equal(dryRun?.badReferences,2);
+ assert.equal(await db.$transaction(tx=>queueTakaReassessment(tx,roleVoice.sessionId,'stale-revision')),null);
+ const replay=await db.$transaction(tx=>queueTakaReassessment(tx,roleVoice.sessionId,dryRun!.key));
+ assert.equal(replay?.kind,TAKA_REASSESS_KIND);
+ assert.equal((await db.$transaction(tx=>queueTakaReassessment(tx,roleVoice.sessionId,dryRun!.key)))?.id,replay!.id);
+ roleRepairFixture=true;
+ await restartedWorker.process(replay!.id);
+ roleRepairFixture=false;
+ assert.deepEqual(roleRepairAttempts,[frozenRole.interviewIds,[frozenRole.interviewIds[1]]]);
+ const revised=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{id:evaluated.id}});
+ const revisedAssessment=(revised.result as {roleAssessment:RoleAssessment}).roleAssessment;
+ assert.equal(revised.promptVersion,TAKA_ROLE_EVIDENCE_VERSION);
+ assert.deepEqual(revisedAssessment.criteria.map(row=>[row.level,row.state]),[[4,'ASSESSED'],[null,'NOT_ASKED']]);
+ assert.deepEqual(revisedAssessment.partial,{competency:100,explanation:75});
+ assert.equal(revised.finalScore,null);
+ await deliver('PDF',roleVoice.sessionId);
+ const revisedReport=await invitations.report(hr,roleVoice.id), revisedList=(await invitations.list(hr,roleCandidate.id)).find(row=>row.id===roleVoice.id);
+ assert.deepEqual(revisedReport.evaluation?.result,revisedList?.session?.evaluation?.result);
+ assert.equal(revisedReport.pdfStatus,'READY');
+ assert.deepEqual((await db.aiScreeningEvaluationRevision.findUniqueOrThrow({where:{evaluationId_inputHash:{evaluationId:evaluated.id,inputHash:originalHash}}})).snapshot,
+  {pdfKey:evaluated.pdfKey,pdfVersion:evaluated.pdfVersion,tag:'frozen'});
+ const revisedPdf=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{id:evaluated.id}});
+ assert.notEqual(revisedPdf.pdfKey,evaluated.pdfKey);
+ const partialPdf=pdfjs.getDocument({data:new Uint8Array(objects.get(revisedPdf.pdfKey!)!),verbosity:0});
+ try{
+  const page=await (await (await partialPdf.promise).getPage(1)).getTextContent();
+  const content=page.items.flatMap(item=>'str' in item?[item.str]:[]).join(' ');
+  assert.match(content,/100\s*\/\s*100 kompetensi \(parsial\)/);
+  assert.match(content,/1 dari 2 kompetensi inti dinilai/);
+ }finally{await partialPdf.destroy();}
+ assert.equal((await db.$transaction(tx=>queueTakaReassessment(tx,roleVoice.sessionId,dryRun!.key)))?.status,'DONE');
+ assert.equal(await db.aiScreeningWork.count({where:{kind:TAKA_REASSESS_KIND,subjectId:roleVoice.sessionId}}),1);
 
  const silentInvite=await roleInvite('VOICE','role-no-speaker');
  assert.equal(liveAgendaCalls,1,'a subsequent Live invitation reuses the frozen agenda');
