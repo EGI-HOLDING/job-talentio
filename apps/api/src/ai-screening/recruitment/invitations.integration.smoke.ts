@@ -20,7 +20,7 @@ import { CURRENT_CONVERSATION } from '../conversation.policy';
 import { TAKA_INTERVIEW_VERSION } from '../taka-interview';
 import { frozenRoleRubric, ROLE_ASSESSMENT_VERSION } from '../role-rubric';
 import type { RoleAssessment } from '../taka-role-assessment';
-import { TAKA_ROLE_EVIDENCE_VERSION } from '../taka-versions';
+import { TAKA_ROLE_EVIDENCE_VERSION, TAKA_ROLE_VALIDATION_VERSION } from '../taka-versions';
 import { inspectTakaReassessment, queueTakaReassessment, TAKA_REASSESS_KIND } from '../taka-reassessment';
 import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 
@@ -620,7 +620,7 @@ async function main(){
  assert.deepEqual(roleRepairAttempts,[frozenRole.interviewIds,[frozenRole.interviewIds[1]]]);
  const revised=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{id:evaluated.id}});
  const revisedAssessment=(revised.result as {roleAssessment:RoleAssessment}).roleAssessment;
- assert.equal(revised.promptVersion,TAKA_ROLE_EVIDENCE_VERSION);
+ assert.equal(revised.promptVersion,TAKA_ROLE_VALIDATION_VERSION);
  assert.deepEqual(revisedAssessment.criteria.map(row=>[row.level,row.state]),[[4,'ASSESSED'],[null,'NOT_ASKED']]);
  assert.deepEqual(revisedAssessment.partial,{competency:100,explanation:75});
  assert.equal(revised.finalScore,null);

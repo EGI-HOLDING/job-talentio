@@ -12,7 +12,9 @@ import type { RoleRubric } from './role-rubric';
 import { acceptRoleJudgements, frozenRoleAssessment, prepareRoleEvidence, roleEvaluationRequest,
     scoreRoleAssessment, type RoleTranscriptEntry } from './taka-role-assessment';
 import { acceptRoleEvidence, roleEvidenceReferences, roleEvidenceRequest } from './taka-role-evidence';
-import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { TAKA_ROLE_EVIDENCE_VERSION, TAKA_ROLE_VALIDATION_VERSION } from './taka-versions';
+import { savedTakaResponses } from './taka-reassessment';
+import { composePrompt } from './prompts/compose';
 
 export async function evaluateTakaInterview(
     db: PrismaService, client: ScreeningClient, workId: string,
@@ -24,18 +26,18 @@ export async function evaluateTakaInterview(
         applicationCv?: { assessable: boolean; total: number } | null;
         role?: { rubric: RoleRubric; transcript: RoleTranscriptEntry[]; direct?: boolean; evidenceV2?: boolean };
         voice?: { closeReason: string | null; transcriptComplete: boolean; durationSeconds: number };
-        reassess?: { previous: string; verify: (tx: Prisma.TransactionClient) => Promise<boolean> } },
+        reassess?: { previous: string; savedResponseOnly: boolean; verify: (tx: Prisma.TransactionClient) => Promise<boolean> } },
 ) {
     if (role) preset = frozenRoleAssessment(invitation?.snapshot);
-    if (role?.evidenceV2) preset = { ...preset, version: TAKA_ROLE_EVIDENCE_VERSION };
     const legacyInput = [preset, session.currentPlanId, plan, rubric, turns, interrupted, notes, voice, applicationCv];
     const roleInput = role ? [...legacyInput, role, invitation?.snapshot] : legacyInput;
-    const inputHash = hash(reassess ? [...roleInput, { reassessedFrom: reassess.previous }] : roleInput);
+    const inputHash = hash([...roleInput, ...(role?.evidenceV2 ? [TAKA_ROLE_VALIDATION_VERSION] : []),
+        ...(reassess ? [{ reassessedFrom: reassess.previous }] : [])]);
     const previous = await db.aiScreeningEvaluation.findUnique({ where: { sessionId: session.id } });
     if (previous?.result && previous.inputHash === inputHash) return;
     if (reassess && previous?.inputHash !== reassess.previous) return;
     if (await db.aiScreeningCall.count({ where: { subjectId: session.id, task: 'evaluate',
-        promptVersion: { not: preset.version }, status: { in: ['RUNNING', 'UNCERTAIN'] } } }))
+        workId: { not: workId }, status: { in: ['RUNNING', 'UNCERTAIN'] } } }))
         throw new AiUncertain('Taka masih merekonsiliasi penilaian terdahulu.');
 
     const frozen = invitation?.snapshot as { cvScore?: number | null;
@@ -87,7 +89,26 @@ export async function evaluateTakaInterview(
                     else if (!(error instanceof AiEvaluationOutputError)) throw error;
                 }
             }
-            if (assessable) {
+            if (reassess?.savedResponseOnly) {
+                const saved = await savedTakaResponses(db, session.id, reassess.previous);
+                const previousContract = [{ ...preset, version: TAKA_ROLE_EVIDENCE_VERSION }, ...roleInput.slice(1)];
+                if (!saved || hash([...previousContract, { reassessedFrom: saved.from }]) !== saved.evaluationHash)
+                    throw new Error('TAKA_SAVED_EVIDENCE_CHANGED');
+                const primary = roleEvidenceRequest(evidence, refs, ids);
+                function stored(request: typeof primary, slot: 'primary' | 'repair') {
+                    const inputHash = hash([composePrompt('evaluate', request.data, request.preset), request.preset.model, undefined]);
+                    return saved?.calls.find(row => row.key.endsWith(':' + slot) && row.inputHash === inputHash)?.result;
+                }
+                const raw = stored(primary, 'primary');
+                const reviews = acceptRoleEvidence(evidence, refs, raw, ids, { requireVerifiedPlayback: true });
+                for (const [id, row] of acceptRoleEvidence(evidence, refs, raw, ids)) judgements.set(id, row);
+                const unresolved = ids.filter(id => !reviews.has(id));
+                const repair = stored(roleEvidenceRequest(evidence, refs, unresolved, true), 'repair');
+                for (const [id, row] of acceptRoleEvidence(evidence, refs, repair, unresolved)) {
+                    if (!judgements.has(id)) judgements.set(id, row);
+                }
+                if (!judgements.size) throw new Error('TAKA_SAVED_EVIDENCE_REQUIRES_REVIEW');
+            } else if (assessable) {
                 await assessRows(ids, 'primary');
                 const unresolved = ids.filter(id => !judgements.has(id));
                 if (!uncertain && unresolved.length) await assessRows(unresolved, 'repair');
@@ -134,14 +155,15 @@ export async function evaluateTakaInterview(
         if (current?.inputHash !== inputHash) {
             if (reassess && (current?.inputHash !== reassess.previous || !await reassess.verify(tx))) return;
             if (current?.result && !reassess) return;
+            const assessmentPreset = role?.evidenceV2 ? { ...preset, version: TAKA_ROLE_VALIDATION_VERSION } : preset;
             const data = { status: ready ? 'READY' : 'NEEDS_REVIEW',
-                promptVersion: preset.version, inputHash, model: preset.model, result: json(payload), error: null,
+                promptVersion: assessmentPreset.version, inputHash, model: preset.model, result: json(payload), error: null,
                 cvScore, ...(cvBreakdown ? { cvBreakdown: json(cvBreakdown) } : {}),
                 screeningScore: score, finalScore, pdfKey: null, pdfVersion: null };
             const saved = await tx.aiScreeningEvaluation.upsert({ where: { sessionId: session.id },
                 create: { sessionId: session.id, ...data }, update: data });
             await tx.aiScreeningEvaluationRevision.upsert({ where: { evaluationId_inputHash: { evaluationId: saved.id, inputHash } },
-                create: { evaluationId: saved.id, inputHash, promptVersion: preset.version, snapshot: json({ ...saved, promptSnapshot: preset }) },
+                create: { evaluationId: saved.id, inputHash, promptVersion: assessmentPreset.version, snapshot: json({ ...saved, promptSnapshot: assessmentPreset }) },
                 update: {} });
         }
         await enqueueEvaluationPdf(tx, session.id, inputHash);

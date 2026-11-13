@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { PDF_TEMPLATE_VERSION } from './screening.policy';
 import type { CandidatePayload, EvaluationPayload, PackagePayload } from './screening.schemas';
 import { taraOutcomeLabel } from './tara-interview';
-import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { TAKA_ROLE_EVIDENCE_VERSION, TAKA_ROLE_VALIDATION_VERSION } from './taka-versions';
 export type ScreeningReport = {
     name: string;
     job: string;
@@ -157,7 +157,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     const excerpt = (value: string, n = 90) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
     const modern = data.result.claims.length > 0 && data.result.claims.every(c => 'score' in c);
-    const fullRoleQuotes = role?.version === TAKA_ROLE_EVIDENCE_VERSION;
+    const fullRoleQuotes = role?.version === TAKA_ROLE_EVIDENCE_VERSION || role?.version === TAKA_ROLE_VALIDATION_VERSION;
     const records: Array<{ title: string; score: number | null; reason: string; quote?: string; evidence?: { questionId: string; quote: string };
         quotes?: Array<{ questionId: string; quote: string }>; pair?: EvaluationPayload['claims'][number]['contradictions'][number]; status: string }> =
         role ? role.criteria.map(row => ({ title: row.name, score: row.level, reason: row.reason,

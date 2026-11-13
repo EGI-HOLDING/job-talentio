@@ -521,7 +521,8 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         return evaluateTakaInterview(this.db, this.client, workId, voice.session, voice.session.invitation,
             frozenTakaInterview(voice.session.invitation.snapshot, (voice.session.package.promptSnapshot as unknown as PromptRegistry)?.takaInterview),
             plan, role ? [] : liveTakaTurns(turns, projection ? new Date(projection.origin) : voice.startedAt, voice.transcriptComplete, notes),
-            { owner, notes, rubric, interrupted, role, reassess: reassessment ? { previous: reassessment.previous, verify: async tx => {
+            { owner, notes, rubric, interrupted, role, reassess: reassessment ? { previous: reassessment.previous,
+                savedResponseOnly: reassessment.savedResponseOnly, verify: async tx => {
                 await tx.$queryRaw`SELECT id FROM "VoiceInterview" WHERE id=${voice.id} FOR UPDATE`;
                 const current = await tx.voiceInterview.findUnique({ where: { id: voice.id }, include: takaVoiceInput });
                 return takaReassessment(current)?.key === reassessment.key;

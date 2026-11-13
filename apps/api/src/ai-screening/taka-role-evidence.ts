@@ -55,7 +55,8 @@ export function roleEvidenceRequest(input: RoleInput, refs: ReturnType<typeof ro
     };
 }
 
-export function acceptRoleEvidence(input: RoleInput, refs: ReturnType<typeof roleEvidenceReferences>, raw: unknown, ids: string[]) {
+export function acceptRoleEvidence(input: RoleInput, refs: ReturnType<typeof roleEvidenceReferences>, raw: unknown, ids: string[],
+    { requireVerifiedPlayback = false } = {}) {
     const accepted = new Map<string, RoleJudgement>();
     const rows = (raw as { criteria?: Record<string, Proposed> } | null)?.criteria;
     for (const id of ids) {
@@ -79,7 +80,9 @@ export function acceptRoleEvidence(input: RoleInput, refs: ReturnType<typeof rol
             if (level === null || level <= 0 || clarity === null || !row.evidence.length || !row.fit ||
                 row.actionRef !== null && !row.evidence.includes(row.actionRef)) continue;
             const context = redirect ?? question;
-            if (row.requiresQuestionContext && (invalidQuestion || context?.opportunity !== 'ANSWERED' ||
+            // Playback proves an opportunity for a zero. Timing and the recorded
+            // exchange itself can establish context for a substantive answer.
+            if (row.requiresQuestionContext && (invalidQuestion || !context || requireVerifiedPlayback && context.opportunity !== 'ANSWERED' ||
                 !row.evidence.some(ref => inWindow(original(ref), context)))) continue;
             if (row.fit === 'TRANSFERABLE') {
                 level = Math.min(level, 2);

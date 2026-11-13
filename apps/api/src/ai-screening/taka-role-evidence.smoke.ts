@@ -43,6 +43,13 @@ assert.equal(accepted.get(proposal)?.evidence[0], 'answer:v2:0');
 assert.equal(acceptRoleEvidence(input, refs, { criteria: { [proposal]: { ...proposalRow, requiresQuestionContext: true },
     [scope]: { ...scopeRow, evidence: ['a999'] }, [security]: { ...zero, questionRef: 'q1' },
     [integration]: { ...offTopic, evidence: ['a5'] } } }, ids).size, 0);
+const contextual = { ...proposalRow, questionRef: 'q1', requiresQuestionContext: true };
+const contextualResult = { criteria: { [proposal]: contextual } };
+assert.equal(acceptRoleEvidence(input, refs, contextualResult, [proposal]).get(proposal)?.level, 4,
+    'a substantive answer in the question window can establish context when the playback meter is incomplete');
+assert.equal(acceptRoleEvidence(input, refs, contextualResult, [proposal], { requireVerifiedPlayback: true }).size, 0);
+assert.equal(acceptRoleEvidence(input, refs, { criteria: { [proposal]: { ...contextual, evidence: ['a3'], actionRef: 'a3' } } }, [proposal]).size, 0,
+    'a later discussion cannot establish context for an unrelated earlier question');
 assert.equal(acceptRoleEvidence(input, refs, { criteria: { [proposal]: { ...proposalRow, actionRef: null } } }, ids).size, 0);
 assert.equal(acceptRoleEvidence(input, refs, { criteria: { [proposal]: { ...proposalRow, evidence: ['answer:other-session:0'] } } }, ids).size, 0);
 assert.equal(acceptRoleEvidence(input, refs, { criteria: { [proposal]: { ...proposalRow, basis: 'DECLINED', level: 0, clarity: 0,

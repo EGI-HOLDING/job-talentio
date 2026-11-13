@@ -7,7 +7,7 @@ import { redactScreeningContacts, scoreScreening } from './screening.policy';
 import type { CandidatePayload, ClaimResult, EvaluationPayload, JsonSchema } from './screening.schemas';
 import { chatTakaTurns } from './taka-interview';
 import type { RoleVoiceEvidence } from './voice/voice-role';
-import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { TAKA_ROLE_EVIDENCE_VERSION, TAKA_ROLE_VALIDATION_VERSION } from './taka-versions';
 
 type Opportunity = 'ANSWERED' | 'SILENCE' | 'INTERRUPTED' | 'UNVERIFIED' | 'PLAYBACK_INTERRUPTED';
 export type RoleTranscriptEntry = {
@@ -33,7 +33,7 @@ type Grade = {
 };
 type Components = { [Key in keyof typeof ROLE_WEIGHTS]: number | null };
 export type RoleAssessment = {
-    version: typeof ROLE_ASSESSMENT_VERSION | typeof TAKA_ROLE_EVIDENCE_VERSION;
+    version: typeof ROLE_ASSESSMENT_VERSION | typeof TAKA_ROLE_EVIDENCE_VERSION | typeof TAKA_ROLE_VALIDATION_VERSION;
     rubricRevision: string;
     state: 'COMPLETE' | 'INCOMPLETE';
     missing: Array<'CV' | 'RUBRIC' | 'COVERAGE'>;
@@ -251,7 +251,7 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
         Math.round((cvScore * ROLE_WEIGHTS.cv + competency * ROLE_WEIGHTS.competency + explanation * ROLE_WEIGHTS.explanation) / 10) / 10;
     const contribution = (value: number | null, weight: number) => value === null ? null : Math.round(value * weight) / 100;
     const measured = grades.filter(row => row.level !== null);
-    const roleAssessment: RoleAssessment = { version: evidencePolicy ? TAKA_ROLE_EVIDENCE_VERSION : ROLE_ASSESSMENT_VERSION, rubricRevision: input.rubric.revision,
+    const roleAssessment: RoleAssessment = { version: evidencePolicy ? TAKA_ROLE_VALIDATION_VERSION : ROLE_ASSESSMENT_VERSION, rubricRevision: input.rubric.revision,
         state: score === null ? 'INCOMPLETE' : 'COMPLETE', missing, components: { cv: cvScore, competency, explanation },
         contributions: { cv: contribution(cvScore, ROLE_WEIGHTS.cv), competency: contribution(competency, ROLE_WEIGHTS.competency),
             explanation: contribution(explanation, ROLE_WEIGHTS.explanation) },
