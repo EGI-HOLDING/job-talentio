@@ -35,6 +35,8 @@ import { conversationTone, isCurrentConversation, requireCurrentConversation } f
 import { taraAssessmentTopics, taraTopics, taraInterviewReport, validTaraDecision, type TaraProgress, type TaraDecision } from './tara-interview';
 import { chatTakaTurns, frozenTakaInterview } from './taka-interview';
 import { evaluateTakaInterview } from './taka-evaluation';
+import { frozenRoleRubric, rolePackage } from './role-rubric';
+import { roleChatTranscript } from './taka-role-assessment';
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -232,6 +234,11 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             return;
         }
         const job = packet.jobSnapshot as Record<string, unknown>, company = packet.companySnapshot;
+        const role = frozenRoleRubric(job);
+        if (role?.interviewIds.length) {
+            await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'READY', payload: json(rolePackage(role)), error: null } });
+            return;
+        }
         const input = { job: { title: job.title, description: job.description, skills: job.jobSkills, languages: job.jobLanguages, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin,
             responsibilities: job.responsibilities,
         }, company };
@@ -413,11 +420,13 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const rubric = session.package.payload as unknown as PackagePayload;
         const progress = session.taraInterview as unknown as TaraProgress | null;
         const notes = progress ? taraInterviewReport(progress, taraTopics(plan, rubric, isCurrentConversation(session.package.conversationPolicy))) : undefined;
+        const roleRubric = frozenRoleRubric(session.package.jobSnapshot);
         const applicationCv = session.invitation ? undefined : await this.cvAssessment(session, session.package.jobSnapshot);
         await evaluateTakaInterview(this.db, this.client, workId, session, session.invitation,
             frozenTakaInterview(session.invitation?.snapshot, (session.package.promptSnapshot as unknown as PromptRegistry)?.takaInterview),
-            plan, chatTakaTurns(session.questions, notes),
-            { rubric, notes, owner, applicationCv, interrupted: progress?.endedReason === 'INTERRUPTED' });
+            plan, roleRubric ? [] : chatTakaTurns(session.questions, notes),
+            { rubric, notes, owner, applicationCv, interrupted: progress?.endedReason === 'INTERRUPTED',
+                role: roleRubric ? { rubric: roleRubric, transcript: roleChatTranscript(session.questions, notes) } : undefined });
     }
     private async ensurePdfWork(id: string) {
         const evaluation = await this.db.aiScreeningEvaluation.findUnique({ where: { sessionId: id } });
@@ -438,7 +447,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         };
         const buffer = await renderScreeningReport({ name: session.profile.user.fullName, job: job.title, company: job.company.name, submittedAt: session.application?.createdAt ?? session.completedAt ?? session.startedAt ?? session.createdAt,
             independentScores: Boolean(session.invitation), methodology: session.evaluation.promptVersion, jobVersion: session.package.version, cvScore: session.evaluation.cvScore, screeningScore: session.evaluation.screeningScore, finalScore: session.evaluation.finalScore,
-            questionLabels: Object.fromEntries([...session.questions.map(q => [q.id, 'Q' + (q.position + 1)]), ...(session.voice?.fragments.map(f=>['v'+f.id, Math.floor(f.startMs/60000)+':'+String(Math.floor(f.startMs/1000)%60).padStart(2,'0')])??[])]), result: session.evaluation.result as unknown as EvaluationPayload, rubric: session.package.payload as unknown as PackagePayload, plan: session.currentPlan.payload as unknown as CandidatePayload });
+            questionLabels: Object.fromEntries([...session.questions.flatMap(q => [[q.id, 'Q' + (q.position + 1)],
+                ['answer:' + q.id, 'Q' + (q.position + 1)]]), ...(session.voice?.fragments.map(f=>['v'+f.id, Math.floor(f.startMs/60000)+':'+String(Math.floor(f.startMs/1000)%60).padStart(2,'0')])??[])]), result: session.evaluation.result as unknown as EvaluationPayload, rubric: session.package.payload as unknown as PackagePayload, plan: session.currentPlan.payload as unknown as CandidatePayload });
         const key = 'screening/reports/' + session.evaluation.id + '/' + session.evaluation.inputHash + '/' + PDF_TEMPLATE_VERSION + '.pdf';
         await this.storage.putObject(key, buffer, 'application/pdf');
         const kept = await this.db.aiScreeningEvaluation.updateMany({ where: { id: session.evaluation.id, inputHash: session.evaluation.inputHash }, data: { pdfKey: key, pdfVersion: PDF_TEMPLATE_VERSION } });

@@ -1,9 +1,10 @@
 import { recordTaraOpportunity, startTara, TARA_FIRST_PASS_MS, TOPIC_MS, type TaraProgress, type TaraTopic } from '../tara-interview';
 import type { Fragment, VoiceTurn } from './voice.policy';
+import type { RoleVoiceControl, VoiceControlEvent } from './voice-role';
 
 export const NATIVE_VOICE_VERSION = 'tara-voice-native-v1';
 export const NATIVE_STARTUP_MS = 60_000;
-export type MediaSignal = 'READY' | 'AUDIBLE' | 'QUIET' | 'INTERRUPTED' | 'TEXT_SHOWN';
+export type MediaSignal = 'READY' | 'AUDIBLE' | 'QUIET' | 'INTERRUPTED' | 'TEXT_SHOWN' | 'OUTPUT_DROPPED';
 type AudibleWindow = { start: number; end: number; interrupted?: boolean };
 export type NativeDelivery = {
     origin?: number;
@@ -13,7 +14,7 @@ export type NativeDelivery = {
     windows: AudibleWindow[];
     shown?: string[];
 };
-export type NativeProgress = TaraProgress & { nativeDelivery?: NativeDelivery };
+export type NativeProgress = TaraProgress & { nativeDelivery?: NativeDelivery; roleControl?: RoleVoiceControl; voiceControls?: VoiceControlEvent[] };
 
 export function nativeVoiceTurns(fragments: Fragment[]): VoiceTurn[] {
     const lanes = new Map<string, VoiceTurn[]>();
@@ -56,6 +57,7 @@ export function topicForQuestion(text: string, topics: readonly TaraTopic[]) {
 export function recordMedia(delivery: NativeDelivery, event: MediaSignal, sequence: number, now: number, transcriptEventId?: string) {
     if (sequence <= delivery.sequence) return false;
     delivery.sequence = sequence;
+    if (event === 'OUTPUT_DROPPED') return true;
     if (event === 'AUDIBLE') {
         delivery.firstAudible ??= now;
         delivery.open ??= now;

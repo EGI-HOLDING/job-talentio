@@ -64,19 +64,37 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     const voice=(data.result as unknown as {voice?:{partial:boolean;testedClaims:number;totalClaims:number;durationSeconds:number;transcriptComplete:boolean}}).voice;
     const alternative=data.result.taraInterview?.topics.some(topic=>topic.alternative);
     const assessment=data.result.interviewAssessment;
-    const notice=assessment?.state==='NO_ASSESSABLE_CLAIMS'?'Belum ada klaim yang dapat dinilai':
-        assessment?.state==='PARTIAL'||!assessment&&voice?.partial?'Hasil parsial — perlu ditinjau HR':null;
+    const role = data.result.roleAssessment;
+    const notice=!role && (assessment?.state==='NO_ASSESSABLE_CLAIMS'?'Belum ada klaim yang dapat dinilai':
+        assessment?.state==='PARTIAL'||!assessment&&voice?.partial?'Hasil parsial — perlu ditinjau HR':null);
     if(notice){doc.roundedRect(44,y,230,23,5).fill('#fff2dc');text(notice,52,y+5,214,9,true,'#96621c');y+=33;}
-    const scores = data.independentScores ? [['Kecocokan CV',data.cvScore],['Dukungan klaim CV',data.screeningScore]] : [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]];
+    if (role) {
+        y += text(role.score === null ? 'Skor akhir belum lengkap' : 'Skor akhir ' + val(role.score) + ' / 100', 44, y, width, 19, true, purple) + 7;
+        const missing = { CV: 'Penilaian CV belum tersedia untuk rubrik ini.', RUBRIC: 'Lowongan belum memiliki kompetensi inti terstruktur.',
+            COVERAGE: 'Sebagian kompetensi belum memiliki bukti atau kesempatan menjawab yang cukup.' };
+        if (role.missing.length) y += text(role.missing.map(key => missing[key]).join(' '), 44, y, width, 10, false, muted) + 8;
+        y += text(role.coverage.assessed + ' dari ' + role.coverage.total + ' kompetensi inti dinilai · Rubrik ' + role.rubricRevision.slice(0, 8), 44, y, width, 9, false, muted) + 16;
+    }
+    const labels = [['cv','Kecocokan CV'],['competency','Kompetensi kerja'],['explanation','Kejelasan penjelasan']] as const;
+    const scores = role ? labels.map(([key, label]) => [label + ' · ' + role.weights[key] + '%', role.components[key]] as const) :
+        data.independentScores ? [['Kecocokan CV',data.cvScore],['Dukungan klaim CV',data.screeningScore]] : [['Skor gabungan', data.finalScore], ['Kecocokan CV', data.cvScore], ['Dukungan klaim CV', data.screeningScore]];
     const gap = 12, card = (width - (scores.length - 1) * gap) / scores.length;
     for (const [i, [label, n]] of scores.entries()) {
         const x = 44 + i * (card + gap);
         doc.roundedRect(x, y, card, 78, 7).fill(i === 0 ? '#f1edff' : '#f8fafd');
         text(String(label), x + 12, y + 12, card - 24, 9, true, muted);
-        text(val(n as number | null) + (data.independentScores && n !== null ? ' / 100' : ''), x + 12, y + 30, card - 24, 24, true, i === 0 ? purple : navy);
+        if (role) {
+            const key = labels[i][0], points = role.contributions[key];
+            text(n === null ? 'Belum lengkap' : val(n as number) + ' / 100', x + 12, y + 28, card - 24, 15, true, i === 0 ? purple : navy);
+            if (points !== null) text(points.toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' poin', x + 12, y + 52, card - 24, 9, false, muted);
+        } else text(val(n as number | null) + (data.independentScores && n !== null ? ' / 100' : ''), x + 12, y + 30, card - 24, 24, true, i === 0 ? purple : navy);
     }
     y += 98;
-    if(data.independentScores){
+    if (role) {
+        heading('Ringkasan', y);
+        y += text(data.result.summary, 44, y + 22, width, 10) + 28;
+        if (role.coverage.interrupted) text('Sebagian rekaman wawancara mungkin tidak tersedia.', 44, y, width, 9.5, false, muted);
+    } else if(data.independentScores){
         const duration=voice?' · Durasi '+Math.floor(voice.durationSeconds/60)+':'+String(voice.durationSeconds%60).padStart(2,'0')+(voice.transcriptComplete?'':' · Transkrip tidak lengkap'):'';
         if(assessment){
             const label=assessment.state==='ALTERNATIVE'?'Pengalaman di luar CV':assessment.assessedClaims+' dari '+assessment.plannedClaims+' klaim dinilai';
@@ -136,7 +154,10 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     }
     const excerpt = (value: string, n = 90) => value.length > n ? value.slice(0, n).trimEnd() + '…' : value;
     const modern = data.result.claims.length > 0 && data.result.claims.every(c => 'score' in c);
-    const records = modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null,
+    const records = role ? role.criteria.map(row => ({ title: row.name, score: row.level, reason: row.reason,
+        quote: undefined as string | undefined, evidence: row.evidence[0], pair: row.discrepancy,
+        status: row.state === 'ASSESSED' ? 'Kejelasan ' + row.clarity + '/4' : coverageLabels[row.state] })) :
+        modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null,
         reason: result.reason + (result.score != null && result.assessment?.openFields.length
             ? '\nBelum dibahas · ' + result.assessment.openFields.map(field => fieldLabels[field]).join(', ') : ''),
         quote: data.plan.claims.find(c => c.id === result.claimId)?.quote, evidence: result.evidence[0],

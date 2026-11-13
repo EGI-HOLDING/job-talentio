@@ -4,13 +4,39 @@ import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect,useState } from 'react';
 import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
 import { TaraInterviewNotes } from '@/components/screening/TaraInterviewNotes';
-import { interviewClaimLabel,interviewFieldLabel,type Evidence,type ScreeningEvaluation,type Report } from './screening-view';
+import { interviewClaimLabel,interviewFieldLabel,number,roleScoreReason,type Evidence,type ScreeningEvaluation,type Report } from './screening-view';
 import s from './ScreeningPanel.module.css';
 export type { ScreeningEvaluation } from './screening-view';
 export function ScreeningResult({result,claims,questions=[],onEvidence,onNoteContext,focusClaim}:{result:ScreeningEvaluation;claims:Array<{id:string;statement:string;quote:string}>;questions?:Report['questions'];onEvidence?:(claimId:string,evidence:Evidence)=>void;onNoteContext?:(topicId:string,ref:string,answer:boolean)=>void;focusClaim?:string}){
  const uiCopy=useHrCopy();
  const [expanded,setExpanded]=useState(result.claims?.[0]?.claimId??'');
  useEffect(()=>{if(focusClaim)setExpanded(focusClaim);},[focusClaim]);
+ const role=result.roleAssessment;
+ if(role)return <div className={s.results}>
+   <section><h4>Skor akhir</h4><b className={s.score}>{role.score===null?'Skor akhir belum lengkap':`${number(role.score)} / 100`}</b>
+     <p>{role.score===null?roleScoreReason(role):result.summary}</p>
+     <dl className={s.findings}>{([['cv','Kecocokan CV'],['competency','Kompetensi kerja'],['explanation','Kejelasan penjelasan']] as const).map(([key,label])=>
+       <div key={key}><dt>{label} · {role.weights[key]}%</dt><dd>{role.components[key]===null?'Belum lengkap':`${number(role.components[key])} / 100 · ${role.contributions[key]?.toLocaleString('id-ID',{maximumFractionDigits:2})} poin`}</dd></div>)}</dl>
+     <small>{role.coverage.assessed} dari {role.coverage.total} kompetensi dinilai · Rubrik {role.rubricRevision.slice(0,8)} · {role.version}</small>
+   </section>
+   {role.criteria.length>0&&<section><h4>Bukti kompetensi</h4><div className={s.claimList}>{role.criteria.map(row=>
+     <details key={row.criterionId} data-claim={row.criterionId} open={expanded===row.criterionId}
+       onToggle={event=>{if(event.currentTarget.open)setExpanded(row.criterionId);}}>
+       <summary onClick={event=>{event.preventDefault();setExpanded(expanded===row.criterionId?'':row.criterionId);}}>
+         <strong>{row.name}</strong><span className={s.claimScore}>{row.level===null?interviewClaimLabel[row.state]:`${row.level}/4`}</span>
+         <DirectionalIcon direction={expanded===row.criterionId?'up':'down'} size={16}/>
+       </summary>
+       <div className={s.claimBody}><p>{row.reason}</p>{row.clarity!==null&&<p>Kejelasan penjelasan · {row.clarity}/4</p>}
+         {row.evidence.map((e,i)=><div key={i} className={s.evidenceGroup}>
+           {e.questionText&&<div className={s.evidence}><span>Pertanyaan Tara</span><p>{e.questionText}</p></div>}
+           <div className={s.evidence}><span>Jawaban kandidat</span><p>{e.quote}</p></div>
+           {onEvidence&&<button type="button" className={s.link} onClick={()=>onEvidence(row.criterionId,e)}>Lihat konteks percakapan</button>}
+         </div>)}
+         {!row.evidence.length&&row.questionRefs[0]&&onNoteContext&&<button type="button" className={s.link} onClick={()=>onNoteContext(row.criterionId,row.questionRefs[0],false)}>Lihat pertanyaan Tara</button>}
+         {row.discrepancy&&<div className={s.warning}><strong>Perlu konfirmasi HR</strong><p>CV · {row.discrepancy.left.quote}</p><p>Jawaban · {row.discrepancy.right.quote}</p></div>}
+       </div>
+     </details>)}</div></section>}
+ </div>;
  return <div className={s.results}>
  <section><h4>Ringkasan</h4><p>{result.summary||'Belum ada ringkasan yang tersedia.'}</p></section>
  {result.taraInterview && <TaraInterviewNotes notes={result.taraInterview} onContext={onNoteContext}/>}

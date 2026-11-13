@@ -14,7 +14,9 @@ import type { CandidatePayload, PackagePayload } from './screening.schemas';
 import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
 import { newConversationPolicy, conversationPolicy, publicConversationPolicy, requireCurrentConversation, isCurrentConversation } from './conversation.policy';
-import { advanceTara, recordTaraOpportunity, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
+import { advanceTara, recordTaraOpportunity, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS,
+    TARA_ROLE_INTRO, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
+import { frozenRoleRubric } from './role-rubric';
 const sessionInclude = { invitation: { include: { candidate: { select: { stage:true, company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
     include: typeof sessionInclude;
@@ -244,7 +246,8 @@ export class ScreeningSessions {
             await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 }, ...(topics ? { taraInterview: json(startTara(topics, true)) } : {}) } });
             if (row.invitation) await tx.screeningInvitation.update({ where: { id: row.invitation.id }, data: { status: 'STARTED' } });
             const startingQuestions = topics?.slice(0, 1) ?? [];
-            if (startingQuestions.length) await tx.aiScreeningQuestion.createMany({ data: startingQuestions.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: c.question })) });
+            const introduction = frozenRoleRubric(fresh.package?.jobSnapshot) ? TARA_ROLE_INTRO + '\n\n' : '';
+            if (startingQuestions.length) await tx.aiScreeningQuestion.createMany({ data: startingQuestions.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: introduction + c.question })) });
         });
         return this.state(user, id);
     }

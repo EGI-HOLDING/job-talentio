@@ -11,6 +11,7 @@ import { hash, json } from '../screening.policy';
 import { candidateBulkSchema, candidateImportSchema, candidateListSchema, type CandidateList } from './recruitment.schemas';
 import { CV_MAX_BYTES, fileChecksum, validateCvBytes } from './cv-scoring.policy';
 import { CV_ALERT_MS, CV_RECOVERY_VERSION } from './cv-assessment';
+import { frozenRoleRubric, roleAssessmentEnabled } from '../role-rubric';
 
 const safeSelect = { id: true, companyId: true, jobId: true, applicationId: true, importId: true, importFileId: true,
   filename: true, sizeBytes: true, contentType: true, fullName: true, email: true, phone: true, headline: true,
@@ -171,8 +172,9 @@ export class RecruitmentService {
   }
   async detail(user: AuthUser, id: string) {
     await this.owned(user, id);
-    return this.db.recruitmentCandidate.findUniqueOrThrow({ where: { id }, select: { ...safeSelect, cvResult: true, jobSnapshot: true, scoringVersion: true,
+    const row = await this.db.recruitmentCandidate.findUniqueOrThrow({ where: { id }, select: { ...safeSelect, cvResult: true, jobSnapshot: true, scoringVersion: true,
       activities: { orderBy: { createdAt: 'desc' }, take: 100 }, application: { select: { interviews: { orderBy: { scheduledAt: 'asc' } }, screeningSession: { select: { id: true, status: true, completedAt: true, evaluation: { select: { status: true, screeningScore: true, result: true } } } } } } } });
+    return { ...row, cvMethodologyUpgradeAvailable: Boolean(roleAssessmentEnabled() && row.jobId && row.scoreStatus === 'READY' && !frozenRoleRubric(row.jobSnapshot)) };
   }
   async applicationCandidate(user:AuthUser,jobId:string,applicationId:string){
     const app=await this.db.application.findFirst({where:{id:applicationId,jobPostId:jobId},select:{jobPost:{select:{companyId:true}}}});
@@ -193,7 +195,8 @@ export class RecruitmentService {
         const v2 = await retryCvAssessmentV2(tx, row, user.id);
         if (v2) return v2;
       }
-      if (!row.fileKey || !['FAILED','UNREADABLE','STALE'].includes(row.scoreStatus)) throw new BadRequestException('CV ini belum dapat diproses ulang.');
+      const upgrade = roleAssessmentEnabled() && row.jobId && row.scoreStatus === 'READY' && !frozenRoleRubric(row.jobSnapshot);
+      if (!row.fileKey || !upgrade && !['FAILED','UNREADABLE','STALE'].includes(row.scoreStatus)) throw new BadRequestException('CV ini belum dapat diproses ulang.');
       await assertNoUnresolvedCvSubmission(tx, row.id);
       const job=row.jobId?await tx.jobPost.findUniqueOrThrow({where:{id:row.jobId},include:scoreJobInclude}):null;
       const claim = await tx.recruitmentCandidate.updateMany({ where: { id, revision: row.revision, scoreStatus: row.scoreStatus }, data: { scoreStatus: 'PENDING', cvScore:null, cvProgress: Prisma.DbNull, ...(job?{jobSnapshot:json(scoringJob(job))}:{}), error: null, revision: { increment: 1 } } });

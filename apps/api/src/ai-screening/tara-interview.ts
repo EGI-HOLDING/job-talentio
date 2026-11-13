@@ -8,6 +8,7 @@ export const TARA_FIRST_PASS_MS = 11 * 60_000;
 export const TARA_COMPLETE_MS = 14 * 60_000;
 export const TARA_SESSION_MS = 15 * 60_000;
 export const TARA_CHAT_REVIEW_MS = 8_000;
+export const TARA_ROLE_INTRO = 'Halo, gue Tara. Kita bahas tugas di posisi ini, ya.';
 const MIN_CLARIFICATION_MS = 35_000;
 export const ALTERNATIVE_TOPIC = 'outside-cv';
 const MAX_TURNS = SKILL_CONVERSATION.maxCore + SKILL_CONVERSATION.maxFollowUp;
@@ -63,6 +64,12 @@ export type TaraProgress = {
 };
 
 export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed = false): TaraTopic[] {
+    if (plan.roleTopics?.length) return plan.roleTopics.map(row => {
+        const criterion = rubric.criteria.find(criterion => criterion.id === row.criterionId);
+        const claim = plan.claims.find(claim => claim.id === row.cvClaimId);
+        return { id: row.criterionId, criterionId: row.criterionId, label: criterion?.name ?? row.question, question: row.question,
+            alternative: !claim, cvQuote: claim?.quote, requirementRef: criterion?.requirementRef, priority: 'CORE', fields: ['TASK', 'ACTION'] };
+    });
     if (plan.claims.length) return plan.claims.map(claim => ({
         id: claim.id, criterionId: claim.criterionId, label: claim.skill ?? claim.statement, question: claim.question, alternative: false,
         ...(timed ? {cvQuote: claim.quote, requirementRef: claim.requirementRef ?? rubric.criteria.find(row => row.id === claim.criterionId)?.requirementRef,

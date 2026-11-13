@@ -15,6 +15,7 @@ import { CV_RUBRIC, fileChecksum } from './cv-scoring.policy';
 import { invalidateCvScores, scoringJob, scoreJobInclude } from './cv-job-context';
 import { cvBackoff, cvRejection, type CvHttp } from './cv-provider';
 import { prepareCvDocument, type CvProviderFile } from './cv-document';
+import { frozenRoleRubric } from '../role-rubric';
 const PDFDocument = require('pdfkit');
 const db = new PrismaService();
 const key = 'whsec_' + Buffer.alloc(32, 61).toString('base64');
@@ -62,6 +63,12 @@ const provider = {
     sent.push({ stage, ids: request.data.rubric.map(x => x.id), file: Boolean(file) });
     history.set(name, sent);
     if (stage === 'INITIAL') assert.equal(file?.detail, 'auto');
+    if (name.startsWith('role-')) {
+      assert.equal(_model, 'gpt-6-luna');
+      const roleGrades = request.data.rubric.map(({ id }, index) => ({ criterionId: id, level: index === 0 ? 4 : 2,
+        reason: 'Kriteria diuji terhadap blok tersimpan.', blockIds: [source.blocks[index + 1].id] }));
+      return ready(id, attempt, bound(request, stage === 'INITIAL' ? source : undefined, roleGrades));
+    }
     if (name === 'rate' && sent.length === 1) return { status: 429, retryAfter: '2', body: { error: { code: 'rate_limit_exceeded' } } };
     if (name === 'overload' && sent.length === 1) return { status: 503, retryAfter: '2', body: { error: { code: 'server_is_overloaded' } } };
     if (name === 'truncated' && sent.length === 1) return { status: 200, body: { id, status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } } };
@@ -157,7 +164,9 @@ async function main() {
   for (let n = 0; n < 3; n++) await db.company.create({ data: { id: n ? 'cv-company-' + n : 'cv-company', slug: 'taka-cv-fixture-' + n, name: 'Taka CV Fixture ' + n } });
   async function create(title: string, id = title, companyId = 'cv-company') {
     const job = await db.jobPost.upsert({ where: { id: 'cv-job-' + title }, update: {},
-      create: { id: 'cv-job-' + title, title, companyId, description: 'Kriteria sintetis untuk validasi Taka.' }, include: scoreJobInclude });
+      create: { id: 'cv-job-' + title, title, companyId, description: 'Kriteria sintetis untuk validasi Taka.',
+        responsibilities: title === 'role-changed' ? ['Rancang layout majalah', 'Sunting materi pemasaran'] : title.startsWith('role-')
+          ? ['Rancang materi kampanye', 'Periksa hasil produksi'] : [] }, include: scoreJobInclude });
     const fileKey = 'cv-test/' + id + '.pdf';
     const document = title === 'missing-page' ? twoPages : title === 'long' ? longCv : bytes;
     objectStore.set(fileKey, document);
@@ -326,6 +335,24 @@ async function main() {
     assert.equal(scored, count); assert.equal(submissions, count);
     measurements.push({ scored, submissions });
   }
+  process.env.TARA_SCREENING_ENABLED = 'true';
+  process.env.TARA_SCREENING_MARKET = 'id';
+  process.env.TAKA_ROLE_ASSESSMENT_ENABLED = 'true';
+  const first = await create('role-canonical', 'role-first'), repeated = await create('role-canonical', 'role-second');
+  const roleRunner = worker();
+  await Promise.all([turn(first.work.id, roleRunner), turn(repeated.work.id, roleRunner)]);
+  const [firstScore, repeatedScore] = await Promise.all([untilDone(first.row.id, first.work.id), untilDone(repeated.row.id, repeated.work.id)]);
+  assert.equal(firstScore.cvScore, 75);
+  assert.deepEqual(firstScore.cvResult, repeatedScore.cvResult, 'identical company, file and rubric reuse the same evidence and score');
+  assert.equal(history.get('role-canonical')!.length, 1, 'concurrent identical assessments submit one reading');
+  const rescoped = await create('role-changed');
+  const rescopedScore = await untilDone(rescoped.row.id, rescoped.work.id);
+  assert.notEqual(frozenRoleRubric(firstScore.jobSnapshot)?.revision, frozenRoleRubric(rescopedScore.jobSnapshot)?.revision);
+  assert.deepEqual(history.get('role-changed')?.map(row => [row.stage, row.file]), [['GRADE', false]]);
+  const foreign = await create('role-foreign', 'role-foreign', 'cv-company-1');
+  await untilDone(foreign.row.id, foreign.work.id);
+  assert.deepEqual(history.get('role-foreign')?.map(row => [row.stage, row.file]), [['INITIAL', true]], 'cache cannot cross companies');
+  console.log('Taka CV role reuse: concurrent identical inputs use one submission, revised rubric only grades stored blocks, company isolation preserved. Paid calls: 0.');
   console.log(JSON.stringify({ suite: 'taka-cv-recovery', traces, slow: { providerSeconds: 396, submissions: 1 },
     lost: { webhookReceipts: 1, submissions: 1 }, loads: measurements, mockedElapsedMs: Date.now() - started, paidCalls: 0 }));
 }

@@ -17,7 +17,7 @@ export async function queueCvProviderCleanup(tx: Prisma.TransactionClient, where
 
 export async function saveCvAssessment(tx: Prisma.TransactionClient, row: RecruitmentCandidate, workId: string,
   checksum: string, checked: ReturnType<typeof validateCvResult>, version: string,
-  publication?: { phase: CvProgress['phase']; sourceReferences: object }) {
+  publication?: { phase: CvProgress['phase']; sourceReferences: object; roleAssessment?: object }) {
   const received = await tx.candidateActivity.findFirst({ where: { candidateId: row.id, kind: 'CV_RECEIVED' },
     orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
   const receivedAt = received?.createdAt ?? (row.applicationId ? row.createdAt : null);
@@ -29,7 +29,8 @@ export async function saveCvAssessment(tx: Prisma.TransactionClient, row: Recrui
     where: { id: row.id, revision: row.revision, fileKey: row.fileKey, scoreStatus: 'PROCESSING' },
     data: {
       scoreStatus: result.readable ? row.jobSnapshot ? 'READY' : 'EXTRACTED' : 'UNREADABLE',
-      cvScore: score, cvResult: json(publication ? { ...result, sourceReferences: publication.sourceReferences } : result), checksum, scoringVersion: version,
+      cvScore: score, cvResult: json(publication ? { ...result, sourceReferences: publication.sourceReferences,
+        roleAssessment: publication.roleAssessment } : result), checksum, scoringVersion: version,
       ...(publication ? { cvProgress: json({ phase: publication.phase, updatedAt: completedAt.toISOString() }) } : {}),
       error: result.readable ? null : 'CV belum dapat dibaca. Periksa berkas atau upload ulang.',
       ...(row.applicationId ? {} : { fullName: result.fullName ?? row.fullName, email: result.email?.toLowerCase(), phone: result.phone }),

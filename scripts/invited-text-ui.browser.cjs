@@ -6,7 +6,7 @@ const origin=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';
 const skillMethodology=process.env.TARA_BROWSER_SKILL_INTERVIEW==='1';
 const timedMethodology=process.env.TARA_BROWSER_TIMED_INTERVIEW==='1';
 if(!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))throw Error('Local-only browser guard');
-const out=path.resolve(timedMethodology?'output/invited-text-ui-v8':skillMethodology?'output/invited-text-ui-v7':'output/invited-text-ui');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(process.env.TARA_BROWSER_OUT||(timedMethodology?'output/invited-text-ui-v8':skillMethodology?'output/invited-text-ui-v7':'output/invited-text-ui'));fs.mkdirSync(out,{recursive:true});
 const auth={accessToken:'synthetic-invited-ui',user:{id:'invited-ui',role:'EMPLOYEE',fullName:'Dinda Pramesti',email:'dinda@example.test',emailVerified:true,phone:'+6281234567890',employeeOnboarding:{status:'COMPLETED',step:3}}};
 const token='invitation-ui-1234567890.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 const question=(id,text)=>({id,text,draft:'',answer:null,shownAt:null,deadlineAt:null,answeredAt:null,timedOut:false});

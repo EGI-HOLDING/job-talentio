@@ -18,6 +18,10 @@ import { VoiceService } from '../voice/voice.service';
 import { UserErasureService } from '../../users/user-erasure.service';
 import { CURRENT_CONVERSATION } from '../conversation.policy';
 import { TAKA_INTERVIEW_VERSION } from '../taka-interview';
+import { frozenRoleRubric, ROLE_ASSESSMENT_VERSION } from '../role-rubric';
+import type { RoleAssessment } from '../taka-role-assessment';
+import { ROLE_VOICE_VERSION } from '../voice/voice-role';
+import type { NativeProgress } from '../voice/voice-native';
 
 const db=new PrismaService();
 async function main(){
@@ -40,6 +44,19 @@ async function main(){
  const invitations=new InvitationsService(db,config,candidates,storage as never,plans,sessions,mail as never,packets);
  let calls=0, alternativeSkillFixture=false, corruptTakaRef=false;
  const takaRequests: string[][] = [];
+ const roleRequests: Array<{ criteria: string[]; answerCount: number }> = [];
+ function roleJudgement(input: { criteria: Array<{ id: string; name: string }>; evidence: Array<{ id: string; ref: string; text: string }>;
+  transcript: Array<{ id: string; question?: boolean; topicId?: string }> }) {
+  roleRequests.push({ criteria: input.criteria.map(row => row.id), answerCount: new Set(input.evidence.map(row => row.ref)).size });
+  return { criteria: Object.fromEntries(input.criteria.map(row => {
+   const first = row.name.includes('endpoint');
+   const evidence = input.evidence.find(item => item.text.includes(first ? 'menulis endpoint' : 'menyusun panduan API'));
+   return [row.id, { level: evidence ? first ? 4 : 3 : null, clarity: evidence ? first ? 3 : 4 : null,
+    basis: evidence ? 'EVIDENCE' : 'INSUFFICIENT', evidence: evidence ? [evidence.id] : [],
+    questionRef: input.transcript.find(turn => turn.question && turn.topicId === row.id)?.id ?? null,
+    redirectRef: null, discrepancyRef: null, reason: 'Tindakan kandidat dinilai dengan patokan lowongan.' }];
+  })) };
+ }
  function takaJudgement(input: { claims: Array<{id:string}>; evidenceCatalog: Array<{id:string;text:string}> }) {
   takaRequests.push(input.claims.map(c=>c.id));
   const evidence=input.evidenceCatalog.find(row=>row.text.includes('menulis endpoint Node.js'));
@@ -71,6 +88,7 @@ async function main(){
     }))}:{})};
   }
   if(task==='evaluate'&&preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
+  if(task==='evaluate'&&preset?.version===ROLE_ASSESSMENT_VERSION)return roleJudgement(input);
   throw Error('Unexpected task '+task);
  }};
  const worker=new ScreeningWorker(db,config,storage as never,new MatchingService(db),packets,sessions,plans,provider as never,undefined,candidates,invitations);
@@ -200,9 +218,10 @@ async function main(){
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'PENDING'}});await deliver('INVITE_DELIVERY',uncertainInvite.id);await invitations.cancel(hr,uncertainInvite.id);
  let holdCreate:Promise<void>|null=null,holdOpen:Promise<void>|null=null;
  let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[];
- const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.deepEqual(body.session.delegation,{type:'client'});assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.match(body.session.instructions,/segera tanggapi isi jawabannya/);return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
+ const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.type,'client');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.match(body.session.instructions,/Tunggu kandidat selesai bicara/);return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
   if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
+  if(preset?.version===ROLE_ASSESSMENT_VERSION)return roleJudgement(input);
   throw Error('Retired voice evaluator invoked');
  }};
  const voiceService=new VoiceService(db,config,sessions,{
@@ -428,6 +447,111 @@ async function main(){
  console.log('Taka evidence integration passed: retired flags cannot select an older evaluator, text fallback, partial Chat and Live parity, scoped retry, matching PDF coverage, tenant isolation and restart deduplication. Paid calls: 0.');
 
  console.log('Tara timed integration passed: server clock, cross-skill notes, bounded fallback, partial PDF, protected audio, deduplication and preserved Taka scoring.');
+
+ process.env.TAKA_ROLE_ASSESSMENT_ENABLED='true';
+ const roleJob=await db.jobPost.create({data:{companyId:company.id,title:'API Engineer',status:'PUBLISHED',
+  description:'Membangun dan mendokumentasikan API internal.',responsibilities:['Bangun endpoint API','Tulis panduan penggunaan API']},include:scoreJobInclude});
+ const roleCandidate=await db.recruitmentCandidate.create({data:{companyId:company.id,jobId:roleJob.id,fullName:candidate.fullName,email:candidate.email,
+  filename:candidate.filename,fileKey:candidate.fileKey,contentType:candidate.contentType,sizeBytes:candidate.sizeBytes,checksum:candidate.checksum,
+  scoreStatus:'READY',cvScore:80,cvResult:{cvText},jobSnapshot:{title:roleJob.title},stage:'IN_REVIEW'}});
+ assert.equal((await candidates.detail(hr,roleCandidate.id)).cvMethodologyUpgradeAvailable,true);
+ await assert.rejects(invitations.create(hr,roleCandidate.id,{mode:'TEXT',requestKey:'role-legacy-cv'}));
+ await candidates.retry(hr,roleCandidate.id);
+ const pendingRole=await db.recruitmentCandidate.findUniqueOrThrow({where:{id:roleCandidate.id}});
+ const frozenRole=frozenRoleRubric(pendingRole.jobSnapshot)!;
+ assert.equal(frozenRole.interviewIds.length,2);
+ await db.recruitmentCandidate.update({where:{id:roleCandidate.id},data:{scoreStatus:'READY',cvScore:80,cvResult:{cvText,
+  roleAssessment:{rubricRevision:frozenRole.revision}}}});
+ async function roleInvite(mode:'VOICE'|'TEXT',key:string){
+  const invite=await invitations.create(hr,roleCandidate.id,{mode,requestKey:key});
+  const row=await db.screeningInvitation.findUniqueOrThrow({where:{id:invite.id}});
+  const claimed=await invitations.claim(user,invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!));
+  const candidatePlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});
+  await deliver('CANDIDATE',candidatePlan.id);
+  return {id:invite.id,sessionId:claimed.session.id};
+ }
+ // The fixture provider deliberately returns no CV claims on the new criteria.
+ alternativeSkillFixture=true;
+ const roleText=await roleInvite('TEXT','role-complete-text');
+ await sessions.claim(user,roleText.sessionId,clientId);
+ guidedText=await sessions.start(user,roleText.sessionId,clientId);
+ assert.match(guidedText.questions[0].text,/^Halo, gue Tara\./);
+ const apiAnswer='Saya menulis endpoint Node.js dan memvalidasi input dengan tes batas.';
+ const docAnswer='Saya menyusun panduan API dan mencatat cara menangani kesalahan akses.';
+ for(const [index,answer] of [apiAnswer,docAnswer].entries()){
+  const currentQuestion=await db.aiScreeningQuestion.findUniqueOrThrow({where:{id:guidedText.questions.find(row=>row.answer===null)!.id}});
+  assert.equal(currentQuestion.claimId,frozenRole.interviewIds[index]);
+  await submitText(answer);
+ }
+ assert.equal(guidedText.status,'COMPLETED');
+ await deliver('EVALUATE',roleText.sessionId);
+ await deliver('PDF',roleText.sessionId);
+ const roleReport=await invitations.report(hr,roleText.id);
+ const rolePayload=(roleReport.evaluation?.result as {roleAssessment:RoleAssessment}).roleAssessment;
+ assert.equal(roleReport.evaluation?.finalScore,85.3);
+ assert.equal(roleReport.evaluation?.status,'READY');
+ assert.equal(rolePayload.criteria[0].evidence[0].quote,apiAnswer);
+ assert.equal(rolePayload.criteria[1].evidence[0].quote,docAnswer);
+ assert.equal(rolePayload.rubricRevision,frozenRole.revision);
+ assert.equal((await invitations.list(hr,roleCandidate.id))[0].session?.evaluation?.finalScore,85.3);
+
+ const roleVoice=await roleInvite('VOICE','role-complete-voice');
+ const noAi=roleRequests.length;
+ const connected=await voiceService.create(user,roleVoice.sessionId,clientId,'v=0 role evidence mock SDP offer');
+ onEvent({type:'session.started',event_id:'role-start'});
+ await voiceService.media(user,roleVoice.sessionId,clientId,'READY',1,0);
+ assert.ok(commands.some(command=>command.type==='session.commentary.append'&&command.event_id==='tara-opening'&&command.content.includes('Halo, gue Tara')));
+ const audio=await voiceService.media(user,roleVoice.sessionId,clientId,'AUDIBLE',2,0);
+ onEvent({type:'session.output_transcript.delta',event_id:'role-question-1',delta:'Halo, gue Tara. Gimana lu membangun API?',start_ms:100,end_ms:260});
+ onEvent({type:'session.input_transcript.delta',event_id:'role-answer-1',delta:apiAnswer,start_ms:590,end_ms:900});
+ await new Promise(resolve=>setTimeout(resolve,280));
+ await voiceService.media(user,roleVoice.sessionId,clientId,'QUIET',3,0);
+ onEvent({type:'session.delegation.created',delegation:{id:'del_role_fixture'}});
+ onEvent({type:'session.delegation.created',delegation:{id:'del_role_fixture'}});
+ assert.equal(commands.filter(c=>c.event_id==='tara-delegation-1-quiet').length,1);
+ await voiceService.tick(new Date(+audio.startedAt+6000));
+ await (voiceService as any).active.get(connected.id).pending;
+ await voiceService.tick(new Date(+audio.startedAt+6000));
+ assert.equal(commands.filter(c=>c.event_id==='tara-slot-1').length,1);
+ onEvent({type:'session.commentary.appended',client_event_id:'tara-slot-1'});
+ onEvent({type:'session.input_transcript.delta',event_id:'role-answer-2',delta:docAnswer,start_ms:9000,end_ms:10000});
+ const dropAt=new Date();
+ const liveRole=(voiceService as any).active.get(connected.id);
+ const pcm=Buffer.alloc(960);for(let i=0;i<pcm.length;i+=2)pcm.writeInt16LE(1200,i);
+ await voiceService.media(user,roleVoice.sessionId,clientId,'OUTPUT_DROPPED',4,0);
+ onEvent({type:'session.input_audio.append',audio:pcm.toString('base64')});
+ await voiceService.tick(new Date(+dropAt+1000));
+ assert.ok(liveRole.candidateLastSpeechAt>=+dropAt,'suppression never mutes the provider microphone input');
+ assert.equal(commands.filter(c=>c.event_id?.startsWith('tara-recover-output-')).length,0,'recovery never interrupts candidate speech');
+ await liveRole.pending;
+ const quietTick=new Date(+audio.startedAt+16000);
+ await voiceService.tick(quietTick);
+ await voiceService.tick(new Date(+quietTick+1200));
+ assert.equal(commands.filter(c=>c.event_id?.startsWith('tara-recover-output-')).length,1,'recover once using the existing Live session');
+ assert.equal(roleRequests.length,noAi,'live audio never calls the evaluator');
+ await voiceService.end(user,roleVoice.sessionId,clientId,'CONNECTION_LOST');
+ await restartedWorker.process((await db.aiScreeningWork.findFirstOrThrow({where:{kind:'VOICE_EVALUATE',subjectId:roleVoice.sessionId}})).id);
+ await deliver('PDF',roleVoice.sessionId);
+ const voiceRoleReport=await invitations.report(hr,roleVoice.id);
+ assert.equal(voiceRoleReport.evaluation?.finalScore,85.3,'concrete evidence that survived disconnect remains eligible');
+ assert.deepEqual(roleRequests.map(request=>request.answerCount),[2,2]);
+ const roleVoiceRow=await db.voiceInterview.findUniqueOrThrow({where:{id:connected.id}});
+ assert.equal(roleVoiceRow.promptVersion,ROLE_VOICE_VERSION);
+ assert.ok((roleVoiceRow.taraInterview as unknown as NativeProgress).voiceControls?.find(row=>row.key==='tara-slot-1')?.acknowledgedAt);
+ for(const sessionId of [roleText.sessionId,roleVoice.sessionId]){
+  const evaluation=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId}});
+  const loading=pdfjs.getDocument({data:new Uint8Array(objects.get(evaluation.pdfKey!)!),verbosity:0});
+  try{
+   const page=await (await (await loading.promise).getPage(1)).getTextContent();
+   const content=page.items.flatMap(item=>'str' in item?[item.str]:[]).join(' ');
+   assert.match(content,/Skor akhir 85,3\s*\/\s*100/);
+   assert.match(content,/2 dari 2 kompetensi inti dinilai/);
+  }finally{await loading.destroy();}
+ }
+ assert.equal((await invitations.report(hr,takaText.invitationId)).evaluation?.finalScore,null,'new scoring does not replace history');
+ await assert.rejects(invitations.report({...hr,id:'foreign-hr'},roleVoice.id));
+ process.env.TAKA_ROLE_ASSESSMENT_ENABLED='false';
+ console.log('Role scoring integration passed: frozen rubrics, Chat and native Live, whole transcript, consistent final score in list/detail/PDF, preserved history and access checks. Paid calls: 0.');
 
  const eraseInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-erasure'}),eraseRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:eraseInvite.id}}),eraseToken=invitationToken(eraseRow.id,eraseRow.tokenNonce,config.get('JWT_SECRET')!),eraseClaim=await invitations.claim(user,eraseToken);
  const erasePlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:eraseClaim.session.id}});await deliver('CANDIDATE',erasePlan.id);await sessions.claim(user,eraseClaim.session.id,clientId);

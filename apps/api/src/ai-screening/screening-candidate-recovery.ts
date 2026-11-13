@@ -4,6 +4,7 @@ import { isCurrentConversation } from './conversation.policy';
 import { enqueueWork } from './screening-packets.service';
 import { json } from './screening.policy';
 import type { PackagePayload } from './screening.schemas';
+import { attachRoleTopics, frozenRoleRubric } from './role-rubric';
 
 export const candidatePreparationInclude = {
     package: true,
@@ -51,7 +52,8 @@ export async function publishCandidatePreparation(db: PrismaClient, before: Cand
             data: { status: 'DONE', leaseOwner: null, leaseUntil: null, error: null } });
         if (!claimed.count) return 'SKIPPED';
         for (const callId of options.reconcileIds ?? []) await enqueueWork(tx, 'CANDIDATE_RESPONSE', callId);
-        await tx.aiCandidatePlan.update({ where: { id: before.id }, data: { status: 'READY', payload: json(prepared.payload), error: null } });
+        const payload = attachRoleTopics(prepared.payload, frozenRoleRubric(retained.package.jobSnapshot));
+        await tx.aiCandidatePlan.update({ where: { id: before.id }, data: { status: 'READY', payload: json(payload), error: null } });
         await tx.aiScreeningSession.update({ where: { id: before.sessionId }, data: { revision: { increment: 1 }, error: null } });
         return 'READY';
     });

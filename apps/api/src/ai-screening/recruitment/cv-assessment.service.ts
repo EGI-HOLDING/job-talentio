@@ -5,12 +5,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { hash, json } from '../screening.policy';
 import { CV_ALERT_MS, CV_DELAYED_MS, CV_MAX_SUBMISSIONS, CV_PROVIDER_TASK, CV_RECOVERY_VERSION, CV_RESPONSE_FORMAT, CvWorkDelay,
-  completeCvSource, cvReadTargets, cvRequest, decodeCvResponse, mergeCvGrades, mergeCvSource, projectCvScore, readCvSource,
+  completeCvSource, cvCriteria, cvReadTargets, cvRequest, decodeCvResponse, mergeCvGrades, mergeCvSource, projectCvScore, readCvSource, reuseCvResult,
   type CvCheckpoint, type CvProgress } from './cv-assessment';
 import { queueCvProviderCleanup, queueCvProviderWork, saveCvAssessment } from './cv-assessment-store';
 import { prepareCvDocument, CV_MAX_BYTES } from './cv-document';
 import { CvProvider, cvBackoff, cvRejection, cvTerminal, cvUsage, isCvResponseId, type CvHttp } from './cv-provider';
-import { CV_RUBRIC } from './cv-scoring.policy';
+import { CV_EXTRACTION_VERSION, frozenRoleRubric, roleAssessmentEnabled, type RoleRubric } from '../role-rubric';
 
 type Run = { work: AiScreeningWork; owner: string; row: RecruitmentCandidate };
 type CallTrace = { pollFailures?: number; providerRequestId?: string | null; acknowledgedAt?: string;
@@ -20,6 +20,8 @@ const progress = (phase: CvProgress['phase']): CvProgress => ({ phase, updatedAt
 const candidateFence = (row: RecruitmentCandidate) => ({ id: row.id, revision: row.revision, fileKey: row.fileKey, scoreStatus: 'PROCESSING' });
 const workFence = (run: Run) => ({ id: run.work.id, leaseOwner: run.owner, status: 'RUNNING' });
 const trace = (call: AiScreeningCall): CallTrace => (call.usage as { trace?: CallTrace } | null)?.trace ?? {};
+const gradesComplete = (row: RecruitmentCandidate, checkpoint: CvCheckpoint) =>
+  !row.jobSnapshot || checkpoint.grades.length === cvCriteria(checkpoint.roleRubric).length;
 
 @Injectable()
 export class CvAssessmentService {
@@ -38,8 +40,14 @@ export class CvAssessmentService {
       if (pendingStatus.includes(call.status)) return this.observe(run, checkpoint, call);
       return this.consume(run, checkpoint, call);
     }
-    if (checkpoint && completeCvSource(checkpoint.source, checkpoint.expectedPages) &&
-      (!row.jobSnapshot || checkpoint.grades.length === CV_RUBRIC.length)) return this.finish(run, checkpoint);
+    const rubric = frozenRoleRubric(row.jobSnapshot);
+    const extractionVersion = rubric || roleAssessmentEnabled() && !row.jobSnapshot ? CV_EXTRACTION_VERSION : undefined;
+    const model = extractionVersion ? 'gpt-6-luna' : this.config.get<string>('CV_SCORING_MODEL')?.trim() || 'gpt-6-luna';
+    if (!checkpoint && !call && extractionVersion && row.checksum) {
+      checkpoint = await this.cachedCheckpoint(this.db, row, row.checksum, model, rubric) ?? null;
+    }
+    if (checkpoint && completeCvSource(checkpoint.source, checkpoint.expectedPages) && gradesComplete(row, checkpoint))
+      return this.finish(run, checkpoint);
     if (!this.provider.configured) return this.halt(run, 'PROVIDER_NOT_CONFIGURED');
 
     const sent = await this.db.aiScreeningCall.count({ where: { workId: work.id, task: CV_PROVIDER_TASK } });
@@ -66,9 +74,9 @@ export class CvAssessmentService {
       if (document.checksum !== (checkpoint?.checksum ?? row.checksum ?? document.checksum) ||
         (checkpoint && (checkpoint.fileKind !== document.fileKind || checkpoint.expectedPages !== document.pages))) return this.halt(run, 'CV_SOURCE_CHANGED');
     }
-    checkpoint ??= { stage: 'INITIAL', responseFormat: CV_RESPONSE_FORMAT, model: this.config.get<string>('CV_SCORING_MODEL')?.trim() || 'gpt-6-luna',
+    checkpoint ??= { stage: 'INITIAL', responseFormat: CV_RESPONSE_FORMAT, model,
       checksum: document!.checksum, expectedPages: document!.pages, fileKind: document!.fileKind,
-      wordVisualFallback: document!.wordVisualFallback, grades: [] };
+      wordVisualFallback: document!.wordVisualFallback, roleRubric: rubric, extractionVersion, grades: [] };
     const spec = cvRequest(checkpoint, row.jobSnapshot, document?.pagesInFile);
     const estimatedTokens = spec.maxOutput + Math.ceil(JSON.stringify(spec.data).length / 3) +
       (document ? (document.pagesInFile.length || document.pages || 10) * 2600 + 2000 : 1000);
@@ -102,6 +110,27 @@ export class CvAssessmentService {
     throw new CvWorkDelay(delay || 30000);
   }
 
+  private async cachedCheckpoint(tx: Pick<Prisma.TransactionClient, 'recruitmentCandidate'>, row: RecruitmentCandidate,
+    checksum: string, model: string, rubric?: RoleRubric) {
+    const base: Prisma.RecruitmentCandidateWhereInput = { companyId: row.companyId, checksum,
+      scoreStatus: { in: ['READY', 'EXTRACTED', 'STALE', 'PROCESSING'] },
+      cvResult: { path: ['sourceReferences', 'extractionVersion'], equals: CV_EXTRACTION_VERSION } };
+    const args = { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { cvResult: true } } as const;
+    const [cached, scored] = await Promise.all([
+      tx.recruitmentCandidate.findMany({ where: base, take: 30, ...args, orderBy: [...args.orderBy] }),
+      rubric && tx.recruitmentCandidate.findFirst({ where: { AND: [base,
+        { cvResult: { path: ['roleAssessment', 'rubricRevision'], equals: rubric.revision } }] }, ...args, orderBy: [...args.orderBy] }),
+    ]);
+    if (scored) cached.push(scored);
+    const recovered = cached.flatMap(({ cvResult }) => {
+      const source = reuseCvResult(cvResult, checksum, model, CV_EXTRACTION_VERSION, rubric);
+      return source ? [source] : [];
+    });
+    const canonical = recovered[0];
+    if (!canonical) return undefined;
+    return recovered.find(source => gradesComplete(row, source) && hash(source.source?.blocks) === hash(canonical.source?.blocks)) ?? canonical;
+  }
+
   private async reserve(run: Run, checkpoint: CvCheckpoint, sent: number, estimatedTokens: number, data: unknown) {
     const rpm = this.limit('CV_SCORING_V2_RPM', 30), tpm = this.limit('CV_SCORING_V2_TPM', 200000);
     // A large estimate reserves the entire window. The provider enforces its exact token limit.
@@ -111,6 +140,20 @@ export class CvAssessmentService {
       if (!candidate || !(await tx.aiScreeningWork.updateMany({ where: workFence(run), data: { cvCheckpoint: json(checkpoint) } })).count) return null;
       // A shared transaction lock keeps all processes on this project within the same rolling budget.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(79642131)`;
+      if (checkpoint.extractionVersion && checkpoint.stage === 'INITIAL' && sent === 0) {
+        if (run.row.checksum && await this.cachedCheckpoint(tx, run.row, checkpoint.checksum, checkpoint.model, checkpoint.roleRubric))
+          throw new CvWorkDelay(1000);
+        const peers = await tx.recruitmentCandidate.findMany({
+          where: { companyId: run.row.companyId, checksum: checkpoint.checksum, id: { not: run.row.id }, scoreStatus: 'PROCESSING' }, select: { id: true },
+        });
+        if (peers.length && await tx.aiScreeningWork.findFirst({
+          where: { kind: 'CV_SCORE', subjectId: { in: peers.map(row => row.id) }, status: { in: ['RUNNING', 'PENDING'] },
+            AND: [
+              { cvCheckpoint: { path: ['extractionVersion'], equals: checkpoint.extractionVersion } },
+              { cvCheckpoint: { path: ['model'], equals: checkpoint.model } },
+            ] }, select: { id: true },
+        })) throw new CvWorkDelay(3000);
+      }
       const now = Date.now();
       const [recent, cooldown] = await Promise.all([
         tx.aiScreeningCall.findMany({ where: { task: CV_PROVIDER_TASK, createdAt: { gt: new Date(now - 60000) } },
@@ -223,11 +266,11 @@ export class CvAssessmentService {
           }
           next.stage = 'READ';
         } else {
-          next.grades = run.row.jobSnapshot ? mergeCvGrades(next.source!, [], grades) : [];
+          next.grades = run.row.jobSnapshot ? mergeCvGrades(next.source!, [], grades, next.roleRubric) : [];
           next.stage = 'GRADE';
         }
       } else {
-        next.grades = mergeCvGrades(next.source!, next.grades, grades);
+        next.grades = mergeCvGrades(next.source!, next.grades, grades, next.roleRubric);
         if (next.grades.length === checkpoint.grades.length) {
           if (await this.store(run, next)) return this.halt(run, 'CV_GRADE_REPAIR_NO_PROGRESS');
           return;
@@ -235,7 +278,7 @@ export class CvAssessmentService {
       }
     }
     if (!(await this.store(run, next))) return;
-    if (completeCvSource(next.source, next.expectedPages) && (!run.row.jobSnapshot || next.grades.length === CV_RUBRIC.length))
+    if (completeCvSource(next.source, next.expectedPages) && gradesComplete(run.row, next))
       return this.finish(run, next);
     await this.setProgress(run, 'REPAIRING');
     throw new CvWorkDelay(call.cvCooldownUntil ? Math.max(1000, +call.cvCooldownUntil - Date.now()) : 1000);
@@ -251,7 +294,7 @@ export class CvAssessmentService {
   }
 
   private async finish(run: Run, checkpoint: CvCheckpoint) {
-    const checked = projectCvScore(checkpoint.source!, checkpoint.grades, Boolean(run.row.jobSnapshot), Boolean(checkpoint.wordVisualFallback));
+    const checked = projectCvScore(checkpoint.source!, checkpoint.grades, Boolean(run.row.jobSnapshot), Boolean(checkpoint.wordVisualFallback), checkpoint.roleRubric);
     await this.db.$transaction(async tx => {
       // Taking the candidate lock first matches the ordering of job edits and retries.
       const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "RecruitmentCandidate" WHERE id=${run.row.id} FOR UPDATE`;
@@ -259,7 +302,11 @@ export class CvAssessmentService {
       await saveCvAssessment(tx, run.row, run.work.id, checkpoint.checksum, checked, CV_RECOVERY_VERSION, {
         phase: run.row.jobSnapshot ? 'READY' : 'EXTRACTED',
         sourceReferences: { ...checked.sourceReferences, fileKind: checkpoint.fileKind, checksum: checkpoint.checksum,
-          model: checkpoint.model, responseFormat: checkpoint.responseFormat },
+          model: checkpoint.model, responseFormat: checkpoint.responseFormat, extractionVersion: checkpoint.extractionVersion,
+          wordVisualFallback: checkpoint.wordVisualFallback },
+        roleAssessment: checkpoint.roleRubric ? { version: checkpoint.roleRubric.version, rubricRevision: checkpoint.roleRubric.revision,
+          state: checked.score === null ? 'NOT_APPLICABLE' : 'READY',
+          criteria: checkpoint.roleRubric.criteria.map(row => ({ id: row.id, name: row.name, requirement: row.requirementRef })) } : undefined,
       });
     });
   }

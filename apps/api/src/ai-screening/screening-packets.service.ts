@@ -5,6 +5,7 @@ import { recruiterJobInclude } from '../matching/recruiter-matching.service';
 import { hash, json, normalizedText, screeningEnabled, PDF_TEMPLATE_VERSION } from './screening.policy';
 import { freezePromptRegistry } from './prompts/registry';
 import { isCurrentConversation, newConversationPolicy } from './conversation.policy';
+import { createRoleRubric, roleAssessmentEnabled } from './role-rubric';
 export async function enqueueWork(db: Pick<Prisma.TransactionClient, 'aiScreeningWork'>, kind: string, subjectId: string, key = kind + ':' + subjectId) {
     return db.aiScreeningWork.upsert({ where: { key }, create: { key, kind, subjectId }, update: {} });
 }
@@ -39,12 +40,14 @@ export class ScreeningPackets {
                     aliases: s.skill.aliases.map(alias => alias.alias).sort() })).sort((a, b) => a.skillId.localeCompare(b.skillId)),
                 languages: job.jobLanguages.map(l => ({ code: l.language.code, minLevel: l.minLevel, isRequired: l.isRequired, provenance: l.provenance })).sort((a, b) => a.code.localeCompare(b.code)), company };
             const promptSnapshot = freezePromptRegistry();
-            const fingerprint = hash([source, policy.version, promptSnapshot, policy]);
+            const roleRubric = invited && roleAssessmentEnabled() ? createRoleRubric(job) : undefined;
+            const fingerprint = hash(roleRubric ? [source, policy.version, promptSnapshot, policy, roleRubric.revision]
+                : [source, policy.version, promptSnapshot, policy]);
             const found = await tx.aiScreeningPackage.findUnique({ where: { jobId_fingerprint: { jobId, fingerprint } } });
             if (found)
                 return found;
             const previous = await tx.aiScreeningPackage.aggregate({ where: { jobId }, _max: { version: true } });
-            const packet = await tx.aiScreeningPackage.create({ data: { jobId, fingerprint, version: (previous._max.version ?? 0) + 1, jobSnapshot: json(job), companySnapshot: json(company), promptVersion: policy.version, promptSnapshot: json(promptSnapshot), conversationPolicy: json(policy) } });
+            const packet = await tx.aiScreeningPackage.create({ data: { jobId, fingerprint, version: (previous._max.version ?? 0) + 1, jobSnapshot: json({ ...job, roleRubric }), companySnapshot: json(company), promptVersion: policy.version, promptSnapshot: json(promptSnapshot), conversationPolicy: json(policy) } });
             await enqueueWork(tx, 'PREPARE', packet.id);
             return packet;
         }, { timeout: 15000 });

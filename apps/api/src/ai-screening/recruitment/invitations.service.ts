@@ -22,18 +22,21 @@ import { registerCvVersion } from '../../profiles/cv-evidence';
 import { CV_MAX_BYTES, fileChecksum } from './cv-scoring.policy';
 import { voiceTurns } from '../voice/voice.policy';
 import { nativeVoiceTurns, NATIVE_VOICE_VERSION } from '../voice/voice-native';
+import { roleVoiceTurns, ROLE_VOICE_VERSION } from '../voice/voice-role';
 import { freezeTakaInterview, TAKA_INTERVIEW_VERSION } from '../taka-interview';
+import { freezeRoleAssessment } from '../taka-role-assessment';
+import { frozenRoleRubric } from '../role-rubric';
 import { invitationCreateSchema, invitationId, invitationNonce, invitationToken, INVITATION_TTL_MS, tokenHash, validInvitationToken } from './invitation.policy';
 
 type FrozenInvitation={filename:string;fileKey:string;checksum:string;contentType:string;cvText:string;cvScore:number|null;cvResult:unknown;job:unknown;jobId:string;jobTitle:string;companyName:string};
-const inviteInclude={candidate:{include:{job:true,company:true,application:{include:{profile:{include:{user:true}}}}}},session:{select:{id:true,status:true,startedAt:true,completedAt:true,evaluation:{select:{status:true,screeningScore:true,result:true}}}},package:{select:{conversationPolicy:true}}} satisfies Prisma.ScreeningInvitationInclude;
+const inviteInclude={candidate:{include:{job:true,company:true,application:{include:{profile:{include:{user:true}}}}}},session:{select:{id:true,status:true,startedAt:true,completedAt:true,evaluation:{select:{status:true,screeningScore:true,finalScore:true,result:true}}}},package:{select:{conversationPolicy:true}}} satisfies Prisma.ScreeningInvitationInclude;
 type Invitation=Prisma.ScreeningInvitationGetPayload<{include:typeof inviteInclude}>;
 @Injectable()
 export class InvitationsService {
  constructor(private db:PrismaService,private config:ConfigService,private candidates:RecruitmentService,private storage:StorageService,private plans:ScreeningCandidatePlans,private sessions:ScreeningSessions,private mail:MailService,private packets:ScreeningPackets,@Optional() private live?:LiveUpdates){}
  private token(row:{id:string;tokenNonce:string}){return invitationToken(row.id,row.tokenNonce,this.config.get<string>('JWT_SECRET')??'');}
  private url(row:{id:string;tokenNonce:string}){const base=this.config.get<string>('WEB_URL')??'http://localhost:3000';const url=new URL('/id/screening/'+this.token(row),base);if(!['http:','https:'].includes(url.protocol))throw Error('WEB_URL_INVALID');return url.toString();}
- private safe(row:Invitation){return {id:row.id,mode:row.mode,status:row.status,closedByStage:['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt,expiresAt:row.expiresAt,recipientEmail:row.recipientEmail,emailStatus:row.emailStatus,messageStatus:row.messageStatus,error:row.error,createdAt:row.createdAt,session:row.session?{id:row.session.id,status:row.session.status,startedAt:row.session.startedAt,completedAt:row.session.completedAt,evaluation:row.session.evaluation?{status:row.session.evaluation.status,screeningScore:row.session.evaluation.screeningScore,result:row.session.evaluation.result}:null}:null};}
+ private safe(row:Invitation){return {id:row.id,mode:row.mode,status:row.status,closedByStage:['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt,expiresAt:row.expiresAt,recipientEmail:row.recipientEmail,emailStatus:row.emailStatus,messageStatus:row.messageStatus,error:row.error,createdAt:row.createdAt,session:row.session?{id:row.session.id,status:row.session.status,startedAt:row.session.startedAt,completedAt:row.session.completedAt,evaluation:row.session.evaluation}:null};}
  async create(user:AuthUser,candidateId:string,input:z.infer<typeof invitationCreateSchema>){
   if(!screeningEnabled())throw new ServiceUnavailableException('Screening baru sedang dijeda.');
   const candidate=await this.candidates.owned(user,candidateId);
@@ -54,6 +57,8 @@ export class InvitationsService {
   if(active)return this.safe(active);
   const packet=await this.packets.sync(candidate.jobId,true);
   if(!packet)throw new BadRequestException('Konteks lowongan belum tersedia.');
+  const roleRubric = frozenRoleRubric(packet.jobSnapshot);
+  const roleAssessmentPrompt = roleRubric ? freezeRoleAssessment() : undefined;
   const takaInterviewAssessment = freezeTakaInterview();
   const id=randomUUID(),tokenNonce=invitationNonce(),token=this.token({id,tokenNonce});
   const row=await this.db.$transaction(async tx=>{
@@ -64,8 +69,9 @@ export class InvitationsService {
    const current=await tx.recruitmentCandidate.findUniqueOrThrow({where:{id:candidateId}});if(['HIRED','REJECTED','WITHDRAWN'].includes(current.stage))throw new ConflictException('Proses rekrutmen kandidat sudah ditutup.');
    const currentJob=await tx.jobPost.findUniqueOrThrow({where:{id:candidate.jobId!},include:scoreJobInclude});
    if(current.scoreStatus!=='READY'||current.revision!==candidate.revision||!sameScoringJob(current.jobSnapshot,scoringJob(currentJob)))throw new ConflictException('Penilaian CV perlu diperbarui sebelum membuat undangan baru.');
-   if(!sameScoringJob(scoringJob(packet.jobSnapshot as never),scoringJob(currentJob)))throw new ConflictException('Lowongan baru saja berubah. Coba buat undangan lagi.');
-   const created=await tx.screeningInvitation.create({data:{id,candidateId,packageId:packet.id,mode:input.mode,recipientEmail:email,createdById:user.id,requestKey:input.requestKey,tokenNonce,tokenHash:tokenHash(token),expiresAt:new Date(Date.now()+INVITATION_TTL_MS),snapshot:json({filename:details.filename,fileKey:details.fileKey,checksum:details.checksum,contentType:details.contentType,cvText:text,cvScore:details.cvScore,cvResult:details.cvResult,job:details.jobSnapshot,jobId:details.jobId,jobTitle:details.job!.title,companyName:details.job!.isAnonymous?'Perusahaan dirahasiakan':details.company.name,takaInterviewAssessment})},include:inviteInclude});
+   if(!sameScoringJob(scoringJob(packet.jobSnapshot as never),scoringJob(currentJob)) ||
+    roleRubric?.revision !== frozenRoleRubric(current.jobSnapshot)?.revision)throw new ConflictException('Lowongan atau penilaian CV baru saja berubah. Coba buat undangan lagi.');
+   const created=await tx.screeningInvitation.create({data:{id,candidateId,packageId:packet.id,mode:input.mode,recipientEmail:email,createdById:user.id,requestKey:input.requestKey,tokenNonce,tokenHash:tokenHash(token),expiresAt:new Date(Date.now()+INVITATION_TTL_MS),snapshot:json({filename:current.filename,fileKey:current.fileKey,checksum:current.checksum,contentType:current.contentType,cvText:text,cvScore:current.cvScore,cvResult:current.cvResult,job:current.jobSnapshot,jobId:current.jobId,jobTitle:currentJob.title,companyName:currentJob.isAnonymous?'Perusahaan dirahasiakan':details.company.name,takaInterviewAssessment,roleAssessmentPrompt})},include:inviteInclude});
    const restored=await tx.aiScreeningPackage.updateMany({where:{id:packet.id,status:'SUPERSEDED'},data:{status:'PENDING'}});
    if(restored.count)await tx.aiScreeningWork.updateMany({where:{key:'PREPARE:'+packet.id,status:'DONE'},data:{status:'PENDING',availableAt:new Date()}});
    await enqueueWork(tx,'INVITE_DELIVERY',id);
@@ -91,7 +97,9 @@ export class InvitationsService {
    }
   }
   const voice=row.sessionId?await this.db.voiceInterview.findUnique({where:{sessionId:row.sessionId},include:{fragments:{orderBy:{id:'asc'}}}}):null;
-  return {claims,pdfStatus,invitation:this.safe(row),voice:voice?{status:voice.status,startedAt:voice.startedAt,endedAt:voice.endedAt,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,transcript:voice.promptVersion===NATIVE_VOICE_VERSION?nativeVoiceTurns(voice.fragments):voiceTurns(voice.fragments)}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
+  const transcript = voice && (voice.promptVersion === ROLE_VOICE_VERSION ? roleVoiceTurns(voice.fragments) :
+    voice.promptVersion === NATIVE_VOICE_VERSION ? nativeVoiceTurns(voice.fragments) : voiceTurns(voice.fragments));
+  return {claims,pdfStatus,invitation:this.safe(row),voice:voice?{status:voice.status,startedAt:voice.startedAt,endedAt:voice.endedAt,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,transcript}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,finalScore:evaluation.finalScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
  }
  async retryDelivery(user:AuthUser,id:string,acknowledgePossibleDuplicate=false){
   const row=await this.db.screeningInvitation.findUnique({where:{id}});if(!row)throw new NotFoundException();await this.candidates.owned(user,row.candidateId);

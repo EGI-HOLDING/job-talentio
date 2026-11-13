@@ -6,6 +6,7 @@ import { localeUrl } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useScreeningFocus } from './ApplicationPresentation';
 import type { Preparation } from './TaraPreparation';
+import { taraTurnPlayback } from './tara-turn-playback';
 import s from './VoiceInterview.module.css';
 type Turn={id:string;speaker:string;text:string;startMs:number;endMs:number};
 type LiveState={id:string;status:string;startedAt:string;endedAt:string|null;serverNow:string;warningAt:string|null;closingAt:string|null;closeReason:string|null;transcriptComplete:boolean;error:string|null;transcript?:Turn[];voiceMode?:string;clockRunning?:boolean;deadlineAt?:string};
@@ -46,13 +47,14 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
  const generation=useRef(0),disconnectTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
  const latest=useRef<LiveState|null>(null);
  const audioContext=useRef<AudioContext|null>(null),stopMeter=useRef<(()=>void)|null>(null);
+ const playback=useRef<ReturnType<typeof taraTurnPlayback>|null>(null);
  const [audioBlocked,setAudioBlocked]=useState(false);
  const [captionEvent,setCaptionEvent]=useState('');
  const reportCaption=useRef<(eventId:string)=>void>(()=>{});
  const pc=useRef<RTCPeerConnection|null>(null),stream=useRef<MediaStream|null>(null),audio=useRef<HTMLAudioElement|null>(null),clientId=useRef(''),offset=useRef(0),live=useRef(false),captionSpeaker=useRef(''),startLock=useRef(false),panel=useRef<HTMLDivElement>(null),endDialog=useRef<HTMLDialogElement>(null),settingsDialog=useRef<HTMLDialogElement>(null),helpDialog=useRef<HTMLDialogElement>(null);
  const name=getSession()?.user.fullName??'Kamu',initials=name.split(/\s+/).map(v=>v[0]).slice(0,2).join('').toUpperCase();
  const base='/ai-screening/sessions/'+sessionId,voice=base+'/voice';
- function cleanup(){if(disconnectTimer.current)clearTimeout(disconnectTimer.current);if(pc.current)pc.current.onconnectionstatechange=null;live.current=false;stopMeter.current?.();stopMeter.current=null;void audioContext.current?.close().catch(()=>undefined);audioContext.current=null;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;pc.current?.close();pc.current=null;if(audio.current)audio.current.srcObject=null;setConnected(false);setSpeaking(false);}
+ function cleanup(){if(disconnectTimer.current)clearTimeout(disconnectTimer.current);if(pc.current)pc.current.onconnectionstatechange=null;live.current=false;stopMeter.current?.();stopMeter.current=null;playback.current?.dispose();playback.current=null;void audioContext.current?.close().catch(()=>undefined);audioContext.current=null;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;pc.current?.close();pc.current=null;if(audio.current)audio.current.srcObject=null;setConnected(false);setSpeaking(false);}
  function apply(value:LiveState|null){
   const prior=latest.current;
   if(prior&&(!value||prior.id===value.id&&!finished(value)&&
@@ -119,8 +121,7 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
  },[state?.deadlineAt,state?.status]);
  async function activateAudio(){
   try{
-   await audioContext.current?.resume();
-   await audio.current?.play();
+   await Promise.all([audioContext.current?.resume(),audio.current?.play(),playback.current?.play()]);
    setAudioBlocked(false);
   }catch{setAudioBlocked(true);}
  } useEffect(()=>{if(confirmEnd)endDialog.current?.showModal();},[confirmEnd]);useEffect(()=>{if(settings)settingsDialog.current?.showModal();},[settings]);useEffect(()=>{if(help)helpDialog.current?.showModal();},[help]);
@@ -136,7 +137,7 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
    peer=new RTCPeerConnection();const connection=peer;pc.current=connection;media.getTracks().forEach(track=>connection.addTrack(track,media!));
    let sequence=0,readyToReport=false;
    let sending=Promise.resolve();
-   function report(event:'READY'|'AUDIBLE'|'QUIET'|'INTERRUPTED'|'TEXT_SHOWN',at=performance.now(),transcriptEventId?:string){
+   function report(event:'READY'|'AUDIBLE'|'QUIET'|'INTERRUPTED'|'TEXT_SHOWN'|'OUTPUT_DROPPED',at=performance.now(),transcriptEventId?:string){
     const next=++sequence;
     sending=sending.then(async()=>{
      if(version!==generation.current||!live.current)return;
@@ -147,15 +148,33 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
     }).catch(()=>{if(event==='READY'&&version===generation.current)setError('Pemutar Tara belum terhubung. Periksa koneksi suara.');});
     return sending;
    }
+   if(!context.audioWorklet)throw Error('Browser ini belum mendukung pemutar suara Tara. Buka interview di browser yang sudah diperbarui.');
+   await context.audioWorklet.addModule('/audio/tara-turn-playback.js');
+   if(version!==generation.current){media.getTracks().forEach(track=>track.stop());connection.close();return;}
+   let droppedAt=-Infinity;
+   const playerOutput=taraTurnPlayback(context,()=>{
+    const at=performance.now();
+    if(readyToReport&&at-droppedAt>=1200){droppedAt=at;void report('OUTPUT_DROPPED',at);}
+   },()=>{
+    if(version!==generation.current||!live.current)return;
+    if(audio.current)audio.current.muted=true;
+    setError('Pemutar suara Tara bermasalah. Jawaban yang sudah tersimpan tetap tersedia.');
+    void api<LiveState>(voice+'/end',{method:'POST',body:JSON.stringify({clientId:owner,reason:'CONNECTION_FAILED'})})
+     .then(value=>{if(version===generation.current)apply(value);}).catch(()=>{if(version===generation.current)cleanup();});
+   });
+   playback.current=playerOutput;
+   playerOutput.setMicrophone(media);
    reportCaption.current=eventId=>{if(readyToReport)void report('TEXT_SHOWN',performance.now(),eventId);};
    peer.ontrack=event=>{
     const player=audio.current;
     if(!player||event.track.kind!=='audio'||version!==generation.current)return;
     const remote=event.streams[0]??new MediaStream([event.track]);
-    player.muted=false;player.srcObject=remote;
+    playerOutput.setRemote(remote);
+    player.muted=false;player.srcObject=playerOutput.stream;
     stopMeter.current?.();
-    const source=context.createMediaStreamSource(remote),analyser=context.createAnalyser();
-    analyser.fftSize=512;source.connect(analyser);
+    const source=context.createMediaStreamSource(playerOutput.stream),analyser=context.createAnalyser(),meterOutput=context.createGain();
+    meterOutput.gain.value=0;
+    analyser.fftSize=512;source.connect(analyser);analyser.connect(meterOutput).connect(context.destination);
     const sample=new Float32Array(analyser.fftSize);
     let heard=false,lastSound=0,consecutive=0;
     function interrupted(){
@@ -178,7 +197,7 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
       if(heard&&now-lastSound>=500){heard=false;setSpeaking(false);void report('QUIET',lastSound+100);}
      }
     },40);
-    stopMeter.current=()=>{clearInterval(meter);source.disconnect();analyser.disconnect();};
+    stopMeter.current=()=>{clearInterval(meter);source.disconnect();analyser.disconnect();meterOutput.disconnect();};
     void activateAudio();
    };
    peer.onconnectionstatechange=()=>{
@@ -212,7 +231,7 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
   }catch(e){if(version!==generation.current){media?.getTracks().forEach(t=>t.stop());peer?.close();return;}setError(microphoneError(e));if(live.current)await api(voice+'/end',{method:'POST',body:JSON.stringify({clientId:owner,reason:'CONNECTION_FAILED'})}).catch(()=>undefined);cleanup();}finally{if(version===generation.current){startLock.current=false;setBusy(false);}}
  }
  async function end(){if(busy)return;setBusy(true);setError('');try{apply(await api<LiveState>(voice+'/end',{method:'POST',body:JSON.stringify({clientId:clientId.current})}));setConfirmEnd(false);cleanup();}catch(e){setError(e instanceof Error?e.message:'Penutupan sedang dicoba ulang.');}finally{setBusy(false);}}
- async function changeDevice(id:string){const version=generation.current;setDeviceId(id);if(!live.current)return;try{const media=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id},echoCancellation:true}});if(version!==generation.current){media.getTracks().forEach(t=>t.stop());return;}const track=media.getAudioTracks()[0];track.enabled=!muted;await pc.current?.getSenders().find(sender=>sender.track?.kind==='audio')?.replaceTrack(track);stream.current?.getTracks().forEach(t=>t.stop());stream.current=media;}catch{setError('Mikrofon belum bisa diganti. Periksa izin browser.');}}
+ async function changeDevice(id:string){const version=generation.current;setDeviceId(id);if(!live.current)return;try{const media=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id},echoCancellation:true,noiseSuppression:true}});if(version!==generation.current){media.getTracks().forEach(t=>t.stop());return;}const track=media.getAudioTracks()[0];track.enabled=!muted;await pc.current?.getSenders().find(sender=>sender.track?.kind==='audio')?.replaceTrack(track);if(version!==generation.current){media.getTracks().forEach(t=>t.stop());return;}playback.current?.setMicrophone(media);stream.current?.getTracks().forEach(t=>t.stop());stream.current=media;}catch{setError('Mikrofon belum bisa diganti. Periksa izin browser.');}}
  function toggleMic(){const next=!muted;setMuted(next);stream.current?.getAudioTracks().forEach(track=>{track.enabled=!next;});}
  const ended=finished(state),started=Boolean(state),showPrejoin=!ended&&!connected,stranded=started&&!live.current&&!busy,remaining=state&&state.clockRunning!==false?Math.max(0,900-Math.floor(Math.max(0,(state.endedAt?Date.parse(state.endedAt):now)-Date.parse(state.startedAt))/1000)):900;
  const needsCv=preparation?.status==='WAITING_CV'||preparation?.reason==='CV_UNREADABLE';

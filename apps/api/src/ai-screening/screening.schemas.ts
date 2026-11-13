@@ -4,6 +4,7 @@ import { CURRENT_CONVERSATION, usesSkillInterview, usesTimedInterview, type Conv
 import { openConversation } from './prompts/shared/conversation-opening';
 import type { taraInterviewReport } from './tara-interview';
 import type { TakaClaimScope, TakaCoverage } from './taka-interview';
+import type { RoleAssessment } from './taka-role-assessment';
 import { normalizeSkillKey } from '../common/skill-resolve';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
@@ -38,6 +39,7 @@ export type CandidatePayload = {
     limitations: string[];
     alternativeCriterionId?: string | null;
     alternativeQuestion?: string;
+    roleTopics?: Array<{ criterionId: string; question: string; cvClaimId?: string }>;
 };
 export type FollowUpPayload = {
     stop: boolean;
@@ -79,6 +81,7 @@ export type EvaluationPayload = {
     claims: ClaimResult[];
     taraInterview?: ReturnType<typeof taraInterviewReport>;
     interviewAssessment?: TakaCoverage;
+    roleAssessment?: RoleAssessment;
 };
 export type AnswerSource = {
     id: string;

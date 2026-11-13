@@ -1,7 +1,7 @@
 // Actual browser interactions with synthetic API/file fixtures. Never calls OpenAI or production.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 let pw;try{pw=require('playwright');}catch{pw=require(path.join(process.env.USERPROFILE||'C:/Users/egi_i','.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));}
-const out=path.resolve('output/screening-workspace');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(process.env.RECRUITMENT_BROWSER_OUT||'output/screening-workspace');fs.mkdirSync(out,{recursive:true});
 const base=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';
 const takaCoverage={version:'taka-interview-evidence-v1',state:'PARTIAL',plannedClaims:4,assessedClaims:2,openScopeClaims:1,interrupted:true};
 async function samplePdf(){const {createRequire}=require('node:module'),req=createRequire(path.resolve('apps/api/package.json')),PDFDocument=req('pdfkit');return new Promise(resolve=>{const chunks=[],doc=new PDFDocument({margin:42});doc.on('data',chunk=>chunks.push(chunk));doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.fontSize(23).text('Dinda Pramesti').moveDown(.4).fontSize(13).text('Machine Learning Engineer').moveDown(1).fontSize(16).text('Ringkasan Profesional').moveDown(.4).fontSize(11).text('Machine Learning Engineer dengan pengalaman mengembangkan model dan layanan data.').moveDown(1).fontSize(16).text('Pengalaman').moveDown(.4).fontSize(11).text('Mengembangkan model machine learning dengan Python.\nMembantu tim melakukan deployment dan evaluasi model.').moveDown(1).fontSize(16).text('Keahlian').moveDown(.4).fontSize(11).text('Python, PyTorch, SQL');doc.addPage().fontSize(18).text('Proyek dan pendidikan').moveDown().fontSize(12).text('Proyek machine learning dan pendidikan kandidat.');doc.end();});}
@@ -53,6 +53,14 @@ async function main(){
   else if(p==='/recruitment/invitations/invite-1/retry-evaluation'){report.writes.push({retryEvaluation:true});invitations[0].session.evaluation.status='PENDING';body={count:1};}
   else if(/^\/recruitment\/invitations\/[^/]+\/report$/.test(p)){
     const id=p.split('/')[3];if(id==='invite-older')await new Promise(r=>setTimeout(r,500));
+    if(id.startsWith('invite-role-')){
+      const invitation=invitations.find(row=>row.id===id);
+      const evaluation=invitation.session.evaluation;
+      const question={id:'role-question',text:'Gimana cara lu memvalidasi model?',answer:'Saya pisahkan data uji berdasarkan tanggal sebelum menjalankan evaluasi.',
+        shownAt:'2026-11-09T09:43:00Z',answeredAt:'2026-11-09T09:43:20Z',timedOut:false};
+      return route.fulfill({status:200,headers,json:{invitation,pdfStatus:'READY',claims:[],voice:null,questions:[question],
+        evaluation:{status:evaluation.status,finalScore:evaluation.finalScore,result:evaluation.result},pdfUrl:'https://private.test/report.pdf?signature='+reportSignature}});
+    }
     body={invitation:invitations.find(i=>i.id===id),pdfStatus:'READY',claims:[{id:'forecast',statement:'Mengembangkan model forecasting',quote:'Mengembangkan model forecasting untuk analisis data.'},{id:'lead',statement:'Memimpin tim proyek',quote:'Memimpin tim proyek.'}],voice:{startedAt:'2026-11-09T09:43:00Z',endedAt:'2026-11-09T09:46:49Z',closeReason:'CONNECTION_LOST',transcriptComplete:false,transcript:[{id:'v1',speaker:'TARA',text:'Bagian mana yang kamu kerjakan sendiri?',startMs:92000},{id:'v2',speaker:'CANDIDATE',text:'Saya lebih banyak membantu di bagian EDA.',startMs:103000},{id:'v3',speaker:'TARA',text:'Apa metrik keberhasilan proyek tersebut?',startMs:126000}]},questions:[],evaluation:{status:'NEEDS_REVIEW',score:id==='invite-older'?50:37.5,result:{summary:id==='invite-older'?'Ringkasan sesi sebelumnya.':'Kontribusi pada EDA disebutkan; langkah dan hasil perlu didalami.',voice:{testedClaims:4,totalClaims:6,partial:true,durationSeconds:229,transcriptComplete:false},strengths:['Kontribusi EDA dijelaskan.'],gaps:['Perlu memperjelas langkah pribadi.'],claims:[{claimId:'forecast',score:2,status:'INSUFFICIENT',asked:true,reason:'Langkah dan hasil belum dijelaskan.',evidence:[{questionId:'v2',questionRef:'v1',questionText:'Bagian mana yang kamu kerjakan sendiri?',quote:'Saya lebih banyak membantu di bagian EDA.'}]},{claimId:'lead',score:null,status:'INSUFFICIENT',asked:false,reason:'Belum diuji.',evidence:[]}],interviewQuestions:['Langkah EDA apa yang dilakukan sendiri?']}},pdfUrl:'https://private.test/report.pdf?signature='+reportSignature};
     if(id==='invite-1')body.evaluation.result.taraInterview={version:'tara-conversation-v7.0.0',topics:[
       {topicId:'forecast',label:'Python',alternative:false,outcome:'CONCRETE_EXAMPLE',questionRefs:['v1'],answerRefs:['v2'],quote:'Saya lebih banyak membantu di bagian EDA.'},
@@ -176,6 +184,38 @@ async function main(){
  await firstCandidate.getByRole('heading',{name:'Klaim yang diperiksa',exact:true}).waitFor();
  report.checks.push('Candidate navigation keeps screening results scoped to their original candidate');
  await page.keyboard.press('Escape');rows[0].stage='REJECTED';await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).click();await page.getByRole('button',{name:'Screening',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Undang screening',exact:true}).isDisabled(),true);report.checks.push('Closed candidate cannot open invitation action');
+ const roleSessions=[true,false].map(complete=>{
+   const assessment={version:'taka-role-assessment-v1',rubricRevision:'b5e2569fabc',state:complete?'COMPLETE':'INCOMPLETE',score:complete?85.3:null,
+     missing:complete?[]:['COVERAGE'],components:{cv:80,competency:complete?87.5:null,explanation:complete?87.5:null},
+     contributions:{cv:24,competency:complete?52.5:null,explanation:complete?8.75:null},weights:{cv:30,competency:60,explanation:10},
+     coverage:{assessed:complete?2:1,total:2,interrupted:!complete},criteria:[{criterionId:'validate',name:'Validasi model',level:4,clarity:4,
+       reason:'Pemisahan data mengikuti waktu pengamatan.',state:'ASSESSED',questionRefs:['question:role-question'],
+       evidence:[{questionId:'answer:role-question',questionRef:'question:role-question',quote:'Saya pisahkan data uji berdasarkan tanggal sebelum menjalankan evaluasi.'}]},
+       {criterionId:'document',name:'Dokumentasikan evaluasi',level:complete?3:null,clarity:complete?3:null,
+        reason:complete?'Kandidat menjelaskan dokumentasi.':'Kompetensi belum dibahas.',state:complete?'ASSESSED':'NOT_ASKED',evidence:[],questionRefs:[]}]};
+   const id='invite-role-'+(complete?'full':'partial');
+   return {...invitations[0],id,mode:'TEXT',session:{...invitations[0].session,id,evaluation:{status:complete?'READY':'NEEDS_REVIEW',
+     screeningScore:complete?87.5:null,finalScore:assessment.score,result:{summary:assessment.coverage.assessed+' dari 2 kompetensi inti dinilai.',roleAssessment:assessment}}}};
+ });
+ await page.keyboard.press('Escape');
+ invitations.unshift(...roleSessions);
+ await page.getByRole('button',{name:'Dinda Pramesti',exact:true}).click();
+ await page.getByRole('button',{name:'Screening',exact:true}).click();
+ const rolePanel=page.getByRole('region',{name:'Screening kandidat'});
+ const history=rolePanel.locator('table[class*="history"] tbody tr');
+ await history.first().locator('td').nth(4).filter({hasText:'85,3'}).waitFor();
+ await rolePanel.getByRole('heading',{name:'Skor akhir',exact:true}).waitFor();
+ await rolePanel.getByText('87,5 / 100 · 52,5 poin',{exact:true}).waitFor();
+ await rolePanel.locator('details[data-claim="validate"] summary').click();
+ await rolePanel.getByRole('button',{name:'Lihat konteks percakapan',exact:true}).click();
+ await rolePanel.locator('[data-turn="answer:role-question"][data-highlight="true"]').waitFor();
+ await rolePanel.getByRole('tab',{name:'Hasil',exact:true}).click();
+ await page.screenshot({path:path.join(out,'06-role-score.png')});
+ await history.nth(1).getByRole('button',{name:/Lihat Interview teks/}).click();
+ await rolePanel.getByText('Sebagian kompetensi belum memiliki bukti atau kesempatan menjawab yang cukup.',{exact:true}).waitFor();
+ await history.nth(1).locator('td').nth(4).filter({hasText:'Belum lengkap'}).waitFor();
+ await page.screenshot({path:path.join(out,'07-role-incomplete-mobile.png')});
+ report.checks.push('Role score, component contributions, Chat evidence link and incomplete coverage verified in browser');
  assert.deepEqual(report.writes,[]);assert.deepEqual(report.errors,[]);
  console.log('Screening workspace checks passed: '+report.checks.join('; '));
  }finally{await browser.close();fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));}

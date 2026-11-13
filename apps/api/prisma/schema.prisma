@@ -2788,6 +2788,7 @@ model RecruitmentCandidate {
   @@unique([importId, importFileId])
   @@index([companyId, jobId, stage])
   @@index([companyId, scoreStatus, createdAt])
+  @@index([companyId, checksum])
   @@index([jobId, cvScore, createdAt])
 }
 
