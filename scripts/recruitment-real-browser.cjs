@@ -12,7 +12,7 @@ function playwright() {
   }
 }
 
-module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, liveText, textUi, voiceEvents, allowed, onboarding, onboardingDraft, makeToken, makePdf }) {
+module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, agendaVoice, liveText, textUi, voiceEvents, advanceVoiceClock, allowed, onboarding, onboardingDraft, makeToken, makePdf }) {
   const web = process.env.RECRUITMENT_WEB_URL || 'http://127.0.0.1:3035';
   const redact = value => value.replace(/(\/screening\/|\/invitations\/open\/)[^/\s?]+/g, '$1[redacted]').replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
   const isLoopback = url => ['127.0.0.1', 'localhost'].includes(new URL(url).hostname);
@@ -20,25 +20,31 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   const out = process.env.AI_RELIABILITY_OUTPUT || path.resolve('output/ai-reliability');
   fs.mkdirSync(out, { recursive: true });
   const voiceProbe = liveVoice ? require('./recruitment-voice-live.cjs') : null;
-  const wav = voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
-  const browser = await playwright().chromium.launch({ headless: true });
+  const agenda = agendaVoice ? require('./recruitment-voice-agenda.cjs') : null;
+  const wav = agenda ? agenda.loadAudio(process.env.RELIABILITY_VOICE_WAV_DIR) : voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
+  const browser = await playwright().chromium.launch({ headless: true, executablePath: process.env.TARA_PROBE_CHROME });
   const contexts = [];
   const interruptedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'interrupted-indonesian';
   const timedVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'timed';
   const taraClosesVoice = liveVoice && process.env.RELIABILITY_VOICE_SCENARIO === 'tara-closes';
-  const test = liveVoice ? taraClosesVoice ? 'live-browser-voice-tara-closes' : timedVoice ? 'live-browser-voice-timed' : interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? process.env.RELIABILITY_TEXT_SCENARIO==='unsupported-injection'?'live-browser-text-unsupported-injection':'live-browser-text' : textUi ? 'browser-text-timing-'+(process.env.RELIABILITY_TEXT_VIEWPORT==='desktop'?'desktop':'mobile') : onboarding ? onboardingDraft ? 'real-browser-hr-onboarding-with-ai' : 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
+  const test = agenda ? process.env.RELIABILITY_VOICE_ATTEMPT || process.env.RELIABILITY_VOICE_SCENARIO : liveVoice ? taraClosesVoice ? 'live-browser-voice-tara-closes' : timedVoice ? 'live-browser-voice-timed' : interruptedVoice ? 'live-browser-voice-indonesian-fault' : 'live-browser-voice' : liveText ? process.env.RELIABILITY_TEXT_SCENARIO==='unsupported-injection'?'live-browser-text-unsupported-injection':'live-browser-text' : textUi ? 'browser-text-timing-'+(process.env.RELIABILITY_TEXT_VIEWPORT==='desktop'?'desktop':'mobile') : onboarding ? onboardingDraft ? 'real-browser-hr-onboarding-with-ai' : 'real-browser-hr-onboarding' : 'real-browser-candidate-to-hr';
   const report = { steps: [], exceptions: [], requests: [], provider: liveVoice ? 'real voice and screening, simulated CV scoring' : liveText ? 'real text screening, simulated CV scoring' : onboardingDraft ? 'real job drafting, simulated CV scoring' : 'simulated', test };
+  if (agenda) process.env.TAKA_ROLE_ASSESSMENT_ENABLED = 'true';
   const job = await db.jobPost.create({ data: {
     id: 'http-browser-job', companyId: 'http-co', title: 'Backend Engineer Browser Audit',
     description: 'Mengembangkan API dan layanan backend dengan Node.js.', status: 'PUBLISHED',
     workMode: 'REMOTE', publishedAt: new Date(),
+    ...(agenda ? { responsibilities: agenda.duties } : {}),
   } });
 
   async function openContext(token, useAudio = false) {
     const session = token ? { ...await call('/auth/me', token), accessToken: token } : null;
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, serviceWorkers: 'block' });
     contexts.push(context);
-    if (useAudio) await voiceProbe.useSyntheticMicrophone(context, wav, interruptedVoice);
+    if (useAudio) {
+      if (agenda) await agenda.useSyntheticMicrophone(context, wav);
+      else await voiceProbe.useSyntheticMicrophone(context, wav, interruptedVoice);
+    }
     await context.addInitScript(({ session, origin }) => {
       if (location.origin !== origin) return;
       if (session) {
@@ -210,7 +216,8 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     assert.equal(invitationWithSession.claimedUserId, 'http-employee');
     report.steps.push('An invitation delivered by SMTP and Talentio opens after verification in a separate browser context with the original tab kept open.');
     const screening = { page: invitationPage, dashboard, drawer, db, worker, call, hr, foreign, sessionId: invitationWithSession.sessionId, invitationId: invitation.id, report, allowed, voiceEvents };
-    if (voiceProbe) await voiceProbe.verifyVoice({ ...screening, interruptedVoice, timedVoice, taraClosesVoice });
+    if (agenda) await agenda.verifyVoice(screening);
+    else if (voiceProbe) await voiceProbe.verifyVoice({ ...screening, interruptedVoice, timedVoice, taraClosesVoice, advanceVoiceClock });
     if (liveText || textUi) await require('./recruitment-text-live.cjs')({ ...screening, textUi });
     assert.deepEqual(report.exceptions, []);
     report.passed = true;
@@ -228,6 +235,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
       where: { workId: { in: [...allowed] } },
       select: { id: true, responseId: true, task: true, status: true, inputTokens: true, outputTokens: true, costUsd: true, error: true },
     }).catch(() => []);
+    if (agenda) report.voiceEvents = voiceEvents;
     throw error;
   } finally {
     fs.writeFileSync(path.join(out, test + '.json'), JSON.stringify(report, null, 2));

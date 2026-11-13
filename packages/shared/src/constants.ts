@@ -20,3 +20,4 @@ export const KANBAN_STAGES = [
 
 export const LOCALES = ['uz', 'ru', 'en', 'id'] as const;
 export const DEFAULT_LOCALE = 'uz' as const;
+export const TARA_LIVE_AUDIO_PROTOCOL = 'tara-live-direct-v1';

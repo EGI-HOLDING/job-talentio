@@ -37,6 +37,9 @@ import { chatTakaTurns, frozenTakaInterview } from './taka-interview';
 import { evaluateTakaInterview } from './taka-evaluation';
 import { frozenRoleRubric, rolePackage } from './role-rubric';
 import { roleChatTranscript } from './taka-role-assessment';
+import { LIVE_AGENDA_PREPARATION_MS, liveAgendaRequest, liveRolePackage, prepareLiveAgenda } from './tara-live-agenda';
+
+const agendaProviderError = /^(?:TARA_INVALID_OUTPUT|TARA_PROVIDER_NOT_CONFIGURED|TARA_RESPONSE_FAILED|TARA_PROVIDER_HTTP_\d+|TARA_LIVE_AGENDA_ALREADY_SUBMITTED|TARA_RETRY_LIMIT|SESSION_ERASED)$/;
 @Injectable()
 export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     private logger = new Logger(ScreeningWorker.name);
@@ -108,7 +111,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             const now = new Date();
             const due = { OR: [{ status: 'PENDING', availableAt: { lte: now } }, { status: 'RUNNING', leaseUntil: { lte: now } }] };
             // CV imports must not fill the delivery window ahead of live interview follow-ups.
-            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE', 'CANDIDATE_RESPONSE'];
+            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE', 'CANDIDATE_RESPONSE', 'LIVE_AGENDA_RESPONSE'];
             const [interactive, imports] = await Promise.all([
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { notIn: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { in: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
@@ -163,7 +166,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             else if (work.kind === 'CV_PROVIDER_DELETE')
                 await this.cvRecovery!.deleteProviderResult(work.subjectId);
             else if (work.kind === 'PREPARE')
-                await this.prepare(id, work.subjectId);
+                await this.prepare(id, work.subjectId, owner);
             else if (work.kind === 'DOCUMENT')
                 await this.document(work.subjectId);
             else if (work.kind === 'CV_SOURCE')
@@ -172,6 +175,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 await this.candidate(id, work.subjectId, owner);
             else if (work.kind === 'CANDIDATE_RESPONSE')
                 await this.reconcileCandidateResponse(work.subjectId);
+            else if (work.kind === 'LIVE_AGENDA_RESPONSE')
+                await this.reconcileLiveAgendaResponse(work.subjectId);
             else if (work.kind === 'ADVANCE')
                 await this.advance(id, work.subjectId);
             else if (work.kind === 'EVALUATE')
@@ -184,7 +189,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         }
         catch (error) {
             if (error instanceof AiPending || error instanceof CvWorkDelay) {
-                const delay = error instanceof CvWorkDelay ? error.delayMs : work.kind === 'CANDIDATE_RESPONSE' ? 10_000 : 2000;
+                const delay = error instanceof CvWorkDelay ? error.delayMs : ['CANDIDATE_RESPONSE', 'LIVE_AGENDA_RESPONSE'].includes(work.kind) ? 10_000 : 2000;
                 await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'PENDING', availableAt: new Date(Date.now() + delay), leaseUntil: null, leaseOwner: null } });
                 return;
             }
@@ -222,7 +227,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             await this.db.aiCandidatePlan.updateMany({ where: { resumeVersionId: id, status: { in: ['PENDING', 'RUNNING'] } }, data: { status: 'FAILED', error: 'CV_UNREADABLE' } });
         }
     }
-    private async prepare(workId: string, id: string) {
+    private async prepare(workId: string, id: string, owner: string) {
         const packet = await this.db.aiScreeningPackage.findUnique({ where: { id } });
         if (!packet || packet.status === 'READY' || !isCurrentConversation(packet.conversationPolicy))
             return;
@@ -236,6 +241,11 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const job = packet.jobSnapshot as Record<string, unknown>, company = packet.companySnapshot;
         const role = frozenRoleRubric(job);
         if (role?.interviewIds.length) {
+            const preset = (packet.promptSnapshot as unknown as PromptRegistry)?.liveAgenda;
+            if (preset) {
+                await this.prepareVoicePackage(workId, id, owner, role, preset);
+                return;
+            }
             await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'READY', payload: json(rolePackage(role)), error: null } });
             return;
         }
@@ -245,6 +255,49 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const sourceStrings = (value: unknown): string => typeof value === 'string' ? value : Array.isArray(value) ? value.map(sourceStrings).join(' ') : value && typeof value === 'object' ? Object.values(value).map(sourceStrings).join(' ') : '';
         const payload = validatePackage(await this.client.run(workId, id, 'prepare', input, currentTaraPrompt(packet.promptSnapshot, 'prepare')), sourceStrings(input.job));
         await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'READY', payload: json(payload), error: null } });
+    }
+
+    private async prepareVoicePackage(workId: string, id: string, owner: string, rubric: NonNullable<ReturnType<typeof frozenRoleRubric>>,
+        preset: NonNullable<PromptRegistry['liveAgenda']>) {
+        const key = workId + ':live-agenda';
+        const call = await this.db.aiScreeningCall.findUnique({ where: { key } });
+        const deadline = +(call?.createdAt ?? new Date()) + LIVE_AGENDA_PREPARATION_MS;
+        let proposal: unknown = call?.status === 'COMPLETED' ? call.result : undefined;
+        if (!call || ['RUNNING', 'UNCERTAIN'].includes(call.status) && Date.now() < deadline) {
+            try {
+                const remaining = Math.max(1, Math.min(12_000, deadline - Date.now()));
+                proposal = await this.client.run(workId, id, 'live-agenda', liveAgendaRequest(rubric).data, preset, undefined, remaining);
+            } catch (error) {
+                if (error instanceof AiPending && Date.now() < deadline) throw error;
+                if (!(error instanceof AiPending || error instanceof AiUncertain || error instanceof Error && agendaProviderError.test(error.message))) throw error;
+            }
+        }
+        const agenda = prepareLiveAgenda(rubric, proposal);
+        await this.db.$transaction(async tx => {
+            const lease = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "AiScreeningWork"
+                WHERE id=${workId} AND "leaseOwner"=${owner} AND status='RUNNING' AND "leaseUntil">now() FOR UPDATE`;
+            if (!lease.length) return;
+            const saved = await tx.aiScreeningPackage.updateMany({ where: { id, status: { in: ['PENDING', 'FAILED'] } },
+                data: { status: 'READY', payload: json(liveRolePackage(rubric, agenda)), error: null } });
+            if (!saved.count) return;
+            const pending = await tx.aiScreeningCall.findUnique({ where: { key } });
+            if (pending?.responseId && ['RUNNING', 'UNCERTAIN'].includes(pending.status)) await enqueueWork(tx, 'LIVE_AGENDA_RESPONSE', pending.id);
+            this.logger.log(`Tara Live agenda ready source=${agenda.source} topics=${agenda.topics.length} deferred=${agenda.deferredIds.length}`);
+        });
+    }
+
+    private async reconcileLiveAgendaResponse(id: string) {
+        const call = await this.db.aiScreeningCall.findUnique({ where: { id } });
+        if (call?.task !== 'live-agenda' || !call.responseId || !['RUNNING', 'UNCERTAIN'].includes(call.status)) return;
+        const packet = await this.db.aiScreeningPackage.findUnique({ where: { id: call.subjectId }, select: { promptSnapshot: true } });
+        const preset = (packet?.promptSnapshot as unknown as PromptRegistry | undefined)?.liveAgenda;
+        if (!preset) return;
+        try { await this.client.pollLiveAgenda(call, preset, 12_000); }
+        catch (error) {
+            if (error instanceof AiPending && Date.now() - +call.createdAt > 900_000) throw new AiUncertain('TARA_AGENDA_RESPONSE_REQUIRES_REVIEW');
+            if (error instanceof Error && agendaProviderError.test(error.message)) return;
+            throw error;
+        }
     }
     private async document(id: string) {
         const document = await this.db.aiCompanyDocument.findUnique({ where: { id } });

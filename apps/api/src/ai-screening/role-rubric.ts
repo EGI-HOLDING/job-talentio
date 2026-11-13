@@ -31,6 +31,7 @@ export type RoleRubric = {
 };
 
 const labelKey = (label: string) => normalizeSkillKey(normalizedText(label));
+const criterionId = (key: string) => 'role-' + hash(key).slice(0, 16);
 function requirementContains(text: string, label: string) {
     const tokens = text.split(/[^\p{L}\p{N}+#.]+/u).filter(Boolean).map(labelKey);
     return tokens.some((_, from) => {
@@ -75,7 +76,7 @@ export function createRoleRubric(job: Job): RoleRubric {
     }
     const unique = [...new Map(candidates.map(row => [row.key, row])).values()];
     const criteria = unique.map(({ key, name, requirement, duty }): RoleCriterion => ({
-        id: 'role-' + hash(key).slice(0, 16), name, requirementRef: requirement,
+        id: criterionId(key), name, requirementRef: requirement,
         question: duty ? 'Gimana cara lu mengerjakan tugas berikut?\n' + duty :
             'Gimana cara lu menerapkan ' + name.replace(/[.!?]+$/u, '') + ' dalam pekerjaan ' + title + '?',
         anchors: [
@@ -94,6 +95,11 @@ export function createRoleRubric(job: Job): RoleRubric {
 export function frozenRoleRubric(snapshot: unknown): RoleRubric | undefined {
     const rubric = (snapshot as { roleRubric?: RoleRubric } | null)?.roleRubric;
     return rubric?.version === ROLE_ASSESSMENT_VERSION ? rubric : undefined;
+}
+
+export function roleInterviewCandidates(rubric: RoleRubric) {
+    return rubric.criteria.filter(row => row.id !== criterionId('experience') &&
+        row.id !== criterionId('language:' + labelKey(row.name)));
 }
 
 function interviewCriteria(rubric: RoleRubric) {

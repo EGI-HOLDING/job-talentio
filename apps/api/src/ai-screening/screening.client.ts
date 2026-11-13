@@ -70,17 +70,18 @@ export class ScreeningClient {
             throw new AiUncertain('TARA_CALL_UNCERTAIN');
         }
         if (!call || ['FAILED', 'INVALID'].includes(call.status)) {
-            if (task === 'candidate' && (call || await this.db.aiScreeningCall.count({ where: { workId, task } })))
-                throw new Error('TARA_CANDIDATE_ALREADY_SUBMITTED');
+            const singleSubmission = task === 'candidate' || task === 'live-agenda';
+            if (singleSubmission && (call || await this.db.aiScreeningCall.count({ where: { workId, task } })))
+                throw new Error(task === 'candidate' ? 'TARA_CANDIDATE_ALREADY_SUBMITTED' : 'TARA_LIVE_AGENDA_ALREADY_SUBMITTED');
             const count = await this.db.aiScreeningCall.count({ where: { workId, inputHash } });
             const activeCount = await this.db.aiScreeningCall.count({ where: { workId, inputHash, status: { not: 'RECOVERED' } } });
             if (activeCount >= 3)
                 throw new Error('TARA_RETRY_LIMIT');
             try {
-                call = await this.db.aiScreeningCall.create({ data: { key: task === 'candidate' ? workId + ':candidate' : workId + ':' + inputHash + ':' + count,
+                call = await this.db.aiScreeningCall.create({ data: { key: singleSubmission ? workId + ':' + task : workId + ':' + inputHash + ':' + count,
                     workId, subjectId, task, model, inputHash, promptVersion: prompt.version, status: 'RUNNING' } });
             } catch (error) {
-                if (task === 'candidate' && (error as { code?: string })?.code === 'P2002') throw new AiPending('TARA_CALL_IN_FLIGHT');
+                if (singleSubmission && (error as { code?: string })?.code === 'P2002') throw new AiPending('TARA_CALL_IN_FLIGHT');
                 throw error;
             }
             let response: Response;
@@ -120,6 +121,11 @@ export class ScreeningClient {
     async pollCandidate(call: AiScreeningCall, timeoutMs: number) {
         if (call.task !== 'candidate' || !['RUNNING', 'UNCERTAIN'].includes(call.status)) return;
         return this.poll(call, undefined, timeoutMs);
+    }
+
+    async pollLiveAgenda(call: AiScreeningCall, preset: PromptPreset, timeoutMs: number) {
+        if (call.task !== 'live-agenda' || !['RUNNING', 'UNCERTAIN'].includes(call.status)) return;
+        return this.poll(call, preset.schema, timeoutMs);
     }
 
     private async poll(call: AiScreeningCall, schema: Parameters<typeof assertSchema>[0] | undefined, timeoutMs?: number) {
@@ -169,8 +175,11 @@ export class ScreeningClient {
         const cost = (cached * 0.01 + (writes ?? 0) * 0.125 + uncached * (writes === undefined ? 0.125 : 0.10) + output * 0.50) / 1000000;
         const accounting = { inputTokens: input, outputTokens: output, cachedTokens: cached, reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
             usage: json({ ...usage, providerTiming: timing }), costUsd: cost, pricing: { input: 0.10, cacheRead: 0.01, cacheWrite: 0.125, output: 0.50, unit: 1000000, conservative: writes === undefined } };
+        const preparation = call.task === 'candidate' || call.task === 'live-agenda';
         if (body.status !== 'completed') {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'FAILED', error: 'PROVIDER_' + (body.status ?? 'FAILED') } });
+            if (call.task === 'live-agenda' && call.responseId)
+                await this.request('/' + call.responseId, { method: 'DELETE' }, 2000).catch(() => undefined);
             throw new Error('TARA_RESPONSE_FAILED');
         }
         const content = (body.output ?? []).filter(o => o.type === 'message').flatMap(o => o.content ?? []);
@@ -191,14 +200,14 @@ export class ScreeningClient {
         }
         catch (error) {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'INVALID', error: 'INVALID_PROVIDER_OUTPUT' } });
-            if (call.task === 'candidate' && call.responseId)
+            if (preparation && call.responseId)
                 await this.request('/' + call.responseId, { method: 'DELETE' }, 2000).catch(() => undefined);
             throw new Error('TARA_INVALID_OUTPUT');
         }
         const saved = await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'COMPLETED', error: null, result: json(result) } });
         if (!saved.count) throw new Error('SESSION_ERASED');
         if (call.responseId)
-            await this.request('/' + call.responseId, { method: 'DELETE' }, call.task === 'candidate' ? 2000 : undefined).catch(() => undefined);
+            await this.request('/' + call.responseId, { method: 'DELETE' }, preparation ? 2000 : undefined).catch(() => undefined);
         return result;
     }
 }

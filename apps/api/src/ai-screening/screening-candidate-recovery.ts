@@ -4,7 +4,8 @@ import { isCurrentConversation } from './conversation.policy';
 import { enqueueWork } from './screening-packets.service';
 import { json } from './screening.policy';
 import type { PackagePayload } from './screening.schemas';
-import { attachRoleTopics, frozenRoleRubric } from './role-rubric';
+import { frozenRoleRubric } from './role-rubric';
+import { attachLiveRoleTopics } from './tara-live-agenda';
 
 export const candidatePreparationInclude = {
     package: true,
@@ -52,7 +53,8 @@ export async function publishCandidatePreparation(db: PrismaClient, before: Cand
             data: { status: 'DONE', leaseOwner: null, leaseUntil: null, error: null } });
         if (!claimed.count) return 'SKIPPED';
         for (const callId of options.reconcileIds ?? []) await enqueueWork(tx, 'CANDIDATE_RESPONSE', callId);
-        const payload = attachRoleTopics(prepared.payload, frozenRoleRubric(retained.package.jobSnapshot));
+        const packet = retained.package.payload as unknown as PackagePayload;
+        const payload = attachLiveRoleTopics(prepared.payload, frozenRoleRubric(retained.package.jobSnapshot), packet.liveAgenda);
         await tx.aiCandidatePlan.update({ where: { id: before.id }, data: { status: 'READY', payload: json(payload), error: null } });
         await tx.aiScreeningSession.update({ where: { id: before.sessionId }, data: { revision: { increment: 1 }, error: null } });
         return 'READY';

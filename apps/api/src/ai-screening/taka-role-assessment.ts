@@ -3,7 +3,7 @@ import { inputTrust } from './prompts/shared/input-trust';
 import { neutrality } from './prompts/shared/neutrality';
 import { evidenceCatalog } from './evidence-catalog';
 import { ROLE_ASSESSMENT_VERSION, ROLE_WEIGHTS, type RoleRubric } from './role-rubric';
-import { scoreScreening } from './screening.policy';
+import { redactScreeningContacts, scoreScreening } from './screening.policy';
 import type { CandidatePayload, ClaimResult, EvaluationPayload, JsonSchema } from './screening.schemas';
 import { chatTakaTurns } from './taka-interview';
 import type { RoleVoiceEvidence } from './voice/voice-role';
@@ -59,7 +59,7 @@ export function roleChatTranscript(questions: Parameters<typeof chatTakaTurns>[0
     });
 }
 
-export function roleLiveTranscript(turns: RoleVoiceEvidence[], interrupted: boolean) {
+export function roleLiveTranscript(turns: RoleVoiceEvidence[], interrupted: boolean, direct = false) {
     return turns.flatMap<RoleTranscriptEntry>((turn, index) => {
         const { id, text, startMs, topicId, speaker, question, heard } = turn;
         if (speaker !== 'CANDIDATE' && speaker !== 'TARA') return [];
@@ -67,12 +67,17 @@ export function roleLiveTranscript(turns: RoleVoiceEvidence[], interrupted: bool
         if (!question) return [{ id, text, startMs, endMs, topicId, speaker }];
         const nextQuestion = turns.findIndex((next, position) => position > index && next.question && next.heard);
         const subsequent = turns.slice(index + 1, nextQuestion < 0 ? undefined : nextQuestion);
-        const answered = subsequent.some(next => next.speaker === 'CANDIDATE' && next.endMs >= endMs && next.text.trim());
+        const answered = subsequent.some(next => next.speaker === 'CANDIDATE' && next.endMs >= endMs && next.text.trim() &&
+            (!direct || next.startMs >= endMs - 150 && !requestsClarification(next.text)));
         const completed = !interrupted || subsequent.some(next => next.speaker === 'TARA' && next.audible &&
             subsequent.some(answer => answer.speaker === 'CANDIDATE' && answer.endMs <= next.startMs + 150)) || nextQuestion >= 0;
         const opportunity = !heard ? 'UNVERIFIED' : answered && completed ? 'ANSWERED' : 'INTERRUPTED';
         return [{ id, text, startMs, endMs, topicId, speaker, question, opportunity }];
     });
+}
+
+function requestsClarification(text: string) {
+    return /^(?:(?:maaf|sorry)[, ]+)?(?:yang mana|tugas yang mana|maksudnya (?:apa|gimana)|bisa (?:diulang|diperjelas)|(?:gue |saya |aku )?(?:gak|nggak|tidak|belum) (?:dengar|kedengeran|paham))(?: ya)?[?.! ]*$/iu.test(text.trim());
 }
 
 const str: JsonSchema = { type: 'string' };
@@ -114,21 +119,18 @@ export function prepareRoleEvidence(rubric: RoleRubric, transcript: RoleTranscri
 }
 type RoleInput = ReturnType<typeof prepareRoleEvidence>;
 
-export function roleEvaluationRequest(input: RoleInput, preset: PromptPreset, ids = input.rubric.interviewIds) {
+export function roleEvaluationRequest(input: RoleInput, preset: PromptPreset, ids = input.rubric.interviewIds, direct = false) {
     const criteria = input.criteria.filter(row => ids.includes(row.id));
     return {
-        preset: { ...preset, schema: obj({ criteria: obj(Object.fromEntries(criteria.map(row => [row.id, rowSchema]))) }) },
+        preset: { ...preset, schema: obj({ criteria: obj(Object.fromEntries(criteria.map(row => [row.id, rowSchema]))) }),
+            ...(direct ? { instructions: preset.instructions + '\n\nUntuk Tara Live, petakan makna pertanyaan ke tugas pada rubrik, termasuk parafrasa dan pertanyaan klarifikasi. Pilih questionRef hanya jika pertanyaannya lengkap dan fokus pada kompetensi itu. Arah balik tanpa pertanyaan konkret, permintaan kandidat untuk mengulang, dan pertanyaan yang belum terverifikasi penyampaiannya tidak membuktikan kesempatan menjawab. Bukti positif yang konkret boleh berasal dari jawaban pada topik lain.' } : {}) },
         data: { role: input.rubric.title, criteria: criteria.map(criterion => ({ ...criterion,
             cvClaims: input.plan.claims.filter(claim => claim.criterionId === criterion.id)
-                .map(({ id, quote, scope }) => ({ id, quote: redact(quote), scope })) })),
-            transcript: input.transcript.map(row => ({ ...row, text: redact(row.text) })),
-            evidence: input.catalog.map(({ id, ref, text }) => ({ id, ref, text: redact(text) })),
+                .map(({ id, quote, scope }) => ({ id, quote: redactScreeningContacts(quote), scope })) })),
+            transcript: input.transcript.map(row => ({ ...row, text: redactScreeningContacts(row.text) })),
+            evidence: input.catalog.map(({ id, ref, text }) => ({ id, ref, text: redactScreeningContacts(text) })),
         },
     };
-}
-
-function redact(text: string) {
-    return text.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gu, '[email]').replace(/\+?\d[\d ()\t.-]{7,}\d/gu, '[kontak]');
 }
 
 type Judgement = { level: number | null; clarity: number | null; basis: typeof bases[number]; reason: string;
@@ -192,7 +194,8 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ju
     interrupted: boolean, notes?: EvaluationPayload['taraInterview']) {
     const grades = input.criteria.map<Grade>(criterion => {
         let row = judgements.get(criterion.id);
-        const questions = input.transcript.filter(turn => turn.question && turn.topicId === criterion.id);
+        const judgedRefs = new Set([row?.questionRef, row?.redirectRef]);
+        const questions = input.transcript.filter(turn => turn.question && (turn.topicId === criterion.id || !turn.topicId && judgedRefs.has(turn.id)));
         const statement = recordedDecline(input, questions);
         if (statement && row?.level && row.evidence.every(id => input.snippets.get(id)?.ref === statement.questionId)) row = undefined;
         const silent = row?.level == null && questions.length && questions.every(turn => turn.opportunity === 'SILENCE');

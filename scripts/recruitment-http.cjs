@@ -15,6 +15,10 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
  }
  if (['--live-draft', '--live-voice', '--live-text', '--live-cv-formats', '--onboarding-live-draft'].some(mode => process.argv.includes(mode))) {
   assert.equal(process.env.RELIABILITY_LIVE_AI, '1', 'Explicit live-provider opt-in required');
+  if (process.argv.includes('--live-voice') && /^agenda-(pace|redirect|full)$/.test(process.env.RELIABILITY_VOICE_SCENARIO || '')) {
+   assert.ok(process.argv.includes('--taka-v2'), 'Use the simulated CV reader for the bounded agenda test');
+   require('./recruitment-voice-agenda.cjs').reserveSpend();
+  }
   const dotenv = createRequire(req.resolve('@nestjs/config'))('dotenv');
   env.OPENAI_API_KEY = dotenv.parse(require('node:fs').readFileSync(path.join(root, '.env'))).OPENAI_API_KEY;
   assert.ok(env.OPENAI_API_KEY, 'Local provider credential unavailable');
@@ -65,6 +69,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const text='Mengembangkan API Node.js selama empat tahun.';let paidMockCalls=0;
    const candidateEmail = `${process.env.S3_BUCKET}@synthetic.test`;
    const takaV2 = process.argv.includes('--taka-v2');
+   const agendaVoice = process.argv.includes('--live-voice') && /^agenda-(pace|redirect|full)$/.test(process.env.RELIABILITY_VOICE_SCENARIO || '');
    if(takaV2){
     const { CvProvider } = require(path.join(root,'apps/api/dist/ai-screening/recruitment/cv-provider.js'));
     const provider=app.get(CvProvider);
@@ -77,19 +82,35 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
       ...(gradeOnly?{blockIds:['p1-b1']}:{})}]));
      if(gradeOnly)assert.deepEqual(Object.keys(grades),['skills']);
      const value={grades,...(gradeOnly?{}:{source:{readable:true,fullName:'HTTP Candidate',email:candidateEmail,phone:null,
-      headline:'Developer',summary:'Pengalaman API.',limitations:[],pages:[{page:1,status:'READ'}],blocks:[{page:1,text,supports:['experience','requirements']}]}})};
+      headline:'Developer',summary:'Pengalaman API.',limitations:[],pages:[{page:1,status:'READ'}],
+      blocks:[{page:1,text,supports:spec.data.rubric.some(({id})=>id.startsWith('role-'))?Object.keys(grades):['experience','requirements']}]}})};
      return {status:200,body:{id:'resp_'+attempt,status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(value)}]}]}};
     };
+    provider.delete=async()=>({status:204});
    }
    const allowedProviderWork = new Set();
    const voiceEvents = [];
+   let advanceVoiceClock;
    if (process.argv.includes('--live-voice')) {
     const { VoiceProvider } = require(path.join(root,'apps/api/dist/ai-screening/voice/voice.provider.js'));
     const provider = app.get(VoiceProvider), attach = provider.attach.bind(provider);
-    provider.attach = (id, onEvent, onLost) => attach(id, event => {
+    if (agendaVoice) require('./recruitment-voice-agenda.cjs').observeProvider(provider, app.get(ScreeningClient), voiceEvents);
+    else provider.attach = (id, onEvent, onLost) => attach(id, event => {
      if (event.type === 'session.closed') voiceEvents.push({ reason: event.reason });
      onEvent(event);
     }, onLost);
+    if (process.env.RELIABILITY_VOICE_SCENARIO === 'timed') {
+     const { VoiceService } = require(path.join(root,'apps/api/dist/ai-screening/voice/voice.service.js'));
+     const voiceService = app.get(VoiceService);
+     advanceVoiceClock = async (id, elapsed) => {
+      const live = voiceService.active.get(id);
+      assert.ok(live?.delivery.clockStartedAt, 'Audio has established the interview clock');
+      const started = Date.now() - elapsed;
+      live.delivery.clockStartedAt = started;
+      await db.voiceInterview.update({ where: { id }, data: { startedAt: new Date(started) } });
+      await voiceService.tick();
+     };
+    }
    }
    const textUi = process.argv.includes('--text-ui');
    let scoreHook;
@@ -191,7 +212,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const onboardingDraft = process.argv.includes('--onboarding-live-draft');
    const onboarding = onboardingDraft || process.argv.includes('--onboarding');
    if (process.argv.includes('--browser') || liveVoice || liveText || textUi || onboarding) await require('./recruitment-real-browser.cjs')({
-     base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,liveText,textUi,voiceEvents,allowed: allowedProviderWork,onboarding,onboardingDraft,makeToken: token,makePdf,
+     base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,agendaVoice,liveText,textUi,voiceEvents,advanceVoiceClock,allowed: allowedProviderWork,onboarding,onboardingDraft,makeToken: token,makePdf,
    });
    console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio, real SMTP verification and stale-token refresh/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. ' + (liveVoice ? 'Bounded live voice probe.' : liveText ? 'Bounded live text probe.' : liveCvFormats ? 'Bounded real-provider CV formats probe.' : onboardingDraft ? 'Four real drafting calls through the HR browser.' : process.argv.includes('--live-draft') ? 'Bounded live drafting probe.' : 'No paid API calls.'));
   }finally{

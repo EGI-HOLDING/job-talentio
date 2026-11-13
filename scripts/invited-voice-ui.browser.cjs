@@ -11,9 +11,9 @@ const auth={accessToken:'synthetic-voice-ui',user:{id:'voice-ui',role:'EMPLOYEE'
 async function main(){
  const browser=await chromium.launch({headless:true,executablePath:process.env.TARA_PROBE_CHROME,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']}),context=await browser.newContext({viewport:{width:1672,height:941},permissions:['microphone'],reducedMotion:'reduce'}),report={errors:[],creates:0,ends:0,media:[],preparation:[]};let state=null,rejectProviderOnce=true,preparation='FAILED';
  try{
- await context.addInitScript(({auth,controlledQuestion})=>{localStorage.setItem('jt_token',auth.accessToken);localStorage.setItem('jt_session',JSON.stringify(auth));let audioAttempts=0; const play=HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play=function(){if(!audioAttempts++)return Promise.reject(new DOMException('synthetic speaker block','NotAllowedError')); return play.call(this);};let mediaAttempts=0;navigator.mediaDevices.getUserMedia=async()=>{const errors=['NotAllowedError','NotFoundError','NotReadableError'];const failure=errors[mediaAttempts++];if(failure)throw new DOMException('synthetic microphone failure',failure);
+ await context.addInitScript(({auth,controlledQuestion})=>{localStorage.setItem('jt_token',auth.accessToken);localStorage.setItem('jt_session',JSON.stringify(auth));let audioAttempts=0; const play=HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play=function(){if(!audioAttempts++){this.autoplay=false;return Promise.reject(new DOMException('synthetic speaker block','NotAllowedError'));} return play.call(this);};let mediaAttempts=0;navigator.mediaDevices.getUserMedia=async()=>{const errors=['NotAllowedError','NotFoundError','NotReadableError'];const failure=errors[mediaAttempts++];if(failure)throw new DOMException('synthetic microphone failure',failure);
  const ac=window.mockCandidateAudio?.context??new AudioContext(),osc=ac.createOscillator(),gain=ac.createGain(),destination=ac.createMediaStreamDestination();
- gain.gain.value=.01;osc.connect(gain).connect(destination);osc.start();await ac.resume();
+ gain.gain.value=0;osc.connect(gain).connect(destination);osc.start();await ac.resume();
  destination.stream.getAudioTracks()[0].addEventListener('ended',()=>void ac.close());
  window.mockCandidateAudio={context:ac,gain,stream:destination.stream};return destination.stream;
  };class Peer{constructor(){window.mockVoicePeer=this;}connectionState='new';iceGatheringState='complete';localDescription=null;onconnectionstatechange=null;senders=[];addTrack(track){this.senders.push({track,replaceTrack:async()=>{}});}getSenders(){return this.senders;}createDataChannel(){const channel={onmessage:null};window.mockVoiceChannel=channel;return channel;}async createOffer(){return{type:'offer',sdp:'v=0 mocked browser voice offer'};}async setLocalDescription(value){this.localDescription=value;}async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();
@@ -34,10 +34,10 @@ async function main(){
   report.preparation.push(preparation);
   if(method==='POST')setTimeout(()=>{preparation='READY';},250);
  }
- else if(p==='/ai-screening/sessions/voice-session/voice'&&method==='POST'){report.creates++;if(rejectProviderOnce){rejectProviderOnce=false;return route.fulfill({status:503,headers,json:{message:'Koneksi suara belum tersedia. Silakan coba lagi sebentar.'}});}state={id:'voice',status:'ACTIVE',startedAt:new Date().toISOString(),endedAt:null,serverNow:new Date().toISOString(),warningAt:null,closingAt:null,closeReason:null,transcriptComplete:false,error:null,transcript:[{id:'v1',speaker:'TARA',text:controlledQuestion,startMs:2000,endMs:4000},{id:'v2',speaker:'CANDIDATE',text:'Saya mengerjakan pipeline data dan evaluasi model.',startMs:5000,endMs:7000}]};Object.assign(state,{voiceMode:'NATIVE',clockRunning:false});body={...state,sdp:'v=0 mock answer'};}
+ else if(p==='/ai-screening/sessions/voice-session/voice'&&method==='POST'){report.creates++;assert.equal(req.postDataJSON().audioProtocol,'tara-live-direct-v1');if(rejectProviderOnce){rejectProviderOnce=false;return route.fulfill({status:503,headers,json:{message:'Koneksi suara belum tersedia. Silakan coba lagi sebentar.'}});}state={id:'voice',status:'ACTIVE',startedAt:new Date().toISOString(),endedAt:null,serverNow:new Date().toISOString(),warningAt:null,closingAt:null,closeReason:null,transcriptComplete:false,error:null,transcript:[{id:'v1',speaker:'TARA',text:controlledQuestion,startMs:2000,endMs:4000},{id:'v2',speaker:'CANDIDATE',text:'Saya mengerjakan pipeline data dan evaluasi model.',startMs:5000,endMs:7000}]};Object.assign(state,{voiceMode:'NATIVE',audioProtocol:'tara-live-direct-v1',clockRunning:false});body={...state,sdp:'v=0 mock answer'};}
  else if(p.endsWith('/voice/media')){
   const {event,sequence}=req.postDataJSON();report.media.push(event);assert.ok(sequence>0);
-  if(event==='AUDIBLE'){state.clockRunning=true;state.deadlineAt=new Date(Date.now()+900000).toISOString();}
+  if((event==='READY'||event==='AUDIBLE')&&!state.clockRunning){state.clockRunning=true;state.deadlineAt=new Date(Date.now()+900000).toISOString();}
   body={...state,serverNow:new Date().toISOString()};
  }
  else if(p.includes('/voice/playback'))throw Error('Retired audio clip endpoint requested'); else if(p.endsWith('/voice/end')){report.ends++;state={...state,status:'ENDED',closeReason:req.postDataJSON().reason??'CANDIDATE_ENDED',endedAt:new Date().toISOString(),serverNow:new Date().toISOString(),transcriptComplete:true};body=state;}
@@ -67,41 +67,43 @@ async function main(){
  await page.getByRole('alert').filter({hasText:'Koneksi ke server terganggu'}).waitFor();assert.equal(report.creates,1);
  await page.getByRole('button',{name:'Coba gabung lagi',exact:true}).click();await page.getByText('Terhubung',{exact:true}).waitFor({timeout:20000});await page.getByText(controlledQuestion,{exact:true}).waitFor();await page.waitForFunction(()=>[...document.images].filter(i=>i.offsetWidth).every(i=>i.complete&&i.naturalWidth));await page.screenshot({path:path.join(out,'02-meeting-desktop.png')});
  await page.waitForFunction(()=>!!document.querySelector('audio').srcObject);
- assert.equal(report.media.includes('READY'),false,'the first blocked play does not start the interview');
+ await page.getByRole('button',{name:'Aktifkan suara',exact:true}).waitFor();
+ assert.ok(await page.evaluate(()=>document.querySelector('audio').srcObject.getAudioTracks()[0]===window.mockRemoteAudio.destination.stream.getAudioTracks()[0]),'WebRTC track goes straight to the media element');
  await page.getByRole('button',{name:'Aktifkan suara',exact:true}).click();
- await page.waitForFunction(()=>!document.querySelector('audio').paused);
- for(let attempt=0;attempt<60&&!report.media.includes('READY');attempt++)await page.waitForTimeout(40);
- assert.ok(report.media.includes('READY'),'opening starts after the browser unlocks audio');
+ await page.waitForFunction(()=>!document.querySelector('audio').paused&&!document.querySelector('audio').muted);
+ assert.equal(report.creates,2,'speaker recovery uses the same connection');
+ for(let attempt=0;attempt<60&&!report.media.includes('INPUT_QUIET');attempt++)await page.waitForTimeout(40);
+ assert.ok(report.media.includes('INPUT_QUIET'),'startup microphone observation runs alongside the speaker');
  if(noTestAudio){
-  await page.getByRole('alert').filter({hasText:'Suara Tara belum terdengar'}).waitFor({timeout:10000});
-  assert.equal(state.clockRunning,false,'no audio means the interview clock remains paused');
-  assert.equal(report.ends,0,'the recovery action keeps the connection');
-  await page.getByRole('button',{name:'Aktifkan suara',exact:true}).click();
-  for(let attempt=0;attempt<60&&!report.media.includes('REPLAY');attempt++)await page.waitForTimeout(40);
-  assert.ok(report.media.includes('REPLAY'),'recovery requests the question on the current provider session');
+  await page.getByRole('status').filter({hasText:'coba bilang “Halo” lewat mikrofon'}).waitFor({timeout:15000});
+  assert.equal(report.ends,0,'missing audio telemetry does not terminate the media connection');
  }
  await page.evaluate(()=>window.mockRemoteAudio.play());
  await page.getByText('Sedang berbicara',{exact:true}).waitFor();
+ if(noTestAudio)await page.getByRole('status').filter({hasText:'coba bilang “Halo” lewat mikrofon'}).waitFor({state:'hidden'});
  await page.getByText('Mendengarkan',{exact:true}).waitFor();
- assert.deepEqual(report.media.filter(e=>e!=='REPLAY').slice(0,3),['READY','AUDIBLE','QUIET']);
- // Feed real AudioWorklet inputs into the app with synthetic speech markers.
+ assert.deepEqual(report.media.filter(e=>['READY','AUDIBLE','QUIET'].includes(e)).slice(0,3),['READY','AUDIBLE','QUIET']);
  const beforeOverlap=report.media.length;
  await page.evaluate(()=>{
   const {context:mic,gain,stream}=window.mockCandidateAudio;
   const {context:remote,destination}=window.mockRemoteAudio;
   gain.gain.setValueAtTime(.08,mic.currentTime);
-  gain.gain.setValueAtTime(0,mic.currentTime+.6);
-  gain.gain.setValueAtTime(.08,mic.currentTime+1.55);
-  gain.gain.setValueAtTime(0,mic.currentTime+2.3);
- const early=remote.createOscillator();early.connect(destination);early.start(remote.currentTime+.8);early.stop(remote.currentTime+3);
-  const clear=remote.createOscillator();clear.connect(destination);clear.start(remote.currentTime+4.5);clear.stop(remote.currentTime+5.5);
+  gain.gain.setValueAtTime(0,mic.currentTime+.5);
+  gain.gain.setValueAtTime(.08,mic.currentTime+1.25);
+  gain.gain.setValueAtTime(0,mic.currentTime+1.8);
+  const response=remote.createOscillator();
+  response.connect(destination);
+  response.start(remote.currentTime+.85);
+  response.stop(remote.currentTime+2.45);
   window.mockInputRemainedLive=stream.getAudioTracks()[0].enabled&&window.mockVoicePeer.getSenders()[0].track===stream.getAudioTracks()[0];
  });
  await page.waitForFunction(()=>window.mockInputRemainedLive===true);
- await page.getByText('Sedang berbicara',{exact:true}).waitFor({timeout:6500});
+ await page.getByText('Sedang berbicara',{exact:true}).waitFor({timeout:2500});
+ await page.waitForFunction(()=>!document.querySelector('audio').paused&&!document.querySelector('audio').muted&&window.mockInputRemainedLive);
  await page.getByText('Mendengarkan',{exact:true}).waitFor();
- for(let attempt=0;attempt<25&&!report.media.slice(beforeOverlap).includes('QUIET');attempt++)await page.waitForTimeout(40);
- assert.deepEqual(report.media.slice(beforeOverlap).filter(e=>e!=='TEXT_SHOWN'),['OUTPUT_DROPPED','AUDIBLE','QUIET']);
+ for(let attempt=0;attempt<30&&!report.media.slice(beforeOverlap).includes('QUIET');attempt++)await page.waitForTimeout(40);
+ assert.deepEqual(report.media.slice(beforeOverlap).filter(e=>!['INPUT_ACTIVE','INPUT_QUIET'].includes(e)),['AUDIBLE','QUIET'],'audio beginning 350 ms after the candidate speaks plays through resumed microphone activity');
+ assert.ok(!report.media.some(e=>e==='REPLAY'||e==='OUTPUT_DROPPED'));
  await page.evaluate(()=>{window.mockVoicePeer.connectionState='disconnected';window.mockVoicePeer.onconnectionstatechange();});
  await page.getByText('Koneksi suara terputus',{exact:true}).waitFor();assert.equal(report.ends,0,'transient disconnect cannot end the interview');
  await page.evaluate(()=>{window.mockVoicePeer.connectionState='connected';window.mockVoicePeer.onconnectionstatechange();});await page.getByText('Terhubung',{exact:true}).waitFor();
@@ -126,7 +128,10 @@ async function main(){
  await page.setViewportSize({width:1672,height:941});state=null;await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('button',{name:'Buka interview',exact:true}).click();await page.getByRole('button',{name:'Gabung interview',exact:true}).click();
  for(let attempt=0;attempt<3;attempt++)await page.getByRole('button',{name:'Coba gabung lagi',exact:true}).click();
  await page.getByText('Terhubung',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Aktifkan suara',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Aktifkan suara',exact:true}).click();
  await page.evaluate(()=>{window.mockVoicePeer.connectionState='disconnected';window.mockVoicePeer.onconnectionstatechange();});
+ await page.getByText('Koneksi suara terputus',{exact:true}).waitFor();
  await page.getByText('Interview berakhir karena koneksi mengalami kendala.',{exact:false}).waitFor({timeout:30000});assert.equal(state.closeReason,'CONNECTION_LOST');assert.equal(report.ends,2);assert.equal(await page.getByText('Kamu mengakhiri interview lebih awal.',{exact:false}).count(),0,'technical disconnect is not blamed on candidate');await page.screenshot({path:path.join(out,'06-disconnected.png')});
  console.log('Voice browser passed: invitation, prejoin, permission denial, missing and busy microphone without call creation, actionable server error and retry, media connection, meeting layout, live caption, mic toggle, transcript, audio settings, contained mobile viewport, confirmed early end and saved completion. Paid calls: 0.');
  }finally{fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}

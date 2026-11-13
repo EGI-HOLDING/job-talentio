@@ -14,13 +14,12 @@ module.exports = async function verifyText({ page, dashboard, drawer, db, worker
   assert.equal(ready.payload.claims.length, 1, 'The one-claim fixture bounds model cost and question count');
   const session = () => db.aiScreeningSession.findUniqueOrThrow({ where: { id: sessionId }, include: { questions: { orderBy: { position: 'asc' } }, package: true } });
   const policy = (await session()).package.conversationPolicy;
-  assert.equal(policy.maxCore, 10);
-  assert.equal(policy.maxFollowUp, 15);
+  assert.equal(policy.maxCore + policy.maxFollowUp, 10);
   assert.equal(policy.questionSeconds, 60);
   await page.getByRole('button', { name: /Lihat aturan singkat/ }).click({ timeout: 20000 });
   await page.getByRole('heading', { name: 'Biar ngobrolnya nyaman' }).waitFor();
   await page.getByText('1 menit per pertanyaan', { exact: true }).waitFor();
-  await page.getByText(/Maksimal 25 pertanyaan/).waitFor();
+  await page.getByText(/Maksimal 10 pertanyaan/).waitFor();
   await page.getByRole('button', { name: /Siap, yuk mulai!/ }).click();
   const marker = 'TALENTIO_OVERRIDE_8617';
   const answers = [

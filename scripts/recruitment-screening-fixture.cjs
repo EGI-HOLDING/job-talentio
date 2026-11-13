@@ -9,23 +9,25 @@ module.exports = function screenFixture(task, input) {
     })) };
   }
   if (task === 'candidate') {
-    const line = input.cvLines.find(line => line.text.includes('Mengembangkan API Node.js'));
+    const line = input.cvSegments.find(line => line.text.includes('Mengembangkan API Node.js'));
     assert.ok(line);
-    return { claims: [{ id: 'claim-1', criterionId: 'criterion-0', statement: line.text, quote: line.text, lineStart: line.line, lineEnd: line.line, question: 'Di proyek API Node.js yang tertulis di CV lu, bagian mana yang lu kerjakan sendiri?' }], limitations: [] };
+    return { claims: [{ sourceRef: line.id, criterionId: 'criterion-0', skillText: 'API', relevance: 'CORE' }] };
   }
   if (task === 'follow-up') {
-    return { stop: false, question: input.targetDepth === 1
-      ? 'Waktu menangani endpoint inventaris yang lu sebut, bagaimana lu menentukan skenario pengujian untuk memastikan perubahan jumlah stok benar-benar tersimpan dan bisa dicek ulang tim QA?'
-      : 'Ketika permintaan pembaruan stok yang sama masuk dua kali, langkah apa yang lu pakai supaya layanan tetap menyimpan satu transaksi dan gimana lu membuktikan hasilnya lewat pengujian?' };
+    const answer = input.chain.at(-1).answer;
+    const example = answer.startsWith('Saya sendiri membuat');
+    const quote = example ? 'Saya sendiri membuat dua endpoint inventaris menggunakan Node.js.' : 'Saya membantu bagian API.';
+    return { outcome: example ? 'EXAMPLE' : 'NEEDS_DETAIL', answerQuote: quote,
+      question: example ? null : 'Bagian mana dari pengembangan API yang lu kerjakan sendiri?',
+      evidence: example ? [{ topicId: input.topic.id, quote, fields: ['TASK', 'ACTION'] }] : [] };
   }
   assert.equal(task, 'evaluate');
   return {
-    summary: 'Kandidat menjelaskan kontribusi pribadi pada pengembangan API.', strengths: ['Pengalaman API dijelaskan.'], gaps: [], interviewQuestions: [],
-    claims: input.claims.map(claim => {
-      const answer = input.answers.filter(row => row.claimId === claim.id).at(-1);
-      const quote = input.evidenceCatalog.find(row => row.source === 'ANSWER' && row.ref === answer.id);
+    claims: Object.fromEntries(input.claims.map(claim => {
+      const quote = input.evidenceCatalog.find(row => row.source === 'ANSWER' && row.text.includes('Saya sendiri membuat'));
       assert.ok(quote);
-      return { claimId: claim.id, judgement: { level: 'CONCRETE', detail: 'NONE', detailRef: null }, status: 'SUPPORTED', reason: 'Ada penjelasan kontribusi pribadi.', evidence: [{ questionId: answer.id, quoteRef: quote.id }], contradictions: [] };
-    }),
+      return [claim.id, { level: 'CONCRETE', reason: 'Ada penjelasan kontribusi pribadi.',
+        evidence: [{ quoteRef: quote.id, fields: ['TASK', 'ACTION'] }], discrepancyRef: null }];
+    })),
   };
 };

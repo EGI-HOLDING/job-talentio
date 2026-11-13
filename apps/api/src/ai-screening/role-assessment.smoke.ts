@@ -4,8 +4,7 @@ import { taraTopics } from './tara-interview';
 import { acceptRoleJudgements, freezeRoleAssessment, prepareRoleEvidence, roleChatTranscript, roleEvaluationRequest,
     roleLiveTranscript, scoreRoleAssessment, type RoleTranscriptEntry } from './taka-role-assessment';
 import { createVoiceRequest } from './prompts/voice-session';
-import { roleVoiceEvidence, startRoleVoice, stepRoleVoice } from './voice/voice-role';
-import { droppedOutputRecoveryAt, reflectedInputActive, roleRedirectQuestion } from './voice/voice-redirect';
+import { directFarewellAt, roleVoiceEvidence, type RoleVoiceControl } from './voice/voice-role';
 import type { NativeDelivery } from './voice/voice-native';
 import type { Fragment } from './voice/voice.policy';
 
@@ -24,11 +23,13 @@ const plan = attachRoleTopics({ claims: [], limitations: [] }, rubric);
 const topics = taraTopics(plan, rolePackage(rubric), true);
 assert.deepEqual(topics.map(topic => topic.id), rubric.interviewIds, 'no CV mention still allows core scenarios');
 assert.ok(topics.every(topic => topic.alternative));
-const request = createVoiceRequest('marin', 'sdp', topics, true);
+const request = createVoiceRequest('marin', 'sdp', topics);
 assert.equal(request.session.model, 'gpt-live-1');
 assert.equal(request.session.delegation.type, 'client');
 assert.match(JSON.stringify(request.session.input), /Halo, gue Tara/);
-assert.doesNotMatch(JSON.stringify(request.session.input), /Susun proposal teknis/, 'future slots are supplied by the server');
+const agenda = JSON.parse(request.session.input[0].content[0].text.split('\n')[1]);
+assert.deepEqual(agenda.map((item: { criterionId: string }) => item.criterionId), rubric.interviewIds, 'the full frozen agenda is available at startup');
+assert.ok(agenda.every((item: { context: string }) => item.context === 'WORK_SCENARIO'));
 assert.doesNotMatch(request.session.instructions, /Keluarkan hanya JSON/u, 'the spoken interview must not inherit a JSON-only instruction');
 assert.match(createVoiceRequest('marin', 'sdp', topics).session.instructions, /Tunggu kandidat selesai bicara/u);
 
@@ -106,7 +107,7 @@ const fragments: Fragment[] = [
 const window = (start: number, end: number, interrupted?: boolean) => ({ start: origin + start, end: origin + end, interrupted });
 const delivery: NativeDelivery = { firstAudible: origin + 100, sequence: 7,
     windows: [window(100, 450), window(870, 1090), window(1538, 1820), window(3500, 4300)] };
-const state = startRoleVoice(topics);
+const state: RoleVoiceControl = { slot: 0, slots: [{ topicId: demo, openedAt: origin, questionRefs: [] }] };
 const playback = roleVoiceEvidence([...fragments].reverse(), delivery, state);
 assert.equal(playback.evidence[0].heard, true, 'split playback and trailing speech preserve the question');
 assert.equal(playback.evidence[0].questionEndMs, 1810);
@@ -114,80 +115,20 @@ assert.deepEqual(roleLiveTranscript(playback.evidence, true).map(row => [row.id,
     [['v1', 'ANSWERED'], ['v5', undefined], ['v6', undefined]]);
 const cut = { ...delivery, windows: [...delivery.windows.slice(0, 2), window(1538, 1670, true)] };
 assert.equal(roleVoiceEvidence(fragments, cut, state).evidence[0].heard, false, 'interrupted playback cannot verify a question');
-assert.equal(stepRoleVoice(state, topics, fragments, delivery, origin, origin + 5100, false, origin + 4700), undefined,
-    'recent microphone activity overrides an early recap and an incomplete transcript');
-assert.equal(state.slot, 0);
-assert.equal(stepRoleVoice(state, topics, fragments, delivery, origin, origin + 5100, false), 'NEXT');
-assert.equal(state.slot, 1);
-const echo = [...fragments, { id: 7, speaker: 'TARA', startMs: 6400, endMs: 6800, text: 'Bagaimana lu nunjukin solusi ini?' }];
-const echoDelivery = { ...delivery, windows: [...delivery.windows, window(6400, 6800)] };
-assert.equal(stepRoleVoice(state, topics, echo, echoDelivery, origin, origin + 7100, false), 'REFOCUS');
-assert.deepEqual(state.slots[1].questionRefs, []);
-assert.equal(roleVoiceEvidence(echo, echoDelivery, state).evidence.at(-1)?.topicId, demo);
-assert.equal(stepRoleVoice(state, topics, echo, echoDelivery, origin, origin + 7500, false), undefined);
-assert.equal(stepRoleVoice(state, topics, fragments, delivery, origin, origin + 840000, true), 'CLOSE');
-assert.equal(stepRoleVoice(state, topics, fragments, delivery, origin, origin + 848000, true), 'END');
-assert.equal(state.slot, 1, 'closing cannot open another topic');
-const clock = startRoleVoice(topics);
-assert.equal(stepRoleVoice(clock, topics, [], delivery, origin, origin + 165_000, false, origin + 164_700), undefined,
-    'a topic deadline waits for the candidate to stop speaking');
-for (const minute of [2.75, 5.5, 8.25]) assert.equal(stepRoleVoice(clock, topics, [], delivery, origin, origin + minute * 60_000, false), 'NEXT');
-assert.equal(clock.slot, 3);
-assert.equal(stepRoleVoice(clock, topics, [], delivery, origin, origin + 660000, false), 'CLOSE');
-
-const redirectAnswer: Fragment = { id: 10, speaker: 'CANDIDATE', startMs: 2000, endMs: 6200,
-    text: 'Saya sedang cerita soal perjalanan liburan saya.' };
-const redirectLead: Fragment = { id: 11, speaker: 'TARA', startMs: 4000, endMs: 4700, text: 'Gue tarik balik ke demo teknis ya.' };
-const redirectCut: Fragment = { ...redirectLead, text: 'Gimana cara lu—' };
-const redirectQuestion: Fragment = { ...redirectLead, startMs: 9000, endMs: 9900, text: 'Gimana cara lu validasi hasil demo SQL?' };
-const initial = fragments.slice(0, 3);
-const initialPlayback = delivery.windows.slice(0, 3);
-const recorded = (extras: NativeDelivery['windows']): NativeDelivery => ({ ...delivery, windows: [...initialPlayback, ...extras] });
-const step = (control: ReturnType<typeof startRoleVoice>, turns: Fragment[], media: NativeDelivery, at: number, micAt?: number) =>
-    stepRoleVoice(control, topics, turns, media, origin, origin + at, false, micAt === undefined ? undefined : origin + micAt);
-for (const incomplete of [redirectLead, redirectCut, { ...redirectLead, text: 'Gue tarik balik ke demo. Gimana cara lu?' }]) {
-    const control = startRoleVoice(topics);
-    const turns = [...initial, redirectAnswer, incomplete];
-    const media = recorded([window(4000, 4700)]);
-    assert.equal(roleVoiceEvidence(turns, media, control).evidence.at(-1)?.question, false, 'unfinished redirect is not a question');
-    assert.equal(step(control, turns, media, 7900, 7500), undefined, 'let the candidate keep speaking');
-    assert.equal(step(control, turns, media, 8100), 'REDIRECT');
-    assert.equal(step(control, turns, media, 9000), undefined, 'request the correction once per topic');
-    assert.deepEqual(control.slots[0].questionRefs, ['v1']);
-    const revised = [...turns, { ...redirectQuestion, id: 12 }];
-    const played = recorded([window(4000, 4700), window(9000, 9900)]);
-    assert.equal(step(control, revised, played, 11_800), undefined, 'wait for an answer to the repaired question');
-    assert.deepEqual(control.slots[0].questionRefs, ['v1', 'v12']);
-    assert.equal(control.slots[0].redirect?.pending, false);
-}
-const complete = startRoleVoice(topics);
-const fullRedirect = { ...redirectLead, endMs: 5100, text: 'Balik ke SQL, bagian mana yang lu kerjain sendiri?' };
-assert.equal(step(complete, [...initial, redirectAnswer, fullRedirect], recorded([window(4000, 5100)]), 8100), undefined);
-assert.deepEqual(complete.slots[0].questionRefs, ['v1', 'v11'], 'a complete redirect counts once and needs no repair');
-const splitRedirect = [
-    { ...redirectLead, text: 'Gue tarik balik ya ke demo teknis. ' },
-    { ...redirectQuestion, id: 12, startMs: 5200, endMs: 5800 },
-    { ...redirectQuestion, id: 13, startMs: 5950, endMs: 6150, text: '?' },
-];
-const splitRedirectControl = startRoleVoice(topics);
-assert.equal(step(splitRedirectControl, [...initial, redirectAnswer, ...splitRedirect], recorded([window(5200, 5800)]), 8100), undefined);
-assert.deepEqual(splitRedirectControl.slots[0].questionRefs, ['v1', 'v11'], 'a missed preamble or punctuation does not erase the audible question');
-const earlySignoff = { ...redirectLead, startMs: 3800, text: 'Makasih, wawancara kita sudah selesai.' };
-const stillSpeaking = startRoleVoice(topics);
-assert.equal(step(stillSpeaking, [...initial, redirectAnswer, earlySignoff], recorded([window(3800, 4700)]), 8500, 7800), undefined);
-assert.equal(stillSpeaking.close, undefined, 'an unsolicited signoff does not close an active answer');
-assert.equal(stepRoleVoice(stillSpeaking, topics, [...initial, redirectAnswer], delivery, origin, origin + 840_000, true, origin + 839_850), undefined,
-    'the closing announcement waits for the candidate to stop');
-assert.equal(stepRoleVoice(stillSpeaking, topics, [...initial, redirectAnswer], delivery, origin, origin + 842_000, true, origin + 839_850), 'CLOSE');
-assert.match(roleRedirectQuestion(topics[0]), /demo teknis SQL.*\?$/u, 'the recovery prompt names the active task');
-assert.equal(reflectedInputActive(Buffer.alloc(960).toString('base64')), false);
-const pcm = Buffer.alloc(960);
-for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(1000, i);
-assert.equal(reflectedInputActive(pcm.toString('base64')), true);
-assert.equal(reflectedInputActive(123), false);
-assert.equal(droppedOutputRecoveryAt(2000, 6000), 9500, 'recovery waits for the candidate even if the output was dropped much earlier');
-assert.equal(droppedOutputRecoveryAt(6000, 3000), 10_500, 'give native playback a chance to recover first');
-const mutedReply = startRoleVoice(topics);
-assert.equal(stepRoleVoice(mutedReply, topics, fragments, delivery, origin, origin + 5100, false, undefined, true), undefined,
-    'do not skip a topic while restoring a response blocked by the player');
+const directDelivery = { ...delivery, firstAudioMs: 100, playbackVerified: true };
+const directEvidence = (rows: Fragment[], media: NativeDelivery = directDelivery) => roleVoiceEvidence(rows, media, undefined, true).evidence;
+assert.ok(directEvidence(fragments).some(row => row.id === 'v5'), 'a gap in delivery proof never erases the candidate transcript');
+assert.equal(directEvidence(fragments)[0].heard, false, 'a partly played prompt cannot establish an opportunity');
+const farewell: Fragment = { id: 20, speaker: 'TARA', startMs: 6200, endMs: 7600, text: 'Makasih udah cerita. Wawancara kita selesai.' };
+const closingMedia = { ...directDelivery, windows: [...directDelivery.windows, window(6200, 7600)] };
+assert.equal(directFarewellAt([...fragments, farewell], closingMedia), origin + 7600);
+assert.equal(directFarewellAt([...fragments, farewell], { ...closingMedia, playbackVerified: false }), undefined);
+assert.equal(directFarewellAt([...fragments, { ...farewell, text: 'Gue jelasin nanti setelah wawancara kita selesai.' }], closingMedia), undefined);
+assert.equal(directFarewellAt([...fragments, farewell, { id: 21, speaker: 'CANDIDATE', startMs: 7700, endMs: 8100, text: 'Sebentar, gue mau nambahin.' }], closingMedia), undefined);
+const specificQuestion: Fragment = { id: 22, speaker: 'TARA', startMs: 100, endMs: 1200, text: 'Waktu nunjukin solusi, langkah persiapan demo lu gimana?' };
+const clarification: Fragment = { id: 23, speaker: 'CANDIDATE', startMs: 1400, endMs: 1800, text: 'Tugas yang mana ya?' };
+const clarified = directEvidence([specificQuestion, clarification], { ...directDelivery, windows: [window(100, 1200)] });
+assert.equal(clarified[0].heard, true);
+assert.equal(clarified[0].topicId, undefined, 'the playback timeline never assigns a rubric criterion');
+assert.equal(roleLiveTranscript(clarified, false, true)[0].opportunity, 'INTERRUPTED', 'a request for clarification is not an answer');
 console.log('Role assessment passed: frozen criteria, CV aliases, scenarios without CV claims, Live delivery, topic limits, source integrity, cross-topic evidence, and complete-score requirements. Paid calls: 0.');

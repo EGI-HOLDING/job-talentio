@@ -5,6 +5,7 @@ import { openConversation } from './prompts/shared/conversation-opening';
 import type { taraInterviewReport } from './tara-interview';
 import type { TakaClaimScope, TakaCoverage } from './taka-interview';
 import type { RoleAssessment } from './taka-role-assessment';
+import type { LiveAgenda } from './tara-live-agenda';
 import { normalizeSkillKey } from '../common/skill-resolve';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
@@ -19,6 +20,7 @@ export type Criterion = {
 export type PackagePayload = {
     context: string;
     criteria: Criterion[];
+    liveAgenda?: LiveAgenda;
 };
 export type Claim = {
     id: string;

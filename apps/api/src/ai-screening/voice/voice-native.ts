@@ -1,17 +1,20 @@
-import { recordTaraOpportunity, startTara, TARA_FIRST_PASS_MS, TOPIC_MS, type TaraProgress, type TaraTopic } from '../tara-interview';
+import { recordTaraOpportunity, startTara, type TaraProgress, type TaraTopic } from '../tara-interview';
 import type { Fragment, VoiceTurn } from './voice.policy';
 import type { RoleVoiceControl, VoiceControlEvent } from './voice-role';
 
 export const NATIVE_VOICE_VERSION = 'tara-voice-native-v1';
 export const NATIVE_STARTUP_MS = 60_000;
-export const NATIVE_AUDIO_RECOVERY_MS = 15_000;
-export type MediaSignal = 'READY' | 'AUDIBLE' | 'QUIET' | 'INTERRUPTED' | 'TEXT_SHOWN' | 'OUTPUT_DROPPED' | 'REPLAY';
+export const VOICE_MEDIA_SIGNALS = ['READY', 'PLAYBACK_READY', 'AUDIBLE', 'QUIET', 'INTERRUPTED', 'INPUT_ACTIVE', 'INPUT_QUIET'] as const;
+export type MediaSignal = typeof VOICE_MEDIA_SIGNALS[number];
 type AudibleWindow = { start: number; end: number; interrupted?: boolean };
 export type NativeDelivery = {
     origin?: number;
     firstAudible?: number;
     firstAudioMs?: number;
     readyAt?: number;
+    playbackReadyAt?: number;
+    clockStartedAt?: number;
+    playbackVerified?: boolean;
     droppedOutputs?: number;
     open?: number;
     sequence: number;
@@ -19,6 +22,18 @@ export type NativeDelivery = {
     shown?: string[];
 };
 export type NativeProgress = TaraProgress & { nativeDelivery?: NativeDelivery; roleControl?: RoleVoiceControl; voiceControls?: VoiceControlEvent[] };
+
+export function reflectedVoiceSignal(delta: unknown) {
+    if (typeof delta !== 'string' || !delta || delta.length > 64_000) return false;
+    const pcm = Buffer.from(delta, 'base64');
+    let energy = 0;
+    let samples = 0;
+    for (let offset = 0; offset + 1 < pcm.length; offset += 8) {
+        energy += (pcm.readInt16LE(offset) / 32768) ** 2;
+        samples++;
+    }
+    return samples > 0 && energy / samples >= 0.0025 ** 2;
+}
 
 export function nativeVoiceTurns(fragments: Fragment[]): VoiceTurn[] {
     const lanes = new Map<string, VoiceTurn[]>();
@@ -58,19 +73,15 @@ export function topicForQuestion(text: string, topics: readonly TaraTopic[]) {
     return matches.length === 1 ? matches[0] : undefined;
 }
 
-export function recordMedia(delivery: NativeDelivery, event: MediaSignal, sequence: number, now: number, transcriptEventId?: string) {
+export function recordMedia(delivery: NativeDelivery, event: MediaSignal, sequence: number, now: number) {
     if (sequence <= delivery.sequence) return false;
     delivery.sequence = sequence;
     if (event === 'READY') delivery.readyAt ??= now;
-    else if (event === 'REPLAY') return true;
-    else if (event === 'OUTPUT_DROPPED') delivery.droppedOutputs = (delivery.droppedOutputs ?? 0) + 1;
+    else if (event === 'PLAYBACK_READY') delivery.playbackReadyAt ??= now;
     else if (event === 'AUDIBLE') {
         delivery.firstAudible ??= now;
         delivery.open ??= now;
-    } else if (event === 'TEXT_SHOWN') {
-        if (transcriptEventId && (delivery.shown?.length ?? 0) < 200 && !delivery.shown?.includes(transcriptEventId))
-            (delivery.shown ??= []).push(transcriptEventId);
-    } else if (delivery.open !== undefined) {
+    } else if ((event === 'QUIET' || event === 'INTERRUPTED') && delivery.open !== undefined) {
         if (now > delivery.open && delivery.windows.length < 200)
             delivery.windows.push({ start: delivery.open, end: now, ...(event === 'INTERRUPTED' ? { interrupted: true } : {}) });
         delivery.open = undefined;
@@ -85,15 +96,15 @@ function audible(turn: VoiceTurn, delivery: NativeDelivery, origin: number) {
         (!window.interrupted || origin + turn.endMs < window.end - 350));
 }
 
-export function nativeInterview(topics: TaraTopic[], turns: VoiceTurn[], delivery: NativeDelivery, endedAt: number, interrupted: boolean) {
+export function nativeInterview(topics: TaraTopic[], turns: VoiceTurn[], delivery: NativeDelivery, endedAt: number, interrupted: boolean, direct = false) {
     const progress: NativeProgress = { ...startTara(topics, true), stage: 'DONE', questions: 0, nativeDelivery: delivery,
         endedReason: interrupted ? 'INTERRUPTED' : 'COMPLETE' };
     const firstOutput = turns.find(turn => turn.speaker === 'TARA');
-    const firstAudioMs = delivery.firstAudioMs ?? firstOutput?.startMs;
+    const firstAudioMs = direct ? delivery.firstAudioMs : delivery.firstAudioMs ?? firstOutput?.startMs;
     const origin = firstAudioMs !== undefined && delivery.firstAudible !== undefined ? delivery.firstAudible - firstAudioMs : delivery.origin;
     const questions = turns.filter(turn => turn.speaker === 'TARA' && question(turn.text));
     const evidenceTurns: VoiceTurn[] = [];
-    if (origin === undefined) return { progress, evidenceTurns, origin: endedAt };
+    if (origin === undefined || direct && !delivery.playbackVerified) return { progress, evidenceTurns, origin: endedAt };
     for (const [index, turn] of questions.entries()) {
         const topic = topicForQuestion(turn.text, topics);
         const note = progress.topics.find(state => state.note.topicId === topic?.id)?.note;
@@ -120,21 +131,4 @@ export function nativeInterview(topics: TaraTopic[], turns: VoiceTurn[], deliver
         progress.questions++;
     }
     return { progress, evidenceTurns, origin };
-}
-
-export function nativeCoverage(topics: TaraTopic[], turns: VoiceTurn[], delivery: NativeDelivery, elapsed: number) {
-    const firstOutput = turns.find(turn => turn.speaker === 'TARA');
-    if (!firstOutput || delivery.firstAudible === undefined) return;
-    const origin = delivery.firstAudible - (delivery.firstAudioMs ?? firstOutput.startMs);
-    const delivered = turns.filter(turn => turn.speaker === 'TARA' && audible(turn, delivery, origin));
-    const seen = new Set(delivered.map(turn => topicForQuestion(turn.text, topics)?.id));
-    const next = topics.find(topic => !seen.has(topic.id));
-    if (!next) return;
-    const grounded = delivered.map(turn => ({ turn, topic: topicForQuestion(turn.text, topics) })).filter(item => item.topic);
-    const last = grounded.at(-1);
-    const outstanding = topics.filter(topic => !seen.has(topic.id)).length;
-    const initialQuestion = last ? grounded.find(item => item.topic?.id === last.topic?.id)?.turn : undefined;
-    const originOfSlot = initialQuestion ? initialQuestion.startMs - firstOutput.startMs : 0;
-    const deadline = Math.min(originOfSlot + TOPIC_MS, Math.floor(TARA_FIRST_PASS_MS * (topics.length - outstanding + 1) / topics.length) - 15_000);
-    return elapsed >= deadline ? next : undefined;
 }

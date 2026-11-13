@@ -29,7 +29,7 @@ type TurnEvidence = {topicId: string; quote: string; fields: EvidenceField[]};
 export type TaraDecision = { outcome: TurnJudgment; answerQuote: string; question: string | null; evidence?: TurnEvidence[] };
 export type TaraTopic = {
     id: string; criterionId: string; label: string; question: string; alternative: boolean;
-    cvQuote?: string; requirementRef?: string; priority?: 'CORE' | 'SUPPORTING'; fields?: EvidenceField[];
+    cvQuote?: string; requirementRef?: string; priority?: 'CORE' | 'SUPPORTING'; fields?: EvidenceField[]; skill?: string;
 };
 type TaraCitation = Omit<TurnEvidence, 'topicId'> & {answerRef: string; fromTopic: string};
 export type TaraOpportunity = {

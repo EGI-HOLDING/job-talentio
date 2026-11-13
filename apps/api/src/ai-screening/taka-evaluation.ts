@@ -19,7 +19,7 @@ export async function evaluateTakaInterview(
     { interrupted, notes, owner, voice, rubric, applicationCv, role }: { interrupted: boolean; notes?: ReturnType<typeof taraInterviewReport>; owner?: string;
         rubric: PackagePayload;
         applicationCv?: { assessable: boolean; total: number } | null;
-        role?: { rubric: RoleRubric; transcript: RoleTranscriptEntry[] };
+        role?: { rubric: RoleRubric; transcript: RoleTranscriptEntry[]; direct?: boolean };
         voice?: { closeReason: string | null; transcriptComplete: boolean; durationSeconds: number } },
 ) {
     if (role) preset = frozenRoleAssessment(invitation?.snapshot);
@@ -66,11 +66,11 @@ export async function evaluateTakaInterview(
         const evidence = prepareRoleEvidence(context.rubric, context.transcript, plan);
         let judgements: ReturnType<typeof acceptRoleJudgements> = new Map();
         if (evidence.criteria.length && evidence.catalog.length) {
-            const request = roleEvaluationRequest(evidence, preset);
+            const request = roleEvaluationRequest(evidence, preset, undefined, context.direct);
             judgements = acceptRoleJudgements(evidence, await client.run(workId, session.id, 'evaluate', request.data, request.preset));
             const unresolved = evidence.criteria.filter(row => !judgements.has(row.id)).map(row => row.id);
             if (unresolved.length && judgements.size) {
-                const repair = roleEvaluationRequest(evidence, preset, unresolved);
+                const repair = roleEvaluationRequest(evidence, preset, unresolved, context.direct);
                 try {
                     const raw = await client.run(workId, session.id, 'evaluate', repair.data, repair.preset);
                     for (const [id, row] of acceptRoleJudgements(evidence, raw, unresolved)) judgements.set(id, row);

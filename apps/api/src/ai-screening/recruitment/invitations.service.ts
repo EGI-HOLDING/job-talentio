@@ -21,6 +21,7 @@ import { json, screeningEnabled, PDF_TEMPLATE_VERSION } from '../screening.polic
 import { registerCvVersion } from '../../profiles/cv-evidence';
 import { CV_MAX_BYTES, fileChecksum } from './cv-scoring.policy';
 import { voiceTurns } from '../voice/voice.policy';
+import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 import { nativeVoiceTurns, NATIVE_VOICE_VERSION } from '../voice/voice-native';
 import { roleVoiceTurns, ROLE_VOICE_VERSION } from '../voice/voice-role';
 import { freezeTakaInterview, TAKA_INTERVIEW_VERSION } from '../taka-interview';
@@ -55,7 +56,7 @@ export class InvitationsService {
   if(!text?.trim()||!details.job)throw new BadRequestException('Isi CV belum tersedia untuk screening.');
   const active=await this.db.screeningInvitation.findFirst({where:{candidateId,mode:input.mode,status:{in:['INVITED','STARTED']},OR:[{expiresAt:{gt:new Date()}},{session:{startedAt:{not:null},status:{in:['ACTIVE','GENERATING']}}}]},include:inviteInclude});
   if(active)return this.safe(active);
-  const packet=await this.packets.sync(candidate.jobId,true);
+  const packet=await this.packets.sync(candidate.jobId,input.mode==='VOICE'?'VOICE':true);
   if(!packet)throw new BadRequestException('Konteks lowongan belum tersedia.');
   const roleRubric = frozenRoleRubric(packet.jobSnapshot);
   const roleAssessmentPrompt = roleRubric ? freezeRoleAssessment() : undefined;
@@ -97,7 +98,7 @@ export class InvitationsService {
    }
   }
   const voice=row.sessionId?await this.db.voiceInterview.findUnique({where:{sessionId:row.sessionId},include:{fragments:{orderBy:{id:'asc'}}}}):null;
-  const transcript = voice && (voice.promptVersion === ROLE_VOICE_VERSION ? roleVoiceTurns(voice.fragments) :
+  const transcript = voice && (voice.promptVersion === ROLE_VOICE_VERSION || voice.promptVersion === TARA_LIVE_AUDIO_PROTOCOL ? roleVoiceTurns(voice.fragments) :
     voice.promptVersion === NATIVE_VOICE_VERSION ? nativeVoiceTurns(voice.fragments) : voiceTurns(voice.fragments));
   return {claims,pdfStatus,invitation:this.safe(row),voice:voice?{status:voice.status,startedAt:voice.startedAt,endedAt:voice.endedAt,closeReason:voice.closeReason,transcriptComplete:voice.transcriptComplete,transcript}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,finalScore:evaluation.finalScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
  }

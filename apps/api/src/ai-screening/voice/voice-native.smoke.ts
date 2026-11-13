@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { nativeCoverage, nativeInterview, nativeVoiceTurns, recordMedia, topicForQuestion, type NativeDelivery } from './voice-native';
+import { nativeInterview, nativeVoiceTurns, recordMedia, topicForQuestion, type NativeDelivery } from './voice-native';
 import { createVoiceRequest } from '../prompts/voice-session';
 import type { TaraTopic } from '../tara-interview';
 
@@ -40,10 +40,8 @@ assert.equal(projection.origin, first - 100);
 assert.deepEqual(projection.evidenceTurns.map(turn => turn.id), ['v1', 'v2', 'v5']);
 assert.deepEqual(projection.progress.topics[0].note.answerRefs, ['v2', 'v5']);
 assert.equal(projection.progress.topics[1].note.outcome, 'TECHNICAL_INTERRUPTION');
-assert.equal(nativeCoverage(topics, turns, media, 180_000)?.id, 'skill-1');
-assert.equal(nativeCoverage(topics, turns, media, 1000), undefined);
 assert.equal(nativeInterview(topics, turns, { sequence: 0, windows: [] }, 30_000, false).progress.questions, 0);
 const alternative = { ...topics[0], id: 'outside-cv', alternative: true };
 assert.equal(topicForQuestion('Pernah ada kegiatan yang mirip dengan tugas utama ini?', [alternative])?.id, 'outside-cv');
 assert.equal(topicForQuestion('Lu sudah siap?', [alternative]), undefined);
-console.log('Tara Native: one model, delivery proof, stale telemetry, out-of-order fragments, interruption, coverage and alternative topic passed.');
+console.log('Tara Native: one model, delivery proof, stale telemetry, out-of-order fragments, interruption, evidence and alternative topic passed.');

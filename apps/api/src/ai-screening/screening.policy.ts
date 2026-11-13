@@ -15,6 +15,9 @@ export const screeningModel = () => process.env.TARA_SCREENING_MODEL?.trim() || 
 export const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value));
 export function normalizedText(value: unknown) { return typeof value === 'string' ? value.normalize('NFKC').replace(/\s+/g, ' ').trim() : ''; }
+export function redactScreeningContacts(text: string) {
+    return text.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gu, '[email]').replace(/\+?\d[\d ()\t.-]{7,}\d/gu, '[kontak]');
+}
 export function redactIdentity(value: unknown): string {
     return JSON.stringify(value).replace(/\S+@\S+\.\S+/g, '[email]').replace(/\+?\d[\d ()\t.-]{7,}\d/g, '[contact]');
 }

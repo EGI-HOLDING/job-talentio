@@ -54,6 +54,21 @@ async function main(){
    }
    assert.equal(submissions,1,'mixed or malformed content uses a single submission');
   }
+  row=null;let agendaSubmissions=0,agendaPolls=0;
+  globalThis.fetch=(async(url:string,init:RequestInit)=>{
+   if(init.method==='POST'){
+    agendaSubmissions++;return new Response(JSON.stringify({id:'resp_agenda',status:'queued'}));
+   }
+   assert.ok(url.endsWith('/resp_agenda'));
+   if(init.method==='DELETE')return new Response(null,{status:204});
+   return ++agendaPolls===1?new Response('{}',{status:503}):complete('{"invalid":true}');
+  }) as any;
+  await assert.rejects(client.run('agenda-work','agenda-packet','live-agenda',{},preset),AiPending);
+  assert.equal(row.key,'agenda-work:live-agenda');
+  await assert.rejects(client.pollLiveAgenda(row,preset,100),AiPending);
+  await assert.rejects(client.pollLiveAgenda(row,preset,100),/TARA_INVALID_OUTPUT/);
+  await assert.rejects(client.run('agenda-work','agenda-packet','live-agenda',{},preset),/TARA_LIVE_AGENDA_ALREADY_SUBMITTED/);
+  assert.equal(agendaSubmissions,1,'one paid submission per frozen agenda despite polling and invalid results');
   console.log('Screening client transport recovery passed; paid API calls: 0.');
  }finally{globalThis.fetch=original;AbortSignal.timeout=timeout;}
 }

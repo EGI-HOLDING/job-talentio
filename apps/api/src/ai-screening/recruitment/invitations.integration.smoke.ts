@@ -20,11 +20,13 @@ import { CURRENT_CONVERSATION } from '../conversation.policy';
 import { TAKA_INTERVIEW_VERSION } from '../taka-interview';
 import { frozenRoleRubric, ROLE_ASSESSMENT_VERSION } from '../role-rubric';
 import type { RoleAssessment } from '../taka-role-assessment';
-import { ROLE_VOICE_VERSION } from '../voice/voice-role';
-import type { NativeProgress } from '../voice/voice-native';
+import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 
 const db=new PrismaService();
 async function main(){
+ const audiblePacket = Buffer.alloc(960);
+ for (let offset = 0; offset < audiblePacket.length; offset += 2) audiblePacket.writeInt16LE(1200, offset);
+ const voiceDelta = audiblePacket.toString('base64');
  await db.$connect();process.env.TARA_SCREENING_ENABLED='true';process.env.TARA_SCREENING_MARKET='id';
  process.env.TARA_TIMED_INTERVIEW_ENABLED='false';process.env.TARA_SKILL_INTERVIEW_ENABLED='true';
  process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
@@ -67,9 +69,16 @@ async function main(){
    : null])) };
  }
  const rubric={context:'Layanan backend',criteria:['API','Dokumentasi','Pengujian'].map((name,i)=>({id:'c'+i,name,requirementRef:'API',anchors:['Tidak tersedia','Terbatas','Sebagian','Jelas','Lengkap']}))};
+ let liveAgendaCalls=0;
  const provider={run:async(_work:string,_subject:string,task:string,input:any,preset?:{version:string})=>{
   calls++;
   if(task==='prepare')return rubric;
+  if(task==='live-agenda'){
+   liveAgendaCalls++;
+   const criteria=input.criteria as Array<{id:string;name:string}>;
+   return {topics:criteria.map(({id,name})=>({criterionId:id,equivalentIds:[],
+    question:name.includes('endpoint')?'Apa langkah pertama lu untuk membuat endpoint API yang aman?':'Gimana lu akan menyusun panduan penggunaan API untuk tim baru?'}))};
+  }
   if(task==='candidate'&&input.duties){
    const line=input.cvSegments.find((row:{text:string})=>row.text.includes('Node.js'));
    return {claims:alternativeSkillFixture?[]:[
@@ -217,8 +226,8 @@ async function main(){
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'RUNNING'}});await assert.rejects(invitations.retryDelivery(hr,uncertainInvite.id,true),'active sending cannot be reset');
  await db.aiScreeningWork.update({where:{id:uncertainWork.id},data:{status:'PENDING'}});await deliver('INVITE_DELIVERY',uncertainInvite.id);await invitations.cancel(hr,uncertainInvite.id);
  let holdCreate:Promise<void>|null=null,holdOpen:Promise<void>|null=null;
- let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[];
- const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.type,'client');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.match(body.session.instructions,/Tunggu kandidat selesai bicara/);return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(_id:string,event:any,lost:any)=>{onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
+ let onEvent:(event:any)=>void=()=>{},onLost:()=>void=()=>{},creates=0,hangups=0;const commands:any[]=[], attachments:string[]=[];
+ const liveProvider={configured:true,create:async(body:any)=>{creates++;if(holdCreate)await holdCreate;assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.type,'client');assert.deepEqual(body.session.client.data_channel.allowed_client_events,[]);assert.match(body.session.instructions,/Tunggu kandidat selesai bicara/);return {session:{id:'live_mock_'+creates},transport:{sdp:'v=0 mock SDP answer'}};},attach:(id:string,event:any,lost:any)=>{attachments.push(id);onEvent=event;onLost=lost;return {opened:holdOpen??Promise.resolve(),send:(command:any)=>{commands.push(command);if(command.type==='session.output_audio.fixture.play')onEvent({type:'session.output_audio.fixture.played',event_id:'fixture-'+creates});if(command.type==='session.close')onEvent({type:'session.closed',event_id:'closed-'+creates,usage:{seconds:840},reason:'close_requested'});},dispose:()=>{}};},hangup:async()=>{hangups++;}};
  const voiceEvaluator={run:async(_work:string,_subject:string,_task:string,input:any,preset?:{version:string})=>{
   if(preset?.version===TAKA_INTERVIEW_VERSION)return takaJudgement(input);
   if(preset?.version===ROLE_ASSESSMENT_VERSION)return roleJudgement(input);
@@ -227,23 +236,39 @@ async function main(){
  const voiceService=new VoiceService(db,config,sessions,{
   ...liveProvider,
  } as never,voiceEvaluator as never);
- async function nextVoice(key:string){const inv=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:key}),row=await db.screeningInvitation.findUniqueOrThrow({where:{id:inv.id}}),claimed=await invitations.claim(user,invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!));const plan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});await deliver('CANDIDATE',plan.id);return voiceService.create(user,claimed.session.id,clientId,'v=0 fault recovery mock SDP offer');}
+ async function nextVoice(key:string){const inv=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:key}),row=await db.screeningInvitation.findUniqueOrThrow({where:{id:inv.id}}),claimed=await invitations.claim(user,invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!));const plan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});await deliver('CANDIDATE',plan.id);return voiceService.create(user,claimed.session.id,clientId,'v=0 fault recovery mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);}
  let releaseCreate:()=>void=()=>{};holdCreate=new Promise<void>(resolve=>{releaseCreate=resolve;});
  const slowInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'voice-slow-startup-test'}),slowRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:slowInvite.id}}),slowClaim=await invitations.claim(user,invitationToken(slowRow.id,slowRow.tokenNonce,config.get('JWT_SECRET')!));
  const slowPlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:slowClaim.session.id}});await deliver('CANDIDATE',slowPlan.id);
- const creating=voiceService.create(user,slowClaim.session.id,clientId,'v=0 slow startup mock SDP offer');
+ const creating=voiceService.create(user,slowClaim.session.id,clientId,'v=0 slow startup mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);
  let slowVoice=await db.voiceInterview.findUnique({where:{sessionId:slowClaim.session.id}});
  for(let i=0;!slowVoice&&i<100;i++){await new Promise(resolve=>setTimeout(resolve,20));slowVoice=await db.voiceInterview.findUnique({where:{sessionId:slowClaim.session.id}});}
  assert.ok(slowVoice);const startupNow=new Date();await db.voiceInterview.update({where:{id:slowVoice.id},data:{startedAt:new Date(+startupNow-40_000),heartbeatAt:new Date(+startupNow-40_000)}});
  await voiceService.tick(startupNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:slowVoice.id}})).status,'CREATING','provider setup is not mistaken for a disconnected candidate at 30 seconds');
  let releaseOpen:()=>void=()=>{};holdOpen=new Promise<void>(resolve=>{releaseOpen=resolve;});releaseCreate();holdCreate=null;
- for(let i=0;i<100&&(await db.voiceInterview.findUniqueOrThrow({where:{id:slowVoice.id}})).status!=='CONNECTING';i++)await new Promise(resolve=>setTimeout(resolve,20));
- await voiceService.tick(startupNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:slowVoice.id}})).status,'CONNECTING','opening sideband also retains the startup grace period');
- releaseOpen();holdOpen=null;await creating;await voiceService.end(user,slowClaim.session.id,clientId);
+ for(let i=0;i<100&&(await db.voiceInterview.findUniqueOrThrow({where:{id:slowVoice.id}})).status!=='ACTIVE';i++)await new Promise(resolve=>setTimeout(resolve,20));
+ await voiceService.tick(startupNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:slowVoice.id}})).status,'ACTIVE','WebRTC can be active before sideband opens');
+ const earlySdp=await Promise.race([creating,new Promise<never>((_,reject)=>setTimeout(()=>reject(Error('SDP waited for transcript capture')),1000))]);
+ assert.ok(earlySdp.sdp);releaseOpen();holdOpen=null;await voiceService.end(user,slowClaim.session.id,clientId);
  assert.equal((await voiceService.heartbeat(user,slowClaim.session.id,clientId))?.status,'ENDED','late heartbeat after finalization returns the saved terminal state');
  const technical=await nextVoice('voice-technical-end-test');const technicalRow=await db.voiceInterview.findUniqueOrThrow({where:{id:technical.id}});await voiceService.end(user,technicalRow.sessionId!,clientId,'CONNECTION_LOST');assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:technical.id}})).closeReason,'CONNECTION_LOST','connection failure cannot be recorded as candidate ending');
- const hard=await nextVoice('voice-hard-ceiling-test'),hardNow=new Date(); (voiceService as any).active.get(hard.id).delivery.firstAudible=+hardNow-900000;await db.voiceInterview.update({where:{id:hard.id},data:{startedAt:new Date(+hardNow-900000),heartbeatAt:hardNow}});await voiceService.tick(hardNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:hard.id}})).status,'ENDED','hard 15-minute ceiling closes actual durable session without earlier watchdog ticks');
- const lost=await nextVoice('voice-sideband-lost-test');onLost();await voiceService.tick(new Date(+lost.startedAt+61_000));for(let i=0;i<80&&(await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}})).status!=='ENDED';i++)await new Promise(r=>setTimeout(r,25));for(let i=0;i<80&&(voiceService as any).active.has(lost.id);i++)await new Promise(r=>setTimeout(r,25));const lostRow=await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}});assert.equal(lostRow.status,'ENDED');assert.equal(lostRow.closeReason,'CANDIDATE_DISCONNECTED');assert.equal(lostRow.transcriptComplete,false);
+ const hard=await nextVoice('voice-hard-ceiling-test'),hardNow=new Date(); (voiceService as any).active.get(hard.id).delivery.clockStartedAt=+hardNow-900000;await db.voiceInterview.update({where:{id:hard.id},data:{startedAt:new Date(+hardNow-900000),heartbeatAt:hardNow}});await voiceService.tick(hardNow);assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:hard.id}})).status,'ENDED','hard 15-minute ceiling closes actual durable session without earlier watchdog ticks');
+ const lost=await nextVoice('voice-sideband-lost-test');
+ const lostRow=await db.voiceInterview.findUniqueOrThrow({where:{id:lost.id}});
+ await voiceService.media(user,lostRow.sessionId!,clientId,'READY',1,0);
+ onEvent({type:'session.input_transcript.delta',event_id:'before-sideband-loss',delta:'Bukti tersimpan sebelum sambungan catatan terputus.',start_ms:700,end_ms:900});
+ const attachmentCount=attachments.length;
+ onLost();
+ await voiceService.tick(new Date(Date.now()+1200));
+ assert.equal(attachments.length,attachmentCount+1);
+ assert.equal(attachments.at(-1),lostRow.providerId,'sideband reconnects to the same media session');
+ onEvent({type:'session.input_transcript.delta',event_id:'before-sideband-loss',delta:'Replay duplicate.',start_ms:700,end_ms:900});
+ onEvent({type:'session.input_transcript.delta',event_id:'after-sideband-reconnect',delta:'Bukti tersimpan setelah tersambung.',start_ms:1000,end_ms:1200});
+ await voiceService.tick(new Date(Date.now()+4000));
+ await voiceService.heartbeat(user,lostRow.sessionId!,clientId);
+ assert.equal((await voiceService.state(user,lostRow.sessionId!))?.status,'ACTIVE','loss of transcript capture cannot hang up an active session');
+ await voiceService.end(user,lostRow.sessionId!,clientId);
+ assert.equal(await db.voiceFragment.count({where:{voiceId:lost.id}}),2,'reconnect keeps original transcript IDs');
  const remote=await nextVoice('voice-provider-remote-hangup-test');
  onEvent({type:'session.closed',event_id:'remote-hangup',usage:{seconds:31},reason:'remote_hangup'});
  for(let i=0;i<80&&(await db.voiceInterview.findUniqueOrThrow({where:{id:remote.id}})).status!=='ENDED';i++)await new Promise(r=>setTimeout(r,25));
@@ -343,40 +368,45 @@ async function main(){
  assert.equal(partialReport.evaluation!.score,null);
  await deliver('PDF',partial.sessionId);
 
- const nativeVoice=await prepareSkillInvite('VOICE','voice-native-playback-test');
- const native=await voiceService.create(user,nativeVoice.sessionId,clientId,'v=0 native mock SDP offer');
+ const nativeVoice=await prepareSkillInvite('VOICE','voice-direct-playback-test');
+ const createsBefore=creates, beforeOpening=commands.length;
+ await assert.rejects(voiceService.create(user,nativeVoice.sessionId,clientId,'v=0 outdated mock SDP offer'),/Muat ulang/);
+ assert.equal(creates,createsBefore,'outdated browsers are rejected before any provider request');
+ const native=await voiceService.create(user,nativeVoice.sessionId,clientId,'v=0 native mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);
  assert.equal(native.voiceMode,'NATIVE');
+ assert.equal(native.audioProtocol,TARA_LIVE_AUDIO_PROTOCOL);
  assert.equal(native.clockRunning,false);
- const openingBefore=commands.filter(c=>c.event_id==='tara-opening').length;
  await assert.rejects(voiceService.media(wrong,nativeVoice.sessionId,clientId,'READY',1,0));
  await assert.rejects(voiceService.media(user,nativeVoice.sessionId,'another-owner-tab','READY',1,0));
+ onEvent({type:'session.started'});
  await voiceService.media(user,nativeVoice.sessionId,clientId,'READY',1,0);
- await voiceService.media(user,nativeVoice.sessionId,clientId,'READY',1,0);
- await new Promise(resolve=>setTimeout(resolve,1550));
- assert.equal(commands.filter(c=>c.event_id==='tara-opening').length,openingBefore+1);
- const opened=await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',2,0);
+ await voiceService.media(user,nativeVoice.sessionId,clientId,'INPUT_QUIET',2,0);
+ await voiceService.tick(new Date(Date.now()+4000));
+ assert.equal(commands.length,beforeOpening,'the fallback greeting waits for a playable element');
+ await voiceService.media(user,nativeVoice.sessionId,clientId,'PLAYBACK_READY',3,0);
+ onEvent({type:'session.output_audio.delta',start_ms:0,end_ms:20,delta:Buffer.alloc(960).toString('base64')});
+ await voiceService.tick(new Date(Date.now()+4000));
+ await voiceService.tick(new Date(Date.now()+4500));
+ assert.deepEqual(commands.slice(beforeOpening).map(c=>c.event_id),['tara-opening'],'silent startup can request a single greeting');
+ onEvent({type:'session.output_audio.delta',start_ms:100,end_ms:120,delta:voiceDelta});
+ const opened=await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',4,0);
  assert.ok(opened.clockRunning);
- assert.equal((await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',2,0)).startedAt.toISOString(),opened.startedAt.toISOString());
+ assert.equal((await voiceService.media(user,nativeVoice.sessionId,clientId,'AUDIBLE',4,0)).startedAt.toISOString(),opened.startedAt.toISOString());
  onEvent({type:'session.output_transcript.delta',event_id:'native-question',delta:'Soal Node.js, bagian mana yang lu kerjain sendiri?',start_ms:100,end_ms:260});
  onEvent({type:'session.input_transcript.delta',event_id:'native-answer',delta:'Saya menulis endpoint Node.js.',start_ms:620,end_ms:900});
  onEvent({type:'session.input_transcript.delta',event_id:'native-answer',delta:'Duplicate fragment',start_ms:620,end_ms:900});
  await new Promise(resolve=>setTimeout(resolve,240));
- await voiceService.media(user,nativeVoice.sessionId,clientId,'QUIET',3,0);
+ await voiceService.media(user,nativeVoice.sessionId,clientId,'QUIET',5,0);
  onEvent({type:'session.delegation.created',delegation:{id:'del_fixture'}});
  onEvent({type:'session.delegation.created',delegation:{id:'del_fixture'}});
- assert.equal(commands.filter(c=>c.event_id==='tara-unexpected-delegation').length,1);
  const transitionAt=new Date(+opened.startedAt+181_000);
  await db.voiceInterview.update({where:{id:native.id},data:{heartbeatAt:transitionAt}});
  await voiceService.tick(transitionAt);
  await (voiceService as any).active.get(native.id).pending;
- await voiceService.tick(transitionAt);
- assert.equal(commands.filter(c=>c.event_id==='tara-coverage-2').length,1);
+ assert.deepEqual(commands.slice(beforeOpening).map(c=>c.event_id),['tara-opening'],'the recorder never steers the dialogue');
  assert.equal(await db.aiScreeningWork.count({where:{subjectId:nativeVoice.sessionId,kind:'VOICE_TURN'}}),0);
  assert.equal(await db.voiceFragment.count({where:{voiceId:native.id}}),2);
  await voiceService.end(user,nativeVoice.sessionId,clientId,'CONNECTION_LOST');
- const nativeNotes=(await db.voiceInterview.findUniqueOrThrow({where:{id:native.id}})).taraInterview as {topics:Array<{note:{opportunities?:Array<{delivery:string}>}}>};
- assert.equal(nativeNotes.topics[0].note.opportunities?.[0].delivery,'AUDIO');
- assert.equal(nativeNotes.topics[1].note.opportunities,undefined);
  assert.equal(await db.aiScreeningWork.count({where:{kind:'VOICE_EVALUATE',subjectId:nativeVoice.sessionId}}),1);
  process.env.TAKA_INTERVIEW_EVIDENCE_ENABLED='false';
  takaRequests.length=0;
@@ -400,9 +430,10 @@ async function main(){
  assert.equal(takaTextReport.pdfStatus,'READY');
  await assert.rejects(invitations.report({...hr,id:'foreign-hr'},takaText.invitationId));
 
- const voicePilot=await voiceService.create(user,takaVoice.sessionId,clientId,'v=0 taka evidence mock SDP offer');
+ const voicePilot=await voiceService.create(user,takaVoice.sessionId,clientId,'v=0 taka evidence mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);
  onEvent({type:'session.started',event_id:'taka-evidence-start'});
  await voiceService.media(user,takaVoice.sessionId,clientId,'READY',1,0);
+ onEvent({type:'session.output_audio.delta',start_ms:100,end_ms:120,delta:voiceDelta});
  await voiceService.media(user,takaVoice.sessionId,clientId,'AUDIBLE',2,0);
  onEvent({type:'session.output_transcript.delta',event_id:'taka-evidence-question',delta:'Soal Node.js, bagian mana yang lu kerjain sendiri?',start_ms:100,end_ms:260});
  onEvent({type:'session.input_transcript.delta',event_id:'taka-evidence-answer',delta:takaAnswer,start_ms:600,end_ms:900});
@@ -446,7 +477,7 @@ async function main(){
  assert.equal(await db.aiScreeningWork.count({where:{kind:'PDF',subjectId:takaText.sessionId}}),1);
  console.log('Taka evidence integration passed: retired flags cannot select an older evaluator, text fallback, partial Chat and Live parity, scoped retry, matching PDF coverage, tenant isolation and restart deduplication. Paid calls: 0.');
 
- console.log('Tara timed integration passed: server clock, cross-skill notes, bounded fallback, partial PDF, protected audio, deduplication and preserved Taka scoring.');
+ console.log('Tara timed integration passed: server clock, cross-skill notes, bounded fallback, partial PDF, direct playback, deduplication and preserved Taka scoring.');
 
  process.env.TAKA_ROLE_ASSESSMENT_ENABLED='true';
  const roleJob=await db.jobPost.create({data:{companyId:company.id,title:'API Engineer',status:'PUBLISHED',
@@ -468,6 +499,12 @@ async function main(){
   const claimed=await invitations.claim(user,invitationToken(row.id,row.tokenNonce,config.get('JWT_SECRET')!));
   const candidatePlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:claimed.session.id}});
   await deliver('CANDIDATE',candidatePlan.id);
+  if(mode==='VOICE'){
+   const packet=await db.aiScreeningPackage.findUniqueOrThrow({where:{id:row.packageId}});
+   assert.equal((packet.payload as {liveAgenda?:{source:string}}).liveAgenda?.source,'JOB_REQUIREMENTS');
+   const prepared=await db.aiCandidatePlan.findUniqueOrThrow({where:{id:candidatePlan.id}});
+   assert.match((prepared.payload as {roleTopics:Array<{question:string}>}).roleTopics[0].question,/membuat endpoint API yang aman/);
+  }
   return {id:invite.id,sessionId:claimed.session.id};
  }
  // The fixture provider deliberately returns no CV claims on the new criteria.
@@ -496,38 +533,23 @@ async function main(){
  assert.equal((await invitations.list(hr,roleCandidate.id))[0].session?.evaluation?.finalScore,85.3);
 
  const roleVoice=await roleInvite('VOICE','role-complete-voice');
+ assert.equal(liveAgendaCalls,1,'one job preparation serves the whole Live package');
  const noAi=roleRequests.length;
- const connected=await voiceService.create(user,roleVoice.sessionId,clientId,'v=0 role evidence mock SDP offer');
+ const connected=await voiceService.create(user,roleVoice.sessionId,clientId,'v=0 role evidence mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);
+ const liveCommands=commands.length;
  onEvent({type:'session.started',event_id:'role-start'});
  await voiceService.media(user,roleVoice.sessionId,clientId,'READY',1,0);
- assert.ok(commands.some(command=>command.type==='session.commentary.append'&&command.event_id==='tara-opening'&&command.content.includes('Halo, gue Tara')));
+ onEvent({type:'session.output_audio.delta',start_ms:100,end_ms:120,delta:voiceDelta});
  const audio=await voiceService.media(user,roleVoice.sessionId,clientId,'AUDIBLE',2,0);
- onEvent({type:'session.output_transcript.delta',event_id:'role-question-1',delta:'Halo, gue Tara. Gimana lu membangun API?',start_ms:100,end_ms:260});
+ onEvent({type:'session.output_transcript.delta',event_id:'role-question-1',delta:'Halo, gue Tara. Apa yang lu kerjakan untuk bikin endpoint?',start_ms:100,end_ms:260});
  onEvent({type:'session.input_transcript.delta',event_id:'role-answer-1',delta:apiAnswer,start_ms:590,end_ms:900});
  await new Promise(resolve=>setTimeout(resolve,280));
  await voiceService.media(user,roleVoice.sessionId,clientId,'QUIET',3,0);
  onEvent({type:'session.delegation.created',delegation:{id:'del_role_fixture'}});
- onEvent({type:'session.delegation.created',delegation:{id:'del_role_fixture'}});
- assert.equal(commands.filter(c=>c.event_id==='tara-delegation-1-quiet').length,1);
- await voiceService.tick(new Date(+audio.startedAt+6000));
- await (voiceService as any).active.get(connected.id).pending;
- await voiceService.tick(new Date(+audio.startedAt+6000));
- assert.equal(commands.filter(c=>c.event_id==='tara-slot-1').length,1);
- onEvent({type:'session.commentary.appended',client_event_id:'tara-slot-1'});
+ onEvent({type:'session.output_transcript.delta',event_id:'role-question-2',delta:'Gimana cara lu bikin panduan untuk pemakai API?',start_ms:7500,end_ms:8100});
  onEvent({type:'session.input_transcript.delta',event_id:'role-answer-2',delta:docAnswer,start_ms:9000,end_ms:10000});
- const dropAt=new Date();
- const liveRole=(voiceService as any).active.get(connected.id);
- const pcm=Buffer.alloc(960);for(let i=0;i<pcm.length;i+=2)pcm.writeInt16LE(1200,i);
- await voiceService.media(user,roleVoice.sessionId,clientId,'OUTPUT_DROPPED',4,0);
- onEvent({type:'session.input_audio.append',audio:pcm.toString('base64')});
- await voiceService.tick(new Date(+dropAt+1000));
- assert.ok(liveRole.candidateLastSpeechAt>=+dropAt,'suppression never mutes the provider microphone input');
- assert.equal(commands.filter(c=>c.event_id?.startsWith('tara-recover-output-')).length,0,'recovery never interrupts candidate speech');
- await liveRole.pending;
- const quietTick=new Date(+audio.startedAt+16000);
- await voiceService.tick(quietTick);
- await voiceService.tick(new Date(+quietTick+1200));
- assert.equal(commands.filter(c=>c.event_id?.startsWith('tara-recover-output-')).length,1,'recover once using the existing Live session');
+ await voiceService.tick(new Date(+audio.startedAt+16_000));
+ assert.equal(commands.length,liveCommands,'no prompts, replays or delegation replies during dialogue');
  assert.equal(roleRequests.length,noAi,'live audio never calls the evaluator');
  await voiceService.end(user,roleVoice.sessionId,clientId,'CONNECTION_LOST');
  await restartedWorker.process((await db.aiScreeningWork.findFirstOrThrow({where:{kind:'VOICE_EVALUATE',subjectId:roleVoice.sessionId}})).id);
@@ -536,8 +558,7 @@ async function main(){
  assert.equal(voiceRoleReport.evaluation?.finalScore,85.3,'concrete evidence that survived disconnect remains eligible');
  assert.deepEqual(roleRequests.map(request=>request.answerCount),[2,2]);
  const roleVoiceRow=await db.voiceInterview.findUniqueOrThrow({where:{id:connected.id}});
- assert.equal(roleVoiceRow.promptVersion,ROLE_VOICE_VERSION);
- assert.ok((roleVoiceRow.taraInterview as unknown as NativeProgress).voiceControls?.find(row=>row.key==='tara-slot-1')?.acknowledgedAt);
+ assert.equal(roleVoiceRow.promptVersion,TARA_LIVE_AUDIO_PROTOCOL);
  for(const sessionId of [roleText.sessionId,roleVoice.sessionId]){
   const evaluation=await db.aiScreeningEvaluation.findUniqueOrThrow({where:{sessionId}});
   const loading=pdfjs.getDocument({data:new Uint8Array(objects.get(evaluation.pdfKey!)!),verbosity:0});
@@ -551,50 +572,84 @@ async function main(){
  assert.equal((await invitations.report(hr,takaText.invitationId)).evaluation?.finalScore,null,'new scoring does not replace history');
  await assert.rejects(invitations.report({...hr,id:'foreign-hr'},roleVoice.id));
 
- const recoverVoice=await roleInvite('VOICE','role-muted-opening');
- const recovery=await voiceService.create(user,recoverVoice.sessionId,clientId,'v=0 local playback recovery');
- onEvent({type:'session.started',event_id:'recovery-start'});
- await voiceService.media(user,recoverVoice.sessionId,clientId,'READY',1,0);
- onEvent({type:'session.output_transcript.delta',event_id:'recovery-silent-intro',delta:'Halo, gue Tara. Gimana lu membangun API?',start_ms:0,end_ms:3000});
- await voiceService.media(user,recoverVoice.sessionId,clientId,'OUTPUT_DROPPED',2,0);
- const recoveryControl=()=>commands.filter(command=>command.event_id?.startsWith('tara-replay-audio-'));
- const replayCount=recoveryControl().length;
- const retryAt=Date.now()+5500;
- await voiceService.tick(new Date(retryAt));
- assert.equal(recoveryControl().length,replayCount+1,'replay a discarded opener on the same Live session even before a candidate answer');
- assert.match(recoveryControl().at(-1)!.content,/Halo, gue Tara/);
- assert.equal((await voiceService.state(user,recoverVoice.sessionId))?.clockRunning,false);
- await voiceService.media(user,recoverVoice.sessionId,clientId,'REPLAY',3,0);
- await voiceService.tick(new Date(retryAt+1000));
- assert.equal(recoveryControl().length,replayCount+1,'a duplicate click does not queue a second replay');
- onEvent({type:'session.output_transcript.delta',event_id:'recovery-audible-intro',delta:'Halo, gue Tara. Gimana lu membangun API?',start_ms:6000,end_ms:9300});
- assert.equal((await voiceService.media(user,recoverVoice.sessionId,clientId,'AUDIBLE',4,0)).clockRunning,true);
- await voiceService.end(user,recoverVoice.sessionId,clientId,'CONNECTION_LOST');
- const recoveredVoice=await db.voiceInterview.findUniqueOrThrow({where:{id:recovery.id}});
- assert.equal((recoveredVoice.taraInterview as unknown as NativeProgress).nativeDelivery?.firstAudioMs,6000,'only the replay anchors delivered audio');
-
  const silentInvite=await roleInvite('VOICE','role-no-speaker');
- const silentVoice=await voiceService.create(user,silentInvite.sessionId,clientId,'v=0 local silent playback');
+ assert.equal(liveAgendaCalls,1,'a subsequent Live invitation reuses the frozen agenda');
+ const silentVoice=await voiceService.create(user,silentInvite.sessionId,clientId,'v=0 local silent playback',TARA_LIVE_AUDIO_PROTOCOL);
  await voiceService.media(user,silentInvite.sessionId,clientId,'READY',1,0);
  onEvent({type:'session.output_transcript.delta',event_id:'silent-preserved',delta:'Gimana lu membangun API?',start_ms:0,end_ms:2400});
- await db.voiceInterview.update({where:{id:silentVoice.id},data:{createdAt:new Date(Date.now()-60_000)}});
- await voiceService.tick();
+ const noPlaybackAt=new Date(Date.now()+61_000);
+ await db.voiceInterview.update({where:{id:silentVoice.id},data:{heartbeatAt:noPlaybackAt}});
+ await voiceService.tick(noPlaybackAt);
+ await (voiceService as any).active.get(silentVoice.id).pending;
  const silentResult=await voiceService.state(user,silentInvite.sessionId);
- assert.equal(silentResult?.closeReason,'AUDIO_UNAVAILABLE','silent playback is reported separately from a transport error');
+ assert.equal(silentResult?.status,'ACTIVE','missing playback telemetry cannot cut a connected call');
  assert.equal(silentResult?.transcript[0].text,'Gimana lu membangun API?');
- assert.equal(silentResult?.transcriptComplete,false);
+ assert.equal(silentResult?.clockRunning,true);
+ await voiceService.tick(new Date(+noPlaybackAt+61_000));
+ assert.equal((await voiceService.state(user,silentInvite.sessionId))?.status,'ACTIVE','a temporary HTTP outage does not disconnect WebRTC');
+ await voiceService.end(user,silentInvite.sessionId,clientId);
+
+ const farewellInvite=await roleInvite('VOICE','role-direct-farewell');
+ const farewellVoice=await voiceService.create(user,farewellInvite.sessionId,clientId,'v=0 farewell mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);
+ const farewellCommands=commands.length;
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'READY',1,0);
+ onEvent({type:'session.output_audio.delta',start_ms:100,end_ms:600,delta:voiceDelta});
+ onEvent({type:'session.output_transcript.delta',event_id:'direct-farewell',delta:'Makasih udah cerita. Wawancara kita selesai.',start_ms:100,end_ms:600});
+ const heardFarewell=await voiceService.media(user,farewellInvite.sessionId,clientId,'AUDIBLE',2,0);
+ await voiceService.tick();
+ await (voiceService as any).active.get(farewellVoice.id).pending;
+ await new Promise(resolve=>setTimeout(resolve,540));
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'QUIET',3,0);
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'INPUT_ACTIVE',4,0);
+ await voiceService.tick(new Date(+heardFarewell.startedAt+4000));
+ assert.equal((await voiceService.state(user,farewellInvite.sessionId))?.status,'ACTIVE','a candidate speaking during closing keeps the session open');
+ onEvent({type:'session.input_transcript.delta',event_id:'direct-farewell-extra',delta:'Ada satu hal yang mau gue tambahkan.',start_ms:700,end_ms:1200});
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'INPUT_QUIET',5,0);
+ await voiceService.tick(new Date(Date.now()+3500));
+ await (voiceService as any).active.get(farewellVoice.id).pending;
+ assert.equal(commands.length,farewellCommands,'a prior farewell is not reused after the candidate resumes');
+ onEvent({type:'session.output_audio.delta',start_ms:1300,end_ms:1810,delta:voiceDelta});
+ onEvent({type:'session.output_transcript.delta',event_id:'direct-farewell-final',delta:'Makasih udah cerita. Wawancara kita selesai.',start_ms:1300,end_ms:1800});
+ await new Promise(resolve=>setTimeout(resolve,Math.max(0,+heardFarewell.startedAt+1200-Date.now())));
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'AUDIBLE',6,Math.max(0,Date.now()-(+heardFarewell.startedAt+1200)));
+ await voiceService.tick();
+ await (voiceService as any).active.get(farewellVoice.id).pending;
+ await new Promise(resolve=>setTimeout(resolve,Math.max(0,+heardFarewell.startedAt+1740-Date.now())));
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'QUIET',7,0);
+ await voiceService.media(user,farewellInvite.sessionId,clientId,'INPUT_QUIET',8,0);
+ await voiceService.tick(new Date(Date.now()+3100));
+ assert.equal((await voiceService.state(user,farewellInvite.sessionId))?.closeReason,'TARA_FINISHED');
+ assert.deepEqual(commands.slice(farewellCommands).map(command=>command.type),['session.close'],'verified farewell only closes the connection');
+
+ const noMediaTelemetry=await roleInvite('VOICE','role-connected-heartbeat');
+ await voiceService.create(user,noMediaTelemetry.sessionId,clientId,'v=0 connected heartbeat mock SDP',TARA_LIVE_AUDIO_PROTOCOL);
+ await voiceService.heartbeat(user,noMediaTelemetry.sessionId,clientId,true);
+ await voiceService.tick(new Date(Date.now()+8500));
+ assert.equal((await voiceService.state(user,noMediaTelemetry.sessionId))?.clockRunning,true,'transport readiness backs up missing media telemetry');
+ await voiceService.end(user,noMediaTelemetry.sessionId,clientId);
+
+ const noDiagnostics=await roleInvite('VOICE','role-no-diagnostics');
+ const unobserved=await voiceService.create(user,noDiagnostics.sessionId,clientId,'v=0 missing diagnostics mock SDP',TARA_LIVE_AUDIO_PROTOCOL);
+ onLost();
+ const receivedSdp=Date.now();
+ await voiceService.tick(new Date(receivedSdp+61_000));
+ const recoveredClock=await voiceService.state(user,noDiagnostics.sessionId);
+ assert.equal(recoveredClock?.status,'ACTIVE','loss of both diagnostics paths cannot hang up a media session');
+ assert.equal(recoveredClock?.clockRunning,true,'a negotiated session always gets a hard deadline');
+ await voiceService.tick(new Date(receivedSdp+900_000));
+ assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:unobserved.id}})).closeReason,'TIME_LIMIT');
  process.env.TAKA_ROLE_ASSESSMENT_ENABLED='false';
  console.log('Role scoring integration passed: frozen rubrics, Chat and native Live, whole transcript, consistent final score in list/detail/PDF, preserved history and access checks. Paid calls: 0.');
 
  const eraseInvite=await invitations.create(hr,candidate.id,{mode:'VOICE',requestKey:'invite-voice-erasure'}),eraseRow=await db.screeningInvitation.findUniqueOrThrow({where:{id:eraseInvite.id}}),eraseToken=invitationToken(eraseRow.id,eraseRow.tokenNonce,config.get('JWT_SECRET')!),eraseClaim=await invitations.claim(user,eraseToken);
  const erasePlan=await db.aiCandidatePlan.findFirstOrThrow({where:{sessionId:eraseClaim.session.id}});await deliver('CANDIDATE',erasePlan.id);await sessions.claim(user,eraseClaim.session.id,clientId);
- const erasing=await voiceService.create(user,eraseClaim.session.id,clientId,'v=0 erasure mock SDP offer');onEvent({type:'session.input_transcript.delta',event_id:'erase-input',delta:'Pengalaman kandidat yang harus dihapus.',start_ms:1000,end_ms:2000});await (voiceService as any).active.get(erasing.id).pending;
+ const erasing=await voiceService.create(user,eraseClaim.session.id,clientId,'v=0 erasure mock SDP offer',TARA_LIVE_AUDIO_PROTOCOL);onEvent({type:'session.input_transcript.delta',event_id:'erase-input',delta:'Pengalaman kandidat yang harus dihapus.',start_ms:1000,end_ms:2000});await (voiceService as any).active.get(erasing.id).pending;
  await new UserErasureService(db,{...storage,keyFromPublicUrl:()=>null} as never).erase(user.id);
  const erasedVoice=await db.voiceInterview.findUniqueOrThrow({where:{id:erasing.id}});assert.equal(erasedVoice.sessionId,null,'provider reference survives until confirmed closure');assert.deepEqual(erasedVoice.promptSnapshot,{erased:true});assert.equal(await db.voiceFragment.count({where:{voiceId:erasing.id}}),0);assert.equal((await db.screeningInvitation.findUniqueOrThrow({where:{id:eraseInvite.id}})).status,'CANCELLED');await assert.rejects(invitations.preview(eraseToken));
  onEvent({type:'session.input_transcript.delta',event_id:'late-erased-input',delta:'Late fragment must not survive erasure.',start_ms:2000,end_ms:3000});await (voiceService as any).active.get(erasing.id).pending;assert.equal(await db.voiceFragment.count({where:{voiceId:erasing.id}}),0);
  await voiceService.tick();assert.equal((await db.voiceInterview.findUniqueOrThrow({where:{id:erasing.id}})).status,'ENDED');assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:candidate.id}})).fileKey,null);
  await voiceService.onModuleDestroy();
- console.log('Voice integration passed: trusted native fragments, duplicate/context rejection, protected data channel, one paid-session creation, 10/14/15-minute server rules, graceful closure, separate scores, unasked coverage and early termination. Paid calls: 0.');
+ console.log('Voice integration passed: direct audio protocol, capture reconnect, deduplicated fragments, one session creation, 15-minute limit, delivered farewell, separate scores and unasked coverage. Paid calls: 0.');
  console.log('Invitation integration passed: email + Talentio delivery, idempotency, verified-email ownership, token integrity, concurrent claim, frozen CV/job, upgraded v6 invitation and v8 Chat, independent history, no application submission, separate scores, cancellation and mode boundaries. Paid calls: 0.');
 }
 main().finally(()=>db.$disconnect()).catch(error=>{console.error(error);process.exitCode=1;});

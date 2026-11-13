@@ -11,7 +11,7 @@ import { neutrality } from './shared/neutrality';
 import { skillTurn, timedTurn, TIMED_TURN_SCHEMA } from './tasks/skill-interview';
 import { freezeTakaInterview } from '../taka-interview';
 import { CANDIDATE_REFERENCES_SCHEMA } from '../candidate-preparation';
-export type ScreeningTask = 'prepare' | 'candidate' | 'follow-up' | 'evaluate';
+export type ScreeningTask = 'prepare' | 'candidate' | 'follow-up' | 'evaluate' | 'live-agenda';
 export type PromptPreset = {
     instructions: string;
     schema: JsonSchema;
@@ -25,6 +25,7 @@ export function composePrompt(task: ScreeningTask, input: unknown, preset?: Prom
     const messages = [{ role: 'user', content: 'DATA_INPUT\n' + JSON.stringify(input) }];
     if (preset) return { ...preset, input: messages };
     if (task === 'evaluate') return { ...freezeTakaInterview(), input: messages };
+    if (task === 'live-agenda') throw new Error('MISSING_LIVE_AGENDA_PROMPT');
     const policy = newConversationPolicy();
     const interviewing = [inputTrust, interviewBoundaries, taraVoice, taraHumor, questionStyle];
     const modules = task === 'prepare' ? [inputTrust, jobRelevance, prepareJob,

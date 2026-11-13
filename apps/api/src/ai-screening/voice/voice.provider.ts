@@ -10,7 +10,12 @@ export class VoiceProvider {
  attach(id:string,onEvent:(event:Record<string,unknown>)=>void,onLost:()=>void){
   const socket=new WebSocket('wss://api.openai.com/v1/live/sessions/'+encodeURIComponent(id)+'/attach',{headers:this.headers(),handshakeTimeout:10_000,maxPayload:4*1024*1024});
   let ready=false;
-  const opened=new Promise<void>((resolve,reject)=>{socket.once('open',()=>{ready=true;resolve();});socket.once('error',()=>reject(Error('VOICE_SIDEBAND_UNAVAILABLE')));});
+  const opened=new Promise<void>((resolve,reject)=>{
+   socket.once('open',()=>{ready=true;resolve();});
+   const unavailable=()=>reject(Error('VOICE_SIDEBAND_UNAVAILABLE'));
+   socket.once('error',unavailable);
+   socket.once('close',unavailable);
+  });
   socket.on('message',bytes=>{try{onEvent(JSON.parse(bytes.toString()));}catch{/* Ignore malformed provider events; transcript loss is handled by the watchdog. */}});
   socket.on('close',()=>{if(ready)onLost();});socket.on('error',()=>{if(ready)onLost();});
   return {opened,send:(event:unknown)=>{if(socket.readyState!==WebSocket.OPEN)throw Error('VOICE_SIDEBAND_CLOSED');socket.send(JSON.stringify(event));},dispose:()=>socket.close()};

@@ -16,7 +16,7 @@ try{
   run(req.resolve('prisma/build/index.js'),['migrate','deploy','--schema','apps/api/prisma/schema.prisma'],true);
   screeningTest('role-assessment.smoke.ts');
   if (process.argv.includes('--taka-interview-only')) {
-    ['taka-interview.smoke.ts','tara-timed-interview.smoke.ts','voice/voice-evidence.smoke.ts','voice/voice-native.smoke.ts','recruitment/invitations.integration.smoke.ts'].forEach(screeningTest);
+    ['tara-live-agenda.smoke.ts','taka-interview.smoke.ts','tara-timed-interview.smoke.ts','voice/voice-evidence.smoke.ts','voice/voice-native.smoke.ts','recruitment/invitations.integration.smoke.ts'].forEach(screeningTest);
   } else {
     if (!process.argv.includes('--taka-only')) {
       ['voice/voice-evidence.smoke.ts','taka-interview.smoke.ts'].forEach(screeningTest);
