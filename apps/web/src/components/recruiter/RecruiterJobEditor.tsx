@@ -22,6 +22,7 @@ export function RecruiterJobEditor(props: Props) {
   if (props.job && !props.job._creationSessionId) {
     return (
       <RecruiterJobEditorV2
+        key={props.job.id}
         companyId={props.companyId}
         company={props.company}
         job={props.job}
@@ -36,6 +37,7 @@ export function RecruiterJobEditor(props: Props) {
 
   return (
     <HrCreationFlow
+      key={props.job?._creationSessionId ?? props.companyId}
       companyId={props.companyId}
       company={props.company}
       sessionId={props.job?._creationSessionId}

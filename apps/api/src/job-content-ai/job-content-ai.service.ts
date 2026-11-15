@@ -48,16 +48,17 @@ export class JobContentAiService {
     });
     if (!company || company.anonymizedAt || company.isBanned) throw new BadRequestException('Profil perusahaan tidak tersedia.');
 
+    const outputLocale = input.outputLanguage ?? input.locale;
     const companyProfile = await this.companyContext(company, input.locale);
     const industry = company.industry
-      ? this.localized(company.industry, input.locale)
-      : company.industryGroup ? this.localized(company.industryGroup, input.locale) : null;
+      ? this.localized(company.industry, outputLocale)
+      : company.industryGroup ? this.localized(company.industryGroup, outputLocale) : null;
     const context = {
       target: input.target,
-      locale: input.locale,
+      locale: outputLocale,
       company: {
         name: company.name,
-        size: company.size ? COMPANY_SIZE_LABELS[company.size]?.[input.locale] ?? null : null,
+        size: company.size ? COMPANY_SIZE_LABELS[company.size]?.[outputLocale] ?? null : null,
         industry,
         companyProfile,
       },

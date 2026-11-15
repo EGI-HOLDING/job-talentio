@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { normalizeSkillKey, skillNameSchema } from '@job-talentio/shared';
+import { jobContentAiLanguageSchema, normalizeSkillKey, skillNameSchema } from '@job-talentio/shared';
 
 export const jobContentTargetSchema = z.enum(['description', 'responsibilities', 'kpis', 'skills']);
 export type JobContentTarget = z.infer<typeof jobContentTargetSchema>;
@@ -10,6 +10,7 @@ export const generateJobContentSchema = z.object({
   companyId: z.string().min(1).max(100),
   target: jobContentTargetSchema,
   locale: z.enum(['id', 'en', 'ru', 'uz']),
+  outputLanguage: jobContentAiLanguageSchema.optional(),
   job: z.object({
     title: z.string().trim().min(2).max(200),
     seniority: z.string().trim().max(120).nullable(),

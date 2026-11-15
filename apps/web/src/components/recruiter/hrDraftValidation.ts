@@ -1,6 +1,6 @@
-import { jobPostSchema, catalogLabelIssue, normalizeSkillKey, skillLabelIssue } from '@job-talentio/shared';
+import { jobPostSchema, catalogLabelIssue, normalizeSkillKey, skillLabelIssue, type JobContentAiLanguage } from '@job-talentio/shared';
 
-export type HrDraft = Record<string, any>;
+export type HrDraft = Record<string, any> & { jobContentAiLanguage?: JobContentAiLanguage };
 export type HrDraftIssue = { field: string; path: string; message: string };
 export function hrJobError(error: unknown) {
   const message=error instanceof Error?error.message:String(error);
@@ -14,7 +14,7 @@ export function hrJobError(error: unknown) {
   return message;
 }
 const draftKeys = new Set([
-  'title','description','positionEntryMode','jobTitleId','positionGroupId','positionGroupScopeRevision','seniorityLevelCode','experienceRangeMin','experienceRangeMax','responsibilities','kpis','specificExpectations','countryId','citySlug','workMode','employmentType','salaryMin','salaryMax','salaryPeriod','currency','skills','languages','benefits',
+  'title','description','jobContentAiLanguage','positionEntryMode','jobTitleId','positionGroupId','positionGroupScopeRevision','seniorityLevelCode','experienceRangeMin','experienceRangeMax','responsibilities','kpis','specificExpectations','countryId','citySlug','workMode','employmentType','salaryMin','salaryMax','salaryPeriod','currency','skills','languages','benefits',
 ]);
 
 // Incomplete skill rows stay in the form until they have a name.

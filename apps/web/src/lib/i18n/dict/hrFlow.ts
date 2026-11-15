@@ -129,6 +129,10 @@ const english:Record<string,string>={
  'dipilih':'selected','grup industri |':'industry groups |','hari':'days','per lowongan':'per job','| 1 lowongan':'| 1 job','✓ Dipilih':'✓ Selected','＋ Tambah':'＋ Add',
  'Menyimpan...':'Saving...','Tersimpan':'Saved','Mengunggah...':'Uploading...','Memproses...':'Processing...',
  'Buat dengan AI':'Generate with AI','Tentang bantuan AI':'About AI assistance','AI membantu membuat draf untuk deskripsi posisi, tanggung jawab, KPI, atau keahlian dari konteks perusahaan dan posisi. Periksa hasilnya sebelum diterapkan; perubahan belum disimpan sampai lowongan disimpan.':'AI drafts the role description, responsibilities, KPIs, or skills using company and role context. Review the result before applying it; changes are not saved until you save the job.','Tutup':'Close','Saran AI':'AI suggestion','Tinjau hasil AI':'Review AI suggestion','Hasil AI untuk bagian ini akan mengganti isi yang sekarang setelah diterapkan.':'Applying this result replaces the current content in this section.','Terapkan':'Apply','Batal':'Cancel','AI sedang menyusun saran...':'AI is drafting a suggestion...','AI belum tersedia. Coba lagi sebentar.':'AI is temporarily unavailable. Please try again.','Hasil AI tidak sesuai dengan bagian yang dipilih. Silakan coba lagi.':'AI returned a result for a different section. Please try again.','Level minimum belum ditentukan':'Minimum level not specified','Pemula':'Beginner','Menengah':'Intermediate','Mahir':'Advanced','Ahli':'Expert',
+ 'Bahasa AI':'AI language','Pilih bahasa AI':'Choose AI language','Ubah bahasa AI':'Change AI language',
+ 'Pilihan ini dipakai untuk semua saran AI di lowongan ini.':'This language is used for all AI suggestions for this job.',
+ 'Bahasa hasil':'Output language','Pilih bahasa':'Select a language','Saran untuk':'Suggestion for',
+ 'Buat saran':'Generate suggestion','Simpan bahasa':'Save language',
 };
 const marketNoticeTitle='Pembuatan lowongan saat ini difokuskan untuk perusahaan di Indonesia.';
 const marketNoticeBody='Layanan HR untuk pasar lain belum tersedia.';

@@ -34,6 +34,8 @@ async function run(){
  for(const field of ['_senioritySnapshot','experienceRangeSource','seniorityVersion','seniorityYearsMin','screeningQuestions','isAnonymous','experienceLevel','experienceYearsMin']){equal(creationDraftSchema.safeParse({[field]:field==='isAnonymous'?true:'spoofed'}).success,false);}
  equal(creationDraftSchema.safeParse({title:'',description:'',kpis:[''],responsibilities:['']}).success,true);
  equal(creationDraftSchema.safeParse({title:'Staff Accountant',positionEntryMode:'MANUAL'}).success,true);
+ equal(creationDraftSchema.parse({jobContentAiLanguage:'en'}),{jobContentAiLanguage:'en'});
+ equal(creationDraftSchema.safeParse({jobContentAiLanguage:'fr'}).success,false);
  for(const [status,fraud,expected] of [['settlement','','PAID'],['capture','accept','PAID'],['capture','challenge','REVIEW'],['pending','','PENDING'],['expire','','EXPIRED'],['cancel','','CANCELLED'],['deny','','FAILED'],['refund','','REVIEW']] as const)equal(midtransState({transaction_status:status,fraud_status:fraud}),expected);
  const originalFetch=globalThis.fetch,oldEnv={mode:process.env.MIDTRANS_ENV,key:process.env.MIDTRANS_SERVER_KEY,checkout:process.env.MIDTRANS_CHECKOUT_ENABLED};
  process.env.MIDTRANS_ENV='sandbox';process.env.MIDTRANS_SERVER_KEY='unit-only-not-a-real-key';

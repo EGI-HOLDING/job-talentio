@@ -31,3 +31,126 @@
 .apply{border:1px solid #5e2be7;background:#632df1;color:#fff}
 .apply:hover{background:#5120d9}
 @media(max-width:600px){.preview{padding:18px}.previewBody{max-height:55vh;padding:13px}.skillItem{flex-direction:column;gap:6px}.skillMeta{justify-content:flex-start}}
+
+.languageButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid #e1d5ff;
+  border-radius: 8px;
+  background: #faf8ff;
+  color: #4c3285;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.languageButton strong { color: #5c24d6; }
+.languageButton:disabled { cursor: not-allowed; opacity: .6; }
+.languageButton:hover:not(:disabled) { background: #f0e9ff; border-color: #bda5ff; }
+
+.languageChevron {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.languageDialog {
+  position: fixed;
+  inset: 0;
+  width: min(476px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #e5dcf5;
+  border-radius: 22px;
+  background: #fff;
+  color: #221839;
+  box-shadow: 0 24px 80px #22123c40, 0 5px 20px #22123c20;
+}
+
+.languageDialog::backdrop { background: #1b103a62; backdrop-filter: blur(2px); }
+.languageForm { margin: 0; }
+.languageContent { padding: 26px 28px 28px; }
+.languageHeader { display: flex; align-items: flex-start; justify-content: space-between; }
+
+.languageIcon {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid #e7d9ff;
+  border-radius: 13px;
+  color: #6631db;
+  background: linear-gradient(145deg, #f7f1ff, #ebdfff);
+}
+
+.languageIcon svg { width: 24px; height: 24px; }
+.languageDialog .close { display: grid; place-items: center; padding: 0; color: #615772; }
+.languageDialog .close:hover { background: #ede8f5; }
+.languageContent h2 { margin: 14px 0 6px; font-family: var(--font-display); font-size: 25px; line-height: 1.22; }
+.languageContent > p { margin: 0; color: #635875; font-size: 14px; line-height: 1.55; }
+.languageField { display: grid; gap: 8px; margin-top: 22px; }
+.languageField label { color: #33264a; font-size: 13px; font-weight: 700; }
+.languageSelect { position: relative; color: #6d5a90; }
+
+.languageSelect select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 38px 0 14px;
+  border: 1px solid #dcd1eb;
+  border-radius: 9px;
+  background: #fff;
+  color: #33264a;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.languageSelect select:invalid { color: #6a607b; }
+.languageSelect select:hover { border-color: #a98bdf; }
+.languageSelect select:focus { outline: 2px solid #a684f1; outline-offset: 2px; }
+.languageSelect .languageChevron { position: absolute; top: 50%; right: 16px; transform: translateY(-65%) rotate(45deg); pointer-events: none; }
+
+.languageFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 10px;
+  padding: 16px 28px;
+  border-top: 1px solid #eee8f6;
+  background: #fcfaff;
+}
+
+.languageTarget { display: grid; gap: 3px; min-width: 0; margin: 0; color: #655875; font-size: 11px; }
+.languageTarget strong { color: #423353; font-size: 13px; overflow-wrap: anywhere; }
+.languageActions { display: flex; gap: 8px; margin-left: auto; }
+.languageActions button { min-height: 42px; padding: 8px 14px; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.languageActions .cancel:hover { background: #f6f1fb; }
+.languagePrimary { border: 1px solid #5d28da; background: #6431ed; color: #fff; }
+.languagePrimary:hover:not(:disabled) { background: #5322d8; }
+.languagePrimary:disabled { border-color: #e4d9f4; background: #eee7f8; color: #695884; cursor: not-allowed; }
+.languageDialog button:focus-visible, .languageButton:focus-visible { outline: 2px solid #a684f1; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .languageDialog button { transition: none; }
+}
+
+@media (max-width: 440px) {
+  .languageDialog { border-radius: 16px; }
+  .languageContent { padding: 22px 20px 24px; }
+  .languageContent h2 { font-size: 22px; }
+  .languageSelect select { font-size: 16px; }
+  .languageFooter { padding: 14px 20px; }
+  .languageActions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+}

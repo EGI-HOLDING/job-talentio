@@ -2,9 +2,9 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{createRequire}=require('node:module');
 const runtime=process.env.CODEX_RUNTIME_NODE_MODULES||'C:/Users/egi_i/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules', {chromium}=createRequire(path.join(runtime,'playwright/package.json'))('playwright');
 const origin=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';if(!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))throw Error('Local-only guard');
-const out=path.resolve('output/recruitment-onboarding');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(process.env.ONBOARDING_OUTPUT_DIR||'output/recruitment-onboarding');fs.mkdirSync(out,{recursive:true});
 async function main(scenario){
- const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1536,height:960},reducedMotion:'reduce'});
+ const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})}),context=await browser.newContext({viewport:{width:1536,height:960},reducedMotion:'reduce'});
  const report={scenario,errors:[],events:[],publish:0,metadata:0,complete:0,uploadStarted:0,uploadCompleted:0,publishKeys:[],importKeys:[],aiRequests:[]};
  const company={id:'onboarding-co',name:'Studio Onboarding',slug:'studio-onboarding',description:'Perusahaan pengujian onboarding.',city:{name:'Kota Jakarta',slug:'jakarta',province:{country:{id:'ID'}}}},membership={companyId:'onboarding-co',role:'OWNER',company};
  const auth={accessToken:'onboarding-fixture',user:{id:'onboarding-hr',fullName:'Nadia Onboarding',role:'RECRUITER',email:'onboarding@example.test',emailVerified:true,recruiterOnboarding:{status:'IN_PROGRESS',step:2},memberships:[membership]}};
@@ -35,6 +35,10 @@ async function main(scenario){
    await new Promise(resolve=>setTimeout(resolve,250));
    if(input.target==='responsibilities'&&attempt===1)return route.fulfill({status:503,headers,json:{message:'Saran AI belum tersedia. Coba lagi.'}});
    if(input.target==='skills'&&attempt===1)body={target:'kpis',suggestion:{items:['Respons salah bagian']},promptVersion:'synthetic'};
+   else if(input.outputLanguage==='en')body={target:input.target,promptVersion:'synthetic',suggestion:input.target==='description'
+     ?{description:'Design reliable TypeScript APIs and support the needs of the company’s digital products.'}
+     :input.target==='skills'?{items:[{name:'TypeScript',isRequired:true,minLevel:'INTERMEDIATE'}]}
+     :{items:input.target==='responsibilities'?['Develop API services.','Write integration tests.']:['Maintain service reliability.','Complete testing before release.']}};
    else body={target:input.target,promptVersion:'synthetic',suggestion:input.target==='description'?{description:'Mengembangkan API TypeScript yang andal serta mendukung kebutuhan produk digital perusahaan.'}:input.target==='skills'?{items:[{name:'TypeScript',isRequired:true,minLevel:'INTERMEDIATE'}]}:{items:input.target==='responsibilities'?['Mengembangkan layanan API.','Menulis pengujian integrasi.']:['Menjaga tingkat keberhasilan layanan.','Menyelesaikan pengujian sebelum rilis.']}};
  }
  else if(p==='/companies/mine')body=[membership];else if(p==='/companies/'+company.id)body=company;
@@ -89,25 +93,65 @@ async function main(scenario){
    const description=page.locator('textarea[name="description"]'),original=await description.inputValue();
    const ai=label=>page.getByRole('button',{name:'Buat dengan AI: '+label,exact:true});
    const dialog=page.getByRole('dialog',{name:/Tinjau hasil AI/});
-   await ai('Deskripsi posisi').evaluate(el=>{el.click();el.click();});
+   const languageDialog=page.getByRole('dialog',{name:'Pilih bahasa AI'});
+   const language=languageDialog.getByRole('combobox',{name:'Bahasa hasil'});
+   const generate=languageDialog.getByRole('button',{name:'Buat saran',exact:true});
+   await ai('Deskripsi posisi').click();await languageDialog.waitFor();
+   assert.equal(report.aiRequests.length,0,'the first icon only opens the language picker');
+   assert.equal(await generate.isDisabled(),true);
+   assert.equal(await language.evaluate(el=>el===document.activeElement),true);
+   assert.deepEqual(await language.locator('option').allTextContents(),['Pilih bahasa','Bahasa Indonesia','English']);
+   await language.selectOption('id');
+   await page.keyboard.press('Escape');await languageDialog.waitFor({state:'hidden'});
+   assert.equal(report.aiRequests.length,0,'dismissing the picker sends no request');
+   assert.equal(await ai('Deskripsi posisi').evaluate(el=>el===document.activeElement),true);
+   await ai('Deskripsi posisi').click();await languageDialog.waitFor();
+   assert.equal(await language.inputValue(),'','dismissed choices are not saved');
+   await page.setViewportSize({width:390,height:844});
+   const mobileBounds=await languageDialog.boundingBox();
+   assert.ok(mobileBounds&&mobileBounds.x>=12&&mobileBounds.x+mobileBounds.width<=378);
+   await page.screenshot({path:path.join(out,'bahasa-ai-mobile.png')});
+   await page.setViewportSize({width:1440,height:960});
+   await language.selectOption('en');
+    assert.equal(await generate.isEnabled(),true);
+   await page.screenshot({path:path.join(out,'bahasa-ai-desktop.png')});
+   const savedLanguage=page.waitForResponse(response=>response.request().method()==='PATCH'&&
+     response.url().endsWith('/hr-flow/sessions/'+resumeSession.id)&&response.request().postDataJSON().draft?.jobContentAiLanguage==='en');
+   await generate.evaluate(el=>{el.click();el.click();});
    await dialog.waitFor();assert.equal(report.aiRequests.length,1,'double click cannot send two AI requests');
+   assert.equal(report.aiRequests[0].locale,'id');assert.equal(report.aiRequests[0].outputLanguage,'en');
+   assert.equal(report.publish,0,'the language modal never submits the job form');
    assert.equal(await description.inputValue(),original,'preview never silently overwrites draft');
    await dialog.getByRole('button',{name:'Batal',exact:true}).click();assert.equal(await description.inputValue(),original);
+   await savedLanguage;
+   await page.reload({waitUntil:'domcontentloaded'});
+   await page.getByRole('button',{name:/Bahasa AI.*English/}).waitFor();
    await ai('Deskripsi posisi').click();await dialog.waitFor();
    assert.equal(await dialog.getByRole('button',{name:'Batal',exact:true}).evaluate(el=>el===document.activeElement),true);
-   await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();assert.match(await description.inputValue(),/API TypeScript/);
-   await ai('Tanggung jawab utama').click();await page.getByRole('alert').filter({hasText:'Saran AI belum tersedia.'}).waitFor();
+   await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();assert.match(await description.inputValue(),/Design reliable TypeScript APIs/);
+    await ai('Tanggung jawab utama').click();await page.getByRole('alert').filter({hasText:'Koneksi ke server terganggu.'}).waitFor();
    assert.equal(await page.getByRole('textbox',{name:'Tanggung jawab utama 1',exact:true}).inputValue(),'Membangun API','failed AI preserves existing rows');
    await ai('Tanggung jawab utama').click();await dialog.waitFor();await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();
-   assert.equal(await page.getByRole('textbox',{name:'Tanggung jawab utama 2',exact:true}).inputValue(),'Menulis pengujian integrasi.');
+   assert.equal(await page.getByRole('textbox',{name:'Tanggung jawab utama 2',exact:true}).inputValue(),'Write integration tests.');
    await ai('KPI posisi').click();await dialog.waitFor();await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();
-   assert.equal(await page.getByRole('textbox',{name:'KPI posisi 2',exact:true}).inputValue(),'Menyelesaikan pengujian sebelum rilis.');
+   assert.equal(await page.getByRole('textbox',{name:'KPI posisi 2',exact:true}).inputValue(),'Complete testing before release.');
    await ai('Keahlian').click();await page.getByRole('alert').filter({hasText:'Hasil AI tidak sesuai dengan bagian yang dipilih.'}).waitFor();
    await ai('Keahlian').click();await dialog.waitFor();await dialog.getByRole('button',{name:'Terapkan',exact:true}).click();
-   assert.equal(await page.getByRole('combobox',{name:'Kebutuhan TypeScript',exact:true}).inputValue(),'REQUIRED');
+    assert.equal(await page.getByRole('textbox',{name:'Keahlian 1',exact:true}).inputValue(),'TypeScript');
+    assert.equal(await page.getByRole('combobox',{name:'Kebutuhan Keahlian 1',exact:true}).inputValue(),'REQUIRED');
+   assert.equal(report.aiRequests.length,7);assert.ok(report.aiRequests.every(request=>request.outputLanguage==='en'));
+   await page.getByRole('button',{name:/Bahasa AI.*English/}).click();
+   const change=page.getByRole('dialog',{name:'Ubah bahasa AI'});await change.waitFor();
+   await change.getByRole('combobox',{name:'Bahasa hasil'}).selectOption('id');
+   await change.getByRole('button',{name:'Simpan bahasa',exact:true}).click();
+   assert.equal(report.aiRequests.length,7,'changing the language does not generate content');
+   await ai('Deskripsi posisi').click();await dialog.waitFor();
+   assert.equal(report.aiRequests.at(-1).outputLanguage,'id');
+   await dialog.getByRole('button',{name:'Batal',exact:true}).click();
    await page.locator('button[form="hr-job-form"]').click();await scene('taka-intro').waitFor();
-   assert.match(resumeSession.draft.description,/API TypeScript/);assert.equal(resumeSession.draft.responsibilities.length,2);assert.equal(resumeSession.draft.kpis.length,2);assert.equal(resumeSession.draft.skills[0].name,'TypeScript');
-   assert.equal(report.aiRequests.length,7);assert.equal(report.publish,0);assert.equal(report.metadata,0);assert.deepEqual(report.errors,[]);
+   assert.match(resumeSession.draft.description,/TypeScript APIs/);assert.equal(resumeSession.draft.responsibilities.length,2);assert.equal(resumeSession.draft.kpis.length,2);assert.equal(resumeSession.draft.skills[0].name,'TypeScript');
+   assert.equal(resumeSession.draft.jobContentAiLanguage,'id');
+   assert.equal(report.aiRequests.length,8);assert.equal(report.publish,0);assert.equal(report.metadata,0);assert.deepEqual(report.errors,[]);
    return;
  }
  if(scenario==='validation'){
@@ -117,6 +161,7 @@ async function main(scenario){
    await page.getByRole('button',{name:'Tambah benefit',exact:true}).click();
    const lookup=page.getByPlaceholder('Cari atau tambahkan benefit',{exact:true});
    await lookup.fill('Benefit audit manual');
+   await page.getByText(/Tidak ada yang cocok.*Benefit audit manual/).waitFor();
    await lookup.press('Enter');
    const dialog=page.getByRole('dialog');await dialog.waitFor();
    await dialog.getByRole('button',{name:'Tambah benefit',exact:true}).click();

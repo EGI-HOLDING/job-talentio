@@ -1256,6 +1256,7 @@ model JobPost {
   responsibilities String[] @default([])
   kpis String[] @default([])
   specificExpectations String?
+  jobContentAiLanguage String? @db.VarChar(2)
   experienceRangeMin Int?
   experienceRangeMax Int?
   experienceRangeSource String?

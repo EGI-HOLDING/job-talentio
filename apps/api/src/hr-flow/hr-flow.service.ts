@@ -88,7 +88,8 @@ export class HrFlowService {
       if(draft){
         const previous=before.draft as Record<string,unknown>;
         const snapshot=draft.seniorityLevelCode&&(draft.seniorityLevelCode!==previous.seniorityLevelCode||!previous._senioritySnapshot)?await resolveSeniority(tx,{seniorityLevelCode:draft.seniorityLevelCode}):draft.seniorityLevelCode?previous._senioritySnapshot:null;
-        draft={...draft,_senioritySnapshot:snapshot,_selectedPackageCode:previous._selectedPackageCode??null,
+        draft={...(previous.jobContentAiLanguage?{jobContentAiLanguage:previous.jobContentAiLanguage}:{}),...draft,
+          _senioritySnapshot:snapshot,_selectedPackageCode:previous._selectedPackageCode??null,
           ...(before.templateId?{_templateFields:previous._templateFields}:{})};
       }
       if(input.packageCode)draft={...(draft??before.draft as Record<string,unknown>),_selectedPackageCode:input.packageCode};

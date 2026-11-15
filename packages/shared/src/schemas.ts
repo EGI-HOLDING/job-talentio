@@ -146,6 +146,9 @@ export const jobScreeningQuestionSchema = z.object({
   sortOrder: z.number().int().min(0).default(0),
 });
 
+export const jobContentAiLanguageSchema = z.enum(['id', 'en']);
+export type JobContentAiLanguage = z.infer<typeof jobContentAiLanguageSchema>;
+
 export const jobPostSchema = z.object({
   positionEntryMode: z.enum(['CATALOG', 'MANUAL', 'GROUP']).optional(),
   positionGroupId: z.string().min(1).max(100).nullable().optional(),
@@ -160,6 +163,7 @@ export const jobPostSchema = z.object({
   title: z.string().trim().min(3).max(200),
   jobTitleSlug: z.string().max(120).optional(),
   description: z.string().trim().min(20).max(20000),
+  jobContentAiLanguage: jobContentAiLanguageSchema.optional(),
   screeningQuestions: z.array(jobScreeningQuestionSchema).max(20).optional(),
   expectedUpdatedAt: z.string().datetime().optional(),
   citySlug: z.string().max(120).optional(),

@@ -28,7 +28,10 @@
 .page .lookup>div>button{min-height:44px;border:1px solid #c6b8ff;border-radius:7px;background:#fbfaff;color:var(--purple);box-shadow:none;text-decoration:none;transform:none}.page .lookup>div>button:hover{background:#f2edff;color:var(--purple)}
 
 .aiSectionHeading,.aiSkillsHeading{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.section .aiSectionHeading h2,.section .aiSkillsHeading h2{margin-bottom:24px}
+.aiSectionHeading{flex-wrap:wrap;margin-bottom:24px}
+.aiSectionTools{display:flex;align-items:center;gap:8px;margin-left:auto}
+.section .aiSectionHeading h2{margin:0}
+.section .aiSkillsHeading h2{margin-bottom:24px}
 .aiFieldHeading{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .aiFieldHeading label{font-size:14px;font-weight:650;line-height:20px}
 .aiFieldHeading .label{margin:0}
