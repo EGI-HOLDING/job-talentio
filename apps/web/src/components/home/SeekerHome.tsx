@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import type { TopCompany } from './FeaturedCompaniesCarousel';
 import { SeekerHero, type PlatformStats } from './SeekerHero';
 import { ForYouJobsSection } from './ForYouJobsSection';
 import { LandingSections, type LandingCategory, type LandingJob, type LandingLocation, type LandingFacet } from './LandingSections';
@@ -16,6 +17,7 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   const { locale } = useI18n();
   const [catalog, setCatalog] = useState<Catalog>({ cities: [], categories: [], titles: [] });
   const [featuredJobs, setFeaturedJobs] = useState<LandingJob[]>([]);
+  const [featuredCompanies, setFeaturedCompanies] = useState<TopCompany[]>([]);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
   const [promotionRetry, setPromotionRetry] = useState(0);
   usePromotionRefresh(featuredJobs, () => setPromotionRetry(value => value + 1));
@@ -24,6 +26,9 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
     let active = true;
     api<PlatformStats>('/meta/platform-stats', { auth: false }).then((data) => { if (active) setPlatformStats(data); }).catch(() => undefined);
     api<{ items: LandingJob[] }>('/jobs?limit=6&sort=featured', { auth: false }).then((data) => { if (active) setFeaturedJobs(data.items); }).catch(() => undefined);
+    api<{ items: TopCompany[] }>('/companies?sort=featured&limit=48', { auth: false })
+      .then(({ items }) => { if (active) setFeaturedCompanies(items); })
+      .catch(() => undefined);
     Promise.all([
       api<Array<{ slug: string; name: string; icon?: string | null }>>('/meta/categories', { auth: false }),
       api<CityMetadata[]>('/meta/cities', { auth: false }).catch(() => [] as CityMetadata[]),
@@ -50,7 +55,7 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   return (
     <div className={styles.page}>
       <div className={styles.shell}>
-        <SeekerHero stats={platformStats} cities={catalog.cities} popularRoles={catalog.titles} />
+        <SeekerHero stats={platformStats} cities={catalog.cities} companies={featuredCompanies} popularRoles={catalog.titles} />
         {isEmployee && <ForYouJobsSection />}
         <LandingSections jobs={featuredJobs} categories={catalog.categories} cities={catalog.cities} roles={catalog.titles} />
       </div>

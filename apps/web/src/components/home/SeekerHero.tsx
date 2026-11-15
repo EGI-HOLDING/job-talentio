@@ -7,9 +7,11 @@ import { useI18n } from '@/lib/i18n';
 import { formatCompactCount } from '@/lib/numberFormat';
 import styles from './SeekerHero.module.css';
 import { HeroLocationPicker } from './HeroLocationPicker';
+import { FeaturedCompaniesCarousel, type TopCompany } from './FeaturedCompaniesCarousel';
 
 export type PlatformStats = {
   openRoles: number;
+  companies: number;
   talentProfiles: number;
   citiesCovered: number;
 };
@@ -17,11 +19,12 @@ export type PlatformStats = {
 type Props = {
   stats: PlatformStats | null;
   cities: Array<{ slug: string; name: string; country?: string; countrySlug?: string }>;
+  companies: TopCompany[];
   popularRoles: Array<{ slug: string; name: string }>;
 };
 
 
-export function SeekerHero({ stats, cities, popularRoles }: Props) {
+export function SeekerHero({ stats, cities, companies, popularRoles }: Props) {
   const { t } = useI18n();
   const router = useRouter();
 
@@ -94,6 +97,7 @@ export function SeekerHero({ stats, cities, popularRoles }: Props) {
       <dl className={styles.stats} aria-label={t('home.platformStats')}>
         {([
           ['openRoles', 'openRoles'],
+          ['companies', 'landing.companiesHiring'],
           ['citiesCovered', 'landing.locations'],
         ] as const).map(([field, label]) => (
           <div key={field}>
@@ -103,6 +107,7 @@ export function SeekerHero({ stats, cities, popularRoles }: Props) {
         ))}
       </dl>
 
+      <FeaturedCompaniesCarousel companies={companies} />
     </>
   );
 }
