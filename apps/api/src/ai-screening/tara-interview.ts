@@ -1,15 +1,12 @@
 import { SKILL_CONVERSATION, TIMED_CONVERSATION, repeatsQuestion } from './conversation.policy';
-import { assertSchema, validQuestion, type CandidatePayload, type PackagePayload } from './screening.schemas';
+import { assertSchema, validQuestion, type CandidatePayload, type PackagePayload, type RequiredSkillProbe } from './screening.schemas';
 import { SKILL_TURN_SCHEMA, TIMED_TURN_SCHEMA } from './prompts/tasks/skill-interview';
 
-export const TOPIC_MS = 180_000;
-export const REVISIT_MS = 60_000;
 export const TARA_FIRST_PASS_MS = 11 * 60_000;
 export const TARA_COMPLETE_MS = 14 * 60_000;
 export const TARA_SESSION_MS = 15 * 60_000;
 export const TARA_CHAT_REVIEW_MS = 8_000;
 export const TARA_ROLE_INTRO = 'Halo, gue Tara. Kita bahas tugas di posisi ini, ya.';
-const MIN_CLARIFICATION_MS = 35_000;
 export const ALTERNATIVE_TOPIC = 'outside-cv';
 const MAX_TURNS = SKILL_CONVERSATION.maxCore + SKILL_CONVERSATION.maxFollowUp;
 
@@ -30,6 +27,7 @@ export type TaraDecision = { outcome: TurnJudgment; answerQuote: string; questio
 export type TaraTopic = {
     id: string; criterionId: string; label: string; question: string; alternative: boolean;
     cvQuote?: string; requirementRef?: string; priority?: 'CORE' | 'SUPPORTING'; fields?: EvidenceField[]; skill?: string;
+    workScenario?: string; needsCvBridge?: boolean; requiredSkill?: RequiredSkillProbe; why?: string; minimumEvidence?: string;
 };
 type TaraCitation = Omit<TurnEvidence, 'topicId'> & {answerRef: string; fromTopic: string};
 export type TaraOpportunity = {
@@ -67,8 +65,12 @@ export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed
     if (plan.roleTopics?.length) return plan.roleTopics.map(row => {
         const criterion = rubric.criteria.find(criterion => criterion.id === row.criterionId);
         const claim = plan.claims.find(claim => claim.id === row.cvClaimId);
+        const agendaTopic = rubric.liveAgenda?.topics.find(topic => topic.criterionId === row.criterionId);
         return { id: row.criterionId, criterionId: row.criterionId, label: criterion?.name ?? row.question, question: row.question,
-            alternative: !claim, cvQuote: claim?.quote, requirementRef: criterion?.requirementRef, priority: 'CORE', fields: ['TASK', 'ACTION'] };
+            alternative: !claim, cvQuote: claim?.quote, skill: claim?.skill, requiredSkill: row.requiredSkill,
+            workScenario: agendaTopic?.question, why: agendaTopic?.why, minimumEvidence: agendaTopic?.minimumEvidence,
+            requirementRef: criterion?.requirementRef, priority: 'CORE',
+            fields: [...new Set<EvidenceField>(['TASK', 'ACTION', ...(claim?.extraEvidence ?? []).map(entry => entry.field)])] };
     });
     if (plan.claims.length) return plan.claims.map(claim => ({
         id: claim.id, criterionId: claim.criterionId, label: claim.skill ?? claim.statement, question: claim.question, alternative: false,
@@ -110,20 +112,6 @@ export function validTaraDecision(value: unknown, answer: string, previous: stri
         && question.match(/\?/g)?.length === 1 && !repeatsQuestion(question, previous) ? question : null };
 }
 
-export function taraBudget(progress: TaraProgress, count: number, started: number, now: number, mode: 'VOICE' | 'CHAT') {
-    const closeAt = started + TARA_COMPLETE_MS;
-    const outstanding = progress.stage === 'FIRST' ? Math.max(1, count - progress.active) : 1;
-    const firstPass = started + TARA_FIRST_PASS_MS;
-    const slot = progress.stage === 'FIRST'
-        ? Math.min(TOPIC_MS, Math.max(0, Math.floor((firstPass - now) / outstanding)))
-        : REVISIT_MS;
-    return {
-        topicEnd: Math.min(closeAt, now + slot), closeAt,
-        canClarify: now + (mode === 'CHAT' ? 60_000 + TARA_CHAT_REVIEW_MS : MIN_CLARIFICATION_MS) <= Math.min(closeAt, now + slot),
-        canRevisit: closeAt - now >= (mode === 'CHAT' ? 60_000 + TARA_CHAT_REVIEW_MS : 45_000),
-    };
-}
-
 export function taraHasEvidence(topic: TaraTopic, note: TaraNote) {
     return !!topic.fields?.length && topic.fields.every(field => note.evidence?.some(entry => entry.fields.includes(field)));
 }
@@ -162,6 +150,9 @@ function clarification(outcome: TurnJudgment) {
     return 'Dari contoh tadi, bagian mana yang lu kerjain sendiri?';
 }
 
+const noPriorExperience = /^(?:(?:maaf|jujur)[,.\s]+)?(?:(?:gua|gue|aku|saya)\s+)?(?:(?:nggak|gak|enggak|tidak) pernah|belum pernah)(?:\s+(?:pakai|menggunakan)\s+[^.,!?]+)?[.!\s]*$/iu;
+const addsContext = /\b(?:tapi|tetapi|namun|meski|walaupun|karena)\b/iu;
+
 function missingDetail(topic: TaraTopic, note: TaraNote) {
     if (!topic.fields) return undefined;
     const missing = topic.fields.filter(field => !note.evidence?.some(item => item.fields.includes(field)));
@@ -177,7 +168,7 @@ function moveTopic(progress: TaraProgress, topics: TaraTopic[], canRevisit: bool
     if (progress.stage === 'FIRST' && progress.active + 1 < topics.length) {
         progress.active++;
         const topic = topics[progress.active], note = progress.topics[progress.active].note;
-        if (!note.evidence?.length) return topic.question;
+        if (!note.evidence?.length || (topic.requiredSkill && topic.requiredSkill.cvEvidence !== 'CV_EXAMPLE')) return topic.question;
         const label = topic.label.replace(/[?:\r\n]+/g, ' ').trim().slice(0, 65);
         const missing = topic.fields?.find(field => !note.evidence?.some(item => item.fields.includes(field)));
         if (missing === 'RESULT') return `Masih soal ${label}, apa hasil dari bagian yang lu kerjain?`;
@@ -212,9 +203,14 @@ export function advanceTara(progress: TaraProgress, topics: TaraTopic[], turn: {
     const topic = topics[next.active];
     if (next.stage === 'DONE' || !state) return { progress: next, question: null };
     const priorOutcome = state.note.outcome;
-    if (next.policyVersion) rememberTaraEvidence(next, topics, turn.decision, turn.answers ?? []);
+    const initialRequiredProbe = turn.questionRef && topic.requiredSkill && topic.requiredSkill.cvEvidence !== 'CV_EXAMPLE' && !state.note.questionRefs.length;
+    const reply = initialRequiredProbe ? turn.answers?.filter(answer => turn.answerRefs.includes(answer.ref)) : undefined;
+    const answeredWithoutExperience = reply?.length === 1 && noPriorExperience.test(reply[0].text.trim()) && !addsContext.test(reply[0].text);
+    if (next.policyVersion && !answeredWithoutExperience) rememberTaraEvidence(next, topics, turn.decision, turn.answers ?? []);
     const completeEvidence = next.policyVersion && turn.questionRef && taraHasEvidence(topic, state.note);
-    const decision = completeEvidence && turn.decision?.outcome !== 'DISCREPANCY'
+    const decision = answeredWithoutExperience ? {
+        outcome: 'NEEDS_DETAIL' as const, answerQuote: '', question: topic.workScenario ?? null,
+    } : completeEvidence && turn.decision?.outcome !== 'DISCREPANCY'
         ? {outcome: 'EXAMPLE' as const, answerQuote: state.note.evidence?.at(-1)?.quote ?? '', question:null}
         : next.policyVersion && turn.decision?.outcome === 'EXAMPLE' && !completeEvidence
             ? {...turn.decision, outcome: 'NEEDS_DETAIL' as const} : turn.decision;
@@ -238,9 +234,11 @@ export function advanceTara(progress: TaraProgress, topics: TaraTopic[], turn: {
                 : state.depth ? 'AFTER_REDIRECT' : 'OPPORTUNITY_GIVEN';
     }
     const outcome = decision?.outcome ?? 'NEEDS_DETAIL';
+    const waiting = next.stage === 'FIRST' ? topics.length - next.active - 1 : 0;
     if (turn.questionRef && turn.answered && !turn.technical && !turn.timedOut && outcome !== 'EXAMPLE'
-        && state.note.outcome !== 'CLARIFIED_DISCREPANCY' && canContinue && canClarify && !state.depth && next.questions < MAX_TURNS) {
-        const question = decision?.question ?? (outcome === 'NEEDS_DETAIL' ? missingDetail(topic,state.note) : undefined) ?? clarification(outcome);
+        && state.note.outcome !== 'CLARIFIED_DISCREPANCY' && canContinue && canClarify && !state.depth && next.questions + waiting < MAX_TURNS) {
+        const question = decision?.question ?? (initialRequiredProbe ? topic.workScenario : undefined) ??
+            (outcome === 'NEEDS_DETAIL' ? missingDetail(topic,state.note) : undefined) ?? clarification(outcome);
         if (!repeatsQuestion(question, turn.previous)) {
             state.depth = 1;
             state.focus = outcome;

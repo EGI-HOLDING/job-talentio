@@ -12,7 +12,7 @@ function playwright() {
   }
 }
 
-module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, agendaVoice, liveText, textUi, voiceEvents, advanceVoiceClock, allowed, onboarding, onboardingDraft, makeToken, makePdf }) {
+module.exports = async function runBrowserJourney({ base, call, db, employee, hr, foreign, worker, deliver, candidateMail, findVerificationToken, liveVoice, agendaVoice, liveText, textUi, voiceEvents, advanceVoiceClock, allowed, onboarding, onboardingDraft, makeToken, makePdf, appPacket }) {
   const web = process.env.RECRUITMENT_WEB_URL || 'http://127.0.0.1:3035';
   const redact = value => value.replace(/(\/screening\/|\/invitations\/open\/)[^/\s?]+/g, '$1[redacted]').replace(/([?&]token=)[^&\s]+/g, '$1[redacted]');
   const isLoopback = url => ['127.0.0.1', 'localhost'].includes(new URL(url).hostname);
@@ -21,6 +21,7 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
   fs.mkdirSync(out, { recursive: true });
   const voiceProbe = liveVoice ? require('./recruitment-voice-live.cjs') : null;
   const agenda = agendaVoice ? require('./recruitment-voice-agenda.cjs') : null;
+  if (agenda) agenda.validateReadinessAudio();
   const wav = agenda ? agenda.loadAudio(process.env.RELIABILITY_VOICE_WAV_DIR, process.env.RELIABILITY_VOICE_READY_WAV)
     : voiceProbe?.loadSyntheticAudio(process.env.RELIABILITY_VOICE_WAV);
   const browser = await playwright().chromium.launch({ headless: true, executablePath: process.env.TARA_PROBE_CHROME });
@@ -35,8 +36,16 @@ module.exports = async function runBrowserJourney({ base, call, db, employee, hr
     id: 'http-browser-job', companyId: 'http-co', title: 'Backend Engineer Browser Audit',
     description: 'Mengembangkan API dan layanan backend dengan Node.js.', status: 'PUBLISHED',
     workMode: 'REMOTE', publishedAt: new Date(),
-    ...(agenda ? { responsibilities: agenda.duties } : {}),
+    ...(agenda ? { responsibilities: agenda.dutiesForScenario() } : {}),
+    ...(agenda?.requiredSkillProbe() ? { jobSkills: { create: {
+      isRequired: true, skill: { create: { name: 'Autentikasi dua faktor', slug: 'synthetic-two-factor', id: 'synthetic-two-factor' } },
+    } } } : {}),
   } });
+  if (agenda && process.env.TAKA_ALIGNED_ROLE_RUBRIC_ENABLED === 'true') {
+    const packet = await appPacket(job.id);
+    assert.ok(packet, 'The synthetic job must share its rubric with CV scoring');
+    await agenda.processWork(db, worker, 'PREPARE', packet.id, allowed);
+  }
 
   async function openContext(token, useAudio = false) {
     const session = token ? { ...await call('/auth/me', token), accessToken: token } : null;

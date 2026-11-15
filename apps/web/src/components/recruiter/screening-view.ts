@@ -11,15 +11,18 @@ export type RoleAssessment = { version: string; rubricRevision: string; state: '
  contributions: Record<RoleComponent, number | null>; weights: Record<RoleComponent, number>;
  partial?: { competency: number; explanation: number };
  coverage: { assessed: number; total: number; interrupted: boolean }; criteria: Array<{ criterionId: string; name: string; level: number | null;
- clarity: number | null; reason: string; state: string; questionRefs: string[]; evidence: Evidence[]; discrepancy?: NonNullable<Claim['contradictions']>[number] }>; };
+ clarity: number | null; reason: string; state: string; questionRefs: string[]; reviewLabels?:string[]; evidence: Evidence[]; discrepancy?: NonNullable<Claim['contradictions']>[number] }>; };
 export const roleScoreReason = (role: RoleAssessment) => role.missing.map(reason => roleScoreReasons[reason]).join(' ');
 export const partialCompetency = (role: RoleAssessment) => role.partial ? `${number(role.partial.competency)} / 100 kompetensi (parsial)` : null;
 export type ScreeningEvaluation={summary?:string;strengths?:string[];gaps?:string[];interviewQuestions?:string[];claims?:Claim[];taraInterview?:TaraInterviewNotes;roleAssessment?:RoleAssessment;interviewAssessment?:{version:string;state:'COMPLETE'|'PARTIAL'|'NO_ASSESSABLE_CLAIMS'|'ALTERNATIVE';plannedClaims:number;assessedClaims:number;openScopeClaims:number;interrupted:boolean};voice?:{testedClaims:number;totalClaims:number;partial:boolean;durationSeconds?:number;transcriptComplete?:boolean;closeReason?:string|null}};
-export type Invitation={id:string;mode:'TEXT'|'VOICE';status:string;closedByStage?:boolean;expiresAt:string;recipientEmail:string;emailStatus:string;messageStatus:string;error?:string|null;createdAt:string;session:{id:string;status:string;startedAt?:string|null;completedAt:string|null;evaluation:{status:string;screeningScore:number|null;finalScore?:number|null;result:ScreeningEvaluation|null}|null}|null};
+export type Invitation={id:string;mode:'TEXT'|'VOICE';status:string;closedByStage?:boolean;expiresAt:string;recipientEmail:string;emailStatus:string;messageStatus:string;error?:string|null;createdAt:string;session:{id:string;status:string;startedAt?:string|null;completedAt:string|null;
+ completion?:{status:'IN_PROGRESS'|'ASSESSING'|'RESUMABLE'|'REVIEW_REQUIRED'|'INTERRUPTED'|'COMPLETE';reason?:string;deadlineAt?:string|null;canRetry?:boolean;resumeUntil?:string};
+ evaluation:{status:string;screeningScore:number|null;finalScore?:number|null;result:ScreeningEvaluation|null}|null}|null};
 export type Turn={id:string;speaker:string;text:string;startMs:number|null;timedOut?:boolean};
 export type Report={pdfStatus?:'NOT_READY'|'PENDING'|'FAILED'|'READY';claims?:Array<{id:string;statement:string;quote:string}>;invitation?:Invitation;voice?:{startedAt?:string;endedAt?:string;closeReason:string;transcriptComplete:boolean;transcript:Array<{id:string;speaker:string;text:string;startMs:number}>}|null;questions:Array<{id:string;text:string;answer:string|null;shownAt?:string|null;answeredAt?:string|null;timedOut:boolean}>;evaluation:{status:string;score:number|null;finalScore?:number|null;result:ScreeningEvaluation|null}|null;pdfUrl:string|null};
 export const number=(n:number|null|undefined)=>n==null?'\u2014':n.toLocaleString('id-ID',{maximumFractionDigits:1});
 export function historyScore(invitation: Invitation) {
+ if(invitation.session?.completion?.status&&invitation.session.completion.status!=='COMPLETE')return number(null);
  const evaluation = invitation.session?.evaluation;
  const role = evaluation?.result?.roleAssessment;
  if (!role) return number(evaluation?.screeningScore);
@@ -33,6 +36,11 @@ export function status(i:Invitation){
  if(i.closedByStage)return 'Ditutup';
  if(i.status==='CANCELLED')return 'Dibatalkan';
  if(i.status==='INVITED')return Date.parse(i.expiresAt)<=Date.now()?'Kedaluwarsa':'Menunggu kandidat';
+ const completion=i.session?.completion?.status;
+ if(completion==='ASSESSING')return 'Menilai hasil';
+ if(completion==='RESUMABLE')return 'Menunggu kandidat melanjutkan';
+ if(completion==='REVIEW_REQUIRED')return 'Penilaian perlu dipulihkan';
+ if(completion==='INTERRUPTED'||i.status==='INTERRUPTED')return 'Wawancara terhenti';
  if(i.status==='STARTED')return 'Sedang berlangsung';
  if(i.status!=='COMPLETED')return 'Sedang disiapkan';
  const e=i.session?.evaluation;

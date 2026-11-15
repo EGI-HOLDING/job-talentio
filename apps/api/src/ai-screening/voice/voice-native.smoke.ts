@@ -10,6 +10,8 @@ const request = createVoiceRequest('marin', 'synthetic', topics);
 assert.equal(request.session.model, 'gpt-live-1');
 assert.deepEqual(request.session.delegation, { type: 'client' });
 assert.deepEqual(request.session.client.data_channel.allowed_client_events, []);
+const managed = createVoiceRequest('marin', 'synthetic', topics, '', {});
+assert.deepEqual(managed.session.client.data_channel.allowed_client_events, ['session.close']);
 assert.equal(request.session.input[0].role, 'user');
 assert.equal(topicForQuestion('Soal C, apa yang lu kerjain?', topics), undefined);
 assert.equal(topicForQuestion('Soal C++, apa yang lu kerjain?', topics)?.id, 'skill-3');

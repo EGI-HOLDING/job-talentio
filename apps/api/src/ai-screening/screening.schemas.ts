@@ -6,6 +6,7 @@ import type { taraInterviewReport } from './tara-interview';
 import type { TakaClaimScope, TakaCoverage } from './taka-interview';
 import type { RoleAssessment } from './taka-role-assessment';
 import type { LiveAgenda } from './tara-live-agenda';
+import type { RoleRubric } from './role-rubric';
 import { normalizeSkillKey } from '../common/skill-resolve';
 export const draftSchema = z.object({ resumeId: z.string().min(1).optional(), coverLetter: z.string().max(5000).optional(), removeCoverFile: z.boolean().optional(), source: z.string().max(40).regex(/^[a-z0-9_:-]+$/i).optional(), funnelSession: z.string().max(200).optional() }).strict();
 export const leaseSchema = z.object({ clientId: z.string().min(10).max(100) }).strict();
@@ -21,6 +22,7 @@ export type PackagePayload = {
     context: string;
     criteria: Criterion[];
     liveAgenda?: LiveAgenda;
+    roleRubric?: RoleRubric;
 };
 export type Claim = {
     id: string;
@@ -41,8 +43,10 @@ export type CandidatePayload = {
     limitations: string[];
     alternativeCriterionId?: string | null;
     alternativeQuestion?: string;
-    roleTopics?: Array<{ criterionId: string; question: string; cvClaimId?: string }>;
+    roleTopics?: Array<{ criterionId: string; question: string; cvClaimId?: string; requiredSkill?: RequiredSkillProbe }>;
+    requiredSkillMentions?: Record<string, 'CV_EXAMPLE' | 'CV_MENTION'>;
 };
+export type RequiredSkillProbe = { name: string; cvEvidence: 'CV_EXAMPLE' | 'CV_MENTION' | 'NOT_ATTESTED' };
 export type FollowUpPayload = {
     stop: boolean;
     question: string | null;
@@ -99,6 +103,7 @@ export type JsonSchema = {
     maxLength?: number;
     pattern?: string;
     maxItems?: number;
+    minItems?: number;
     type?: string;
     properties?: Record<string, JsonSchema>;
     required?: string[];
@@ -160,6 +165,7 @@ export function assertSchema(schema: JsonSchema, value: unknown, path = 'result'
     if (typeof value === 'string' && schema.pattern && !new RegExp(schema.pattern, 'u').test(value)) throw new Error('Invalid ' + path);
     if (typeof value === 'string' && schema.maxLength !== undefined && value.length > schema.maxLength) throw new Error('Too long ' + path);
     if (Array.isArray(value) && schema.maxItems !== undefined && value.length > schema.maxItems) throw new Error('Too many ' + path);
+    if (Array.isArray(value) && schema.minItems !== undefined && value.length < schema.minItems) throw new Error('Too few ' + path);
     if (schema.type === 'null') {
         if (value !== null)
             throw new Error('Invalid ' + path);

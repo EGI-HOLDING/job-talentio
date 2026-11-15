@@ -25,7 +25,10 @@ export function roleEvidenceReferences(input: RoleInput) {
     const questions = new Map(input.transcript.filter(row => row.speaker === 'TARA' && row.question)
         .map((row, i) => ['q' + (i + 1), row] as const));
     const answers = new Map(input.catalog.map((row, i) => ['a' + (i + 1), row] as const));
-    const followingQuestions = new Map([...questions.values()].map((question, index, all) => [question.id, all[index + 1]?.startMs]));
+    const followingQuestions = new Map([...questions.values()].map((question, index, all) => {
+        const next = all[index + 1];
+        return [question.id, next && next.connectionId === question.connectionId ? next.startMs : undefined];
+    }));
     return { questions, answers, followingQuestions };
 }
 
@@ -41,12 +44,18 @@ export function roleEvidenceRequest(input: RoleInput, refs: ReturnType<typeof ro
                 'Untuk EVIDENCE, fit DIRECT berarti tindakan atau keputusan secara langsung memenuhi fokus kompetensi, termasuk contoh dari pekerjaan lain yang melakukan tindakan yang sama atau jawaban situasional yang konkret. TRANSFERABLE berarti kemiripan sebagian dan batas maksimum 2. Untuk 3 atau 4, wajib pilih actionRef dari evidence yang memuat tindakan atau keputusan pribadi yang langsung menjawab kompetensi. Kata kunci, alat, hasil kerja lain, pengetahuan umum, atau tindakan persiapan saja tidak cukup. Kesepakatan ruang lingkup memerlukan tindakan memperoleh persetujuan. Nilai 4 membutuhkan dukungan kuat untuk seluruh fokus yang diuji.',
                 'Pilih questionRef hanya untuk pertanyaan lengkap yang menguji kompetensi itu. Untuk bukti yang cukup secara mandiri, termasuk bukti lintas topik, requiresQuestionContext=false dan questionRef boleh null. Jika jawaban bergantung pada pertanyaan (contoh: "gue lakukan itu"), isi requiresQuestionContext=true dan pilih pertanyaan yang diperlukan.',
                 'Untuk penilaian selain EVIDENCE, fit dan actionRef harus null. Untuk DECLINED, kandidat harus eksplisit tidak bisa atau tidak mau memberi contoh atau menjelaskan langkah. Untuk AFTER_REDIRECTION, kandidat harus telah menjawab dua pertanyaan utuh pada kompetensi yang sama dan tetap tidak relevan. Untuk 0, kesempatan pada pertanyaan terkait harus ANSWERED. Diam, jawaban terpotong, dan permintaan mengulang bukan 0. Gunakan INSUFFICIENT bila belum teruji dan cantumkan rujukan pertanyaan bila memang ada.',
+                ...(input.plan.roleTopics?.some(topic => topic.requiredSkill) ? [
+                    'Untuk requiredSkill, sebut apakah jawaban membuktikan penggunaan aktual atau pemahaman melalui skenario. Pengalaman yang belum tampak di CV dapat dibuktikan dengan contoh aktual dari kandidat. Skenario dapat membuktikan langkah dan keputusan, tetapi tidak membuktikan pengalaman penggunaan yang pernah dilakukan.',
+                ] : []),
                 ...(repair ? ['Perbaiki hanya kompetensi yang diminta. Periksa kembali rujukan, kesempatan menjawab, serta kecocokan tindakan dengan kompetensi. Kembalikan INSUFFICIENT jika penilaian tidak dapat dibuktikan.'] : []),
             ].join('\n\n'),
         },
-        data: { role: input.rubric.title, criteria: criteria.map(criterion => ({ ...criterion,
-            cvClaims: input.plan.claims.filter(claim => claim.criterionId === criterion.id)
-                .map(({ id, quote, scope }) => ({ id, quote: redactScreeningContacts(quote), scope })) })),
+        data: { role: input.rubric.title, criteria: criteria.map(criterion => {
+            const requiredSkill = input.plan.roleTopics?.find(topic => topic.criterionId === criterion.id)?.requiredSkill;
+            return { ...criterion, ...(requiredSkill ? { requiredSkill } : {}),
+                cvClaims: input.plan.claims.filter(claim => claim.criterionId === criterion.id)
+                    .map(({ id, quote, scope }) => ({ id, quote: redactScreeningContacts(quote), scope })) };
+        }),
             transcript: input.transcript.map(({ id, speaker, startMs, endMs, text }) => ({ turnId: id, speaker, startMs, endMs,
                 question: questionIds.get(id), text: redactScreeningContacts(text) })),
             questions: [...refs.questions].map(([id, row]) => ({ id, turnId: row.id, opportunity: row.opportunity })),

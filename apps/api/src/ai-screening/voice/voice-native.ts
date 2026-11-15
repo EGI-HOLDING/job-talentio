@@ -1,11 +1,11 @@
 import { recordTaraOpportunity, startTara, type TaraProgress, type TaraTopic } from '../tara-interview';
 import type { Fragment, VoiceTurn } from './voice.policy';
-import type { RoleVoiceControl, VoiceControlEvent } from './voice-role';
+import type { RoleVoiceControl } from './voice-role';
 import { isReadinessCheck } from './voice-redirect';
 
 export const NATIVE_VOICE_VERSION = 'tara-voice-native-v1';
 export const NATIVE_STARTUP_MS = 60_000;
-export const VOICE_MEDIA_SIGNALS = ['READY', 'PLAYBACK_READY', 'AUDIBLE', 'QUIET', 'INTERRUPTED', 'INPUT_ACTIVE', 'INPUT_QUIET'] as const;
+export const VOICE_MEDIA_SIGNALS = ['READY', 'PLAYBACK_READY', 'AUDIBLE', 'QUIET', 'INTERRUPTED', 'INPUT_ACTIVE', 'INPUT_QUIET', 'MEDIA_LOST', 'PLAYER_BLOCKED', 'MEDIA_RESTORED'] as const;
 export type MediaSignal = typeof VOICE_MEDIA_SIGNALS[number];
 type AudibleWindow = { start: number; end: number; interrupted?: boolean };
 export type NativeDelivery = {
@@ -22,7 +22,8 @@ export type NativeDelivery = {
     windows: AudibleWindow[];
     shown?: string[];
 };
-export type NativeProgress = TaraProgress & { nativeDelivery?: NativeDelivery; roleControl?: RoleVoiceControl; voiceControls?: VoiceControlEvent[] };
+export type NativeProgress = TaraProgress & { nativeDelivery?: NativeDelivery; roleControl?: RoleVoiceControl;
+    captureGaps?: Array<{ start: number; end?: number; reason: string }> };
 
 export function reflectedVoiceSignal(delta: unknown) {
     if (typeof delta !== 'string' || !delta || delta.length > 64_000) return false;
@@ -36,7 +37,7 @@ export function reflectedVoiceSignal(delta: unknown) {
     return samples > 0 && energy / samples >= 0.0025 ** 2;
 }
 
-export function nativeVoiceTurns(fragments: Fragment[]): VoiceTurn[] {
+export function nativeVoiceTurns(fragments: Fragment[], preserveAnswerTail = false): VoiceTurn[] {
     const lanes = new Map<string, VoiceTurn[]>();
     const ordered = [...fragments.filter(row => row.speaker === 'TARA'), ...fragments.filter(row => row.speaker === 'CANDIDATE')];
     for (const row of ordered) {
@@ -44,8 +45,13 @@ export function nativeVoiceTurns(fragments: Fragment[]): VoiceTurn[] {
         if (!lanes.has(row.speaker)) lanes.set(row.speaker, turns);
         const last = turns.at(-1);
         const gap = row.speaker === 'TARA' ? 650 : 1800;
-        const changesQuestion = row.speaker === 'CANDIDATE' && last && lanes.get('TARA')?.some(turn =>
-            question(turn.text) && turn.startMs > last.startMs && turn.startMs <= row.startMs);
+        const changesQuestion = row.speaker === 'CANDIDATE' && last && lanes.get('TARA')?.some(turn => {
+            if (!question(turn.text) || turn.startMs <= last.startMs || turn.startMs > row.startMs) return false;
+            // A word at the end of an unfinished answer can overlap the next
+            // question's estimated onset. Keep it with its source answer.
+            return !preserveAnswerTail || row.startMs >= turn.endMs || row.startMs - last.endMs > 350 ||
+                /[.!?]\s*$/u.test(last.text);
+        });
         if (last && !changesQuestion && row.startMs >= last.startMs && row.startMs - last.endMs <= gap) {
             last.text += row.text;
             last.endMs = Math.max(last.endMs, row.endMs);

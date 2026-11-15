@@ -15,8 +15,9 @@ try{
   execFileSync('docker',['exec','jt-postgres','createdb','-U',user,name],{windowsHide:true});
   run(req.resolve('prisma/build/index.js'),['migrate','deploy','--schema','apps/api/prisma/schema.prisma'],true);
   screeningTest('role-assessment.smoke.ts');
+  screeningTest('aligned-role-rubric.smoke.ts');
   if (process.argv.includes('--taka-interview-only')) {
-    ['taka-role-evidence.smoke.ts','screening-client.smoke.ts','tara-live-agenda.smoke.ts','taka-interview.smoke.ts','tara-timed-interview.smoke.ts','voice/voice-evidence.smoke.ts','voice/voice-native.smoke.ts','recruitment/invitations.integration.smoke.ts'].forEach(screeningTest);
+    ['taka-role-evidence.smoke.ts','taka-live-completion.smoke.ts','screening-client.smoke.ts','tara-live-agenda.smoke.ts','taka-interview.smoke.ts','tara-timed-interview.smoke.ts','voice/voice-evidence.smoke.ts','voice/voice-native.smoke.ts','recruitment/invitations.integration.smoke.ts'].forEach(screeningTest);
   } else {
     if (!process.argv.includes('--taka-only')) {
       ['voice/voice-evidence.smoke.ts','taka-interview.smoke.ts'].forEach(screeningTest);

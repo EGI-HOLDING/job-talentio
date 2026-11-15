@@ -5,6 +5,7 @@ import { Webhook } from 'standardwebhooks';
 import { PrismaService } from '../../prisma/prisma.service';
 import { queueCvProviderWork } from './cv-assessment-store';
 import { isCvResponseId } from './cv-provider';
+import { enqueueWork } from '../screening-packets.service';
 
 const events = new Set(['response.completed', 'response.failed', 'response.incomplete', 'response.cancelled']);
 
@@ -26,7 +27,12 @@ export class CvWebhookController {
         'webhook-id': webhookId, 'webhook-timestamp': timestamp, 'webhook-signature': signature,
       }) as typeof event;
     } catch { throw new BadRequestException('Tanda tangan webhook tidak valid.'); }
-    if (event?.type && events.has(event.type) && isCvResponseId(event.data?.id))
-      await queueCvProviderWork(this.db, 'CV_PROVIDER_EVENT', event.data.id, webhookId);
+    if (event?.type && events.has(event.type) && isCvResponseId(event.data?.id)) {
+      const responseId = event.data.id;
+      await this.db.$transaction(async tx => {
+        await queueCvProviderWork(tx, 'CV_PROVIDER_EVENT', responseId, webhookId);
+        await enqueueWork(tx, 'TAKA_PROVIDER_EVENT', responseId, 'TAKA_PROVIDER_EVENT:' + webhookId);
+      });
+    }
   }
 }

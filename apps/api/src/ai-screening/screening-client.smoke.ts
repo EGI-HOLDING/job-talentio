@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import assert from 'node:assert/strict';
 import { ScreeningClient,AiEvaluationOutputError,AiPending,AiUncertain } from './screening.client';
 import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { TARA_ALIGNED_AGENDA_VERSION } from './tara-live-agenda';
 async function main(){
  const original=globalThis.fetch,timeout=AbortSignal.timeout;let creates=0,polls=0,lastTimeout=0;
  let row:any=null;
@@ -27,7 +28,7 @@ async function main(){
    assert.notEqual(init.method,'POST');
    return new Response('{}',{status:429,headers:{'Retry-After':'2'}});
   }) as any;
-  await assert.rejects(client.run('w','s','evaluate',{},preset),AiPending);
+  await assert.rejects(client.run('w','s','evaluate',{},preset),error=>error instanceof AiPending&&error.delayMs===2000);
   assert.equal(row.status,'RUNNING');
   assert.equal(row.responseId,'resp_synthetic','provider rate limit must preserve the existing response');
   globalThis.fetch=(async()=>new Response('{}',{status:404})) as any;
@@ -70,6 +71,20 @@ async function main(){
   await assert.rejects(client.pollLiveAgenda(row,preset,100),/TARA_INVALID_OUTPUT/);
   await assert.rejects(client.run('agenda-work','agenda-packet','live-agenda',{},preset),/TARA_LIVE_AGENDA_ALREADY_SUBMITTED/);
   assert.equal(agendaSubmissions,1,'one paid submission per frozen agenda despite polling and invalid results');
+  row=null;let mixedAgendaSubmissions=0;
+  const validTopic={criterionId:'fixture-role',question:'Apa tindakan pribadi lo pada tugas ini?'};
+  globalThis.fetch=(async(_url:string,init:RequestInit)=>{
+   if(init.method==='POST'){
+    mixedAgendaSubmissions++;
+    return complete(JSON.stringify({topics:[null,{criterionId:42,question:'Invalid'},validTopic],merges:[{duplicates:[]}]}));
+   }
+   assert.equal(init.method,'DELETE');
+   return new Response(null,{status:204});
+  }) as any;
+  const alignedPreset={...preset,version:TARA_ALIGNED_AGENDA_VERSION};
+  await client.run('aligned-work','aligned-packet','live-agenda',{},alignedPreset);
+  assert.deepEqual(row.result.topics.at(-1),validTopic);
+  assert.equal(mixedAgendaSubmissions,1,'a bad agenda row does not discard the usable topics');
   const records=new Map<string,any>();
   const persisted={aiScreeningCall:{
    findUnique:async({where}:any)=>records.get(where.key??where.id),

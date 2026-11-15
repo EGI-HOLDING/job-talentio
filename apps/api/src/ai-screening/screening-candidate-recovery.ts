@@ -4,8 +4,9 @@ import { isCurrentConversation } from './conversation.policy';
 import { enqueueWork } from './screening-packets.service';
 import { json } from './screening.policy';
 import type { PackagePayload } from './screening.schemas';
-import { frozenRoleRubric } from './role-rubric';
+import { alignedRoleFromPacket, roleInterviewCandidates, ROLE_RUBRIC_VERSION } from './role-rubric';
 import { attachLiveRoleTopics } from './tara-live-agenda';
+import { preparationCvSource } from './screening-preparation';
 
 export const candidatePreparationInclude = {
     package: true,
@@ -26,11 +27,19 @@ export function pendingCandidateDraft(plan: CandidatePlan) {
             !['HIRED', 'REJECTED', 'WITHDRAWN'].includes(invite.candidate.stage)));
 }
 
-export function candidatePreparationInput(plan: CandidatePlan) {
-    const source = plan.resumeVersion.screeningSource;
+export function candidatePreparationSource(plan: CandidatePlan) {
+    return preparationCvSource({ invitation: plan.session.invitation, resumeVersion: plan.resumeVersion });
+}
+
+export function candidatePreparationInput(plan: CandidatePlan, source = candidatePreparationSource(plan)) {
     if (!source?.text?.trim() || source.status !== 'READY' || !plan.package.payload || plan.package.status !== 'READY') return null;
+    const packet = plan.package.payload as unknown as PackagePayload;
+    const role = alignedRoleFromPacket(plan.package.jobSnapshot, packet);
+    const alignedRole = role?.version === ROLE_RUBRIC_VERSION && role.interviewIds.length ? role : undefined;
     return { segments: candidateEvidence(source.text, plan.session.profile.user.fullName),
-        rubric: plan.package.payload as unknown as PackagePayload, job: plan.package.jobSnapshot as unknown as CandidateJob };
+        rubric: alignedRole ? { ...packet, criteria: roleInterviewCandidates(alignedRole) } : packet,
+        job: plan.package.jobSnapshot as unknown as CandidateJob,
+        coreIds: alignedRole?.interviewIds };
 }
 
 export async function publishCandidatePreparation(db: PrismaClient, before: CandidatePlan, workId: string,
@@ -44,8 +53,9 @@ export async function publishCandidatePreparation(db: PrismaClient, before: Cand
             return 'SKIPPED';
         }
         if (!retained || !pendingCandidateDraft(retained) || retained.status === 'READY' || retained.status === 'SUPERSEDED') return 'SKIPPED';
-        const source = retained.resumeVersion.screeningSource, previous = before.resumeVersion.screeningSource;
-        if (!source || !previous || source.status !== 'READY' || source.checksum !== previous.checksum || +source.updatedAt !== +previous.updatedAt ||
+        const source = candidatePreparationSource(retained), previous = candidatePreparationSource(before);
+        if (!source || !previous || source.status !== 'READY' || source.checksum !== previous.checksum ||
+            source.text !== previous.text || source.updatedAt?.getTime() !== previous.updatedAt?.getTime() ||
             retained.package.status !== 'READY' || !isCurrentConversation(retained.package.conversationPolicy) ||
             retained.session.revision !== before.session.revision) return 'CHANGED';
         const claimed = await tx.aiScreeningWork.updateMany({ where: { id: workId, kind: 'CANDIDATE', subjectId: before.id,
@@ -54,7 +64,7 @@ export async function publishCandidatePreparation(db: PrismaClient, before: Cand
         if (!claimed.count) return 'SKIPPED';
         for (const callId of options.reconcileIds ?? []) await enqueueWork(tx, 'CANDIDATE_RESPONSE', callId);
         const packet = retained.package.payload as unknown as PackagePayload;
-        const payload = attachLiveRoleTopics(prepared.payload, frozenRoleRubric(retained.package.jobSnapshot), packet.liveAgenda);
+        const payload = attachLiveRoleTopics(prepared.payload, alignedRoleFromPacket(retained.package.jobSnapshot, packet), packet.liveAgenda);
         await tx.aiCandidatePlan.update({ where: { id: before.id }, data: { status: 'READY', payload: json(payload), error: null } });
         await tx.aiScreeningSession.update({ where: { id: before.sessionId }, data: { revision: { increment: 1 }, error: null } });
         return 'READY';
@@ -84,7 +94,8 @@ export async function recoverFailedCandidatePreparations(db: PrismaClient, apply
             if (!work || work.status !== 'FAILED') { report.skipped++; continue; }
             const calls = await db.aiScreeningCall.findMany({ where: { workId: work.id, subjectId: plan.sessionId, task: 'candidate',
                 promptVersion: plan.promptVersion, status: { in: ['INVALID', 'COMPLETED'] }, result: { not: Prisma.DbNull } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
-            const assembled = buildCandidatePreparation(context.segments, context.rubric, context.job, calls.map(call => call.result), { recoverStored: true });
+            const assembled = buildCandidatePreparation(context.segments, context.rubric, context.job, calls.map(call => call.result),
+                { recoverStored: true, coreIds: context.coreIds });
             report.eligible++;
             report.storedResponses += calls.length;
             report.claims += assembled.payload.claims.length;

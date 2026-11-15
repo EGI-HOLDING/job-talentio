@@ -1,6 +1,10 @@
 // Full compiled Nest graph, JWT guards, real local PostgreSQL/S3/SMTP. Paid AI is opt-in.
 const {execFileSync,spawnSync}=require('node:child_process'),{createRequire}=require('node:module'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),req=createRequire(path.join(root,'apps/api/package.json'));
+const voiceScenario=process.env.RELIABILITY_VOICE_SCENARIO||'';
+const completionProbe=/^agenda-completion-(?:response|close|coverage|resume|full|skill-gap|redirect|clarify|pause)$/.test(voiceScenario);
+const completionPreflight=completionProbe&&process.argv.includes('--live-preflight');
+const agendaScenario=/^agenda-(?:pace|redirect|full|aligned|aligned-close)$/.test(voiceScenario)||completionProbe;
 function inspect(name){return JSON.parse(execFileSync('docker',['inspect',name],{encoding:'utf8',windowsHide:true}))[0];}
 function envOf(info){return Object.fromEntries(info.Config.Env.map(line=>{const n=line.indexOf('=');return [line.slice(0,n),line.slice(n+1)];}));}
 if(!process.env.RECRUITMENT_HTTP_CHILD){
@@ -13,18 +17,19 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
  if (process.argv.includes('--taka-v2')) {
   env.OPENAI_CV_WEBHOOK_SECRET='whsec_'+Buffer.alloc(32,81).toString('base64');
  }
- if (['--live-draft', '--live-voice', '--live-text', '--live-cv-formats', '--onboarding-live-draft'].some(mode => process.argv.includes(mode))) {
+ if (!completionPreflight && ['--live-draft', '--live-voice', '--live-text', '--live-cv-formats', '--onboarding-live-draft'].some(mode => process.argv.includes(mode))) {
   assert.equal(process.env.RELIABILITY_LIVE_AI, '1', 'Explicit live-provider opt-in required');
-  if (process.argv.includes('--live-voice') && /^agenda-(pace|redirect|full)$/.test(process.env.RELIABILITY_VOICE_SCENARIO || '')) {
+  if (process.argv.includes('--live-voice') && agendaScenario) {
    assert.ok(process.argv.includes('--taka-v2'), 'Use the simulated CV reader for the bounded agenda test');
-   require('./recruitment-voice-agenda.cjs').reserveSpend();
+   const agenda = require('./recruitment-voice-agenda.cjs');
+   agenda.validateReadinessAudio();
+   agenda.reserveSpend();
   }
   const dotenv = createRequire(req.resolve('@nestjs/config'))('dotenv');
   env.OPENAI_API_KEY = dotenv.parse(require('node:fs').readFileSync(path.join(root, '.env'))).OPENAI_API_KEY;
   assert.ok(env.OPENAI_API_KEY, 'Local provider credential unavailable');
   env.JOB_CONTENT_AI_MODEL = 'gpt-6-luna';
   env.TARA_LIVE_MODEL = 'gpt-live-1';
-  env.TARA_LIVE_REASONING_MODEL = 'gpt-6-luna';
  }
  let disposableRedis, retainProviderState = false;
  try{
@@ -62,6 +67,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
  let retainProviderState = false;
  async function main(){
   const app=await NestFactory.create(AppModule,{logger:false,abortOnError:false,rawBody:true});let db;
+   let stopVoiceProbe;
   try{
    app.setGlobalPrefix('api');app.useGlobalPipes(new ValidationPipe({whitelist:true,transform:true,transformOptions:{enableImplicitConversion:true}}));
    await app.listen(0,'127.0.0.1');db=app.get(PrismaService);
@@ -69,7 +75,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const text='Mengembangkan API Node.js selama empat tahun.';let paidMockCalls=0;
    const candidateEmail = `${process.env.S3_BUCKET}@synthetic.test`;
    const takaV2 = process.argv.includes('--taka-v2');
-   const agendaVoice = process.argv.includes('--live-voice') && /^agenda-(pace|redirect|full)$/.test(process.env.RELIABILITY_VOICE_SCENARIO || '');
+   const agendaVoice = process.argv.includes('--live-voice') && agendaScenario;
    if(takaV2){
     const { CvProvider } = require(path.join(root,'apps/api/dist/ai-screening/recruitment/cv-provider.js'));
     const provider=app.get(CvProvider);
@@ -80,7 +86,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
      assert.equal(Boolean(file),!gradeOnly);
      const grades=Object.fromEntries(spec.data.rubric.map(({id})=>[id,{level:3,reason:'Tertulis di CV.',
       ...(gradeOnly?{blockIds:['p1-b1']}:{})}]));
-     if(gradeOnly)assert.deepEqual(Object.keys(grades),['skills']);
+     if(gradeOnly&&!agendaVoice)assert.deepEqual(Object.keys(grades),['skills']);
      const value={grades,...(gradeOnly?{}:{source:{readable:true,fullName:'HTTP Candidate',email:candidateEmail,phone:null,
       headline:'Developer',summary:'Pengalaman API.',limitations:[],pages:[{page:1,status:'READ'}],
       blocks:[{page:1,text,supports:spec.data.rubric.some(({id})=>id.startsWith('role-'))?Object.keys(grades):['experience','requirements']}]}})};
@@ -94,12 +100,12 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    if (process.argv.includes('--live-voice')) {
     const { VoiceProvider } = require(path.join(root,'apps/api/dist/ai-screening/voice/voice.provider.js'));
     const provider = app.get(VoiceProvider), attach = provider.attach.bind(provider);
-    if (agendaVoice) require('./recruitment-voice-agenda.cjs').observeProvider(provider, app.get(ScreeningClient), voiceEvents);
+    if (agendaVoice) stopVoiceProbe=require('./recruitment-voice-agenda.cjs').observeProvider(provider, app.get(ScreeningClient), voiceEvents);
     else provider.attach = (id, onEvent, onLost) => attach(id, event => {
      if (event.type === 'session.closed') voiceEvents.push({ reason: event.reason });
      onEvent(event);
     }, onLost);
-    if (process.env.RELIABILITY_VOICE_SCENARIO === 'timed') {
+    if (voiceScenario === 'timed') {
      const { VoiceService } = require(path.join(root,'apps/api/dist/ai-screening/voice/voice.service.js'));
      const voiceService = app.get(VoiceService);
      advanceVoiceClock = async (id, elapsed) => {
@@ -116,6 +122,42 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    let scoreHook;
    const screeningClient = app.get(ScreeningClient), originalRun = screeningClient.run.bind(screeningClient);
    screeningClient.run=async(_w,_s,task,input,...options)=>{
+    if(completionProbe&&task==='live-agenda'){
+      assert.ok(input.criteria.every(row=>row.id.startsWith('role-')||row.id==='synthetic-two-factor'));
+      const api=input.criteria.filter(row=>/\bAPI\b/u.test(row.name));
+      const merged=api.length===2&&require('./recruitment-voice-agenda.cjs').coverageProbe();
+      const skill=input.criteria.find(row=>row.id==='synthetic-two-factor');
+      const duty=input.criteria.find(row=>row.id!==skill?.id&&row.name.includes('autentikasi dua faktor'));
+      return {merges:[
+       ...(merged?[{representative:api[0].id,duplicates:[api[1].id],sharedAction:'Merancang endpoint API',sharedOutput:'Validasi perubahan stok inventaris'}]:[]),
+       ...(skill&&duty?[{representative:duty.id,duplicates:[skill.id],sharedAction:'Mengaktifkan autentikasi dua faktor',sharedOutput:'Akses admin aman dengan dua faktor'}]:[]),
+      ],
+       topics:input.criteria.filter(row=>(!merged||row.id!==api[1].id)&&row.id!==skill?.id).map(row=>({criterionId:row.id,
+       question:'Kalau lo diminta '+row.name.replace(/[.!?]+$/u,'').toLowerCase()+', apa langkah pertama yang lo ambil?'}))};
+     }
+     if(completionProbe&&task==='candidate'){
+      const skill=input.cvSegments.find(line=>line.text.includes('Mengembangkan API Node.js'));
+      const criterion=input.job.criteria.find(row=>/\bAPI\b/u.test(row.name));
+      assert.ok(skill&&criterion&&input.coreCriterionIds.includes(criterion.id));
+      return {claims:[{sourceRef:skill.id,criterionId:criterion.id,skillText:'API',relevance:'CORE'}]};
+     }
+     if(completionProbe&&task==='evaluate'&&process.env.RELIABILITY_VOICE_REAL_EVAL==='1'){
+      assert.ok(allowedProviderWork.has(_w), 'Only the finished voice fixture may use the real evaluator');
+      return originalRun(_w,_s,task,input,...options);
+     }
+     if(completionProbe&&task==='evaluate'){
+      return {criteria:Object.fromEntries(input.criteria.map(row=>{
+       const terms=/\bAPI\b/u.test(row.name)?/endpoint|inventory|stock|stok/i:/panduan/i.test(row.name)?/dokumentasi|panduan|serah terima|langkah|recovery steps|support team/i:
+        /autentikasi/i.test(row.name)?/totp|dua faktor|authenticator|backup code|second factor|expired codes/i:/rollback|health check|roll back/i;
+       const answer=input.answers.find(item=>terms.test(item.text));
+       const possible={level:null,clarity:null,evidence:[],fit:null,requiresQuestionContext:false,
+        discrepancyRef:null,redirectRef:null,questionRef:null};
+       return [row.id,answer?{...possible,level:3,clarity:3,fit:'DIRECT',evidence:[answer.id],
+        reason:'Tindakan jawaban sintetis sesuai dengan kompetensi.'}:
+        {...possible,reason:'Belum ada jawaban sintetis untuk kompetensi ini.'}];
+      }))};
+     }
+     if ('live-agenda'===task&&agendaVoice&&process.env.TAKA_ALIGNED_ROLE_RUBRIC_ENABLED==='true') return originalRun(_w,_s,task,input,...options);
      if (allowedProviderWork.has(_w)) return textUi ? require('./recruitment-screening-fixture.cjs')(task,input) : originalRun(_w,_s,task,input,...options);
      assert.equal(task,'cv-score');paidMockCalls++;if(scoreHook)await scoreHook(_s);return {readable:true,fullName:'HTTP Candidate',email:candidateEmail,phone:null,headline:'Developer',summary:'Pengalaman API.',cvText:text,criteria:input.job?CV_RUBRIC.map(c=>({criterionId:c.id,level:3,reason:'Tertulis di CV.',evidence:[text]})):[],limitations:[]};};
    const base=(await app.getUrl())+'/api',jwt=new JwtService(),token=id=>jwt.sign({sub:id,tv:0},{secret:process.env.JWT_SECRET,expiresIn:'1h'});
@@ -140,6 +182,10 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    }
    const hr=token('http-hr'),employee=token('http-employee'),foreign=token('http-foreign');
    await db.company.create({data:{id:'http-co',name:'HTTP Company',slug:'http-company',members:{create:{userId:'http-hr',role:'OWNER'}}}});
+   // Keep the general CV smoke fixture on its existing rubric. The browser
+   // fixture below provisions a separate lowongan with a prepared role rubric.
+   const roleFlag = process.env.TAKA_ROLE_ASSESSMENT_ENABLED;
+   if (agendaVoice) process.env.TAKA_ROLE_ASSESSMENT_ENABLED = 'false';
    await db.jobPost.create({data:{id:'http-job',companyId:'http-co',title:'Backend Developer',description:'Mengembangkan API dan layanan backend dengan Node.js.',status:'PUBLISHED',workMode:'REMOTE'}});
    await call('/recruitment/candidates?companyId=http-co',null,null,'GET',401);
    await call('/recruitment/candidates?companyId=http-co',employee,null,'GET',403);
@@ -203,6 +249,7 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const schedules=await call('/recruitment/candidates/'+id+'/interviews',hr);assert.ok(schedules.some(s=>s.id===schedule.id));
    assert.ok((await candidateMail()).length >= 2, 'real SMTP invite and message reach local Mailpit');
    assert.equal(paidMockCalls,takaV2?2:1);assert.equal(await db.aiScreeningCall.count(),takaV2?2:0);
+   if (agendaVoice && roleFlag !== undefined) process.env.TAKA_ROLE_ASSESSMENT_ENABLED = roleFlag;
    if (process.argv.includes('--live-draft')) await require('./job-draft-live.cjs')({call,db,hr,foreign,app,root});
    if (process.argv.includes('--load')) await require('./recruitment-load-real.cjs')({db,call,makeToken:token,makePdf,worker,setScoreHook:hook=>{scoreHook=hook;}});
    const liveCvFormats = process.argv.includes('--live-cv-formats');
@@ -213,17 +260,19 @@ if(!process.env.RECRUITMENT_HTTP_CHILD){
    const onboarding = onboardingDraft || process.argv.includes('--onboarding');
    if (process.argv.includes('--browser') || liveVoice || liveText || textUi || onboarding) await require('./recruitment-real-browser.cjs')({
      base,call,db,employee,hr,foreign,worker,deliver: id => app.get(InvitationsService).deliver(id),candidateMail,findVerificationToken,liveVoice,agendaVoice,liveText,textUi,voiceEvents,advanceVoiceClock,allowed: allowedProviderWork,onboarding,onboardingDraft,makeToken: token,makePdf,
+     appPacket: id => app.get(require(path.join(root,'apps/api/dist/ai-screening/screening-packets.service.js')).ScreeningPackets).sync(id, 'VOICE'),
    });
    console.log('Recruitment HTTP passed: full compiled Nest DI, JWT/role/tenant guards, actual private MinIO PUT/GET, CV-only native application, ranking/detail APIs, invitation/email/Talentio, real SMTP verification and stale-token refresh/verified claim, bulk delivery, imported schedule and real local Mailpit SMTP. ' + (liveVoice ? 'Bounded live voice probe.' : liveText ? 'Bounded live text probe.' : liveCvFormats ? 'Bounded real-provider CV formats probe.' : onboardingDraft ? 'Four real drafting calls through the HR browser.' : process.argv.includes('--live-draft') ? 'Bounded live drafting probe.' : 'No paid API calls.'));
   }finally{
+   const unconfirmedVoice = await stopVoiceProbe?.();
    if (db && process.argv.some(option => option.startsWith('--live-'))) {
     const unresolved = await db.aiScreeningCall.count({where:{status:{in:['RUNNING','UNCERTAIN']}}});
-    if (unresolved) {
+    if (unresolved || unconfirmedVoice) {
      retainProviderState = true;
      const fs = require('node:fs');
      const dir = process.env.AI_RELIABILITY_OUTPUT || path.resolve('output/ai-reliability');
      fs.mkdirSync(dir,{recursive:true});
-     fs.writeFileSync(path.join(dir,process.env.S3_BUCKET+'-retained-provider.json'),JSON.stringify({database:new URL(process.env.DATABASE_URL).pathname.slice(1),bucket:process.env.S3_BUCKET,unresolved},null,2));
+     fs.writeFileSync(path.join(dir,process.env.S3_BUCKET+'-retained-provider.json'),JSON.stringify({database:new URL(process.env.DATABASE_URL).pathname.slice(1),bucket:process.env.S3_BUCKET,unresolved,unconfirmedVoice:Boolean(unconfirmedVoice)},null,2));
      console.error('Unresolved synthetic provider state retained for recovery.');
     }
    }

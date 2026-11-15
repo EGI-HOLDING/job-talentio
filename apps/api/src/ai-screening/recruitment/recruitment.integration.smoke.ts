@@ -12,6 +12,7 @@ import { CV_RUBRIC } from './cv-scoring.policy';
 import { MatchingService } from '../../matching/matching.service';
 import { ApplicationsService } from '../../applications/applications.service';
 import { ScreeningWorker } from '../screening-worker.service';
+import { ScreeningPackets } from '../screening-packets.service';
 const db = new PrismaService();
 async function main() {
   await db.$connect();
@@ -48,7 +49,7 @@ async function main() {
       const checksum = fileChecksum(await storage.getObjectBuffer(row.fileKey!));
       await db.$transaction(tx=>saveCvAssessment(tx,row,work.id,checksum,checked,CV_RECOVERY_VERSION));
     },
-  } as never);
+  } as never, new ScreeningPackets(db));
   const worker = new ScreeningWorker(db,new ConfigService({}),storage as never,new MatchingService(db),{} as never,{} as never,{} as never,
     {} as never,scoring,candidates);
   async function runScore(candidateId: string) {

@@ -8,7 +8,7 @@ export function observeVoiceAudio(
     report: (activity: AudioActivity) => void,
 ) {
     let context: AudioContext;
-    try { context = new AudioContext(); } catch { return () => {}; }
+    try { context = new AudioContext(); } catch { return; }
     const tara = context.createAnalyser();
     const candidate = context.createAnalyser();
     tara.fftSize = candidate.fftSize = 1024;
@@ -78,19 +78,21 @@ export function observeVoiceAudio(
             }
             inputActive = true;
         } else if (now - lastInput >= 750 && (inputActive !== false || now - inputReportedAt >= 2000)) {
+            const speechEndedAt = inputActive === true ? lastInput : now;
             inputActive = false;
-            report({ source: 'candidate', active: false, at: now });
+            report({ source: 'candidate', active: false, at: speechEndedAt });
             inputReportedAt = now;
         }
     }
 
     // The media element owns playback. Both analyser nodes are read-only branches.
     const timer = setInterval(() => { try { sample(); } catch { /* Browser diagnostics are best effort. */ } }, 40);
-    void context.resume().catch(() => undefined);
-    return () => {
+    const resume = () => { if (context.state !== 'running') void context.resume().catch(() => undefined); };
+    resume();
+    return { resume, stop() {
         clearInterval(timer);
         remoteSource?.disconnect();
         micSource?.disconnect();
         void context.close().catch(() => undefined);
-    };
+    } };
 }

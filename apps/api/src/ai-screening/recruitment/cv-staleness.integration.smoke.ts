@@ -51,7 +51,7 @@ async function main(){
     criteria:CV_RUBRIC.map(c=>({criterionId:c.id,level:3,reason:'Tertulis di CV.',evidence:[text]})),limitations:[]},true);
    await db.$transaction(tx=>saveCvAssessment(tx,row,work.id,row.checksum!,checked,CV_RECOVERY_VERSION));
   },
- } as never);
+ } as never,new ScreeningPackets(db));
  const processScore=async(work:{id:string},id:string)=>{
   await db.aiScreeningWork.update({where:{id:work.id},data:{status:'RUNNING',leaseOwner:'synthetic-owner'}});
   return scorer.process(work.id,id,'synthetic-owner');

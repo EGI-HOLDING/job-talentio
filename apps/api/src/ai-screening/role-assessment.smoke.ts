@@ -122,9 +122,14 @@ assert.equal(directEvidence(fragments)[0].heard, false, 'a partly played prompt 
 const farewell: Fragment = { id: 20, speaker: 'TARA', startMs: 6200, endMs: 7600, text: 'Makasih udah cerita. Wawancara kita selesai.' };
 const closingMedia = { ...directDelivery, windows: [...directDelivery.windows, window(6200, 7600)] };
 assert.equal(directFarewellAt([...fragments, farewell], closingMedia), origin + 7600);
+assert.equal(directFarewellAt([...fragments, farewell], closingMedia, 6200), origin + 7600);
+assert.equal(directFarewellAt([...fragments, farewell], closingMedia, 7000), undefined,
+    'a farewell already in progress at the boundary does not count as a normal closure');
 assert.equal(directFarewellAt([...fragments, farewell], { ...closingMedia, playbackVerified: false }), undefined);
 assert.equal(directFarewellAt([...fragments, { ...farewell, text: 'Gue jelasin nanti setelah wawancara kita selesai.' }], closingMedia), undefined);
 assert.equal(directFarewellAt([...fragments, farewell, { id: 21, speaker: 'CANDIDATE', startMs: 7700, endMs: 8100, text: 'Sebentar, gue mau nambahin.' }], closingMedia), undefined);
+assert.equal(directFarewellAt([...fragments, farewell, { id: 21, speaker: 'CANDIDATE', startMs: 6070, endMs: 7180, text: 'Sebentar, gue mau nambahin.' }], closingMedia), undefined,
+    'candidate speech already in progress invalidates an overlapping farewell even if the candidate finishes first');
 const specificQuestion: Fragment = { id: 22, speaker: 'TARA', startMs: 100, endMs: 1200, text: 'Waktu nunjukin solusi, langkah persiapan demo lu gimana?' };
 const clarification: Fragment = { id: 23, speaker: 'CANDIDATE', startMs: 1400, endMs: 1800, text: 'Tugas yang mana ya?' };
 const clarified = directEvidence([specificQuestion, clarification], { ...directDelivery, windows: [window(100, 1200)] });

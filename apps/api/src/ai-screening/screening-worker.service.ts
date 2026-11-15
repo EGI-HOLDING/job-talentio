@@ -29,17 +29,18 @@ import { renderScreeningReport } from './screening-report';
 import { currentTaraPrompt, type PromptRegistry } from './prompts/registry';
 import { composePrompt } from './prompts/compose';
 import { buildCandidatePreparation, CANDIDATE_PREPARATION_MS } from './candidate-preparation';
-import { candidatePreparationInclude, candidatePreparationInput, pendingCandidateDraft, publishCandidatePreparation } from './screening-candidate-recovery';
+import { candidatePreparationInclude, candidatePreparationInput, candidatePreparationSource, pendingCandidateDraft, publishCandidatePreparation } from './screening-candidate-recovery';
 import { enqueueEvaluationPdf, enqueueWork } from './screening-packets.service';
 import { conversationTone, isCurrentConversation, requireCurrentConversation } from './conversation.policy';
 import { taraAssessmentTopics, taraTopics, taraInterviewReport, validTaraDecision, type TaraProgress, type TaraDecision } from './tara-interview';
 import { chatTakaTurns, frozenTakaInterview } from './taka-interview';
 import { evaluateTakaInterview } from './taka-evaluation';
-import { frozenRoleRubric, rolePackage } from './role-rubric';
+import { alignedRoleFromPacket, frozenRoleRubric, rolePackage, ROLE_RUBRIC_VERSION } from './role-rubric';
 import { roleChatTranscript } from './taka-role-assessment';
-import { LIVE_AGENDA_PREPARATION_MS, liveAgendaRequest, liveRolePackage, prepareLiveAgenda } from './tara-live-agenda';
+import { LIVE_AGENDA_PREPARATION_MS, liveAgendaRequest, liveRolePackage, prepareAlignedRolePackage, prepareLiveAgenda, type LiveAgenda } from './tara-live-agenda';
 import { TAKA_REASSESS_KIND } from './taka-reassessment';
-import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { TAKA_LIVE_COMPLETION_VERSION, TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { canPublishLiveReport, liveCompletion, liveTranscript, markLiveEvaluationUnrecoverable } from './voice/voice-completion';
 
 const agendaProviderError = /^(?:TARA_INVALID_OUTPUT|TARA_PROVIDER_NOT_CONFIGURED|TARA_RESPONSE_FAILED|TARA_PROVIDER_HTTP_\d+|TARA_LIVE_AGENDA_ALREADY_SUBMITTED|TARA_RETRY_LIMIT|SESSION_ERASED)$/;
 @Injectable()
@@ -155,8 +156,10 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         try {
             if (work.kind === 'CANDIDATE_DELIVERY')
                 await this.actions!.deliver(work.subjectId);
-            else if (work.kind === 'VOICE_EVALUATE')
-                await this.voice?.evaluate(id, work.subjectId, owner);
+            else if (work.kind === 'VOICE_EVALUATE') {
+                if (!this.voice) throw new Error('TAKA_VOICE_WORKER_UNAVAILABLE');
+                await this.voice.evaluate(id, work.subjectId, owner, undefined, work.key);
+            }
             else if (work.kind === TAKA_REASSESS_KIND)
                 await this.voice?.evaluate(id, work.subjectId, owner, work.key);
             else if (work.kind === 'INVITE_DELIVERY')
@@ -167,6 +170,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 await this.cvScoring!.process(id, work.subjectId, owner);
             else if (work.kind === 'CV_PROVIDER_EVENT')
                 await this.cvRecovery!.receiveProviderEvent(work.subjectId);
+            else if (work.kind === 'TAKA_PROVIDER_EVENT')
+                await this.client.reconcileEvaluationResponse(work.subjectId);
             else if (work.kind === 'CV_PROVIDER_DELETE')
                 await this.cvRecovery!.deleteProviderResult(work.subjectId);
             else if (work.kind === 'PREPARE')
@@ -193,28 +198,31 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         }
         catch (error) {
             if (error instanceof AiPending || error instanceof CvWorkDelay) {
-                const delay = error instanceof CvWorkDelay ? error.delayMs : ['CANDIDATE_RESPONSE', 'LIVE_AGENDA_RESPONSE'].includes(work.kind) ? 10_000 : 2000;
+                const delay = error.delayMs ?? (['CANDIDATE_RESPONSE', 'LIVE_AGENDA_RESPONSE'].includes(work.kind) ? 10_000 : 2000);
                 await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: 'PENDING', availableAt: new Date(Date.now() + delay), leaseUntil: null, leaseOwner: null } });
                 return;
             }
             const message = work.cvPolicy ? 'CV_WORKER_ERROR' : error instanceof Error ? error.message : 'TARA_PROCESSING_FAILED';
             const uncertain = error instanceof AiUncertain;
             if (!uncertain && !work.cvPolicy && !['CANDIDATE', 'CANDIDATE_RESPONSE'].includes(work.kind))
-                await this.db.aiScreeningCall.updateMany({ where: { workId: id, status: 'COMPLETED', promptVersion: { not: TAKA_ROLE_EVIDENCE_VERSION } },
+                await this.db.aiScreeningCall.updateMany({ where: { workId: id, status: 'COMPLETED', promptVersion: { notIn: [TAKA_ROLE_EVIDENCE_VERSION, TAKA_LIVE_COMPLETION_VERSION] } },
                     data: { status: 'INVALID', error: 'DOMAIN_VALIDATION_FAILED' } });
             const retry = !uncertain && work.attempts < 2 && message !== 'CV_UNREADABLE' && message !== 'NO_CV_CLAIMS' && !message.includes('RETIRED_');
             const changed = await this.db.aiScreeningWork.updateMany({ where: { id, leaseOwner: owner }, data: { status: retry ? 'PENDING' : 'FAILED', attempts: { increment: 1 }, availableAt: new Date(Date.now() + 10000), leaseUntil: null, leaseOwner: null, error: message.slice(0, 180) } });
             if (changed.count && !retry)
-                await this.failure(work.kind, work.subjectId, message, work.key);
+                await this.failure(work.kind, work.subjectId, message, work.key, work.id);
             this.logger.warn('Tara ' + work.kind + ' ' + (retry ? 'retry scheduled' : 'needs recovery') + ' (' + message.slice(0, 80) + ')');
         }
         finally {
             clearInterval(heartbeat);
         }
     }
-    private async failure(kind: string, id: string, error: string, workKey?:string) {
+    private async failure(kind: string, id: string, error: string, workKey?:string, workId?:string) {
         if (kind === 'CANDIDATE_DELIVERY') await this.actions?.failure(id);
-        if (kind === 'VOICE_EVALUATE') await this.db.aiScreeningEvaluation.updateMany({where:{sessionId:id,result:{equals:Prisma.DbNull}},data:{status:'FAILED',error}});
+        if (kind === 'VOICE_EVALUATE') {
+            if (!workId || !await markLiveEvaluationUnrecoverable(this.db, id, workKey, workId, error))
+                await this.db.aiScreeningEvaluation.updateMany({where:{sessionId:id,result:{equals:Prisma.DbNull}},data:{status:'FAILED',error}});
+        }
         if (kind === 'INVITE_DELIVERY') await this.invitations?.failure(id);
         if (kind === 'CV_SCORE') await this.cvScoring?.failure(id, error, workKey);
         if (kind === 'PREPARE')
@@ -229,22 +237,34 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             await this.db.aiCompanyDocument.updateMany({ where: { id }, data: { status: 'FAILED', error } });
         if (kind === 'CV_SOURCE') {
             await this.db.aiCvSource.updateMany({ where: { versionId: id }, data: { status: 'FAILED', error: 'CV_UNREADABLE' } });
-            await this.db.aiCandidatePlan.updateMany({ where: { resumeVersionId: id, status: { in: ['PENDING', 'RUNNING'] } }, data: { status: 'FAILED', error: 'CV_UNREADABLE' } });
+            await this.db.aiCandidatePlan.updateMany({ where: { resumeVersionId: id, status: { in: ['PENDING', 'RUNNING'] },
+                session: { invitation: { is: null } } }, data: { status: 'FAILED', error: 'CV_UNREADABLE' } });
         }
     }
     private async prepare(workId: string, id: string, owner: string) {
         const packet = await this.db.aiScreeningPackage.findUnique({ where: { id } });
         if (!packet || packet.status === 'READY' || !isCurrentConversation(packet.conversationPolicy))
             return;
-        const newer = await this.db.aiScreeningPackage.count({ where: { jobId: packet.jobId, version: { gt: packet.version } } });
-        const pinned = await this.db.aiScreeningSession.count({ where: { packageId: id } });
-        const invited = await this.db.screeningInvitation.count({where:{packageId:id,status:{in:['INVITED','STARTED','COMPLETED']}}});
-        if (newer && !pinned && !invited) {
-            await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'SUPERSEDED' } });
-            return;
+        const role = frozenRoleRubric(packet.jobSnapshot);
+        if (role?.version !== ROLE_RUBRIC_VERSION) {
+            const [newer, pinned, invited] = await Promise.all([
+                this.db.aiScreeningPackage.count({ where: { jobId: packet.jobId, version: { gt: packet.version } } }),
+                this.db.aiScreeningSession.count({ where: { packageId: id } }),
+                this.db.screeningInvitation.count({ where: { packageId: id, status: { in: ['INVITED', 'STARTED', 'COMPLETED'] } } }),
+            ]);
+            if (newer && !pinned && !invited) {
+                await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'SUPERSEDED' } });
+                return;
+            }
         }
         const job = packet.jobSnapshot as Record<string, unknown>, company = packet.companySnapshot;
-        const role = frozenRoleRubric(job);
+        if (role?.version === ROLE_RUBRIC_VERSION && !role.interviewIds.length) {
+            const payload = prepareAlignedRolePackage(role, undefined);
+            payload.criteria = [{ id: 'experience-alternative', name: role.title, requirementRef: String(job.description ?? '').slice(0, 400), anchors: [] }];
+            await this.db.aiScreeningPackage.updateMany({ where: { id, status: { in: ['PENDING', 'FAILED'] } },
+                data: { status: 'READY', payload: json(payload), error: null } });
+            return;
+        }
         if (role?.interviewIds.length) {
             const preset = (packet.promptSnapshot as unknown as PromptRegistry)?.liveAgenda;
             if (preset) {
@@ -271,22 +291,24 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (!call || ['RUNNING', 'UNCERTAIN'].includes(call.status) && Date.now() < deadline) {
             try {
                 const remaining = Math.max(1, Math.min(12_000, deadline - Date.now()));
-                proposal = await this.client.run(workId, id, 'live-agenda', liveAgendaRequest(rubric).data, preset, undefined, remaining);
+                proposal = await this.client.run(workId, id, 'live-agenda', liveAgendaRequest(rubric, preset.version).data, preset, undefined, remaining);
             } catch (error) {
                 if (error instanceof AiPending && Date.now() < deadline) throw error;
                 if (!(error instanceof AiPending || error instanceof AiUncertain || error instanceof Error && agendaProviderError.test(error.message))) throw error;
             }
         }
-        const agenda = prepareLiveAgenda(rubric, proposal);
+        const payload = rubric.version === ROLE_RUBRIC_VERSION ? prepareAlignedRolePackage(rubric, proposal, preset.version as LiveAgenda['version']) :
+            liveRolePackage(rubric, prepareLiveAgenda(rubric, proposal));
         await this.db.$transaction(async tx => {
             const lease = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "AiScreeningWork"
                 WHERE id=${workId} AND "leaseOwner"=${owner} AND status='RUNNING' AND "leaseUntil">now() FOR UPDATE`;
             if (!lease.length) return;
             const saved = await tx.aiScreeningPackage.updateMany({ where: { id, status: { in: ['PENDING', 'FAILED'] } },
-                data: { status: 'READY', payload: json(liveRolePackage(rubric, agenda)), error: null } });
+                data: { status: 'READY', payload: json(payload), error: null } });
             if (!saved.count) return;
             const pending = await tx.aiScreeningCall.findUnique({ where: { key } });
             if (pending?.responseId && ['RUNNING', 'UNCERTAIN'].includes(pending.status)) await enqueueWork(tx, 'LIVE_AGENDA_RESPONSE', pending.id);
+            const agenda = payload.liveAgenda!;
             this.logger.log(`Tara Live agenda ready source=${agenda.source} topics=${agenda.topics.length} deferred=${agenda.deferredIds.length}`);
         });
     }
@@ -347,10 +369,10 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (plan.package.status !== 'READY')
             throw new AiPending();
         if (!pendingCandidateDraft(plan)) return;
-        const source = plan.resumeVersion.screeningSource;
+        const source = candidatePreparationSource(plan);
         if (source?.status === 'FAILED' || source?.status === 'READY' && !source.text?.trim())
             throw new Error('CV_UNREADABLE');
-        const context = candidatePreparationInput(plan);
+        const context = candidatePreparationInput(plan, source);
         if (!context)
             throw new AiPending();
         const calls = await this.db.aiScreeningCall.findMany({ where: { workId, task: 'candidate', subjectId: plan.sessionId },
@@ -367,7 +389,9 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                     responses.push(await this.client.run(workId, plan.sessionId, 'candidate', {
                         job: context.rubric, cvSegments: context.segments, duties: context.job.responsibilities,
                         description: context.job.description, requestedSkills: context.job.jobSkills,
-                    }, { ...preset, model }, undefined, CANDIDATE_PREPARATION_MS));
+                        coreCriterionIds: context.coreIds,
+                    }, { ...preset, model, instructions: preset.instructions + (context.coreIds ? '\n\n' +
+                        'Pilih paling banyak satu contoh CV per kompetensi inti. skillText hanya nama alat atau frasa keahlian, misalnya Adobe Photoshop atau koordinasi proyek. Gunakan sourceRef untuk mengacu pada kalimat pengalaman lengkap. Cocokkan tindakan pribadi dan hasil kerja, bukan sekadar nama skill, industri, proyek, alat, atau kata bersama. Jika contoh hanya mendukung kompetensi di luar coreCriterionIds, jangan pindahkan atau ajukan contoh itu. Penyusunan materi tidak membuktikan presentasi atau koordinasi. Bila kecocokan belum jelas, lewati agar Tara memakai skenario tugas yang sudah disediakan.' : '') }, undefined, CANDIDATE_PREPARATION_MS));
                 } else if (pending.length) {
                     if (!pending[0].responseId) throw new AiPending('TARA_CALL_IN_FLIGHT');
                     responses.push(await this.client.pollCandidate(pending[0], Math.max(1, Math.min(12_000, deadline - Date.now()))));
@@ -382,7 +406,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         }
         const unresolved = await this.db.aiScreeningCall.findMany({ where: { workId, task: 'candidate', status: { in: ['RUNNING', 'UNCERTAIN'] },
             responseId: { not: null } }, select: { id: true } });
-        const prepared = buildCandidatePreparation(context.segments, context.rubric, context.job, responses, { recoverStored: calls.length > 0, alternativeOnly });
+        const prepared = buildCandidatePreparation(context.segments, context.rubric, context.job, responses,
+            { recoverStored: calls.length > 0, alternativeOnly, coreIds: context.coreIds });
         const outcome = await publishCandidatePreparation(this.db, plan, workId, prepared, { owner, reconcileIds: unresolved.map(call => call.id) });
         if (outcome === 'CHANGED') throw new AiPending('TARA_DRAFT_CHANGED');
         if (outcome === 'READY') this.logger.log(`Tara preparation ready claims=${prepared.payload.claims.length} rejected=${prepared.rejected} waitMs=${Math.max(0, Date.now() - deadline + CANDIDATE_PREPARATION_MS)}`);
@@ -478,7 +503,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const rubric = session.package.payload as unknown as PackagePayload;
         const progress = session.taraInterview as unknown as TaraProgress | null;
         const notes = progress ? taraInterviewReport(progress, taraTopics(plan, rubric, isCurrentConversation(session.package.conversationPolicy))) : undefined;
-        const roleRubric = frozenRoleRubric(session.package.jobSnapshot);
+        const roleRubric = alignedRoleFromPacket(session.package.jobSnapshot, rubric);
         const applicationCv = session.invitation ? undefined : await this.cvAssessment(session, session.package.jobSnapshot);
         await evaluateTakaInterview(this.db, this.client, workId, session, session.invitation,
             frozenTakaInterview(session.invitation?.snapshot, (session.package.promptSnapshot as unknown as PromptRegistry)?.takaInterview),
@@ -492,8 +517,9 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (!evaluation?.pdfKey && work.status === 'DONE') await this.db.aiScreeningWork.updateMany({ where: { id: work.id, status: 'DONE' }, data: { status: 'PENDING', availableAt: new Date() } });
     }
     private async pdf(id: string) {
-        const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { voice: {include:{fragments:true}}, invitation: true, package: true, currentPlan: true, evaluation: true, questions: { select: { id: true, position: true } }, profile: { select: { user: { select: { fullName: true } } } }, application: { select: { createdAt: true } } } });
-        if (!session?.evaluation?.result || !session.package || !session.currentPlan)
+        const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { voice: {include:{fragments:true}},
+            resumedVoices: {include:{fragments:true},orderBy:{connectionNumber:'asc'}}, invitation: true, package: true, currentPlan: true, evaluation: true, questions: { select: { id: true, position: true } }, profile: { select: { user: { select: { fullName: true } } } }, application: { select: { createdAt: true } } } });
+        if (!session?.evaluation?.result || !session.package || !session.currentPlan || !canPublishLiveReport(liveCompletion(session.voiceCompletion)))
             return;
         if (session.evaluation.pdfKey && session.evaluation.pdfVersion === PDF_TEMPLATE_VERSION)
             return;
@@ -503,10 +529,14 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 name: string;
             };
         };
+        const voiceLabels = session.voiceCompletion && session.voice ?
+            liveTranscript([session.voice, ...session.resumedVoices]).map(turn => [turn.id, turn.startMs] as const) :
+            session.voice?.fragments.map(fragment => ['v' + fragment.id, fragment.startMs] as const) ?? [];
         const buffer = await renderScreeningReport({ name: session.profile.user.fullName, job: job.title, company: job.company.name, submittedAt: session.application?.createdAt ?? session.completedAt ?? session.startedAt ?? session.createdAt,
             independentScores: Boolean(session.invitation), methodology: session.evaluation.promptVersion, jobVersion: session.package.version, cvScore: session.evaluation.cvScore, screeningScore: session.evaluation.screeningScore, finalScore: session.evaluation.finalScore,
+            voiceCompletionStatus: liveCompletion(session.voiceCompletion)?.status,
             questionLabels: Object.fromEntries([...session.questions.flatMap(q => [[q.id, 'Q' + (q.position + 1)],
-                ['answer:' + q.id, 'Q' + (q.position + 1)]]), ...(session.voice?.fragments.map(f=>['v'+f.id, Math.floor(f.startMs/60000)+':'+String(Math.floor(f.startMs/1000)%60).padStart(2,'0')])??[])]), result: session.evaluation.result as unknown as EvaluationPayload, rubric: session.package.payload as unknown as PackagePayload, plan: session.currentPlan.payload as unknown as CandidatePayload });
+                ['answer:' + q.id, 'Q' + (q.position + 1)]]), ...voiceLabels.map(([ref, ms])=>[ref, Math.floor(ms/60000)+':'+String(Math.floor(ms/1000)%60).padStart(2,'0')])]), result: session.evaluation.result as unknown as EvaluationPayload, rubric: session.package.payload as unknown as PackagePayload, plan: session.currentPlan.payload as unknown as CandidatePayload });
         const key = 'screening/reports/' + session.evaluation.id + '/' + session.evaluation.inputHash + '/' + PDF_TEMPLATE_VERSION + '.pdf';
         await this.storage.putObject(key, buffer, 'application/pdf');
         const kept = await this.db.aiScreeningEvaluation.updateMany({ where: { id: session.evaluation.id, inputHash: session.evaluation.inputHash }, data: { pdfKey: key, pdfVersion: PDF_TEMPLATE_VERSION } });

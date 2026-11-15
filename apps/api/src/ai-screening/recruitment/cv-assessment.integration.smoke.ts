@@ -8,6 +8,7 @@ import { enqueueCvAssessment } from './cv-score-recovery';
 import { json } from '../screening.policy';
 import { CvAssessmentService } from './cv-assessment.service';
 import { CvScoringService } from './cv-scoring.service';
+import { ScreeningPackets } from '../screening-packets.service';
 import { CvWebhookController } from './cv-webhook.controller';
 import { RecruitmentService } from './recruitment.service';
 import { CV_PROVIDER_TASK, CV_RECOVERY_VERSION, cvRequest, type CvSource } from './cv-assessment';
@@ -15,7 +16,9 @@ import { CV_RUBRIC, fileChecksum } from './cv-scoring.policy';
 import { invalidateCvScores, scoringJob, scoreJobInclude } from './cv-job-context';
 import { cvBackoff, cvRejection, type CvHttp } from './cv-provider';
 import { prepareCvDocument, type CvProviderFile } from './cv-document';
-import { frozenRoleRubric } from '../role-rubric';
+import { frozenRoleRubric, ROLE_RUBRIC_VERSION } from '../role-rubric';
+import { TARA_ALIGNED_AGENDA_VERSION } from '../tara-live-agenda';
+import type { PackagePayload } from '../screening.schemas';
 const PDFDocument = require('pdfkit');
 const db = new PrismaService();
 const key = 'whsec_' + Buffer.alloc(32, 61).toString('base64');
@@ -125,9 +128,17 @@ const provider = {
   async delete() { changed++; return { status: 204 }; },
 };
 const recovery = new CvAssessmentService(db, storage as never, config, provider as never);
-const scorer = new CvScoringService(db, recovery);
-const worker = () => new ScreeningWorker(db, config, storage as never, {} as never, {} as never, {} as never, {} as never,
-  {} as never, scorer, undefined, undefined, undefined, undefined, recovery);
+const packets = new ScreeningPackets(db);
+const scorer = new CvScoringService(db, recovery, packets);
+  let rubricCalls = 0;
+  const worker = () => new ScreeningWorker(db, config, storage as never, {} as never, packets, {} as never, {} as never,
+    { run: async (_work: unknown, _id: unknown, task: string, input: { criteria: Array<{ id: string; name: string }> }, preset: { version: string }) => {
+      assert.equal(task, 'live-agenda');
+      assert.equal(preset.version, TARA_ALIGNED_AGENDA_VERSION);
+      rubricCalls++;
+      return { merges: [], topics: input.criteria.slice(0, 4).map(row => ({ criterionId: row.id,
+        question: `Apa keputusan pertama lu untuk ${row.name.toLowerCase()}?` })) };
+    } } as never, scorer, undefined, undefined, undefined, undefined, recovery);
 const hr = { id: 'cv-hr', fullName: 'HR', role: 'RECRUITER', email: null, isBanned: false } as const;
 const operator = { ...hr, id: 'cv-operator', role: 'SUPER_ADMIN' } as const;
 const candidates = new RecruitmentService(db, storage as never, { assertMember: async (_: unknown, id: string) => {
@@ -352,6 +363,71 @@ async function main() {
   const foreign = await create('role-foreign', 'role-foreign', 'cv-company-1');
   await untilDone(foreign.row.id, foreign.work.id);
   assert.deepEqual(history.get('role-foreign')?.map(row => [row.stage, row.file]), [['INITIAL', true]], 'cache cannot cross companies');
+  process.env.TAKA_ALIGNED_ROLE_RUBRIC_ENABLED = 'true';
+  const aligned = await create('role-aligned', 'role-aligned-one');
+  const alignedAgain = await create('role-aligned', 'role-aligned-two');
+  const alignedWorker = worker();
+  await Promise.all([turn(aligned.work.id, alignedWorker), turn(alignedAgain.work.id, alignedWorker)]);
+  assert.equal(await db.aiScreeningCall.count({ where: { workId: { in: [aligned.work.id, alignedAgain.work.id] } } }), 0,
+    'CV scoring waits for its frozen job rubric before submitting');
+  const [textPacket, voicePacket] = await Promise.all([packets.sync(aligned.job.id, true), packets.sync(aligned.job.id, 'VOICE')]);
+  assert.equal(textPacket?.id, voicePacket?.id);
+  const prepareWork = await db.aiScreeningWork.findUniqueOrThrow({ where: { key: 'PREPARE:' + textPacket!.id } });
+  await Promise.all([alignedWorker.process(prepareWork.id), alignedWorker.process(prepareWork.id)]);
+  assert.equal(rubricCalls, 1);
+  const packet = await db.aiScreeningPackage.findUniqueOrThrow({ where: { id: textPacket!.id } });
+  const shared = (packet.payload as PackagePayload).roleRubric!;
+  assert.equal(shared.version, ROLE_RUBRIC_VERSION);
+  const assessed = await untilDone(aligned.row.id, aligned.work.id);
+  const repeatedAligned = await untilDone(alignedAgain.row.id, alignedAgain.work.id);
+  assert.equal(assessed.cvScore, repeatedAligned.cvScore);
+  assert.deepEqual(assessed.cvResult, repeatedAligned.cvResult);
+  assert.equal((assessed.cvResult as { roleAssessment: { rubricRevision: string } }).roleAssessment.rubricRevision, shared.revision);
+  assert.deepEqual(history.get('role-aligned')?.map(row => [row.stage, row.file]), [['GRADE', false]], 'new rubric uses the previous CV reading');
+  const descriptionOnly = await create('role-description-only');
+  const legacyPosting = await db.jobPost.update({ where: { id: descriptionOnly.job.id },
+    data: { responsibilities: [],
+      description: 'Tanggung jawab utama:\n- Menyiapkan materi cetak.\n- Memeriksa hasil produksi.\nPersyaratan:\n- Menguasai alat desain.' },
+    include: scoreJobInclude });
+  await db.recruitmentCandidate.update({ where: { id: descriptionOnly.row.id },
+    data: { jobSnapshot: json(scoringJob(legacyPosting)) } });
+  const legacyPacket = await packets.sync(legacyPosting.id, 'VOICE');
+  const legacyPrepare = await db.aiScreeningWork.findUniqueOrThrow({ where: { key: 'PREPARE:' + legacyPacket!.id } });
+  await turn(legacyPrepare.id, alignedWorker);
+  const legacyScore = await untilDone(descriptionOnly.row.id, descriptionOnly.work.id);
+  assert.equal(legacyScore.scoreStatus, 'READY');
+  assert.equal(legacyScore.cvScore, 75);
+  const legacyRubric = (legacyScore.jobSnapshot as { resolvedRoleRubric?: PackagePayload['roleRubric'] }).resolvedRoleRubric;
+  assert.deepEqual(legacyRubric?.criteria.map(row => row.name), ['Menyiapkan materi cetak', 'Memeriksa hasil produksi']);
+  assert.equal(legacyRubric?.interviewIds.length, 2);
+  assert.equal((legacyScore.cvResult as { roleAssessment: { rubricRevision: string } }).roleAssessment.rubricRevision, legacyRubric?.revision);
+  assert.equal((await candidates.detail(hr, legacyScore.id)).cvMethodologyUpgradeAvailable, false);
+  await assert.rejects(candidates.retry(hr, legacyScore.id), /CV ini belum dapat diproses ulang/u);
+  await db.recruitmentCandidate.update({ where: { id: legacyScore.id }, data: { jobSnapshot: json({
+    ...scoringJob(legacyPosting), resolvedRoleRubric: { ...legacyRubric, agendaVersion: 'tara-live-agenda-v2' },
+  }) } });
+  assert.equal((await candidates.detail(hr, legacyScore.id)).cvMethodologyUpgradeAvailable, true);
+  assert.equal((await candidates.retry(hr, legacyScore.id)).status, 'PENDING');
+  assert.equal(await db.aiScreeningWork.count({ where: { subjectId: legacyScore.id, kind: 'CV_SCORE', status: 'PENDING' } }), 1);
+  assert.equal(await db.aiScreeningCall.count({ where: { subjectId: legacyScore.id, task: CV_PROVIDER_TASK } }), 1);
+  const descriptionSkill = await create('role-description-skill');
+  const skillPosting = await db.jobPost.update({ where: { id: descriptionSkill.job.id }, data: { responsibilities: [],
+    description: 'Tentang perusahaan:\n' + 'Tim kami menyediakan layanan penerbitan dan arsip. '.repeat(160) +
+      '\nPersyaratan wajib:\n- Berpengalaman menggunakan Adobe InDesign.\n- Pengalaman Figma menjadi nilai tambah.' },
+    include: scoreJobInclude });
+  await db.recruitmentCandidate.update({ where: { id: descriptionSkill.row.id }, data: { jobSnapshot: json(scoringJob(skillPosting)) } });
+  const [skillChat, skillLive] = await Promise.all([packets.sync(skillPosting.id, true), packets.sync(skillPosting.id, 'VOICE')]);
+  assert.equal(skillChat?.id, skillLive?.id);
+  const skillPrepare = await db.aiScreeningWork.findUniqueOrThrow({ where: { key: 'PREPARE:' + skillLive!.id } });
+  await turn(skillPrepare.id, alignedWorker);
+  const skillScore = await untilDone(descriptionSkill.row.id, descriptionSkill.work.id);
+  const skillRubric = (skillScore.jobSnapshot as { resolvedRoleRubric?: PackagePayload['roleRubric'] }).resolvedRoleRubric;
+  assert.equal(skillScore.scoreStatus, 'READY');
+  assert.deepEqual(skillRubric?.criteria.map(row => row.name), ['Adobe InDesign']);
+  assert.equal(skillRubric?.criteria[0].requirementRef, 'Pengalaman menggunakan Adobe InDesign');
+  assert.equal(skillRubric?.interviewIds.length, 1);
+  assert.equal((skillScore.cvResult as { roleAssessment: { rubricRevision: string } }).roleAssessment.rubricRevision, skillRubric?.revision);
+  assert.deepEqual(history.get('role-description-skill')?.map(row => [row.stage, row.file]), [['GRADE', false]]);
   console.log('Taka CV role reuse: concurrent identical inputs use one submission, revised rubric only grades stored blocks, company isolation preserved. Paid calls: 0.');
   console.log(JSON.stringify({ suite: 'taka-cv-recovery', traces, slow: { providerSeconds: 396, submissions: 1 },
     lost: { webhookReceipts: 1, submissions: 1 }, loads: measurements, mockedElapsedMs: Date.now() - started, paidCalls: 0 }));

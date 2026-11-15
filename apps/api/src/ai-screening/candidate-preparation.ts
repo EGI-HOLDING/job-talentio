@@ -18,7 +18,7 @@ export const CANDIDATE_REFERENCES_SCHEMA: JsonSchema = {
 
 type Segment = { id: string; text: string; lineStart: number; lineEnd: number };
 export type CandidateJob = { description?: string; responsibilities?: string[]; jobSkills?: Array<{
-    skillId?: string; isRequired?: boolean; skill?: { name: string; aliases?: Array<{ aliasKey: string; alias?: string }> };
+    skillId?: string; isRequired?: boolean; skill?: { name: string; aliases?: Array<{ aliasKey?: string; alias?: string }> };
 }> };
 type ProposedClaim = { sourceRef?: unknown; skillText?: unknown; criterionId?: unknown; relevance?: unknown;
     skill?: unknown; quote?: unknown; lineStart?: unknown; lineEnd?: unknown };
@@ -36,6 +36,11 @@ function skillLabel(value: unknown) {
     const label = normalize(value);
     return label.length <= 80 && label.split(' ').length <= 8 && /\p{L}/u.test(label) &&
         /^[\p{L}\p{M}\p{N} .+#&/()-]+$/u.test(label) ? label : null;
+}
+
+function isExperienceSentence(value: string) {
+    return /^(?:saya|aku|gue|gua|kami|we|i)\s/iu.test(value) ||
+        /^(?:membuat|menyiapkan|mempersiapkan|menyusun|merancang|mendesain|mengembangkan|membangun|mengerjakan|mengelola|built|created|prepared|designed|developed|managed)\s+/iu.test(value);
 }
 
 export function candidateEvidence(cvText: string, fullName: string): Segment[] {
@@ -82,7 +87,7 @@ function explicitContext(segment: Segment, label: string) {
     const match = skillMatch(label, input);
     if (!match) return null;
     const prefix = input.slice(0, match.index);
-    const action = prefix.match(/(?:^|[.;]\s*|[-•]\s+)((?:membuat|merancang|mendesain|mengembangkan|mengedit|mengolah|menganalisis|mengelola|membangun|membantu|memimpin|built|created|designed|developed|edited|managed|analy[sz]ed|led|assisted)\s+[^.;:\n]{3,220}?\b(?:dengan|pakai|memakai|menggunakan|using|with|in)\s+)$/iu);
+    const action = prefix.match(/(?:^|[.;]\s*|[-•]\s+)((?:membuat|merancang|mendesain|menyiapkan|mengembangkan|mengedit|mengolah|menganalisis|mengelola|membangun|membantu|memimpin|built|created|designed|prepared|developed|edited|managed|analy[sz]ed|led|assisted)\s+[^.;:\n]{3,220}?\b(?:dengan|pakai|memakai|menggunakan|using|with|in)\s+)$/iu);
     if (!action || /\b(?:belum|tidak|rencana|ingin|never|learning to|planning)\b/iu.test(action[1])) return null;
     const context = action[1] + match[0];
     const evidence: NonNullable<Claim['extraEvidence']> = [{ field: 'CONTEXT', cvQuote: context.slice(-180) }];
@@ -106,23 +111,32 @@ function proposedClaims(response: unknown) {
 }
 
 export function buildCandidatePreparation(segments: Segment[], rubric: PackagePayload, job: CandidateJob,
-    responses: unknown[], { recoverStored = false, alternativeOnly = false } = {}) {
-    const { criterion, duty } = alternativeCriterion(rubric, job);
+    responses: unknown[], { recoverStored = false, alternativeOnly = false, coreIds }: { recoverStored?: boolean; alternativeOnly?: boolean; coreIds?: string[] } = {}) {
+    const priorityCriteria = coreIds ? rubric.criteria.filter(row => coreIds.includes(row.id)) : rubric.criteria;
+    const { criterion, duty } = alternativeCriterion({ ...rubric, criteria: priorityCriteria }, job);
     if (!criterion) throw new Error('JOB_CONTEXT_FAILED');
     const alternate = () => alternativePlan(criterion, duty);
-    if (alternativeOnly) return { payload: alternate(), rejected: 0, proposals: 0 };
-
     const byId = new Map(segments.map(segment => [segment.id, segment]));
     const criteria = new Map(rubric.criteria.map(row => [row.id, row]));
     const requested = (job.jobSkills ?? []).flatMap(row => row.skill ? [{
         id: row.skillId ?? row.skill.name, required: row.isRequired === true, name: row.skill.name,
         labels: [row.skill.name, ...(row.skill.aliases ?? []).flatMap(alias => alias.alias ? [alias.alias] : [])],
-        keys: new Set([normalizeSkillKey(row.skill.name), ...(row.skill.aliases ?? []).map(alias => alias.aliasKey)]),
+        keys: new Set([normalizeSkillKey(row.skill.name), ...(row.skill.aliases ?? []).map(alias => alias.aliasKey ?? normalizeSkillKey(alias.alias ?? ''))]),
     }] : []);
+    const alignedSkills = (rubric.roleRubric?.criteria ?? []).flatMap(criterion => (criterion.sources ?? [])
+        .filter(source => source.kind === 'SKILL').map(source => [source.id, { source, criterion }] as const));
+    const requestedKeys = new Set(requested.flatMap(row => [...row.keys]));
+    for (const [id, { source }] of alignedSkills) {
+        const key = normalizeSkillKey(source.text);
+        if (!source.original || requestedKeys.has(key)) continue;
+        requested.push({ id, name: source.text, required: true, labels: [source.text], keys: new Set([key]) });
+        requestedKeys.add(key);
+    }
     const catalog = (label: string) => {
         const matches = requested.filter(row => row.keys.has(normalizeSkillKey(label)));
         return matches.length === 1 ? matches[0] : undefined;
     };
+    const rubricBySkill = new Map(alignedSkills.map(([id, { criterion }]) => [id, criterion]));
     function makeClaim(segment: Segment, label: string, criterionId: string, relevance: 'CORE' | 'SUPPORTING', allowContext = true): RankedClaim | null {
         const sourceLabel = usableMention(segment, label);
         if (!sourceLabel) return null;
@@ -139,12 +153,13 @@ export function buildCandidatePreparation(segments: Segment[], rubric: PackagePa
                 extraEvidence: context?.evidence ?? [] } };
     }
 
-    const proposals = responses.flatMap(proposedClaims);
+    const proposals = alternativeOnly ? [] : responses.flatMap(proposedClaims);
     const ranked: RankedClaim[] = [];
     for (const proposal of proposals) {
         const label = skillLabel(proposal.skillText ?? (recoverStored ? proposal.skill : undefined));
         if (!label || typeof proposal.criterionId !== 'string' || !criteria.has(proposal.criterionId) ||
             proposal.relevance !== 'CORE' && proposal.relevance !== 'SUPPORTING') continue;
+        if (coreIds && isExperienceSentence(label) && !catalog(label)) continue;
         let selected = typeof proposal.sourceRef === 'string' ? byId.get(proposal.sourceRef) : undefined;
         let allowContext = true;
         if (!selected && proposal.sourceRef === undefined && recoverStored && typeof proposal.skill === 'string' && typeof proposal.quote === 'string') {
@@ -158,31 +173,54 @@ export function buildCandidatePreparation(segments: Segment[], rubric: PackagePa
             }
         }
         const accepted = selected && makeClaim(selected, label, proposal.criterionId, proposal.relevance, allowContext);
-        if (accepted) ranked.push(accepted);
+        const labelMatches = coreIds ? matchingCriterion(label) : undefined;
+        if (accepted && (!labelMatches || accepted.claim.criterionId === labelMatches.id)) ranked.push(accepted);
     }
     const rejected = proposals.length - ranked.length;
-    if (!ranked.length) {
+    function matchingCriterion(label: string) {
+        const skill = catalog(label);
+        const labels = skill?.labels ?? [label];
+        const direct = rubric.criteria.filter(item => labels.some(term => skillMatch(normalize(term), normalize(item.name + ' ' + item.requirementRef))));
+        if (!coreIds) return direct[0];
+        // All job criteria remain visible to the model, even when one wasn't selected for the interview.
+        // A known skill linked to a different criterion cannot be borrowed by the live agenda.
+        const explicit = rubricBySkill.get(skill?.id ?? '');
+        if (explicit) return explicit;
+        return direct.length === 1 ? direct[0] : undefined;
+    }
+    const requiredSkillMentions: NonNullable<CandidatePayload['requiredSkillMentions']> = {};
+    if (coreIds || !alternativeOnly && !ranked.length) {
         for (const row of requested) {
+            if (alternativeOnly && !row.required) continue;
+            const selected = new Set(ranked.filter(item => item.key === 'catalog:' + row.id).map(item => item.claim.criterionId));
             for (const value of row.labels) {
                 const label = skillLabel(value);
                 if (!label || catalog(label)?.id !== row.id) continue;
-                const source = segments.find(segment => usableMention(segment, label));
-                if (!source) continue;
-                const linked = rubric.criteria.find(item => row.labels.some(term => skillMatch(normalize(term), normalize(item.name + ' ' + item.requirementRef)))) ?? criterion;
-                const accepted = makeClaim(source, label, linked.id, row.required ? 'CORE' : 'SUPPORTING');
-                if (accepted) { ranked.push(accepted); break; }
+                const mentions = segments.filter(segment => usableMention(segment, label));
+                if (!mentions.length) continue;
+                const experience = mentions.find(segment => explicitContext(segment, label));
+                if (coreIds && row.required) {
+                    requiredSkillMentions[row.id] = experience || requiredSkillMentions[row.id] === 'CV_EXAMPLE' ? 'CV_EXAMPLE' : 'CV_MENTION';
+                }
+                if (alternativeOnly) continue;
+                const linked = matchingCriterion(label) ?? (coreIds ? undefined : criterion);
+                if (!linked || selected.has(linked.id) || coreIds && !coreIds.includes(linked.id)) continue;
+                const accepted = makeClaim(experience ?? mentions[0], label, linked.id, row.required ? 'CORE' : 'SUPPORTING');
+                if (accepted) ranked.push({ ...accepted, priority: accepted.priority + 3 });
             }
         }
     }
 
-    const seen = new Set<string>(), claims: Claim[] = [];
+    const seen = new Set<string>(), covered = new Set<string>(), claims: Claim[] = [];
     ranked.sort((a, b) => a.priority - b.priority || Number(b.claim.scope === 'CONTEXTUAL') - Number(a.claim.scope === 'CONTEXTUAL'));
     for (const { claim, key } of ranked) {
-        if (seen.has(key)) continue;
+        if (seen.has(key) || coreIds && (!coreIds.includes(claim.criterionId) || covered.has(claim.criterionId))) continue;
         seen.add(key);
+        covered.add(claim.criterionId);
         claims.push({ ...claim, id: `skill-${claims.length}`, question: claims.length ? claim.question : openConversation(claim.question) });
         if (claims.length === TIMED_CONVERSATION.maxCore) break;
     }
     const payload = claims.length ? { claims, limitations: [], alternativeCriterionId: null } : alternate();
+    if (coreIds) payload.requiredSkillMentions = requiredSkillMentions;
     return { payload, rejected, proposals: proposals.length };
 }

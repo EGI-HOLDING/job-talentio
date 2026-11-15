@@ -27,7 +27,7 @@ export function ScreeningResult({result,claims,questions=[],onEvidence,onNoteCon
          <strong>{row.name}</strong><span className={s.claimScore}>{row.level===null?interviewClaimLabel[row.state]:`${row.level}/4`}</span>
          <DirectionalIcon direction={expanded===row.criterionId?'up':'down'} size={16}/>
        </summary>
-       <div className={s.claimBody}><p>{row.reason}</p>{row.clarity!==null&&<p>Kejelasan penjelasan · {row.clarity}/4</p>}
+       <div className={s.claimBody}><p>{row.reason}</p>{row.reviewLabels?.map(label=><p key={label}>{label}</p>)}{row.clarity!==null&&<p>{`Kejelasan penjelasan \u00b7 ${row.clarity}/4`}</p>}
          {row.evidence.map((e,i)=><div key={i} className={s.evidenceGroup}>
            {e.questionText&&<div className={s.evidence}><span>Pertanyaan Tara</span><p>{e.questionText}</p></div>}
            <div className={s.evidence}><span>Jawaban kandidat</span><p>{e.quote}</p></div>

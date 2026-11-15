@@ -51,7 +51,10 @@ model AiScreeningSession {
   taraInterview Json?
   taraDeadlineAt DateTime?
   taraAdvanceAt DateTime?
+  voiceCompletion Json?
+  voiceDeadlineAt DateTime?
   voice VoiceInterview?
+  resumedVoices VoiceInterview[] @relation("VoiceContinuation")
   id String @id @default(cuid())
   legacyKey String? @unique
   invitation ScreeningInvitation?
@@ -91,6 +94,7 @@ model AiScreeningSession {
   @@index([status, updatedAt])
   @@index([taraDeadlineAt, status])
   @@index([taraAdvanceAt, status])
+  @@index([status, voiceDeadlineAt])
 }
 
 model AiScreeningQuestion {
@@ -2843,6 +2847,13 @@ model VoiceInterview {
   id String @id @default(cuid())
   sessionId String? @unique
   session AiScreeningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  resumedForId String?
+  resumedFor AiScreeningSession? @relation("VoiceContinuation", fields: [resumedForId], references: [id], onDelete: SetNull)
+  connectionNumber Int @default(1)
+  attemptKey String?
+  reservedVoiceMs Int?
+  billedVoiceMs Int?
+  observedVoiceMs Int?
   status String @default("CREATING")
   providerId String? @unique
   model String
@@ -2850,6 +2861,7 @@ model VoiceInterview {
   promptSnapshot Json
   startedAt DateTime @default(now())
   heartbeatAt DateTime @default(now())
+  mediaConnectedAt DateTime?
   warningAt DateTime?
   closingAt DateTime?
   endedAt DateTime?
@@ -2862,6 +2874,7 @@ model VoiceInterview {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   fragments VoiceFragment[]
+  @@unique([resumedForId, connectionNumber])
   @@index([status, leaseUntil])
 }
 model VoiceFragment {

@@ -17,6 +17,7 @@ export type ScreeningReport = {
     finalScore: number | null;
     independentScores?: boolean;
     result: EvaluationPayload;
+    voiceCompletionStatus?: string;
     rubric: PackagePayload;
     plan: CandidatePayload;
     questionLabels?: Record<string, string>;
@@ -70,7 +71,9 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
         assessment?.state==='PARTIAL'||!assessment&&voice?.partial?'Hasil parsial — perlu ditinjau HR':null);
     if(notice){doc.roundedRect(44,y,230,23,5).fill('#fff2dc');text(notice,52,y+5,214,9,true,'#96621c');y+=33;}
     if (role) {
-        y += text(role.score === null ? 'Skor akhir belum lengkap' : 'Skor akhir ' + val(role.score) + ' / 100', 44, y, width, 19, true, purple) + 7;
+        const unresolvedTitle = data.voiceCompletionStatus === 'INTERRUPTED' ? 'Wawancara terhenti' :
+            data.voiceCompletionStatus === 'REVIEW_REQUIRED' ? 'Penilaian perlu dipulihkan' : 'Skor akhir belum lengkap';
+        y += text(role.score === null ? unresolvedTitle : 'Skor akhir ' + val(role.score) + ' / 100', 44, y, width, 19, true, purple) + 7;
         const missing = { CV: 'Penilaian CV belum tersedia untuk rubrik ini.', RUBRIC: 'Lowongan belum memiliki kompetensi inti terstruktur.',
             COVERAGE: 'Sebagian kompetensi belum memiliki bukti atau kesempatan menjawab yang cukup.' };
         if (role.missing.length) y += text(role.missing.map(key => missing[key]).join(' '), 44, y, width, 10, false, muted) + 8;
@@ -160,7 +163,7 @@ export async function renderScreeningReport(data: ScreeningReport): Promise<Buff
     const fullRoleQuotes = role?.version === TAKA_ROLE_EVIDENCE_VERSION || role?.version === TAKA_ROLE_VALIDATION_VERSION;
     const records: Array<{ title: string; score: number | null; reason: string; quote?: string; evidence?: { questionId: string; quote: string };
         quotes?: Array<{ questionId: string; quote: string }>; pair?: EvaluationPayload['claims'][number]['contradictions'][number]; status: string }> =
-        role ? role.criteria.map(row => ({ title: row.name, score: row.level, reason: row.reason,
+        role ? role.criteria.map(row => ({ title: row.name, score: row.level, reason: [row.reason, ...(row.reviewLabels ?? [])].join(' '),
         quote: undefined as string | undefined, evidence: row.evidence[0], quotes: fullRoleQuotes ? row.evidence : undefined, pair: row.discrepancy,
         status: row.state === 'ASSESSED' ? 'Kejelasan ' + row.clarity + '/4' : coverageLabels[row.state] })) :
         modern ? data.result.claims.map((result, i) => ({ title: 'Klaim ' + (i + 1), score: result.score ?? null,

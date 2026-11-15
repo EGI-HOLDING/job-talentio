@@ -5,7 +5,7 @@ import { recruiterJobInclude } from '../matching/recruiter-matching.service';
 import { hash, json, normalizedText, screeningEnabled, PDF_TEMPLATE_VERSION } from './screening.policy';
 import { freezePromptRegistry } from './prompts/registry';
 import { isCurrentConversation, newConversationPolicy } from './conversation.policy';
-import { createRoleRubric, roleAssessmentEnabled } from './role-rubric';
+import { createRoleRubric, roleAssessmentEnabled, ROLE_RUBRIC_VERSION, type RoleRubric } from './role-rubric';
 import { liveAgendaRequest } from './tara-live-agenda';
 export async function enqueueWork(db: Pick<Prisma.TransactionClient, 'aiScreeningWork'>, kind: string, subjectId: string, key = kind + ':' + subjectId) {
     return db.aiScreeningWork.upsert({ where: { key }, create: { key, kind, subjectId }, update: {} });
@@ -23,7 +23,7 @@ export async function enqueueEvaluationPdf(db: Pick<Prisma.TransactionClient, 'a
 export class ScreeningPackets {
     private cursor: string | undefined;
     constructor(private db: PrismaService) { }
-    async sync(jobId: string, invited: boolean | 'VOICE' = false) {
+    async sync(jobId: string, invited: boolean | 'VOICE' = false, version?: RoleRubric['version']) {
         if (!screeningEnabled())
             return null;
         return this.db.$transaction(async (tx) => {
@@ -32,7 +32,9 @@ export class ScreeningPackets {
                 jobSkills: { include: { skill: { include: { aliases: { select: { alias: true, aliasKey: true } } } } } } } });
             if (!job || job.company.isBanned || job.company.anonymizedAt || !invited && (job.status !== 'PUBLISHED' || Boolean(job.benefit?.expiresAt && job.benefit.expiresAt <= new Date())))
                 return null;
-            const document = await tx.aiCompanyDocument.findFirst({ where: { companyId: job.companyId, status: 'READY' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+            const roleRubric = invited && (version || roleAssessmentEnabled()) ? createRoleRubric(job, version) : undefined;
+            const aligned = roleRubric?.version === ROLE_RUBRIC_VERSION;
+            const document = aligned ? null : await tx.aiCompanyDocument.findFirst({ where: { companyId: job.companyId, status: 'READY' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
             const company = { name: job.company.name, description: job.company.description, industryId: job.company.industryId, profile: document?.text ?? null, profileChecksum: document?.checksum ?? null };
             const policy = newConversationPolicy();
             const source = { title: normalizedText(job.title), description: normalizedText(job.description), jobTitleId: job.jobTitleId, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin,
@@ -41,10 +43,12 @@ export class ScreeningPackets {
                     aliases: s.skill.aliases.map(alias => alias.alias).sort() })).sort((a, b) => a.skillId.localeCompare(b.skillId)),
                 languages: job.jobLanguages.map(l => ({ code: l.language.code, minLevel: l.minLevel, isRequired: l.isRequired, provenance: l.provenance })).sort((a, b) => a.code.localeCompare(b.code)), company };
             const promptSnapshot = freezePromptRegistry();
-            const roleRubric = invited && roleAssessmentEnabled() ? createRoleRubric(job) : undefined;
-            const liveAgendaPrompt = invited === 'VOICE' && roleRubric?.interviewIds.length ? liveAgendaRequest(roleRubric).preset : undefined;
-            const fingerprint = hash([source, policy.version, promptSnapshot, policy,
-                ...(roleRubric ? [roleRubric.revision] : []), ...(liveAgendaPrompt ? [liveAgendaPrompt] : [])]);
+            const liveAgendaPrompt = (aligned || invited === 'VOICE') && roleRubric?.interviewIds.length ? liveAgendaRequest(roleRubric).preset : undefined;
+            // Company context and the invitation channel do not change a competency rubric.
+            const fingerprint = aligned ? hash([roleRubric.revision, liveAgendaPrompt, job.title, job.description, source.experienceLevel,
+                source.skills, source.languages, job.jobLanguages.map(row => [row.language.code, row.language.name]).sort()]) :
+                hash([source, policy.version, promptSnapshot, policy,
+                    ...(roleRubric ? [roleRubric.revision] : []), ...(liveAgendaPrompt ? [liveAgendaPrompt] : [])]);
             const found = await tx.aiScreeningPackage.findUnique({ where: { jobId_fingerprint: { jobId, fingerprint } } });
             if (found)
                 return found;

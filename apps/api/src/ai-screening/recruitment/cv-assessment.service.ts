@@ -40,7 +40,7 @@ export class CvAssessmentService {
       if (pendingStatus.includes(call.status)) return this.observe(run, checkpoint, call);
       return this.consume(run, checkpoint, call);
     }
-    const rubric = frozenRoleRubric(row.jobSnapshot);
+    const rubric = (row.jobSnapshot as { resolvedRoleRubric?: RoleRubric } | null)?.resolvedRoleRubric ?? frozenRoleRubric(row.jobSnapshot);
     const extractionVersion = rubric || roleAssessmentEnabled() && !row.jobSnapshot ? CV_EXTRACTION_VERSION : undefined;
     const model = extractionVersion ? 'gpt-6-luna' : this.config.get<string>('CV_SCORING_MODEL')?.trim() || 'gpt-6-luna';
     if (!checkpoint && !call && extractionVersion && row.checksum) {
@@ -306,7 +306,8 @@ export class CvAssessmentService {
           wordVisualFallback: checkpoint.wordVisualFallback },
         roleAssessment: checkpoint.roleRubric ? { version: checkpoint.roleRubric.version, rubricRevision: checkpoint.roleRubric.revision,
           state: checked.score === null ? 'NOT_APPLICABLE' : 'READY',
-          criteria: checkpoint.roleRubric.criteria.map(row => ({ id: row.id, name: row.name, requirement: row.requirementRef })) } : undefined,
+          criteria: checkpoint.roleRubric.criteria.map(row => ({ id: row.id, name: row.name, requirement: row.requirementRef,
+            ...(row.sources ? { sources: row.sources, equivalence: row.equivalence } : {}) })) } : undefined,
       });
     });
   }

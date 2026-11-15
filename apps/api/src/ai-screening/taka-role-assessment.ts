@@ -7,7 +7,7 @@ import { redactScreeningContacts, scoreScreening } from './screening.policy';
 import type { CandidatePayload, ClaimResult, EvaluationPayload, JsonSchema } from './screening.schemas';
 import { chatTakaTurns } from './taka-interview';
 import type { RoleVoiceEvidence } from './voice/voice-role';
-import { TAKA_ROLE_EVIDENCE_VERSION, TAKA_ROLE_VALIDATION_VERSION } from './taka-versions';
+import { TAKA_LIVE_COMPLETION_VERSION, TAKA_ROLE_EVIDENCE_VERSION, TAKA_ROLE_VALIDATION_VERSION } from './taka-versions';
 
 type Opportunity = 'ANSWERED' | 'SILENCE' | 'INTERRUPTED' | 'UNVERIFIED' | 'PLAYBACK_INTERRUPTED';
 export type RoleTranscriptEntry = {
@@ -19,6 +19,15 @@ export type RoleTranscriptEntry = {
     topicId?: string;
     question?: boolean;
     opportunity?: Opportunity;
+    connectionId?: string;
+    playback?: 'CONFIRMED' | 'HEALTHY_UNVERIFIED' | 'UNKNOWN' | 'INTERRUPTED';
+    clarification?: boolean;
+    cutShort?: boolean;
+};
+type LivePlaybackContext = {
+    playbackHealthy: boolean; connectionId: string;
+    playWindowNear: (question: RoleVoiceEvidence) => boolean;
+    cutShortAfterMs?: number;
 };
 type Grade = {
     criterionId: string;
@@ -28,12 +37,14 @@ type Grade = {
     state: 'ASSESSED' | 'NOT_ASKED' | 'INSUFFICIENT_OPPORTUNITY' | 'TECHNICAL_INTERRUPTION' | 'PLAYBACK_UNVERIFIED' | 'ASSESSMENT_UNAVAILABLE';
     reason: string;
     questionRefs: string[];
+    reviewReasons?: string[];
+    reviewLabels?: string[];
     evidence: Array<{ questionId: string; questionRef?: string; questionText?: string; quote: string }>;
     discrepancy?: ClaimResult['contradictions'][number];
 };
 type Components = { [Key in keyof typeof ROLE_WEIGHTS]: number | null };
 export type RoleAssessment = {
-    version: typeof ROLE_ASSESSMENT_VERSION | typeof TAKA_ROLE_EVIDENCE_VERSION | typeof TAKA_ROLE_VALIDATION_VERSION;
+    version: typeof ROLE_ASSESSMENT_VERSION | typeof TAKA_ROLE_EVIDENCE_VERSION | typeof TAKA_ROLE_VALIDATION_VERSION | typeof TAKA_LIVE_COMPLETION_VERSION;
     rubricRevision: string;
     state: 'COMPLETE' | 'INCOMPLETE';
     missing: Array<'CV' | 'RUBRIC' | 'COVERAGE'>;
@@ -61,7 +72,9 @@ export function roleChatTranscript(questions: Parameters<typeof chatTakaTurns>[0
     });
 }
 
-export function roleLiveTranscript(turns: Array<RoleVoiceEvidence & { playbackInterrupted?: boolean }>, interrupted: boolean, direct = false) {
+export function roleLiveTranscript(turns: Array<RoleVoiceEvidence & { playbackInterrupted?: boolean }>, interrupted: boolean, direct = false,
+    completion?: LivePlaybackContext) {
+    if (completion) return completedLiveTurns(turns, interrupted, completion);
     return turns.flatMap<RoleTranscriptEntry>((turn, index) => {
         const { id, text, startMs, topicId, speaker, question, heard } = turn;
         if (speaker !== 'CANDIDATE' && speaker !== 'TARA') return [];
@@ -76,6 +89,44 @@ export function roleLiveTranscript(turns: Array<RoleVoiceEvidence & { playbackIn
         const opportunity = turn.playbackInterrupted ? 'PLAYBACK_INTERRUPTED' : !heard ? 'UNVERIFIED' : answered && completed ? 'ANSWERED' : 'INTERRUPTED';
         return [{ id, text, startMs, endMs, topicId, speaker, question, opportunity }];
     });
+}
+
+function completedLiveTurns(turns: Array<RoleVoiceEvidence & { playbackInterrupted?: boolean }>, interrupted: boolean,
+    { playbackHealthy, connectionId, playWindowNear, cutShortAfterMs }: LivePlaybackContext) {
+    const entries: RoleTranscriptEntry[] = turns.map(turn => {
+        const { id, speaker, text, startMs, endMs, topicId } = turn;
+        return { id, speaker: speaker === 'TARA' ? 'TARA' : 'CANDIDATE', text, startMs, endMs, topicId, connectionId,
+            ...(speaker === 'TARA' && turn.question ? { question: true, endMs: turn.questionEndMs,
+                playback: turn.playbackInterrupted ? 'INTERRUPTED' : turn.heard ? 'CONFIRMED' :
+                    playbackHealthy && playWindowNear(turn) ? 'HEALTHY_UNVERIFIED' : 'UNKNOWN' } : {}),
+            ...(speaker === 'CANDIDATE' && clarificationRequest(text) ? { clarification: true } : {}),
+        };
+    });
+    const last = entries.at(-1);
+    if (interrupted && last?.speaker === 'CANDIDATE' &&
+        (cutShortAfterMs !== undefined ? last.endMs >= cutShortAfterMs : /(?:\.{2,}|[…–—-])\s*$/u.test(last.text))) last.cutShort = true;
+    for (const [index, turn] of entries.entries()) {
+        if (!turn.question) continue;
+        const next = entries.findIndex((item, position) => position > index && item.question);
+        const answers = entries.slice(index + 1, next < 0 ? undefined : next).filter(answer => inRoleAnswerWindow(answer, turn,
+            next < 0 ? undefined : entries[next].startMs));
+        turn.opportunity = turn.playback === 'INTERRUPTED' ? 'PLAYBACK_INTERRUPTED' :
+            turn.playback !== 'CONFIRMED' ? 'UNVERIFIED' :
+                answers.some(answer => !answer.cutShort && !answer.clarification && answer.text.trim()) ? 'ANSWERED' : 'INTERRUPTED';
+    }
+    return entries;
+}
+
+export function inRoleAnswerWindow(answer: RoleTranscriptEntry, tested: RoleTranscriptEntry, next?: number) {
+    return answer.speaker === 'CANDIDATE' && answer.connectionId === tested.connectionId &&
+        answer.startMs >= (tested.connectionId ? Math.max(tested.startMs, tested.endMs - 500) : tested.endMs - 150) &&
+        answer.endMs >= tested.endMs && answer.startMs < (next ?? Infinity);
+}
+
+export function clarificationRequest(text: string) {
+    if (requestsClarification(text)) return true;
+    const normalized = text.trim().replace(/^(?:(?:oh|maaf|sorry|bentar|sebentar)[,.\s]+)+/iu, '');
+    return /^(?:(?:boleh|bisa) (?:kasih|beri|berikan|jelasin) contoh(?:nya)?(?: dulu| ya)?|(?:contoh(?:nya)?\s+)?(?:data|kasus|skenario|tugas|pertanyaan|konteks|bagian|proyek)(?:nya)?(?: (?:yang|ini|itu))? (?:apa(?:an)?(?: sih)?|yang mana|gimana|bagaimana)(?: ya)?|(?:maksudnya|yang dimaksud) (?:apa(?:an)?|gimana|yang mana)|bisa (?:ulangi|jelaskan|ulang|perjelas)(?: pertanyaannya)?)(?:[?.!, ]+contoh(?:nya)?)?[?.! ]*$/iu.test(normalized);
 }
 
 function requestsClarification(text: string) {
@@ -210,10 +261,16 @@ function gradeState(level: number | null, questions: RoleTranscriptEntry[], judg
 }
 
 export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, RoleJudgement>, cvScore: number | null,
-    interrupted: boolean, notes?: EvaluationPayload['taraInterview'], evidencePolicy?: { unavailable: ReadonlySet<string> }) {
+    interrupted: boolean, notes?: EvaluationPayload['taraInterview'], evidencePolicy?: {
+        unavailable: ReadonlySet<string>;
+        diagnostics?: ReadonlyMap<string, { questionRefs: string[]; reasons: string[]; labels?: string[] }>;
+        includePartial?: boolean;
+        version?: typeof TAKA_LIVE_COMPLETION_VERSION;
+    }) {
     const grades = input.criteria.map<Grade>(criterion => {
         let row = judgements.get(criterion.id);
-        const judgedRefs = new Set([row?.questionRef, row?.redirectRef]);
+        const diagnostic = evidencePolicy?.diagnostics?.get(criterion.id);
+        const judgedRefs = new Set([row?.questionRef, row?.redirectRef, ...(diagnostic?.questionRefs ?? [])]);
         const questions = input.transcript.filter(turn => turn.question && (turn.topicId === criterion.id || !turn.topicId && judgedRefs.has(turn.id)));
         const statement = evidencePolicy ? undefined : recordedRoleDecline(input, questions);
         if (statement && row?.level && row.evidence.every(id => input.snippets.get(id)?.ref === statement.questionId)) row = undefined;
@@ -224,11 +281,13 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
         const state = gradeState(level, questions, row, evidencePolicy?.unavailable.has(criterion.id) ?? false, Boolean(evidencePolicy), interrupted);
         const evidence = declined ? [declined] : row?.evidence.map(id => {
             const snippet = input.snippets.get(id)!;
-            const possibleRef = row.redirectRef ?? row.questionRef ?? undefined;
-            const question = possibleRef && input.turns.get(possibleRef);
             const answer = input.turns.get(snippet.ref)!;
-            const questionRef = !evidencePolicy ? possibleRef : question && answer.endMs >= question.endMs &&
-                !input.transcript.some(turn => turn.question && turn.startMs > question.startMs && turn.startMs < answer.startMs) ? question.id : undefined;
+            const questionRef = !evidencePolicy ? row.redirectRef ?? row.questionRef ?? undefined :
+                [row.redirectRef, row.questionRef].find(ref => {
+                    const question = ref ? input.turns.get(ref) : undefined;
+                    return question?.question && inRoleAnswerWindow(answer, question, input.transcript.find(turn =>
+                        turn.question && turn.connectionId === question.connectionId && turn.startMs > question.startMs)?.startMs);
+                }) ?? undefined;
             return { questionId: snippet.ref, questionRef, questionText: questionRef ? input.turns.get(questionRef)?.text : undefined, quote: snippet.text };
         }) ?? [];
         const claim = input.plan.claims.find(c => c.criterionId === criterion.id);
@@ -237,6 +296,7 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
             reason: state === 'ASSESSED' ? row?.level != null ? row.reason : declined ? 'Kandidat menyatakan belum bisa menjawab setelah mendapat kesempatan.' :
                 'Waktu menjawab selesai dengan koneksi terkonfirmasi.' : state === 'INSUFFICIENT_OPPORTUNITY' && evidencePolicy && row ? row.reason : missingReason[state],
             questionRefs: [...new Set([...questions.map(q => q.id), ...(row?.questionRef ? [row.questionRef] : []), ...(row?.redirectRef ? [row.redirectRef] : [])])],
+            ...(diagnostic?.reasons.length && level === null ? { reviewReasons: diagnostic.reasons, reviewLabels: diagnostic.labels } : {}),
             evidence, ...(claim && difference && level !== null ? { discrepancy: { left: { source: 'CV', ref: claim.id, quote: claim.quote },
                 right: { source: 'ANSWER', ref: difference.ref, quote: difference.text } } } : {}) };
     });
@@ -251,12 +311,12 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
         Math.round((cvScore * ROLE_WEIGHTS.cv + competency * ROLE_WEIGHTS.competency + explanation * ROLE_WEIGHTS.explanation) / 10) / 10;
     const contribution = (value: number | null, weight: number) => value === null ? null : Math.round(value * weight) / 100;
     const measured = grades.filter(row => row.level !== null);
-    const roleAssessment: RoleAssessment = { version: evidencePolicy ? TAKA_ROLE_VALIDATION_VERSION : ROLE_ASSESSMENT_VERSION, rubricRevision: input.rubric.revision,
+    const roleAssessment: RoleAssessment = { version: evidencePolicy?.version ?? (evidencePolicy ? TAKA_ROLE_VALIDATION_VERSION : ROLE_ASSESSMENT_VERSION), rubricRevision: input.rubric.revision,
         state: score === null ? 'INCOMPLETE' : 'COMPLETE', missing, components: { cv: cvScore, competency, explanation },
         contributions: { cv: contribution(cvScore, ROLE_WEIGHTS.cv), competency: contribution(competency, ROLE_WEIGHTS.competency),
             explanation: contribution(explanation, ROLE_WEIGHTS.explanation) },
         weights: ROLE_WEIGHTS, score, coverage, criteria: grades,
-        ...(evidencePolicy && measured.length > 0 && measured.length < grades.length ? { partial: {
+        ...(evidencePolicy && evidencePolicy.includePartial !== false && measured.length > 0 && measured.length < grades.length ? { partial: {
             competency: scoreScreening(measured.map(row => ({ score: row.level })))!,
             explanation: scoreScreening(measured.map(row => ({ score: row.clarity })))!,
         } } : {}) };

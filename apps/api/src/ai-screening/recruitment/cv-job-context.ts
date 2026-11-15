@@ -1,14 +1,23 @@
 import { Prisma } from '@prisma/client';
 import { json } from '../screening.policy';
 import { queueCvProviderCleanup } from './cv-assessment-store';
-import { createRoleRubric, roleAssessmentEnabled } from '../role-rubric';
+import { createRoleRubric, frozenRoleRubric, roleAssessmentEnabled, ROLE_RUBRIC_VERSION, type RoleRubric } from '../role-rubric';
 
 export const scoreJobInclude = { jobSkills: { include: { skill: { include: { aliases: { select: { alias: true } } } } } }, jobLanguages: { include: { language: true } } } satisfies Prisma.JobPostInclude;
-export function scoringJob(job: Prisma.JobPostGetPayload<{ include: typeof scoreJobInclude }>) {
+export function scoringJob(job: Prisma.JobPostGetPayload<{ include: typeof scoreJobInclude }>, version?: RoleRubric['version']) {
   return { title: job.title, description: job.description, experienceLevel: job.experienceLevel, experienceYearsMin: job.experienceYearsMin,
     skills: job.jobSkills.map(s => ({ name: s.skill.name, required: s.isRequired, level: s.minLevel })).sort((a,b)=>a.name.localeCompare(b.name)),
     languages: job.jobLanguages.map(l => ({ name: l.language.name, required: l.isRequired, level: l.minLevel })).sort((a,b)=>a.name.localeCompare(b.name)),
-    ...(roleAssessmentEnabled() ? { roleRubric: createRoleRubric(job) } : {}) };
+    ...(version || roleAssessmentEnabled() ? { roleRubric: createRoleRubric(job, version) } : {}) };
+}
+
+export function pendingCvRubric(snapshot: unknown) {
+  return frozenRoleRubric(snapshot)?.version === ROLE_RUBRIC_VERSION && !(snapshot as { resolvedRoleRubric?: RoleRubric }).resolvedRoleRubric;
+}
+
+export function cvJobRequirements(snapshot: unknown) {
+  const { resolvedRoleRubric: _resolved, ...requirements } = (snapshot as { resolvedRoleRubric?: RoleRubric } | null) ?? {};
+  return requirements;
 }
 export function sameScoringJob(a: unknown, b: unknown): boolean {
   const canonical = (value: unknown): unknown => {

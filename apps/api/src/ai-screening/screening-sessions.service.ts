@@ -11,7 +11,7 @@ import { freezeHrSubmission } from '../matching/recruiter-evidence';
 import { enqueueWork, ScreeningPackets } from './screening-packets.service';
 import { answerDeadline, isExpired, json, MAX_ANSWER_CHARS, SESSION_LEASE_MS, screeningEnabled } from './screening.policy';
 import type { CandidatePayload, PackagePayload } from './screening.schemas';
-import { ScreeningCandidatePlans } from './screening-candidate-plans.service';
+import { candidatePlanFingerprint, ScreeningCandidatePlans } from './screening-candidate-plans.service';
 import { screeningPreparation } from './screening-preparation';
 import { newConversationPolicy, conversationPolicy, publicConversationPolicy, requireCurrentConversation, isCurrentConversation } from './conversation.policy';
 import { advanceTara, recordTaraOpportunity, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS,
@@ -63,7 +63,7 @@ export class ScreeningSessions {
         const preparation = screeningPreparation(row);
         const requiresRecovery = /UNCERTAIN|REQUIRES_REVIEW|UNCONFIRMED|RETRY_LIMIT/.test([row.error, row.package?.error, row.currentPlan?.error].join(' ')) ||
             Boolean((preparation.status === 'FAILED' || row.error) && await this.db.aiScreeningWork.count({ where: {
-                subjectId: { in: [row.id, row.packageId, row.currentPlanId, row.resumeVersionId].filter((v): v is string => Boolean(v)) }, status: 'FAILED', attempts: { gte: 3 },
+                subjectId: { in: [row.id, row.packageId, row.currentPlanId, row.invitation ? null : row.resumeVersionId].filter((v): v is string => Boolean(v)) }, status: 'FAILED', attempts: { gte: 3 },
             } }));
         if (preparation.status === 'FAILED' && requiresRecovery && preparation.reason !== 'CV_UNREADABLE') preparation.reason = 'RECOVERY_REQUIRED';
         const cv = row.cvSnapshot as {
@@ -123,9 +123,13 @@ export class ScreeningSessions {
     }
     async state(user: AuthUser, id: string) {
         let row = await this.owned(user, id);
-        if (row.status === 'DRAFT' && row.resumeId && !isCurrentConversation(row.package?.conversationPolicy)) {
-            await this.plans.request(id);
-            row = await this.owned(user, id);
+        if (row.status === 'DRAFT' && row.resumeId) {
+            const stalePlan = row.invitation && row.resumeVersion && row.package &&
+                row.currentPlan?.fingerprint !== candidatePlanFingerprint(row.resumeVersion, row.package, row.invitation);
+            if (stalePlan || !isCurrentConversation(row.package?.conversationPolicy)) {
+                await this.plans.request(id);
+                row = await this.owned(user, id);
+            }
         }
         if (row.taraDeadlineAt && ['ACTIVE','GENERATING'].includes(row.status) &&
             (+row.taraDeadlineAt - (TARA_SESSION_MS - TARA_COMPLETE_MS) <= Date.now() || row.taraAdvanceAt && +row.taraAdvanceAt <= Date.now())) {
@@ -208,7 +212,8 @@ export class ScreeningSessions {
         // Validate ownership, lease and CV even when preparation is still pending.
         await this.db.$transaction(async tx => {
             const current = await this.lock(tx, id, row.profileId, clientId);
-            const resume = await tx.resume.findFirst({ where: { id: current.resumeId ?? '', profileId: row.profileId, ...(row.invitation ? {} : {deletedAt: null}), fileKey: { not: null } } });
+            const resume = await tx.resume.findFirst({ where: { id: current.resumeId ?? '', profileId: row.profileId,
+                ...(row.invitation ? {} : { deletedAt: null, fileKey: { not: null } }) } });
             if (!resume) throw new BadRequestException('Pilih CV sebelum mulai, ya.');
         });
         const plan = await this.plans.request(id);
@@ -220,29 +225,32 @@ export class ScreeningSessions {
             return this.public(fresh);
         const payload = plan.payload as unknown as CandidatePayload;
         await this.db.$transaction(async (tx) => {
+            let invitedCv: { filename?: string } | null = null;
             if (row.invitation) {
                 await tx.$queryRaw(Prisma.sql`SELECT id FROM "ScreeningInvitation" WHERE id=${row.invitation.id} FOR UPDATE`);
                 await tx.$queryRaw(Prisma.sql`SELECT id FROM "RecruitmentCandidate" WHERE id=${row.invitation.candidateId} FOR UPDATE`);
                 const invite=await tx.screeningInvitation.findUniqueOrThrow({where:{id:row.invitation.id},include:{candidate:{select:{stage:true}}}});if(['HIRED','REJECTED','WITHDRAWN'].includes(invite.candidate.stage))throw new ConflictException('Proses rekrutmen sudah ditutup.');
                 if(invite.status==='CANCELLED'||invite.expiresAt<=new Date())throw new ConflictException('Undangan tidak lagi aktif.');
+                invitedCv = invite.snapshot as { filename?: string } | null;
             }
             await tx.$queryRaw(Prisma.sql `SELECT id FROM "EmployeeProfile" WHERE id=${row.profileId} FOR UPDATE`);
             const session = await this.lock(tx, id, row.profileId, clientId);
             if (session.status !== 'DRAFT')
                 return;
-            const resume = await tx.resume.findFirst({ where: { id: session.resumeId ?? '', profileId: row.profileId, ...(row.invitation ? {} : {deletedAt: null}), fileKey: { not: null } } });
-            if (!resume?.fileKey)
+            const resume = await tx.resume.findFirst({ where: { id: session.resumeId ?? '', profileId: row.profileId,
+                ...(row.invitation ? {} : { deletedAt: null, fileKey: { not: null } }) } });
+            if (!resume)
                 throw new BadRequestException('Pilih CV sebelum mulai, ya.');
             if (session.currentPlanId !== plan.id)
                 throw new ConflictException('Pilihan CV berubah. Muat ulang sebelum mulai.');
-            const version = await tx.resumeVersion.findUniqueOrThrow({ where: { id: plan.resumeVersionId }, include: { employeeEvidence: true } });
-            if (version.fileKey !== resume.fileKey)
+            const version = await tx.resumeVersion.findFirst({ where: { id: plan.resumeVersionId, resumeId: resume.id }, include: { employeeEvidence: true } });
+            if (!version || session.resumeVersionId !== version.id || !row.invitation && version.fileKey !== resume.fileKey)
                 throw new ConflictException('CV berubah. Pilih ulang CV sebelum mulai.');
             const profile = await tx.employeeProfile.findUniqueOrThrow({ where: { id: row.profileId }, include: { languages: { include: { language: true } }, certifications: true } });
             requireCurrentConversation(session.package?.conversationPolicy);
             const topics = transport === 'TEXT'
                 ? taraTopics(payload, fresh.package?.payload as unknown as PackagePayload, true) : null;
-            const now = new Date(), snapshot = { resume: { id: resume.id, title: resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
+            const now = new Date(), snapshot = { resume: { id: resume.id, title: invitedCv?.filename ?? resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
             await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 }, ...(topics ? { taraInterview: json(startTara(topics, true)) } : {}) } });
             if (row.invitation) await tx.screeningInvitation.update({ where: { id: row.invitation.id }, data: { status: 'STARTED' } });
             const startingQuestions = topics?.slice(0, 1) ?? [];
@@ -390,7 +398,7 @@ export class ScreeningSessions {
         if (row.status === 'DRAFT')
             await this.plans.request(id);
         const fresh = await this.owned(user, id);
-        const subjects = [id, fresh.packageId, fresh.currentPlanId, fresh.resumeVersionId].filter((v): v is string => Boolean(v));
+        const subjects = [id, fresh.packageId, fresh.currentPlanId, fresh.invitation ? null : fresh.resumeVersionId].filter((v): v is string => Boolean(v));
         const works = await this.db.aiScreeningWork.findMany({ where: { subjectId: { in: subjects }, status: 'FAILED' } });
         for (const work of works) {
             const uncertain = await this.db.aiScreeningCall.count({ where: { workId: work.id, status: { in: ['UNCERTAIN', 'ERASED'] } } });

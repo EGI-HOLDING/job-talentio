@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
 import { SKILL_CONVERSATION, CURRENT_CONVERSATION, conversationPolicy } from './conversation.policy';
-import { advanceTara, startTara, taraTopics, validTaraDecision, TOPIC_MS, type TaraDecision } from './tara-interview';
+import { advanceTara, startTara, taraTopics, validTaraDecision, type TaraDecision } from './tara-interview';
 import { validateCandidate, type Claim, type PackagePayload } from './screening.schemas';
-import { TaraLiveTurns, taraVerbalStop } from './voice/voice-turns';
-import type { VoiceTurn } from './voice/voice.policy';
 
-async function main() {
+function main() {
     const skills = ['Figma', 'Photoshop', 'SQL', 'Excel'];
     const rubric: PackagePayload = {
         context: 'Buat materi kampanye dan analisis hasil.',
@@ -54,32 +52,7 @@ async function main() {
     assert.equal(next.progress.active,0);
     assert.equal(submit(next.progress,'EXAMPLE').progress.stage,'DONE');
 
-    const live = new TaraLiveTurns(topics);
-    const transcript: VoiceTurn[] = [
-        { id:'v1',speaker:'TARA',text:topics[0].question,startMs:1,endMs:4000,fragmentIds:[1] },
-        { id:'v2',speaker:'CANDIDATE',text:'Saya sedang menjelaskan panjang lebar.',startMs:4200,endMs:170000,fragmentIds:[2] },
-    ];
-    live.issue(topics[0].question,100,true,0);
-    let resolve!: (value: TaraDecision) => void;
-    const pending = new Promise<TaraDecision>(done => { resolve=done; });
-    live.tick(transcript, 172000, 840000, () => pending);
-    live.tick(transcript, 174000, 840000, () => pending);
-    const timed = live.tick(transcript, 100+TOPIC_MS, 840000, () => pending)!;
-    assert.ok(timed.timeout);
-    assert.equal(timed.question, topics[1].question);
-    assert.equal(live.progress.topics[0].note.outcome,'ANSWER_CUT_SHORT');
-    assert.deepEqual(live.progress.topics[0].note.answerRefs,['v2']);
-    live.issue(timed.question!, 100+TOPIC_MS, true, timed.after);
-    resolve(judgment('EXAMPLE'));
-    await pending;
-    assert.equal(live.tick(transcript, 182000, 840000, () => pending),undefined,'stale response may not move the next question');
-    const failed = live.tick(transcript, 206000, 840000, () => pending)!;
-    assert.equal(failed.question,topics[2].question);
-    assert.equal(live.progress.topics[1].note.outcome,'TECHNICAL_INTERRUPTION');
-    assert.equal(live.progress.topics[3].note.outcome,'NOT_ASKED');
-    assert.ok(taraVerbalStop('Saya ingin mengakhiri interview.'));
-    assert.ok(!taraVerbalStop('Saya tidak ingin mengakhiri interview.'));
-    console.log('Tara skill interview: grounded sample, alternatives, directed probes, discrepancy, first-pass coverage, live deadline and stale response passed.');
+    console.log('Tara skill interview: grounded sample, alternatives, directed probes, discrepancy and Chat first-pass coverage passed.');
 }
 
-void main();
+main();

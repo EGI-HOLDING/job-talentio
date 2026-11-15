@@ -5,14 +5,17 @@ import { dirname, join, resolve } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import { ConfigService } from '@nestjs/config';
 import { composePrompt } from './prompts/compose';
-import { CV_EXTRACTION_VERSION, createRoleRubric } from './role-rubric';
+import { CV_EXTRACTION_VERSION, createRoleRubric, ROLE_RUBRIC_VERSION } from './role-rubric';
+import { prepareAlignedRolePackage } from './tara-live-agenda';
 import { completeCvSource, CV_RESPONSE_FORMAT, cvRequest, decodeCvResponse, mergeCvGrades, projectCvScore,
     type CvCheckpoint } from './recruitment/cv-assessment';
 import { prepareCvDocument } from './recruitment/cv-document';
 import { CvProvider, cvTerminal, cvUsage, isCvResponseId, type CvHttp, type CvResponse } from './recruitment/cv-provider';
 import { hash } from './screening.policy';
-import { acceptRoleJudgements, freezeRoleAssessment, prepareRoleEvidence, roleEvaluationRequest,
-    scoreRoleAssessment, type RoleTranscriptEntry } from './taka-role-assessment';
+import { prepareRoleEvidence, scoreRoleAssessment, type RoleTranscriptEntry } from './taka-role-assessment';
+import { roleEvidenceReferences } from './taka-role-evidence';
+import { acceptLiveEvidence, liveEvidenceRequest, liveReviewLabels, type LiveEvidenceDiagnostic } from './taka-live-evidence';
+import { TAKA_LIVE_COMPLETION_VERSION } from './taka-versions';
 
 type Case = { id: string; role: string; responsibilities: string[]; pdf: string; pdfChecksum: string;
     interview: Array<{ question: string; answer: string; opportunity: 'ANSWERED' }> };
@@ -34,7 +37,8 @@ async function main() {
         .map(row => JSON.parse(row) as { runId: string; key: string; reservedUsd?: number; costUsd?: number }) : [];
     assert.ok(history.every(row => row.runId !== runId), 'Run already has provider requests; inspect its receipts first');
     let reserved = history.reduce((sum, row) => sum + (row.reservedUsd ?? 0), 0), actual = 0, submissions = 0;
-    const budget = 2.5;
+    const budget = Number(process.env.TAKA_SYNTHETIC_BUDGET_USD ?? 2.5);
+    assert.ok(Number.isFinite(budget) && budget > reserved);
     const note = (row: object) => appendFileSync(ledger, JSON.stringify({ runId, ...row }) + '\n');
     function reserve(key: string, reservedUsd: number) {
         assert.ok(reserved + reservedUsd <= budget, 'Scoring test allocation exhausted');
@@ -71,51 +75,89 @@ async function main() {
     async function grade(sample: Case) {
         assert.match(sample.id, /^R[1-6]-[1-5]$/u);
         assert.equal(sample.pdf, 'cv/' + sample.id + '.pdf');
-        const rubric = createRoleRubric({ title: sample.role, responsibilities: sample.responsibilities, jobSkills: [], jobLanguages: [] });
+        const sources = createRoleRubric({ title: sample.role, responsibilities: sample.responsibilities,
+            jobSkills: [], jobLanguages: [] }, ROLE_RUBRIC_VERSION);
+        // These fixture duties were independently written as separate skills.
+        const rubric = prepareAlignedRolePackage(sources, undefined).roleRubric!;
+        assert.equal(rubric.interviewIds.length, sample.interview.length);
         const document = await prepareCvDocument(readFileSync(join(dir, sample.pdf)), 'synthetic-cv.pdf', 'synthetic-cv.pdf');
         assert.equal(document.checksum, sample.pdfChecksum);
         assert.equal(document.pages, 1);
         const checkpoint: CvCheckpoint = { stage: 'INITIAL', responseFormat: CV_RESPONSE_FORMAT, model, checksum: document.checksum,
             expectedPages: document.pages, fileKind: document.fileKind, grades: [], roleRubric: rubric, extractionVersion: CV_EXTRACTION_VERSION };
-        const cvKey = sample.id + ':CV';
-        reserve(cvKey, .016);
-        const cvResponse = await result(cvKey, await provider.create(randomUUID(), model, cvRequest(checkpoint, { title: sample.role }), document.file));
-        const decoded = decodeCvResponse(checkpoint, cvResponse as Parameters<typeof decodeCvResponse>[1]);
+        async function readCv(request: CvCheckpoint, file = false) {
+            const key = sample.id + ':CV:' + request.stage;
+            reserve(key, .016);
+            return decodeCvResponse(request, await result(key, await provider.create(randomUUID(), model,
+                cvRequest(request, { title: sample.role }), file ? document.file : undefined)) as Parameters<typeof decodeCvResponse>[1]);
+        }
+        const decoded = await readCv(checkpoint, true);
         assert.ok(completeCvSource(decoded.source, document.pages), sample.id + ' incomplete CV');
-        const grades = mergeCvGrades(decoded.source!, [], decoded.grades, rubric);
+        let grades = mergeCvGrades(decoded.source!, [], decoded.grades, rubric);
+        const neededCvRepair = grades.length !== rubric.criteria.length;
+        if (neededCvRepair) {
+            const repair = await readCv({ ...checkpoint, stage: 'GRADE', source: decoded.source, grades });
+            grades = mergeCvGrades(decoded.source!, grades, repair.grades, rubric);
+        }
         assert.equal(grades.length, rubric.criteria.length, sample.id + ' missing CV grades');
         const cv = projectCvScore(decoded.source!, grades, true, false, rubric);
         const transcript = sample.interview.flatMap<RoleTranscriptEntry>((turn, index) => {
             const topicId = rubric.interviewIds[index], at = index * 60_000;
-            return [{ id: 'q' + index, topicId, speaker: 'TARA', text: turn.question,
+            const question = turn.question.replace(/^Gimana cara lu mengerjakan tugas berikut\?\n/u, 'Gimana cara lo mengerjakan tugas ini secara konkret? ');
+            return [{ id: 'q' + index, topicId, speaker: 'TARA', text: question,
                 question: true, opportunity: turn.opportunity, startMs: at, endMs: at + 2000 },
             { id: 'a' + index, topicId, speaker: 'CANDIDATE', text: turn.answer, startMs: at + 3000, endMs: at + 16000 }];
         });
         const evidence = prepareRoleEvidence(rubric, transcript, { claims: [], limitations: [] });
-        const { data, preset } = roleEvaluationRequest(evidence, freezeRoleAssessment());
-        const prompt = composePrompt('evaluate', data, preset);
-        const evalKey = sample.id + ':INTERVIEW';
-        reserve(evalKey, .006);
-        const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST',
-            headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY, 'Content-Type': 'application/json', 'X-Client-Request-Id': randomUUID() },
-            signal: AbortSignal.timeout(120_000), body: JSON.stringify({ model, background: true, store: true,
-                reasoning: { effort: prompt.reasoning, context: 'current_turn' }, max_output_tokens: prompt.maxOutput,
-                prompt_cache_options: { mode: 'explicit', ttl: '30m' },
-                input: [{ role: 'developer', content: [{ type: 'input_text', text: prompt.instructions,
-                    prompt_cache_breakpoint: { mode: 'explicit', ttl: '30m' } }] }, ...prompt.input],
-                text: { format: { type: 'json_schema', name: prompt.name, strict: true, schema: prompt.schema } },
-            }) });
-        const judgement = await result(evalKey, { status: response.status, body: await response.json() as CvResponse });
-        const scored = scoreRoleAssessment(evidence, acceptRoleJudgements(evidence, judgement), cv.score, false).result.roleAssessment!;
+        const refs = roleEvidenceReferences(evidence);
+        const criteriaIds = evidence.criteria.map(criterion => criterion.id);
+        const diagnostics = new Map<string, LiveEvidenceDiagnostic>();
+        async function evaluate(ids: string[], repair = false) {
+            const { data, preset } = liveEvidenceRequest(evidence, refs, ids, repair ? diagnostics : undefined);
+            const prompt = composePrompt('evaluate', data, preset);
+            const evalKey = sample.id + ':INTERVIEW' + (repair ? ':REPAIR' : '');
+            reserve(evalKey, .006);
+            const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST',
+                headers: { Authorization: 'Bearer ' + process.env.OPENAI_API_KEY, 'Content-Type': 'application/json', 'X-Client-Request-Id': randomUUID() },
+                signal: AbortSignal.timeout(120_000), body: JSON.stringify({ model, background: true, store: true,
+                    reasoning: { effort: prompt.reasoning, context: 'current_turn' }, max_output_tokens: prompt.maxOutput,
+                    prompt_cache_options: { mode: 'explicit', ttl: '30m' },
+                    input: [{ role: 'developer', content: [{ type: 'input_text', text: prompt.instructions,
+                        prompt_cache_breakpoint: { mode: 'explicit', ttl: '30m' } }] }, ...prompt.input],
+                    text: { format: { type: 'json_schema', name: prompt.name, strict: true, schema: prompt.schema } },
+                }) });
+            const judgement = await result(evalKey, { status: response.status, body: await response.json() as CvResponse });
+            return acceptLiveEvidence(evidence, refs, judgement, ids, { repair });
+        }
+        const first = await evaluate(criteriaIds);
+        const accepted = first.accepted;
+        for (const [id, issue] of first.diagnostics) diagnostics.set(id, issue);
+        const unresolved = criteriaIds.filter(id => diagnostics.has(id));
+        if (unresolved.length) {
+            const second = await evaluate(unresolved, true);
+            for (const [id, issue] of second.diagnostics) diagnostics.set(id, issue);
+            for (const [id, row] of second.accepted) {
+                accepted.set(id, row);
+                if (row.level !== null || diagnostics.get(id)?.reasons.every(reason => reason === 'INSUFFICIENT_WITH_ANSWER'))
+                    diagnostics.delete(id);
+            }
+        }
+        const scored = scoreRoleAssessment(evidence, accepted, cv.score, false, undefined, { unavailable: new Set(),
+            diagnostics: new Map([...diagnostics].map(([id, issue]) => [
+                id, { ...issue, labels: issue.reasons.map(reason => liveReviewLabels[reason]) },
+            ])), version: TAKA_LIVE_COMPLETION_VERSION }).result.roleAssessment!;
         return { id: sample.id, cv: grades.map(row => row.level), competency: scored.criteria.map(row => row.level),
-            explanation: scored.criteria.map(row => row.clarity), total: scored.score };
+            explanation: scored.criteria.map(row => row.clarity), total: scored.score,
+            cvRepair: neededCvRepair, interviewRepair: unresolved.length > 0,
+            review: scored.criteria.filter(row => row.level === null).map(row => ({criterionId: row.criterionId, state: row.state,
+                reasons: row.reviewReasons })) };
     }
     const grades: Array<Awaited<ReturnType<typeof grade>>> = [], failures: Array<{ id: string; code: string }> = [];
     const persist = () => writeFileSync(predictionPath, JSON.stringify({ checksum, grades, failures, submissions, actualUsd: actual, reservedUsd: reserved }, null, 2));
     async function assess(sample: Case) {
         try {
             const scored = await grade(sample);
-            assert.ok(scored.total !== null, sample.id + ' assessment incomplete');
+            assert.ok(scored.total !== null, sample.id + ' assessment incomplete: ' + JSON.stringify(scored.review));
             grades.push(scored);
         } catch (error) {
             failures.push({ id: sample.id, code: error instanceof Error ? error.message : 'UNKNOWN' });

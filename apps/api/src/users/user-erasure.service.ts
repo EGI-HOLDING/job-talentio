@@ -150,7 +150,7 @@ export class UserErasureService {
       await tx.candidateActivity.deleteMany({where:{candidateId:{in:candidateIds}}});
       await tx.recruitmentCandidate.updateMany({where:{id:{in:candidateIds}},data:{fullName:ANONYMIZED_DISPLAY_NAME,email:null,phone:null,headline:'',filename:'CV dihapus',fileKey:null,checksum:null,cvScore:null,cvResult:Prisma.DbNull,cvProgress:Prisma.DbNull,jobSnapshot:Prisma.DbNull,dedupeKey:null,scoreStatus:'ERASED',stage:'WITHDRAWN',error:null,revision:{increment:1}}});
       taraKeys=[...new Set([...taraKeys,...cvKeys])];
-      const voiceRows=profile?await tx.voiceInterview.findMany({where:{session:{profileId:profile.id}},select:{id:true}}):[];
+      const voiceRows=profile?await tx.voiceInterview.findMany({where:{OR:[{session:{profileId:profile.id}},{resumedFor:{profileId:profile.id}}]},select:{id:true}}):[];
       const voiceIds=voiceRows.map(v=>v.id);
       if(voiceIds.length)await tx.$queryRaw(Prisma.sql`SELECT id FROM "VoiceInterview" WHERE id IN (${Prisma.join(voiceIds)}) ORDER BY id FOR UPDATE`);
       await tx.voiceFragment.deleteMany({where:{voiceId:{in:voiceIds}}});

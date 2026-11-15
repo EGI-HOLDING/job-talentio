@@ -16,10 +16,8 @@ export type RoleVoiceControl = {
     slot: number;
     slots: Slot[];
 };
-export type VoiceControlEvent = { key: string; sentAt: number; acknowledgedAt?: number };
-
-export function roleVoiceTurns(fragments: Fragment[]) {
-    const turns = nativeVoiceTurns([...fragments].sort((a, b) => a.startMs - b.startMs || a.id - b.id));
+export function roleVoiceTurns(fragments: Fragment[], preserveAnswerTail = false) {
+    const turns = nativeVoiceTurns([...fragments].sort((a, b) => a.startMs - b.startMs || a.id - b.id), preserveAnswerTail);
     const grouped: VoiceTurn[] = [];
     for (const turn of turns) {
         const prior = grouped.at(-1);
@@ -33,8 +31,9 @@ export function roleVoiceTurns(fragments: Fragment[]) {
 }
 
 function isQuestion(text: string) {
-    return /\b(?:apa|bagaimana|gimana|kapan|mengapa|kenapa|siapa|berapa|bagian mana|ceritain|ceritakan|jelasin|jelaskan|sebutin|sebutkan|uraikan|how|why|what|describe)\b/iu.test(text) &&
-        (/[?]/u.test(text) || /(?:^|[.!]\s+)(?:jadi\s+|nah\s+)?(?:apa yang|gimana|bagaimana|bagian mana|ceritain|ceritakan|jelasin|jelaskan|sebutin|sebutkan|uraikan|how|what|describe)\b/iu.test(text.trim()));
+    const actualExperience = /\b(?:(?:lo|lu|kamu|anda)\s+(?:(?:udah|sudah)\s+)?pernah\s+[^?\r\n]+|(?:did|have)\s+you\s+(?:ever\s+)?(?:use|used|work with|worked with)\s+[^?\r\n]+)\?/iu;
+    return actualExperience.test(text) || /\b(?:apa|bagaimana|gimana|kapan|mengapa|kenapa|siapa|berapa|bagian mana|ceritain|ceritakan|jelasin|jelaskan|sebutin|sebutkan|uraikan|how|why|what|describe)\b/iu.test(text) &&
+        (/[?]/u.test(text) || /(?:^|[.!]\s+)(?:(?:jadi|nah|coba|boleh|bisa)(?:\s+(?:lo|lu|kamu))?\s+)?(?:apa yang|gimana|bagaimana|bagian mana|ceritain|ceritakan|jelasin|jelaskan|sebutin|sebutkan|uraikan|how|what|describe)\b/iu.test(text.trim()));
 }
 const directGenericQuestion = /(?:^|[.!]\s+)\s*(?:(?:gimana|bagaimana) cara (?:lu|lo|kamu) (?:mengerjakan|ngerjain) tugas berikut|(?:gimana|bagaimana)(?: jadinya| caranya)?)\?\s*$/iu;
 function outputSpans(turn: VoiceTurn, byId: Map<number, Fragment>, question: boolean) {
@@ -73,8 +72,8 @@ export function heardRoleSpeech(turn: VoiceTurn, delivery: NativeDelivery, origi
         origin + span.startMs >= window.start - 350 && origin + span.endMs <= window.end + (window.interrupted ? -350 : 350)));
 }
 
-export function roleVoiceEvidence(fragments: Fragment[], delivery: NativeDelivery, control?: RoleVoiceControl, direct = false) {
-    const turns = roleVoiceTurns(fragments), byId = new Map(fragments.map(fragment => [fragment.id, fragment]));
+export function roleVoiceEvidence(fragments: Fragment[], delivery: NativeDelivery, control?: RoleVoiceControl, direct = false, preserveAnswerTail = false) {
+    const turns = roleVoiceTurns(fragments, preserveAnswerTail), byId = new Map(fragments.map(fragment => [fragment.id, fragment]));
     const origin = direct && (!delivery.playbackVerified || delivery.firstAudioMs === undefined) ? undefined : playbackOrigin(turns, delivery);
     const repeated = new Map(control?.slots.flatMap(slot => (slot.repeated ?? []).map(row => [row.ref, row.topicId] as const)));
     return { turns, origin, byId, evidence: turns.map(turn => {
@@ -93,8 +92,8 @@ export function roleVoiceEvidence(fragments: Fragment[], delivery: NativeDeliver
 }
 
 /** Allows evaluation of the question itself when a preceding recap lacked playback telemetry. */
-export function roleAssessmentVoiceEvidence(fragments: Fragment[], delivery: NativeDelivery) {
-    const { evidence, origin, byId } = roleVoiceEvidence(fragments, delivery, undefined, true);
+export function roleAssessmentVoiceEvidence(fragments: Fragment[], delivery: NativeDelivery, preserveAnswerTail = false) {
+    const { evidence, origin, byId } = roleVoiceEvidence(fragments, delivery, undefined, true, preserveAnswerTail);
     return evidence.map((turn): RoleVoiceEvidence & { playbackInterrupted?: boolean } => {
         if (!turn.question || origin === undefined) return turn;
         const spans = outputSpans(turn, byId, true);
@@ -109,14 +108,16 @@ export function roleAssessmentVoiceEvidence(fragments: Fragment[], delivery: Nat
     });
 }
 
-export function directFarewellAt(fragments: Fragment[], delivery: NativeDelivery) {
+export function directFarewellAt(fragments: Fragment[], delivery: NativeDelivery, earliestStartMs = 0, candidateLastSpeechAt?: number) {
     if (delivery.open !== undefined || !delivery.playbackVerified || delivery.firstAudioMs === undefined) return;
     const turns = roleVoiceTurns(fragments);
     const farewell = turns.at(-1);
-    if (farewell?.speaker !== 'TARA' || !/(?:^|[.!?]\s+)(?:makasih|terima kasih) udah cerita[.!]\s+wawancara kita selesai[.!]?$/iu.test(farewell.text.trim())) return;
-    if (turns.some(turn => turn.speaker === 'CANDIDATE' && turn.endMs >= farewell.endMs)) return;
+    if (farewell?.speaker !== 'TARA' || farewell.startMs < earliestStartMs ||
+        !/(?:^|[.!?]\s+)(?:oke,\s+)?(?:makasih|terima kasih) (?:udah|sudah) (?:cerita|bercerita|berbagi)[.,!]\s+wawancara kita selesai[.!]?$/iu.test(farewell.text.trim())) return;
+    if (turns.some(turn => turn.speaker === 'CANDIDATE' && turn.endMs > farewell.startMs)) return;
     const origin = playbackOrigin(turns, delivery);
-    if (origin === undefined || !heardRoleSpeech(farewell, delivery, origin, new Map(fragments.map(row => [row.id, row])))) return;
+    if (origin === undefined || candidateLastSpeechAt !== undefined && candidateLastSpeechAt >= origin + farewell.startMs ||
+        !heardRoleSpeech(farewell, delivery, origin, new Map(fragments.map(row => [row.id, row])))) return;
     return origin + farewell.endMs;
 }
 
