@@ -10,7 +10,7 @@ import { CV_ALERT_MS, CV_DELAYED_MS, CV_MAX_SUBMISSIONS, CV_PROVIDER_TASK, CV_RE
 import { queueCvProviderCleanup, queueCvProviderWork, saveCvAssessment } from './cv-assessment-store';
 import { prepareCvDocument, CV_MAX_BYTES } from './cv-document';
 import { CvProvider, cvBackoff, cvRejection, cvTerminal, cvUsage, isCvResponseId, type CvHttp } from './cv-provider';
-import { CV_EXTRACTION_VERSION, frozenRoleRubric, roleAssessmentEnabled, type RoleRubric } from '../role-rubric';
+import { CV_EXTRACTION_VERSION, frozenRoleRubric, roleAssessmentEnabled, roleCvCriteria, type RoleRubric } from '../role-rubric';
 
 type Run = { work: AiScreeningWork; owner: string; row: RecruitmentCandidate };
 type CallTrace = { pollFailures?: number; providerRequestId?: string | null; acknowledgedAt?: string;
@@ -36,6 +36,10 @@ export class CvAssessmentService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
     if (checkpoint && checkpoint.responseFormat !== CV_RESPONSE_FORMAT || call && !checkpoint)
       return this.halt(run, 'CV_RETIRED_FORMAT_REQUIRES_REVIEW');
+    if (checkpoint?.roleRubric && checkpoint.grades.length) {
+      const currentIds = new Set(roleCvCriteria(checkpoint.roleRubric).map(row => row.id));
+      checkpoint = { ...checkpoint, grades: checkpoint.grades.filter(row => currentIds.has(row.criterionId)) };
+    }
     if (call && checkpoint && checkpoint.consumed !== call.id) {
       if (pendingStatus.includes(call.status)) return this.observe(run, checkpoint, call);
       return this.consume(run, checkpoint, call);
@@ -233,6 +237,8 @@ export class CvAssessmentService {
   }
 
   private async consume(run: Run, checkpoint: CvCheckpoint, call: AiScreeningCall) {
+    if (completeCvSource(checkpoint.source, checkpoint.expectedPages) && gradesComplete(run.row, checkpoint))
+      return this.finish(run, checkpoint);
     const next: CvCheckpoint = { ...checkpoint, consumed: call.id, alertAt: undefined };
     if (call.status !== 'COMPLETED') {
       if (['PROVIDER_REFUSAL', 'PROVIDER_REQUEST_BLOCKED', 'PROVIDER_INCOMPLETE'].includes(call.error ?? '')) {
@@ -306,7 +312,7 @@ export class CvAssessmentService {
           wordVisualFallback: checkpoint.wordVisualFallback },
         roleAssessment: checkpoint.roleRubric ? { version: checkpoint.roleRubric.version, rubricRevision: checkpoint.roleRubric.revision,
           state: checked.score === null ? 'NOT_APPLICABLE' : 'READY',
-          criteria: checkpoint.roleRubric.criteria.map(row => ({ id: row.id, name: row.name, requirement: row.requirementRef,
+          criteria: roleCvCriteria(checkpoint.roleRubric).map(row => ({ id: row.id, name: row.name, requirement: row.requirementRef,
             ...(row.sources ? { sources: row.sources, equivalence: row.equivalence } : {}) })) } : undefined,
       });
     });

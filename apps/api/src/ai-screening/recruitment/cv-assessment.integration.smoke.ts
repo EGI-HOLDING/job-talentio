@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { ConfigService } from '@nestjs/config';
 import { Webhook } from 'standardwebhooks';
 import { PrismaService } from '../../prisma/prisma.service';
+import { reprojectCvLanguageScores } from '../../scripts/taka-reproject-cv-language';
 import { ScreeningWorker } from '../screening-worker.service';
 import { enqueueCvAssessment } from './cv-score-recovery';
 import { json } from '../screening.policy';
@@ -11,12 +12,12 @@ import { CvScoringService } from './cv-scoring.service';
 import { ScreeningPackets } from '../screening-packets.service';
 import { CvWebhookController } from './cv-webhook.controller';
 import { RecruitmentService } from './recruitment.service';
-import { CV_PROVIDER_TASK, CV_RECOVERY_VERSION, cvRequest, type CvSource } from './cv-assessment';
+import { CV_PROVIDER_TASK, CV_RECOVERY_VERSION, CV_RESPONSE_FORMAT, cvRequest, type CvCheckpoint, type CvSource } from './cv-assessment';
 import { CV_RUBRIC, fileChecksum } from './cv-scoring.policy';
 import { invalidateCvScores, scoringJob, scoreJobInclude } from './cv-job-context';
 import { cvBackoff, cvRejection, type CvHttp } from './cv-provider';
 import { prepareCvDocument, type CvProviderFile } from './cv-document';
-import { frozenRoleRubric, ROLE_RUBRIC_VERSION } from '../role-rubric';
+import { CV_EXTRACTION_VERSION, frozenRoleRubric, ROLE_RUBRIC_VERSION } from '../role-rubric';
 import { TARA_ALIGNED_AGENDA_VERSION } from '../tara-live-agenda';
 import type { PackagePayload } from '../screening.schemas';
 const PDFDocument = require('pdfkit');
@@ -177,7 +178,10 @@ async function main() {
     const job = await db.jobPost.upsert({ where: { id: 'cv-job-' + title }, update: {},
       create: { id: 'cv-job-' + title, title, companyId, description: 'Kriteria sintetis untuk validasi Taka.',
         responsibilities: title === 'role-changed' ? ['Rancang layout majalah', 'Sunting materi pemasaran'] : title.startsWith('role-')
-          ? ['Rancang materi kampanye', 'Periksa hasil produksi'] : [] }, include: scoreJobInclude });
+          ? ['Rancang materi kampanye', 'Periksa hasil produksi'] : [],
+        ...(title === 'role-aligned' ? { jobLanguages: { create: { language: { connect: { code: 'id' } },
+          minLevel: 'NATIVE', isRequired: true, provenance: 'EMPLOYER_CONFIRMED' } } } : {}),
+      }, include: scoreJobInclude });
     const fileKey = 'cv-test/' + id + '.pdf';
     const document = title === 'missing-page' ? twoPages : title === 'long' ? longCv : bytes;
     objectStore.set(fileKey, document);
@@ -378,12 +382,60 @@ async function main() {
   const packet = await db.aiScreeningPackage.findUniqueOrThrow({ where: { id: textPacket!.id } });
   const shared = (packet.payload as PackagePayload).roleRubric!;
   assert.equal(shared.version, ROLE_RUBRIC_VERSION);
+  const excluded = shared.criteria.find(row => row.sources?.some(item => item.kind === 'LANGUAGE'))!;
+  assert.equal(excluded.name, 'Indonesian');
+  assert.ok(!shared.interviewIds.includes(excluded.id));
   const assessed = await untilDone(aligned.row.id, aligned.work.id);
   const repeatedAligned = await untilDone(alignedAgain.row.id, alignedAgain.work.id);
+  assert.equal(assessed.cvScore, 75);
   assert.equal(assessed.cvScore, repeatedAligned.cvScore);
   assert.deepEqual(assessed.cvResult, repeatedAligned.cvResult);
   assert.equal((assessed.cvResult as { roleAssessment: { rubricRevision: string } }).roleAssessment.rubricRevision, shared.revision);
+  assert.ok(!JSON.stringify(assessed.cvResult).includes(excluded.id));
+  assert.ok(!history.get('role-aligned')?.some(row => row.ids.includes(excluded.id)));
   assert.deepEqual(history.get('role-aligned')?.map(row => [row.stage, row.file]), [['GRADE', false]], 'new rubric uses the previous CV reading');
+  const inFlight = await create('role-aligned', 'role-aligned-old-checkpoint');
+  const oldGrades = shared.criteria.map((row, index) => ({ criterionId: row.id, level: row.id === excluded.id ? 0 : index === 0 ? 4 : 2,
+    reason: 'Kriteria diuji terhadap blok tersimpan.', blockIds: row.id === excluded.id ? [] : [source.blocks[index + 1].id] }));
+  const oldCheckpoint = { stage: 'GRADE', model: 'gpt-6-luna', extractionVersion: CV_EXTRACTION_VERSION,
+    responseFormat: CV_RESPONSE_FORMAT, checksum: inFlight.row.checksum!, expectedPages: 1, fileKind: 'PDF',
+    source, roleRubric: shared, grades: oldGrades } satisfies CvCheckpoint;
+  await db.aiScreeningWork.update({ where: { id: inFlight.work.id }, data: { cvCheckpoint: json(oldCheckpoint) } });
+  const completed = await untilDone(inFlight.row.id, inFlight.work.id);
+  assert.equal(completed.cvScore, assessed.cvScore);
+  assert.ok(!JSON.stringify(completed.cvResult).includes(excluded.id));
+  assert.equal(await db.aiScreeningCall.count({ where: { workId: inFlight.work.id } }), 0, 'the previous checkpoint needs no additional grading');
+  const interrupted = await create('role-aligned', 'role-aligned-retired-language-call');
+  await db.aiScreeningWork.update({ where: { id: interrupted.work.id }, data: { cvCheckpoint: json({
+    ...oldCheckpoint, grades: oldGrades.filter(row => row.criterionId !== excluded.id),
+  }) } });
+  await db.aiScreeningCall.create({ data: { key: 'old-language:' + interrupted.work.id, workId: interrupted.work.id, subjectId: interrupted.row.id,
+    task: CV_PROVIDER_TASK, promptVersion: CV_RECOVERY_VERSION, model: 'gpt-6-luna', inputHash: 'old-language-only',
+    status: 'FAILED', error: 'INVALID_PROVIDER_OUTPUT',
+  } });
+  assert.equal((await untilDone(interrupted.row.id, interrupted.work.id)).cvScore, 75);
+  assert.equal(await db.aiScreeningCall.count({ where: { workId: interrupted.work.id } }), 1, 'failure in the retired criterion cannot trigger a replacement');
+
+  const currentResult = completed.cvResult as unknown as {
+    criteria: Array<{ criterionId: string }>; roleAssessment: { criteria: Array<{ id: string }> };
+    sourceReferences: { criteria: Array<{ criterionId: string }> };
+  };
+  const priorResult = {
+    ...currentResult,
+    criteria: [...currentResult.criteria, { criterionId: excluded.id, level: 0, reason: 'Level bahasa belum disebut.', evidence: [] }],
+    roleAssessment: { ...currentResult.roleAssessment, criteria: [...currentResult.roleAssessment.criteria, { id: excluded.id }] },
+    sourceReferences: { ...currentResult.sourceReferences, criteria: [...currentResult.sourceReferences.criteria, { criterionId: excluded.id, blockIds: [] }] },
+  };
+  await db.recruitmentCandidate.update({ where: { id: completed.id }, data: { cvScore: 50, cvResult: json(priorResult) } });
+  assert.equal((await reprojectCvLanguageScores(db, false)).eligible, 1);
+  assert.equal((await state(completed.id)).cvScore, 50, 'dry-run leaves the published score intact');
+  assert.equal((await reprojectCvLanguageScores(db, true)).changed, 1);
+  const corrected = await state(completed.id);
+  assert.equal(corrected.cvScore, 75);
+  assert.deepEqual(corrected.cvResult, completed.cvResult);
+  assert.deepEqual(corrected.jobSnapshot, completed.jobSnapshot);
+  assert.equal(corrected.revision, completed.revision + 1);
+  assert.equal((await reprojectCvLanguageScores(db, true)).changed, 0, 're-running the correction is idempotent');
   const descriptionOnly = await create('role-description-only');
   const legacyPosting = await db.jobPost.update({ where: { id: descriptionOnly.job.id },
     data: { responsibilities: [],

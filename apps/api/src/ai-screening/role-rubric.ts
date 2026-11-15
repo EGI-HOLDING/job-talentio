@@ -110,6 +110,12 @@ export function frozenRoleRubric(snapshot: unknown): RoleRubric | undefined {
     return rubric?.version === ROLE_ASSESSMENT_VERSION || rubric?.version === ROLE_RUBRIC_VERSION ? rubric : undefined;
 }
 
+export function roleCvCriteria(rubric: RoleRubric): RoleCriterion[] {
+    return rubric.criteria.filter(row => row.sources?.length
+        ? row.sources.some(source => source.kind !== 'LANGUAGE')
+        : row.id !== criterionId('language:' + labelKey(row.name)));
+}
+
 export function roleInterviewCandidates(rubric: RoleRubric) {
     return rubric.criteria.filter(row => row.sources ? row.sources.some(source => source.kind === 'DUTY' || source.kind === 'SKILL') : row.id !== criterionId('experience') &&
         row.id !== criterionId('language:' + labelKey(row.name)));

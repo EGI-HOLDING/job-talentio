@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createRoleRubric, ROLE_ASSESSMENT_VERSION, ROLE_RUBRIC_VERSION } from '../role-rubric';
+import { CV_RESPONSE_FORMAT, cvCriteria, cvRequest, decodeCvResponse, mergeCvGrades, projectCvScore, reprojectStoredCvScore, type CvCheckpoint } from './cv-assessment';
 import { CV_MAX_BYTES, CV_RUBRIC, validateCvResult, validateCvBytes, fileChecksum } from './cv-scoring.policy';
 import { candidateImportSchema, candidateListSchema } from './recruitment.schemas';
 const cvText = 'Dinda Pramesti\nMengembangkan API Node.js selama 4 tahun.\nMembantu tim menjalankan layanan pelanggan.';
@@ -30,4 +32,53 @@ assert.throws(()=>candidateImportSchema.parse({companyId:'co',requestKey:'reques
 assert.throws(()=>candidateImportSchema.parse({companyId:'co',requestKey:'request-0001',files:[{...file,size:99999999}]}));
 assert.equal(candidateListSchema.parse({companyId:'co'}).limit,10);
 assert.throws(()=>candidateListSchema.parse({companyId:'co',limit:10001}));
+
+const languageJob = {
+  title: 'Backend Developer', responsibilities: ['Mengembangkan layanan API'],
+  jobSkills: [{ skill: { name: 'Node.js' }, isRequired: true }], experienceYearsMin: 2,
+  jobLanguages: ['Indonesian', 'English'].map(name => ({ language: { name }, isRequired: true, minLevel: 'NATIVE', provenance: 'EMPLOYER_CONFIRMED' })),
+};
+const storedSource = { readable: true, fullName: null, email: null, phone: null, headline: '', summary: '', limitations: [],
+  pages: [{ page: 1, status: 'READ' as const }], blocks: [{ id: 'p1-b1', page: 1, text: cvText }] };
+const checkpoint = { stage: 'GRADE', responseFormat: CV_RESPONSE_FORMAT, model: 'test', checksum: 'test',
+  expectedPages: 1, fileKind: 'PDF', source: storedSource, grades: [] } satisfies CvCheckpoint;
+for (const version of [ROLE_RUBRIC_VERSION, ROLE_ASSESSMENT_VERSION] as const) {
+  const roleRubric = createRoleRubric(languageJob, version);
+  const basicRubric = createRoleRubric({ ...languageJob, jobLanguages: [] }, version);
+  assert.equal(roleRubric.criteria.length, basicRubric.criteria.length + 2);
+  assert.deepEqual(roleRubric.interviewIds, basicRubric.interviewIds);
+  assert.deepEqual(cvCriteria(roleRubric), basicRubric.criteria);
+  const request = cvRequest({ ...checkpoint, roleRubric }, languageJob);
+  assert.deepEqual(request.data.rubric, basicRubric.criteria);
+  assert.doesNotMatch(JSON.stringify(request.schema), /Indonesian|English/u);
+  const previousGrades = roleRubric.criteria.map(row => ({ criterionId: row.id,
+    level: row.name === 'Indonesian' || row.name === 'English' ? 0 : 3,
+    reason: 'Bukti CV yang tersimpan.', blockIds: row.name === 'Indonesian' || row.name === 'English' ? [] : ['p1-b1'],
+  }));
+  const response = decodeCvResponse({ ...checkpoint, roleRubric }, { grades: Object.fromEntries(previousGrades.map(({ criterionId, ...grade }) => [criterionId, grade])) });
+  const kept = mergeCvGrades(storedSource, [], response.grades, roleRubric);
+  const result = projectCvScore(storedSource, kept, true, false, roleRubric);
+  assert.equal(result.score, 75);
+  assert.deepEqual(result.result.criteria.map(row => row.criterionId), basicRubric.criteria.map(row => row.id));
+  assert.deepEqual(result.sourceReferences.criteria.map(row => row.criterionId), basicRubric.criteria.map(row => row.id));
+
+  const oldResult = { ...result.result, criteria: previousGrades.map(({ blockIds, ...grade }) => ({ ...grade, evidence: blockIds.map(() => cvText) })) };
+  const stored = { ...oldResult, sourceReferences: { ...result.sourceReferences, criteria: previousGrades.map(({ criterionId, blockIds }) => ({ criterionId, blockIds })) },
+    roleAssessment: { rubricRevision: roleRubric.revision, state: 'READY', criteria: roleRubric.criteria } };
+  const priorScore = validateCvResult(oldResult, true, 1, roleRubric.criteria).score!;
+  assert.equal(priorScore, 45);
+  const corrected = reprojectStoredCvScore(stored, roleRubric, priorScore)!;
+  assert.equal(corrected.score, 75);
+  assert.deepEqual(corrected.cvResult.criteria, result.result.criteria);
+  assert.equal(corrected.cvResult.cvText, stored.cvText);
+  assert.equal(corrected.cvResult.roleAssessment.rubricRevision, roleRubric.revision);
+  assert.deepEqual(corrected.cvResult.sourceReferences?.criteria, result.sourceReferences.criteria);
+  assert.equal(stored.criteria.length, 5);
+  assert.equal(reprojectStoredCvScore(corrected.cvResult, roleRubric, 75), undefined);
+  assert.throws(() => reprojectStoredCvScore(stored, roleRubric, 46), /CV_STORED_SCORE_MISMATCH/);
+}
+const legacyRequest = cvRequest(checkpoint, { title: languageJob.title, languages: languageJob.jobLanguages });
+assert.deepEqual(legacyRequest.data.job, { title: languageJob.title });
+const languageOnly = createRoleRubric({ ...languageJob, responsibilities: [], jobSkills: [], experienceYearsMin: 0 }, ROLE_RUBRIC_VERSION);
+assert.equal(projectCvScore(storedSource, [], true, false, languageOnly).score, null);
 console.log('CV scoring: grounding, weighted arithmetic, invalid provider output, file and import validation passed.');
