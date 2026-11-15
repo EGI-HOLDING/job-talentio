@@ -15,13 +15,12 @@ import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { PhoneNumberField, phoneErrorText } from '@/components/ui/PhoneNumberField';
-import { phoneDraftFromE164, validatePhoneDraft } from '@job-talentio/shared';
+import { LANGUAGE_LEVELS, phoneDraftFromE164, validatePhoneDraft } from '@job-talentio/shared';
 import { ProfileDialog } from './ProfileDialog';
 import { ProfileIcon } from './ProfileIcon';
 import { dateValue, type CareerProfile, type City, type ProfileEditor } from './types';
 import s from './ProfileWorkspace.module.css';
 
-const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'];
 const WORK_MODES = [
   { mode: 'ONSITE', icon: 'building' },
   { mode: 'HYBRID', icon: 'hybrid' },
@@ -134,7 +133,9 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose} disabled={busy}>{t('cancel')}</button><button type="submit" className={s.primary} disabled={busy}>{busy ? t('saving') : t('save')}</button></footer>
     </form> : listEditor ? <div className={s.dialogBody}>
       <fieldset disabled={busy} className={s.resetFieldset}>
-        <LookupCombobox focusSuggestions kind="languages" placeholder={t('languageSearchPlaceholder')} disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1" onPick={(item) => mutate('/profiles/me/languages', 'POST', { ...(item.code || item.slug ? { code: item.code || item.slug } : { name: item.name }), level: item.level || 'B1' })} />
+        <LookupCombobox focusSuggestions keepOpenOnPick kind="languages" excludedCodes={profile.languages.map(row=>row.language.code)}
+          disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1"
+          onPick={item => mutate('/profiles/me/languages', 'POST', { code: item.code || item.slug, level: item.level || 'B1' })} />
         <div className={s.editList}>
           {profile.languages.map(row => <div key={row.id}>
             <strong>{row.language.name}</strong>

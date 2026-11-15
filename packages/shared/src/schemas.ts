@@ -1,4 +1,5 @@
 import { JOB_SKILL_LIMIT, SKILL_FILTER_LIMIT, SKILL_NAME_MAX_LENGTH, skillLabelIssue } from './catalog-label';
+import { JOB_LANGUAGE_LIMIT } from './languages';
 import { desiredSelectionsSchema } from './employee-intent';
 import { z } from 'zod';
 
@@ -229,7 +230,7 @@ export const jobPostSchema = z.object({
         })
         .refine((l) => Boolean(l.code || l.name), { message: 'code or name required' }),
     )
-    .max(4)
+    .max(JOB_LANGUAGE_LIMIT)
     .default([]),
   locale: z.enum(['uz', 'ru', 'en', 'id']).default('uz'),
 });

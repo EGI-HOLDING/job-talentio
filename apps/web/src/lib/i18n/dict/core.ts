@@ -1121,6 +1121,8 @@ export const core = {
     ru: 'Поиск льготы...',
     en: 'Search benefits...',
   },
+  languageNoResults: { en: 'No languages available for this search.', ru: 'По этому запросу языки не найдены.', uz: 'Bu qidiruv bo‘yicha tillar topilmadi.' },
+  languageAlreadyAdded: { en: 'This language has already been added.', ru: 'Этот язык уже добавлен.', uz: 'Bu til allaqachon qo‘shilgan.' },
   languageSearchPlaceholder: {
     uz: 'Til qidiring...',
     ru: 'Поиск языка...',

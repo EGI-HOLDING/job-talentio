@@ -76,12 +76,18 @@ async function main(){
   }
   await page.getByLabel('Kebutuhan Keahlian 1',{exact:true}).selectOption('OPTIONAL');
   await page.getByLabel('Level minimum Keahlian 2',{exact:true}).selectOption('ADVANCED');
-  await page.getByRole('button',{name:/^Tambah bahasa$/}).click();await page.getByPlaceholder('Tambah bahasa').fill('Eng');await page.locator('[role=listbox] [role=option]').first().click();await page.getByRole('button',{name:'Simpan draf',exact:true}).click();await page.getByRole('status').filter({hasText:'Tersimpan'}).waitFor();
+  await page.getByRole('button',{name:/^Tambah bahasa$/}).click();
+  const languagePicker=page.locator('[data-job-field=languages] [role=combobox]');
+  await languagePicker.fill('English');await page.getByRole('option',{name:/English|Inggris/i}).first().click();
+  await languagePicker.fill('indonesia');await page.getByRole('option',{name:/Bahasa Indonesia|Indonesian/i}).first().click();
+  await page.locator('[data-job-field=languages]').getByRole('button',{name:'Selesai',exact:true}).click();
+  await page.getByRole('button',{name:'Simpan draf',exact:true}).click();await page.getByRole('status').filter({hasText:'Tersimpan'}).waitFor();
   await page.reload();
   assert.equal(await page.getByRole('textbox',{name:'Keahlian 1',exact:true}).inputValue(),'Python');
   assert.equal(await page.getByRole('textbox',{name:'Keahlian 2',exact:true}).inputValue(),'C++');
   assert.equal(await page.getByLabel('Kebutuhan Keahlian 1',{exact:true}).inputValue(),'OPTIONAL');
   assert.equal(await page.getByLabel('Level minimum Keahlian 2',{exact:true}).inputValue(),'ADVANCED');
+  assert.equal(await page.locator('[data-job-field=languages] tbody tr').count(),2);
   await responsive('job-form-filled');await actionStates('onboarding');
   const a=await page.getByLabel('Posisi yang dicari *',{exact:true}).boundingBox(),b=await page.getByLabel('Senioritas',{exact:true}).boundingBox();assert.ok(a&&b&&Math.abs(a.width-b.width)<=2&&Math.abs(a.y-b.y)<=2,'position and seniority aligned equally');
   await page.setViewportSize({width:390,height:844});await fits();await shot('job-form-mobile');await page.setViewportSize({width:1440,height:1000});

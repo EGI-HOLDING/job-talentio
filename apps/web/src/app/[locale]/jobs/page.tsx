@@ -12,6 +12,7 @@ import { useRouter } from '@/lib/navigation';
 import { FilterFieldset, FormField } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { SkillNameTags, type SkillTag } from '@/components/ui/SkillNameTags';
+import { LookupCombobox } from '@/components/ui/LookupCombobox';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { JobListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
@@ -30,7 +31,6 @@ import { useMatchingStatus } from '@/lib/useMatchingStatus';
 import { usePromotionRefresh } from '@/lib/usePromotionRefresh';
 import type { JobPromotion } from '@job-talentio/shared';
 import {
-  csvHasLanguageCode,
   LanguageLevelCode,
   parseLanguagesCsv,
   scoreProfileCompleteness,
@@ -355,9 +355,17 @@ function JobsInner() {
   useEffect(()=>{
     if(!filtersOpen&&!browseCompanies)return;
     let active=true;const controller=new AbortController(),options={auth:false,signal:controller.signal};
-    Promise.all([api<MetaItem[]>('/meta/cities',options),api<MetaItem[]>('/meta/categories',options),api<MetaItem[]>('/meta/benefits',options),api<LangMeta[]>('/meta/languages',options),api<MetaItem[]>('/meta/countries',options)]).then(([c,cat,b,langs,countryRows])=>{if(active){setCities(c);setCategories(cat);setBenefits(b);setLanguages(langs||[]);setCountries(countryRows);}}).catch(()=>{});
+    Promise.all([api<MetaItem[]>('/meta/cities',options),api<MetaItem[]>('/meta/categories',options),api<MetaItem[]>('/meta/benefits',options),api<MetaItem[]>('/meta/countries',options)]).then(([c,cat,b,countryRows])=>{if(active){setCities(c);setCategories(cat);setBenefits(b);setCountries(countryRows);}}).catch(()=>{});
     return()=>{active=false;controller.abort();};
   },[locale,filtersOpen,browseCompanies]);
+  const needsLanguageLabels = Boolean(filters.languages);
+  useEffect(() => {
+    if (!needsLanguageLabels) return;
+    const controller = new AbortController();
+    void api<LangMeta[]>('/meta/languages', { auth: false, signal: controller.signal })
+      .then(rows => { if (!controller.signal.aborted) setLanguages(rows); }).catch(() => {});
+    return () => controller.abort();
+  }, [locale, needsLanguageLabels]);
   const apply = useCallback(
     (patch: Partial<Filters>, opts?: { keepBrowse?: boolean }) => {
       listScroll.current = 0;
@@ -705,40 +713,17 @@ function JobsInner() {
           </FilterFieldset>
 
           <FilterFieldset legend={t('languages')} className="filter-group">
-            <ExpandableList
-              items={(() => {
-                const byCode = new Map<string, LangMeta & { count?: number }>();
-                for (const l of data?.facets?.languages || []) {
-                  byCode.set(l.code, { id: l.code, code: l.code, name: l.name, count: l.count });
-                }
-                for (const l of languages) {
-                  if (!byCode.has(l.code)) byCode.set(l.code, { ...l, count: undefined });
-                  else {
-                    const cur = byCode.get(l.code)!;
-                    byCode.set(l.code, { ...cur, name: l.name || cur.name });
-                  }
-                }
-                return [...byCode.values()].sort(
-                  (a, b) => (b.count || 0) - (a.count || 0) || a.name.localeCompare(b.name),
-                );
-              })()}
-              initialCount={8}
-              step={10}
-              getKey={(l) => l.code}
-              renderItem={(l) => (
-                <label className="filter-check">
-                  <input
-                    type="checkbox"
-                    checked={csvHasLanguageCode(filters.languages, l.code)}
-                    onChange={() => apply({ languages: toggleLanguageCsv(filters.languages, l.code, 'B1') })}
-                  />
-                  {l.name}
-                  {'count' in l && l.count !== undefined && (
-                    <span className="facet-count">({l.count})</span>
-                  )}
-                </label>
-              )}
-            />
+            <LookupCombobox kind="languages" focusSuggestions keepOpenOnPick
+              excludedCodes={selectedLanguageTokens.map(item => item.code)}
+              onPick={item => apply({ languages: toggleLanguageCsv(filters.languages, item.code ?? item.slug) })} />
+            {selectedLanguageTokens.length > 0 && <div className={s.languageFilters}>
+              {[...new Set(selectedLanguageTokens.map(item => item.code))].map(code => {
+                const name = languages.find(item => item.code === code)?.name
+                  ?? data?.facets?.languages?.find(item => item.code === code)?.name ?? code;
+                return <button key={code} type="button" aria-label={t('pc.remove') + ': ' + name}
+                  onClick={() => apply({ languages: toggleLanguageCsv(filters.languages, code) })}>{name} <span aria-hidden>×</span></button>;
+              })}
+            </div>}
           </FilterFieldset>
 
           <div className="filter-group">

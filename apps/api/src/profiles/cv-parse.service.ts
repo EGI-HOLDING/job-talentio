@@ -175,7 +175,11 @@ export class CvParseService {
         this.prisma.language.findMany({
           where: ACTIVE_CATALOG,
           select: {
+            id: true,
             name: true,
+            nameId: true,
+            nameRu: true,
+            nameUz: true,
             code: true,
             aliases: { select: { alias: true, aliasKey: true } },
           },

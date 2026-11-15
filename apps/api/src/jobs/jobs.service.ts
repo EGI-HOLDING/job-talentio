@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { JobStatus, LanguageLevel, Prisma, WorkMode } from '@prisma/client';
 import {
+  JOB_LANGUAGE_LIMIT,
   levelsAtOrAbove,
   parseLanguagesCsv,
   resolveBenefitIcon,
@@ -240,9 +241,10 @@ export class JobsService {
   }
 
   private async syncLanguages(jobPostId: string, languages: JobLanguageInput[], db: Prisma.TransactionClient) {
+    if (languages.length > JOB_LANGUAGE_LIMIT) throw new BadRequestException('Too many job languages');
     await db.jobPostLanguage.deleteMany({ where: { jobPostId } });
     const seen = new Set<string>();
-    for (const item of languages.slice(0, 4)) {
+    for (const item of languages) {
       if (!item.code && !item.name) continue;
         const { language } = await resolveLanguage(db, {
           code: item.code,
@@ -1280,7 +1282,7 @@ export class JobsService {
       category: true,
       jobTitle: { select: { id: true, name: true, nameUz: true, nameRu: true, nameId: true, slug: true } },
       jobSkills: { include: { skill: true }, take: 8 },
-      jobLanguages: { include: { language: true }, take: 4 },
+      jobLanguages: { include: { language: true }, take: JOB_LANGUAGE_LIMIT },
       benefits: { include: { benefit: true }, take: 6 },
     } as const;
 

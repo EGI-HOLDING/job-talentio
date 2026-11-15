@@ -52,6 +52,9 @@
 .moreFilters[open] > summary { margin-bottom: 1rem; }
 .moreFilters :global(.filter-group) { margin: 12px 0; padding: 0; border: 0; }
 .moreFilters :global(.filter-group) legend { margin-bottom: 6px; font-size: .78rem; font-weight: 600; }
+.languageFilters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.languageFilters button { border: 1px solid #ded5ff; border-radius: 7px; background: #f4efff; color: var(--purple); padding: 5px 8px; font-size: .75rem; cursor: pointer; }
+.languageFilters button:hover { background: #eae1ff; }
 .moreFilters :global(.filter-check) { display: flex; align-items: center; gap: 7px; min-height: 28px; font-size: .74rem; }
 .moreFilters :global(.filter-check) input { width: 14px; height: 14px; flex-shrink: 0; margin: 0; accent-color: var(--purple); }
 .moreFilters :global(.facet-count) { margin-left: auto; font-size: .68rem; color: #8994aa; }

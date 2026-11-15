@@ -501,6 +501,8 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
   lookupKindCity: 'kota',
   benefitSearchPlaceholder: 'Cari tunjangan...',
   languageSearchPlaceholder: 'Cari bahasa...',
+  languageNoResults: 'Tidak ada bahasa yang bisa dipilih untuk pencarian ini.',
+  languageAlreadyAdded: 'Bahasa ini sudah ditambahkan.',
   createResume: 'Buat CV',
   createResumeHint: 'Masukkan nama dan jabatan yang dituju terlebih dahulu. Maksimal {max} CV.',
   resumeDisplayName: 'Nama CV',

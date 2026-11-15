@@ -1,7 +1,9 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { MetaService } from './meta.service';
 import { PositionCatalogService } from '../matching/position-catalog.service';
 import { RawLocaleNames } from '../common/locale.interceptor';
+import { requestLocale } from '../common/i18n/request-locale';
 
 @Controller('meta')
 export class MetaController {
@@ -79,8 +81,8 @@ export class MetaController {
   }
 
   @Get('languages/suggest')
-  suggestLanguages(@Query('q') q?: string, @Query('take') take?: string) {
-    return this.meta.suggestLanguages(q, take ? Number(take) : 10);
+  suggestLanguages(@Req() request: Request, @Query('q') q?: string, @Query('take') take?: string) {
+    return this.meta.suggestLanguages(q, take ? Number(take) : 10, requestLocale(request));
   }
 
   @Get('languages')

@@ -1,11 +1,12 @@
 'use client';
 import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { useEffect, useState } from 'react';
-import { skillLabelIssue, SKILL_NAME_MAX_LENGTH } from '@job-talentio/shared';
+import { LANGUAGE_LEVELS, skillLabelIssue, SKILL_NAME_MAX_LENGTH } from '@job-talentio/shared';
 import { api } from '@/lib/api';
 import { useEnumLabel, useI18n } from '@/lib/i18n';
 import { ProfileDialog } from './ProfileDialog';
 import { CatalogPositionPicker, usePositionLabels, type PositionValue } from '../ui/CatalogPositionPicker';
+import { LookupCombobox } from '../ui/LookupCombobox';
 import s from './ProfileWorkspace.module.css';
 type Row = {
     key: string;
@@ -93,7 +94,8 @@ export function EmployeeEvidenceReview({ resumeId, versionId, onClose }: {
         }
         catch (e) {
             const message=(e as Error).message;
-            setError(message.includes('CV_SKILL_DUPLICATE') ? t('skillNameDuplicate') : message);
+            setError(message.includes('CV_SKILL_DUPLICATE') ? t('skillNameDuplicate')
+                : message.includes('CV_LANGUAGE_DUPLICATE') ? t('languageAlreadyAdded') : message);
             try {
                 setData(await api<Evidence>(endpoint));
             }
@@ -131,8 +133,13 @@ export function EmployeeEvidenceReview({ resumeId, versionId, onClose }: {
         onChange={([position]) => setEditing({ ...editing, position, row: { ...editing.row, jobTitleId: position?.id ?? null, title: editing.row.title || position?.name || '' } })} />
     </>}
     {editing.kind === 'EXPERIENCE' && <><label>{m("startDateHint")}<input type="date" value={editing.row.startDate?.slice(0, 10) || ''} onChange={e => setEditing({ ...editing, row: { ...editing.row, startDate: e.target.value || null } })}/></label><label><input type="checkbox" checked={Boolean(editing.row.isCurrent)} onChange={e => setEditing({ ...editing, row: { ...editing.row, isCurrent: e.target.checked, endDate: e.target.checked ? null : editing.row.endDate } })}/>{m("currentlyWorking")}</label><label>{m("endDate")}<input type="date" disabled={editing.row.isCurrent} value={editing.row.endDate?.slice(0, 10) || ''} onChange={e => setEditing({ ...editing, row: { ...editing.row, endDate: e.target.value || null } })}/></label><label>{m("seniority")}<select value={editing.row.seniority || ''} onChange={e => setEditing({ ...editing, row: { ...editing.row, seniority: e.target.value || null } })}><option value="">{m("unknown")}</option>{['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].map(v => <option key={v} value={v}>{enumLabel('experienceLevel', v)}</option>)}</select></label></>}
-    {editing.kind === 'LANGUAGE' && <select aria-label={t('languages')} value={editing.row.code || ''} onChange={e => setEditing({ ...editing, row: { ...editing.row, code: e.target.value } })}><option value="">-</option>{languages.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select>}
-    {['SKILL', 'LANGUAGE'].includes(editing.kind) && <label>{m("levelYouConfirm")}<select value={editing.row.level || ''} onChange={e => setEditing({ ...editing, row: { ...editing.row, level: e.target.value || null } })}><option value="">{m("unknown")}</option>{(editing.kind === 'SKILL' ? ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] : ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']).map(level => <option key={level} value={level}>{level}</option>)}</select></label>}
-    <button type="button" className={s.primary} onClick={() => void mutate(editing.kind, editing.row, 'UPSERT')}>{m("confirmAndSave")}</button><button type="button" className={s.secondary} onClick={() => setEditing(null)}>{t('cancel')}</button></fieldset></section>}
+    {editing.kind === 'LANGUAGE' && <>
+      {!!editing.row.code && <p><strong>{languages.find(l => l.code === editing.row.code)?.name ?? editing.row.code}</strong></p>}
+      <LookupCombobox kind="languages" focusSuggestions disabled={busy}
+        excludedCodes={data.facts?.languages.flatMap(row => row.key !== editing.row.key && row.code ? [row.code] : [])}
+        onPick={item => setEditing({ ...editing, row: { ...editing.row, code: item.code ?? item.slug } })} />
+    </>}
+    {['SKILL', 'LANGUAGE'].includes(editing.kind) && <label>{m("levelYouConfirm")}<select value={editing.row.level || ''} onChange={e => setEditing({ ...editing, row: { ...editing.row, level: e.target.value || null } })}><option value="">{m("unknown")}</option>{(editing.kind === 'SKILL' ? ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'] : LANGUAGE_LEVELS).map(level => <option key={level} value={level}>{editing.kind === 'LANGUAGE' ? enumLabel('cefr', level) : level}</option>)}</select></label>}
+    <button type="button" className={s.primary} disabled={editing.kind === 'LANGUAGE' && !editing.row.code} onClick={() => void mutate(editing.kind, editing.row, 'UPSERT')}>{m("confirmAndSave")}</button><button type="button" className={s.secondary} onClick={() => setEditing(null)}>{t('cancel')}</button></fieldset></section>}
  </>}</div></ProfileDialog>;
 }

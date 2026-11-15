@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { parseCvText } from '../profiles/cv-parser';
+import { parseCvText, type CvCatalogLanguage } from '../profiles/cv-parser';
 import { EmployeeOccupationIndex, employeeOccupationRevision, type IntentRole } from './employee-occupation';
 export const EMPLOYEE_EVIDENCE_PARSER = 'employee-cv-v3.1';
 export const employeeEvidenceParserVersion = (roles: IntentRole[]) => EMPLOYEE_EVIDENCE_PARSER + '@' + employeeOccupationRevision(roles);
@@ -69,14 +69,7 @@ function groundedDate(value: string | null | undefined, text: string): string | 
     const pattern = new RegExp(`(?:${year}[-/]${month}(?:[-/]\\d{2})?|(?:${names.join('|')})\\p{L}*\\s+${year})`, 'iu');
     return pattern.test(text) ? value : null;
 }
-export function parseEmployeeEvidence(text: string, index: EmployeeOccupationIndex, skills: IntentSkill[], languages: Array<{
-    code: string;
-    name: string;
-    aliases?: Array<{
-        alias: string;
-        aliasKey: string;
-    }>;
-}>, identity?: {
+export function parseEmployeeEvidence(text: string, index: EmployeeOccupationIndex, skills: IntentSkill[], languages: CvCatalogLanguage[], identity?: {
     fullName?: string | null;
 }): IntentFacts {
     let removedName = false;

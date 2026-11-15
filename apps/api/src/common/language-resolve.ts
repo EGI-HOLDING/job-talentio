@@ -1,15 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 import { Language, PrismaClient } from '@prisma/client';
-import {
-  assertCatalogLabel,
-  normalizeLookupKey,
-  titleCaseWords,
-} from './lookup-normalize';
+import { assertCatalogLabel, titleCaseWords } from './lookup-normalize';
 
 type Db = Pick<PrismaClient, 'language' | 'languageAlias'>;
 
 export function languageKey(input: string): string {
-  return normalizeLookupKey(input);
+  return input.trim().toLowerCase().normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').normalize('NFC').replace(/[^\p{L}\p{N}]+/gu, '').slice(0, 80);
 }
 
 function codeFromInput(input: string): string {
@@ -32,10 +29,10 @@ export async function resolveLanguage(
   const raw = (opts.name || opts.code || '').trim();
   if (!raw) throw new BadRequestException('code or name required');
 
-  const code = (opts.code || codeFromInput(raw)).toLowerCase().slice(0, 8);
+  const code = (opts.code?.trim() || (/^[a-z]{2,3}$/i.test(raw) ? raw : '')).toLowerCase().slice(0, 8);
   const key = languageKey(raw);
 
-  const byCode = await db.language.findUnique({ where: { code } });
+  const byCode = code ? await db.language.findUnique({ where: { code } }) : null;
   if (byCode) {
     await ensureAlias(db, byCode.id, raw, key);
     return { language: byCode, created: false, matchedVia: 'code' };
@@ -58,7 +55,10 @@ export async function resolveLanguage(
   }
 
   const byName = await db.language.findFirst({
-    where: { name: { equals: raw, mode: 'insensitive' } },
+    where: { OR: (['name', 'nameId', 'nameRu', 'nameUz'] as const).map(field => ({
+      [field]: { equals: raw, mode: 'insensitive' as const },
+    })) },
+    orderBy: { id: 'asc' },
   });
   if (byName) {
     await ensureAlias(db, byName.id, raw, key);
@@ -76,26 +76,18 @@ export async function resolveLanguage(
   const displayName = opts.name?.trim() || titleCaseWords(raw);
   const finalCode = code || codeFromInput(displayName);
 
-  try {
-    // Language names always read differently per locale ("Kazakh" / "Qozoqcha" /
-    // "Казахский"), so they never qualify as a tech identity.
-    const language = await db.language.create({
-      data: {
+  const inserted = await db.language.createMany({
+      data: [{
         name: displayName,
         code: finalCode,
         normalizedKey: key || finalCode,
         i18nStatus: 'PENDING',
-      },
-    });
-    return { language, created: true, matchedVia: 'created' };
-  } catch {
-    const again = await db.language.findUnique({ where: { code: finalCode } });
-    if (again) {
-      await ensureAlias(db, again.id, raw, key);
-      return { language: again, created: false, matchedVia: 'code' };
-    }
-    throw new BadRequestException('Could not create language');
-  }
+      }],
+      skipDuplicates: true,
+  });
+  const language = await db.language.findUnique({ where: { normalizedKey: key || finalCode } });
+  if (!language) throw new BadRequestException('Language code is already in use');
+  return { language, created: inserted.count > 0, matchedVia: inserted.count ? 'created' : 'normalizedKey' };
 }
 
 async function ensureAlias(db: Db, languageId: string, alias: string, aliasKey: string) {
@@ -105,7 +97,8 @@ async function ensureAlias(db: Db, languageId: string, alias: string, aliasKey: 
   if (languageKey(language.name) === aliasKey || language.code === aliasKey) return;
   const existing = await db.languageAlias.findUnique({ where: { aliasKey } });
   if (existing) return;
-  await db.languageAlias
-    .create({ data: { languageId, alias: alias.trim().slice(0, 80), aliasKey } })
-    .catch(() => undefined);
+  await db.languageAlias.createMany({
+    data: [{ languageId, alias: alias.trim().slice(0, 80), aliasKey }],
+    skipDuplicates: true,
+  });
 }

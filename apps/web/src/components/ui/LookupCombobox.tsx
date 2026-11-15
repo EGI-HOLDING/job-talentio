@@ -39,6 +39,8 @@ type LookupComboboxProps = {
   disabled?: boolean;
   submitLabel?: string;
   placeholder?: string;
+  excludedCodes?: readonly string[];
+  keepOpenOnPick?: boolean;
 };
 
 const SUGGEST_PATH: Record<LookupKind, string> = {
@@ -70,6 +72,8 @@ export function LookupCombobox({
   disabled,
   submitLabel,
   placeholder,
+  excludedCodes = [],
+  keepOpenOnPick = false,
 }: LookupComboboxProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
@@ -79,40 +83,50 @@ export function LookupCombobox({
   const panelRef = useRef<HTMLUListElement>(null);
   const levelRef = useRef<HTMLSelectElement>(null);
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<LookupSuggestion[]>([]);
+  const [results, setResults] = useState<{ term: string; items: LookupSuggestion[] } | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [highlight, setHighlight] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<FloatingPanelPosition | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const languagePicker = kind === 'languages';
+  const term = query.trim();
+  const suggestions = results?.term === term
+    ? results.items.filter(row => !excludedCodes.includes(row.code || row.slug))
+    : [];
 
   useEffect(() => {
-    let active = true;
+    const abort = new AbortController();
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (focusSuggestions && !isOpen) { setLoading(false); return; }
+    setLoading(true);
+    setFailed(false);
     debounceRef.current = setTimeout(() => {
-      setLoading(true);
-      const q = query.trim();
       api<LookupSuggestion[]>(
-        `${SUGGEST_PATH[kind]}?take=10${q ? `&q=${encodeURIComponent(q)}` : ''}`,
-        { auth: false },
+        `${SUGGEST_PATH[kind]}?take=${languagePicker ? 250 : 10}${term ? `&q=${encodeURIComponent(term)}` : ''}`,
+        { auth: false, signal: abort.signal },
       )
         .then((rows) => {
-          if (!active) return;
-          setSuggestions(rows || []);
+          if (abort.signal.aborted) return;
+          setResults({ term, items: rows || [] });
           setHighlight(-1);
         })
-        .catch(() => { if (active) setSuggestions([]); })
-        .finally(() => { if (active) setLoading(false); });
+        .catch(() => {
+          if (abort.signal.aborted) return;
+          setResults(null);
+          setFailed(true);
+        })
+        .finally(() => { if (!abort.signal.aborted) setLoading(false); });
     }, 220);
     return () => {
-      active = false;
+      abort.abort();
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, kind, focusSuggestions, isOpen]);
+  }, [term, kind, languagePicker, focusSuggestions, isOpen]);
 
-  const showSuggestions = suggestions.length > 0 && (!focusSuggestions || isOpen);
+  const showSuggestions = !loading && suggestions.length > 0 && (!focusSuggestions || isOpen);
   useLayoutEffect(() => {
     if (!showSuggestions) { setPosition(null); return; }
     const place = () => {
@@ -131,6 +145,11 @@ export function LookupCombobox({
       window.visualViewport?.removeEventListener('scroll', place);
     };
   }, [showSuggestions]);
+  useLayoutEffect(() => {
+    if (showSuggestions && highlight >= 0) {
+      panelRef.current?.querySelectorAll('[role=option]')[highlight]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlight, showSuggestions]);
 
   useEffect(() => {
     if (!focusSuggestions || !isOpen) return;
@@ -158,11 +177,16 @@ export function LookupCombobox({
       s.code?.toLowerCase() === query.trim().toLowerCase() ||
       (s.aliases || []).some((a) => a.toLowerCase() === query.trim().toLowerCase()),
   );
-  const canCreate = allowCreate && query.trim().length >= 2 && !exact && !loading;
+  const canCreate = allowCreate && !languagePicker && term.length >= 2 && !exact && !loading && results?.term === term;
 
   async function choose(item: LookupSuggestion) {
-    if (focusSuggestions) { setIsOpen(false); setSuggestions([]); }
-    setStatus(t('skillMatched').replace('{name}', item.name));
+    if (disabled || loading) return;
+    if (focusSuggestions && !keepOpenOnPick) {
+      setIsOpen(false);
+      setResults(null);
+    }
+    setHighlight(-1);
+    setStatus(languagePicker ? item.name : t('skillMatched').replace('{name}', item.name));
     setQuery('');
     await onPick({
       slug: item.slug,
@@ -171,11 +195,17 @@ export function LookupCombobox({
       isNew: false,
       level: currentLevel(),
     });
+    if (keepOpenOnPick) requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   async function submitPick() {
-    if (disabled) return;
+    if (disabled || loading) return;
     const level = currentLevel();
+    if (languagePicker) {
+      const selected = suggestions[highlight] ?? exact ?? (term && suggestions.length === 1 ? suggestions[0] : null);
+      if (selected) await choose(selected);
+      return;
+    }
 
     if (exact) {
       await choose(exact);
@@ -212,15 +242,15 @@ export function LookupCombobox({
           ref={inputRef}
           type="text"
           role="combobox"
-          aria-expanded={suggestions.length > 0 && (!focusSuggestions || isOpen)}
-          aria-controls={listId}
+          aria-expanded={showSuggestions}
+          aria-controls={showSuggestions ? listId : undefined}
           aria-autocomplete="list"
-          aria-activedescendant={highlight >= 0 ? `${listId}-opt-${highlight}` : undefined}
+          aria-activedescendant={showSuggestions && suggestions[highlight] ? `${listId}-opt-${highlight}` : undefined}
           autoComplete="off"
           value={query}
           disabled={disabled}
-          placeholder={placeholder || t('skillSearchPlaceholder')}
-          onChange={(e) => { setQuery(e.target.value); if (focusSuggestions) setIsOpen(true); }}
+          placeholder={placeholder || t(languagePicker ? 'languageSearchPlaceholder' : 'skillSearchPlaceholder')}
+          onChange={(e) => { setQuery(e.target.value); setHighlight(-1); if (focusSuggestions) setIsOpen(true); }}
           onFocus={() => { if (focusSuggestions) setIsOpen(true); }}
           onClick={() => { if (focusSuggestions) setIsOpen(true); }}
           onBlur={() => {
@@ -231,15 +261,17 @@ export function LookupCombobox({
             }, 0);
           }}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'ArrowDown') {
               e.preventDefault();
+              setIsOpen(true);
               setHighlight((h) => Math.min(h + 1, suggestions.length - 1));
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
               setHighlight((h) => Math.max(h - 1, 0));
             } else if (e.key === 'Escape') {
-              if (focusSuggestions) { e.preventDefault(); e.stopPropagation(); setIsOpen(false); }
-              setSuggestions([]);
+              if (focusSuggestions && isOpen) { e.preventDefault(); e.stopPropagation(); setIsOpen(false); }
+              setResults(null);
               setHighlight(-1);
             } else if (e.key === 'Enter') {
               e.preventDefault();
@@ -249,7 +281,7 @@ export function LookupCombobox({
           }}
         />
       </label>
-      {loading && suggestions.length === 0 && (
+      {!languagePicker && loading && suggestions.length === 0 && (
         <div className="lookup-suggest-skel" aria-hidden>
           <span className="skel skel-line" />
           <span className="skel skel-line short" />
@@ -295,7 +327,7 @@ export function LookupCombobox({
                     </span>
                   ) : null}
                 </span>
-                {s.usageCount !== undefined && (
+                {!languagePicker && s.usageCount !== undefined && (
                   <span className="muted" style={{ fontSize: '0.8rem' }}>
                     {s.usageCount}
                   </span>
@@ -304,7 +336,10 @@ export function LookupCombobox({
             </li>
           ))}
         </ul>,
-        inputRef.current?.closest('dialog') || document.body,
+        inputRef.current?.closest('dialog,[role=dialog]') || document.body,
+      )}
+      {languagePicker && isOpen && (failed || (!loading && results?.term === term && !suggestions.length)) && (
+        <p className="muted" role="status">{t(failed ? 'ew.loadFailed' : 'languageNoResults')}</p>
       )}
       {canCreate && (
         <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>
@@ -323,13 +358,13 @@ export function LookupCombobox({
           </select>
         </label>
       )}
-      <button
+      {!languagePicker && <button
         type="button"
         disabled={disabled || (!query.trim() && highlight < 0)}
         onClick={() => void submitPick()}
       >
         {submitLabel || t('addSkill')}
-      </button>
+      </button>}
       <p id={statusId} className="sr-only" aria-live="polite">
         {status}
       </p>

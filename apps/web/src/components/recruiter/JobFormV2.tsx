@@ -3,7 +3,7 @@ import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { JOB_SKILL_LIMIT, normalizeSkillKey, SKILL_NAME_MAX_LENGTH } from '@job-talentio/shared';
+import { JOB_LANGUAGE_LIMIT, JOB_SKILL_LIMIT, LANGUAGE_LEVELS, normalizeSkillKey, SKILL_NAME_MAX_LENGTH } from '@job-talentio/shared';
 import { CatalogPositionPicker, usePositionLabels } from '@/components/ui/CatalogPositionPicker';
 import { LocationFields } from '@/components/ui/LocationFields';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
@@ -53,7 +53,7 @@ export function JobFormV2({draft,onChange,companyId,initialCity,approvedMembers,
   },[focusSkill]);
   useEffect(()=>{if(addingLanguage)languagePicker.current?.querySelector('input')?.focus();},[addingLanguage]);
   useEffect(()=>{const abort=new AbortController();api<Array<{currencyCode?:string}>>('/meta/countries',{auth:false,signal:abort.signal}).then(rows=>setCurrencies([...new Set(['IDR','USD','EUR',...rows.map(row=>row.currencyCode).filter((value):value is string=>Boolean(value))])].sort())).catch(()=>undefined);return()=>abort.abort();},[]);
-  const {locale}=useI18n();const confirm=useConfirm();
+  const {locale,t}=useI18n();const confirm=useConfirm();
   const [levels,setLevels]=useState<Level[]>([]),[catalogError,setCatalogError]=useState(''),[retry,setRetry]=useState(0);
   useEffect(()=>{const abort=new AbortController();api<{levels:Level[]}>('/meta/seniority-levels',{auth:false,signal:abort.signal}).then(v=>{setLevels(v.levels);setCatalogError('');}).catch(error=>{if(!abort.signal.aborted)setCatalogError(error.message);});return()=>abort.abort();},[retry]);
   const update=(key:string,value:any)=>onChange({[key]:value});
@@ -195,8 +195,40 @@ export function JobFormV2({draft,onChange,companyId,initialCity,approvedMembers,
         })}</tbody>
       </table>
       <HrAddItemButton fullWidth disabled={!skillCapacity} onClick={()=>appendSkills([{name:'',isRequired:true,weight:1,minLevel:null}],true)}>{c("Tambah keahlian")}</HrAddItemButton>
-      <hr className={s.separator}/><div data-job-field="languages">{fieldErrors("languages")}</div><table className={s.table}><thead><tr><th>{c("Bahasa")}</th><th>{c("Kebutuhan")}</th><th>{c("Level minimum")}</th><th><span className={s.srOnly}>{c("Hapus")}</span></th></tr></thead><tbody>{languages.map((language,index)=><tr key={language.code}><td><span className={s.tableValue}>{language.name??language.code}</span></td><td data-label={c("Kebutuhan")}><select aria-label={`Kebutuhan bahasa ${language.name}`} value={language.isRequired?'REQUIRED':'OPTIONAL'} onChange={e=>update('languages',languages.map((v,i)=>i===index?{...v,isRequired:e.target.value==='REQUIRED',confirmed:true}:v))}><option value="REQUIRED">{c("Wajib")}</option><option value="OPTIONAL">{c("Nilai tambah")}</option></select></td><td data-label={c("Level minimum")}><select aria-label={`Level bahasa ${language.name}`} value={language.minLevel} onChange={e=>update('languages',languages.map((v,i)=>i===index?{...v,minLevel:e.target.value,confirmed:true}:v))}>{['A1','A2','B1','B2','C1','C2','NATIVE'].map(v=><option value={v} key={v}>{v==='NATIVE'?c("Penutur asli"):v}</option>)}</select></td><td><button className={s.icon} type="button" aria-label={`Hapus bahasa ${language.name}`} onClick={()=>update('languages',languages.filter((_,i)=>i!==index))}>×</button></td></tr>)}</tbody></table>
-      {addingLanguage&&languages.length<4&&<div ref={languagePicker} className={s.lookup}><LookupCombobox kind="languages" focusSuggestions allowCreate={false} submitLabel={c("Tambah bahasa")} placeholder={c("Tambah bahasa")} onPick={item=>{const code=item.code??item.slug;if(code&&!languages.some(v=>v.code===code)){update('languages',[...languages,{code,name:item.name,minLevel:'B1',isRequired:true,confirmed:true}]);setAddingLanguage(false);}}}/></div>}<HrAddItemButton fullWidth disabled={languages.length>=4} onClick={()=>setAddingLanguage(v=>!v)}>{addingLanguage?c("Tutup pencarian"):c("Tambah bahasa")}</HrAddItemButton>
+      <hr className={s.separator}/>
+      <div data-job-field="languages">
+        {fieldErrors("languages")}
+        <table className={s.table}>
+          <thead><tr><th>{c("Bahasa")}</th><th>{c("Kebutuhan")}</th><th>{c("Level minimum")}</th><th><span className={s.srOnly}>{c("Hapus")}</span></th></tr></thead>
+          <tbody>{languages.map((language,index)=>{
+            const name=language.name??language.code;
+            return <tr key={language.code??name}>
+              <td><span className={s.tableValue}>{name}</span></td>
+              <td data-label={c("Kebutuhan")}><select aria-label={c("Kebutuhan")+' · '+name} value={language.isRequired?'REQUIRED':'OPTIONAL'}
+                onChange={e=>update('languages',languages.map((row,i)=>i===index?{...row,isRequired:e.target.value==='REQUIRED',confirmed:true}:row))}>
+                <option value="REQUIRED">{c("Wajib")}</option><option value="OPTIONAL">{c("Nilai tambah")}</option>
+              </select></td>
+              <td data-label={c("Level minimum")}><select aria-label={c("Level minimum")+' · '+name} value={language.minLevel}
+                onChange={e=>update('languages',languages.map((row,i)=>i===index?{...row,minLevel:e.target.value,confirmed:true}:row))}>
+                {LANGUAGE_LEVELS.map(level=><option value={level} key={level}>{level==='NATIVE'?c("Penutur asli"):level}</option>)}
+              </select></td>
+              <td><button className={s.icon} type="button" aria-label={c("Hapus")+' · '+name}
+                onClick={()=>update('languages',languages.filter((_,i)=>i!==index))}>×</button></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {addingLanguage && <div ref={languagePicker} className={s.lookup}>
+          <LookupCombobox kind="languages" focusSuggestions keepOpenOnPick excludedCodes={languages.map(row=>row.code)} onPick={item=>{
+            const code=item.code??item.slug;
+            if(!code||languages.length>=JOB_LANGUAGE_LIMIT||languages.some(row=>row.code===code))return;
+            update('languages',[...languages,{code,name:item.name,minLevel:'B1',isRequired:true,confirmed:true}]);
+            if(languages.length+1===JOB_LANGUAGE_LIMIT)setAddingLanguage(false);
+          }}/>
+        </div>}
+        {addingLanguage
+          ? <button className={s.link} type="button" onClick={()=>setAddingLanguage(false)}>{t('pc.done')}</button>
+          : <HrAddItemButton fullWidth disabled={languages.length>=JOB_LANGUAGE_LIMIT} onClick={()=>setAddingLanguage(true)}>{c("Tambah bahasa")}</HrAddItemButton>}
+      </div>
     </section>
     <section className={s.section} data-job-field="specificExpectations">{fieldErrors("specificExpectations")}<h2>{c("Harapan spesifik posisi")+" "}<small>{c("Nice-to-have")}</small></h2><p className={s.subtitle}>{c("Tambahkan pengalaman atau konteks khusus yang menjadi nilai tambah.")}</p><label className={s.field}><span className={s.srOnly}>{c("Harapan spesifik posisi")}</span><textarea rows={4} maxLength={5000} value={draft.specificExpectations??''} onChange={e=>update('specificExpectations',e.target.value)} placeholder={c("Tuliskan harapan spesifik untuk posisi ini...")}/></label><span className={s.hint}>{c("Contoh: pengalaman menjual SaaS atau membangun relasi dengan BUMN.")}</span></section>
     <section className={s.section} data-job-field="countryId">{["countryId","citySlug","workMode","employmentType","salaryMin","salaryMax","currency","salaryPeriod","benefits"].map(field=>fieldErrors(field))}<h2>{c("Lokasi, pola kerja & kompensasi")}</h2>

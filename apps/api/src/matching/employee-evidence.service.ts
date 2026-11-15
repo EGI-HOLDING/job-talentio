@@ -143,8 +143,15 @@ export class EmployeeEvidenceService {
                         throw new BadRequestException('CV_SKILL_DUPLICATE');
                     value = { skillId, level: value.level };
                 }
-                if (patch.kind === 'LANGUAGE' && !await tx.language.findFirst({ where: { code: String(value.code), archivedAt: null } }))
-                    throw new BadRequestException('Select a catalog language');
+                if (patch.kind === 'LANGUAGE') {
+                    const languages = applyEmployeeOverrides(facts, overrides).languages;
+                    const current = languages.find(language => language.key === patch.key);
+                    const code = String(value.code);
+                    if (current?.code !== code && !await tx.language.findFirst({ where: { code, archivedAt: null } }))
+                        throw new BadRequestException('Select a catalog language');
+                    if (current?.code !== code && languages.some(language => language.code === code))
+                        throw new BadRequestException('CV_LANGUAGE_DUPLICATE');
+                }
                 if (value.jobTitleId) {
                     const index = new EmployeeOccupationIndex(await tx.jobTitle.findMany({ include: intentRoleInclude }));
                     if (!index.identity(String(value.jobTitleId)))

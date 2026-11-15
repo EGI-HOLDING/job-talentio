@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import { countryFilter, geoAliasKey, SELECTABLE_CITY } from '../common/geo-selection';
+import { languageKey } from '../common/language-resolve';
+import type { Locale } from '../common/i18n/locale';
 
 export type PlatformStats = {
   openRoles: number;
@@ -475,35 +477,33 @@ export class MetaService {
     });
   }
 
-  async suggestLanguages(q?: string, take = 10) {
-    const limit = Math.min(Math.max(take || 10, 1), 20);
-    const term = q?.trim();
+  async suggestLanguages(q?: string, take = 10, locale: Locale = 'en') {
+    const limit = Math.min(Math.max(Math.trunc(take) || 10, 1), 250);
+    const term = typeof q === 'string' ? q.trim().slice(0, 120) : '';
+    const key = languageKey(term);
+    const nameFields = ['name', 'nameId', 'nameRu', 'nameUz'] as const;
     const rows = await this.prisma.language.findMany({
-      where: {
-        ...ACTIVE_CATALOG,
-        ...(term
-          ? {
-              OR: [
-                { name: { contains: term, mode: 'insensitive' } },
-                { code: { contains: term.toLowerCase(), mode: 'insensitive' } },
-                {
-                  aliases: {
-                    some: { alias: { contains: term, mode: 'insensitive' } },
-                  },
-                },
-              ],
-            }
-          : {}),
-      },
+      where: ACTIVE_CATALOG,
       include: {
         _count: { select: { profileLanguages: true } },
-        aliases: { take: 3, select: { alias: true } },
+        aliases: { select: { alias: true } },
       },
-      orderBy: { name: 'asc' },
-      take: limit * 2,
     });
-    return rows
-      .map((l) => ({
+    const localField = locale === 'id' ? 'nameId' : locale === 'ru' ? 'nameRu' : locale === 'uz' ? 'nameUz' : 'name';
+    const collator = new Intl.Collator(locale, { sensitivity: 'base' });
+    const ranked = rows.map(row => {
+      const labels = [...nameFields.map(field => row[field] ?? ''), ...row.aliases.map(alias => alias.alias)].map(languageKey);
+      const rank = !term ? 0 : !key ? -1 : row.code === key ? 3 : labels.includes(key) ? 2
+        : labels.some(label => label.startsWith(key)) ? 1
+        : labels.some(label => label.includes(key)) || row.code.startsWith(key) ? 0 : -1;
+      return { row, rank, label: row[localField] || row.name };
+    });
+    return ranked
+      .filter(item => item.rank >= 0)
+      .sort((a, b) => b.rank - a.rank || b.row._count.profileLanguages - a.row._count.profileLanguages
+        || collator.compare(a.label, b.label) || a.row.code.localeCompare(b.row.code))
+      .slice(0, limit)
+      .map(({ row: l }) => ({
         id: l.id,
         name: l.name,
         nameUz: l.nameUz,
@@ -511,11 +511,9 @@ export class MetaService {
         nameId: l.nameId,
         slug: l.code,
         code: l.code,
-        aliases: l.aliases.map((a) => a.alias),
+        aliases: l.aliases.slice(0, 3).map((a) => a.alias),
         usageCount: l._count.profileLanguages,
-      }))
-      .sort((a, b) => b.usageCount - a.usageCount || a.name.localeCompare(b.name))
-      .slice(0, limit);
+      }));
   }
 
   async suggestCities(q?: string, take = 10, country?: string) {

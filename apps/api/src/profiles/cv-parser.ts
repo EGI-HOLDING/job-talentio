@@ -56,7 +56,11 @@ export type CvCatalogSkill = {
 };
 
 export type CvCatalogLanguage = {
+  id?: string;
   name: string;
+  nameId?: string | null;
+  nameRu?: string | null;
+  nameUz?: string | null;
   code: string;
   aliases?: Array<{ alias: string; aliasKey: string }>;
 };
@@ -281,12 +285,14 @@ export function normalizeSkillNames(
   }
   return out;
 }
-function extractLanguages(text: string, knownLanguages: CvCatalogLanguage[]): ParsedLanguage[] {
+function extractLanguages(text: string, knownLanguages: CvCatalogLanguage[], explicitSection: boolean): ParsedLanguage[] {
   const out: ParsedLanguage[] = [];
   const hints = knownLanguages
     .map((language) => ({
       ...language,
-      labels: [language.name, ...(language.aliases ?? []).map((alias) => alias.alias)]
+      labels: [language.name, ...(language.aliases ?? []).map((alias) => alias.alias),
+        ...(explicitSection ? [language.nameId, language.nameRu, language.nameUz] : [])]
+        .filter((label): label is string => Boolean(label))
         .map((label) => label.trim())
         .filter(Boolean)
         .sort((a, b) => b.length - a.length),
@@ -299,10 +305,10 @@ function extractLanguages(text: string, knownLanguages: CvCatalogLanguage[]): Pa
   for (const hint of hints) {
     const pattern = hint.labels.map(escapeRegexLabel).join('|');
     if (!pattern || out.some((language) => language.code === hint.code)) continue;
-    const re = new RegExp(
-      BOUND_L + '(' + pattern + ')' + BOUND_R + '\\s*[:\\-–—]?\\s*(' + LANG_LEVEL + ')?',
-      'iu',
-    );
+    // The expanded catalog includes names like Akan that can also be words in prose.
+    const needsProficiency = !explicitSection && hint.id?.startsWith('catalog_iso_language_');
+    const expression = BOUND_L + '(' + pattern + ')' + BOUND_R + '\\s*[:\\-–—]?\\s*(' + LANG_LEVEL + ')';
+    const re = new RegExp(expression + (needsProficiency ? BOUND_R : '?'), 'iu');
     const match = text.match(re);
     if (!match) continue;
     let level: ParsedLanguage['level'];
@@ -514,7 +520,7 @@ export function parseCvText(
     skillNames: extractSkills(skillText, knownSkills, Boolean(sections.skills)),
     experiences: extractExperiences(sections.experience ?? collapsed, Boolean(sections.experience)),
     educations: extractEducations(sections.education ?? collapsed),
-    languages: extractLanguages(sections.languages ?? collapsed, knownLanguages),
+    languages: extractLanguages(sections.languages ?? collapsed, knownLanguages, sections.languages !== undefined),
     textPreview: collapsed.replace(/\s+/g, ' ').trim().slice(0, 2000),
   });
 }
