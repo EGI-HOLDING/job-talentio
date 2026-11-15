@@ -13,7 +13,6 @@ import { CountryPicker, SalaryFields, type Country, type SalaryValue } from '@/c
 import { useOnboardingText } from '@/lib/i18n/onboarding';
 import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { LookupCombobox } from '@/components/ui/LookupCombobox';
-import { SkillCombobox } from '@/components/ui/SkillCombobox';
 import { WorkspaceSelect } from '@/components/jobs/WorkspaceSelect';
 import { PhoneNumberField, phoneErrorText } from '@/components/ui/PhoneNumberField';
 import { phoneDraftFromE164, validatePhoneDraft } from '@job-talentio/shared';
@@ -22,7 +21,6 @@ import { ProfileIcon } from './ProfileIcon';
 import { dateValue, type CareerProfile, type City, type ProfileEditor } from './types';
 import s from './ProfileWorkspace.module.css';
 
-const SKILL_LEVELS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'];
 const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE'];
 const WORK_MODES = [
   { mode: 'ONSITE', icon: 'building' },
@@ -65,7 +63,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
   const certification = profile.certifications.find((row) => row.id === editor.id);
   const [current, setCurrent] = useState(experience?.isCurrent || false);
   const titles = {
-    basics: t('pc.editProfile'), phone: onboardingText('phoneEdit'), skills: t('pc.editSkills'), languages: t('pc.editLanguages'),
+    basics: t('pc.editProfile'), phone: onboardingText('phoneEdit'), languages: t('pc.editLanguages'),
     experience: t(editor.id ? 'pc.editExperience' : 'pc.addExperience'),
     education: t(editor.id ? 'pc.editEducation' : 'pc.addEducation'),
     certification: t(editor.id ? 'pc.editCertification' : 'pc.addCertification'),
@@ -119,7 +117,7 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
     }
   }
 
-  const listEditor = editor.kind === 'skills' || editor.kind === 'languages';
+  const listEditor = editor.kind === 'languages';
   return <ProfileDialog title={titles[editor.kind]} subtitle={editor.kind === 'basics' ? t('pc.basicsHint') : undefined} onClose={onClose} busy={busy} guardChanges={!listEditor} initialFocus={editor.kind === 'languages' ? 'close' : 'field'}>
     {error && <div className={s.formError} role="alert">{error}</div>}
     {editor.kind === 'phone' ? <form onSubmit={submit} className={s.form}>
@@ -136,13 +134,16 @@ export function ProfileForms({ editor, profile, onClose, onSaved }: { editor: Pr
       <footer className={s.dialogFooter}><button type="button" className={s.secondary} onClick={onClose} disabled={busy}>{t('cancel')}</button><button type="submit" className={s.primary} disabled={busy}>{busy ? t('saving') : t('save')}</button></footer>
     </form> : listEditor ? <div className={s.dialogBody}>
       <fieldset disabled={busy} className={s.resetFieldset}>
-        {editor.kind === 'skills' ? <SkillCombobox focusSuggestions disabled={busy} onPick={(item) => mutate('/profiles/me/skills', 'POST', { ...(item.slug ? { slug: item.slug } : { name: item.name }), level: item.level || 'INTERMEDIATE' })} /> : <LookupCombobox focusSuggestions kind="languages" placeholder={t('languageSearchPlaceholder')} disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1" onPick={(item) => mutate('/profiles/me/languages', 'POST', { ...(item.code || item.slug ? { code: item.code || item.slug } : { name: item.name }), level: item.level || 'B1' })} />}
+        <LookupCombobox focusSuggestions kind="languages" placeholder={t('languageSearchPlaceholder')} disabled={busy} levelOptions={LANGUAGE_LEVELS.map((value) => ({ value, label: enumLabel('cefr', value) }))} defaultLevel="B1" onPick={(item) => mutate('/profiles/me/languages', 'POST', { ...(item.code || item.slug ? { code: item.code || item.slug } : { name: item.name }), level: item.level || 'B1' })} />
         <div className={s.editList}>
-          {(editor.kind === 'skills' ? profile.skills : profile.languages).map((row) => {
-            const name = 'skill' in row ? row.skill.name : row.language.name;
-            const kind = editor.kind === 'skills' ? 'skills' : 'languages';
-            return <div key={row.id}><strong>{name}</strong><WorkspaceSelect value={row.level} label={t('emp.levelFor').replace('{name}', name)} onChange={(level) => void mutate(`/profiles/me/${kind}/${row.id}`, 'PATCH', { level })} options={(kind === 'skills' ? SKILL_LEVELS : LANGUAGE_LEVELS).map((value) => ({ value, label: enumLabel(kind === 'skills' ? 'skillLevel' : 'cefr', value) }))} /><button className={s.iconButton} type="button" aria-label={`${t('pc.remove')}: ${name}`} onClick={() => void mutate(`/profiles/me/${kind}/${row.id}`, 'DELETE')}><ProfileIcon kind="trash" /></button></div>;
-          })}
+          {profile.languages.map(row => <div key={row.id}>
+            <strong>{row.language.name}</strong>
+            <WorkspaceSelect value={row.level} label={t('emp.levelFor').replace('{name}', row.language.name)}
+              onChange={level => void mutate('/profiles/me/languages/'+row.id, 'PATCH', { level })}
+              options={LANGUAGE_LEVELS.map(value => ({ value, label: enumLabel('cefr', value) }))} />
+            <button className={s.iconButton} type="button" aria-label={t('pc.remove')+': '+row.language.name}
+              onClick={() => void mutate('/profiles/me/languages/'+row.id, 'DELETE')}><ProfileIcon kind="trash" /></button>
+          </div>)}
         </div>
       </fieldset>
       <div className={s.dialogFooter}><span className={s.quiet}>{busy ? t('saving') : t('pc.changesImmediate')}</span><button className={s.primary} type="button" disabled={busy} onClick={onClose}>{t('pc.done')}</button></div>

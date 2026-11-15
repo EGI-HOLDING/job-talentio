@@ -1,3 +1,4 @@
+import { JOB_SKILL_LIMIT, SKILL_FILTER_LIMIT, SKILL_NAME_MAX_LENGTH, skillLabelIssue } from './catalog-label';
 import { desiredSelectionsSchema } from './employee-intent';
 import { z } from 'zod';
 
@@ -193,9 +194,13 @@ export const jobPostSchema = z.object({
           weight: z.number().min(0.1).max(5).optional().default(1),
           minLevel: z.enum(['BEGINNER','INTERMEDIATE','ADVANCED','EXPERT']).nullable().optional(),
         })
-        .refine((s) => Boolean(s.slug || s.name), { message: 'slug or name required' }),
+        .superRefine((skill, context) => {
+          if (!skill.slug && skillLabelIssue(skill.name ?? '')) {
+            context.addIssue({ code: 'custom', path: ['name'], message: 'Invalid skill name' });
+          }
+        }),
     )
-    .max(30)
+    .max(JOB_SKILL_LIMIT)
     .default([]),
   benefitSlugs: z.array(z.string()).max(20).default([]),
   benefits: z
@@ -229,6 +234,11 @@ export const jobPostSchema = z.object({
   locale: z.enum(['uz', 'ru', 'en', 'id']).default('uz'),
 });
 
+export const skillNameSchema = z.string().trim().min(1).max(SKILL_NAME_MAX_LENGTH)
+  .refine(name => skillLabelIssue(name) === null, 'Invalid skill name');
+const skillNamesSchema = z.array(skillNameSchema).max(SKILL_FILTER_LIMIT);
+const searchSkillNamesSchema = z.preprocess(value => typeof value === 'string' ? [value] : value, skillNamesSchema.optional());
+
 export const jobSearchSchema = z.object({
   selectionScope: z.enum(['primary','related']).optional(),
   q: z.string().optional(),
@@ -247,6 +257,7 @@ export const jobSearchSchema = z.object({
   workMode: z.enum(['ONSITE', 'REMOTE', 'HYBRID']).optional(),
   experienceLevel: z.string().refine((value) => value.split(',').every((item) => ['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE'].includes(item.trim())), 'Invalid experience level').optional(),
   skills: z.string().optional(), // comma-separated slugs
+  skillName: searchSkillNamesSchema,
   skillMode: z.enum(['AND', 'OR']).default('OR'),
   benefits: z.string().optional(), // comma-separated slugs
   /** Comma-separated language tokens: `en` or `en:B2` (level = floor, inclusive). */
@@ -481,6 +492,7 @@ export const jobAlertSchema = z.object({
   countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional(),
   skillSlugs: z.array(z.string()).max(20).default([]),
+  skillNames: skillNamesSchema.optional(),
   frequency: z.enum(['DAILY', 'WEEKLY']).default('DAILY'),
   notifyInApp: z.boolean().default(true),
   notifyEmail: z.boolean().default(true),
@@ -495,6 +507,7 @@ export const jobAlertUpdateSchema = z.object({
   countryId: z.string().max(100).nullable().optional(),
   categorySlug: z.string().max(120).optional().nullable(),
   skillSlugs: z.array(z.string()).max(20).optional(),
+  skillNames: skillNamesSchema.optional(),
   frequency: z.enum(['DAILY', 'WEEKLY']).optional(),
   isActive: z.boolean().optional(),
   notifyInApp: z.boolean().optional(),

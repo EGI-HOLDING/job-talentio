@@ -8,7 +8,7 @@ import { packageHref } from '@/lib/jobCommerce';
 import { HrIcon, useHrFlowSurface } from './HrFlowPresentation';
 import { JobFormV2, cleanHrDraft, initialHrDraft, HrDraft } from './JobFormV2';
 import s from './HrFlow.module.css';
-import { hrJobError } from './hrDraftValidation';
+import { hrJobError, validateHrSkills, type HrDraftIssue } from './hrDraftValidation';
 import { useEmployerUnsaved } from './useEmployerUnsaved';
 
 export function RecruiterJobEditorV2({companyId,company,job,onClose,onPublished,onSaved}:{companyId:string;company:any;job:any;onClose:()=>void;onPublished?:(id:string)=>void|Promise<void>;onSaved:(message:string)=>Promise<void>}){
@@ -16,6 +16,7 @@ export function RecruiterJobEditorV2({companyId,company,job,onClose,onPublished,
   useHrFlowSurface(company?.name);
   const router=useRouter();const [draft,setDraft]=useState<HrDraft>(()=>initialHrDraft(job)),[busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
   const [approved,setApproved]=useState(job);
+  const [skillIssues,setSkillIssues]=useState<HrDraftIssue[]>([]);
   const original=useRef(job),current=useRef(draft),saved=useRef(JSON.stringify(cleanHrDraft(draft))),queue=useRef<Promise<any>>(Promise.resolve()),alive=useRef(false),lock=useRef(false);current.current=draft;
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
   function save(){
@@ -23,6 +24,7 @@ export function RecruiterJobEditorV2({companyId,company,job,onClose,onPublished,
       if(!alive.current)throw Error(c("Halaman sudah berubah."));
       const body=cleanHrDraft(current.current),hash=JSON.stringify(body);
       if(hash===saved.current)return original.current;
+      if(validateHrSkills(current.current,false).length)return original.current;
       const initial=initialHrDraft(original.current);
       const positionFields=['title','jobTitleId','positionEntryMode','positionGroupId','positionGroupScopeRevision'];
       if(positionFields.every(field=>(body[field]??null)===(initial[field]??null))){
@@ -40,7 +42,11 @@ export function RecruiterJobEditorV2({companyId,company,job,onClose,onPublished,
   useEffect(()=>{if(job.status!=='DRAFT'||serialized===saved.current)return;setStatus(c("Perubahan belum tersimpan"));const timer=setTimeout(()=>void save().catch(reason=>{if(alive.current)setError(reason.message);}),900);return()=>clearTimeout(timer);},[serialized,job.id,job.status]);
   useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(JSON.stringify(cleanHrDraft(current.current))!==saved.current){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[]);
   async function action(publish=false){
-    if(lock.current)return;lock.current=true;setBusy(true);setError('');
+    if(lock.current)return;
+    const issues=validateHrSkills(current.current);
+    setSkillIssues(issues);
+    if(issues.length){document.querySelector('#hr-existing-job-form [data-job-field=skills]')?.scrollIntoView({block:'center'});return;}
+    lock.current=true;setBusy(true);setError('');
     try{
       const result=await save();
       if(publish&&result.status!=='PUBLISHED'){
@@ -51,5 +57,5 @@ export function RecruiterJobEditorV2({companyId,company,job,onClose,onPublished,
       await onSaved(publish?c("Lowongan berhasil dipublikasikan."):c("Perubahan berhasil disimpan."));
     }catch(reason){setError(c(hrJobError(reason)));}finally{lock.current=false;if(alive.current)setBusy(false);}
   }
-  return <div className={s.page} data-hr-job-editor-v2 data-hr-surface><h1 className={s.title}>{job.status==='PUBLISHED'?c("Edit lowongan"):c("Lengkapi lowongan")}</h1><p className={s.subtitle}>{c("Susun kebutuhan posisi dengan jelas untuk kandidat.")}</p><div className={s.context}><strong><HrIcon kind="building"/>{company?.name}</strong><span className={s.saved} data-saved={status===c("Tersimpan")} role="status">{status===c("Tersimpan")&&<HrIcon kind="check"/>}{status}</span></div>{error&&<div className={s.error} role="alert">{error}</div>}<form id="hr-existing-job-form" onSubmit={e=>{e.preventDefault();void action(job.status!=='PUBLISHED');}}><JobFormV2 draft={draft} companyId={companyId} initialCity={job.city} approvedMembers={approved.positionGroupApprovedAt && approved.positionGroupId===draft.positionGroupId ? approved.approvedPositionMembers : undefined} disabled={busy} onChange={patch=>setDraft(previous=>({...previous,...patch}))}/></form><footer className={s.footer}><div className={s.footerInner}><button className={s.secondary} disabled={busy} onClick={()=>{void (async()=>{if(serialized!==saved.current){await save();await onSaved(c("Draf tersimpan."));}onClose();})().catch(reason=>setError(reason.message));}}><HrIcon kind="back"/>{c("Kembali")}</button><div className={s.actions}><button className={job.status==='PUBLISHED'?s.primary:s.secondary} disabled={busy} onClick={()=>void action(false)}>{c("Simpan")+" "}{job.status==='DRAFT'?'draf':'perubahan'}</button>{job.status!=='PUBLISHED'&&<button className={s.primary} type="submit" form="hr-existing-job-form" disabled={busy}>{c("Publikasikan lowongan")}</button>}</div></div></footer></div>;
+  return <div className={s.page} data-hr-job-editor-v2 data-hr-surface><h1 className={s.title}>{job.status==='PUBLISHED'?c("Edit lowongan"):c("Lengkapi lowongan")}</h1><p className={s.subtitle}>{c("Susun kebutuhan posisi dengan jelas untuk kandidat.")}</p><div className={s.context}><strong><HrIcon kind="building"/>{company?.name}</strong><span className={s.saved} data-saved={status===c("Tersimpan")} role="status">{status===c("Tersimpan")&&<HrIcon kind="check"/>}{status}</span></div>{error&&<div className={s.error} role="alert">{error}</div>}<form id="hr-existing-job-form" onSubmit={e=>{e.preventDefault();void action(job.status!=='PUBLISHED');}}><JobFormV2 draft={draft} companyId={companyId} initialCity={job.city} approvedMembers={approved.positionGroupApprovedAt && approved.positionGroupId===draft.positionGroupId ? approved.approvedPositionMembers : undefined} disabled={busy} validationIssues={skillIssues} onChange={patch=>{if('skills' in patch)setSkillIssues([]);setDraft(previous=>({...previous,...patch}));}}/></form><footer className={s.footer}><div className={s.footerInner}><button className={s.secondary} disabled={busy} onClick={()=>{void (async()=>{const issues=validateHrSkills(current.current);if(issues.length){setSkillIssues(issues);return;}if(serialized!==saved.current){await save();await onSaved(c("Draf tersimpan."));}onClose();})().catch(reason=>setError(reason.message));}}><HrIcon kind="back"/>{c("Kembali")}</button><div className={s.actions}><button className={job.status==='PUBLISHED'?s.primary:s.secondary} disabled={busy} onClick={()=>void action(false)}>{c("Simpan")+" "}{job.status==='DRAFT'?'draf':'perubahan'}</button>{job.status!=='PUBLISHED'&&<button className={s.primary} type="submit" form="hr-existing-job-form" disabled={busy}>{c("Publikasikan lowongan")}</button>}</div></div></footer></div>;
 }

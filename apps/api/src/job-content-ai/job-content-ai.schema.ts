@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { catalogLabelIssue } from '@job-talentio/shared';
+import { normalizeSkillKey, skillNameSchema } from '@job-talentio/shared';
 
 export const jobContentTargetSchema = z.enum(['description', 'responsibilities', 'kpis', 'skills']);
 export type JobContentTarget = z.infer<typeof jobContentTargetSchema>;
@@ -40,7 +40,7 @@ const kpiOutput = z.object({
 }).strict();
 const skillsOutput = z.object({
   items: z.array(z.object({
-    name: z.string().trim().min(2).max(80).refine(name => catalogLabelIssue(name) === null, 'Invalid catalog skill name'),
+    name: skillNameSchema,
     isRequired: z.boolean(),
     minLevel: jobSkillLevelSchema.nullable(),
   }).strict()).min(1).max(10),
@@ -61,7 +61,7 @@ export function validateJobContentSuggestion(target: JobContentTarget, value: un
   const seen = new Set<string>();
   if (target === 'skills') {
     const items = (parsed.data as z.infer<typeof skillsOutput>).items.filter(item => {
-      const key = item.name.normalize('NFKC').trim().toLocaleLowerCase();
+      const key = normalizeSkillKey(item.name);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

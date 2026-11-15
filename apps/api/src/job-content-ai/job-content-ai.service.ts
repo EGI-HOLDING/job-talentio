@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, Logger, ServiceUnavailableExce
 import { ConfigService } from '@nestjs/config';
 import type { Company } from '@prisma/client';
 import { OpenAiClient } from '../common/openai/openai.client';
+import { readSkillNameIdentities } from '../common/skill-resolve';
 import { AuthUser } from '../common/auth.decorators';
 import { CompaniesService } from '../companies/companies.service';
 import { extractCvText } from '../profiles/parse/cv-text-extract';
@@ -71,6 +72,19 @@ export class JobContentAiService {
         maxTokens: prompt.maxTokens,
       });
       const suggestion = validateJobContentSuggestion(input.target, raw);
+      if (input.target === 'skills' && 'items' in suggestion) {
+        const currentNames = input.job.skills.map(skill => skill.name);
+        const items = suggestion.items.filter(item => typeof item !== 'string');
+        const identities = await readSkillNameIdentities(this.db, [...currentNames, ...items.map(item => item.name)]);
+        const used = new Set(currentNames.map(name => identities.get(name)));
+        const newItems = items.filter(item => {
+          const identity = identities.get(item.name);
+          if (used.has(identity)) return false;
+          used.add(identity);
+          return true;
+        });
+        return { target: input.target, suggestion: { items: newItems }, promptVersion: prompt.version };
+      }
       return { target: input.target, suggestion, promptVersion: prompt.version };
     } catch (error) {
       this.logger.warn('Job content generation failed for company ' + input.companyId + ', target ' + input.target + ': ' + (error instanceof Error ? error.message : 'unknown error'));

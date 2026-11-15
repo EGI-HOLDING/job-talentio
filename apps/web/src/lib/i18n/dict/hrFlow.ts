@@ -3,6 +3,10 @@ import { hrAssistantEnglish } from './hrAssistant';
 /** Indonesia HR flow; English is also the fallback for other UI languages. */
 const english:Record<string,string>={
  ...hrAssistantEnglish,
+ "Nama keahlian":"Skill name",
+ "Sudah ada":"Already added",
+ "Pilih keahlian yang ingin ditambahkan. Keahlian yang sudah diisi tetap tersimpan.":"Choose the skills to add. Your existing skills will be kept.",
+ "Semua keahlian yang disarankan sudah ada.":"All suggested skills have already been added.",
  "Jadikan template":"Save as template",
  "Template lowongan":"Job templates",
  "Template lowongan tersimpan.":"Job template saved.",

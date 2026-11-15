@@ -126,18 +126,7 @@ export function ApplicantFilters({
           </label>
         </div>
         <div className={s.fieldRow}>
-          {multi('skills', meta.skills || [], 'slug', t('skills'))}
           {multi('languages', meta.languages || [], 'code', t('languages'))}
-          <label>
-            {t('hr.skillMode')}
-            <select
-              value={values.skillMode || 'OR'}
-              onChange={(event) => change('skillMode', event.target.value)}
-            >
-              <option value="OR">{t('any')}</option>
-              <option value="AND">{t('hr.all')}</option>
-            </select>
-          </label>
         </div>
         <div className={s.fieldRow}>
           {['experienceYearsMin', 'experienceYearsMax'].map((key, index) => (

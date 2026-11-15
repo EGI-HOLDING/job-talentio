@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/lib/navigation';
 import { FilterFieldset, FormField } from '@/components/ui/Field';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { SkillNameTags, type SkillTag } from '@/components/ui/SkillNameTags';
 import { ExpandableList } from '@/components/ui/ExpandableList';
 import { JobListSkeleton } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
@@ -33,6 +34,7 @@ import {
   LanguageLevelCode,
   parseLanguagesCsv,
   scoreProfileCompleteness,
+  uniqueSkillNames,
 } from '@job-talentio/shared';
 
 type MetaItem = { id: string; name: string; slug: string; icon?: string | null; code?: string; province?: { country?: { name: string; slug: string } } };
@@ -132,6 +134,7 @@ type Filters = {
   jobTitle: string;
   positions: string;
   skills: string;
+  skillName: string[];
   skillMode: string;
   benefits: string;
   languages: string;
@@ -171,6 +174,7 @@ const EMPTY: Filters = {
   jobTitle: '',
   positions: '',
   skills: '',
+  skillName: [],
   skillMode: 'OR',
   benefits: '',
   languages: '',
@@ -204,6 +208,7 @@ function filtersFromParams(sp: URLSearchParams, implicitSort: string): Filters {
     jobTitle: sp.get('jobTitle') ?? '',
     positions: sp.get('positions') ?? '',
     skills: sp.get('skills') ?? '',
+    skillName: uniqueSkillNames(sp.getAll('skillName')),
     skillMode: sp.get('skillMode') ?? 'OR',
     benefits: sp.get('benefits') ?? '',
     languages: sp.get('languages') ?? '',
@@ -223,6 +228,10 @@ function toParams(f: Filters, view?: string | null, implicitSort = 'relevance'):
   const p = new URLSearchParams();
   (Object.keys(EMPTY) as Array<keyof Filters>).forEach((key) => {
     const value = f[key];
+    if (key === 'skillName') {
+      f.skillName.forEach(name => p.append('skillName', name));
+      return;
+    }
     if (key === 'page') {
       if (Number(value) > 1) p.set('page', String(value));
       return;
@@ -287,10 +296,8 @@ function JobsInner() {
   const [cities, setCities] = useState<MetaItem[]>([]);
   const [countries, setCountries] = useState<MetaItem[]>([]);
   const [categories, setCategories] = useState<MetaItem[]>([]);
-  const [skills, setSkills] = useState<MetaItem[]>([]);
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
   const [languages, setLanguages] = useState<LangMeta[]>([]);
-  const [skillQ, setSkillQ] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [retry, setRetry] = useState(0);
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
@@ -348,7 +355,7 @@ function JobsInner() {
   useEffect(()=>{
     if(!filtersOpen&&!browseCompanies)return;
     let active=true;const controller=new AbortController(),options={auth:false,signal:controller.signal};
-    Promise.all([api<MetaItem[]>('/meta/cities',options),api<MetaItem[]>('/meta/categories',options),api<MetaItem[]>('/meta/skills?sort=popular&take=120',options),api<MetaItem[]>('/meta/benefits',options),api<LangMeta[]>('/meta/languages',options),api<MetaItem[]>('/meta/countries',options)]).then(([c,cat,sk,b,langs,countryRows])=>{if(active){setCities(c);setCategories(cat);setSkills(sk);setBenefits(b);setLanguages(langs||[]);setCountries(countryRows);}}).catch(()=>{});
+    Promise.all([api<MetaItem[]>('/meta/cities',options),api<MetaItem[]>('/meta/categories',options),api<MetaItem[]>('/meta/benefits',options),api<LangMeta[]>('/meta/languages',options),api<MetaItem[]>('/meta/countries',options)]).then(([c,cat,b,langs,countryRows])=>{if(active){setCities(c);setCategories(cat);setBenefits(b);setLanguages(langs||[]);setCountries(countryRows);}}).catch(()=>{});
     return()=>{active=false;controller.abort();};
   },[locale,filtersOpen,browseCompanies]);
   const apply = useCallback(
@@ -382,9 +389,9 @@ function JobsInner() {
         if(filters.sort==='match'&&res.state)setRecommendationMeta({total:res.total,totalPages:res.totalPages,mode:res.mode||'PERSONALIZED',state:res.state,evidenceState:res.evidenceState,preferenceWarnings:res.preferenceWarnings,emptyReason:res.emptyReason});
         // Keep URL in sync when the API clamps an out-of-range page.
         if (requestedMode !== 'for-you' && res.page !== filters.page) {
-          router.replace(
-            `/jobs?${new URLSearchParams({ ...Object.fromEntries(toParams({ ...filters, page: res.page }, browseCompanies ? 'companies' : null, implicitSort)), ...(requestedMode ? { mode: requestedMode } : {}) })}`,
-          );
+          const nextParams = toParams({ ...filters, page: res.page }, browseCompanies ? 'companies' : null, implicitSort);
+          if (requestedMode) nextParams.set('mode', requestedMode);
+          router.replace('/jobs?' + nextParams);
         }
       })
       .catch((e) => { if (active) setError(e.message); })
@@ -400,24 +407,10 @@ function JobsInner() {
   const selectedLevels = filters.experienceLevel.split(',').filter(Boolean);
   const selectedCompanies = filters.companySlug.split(',').filter(Boolean);
 
-  const skillFacetList = data?.facets?.skills || [];
-  const skillFacet = Object.fromEntries(skillFacetList.map((s) => [s.slug, s.count]));
-  const skillList = useMemo(() => {
-    const bySlug = new Map<string, MetaItem & { count?: number }>();
-    for (const s of skillFacetList) {
-      bySlug.set(s.slug, { id: s.slug, slug: s.slug, name: s.name, count: s.count });
-    }
-    for (const s of skills) {
-      if (!bySlug.has(s.slug)) bySlug.set(s.slug, { ...s, count: skillFacet[s.slug] });
-      else {
-        const cur = bySlug.get(s.slug)!;
-        bySlug.set(s.slug, { ...cur, name: s.name || cur.name });
-      }
-    }
-    return [...bySlug.values()]
-      .filter((s) => !skillQ || s.name.toLowerCase().includes(skillQ.toLowerCase()))
-      .sort((a, b) => (b.count || 0) - (a.count || 0) || a.name.localeCompare(b.name));
-  }, [skills, skillFacetList, skillFacet, skillQ]);
+  const jobSkillTags: SkillTag[] = [
+    ...selectedSkills.map(slug => ({slug, name: data?.facets?.skills?.find(skill => skill.slug === slug)?.name || slug})),
+    ...filters.skillName.map(name => ({name})),
+  ];
 
   const catFacet = Object.fromEntries((data?.facets?.categories || []).map((c) => [c.slug, c.count]));
   const companyFacetList = hiringCompanies.length
@@ -458,7 +451,7 @@ function JobsInner() {
   const advancedActiveCount = [
     filters.industrySlug,
     filters.positions || filters.jobTitle,
-    filters.skills,
+    filters.skills || filters.skillName.length,
     filters.benefits,
     filters.languages,
     filters.postedWithin,
@@ -617,7 +610,11 @@ function JobsInner() {
   else selectedCities.forEach((slug) => activeChips.push({ key: `city-${slug}`, label: cities.find((city) => city.slug === slug)?.name || slug, remove: () => apply({ city: toggleCsv(filters.city, slug) }) }));
   selectedCats.forEach((slug) => activeChips.push({ key: `category-${slug}`, label: categories.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ category: toggleCsv(filters.category, slug) }) }));
   selectedCompanies.forEach((slug) => activeChips.push({ key: `company-${slug}`, label: companyFacetList.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ companySlug: toggleCsv(filters.companySlug, slug) }) }));
-  selectedSkills.forEach((slug) => activeChips.push({ key: `skill-${slug}`, label: skills.find((item) => item.slug === slug)?.name || slug, remove: () => apply({ skills: toggleCsv(filters.skills, slug) }) }));
+  jobSkillTags.forEach(({ name, slug }) => activeChips.push({
+    key: slug ? 'skill-slug-' + slug : 'skill-name-' + name,
+    label: name,
+    remove: () => apply(slug ? { skills: toggleCsv(filters.skills, slug) } : { skillName: filters.skillName.filter(skill => skill !== name) }),
+  }));
   filters.jobTitle.split(',').filter(Boolean).forEach(slug => activeChips.push({ key: `title-${slug}`, label: titleCatalog.find(role => role.slug === slug)?.name || slug, remove: () => apply({ jobTitle: toggleCsv(filters.jobTitle, slug) }) }));
   selectedPositions.filter(row => positionRefs.includes(positionRef(row))).forEach(row => activeChips.push({
     key: positionRef(row), label: row.name, remove: () => apply({ positions: toggleCsv(filters.positions, positionRef(row)) }),
@@ -680,30 +677,10 @@ function JobsInner() {
                 <option value="AND">{t('matchAll')}</option>
               </select>
             </FormField>
-            <FormField label={t('filterSkills')} optional>
-              <input
-                value={skillQ}
-                onChange={(e) => setSkillQ(e.target.value)}
-                placeholder={t('filterSkills')}
-              />
-            </FormField>
-            <ExpandableList
-              items={skillList}
-              initialCount={10}
-              step={10}
-              getKey={(s) => s.slug}
-              renderItem={(s) => (
-                <label className="filter-check">
-                  <input
-                    type="checkbox"
-                    checked={selectedSkills.includes(s.slug)}
-                    onChange={() => apply({ skills: toggleCsv(filters.skills, s.slug) })}
-                  />
-                  {s.name}
-                  {s.count !== undefined && <span className="facet-count">({s.count})</span>}
-                </label>
-              )}
-            />
+            <SkillNameTags tags={jobSkillTags} onChange={tags => apply({
+              skills: tags.flatMap(tag => tag.slug ? [tag.slug] : []).join(','),
+              skillName: tags.flatMap(tag => tag.slug ? [] : [tag.name]),
+            })}/>
           </FilterFieldset>
 
 

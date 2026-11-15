@@ -9,7 +9,9 @@ import { displayCompanyName } from '../common/anonymous-job';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { AuthUser } from '../common/auth.decorators';
-import { resolveSkill } from '../common/skill-resolve';
+import { skillNameWhere } from '../common/skill-resolve';
+import { normalizeSkillKey, SKILL_FILTER_LIMIT, uniqueSkillNames } from '@job-talentio/shared';
+import type { Prisma } from '@prisma/client';
 import { resolveJobLocation } from '../common/geo-selection';
 import { PositionCatalogService } from '../matching/position-catalog.service';
 import { ACTIVE_CATALOG } from '../common/catalog-visibility';
@@ -73,6 +75,17 @@ export class AlertsService {
     return ensureDeliverableAlertChannels({ notifyInApp, notifyEmail, notifyTelegram });
   }
 
+  private async alertSkillIds(db: Prisma.TransactionClient, slugs: string[], existingIds: string[] = []) {
+    const keys = [...new Set(slugs.map(slug => slug.trim()).filter(Boolean))];
+    if (!keys.length) return [];
+    const skills = await db.skill.findMany({
+      where: { slug: { in: keys }, OR: [{ archivedAt: null }, { id: { in: existingIds } }] },
+      select: { id: true },
+    });
+    if (skills.length !== keys.length) throw new BadRequestException('An alert skill is unavailable');
+    return skills.map(skill => skill.id);
+  }
+
   async create(
     user: AuthUser,
     data: {
@@ -83,6 +96,7 @@ export class AlertsService {
       countryId?: string | null;
       categorySlug?: string;
       skillSlugs?: string[];
+      skillNames?: string[];
       frequency?: 'DAILY' | 'WEEKLY';
       notifyInApp?: boolean;
       notifyEmail?: boolean;
@@ -101,7 +115,11 @@ export class AlertsService {
     if (data.query?.trim()) throw new BadRequestException('Select a position from the catalog');
     const positionSelections = await this.positions.validate(data.positionSelections ?? []);
     const selectionKey = (rows: DesiredSelection[]) => rows.map(row => row.kind + ':' + row.id).sort().join(',');
-    const skillSlugs = [...new Set((data.skillSlugs ?? []).map((s) => s.trim()).filter(Boolean))].sort();
+    const skillNames = uniqueSkillNames(data.skillNames ?? []);
+    const skillIds = await this.alertSkillIds(this.prisma, data.skillSlugs ?? []);
+    if (skillIds.length + skillNames.length > SKILL_FILTER_LIMIT) throw new BadRequestException('Too many alert skills');
+    const filterKey = (ids: string[], names: string[]) => JSON.stringify([ids.sort(), names.map(normalizeSkillKey).sort()]);
+    const inputKey = filterKey([...skillIds], skillNames);
 
     const existing = await this.prisma.jobAlert.findMany({
       where: {
@@ -114,9 +132,8 @@ export class AlertsService {
       include: { skills: { include: { skill: true } } },
     });
     const dupe = existing.find((a) => {
-      const aSkills = a.skills.map((s) => s.skill.slug).sort().join(',');
-      const bSkills = skillSlugs.join(',');
-      return selectionKey(desiredSelectionsSchema.parse(a.positionSelections)) === selectionKey(positionSelections) && aSkills === bSkills;
+      return selectionKey(desiredSelectionsSchema.parse(a.positionSelections)) === selectionKey(positionSelections)
+        && filterKey(a.skills.map(({ skillId }) => skillId), a.skillNames) === inputKey;
     });
     if (dupe) {
       throw new ConflictException('An identical job alert already exists');
@@ -137,20 +154,11 @@ export class AlertsService {
         countryId,
         categoryId,
         frequency: data.frequency ?? 'DAILY',
+        skillNames,
+        skills: { create: skillIds.map(skillId => ({ skillId })) },
         ...channels,
       },
     });
-
-    for (const slug of skillSlugs) {
-      try {
-        const { skill } = await resolveSkill(this.prisma, { slug, allowCreate: false });
-        await this.prisma.jobAlertSkill.create({
-          data: { alertId: alert.id, skillId: skill.id },
-        });
-      } catch {
-        /* unknown skill slug — skip */
-      }
-    }
 
     const row = await this.prisma.jobAlert.findUniqueOrThrow({
       where: { id: alert.id },
@@ -186,6 +194,7 @@ export class AlertsService {
       countryId?: string | null;
       categorySlug?: string | null;
       skillSlugs?: string[];
+      skillNames?: string[];
       frequency?: 'DAILY' | 'WEEKLY';
       isActive?: boolean;
       notifyInApp?: boolean;
@@ -223,38 +232,34 @@ export class AlertsService {
       alert,
     );
 
-    await this.prisma.jobAlert.update({
-      where: { id },
-      data: {
-        name: data.name?.trim(),
-        positionSelections: selections,
-        positionReviewRequired: selections === undefined ? undefined : false,
-        cityId,
-        countryId,
-        categoryId,
-        frequency: data.frequency,
-        isActive: data.isActive,
-        ...channels,
-      },
-    });
-
-    if (data.skillSlugs) {
-      await this.prisma.jobAlertSkill.deleteMany({ where: { alertId: id } });
-      for (const slug of [...new Set(data.skillSlugs.map((s) => s.trim()).filter(Boolean))]) {
-        try {
-          const { skill } = await resolveSkill(this.prisma, { slug, allowCreate: false });
-          await this.prisma.jobAlertSkill.create({
-            data: { alertId: id, skillId: skill.id },
-          });
-        } catch {
-          /* skip unknown */
-        }
+    const row = await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "JobAlert" WHERE id=${id} AND "userId"=${userId} FOR UPDATE`;
+      const current = await tx.jobAlert.findFirst({ where: { id, userId }, include: { skills: true } });
+      if (!current) throw new NotFoundException();
+      const oldIds = current.skills.map(({ skillId }) => skillId);
+      const skillIds = data.skillSlugs === undefined ? oldIds : await this.alertSkillIds(tx, data.skillSlugs, oldIds);
+      const skillNames = data.skillNames === undefined ? current.skillNames : uniqueSkillNames(data.skillNames);
+      if (skillIds.length + skillNames.length > SKILL_FILTER_LIMIT) throw new BadRequestException('Too many alert skills');
+      if (data.skillSlugs !== undefined) {
+        await tx.jobAlertSkill.deleteMany({ where: { alertId: id } });
+        if (skillIds.length) await tx.jobAlertSkill.createMany({ data: skillIds.map(skillId => ({ alertId: id, skillId })) });
       }
-    }
-
-    const row = await this.prisma.jobAlert.findUniqueOrThrow({
-      where: { id },
-      include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
+      return tx.jobAlert.update({
+        where: { id },
+        data: {
+          name: data.name?.trim(),
+          positionSelections: selections,
+          positionReviewRequired: selections === undefined ? undefined : false,
+          cityId,
+          countryId,
+          categoryId,
+          frequency: data.frequency,
+          isActive: data.isActive,
+          skillNames: data.skillNames === undefined ? undefined : skillNames,
+          ...channels,
+        },
+        include: { city: { include: { province: { include: { country: true } } } }, country: true, category: true, skills: { include: { skill: true } } },
+      });
     });
     return (await this.positionView([row]))[0];
   }
@@ -296,10 +301,13 @@ export class AlertsService {
       if (selections.length) {
         and.push(await this.positions.jobPositionWhere(selections));
       }
-      if (alert.skills.length) {
+      if (alert.skills.length || alert.skillNames.length) {
         and.push({
           jobSkills: {
-            some: { skillId: { in: alert.skills.map((s) => s.skillId) } },
+            some: { OR: [
+              { skillId: { in: alert.skills.map(({ skillId }) => skillId) } },
+              ...alert.skillNames.map(name => ({ skill: skillNameWhere(name) })),
+            ] },
           },
         });
       }

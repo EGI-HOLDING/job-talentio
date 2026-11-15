@@ -19,7 +19,7 @@ export type LookupSuggestion = {
   provinceLabel?: string;
 };
 
-type LookupKind = 'skills' | 'benefits' | 'languages' | 'cities';
+type LookupKind = 'benefits' | 'languages' | 'cities';
 
 type LookupComboboxProps = {
   focusSuggestions?: boolean;
@@ -42,21 +42,18 @@ type LookupComboboxProps = {
 };
 
 const SUGGEST_PATH: Record<LookupKind, string> = {
-  skills: '/meta/skills/suggest',
   benefits: '/meta/benefits/suggest',
   languages: '/meta/languages/suggest',
   cities: '/meta/cities/suggest',
 };
 
 const KIND_LABEL_KEY: Record<LookupKind, string> = {
-  skills: 'skills',
   benefits: 'benefits',
   languages: 'languages',
   cities: 'city',
 };
 
 const KIND_SINGULAR_KEY: Record<LookupKind, string> = {
-  skills: 'lookupKindSkill',
   benefits: 'lookupKindBenefit',
   languages: 'lookupKindLanguage',
   cities: 'lookupKindCity',

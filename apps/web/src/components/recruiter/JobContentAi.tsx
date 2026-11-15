@@ -48,8 +48,8 @@ export function JobContentAiHelp() {
   </span>;
 }
 
-export function JobContentAiPreview({ title, children, onCancel, onApply }: {
-  title: string; children: ReactNode; onCancel: () => void; onApply: () => void;
+export function JobContentAiPreview({ title, children, onCancel, onApply, append = false, applyDisabled = false }: {
+  title: string; children: ReactNode; append?: boolean; applyDisabled?: boolean; onCancel: () => void; onApply: () => void;
 }) {
   const c = useHrCopy();
   const id = useId();
@@ -85,9 +85,9 @@ export function JobContentAiPreview({ title, children, onCancel, onApply }: {
   return createPortal(<div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
     <section ref={modal} className={'modal ' + s.preview} role="dialog" aria-modal="true" aria-labelledby={id}>
       <header><div><span className={s.eyebrow}>{c('Saran AI')}</span><h2 id={id}>{title}</h2></div><button className={s.close} type="button" onClick={onCancel} aria-label={c('Tutup')}>×</button></header>
-      <p className={s.replaceHint}>{c('Hasil AI untuk bagian ini akan mengganti isi yang sekarang setelah diterapkan.')}</p>
+      <p className={s.replaceHint}>{c(append ? 'Pilih keahlian yang ingin ditambahkan. Keahlian yang sudah diisi tetap tersimpan.' : 'Hasil AI untuk bagian ini akan mengganti isi yang sekarang setelah diterapkan.')}</p>
       <div className={s.previewBody}>{children}</div>
-      <footer><button className={s.cancel} type="button" ref={cancel} onClick={onCancel}>{c('Batal')}</button><button className={s.apply} type="button" ref={apply} onClick={onApply}>{c('Terapkan')}</button></footer>
+      <footer><button className={s.cancel} type="button" ref={cancel} onClick={onCancel}>{c('Batal')}</button><button className={s.apply} type="button" ref={apply} disabled={applyDisabled} onClick={onApply}>{c('Terapkan')}</button></footer>
     </section>
   </div>, document.body);
 }

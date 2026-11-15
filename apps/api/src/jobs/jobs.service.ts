@@ -40,7 +40,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuthUser } from '../common/auth.decorators';
 import { slugify, parseDto } from '../common/utils';
 import { contentHash, jobFingerprint } from '../common/dedupe';
-import { resolveSkill } from '../common/skill-resolve';
+import { resolveSkill, skillNameWhere } from '../common/skill-resolve';
 import { resolveBenefit } from '../common/benefit-resolve';
 import { resolveJobTitle } from '../common/title-resolve';
 import { resolveLanguage } from '../common/language-resolve';
@@ -197,27 +197,26 @@ export class JobsService {
   }
 
   private async syncSkills(jobPostId: string, skills: JobSkillInput[], db: Prisma.TransactionClient) {
-    await db.jobPostSkill.deleteMany({ where: { jobPostId } });
-    const seen = new Set<string>();
-    for (const s of skills) {
-      if (!s.slug && !s.name) continue;
-      const { skill } = await resolveSkill(db, {
-        slug: s.slug,
-        name: s.name,
-        allowCreate: true,
-      });
-      if (seen.has(skill.id)) continue;
-      seen.add(skill.id);
-      await db.jobPostSkill.create({
-        data: {
-          jobPostId,
-          skillId: skill.id,
-          minLevel:s.minLevel ?? null,
-          isRequired: s.isRequired ?? true,
-          weight: s.weight ?? 1,
-        },
-      });
+    const previous = await db.jobPostSkill.findMany({
+      where: { jobPostId }, select: { skill: { select: { id: true, slug: true } } },
+    });
+    const previousIds = new Map(previous.map(({ skill }) => [skill.slug, skill.id]));
+    const rows: Prisma.JobPostSkillCreateManyInput[] = [];
+    const seen = new Map<string, boolean>();
+    for (const [index, skill] of skills.entries()) {
+      if (!skill.slug && !skill.name) continue;
+      const skillId = (skill.slug && previousIds.get(skill.slug))
+        || (await resolveSkill(db, { slug: skill.slug, name: skill.name })).skill.id;
+      if (seen.has(skillId)) {
+        // Name-based rows can resolve to the same catalog skill through aliases.
+        if (!skill.slug || seen.get(skillId)) throw new BadRequestException('JOB_SKILL_DUPLICATE:' + (index + 1));
+        continue;
+      }
+      seen.set(skillId, !skill.slug);
+      rows.push({ jobPostId, skillId, minLevel: skill.minLevel ?? null, isRequired: skill.isRequired ?? true, weight: skill.weight ?? 1 });
     }
+    await db.jobPostSkill.deleteMany({ where: { jobPostId } });
+    if (rows.length) await db.jobPostSkill.createMany({ data: rows });
   }
 
   private async syncBenefits(jobPostId: string, benefits: JobBenefitInput[], db: Prisma.TransactionClient) {
@@ -1105,6 +1104,7 @@ export class JobsService {
     workMode?: string;
     experienceLevel?: string;
     skills?: string;
+    skillName?: string[];
     skillMode?: 'AND' | 'OR';
     benefits?: string;
     languages?: string;
@@ -1207,14 +1207,14 @@ export class JobsService {
     }
 
     const skillSlugs = (query.skills || '').split(',').map((s) => s.trim()).filter(Boolean);
-    if (skillSlugs.length) {
-      if (query.skillMode === 'AND') {
-        for (const slug of skillSlugs) {
-          and.push({ jobSkills: { some: { skill: { slug } } } });
-        }
-      } else {
-        and.push({ jobSkills: { some: { skill: { slug: { in: skillSlugs } } } } });
-      }
+    const skillCriteria: Prisma.SkillWhereInput[] = [
+      ...skillSlugs.map(slug => ({ slug })),
+      ...(query.skillName ?? []).map(skillNameWhere),
+    ];
+    if (skillCriteria.length && query.skillMode === 'AND') {
+      and.push(...skillCriteria.map(skill => ({ jobSkills: { some: { skill } } })));
+    } else if (skillCriteria.length) {
+      and.push({ jobSkills: { some: { skill: { OR: skillCriteria } } } });
     }
 
     const benefitSlugs = (query.benefits || '').split(',').map((s) => s.trim()).filter(Boolean);

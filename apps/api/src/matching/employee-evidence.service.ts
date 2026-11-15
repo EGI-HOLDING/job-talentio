@@ -3,15 +3,20 @@ import { EmployeeCatalogSnapshot } from './employee-catalog-snapshot';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import type { EmployeeEvidencePatch } from '@job-talentio/shared';
+import { skillNameSchema, type EmployeeEvidencePatch } from '@job-talentio/shared';
+import { resolveSkill } from '../common/skill-resolve';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { extractCvText } from '../profiles/parse/cv-text-extract';
 import { EmployeeOccupationIndex, intentRoleInclude } from './employee-occupation';
 import { employeeEvidenceParserVersion, applyEmployeeOverrides, evidenceConflicts, hasEmployeeCareerEvidence, parseEmployeeEvidence, type IntentFacts, type EvidenceOverride } from './employee-intent-evidence';
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => Number.isFinite(+new Date(s)) && new Date(s).toISOString().slice(0, 10) === s).nullable();
+const skillLevel = z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).nullable().default(null);
 const validators = {
-    SKILL: z.object({ skillId: z.string().min(1), level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']).nullable().default(null) }).strict(),
+    SKILL: z.union([
+        z.object({ skillId: z.string().min(1), level: skillLevel }).strict(),
+        z.object({ name: skillNameSchema, level: skillLevel }).strict(),
+    ]),
     ROLE: z.object({ jobTitleId: z.string().min(1), title: z.string().min(1).max(160) }).strict(),
     EXPERIENCE: z.object({ title: z.string().min(1).max(160), jobTitleId: z.string().nullable(), startDate: date, endDate: date, isCurrent: z.boolean(), seniority: z.enum(['INTERN', 'JUNIOR', 'MIDDLE', 'SENIOR', 'LEAD', 'EXECUTIVE']).nullable() }).strict(),
     LANGUAGE: z.object({ code: z.string().min(2).max(10), level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'NATIVE']).nullable() }).strict(),
@@ -125,8 +130,19 @@ export class EmployeeEvidenceService {
                 if (!clean.success)
                     throw new BadRequestException('Invalid evidence fields');
                 value = clean.data;
-                if (patch.kind === 'SKILL' && !await tx.skill.findFirst({ where: { id: String(value.skillId), archivedAt: null } }))
-                    throw new BadRequestException('Select a catalog skill');
+                if (patch.kind === 'SKILL') {
+                    const currentSkills = applyEmployeeOverrides(facts, overrides).skills;
+                    const current = currentSkills.find(skill => skill.key === patch.key);
+                    const skillId = typeof value.name === 'string'
+                        ? (await resolveSkill(tx, { name: value.name })).skill.id
+                        : String(value.skillId);
+                    if (typeof value.name !== 'string' && current?.skillId !== skillId
+                        && !await tx.skill.findFirst({ where: { id: skillId, archivedAt: null } }))
+                        throw new BadRequestException('Skill is not available');
+                    if (current?.skillId !== skillId && currentSkills.some(skill => skill.skillId === skillId))
+                        throw new BadRequestException('CV_SKILL_DUPLICATE');
+                    value = { skillId, level: value.level };
+                }
                 if (patch.kind === 'LANGUAGE' && !await tx.language.findFirst({ where: { code: String(value.code), archivedAt: null } }))
                     throw new BadRequestException('Select a catalog language');
                 if (value.jobTitleId) {

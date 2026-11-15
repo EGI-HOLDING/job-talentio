@@ -2042,6 +2042,7 @@ model JobAlert {
   id              String         @id @default(cuid())
   userId          String
   name            String
+  skillNames      String[]       @default([])
   query           String?
   positionSelections Json       @default("[]")
   positionReviewRequired Boolean @default(false)

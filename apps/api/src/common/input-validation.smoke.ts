@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   adminBanSchema, adminUserListSchema, certificationSchema, chatMessageSchema,
   educationSchema, experienceSchema, interviewSchema, jobSearchSchema, applicationListSchema, notificationListSchema,
+  jobAlertSchema, skillNameSchema, uniqueSkillNames,
 } from '@job-talentio/shared';
 
 assert.ok(!interviewSchema.safeParse({ scheduledAt: 'not-a-date' }).success);
@@ -23,6 +24,13 @@ assert.ok(!jobSearchSchema.safeParse({ employmentType: 'invalid' }).success);
 assert.ok(!jobSearchSchema.safeParse({ experienceLevel: 'SENIOR,invalid' }).success);
 assert.ok(jobSearchSchema.safeParse({ experienceLevel: 'SENIOR,LEAD' }).success);
 assert.equal(jobSearchSchema.parse({ sort: 'featured' }).sort, 'featured');
+const skillNames = ['R', 'C++', 'C#', '.NET', 'React (Hooks)'];
+for (const name of skillNames) assert.equal(skillNameSchema.parse(' ' + name + ' '), name);
+assert.deepEqual(uniqueSkillNames(['C#', 'c#', 'C++']), ['C#', 'C++']);
+assert.deepEqual(jobSearchSchema.parse({ skillName: skillNames, skills: 'python', skillMode: 'AND' }).skillName, skillNames);
+assert.deepEqual(jobSearchSchema.parse({ skillName: 'R' }).skillName, ['R']);
+assert.ok(!jobSearchSchema.safeParse({ skillName: ['R', '   '] }).success);
+assert.deepEqual(jobAlertSchema.parse({ name: 'Skills', skillSlugs: ['python'], skillNames }).skillSlugs, ['python']);
 assert.ok(!applicationListSchema.safeParse({ status: 'invalid' }).success);
 assert.ok(!applicationListSchema.safeParse({ minMatch: 'invalid' }).success);
 assert.ok(!notificationListSchema.safeParse({ page: 'invalid' }).success);

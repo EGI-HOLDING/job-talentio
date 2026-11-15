@@ -108,6 +108,7 @@ export type AlertJobsListInput = {
   country?: { slug: string } | null;
   category?: { slug: string } | null;
   skills: Array<{ skill?: { slug: string } | null }>;
+  skillNames?: string[];
 };
 
 /** Jobs browse URL that mirrors the alert filters (city, skills, keywords). */
@@ -123,6 +124,7 @@ export function buildAlertJobsListPath(alert: AlertJobsListInput): string {
     ...new Set(alert.skills.map((row) => row.skill?.slug?.trim()).filter(Boolean) as string[]),
   ];
   if (skillSlugs.length) params.set('skills', skillSlugs.join(','));
+  for (const name of alert.skillNames ?? []) params.append('skillName', name);
   if (alert.frequency === 'WEEKLY') params.set('postedWithin', '7d');
   else params.set('postedWithin', '24h');
   params.set('sort', 'newest');

@@ -89,9 +89,8 @@ function RecruiterDashboard() {
   const [jobsLoading, setJobsLoading] = useState(true);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [applicantsLoading, setApplicantsLoading] = useState(false);
-  const [meta, setMeta] = useState<{ cities: any[]; skills: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
+  const [meta, setMeta] = useState<{ cities: any[]; categories: any[]; benefits: any[]; languages: any[] }>({
     cities: [],
-    skills: [],
     categories: [],
     benefits: [],
     languages: [],
@@ -141,10 +140,9 @@ function RecruiterDashboard() {
       window.location.href = localeHref(session.user.role === 'EMPLOYEE' ? '/jobs' : '/');
       return;
     }
-    const [mine, cities, skills, categories, benefits, inds, langs, me] = await Promise.all([
+    const [mine, cities, categories, benefits, inds, langs, me] = await Promise.all([
       api<any[]>('/companies/mine'),
       api('/meta/cities', { auth: false }),
-      api('/meta/skills?sort=popular&take=120', { auth: false }),
       api('/meta/categories', { auth: false }),
       api('/meta/benefits', { auth: false }),
       api<{ groups?: Array<{ slug: string; name: string; industries: Array<{ slug: string; name: string }> }> }>(
@@ -160,7 +158,6 @@ function RecruiterDashboard() {
     setMemberships(mine);
     setMeta({
       cities: cities as any[],
-      skills: skills as any[],
       categories: categories as any[],
       benefits: benefits as any[],
       languages: langs as any[],

@@ -37,8 +37,8 @@ export function RecruiterJobWorkspace() {
       const companyId=job.companyId||job.company?.id;
       const membership=memberships.find(row=>row.companyId===companyId);
       if(!membership && getSession()?.user.role!=='SUPER_ADMIN') throw new Error(t('rw.noCompanyHint'));
-      const [cities,skills,categories,benefits,languages]=await Promise.all(['cities','skills?sort=popular&take=120','categories','benefits','languages'].map(path=>api<any[]>('/meta/'+path,{auth:false})));
-      if(alive){rememberCompany(companyId);setData({job,companyId,company:membership?.company||job.company,meta:{cities,skills,categories,benefits,languages},applicants:[],templates:[],revision:retry});}
+      const [cities,categories,benefits,languages]=await Promise.all(['cities','categories','benefits','languages'].map(path=>api<any[]>('/meta/'+path,{auth:false})));
+      if(alive){rememberCompany(companyId);setData({job,companyId,company:membership?.company||job.company,meta:{cities,categories,benefits,languages},applicants:[],templates:[],revision:retry});}
     })().catch(reason=>{if(alive)setError(reason.message);}).finally(()=>{if(alive)setLoading(false);});
     return()=>{alive=false;};
   },[id,locale,retry]);

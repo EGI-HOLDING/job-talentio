@@ -1005,6 +1005,10 @@ export const core = {
     en: 'Pick a suggestion or type a new skill name',
   },
   addSkill: { uz: 'Ko‘nikma qo‘shish', ru: 'Добавить навык', en: 'Add skill' },
+  skillName: { uz: 'Ko‘nikma nomi', ru: 'Название навыка', en: 'Skill name' },
+  skillNameInvalid: { uz: 'Ko‘nikma nomini to‘g‘ri kiriting (80 belgigacha).', ru: 'Введите корректное название навыка (до 80 символов).', en: 'Enter a valid skill name (up to 80 characters).' },
+  skillNameDuplicate: { uz: 'Bu ko‘nikma allaqachon qo‘shilgan.', ru: 'Этот навык уже добавлен.', en: 'This skill has already been added.' },
+  skillNameLimit: { uz: 'Ko‘pi bilan 20 ta ko‘nikma.', ru: 'Максимум 20 навыков.', en: 'You can add up to 20 skills.' },
   addResume: { uz: 'Resume qo‘shish', ru: 'Добавить резюме', en: 'Add resume' },
   openResumeBuilder: {
     uz: 'Resume builder',

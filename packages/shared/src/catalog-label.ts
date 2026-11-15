@@ -73,3 +73,43 @@ export function assertCatalogLabel(name: string, opts?: { skipCharset?: boolean 
   }
   throw new Error(NEUTRAL_REJECT);
 }
+
+export function normalizeSkillKey(input: string): string {
+  let s = input
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  s = s
+    .replace(/c\+\+/g, 'cplusplus')
+    .replace(/c#/g, 'csharp')
+    .replace(/f#/g, 'fsharp')
+    .replace(/\.net\b/g, 'dotnet');
+
+  s = s.replace(/[^\p{L}\p{N}]+/gu, '');
+  return s;
+}
+
+export const SKILL_NAME_MAX_LENGTH = 80;
+export const JOB_SKILL_LIMIT = 30;
+export const SKILL_FILTER_LIMIT = 20;
+
+export function skillLabelIssue(name: string): CatalogLabelIssue {
+  const trimmed = name.trim();
+  if (trimmed.length > SKILL_NAME_MAX_LENGTH) return 'charset';
+  if (/^\.net\b/i.test(trimmed) && CATALOG_NAME_RE.test('N' + trimmed.slice(1))) {
+    return catalogLabelIssue(trimmed, { skipCharset: true });
+  }
+  return catalogLabelIssue(trimmed);
+}
+
+export function uniqueSkillNames(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return names.map(name => name.trim()).filter(name => {
+    const key = normalizeSkillKey(name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

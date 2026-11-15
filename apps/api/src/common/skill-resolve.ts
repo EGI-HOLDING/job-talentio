@@ -1,28 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
-import { PrismaClient, Skill } from '@prisma/client';
+import { Prisma, PrismaClient, Skill } from '@prisma/client';
 import { initialCatalogStatus } from './i18n/catalog-tech-identity';
-import { assertCatalogLabel } from './lookup-normalize';
-import { CATALOG_NAME_RE } from '@job-talentio/shared';
+import { normalizeSkillKey, skillLabelIssue } from '@job-talentio/shared';
+export { normalizeSkillKey } from '@job-talentio/shared';
 import { slugify } from './utils';
 
 type Db = Pick<PrismaClient, 'skill' | 'skillAlias'>;
-
-export function normalizeSkillKey(input: string): string {
-  let s = input
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-  s = s
-    .replace(/c\+\+/g, 'cplusplus')
-    .replace(/c#/g, 'csharp')
-    .replace(/f#/g, 'fsharp')
-    .replace(/\.net\b/g, 'dotnet');
-
-  s = s.replace(/[^\p{L}\p{N}]+/gu, '');
-  return s;
-}
+const skillNameFields = ['name', 'nameId', 'nameRu', 'nameUz'] as const;
 
 /** Slug that preserves C++/C# tokens before generic slugify. */
 export function skillSlugify(input: string): string {
@@ -30,7 +14,8 @@ export function skillSlugify(input: string): string {
   s = s
     .replace(/c\+\+/gi, 'cplusplus')
     .replace(/c#/gi, 'csharp')
-    .replace(/f#/gi, 'fsharp');
+    .replace(/f#/gi, 'fsharp')
+    .replace(/\.net\b/gi, 'dotnet');
   return slugify(s) || normalizeSkillKey(input).slice(0, 60);
 }
 
@@ -40,7 +25,40 @@ function titleCaseFromSlug(slug: string): string {
   return slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const NAME_RE = CATALOG_NAME_RE;
+/** A job filter reads catalog identity without creating records or aliases. */
+export function skillNameWhere(name: string): Prisma.SkillWhereInput {
+  const key = normalizeSkillKey(name);
+  return {
+    archivedAt: null,
+    OR: [
+      { slug: skillSlugify(name) },
+      { normalizedKey: key },
+      { aliases: { some: { aliasKey: key } } },
+      ...skillNameFields.map(field => ({
+        [field]: { equals: name, mode: 'insensitive' },
+      })),
+    ],
+  };
+}
+
+export async function readSkillNameIdentities(db: Pick<Db, 'skill'>, names: string[]) {
+  if (!names.length) return new Map<string, string>();
+  const keys = names.map(normalizeSkillKey);
+  const skills = await db.skill.findMany({
+    where: { OR: names.map(skillNameWhere) },
+    include: { aliases: { where: { aliasKey: { in: keys } }, select: { aliasKey: true } } },
+    orderBy: { id: 'asc' },
+  });
+  return new Map(names.map((name, index) => {
+    const key = keys[index];
+    const slug = skillSlugify(name);
+    const skill = skills.find(row => row.slug === slug)
+      ?? skills.find(row => row.normalizedKey === key)
+      ?? skills.find(row => row.aliases.some(alias => alias.aliasKey === key))
+      ?? skills.find(row => skillNameFields.some(field => row[field]?.toLowerCase() === name.toLowerCase()));
+    return [name, skill ? 'id:' + skill.id : 'name:' + key];
+  }));
+}
 
 export type ResolveSkillResult = {
   skill: Skill;
@@ -92,7 +110,8 @@ export async function resolveSkill(
   }
 
   const byName = await db.skill.findFirst({
-    where: { OR: (['name', 'nameId', 'nameRu', 'nameUz'] as const).map(field => ({ [field]: { equals: raw, mode: 'insensitive' as const } })) },
+    where: { OR: skillNameFields.map(field => ({ [field]: { equals: raw, mode: 'insensitive' as const } })) },
+    orderBy: { id: 'asc' },
   });
   if (byName) {
     if (byName.archivedAt) throw new BadRequestException('Skill is not available');
@@ -105,15 +124,8 @@ export async function resolveSkill(
   }
 
   const displayName = opts.name?.trim() || titleCaseFromSlug(slug || key);
-  try {
-    assertCatalogLabel(displayName);
-  } catch (e) {
-    throw new BadRequestException((e as Error).message);
-  }
-  if (opts.name && !NAME_RE.test(opts.name.trim())) {
-    throw new BadRequestException(
-      'Skill name is not a valid catalog label',
-    );
+  if (skillLabelIssue(displayName)) {
+    throw new BadRequestException('Skill name is not a valid catalog label');
   }
   const finalSlug = slug || skillSlugify(displayName) || key.slice(0, 60);
 
