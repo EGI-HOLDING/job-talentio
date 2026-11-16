@@ -59,6 +59,14 @@ type State = {
     residenceCountry?: Country | null;
   };
 };
+function selectedPositionFields(profile: State["profile"]) {
+  const selections = positionPreferenceSelections(profile);
+  return {
+    desiredSelections: selections.map(({ kind, id }) => ({ kind, id })),
+    desiredPositions: selections.map(({ name }) => name),
+  };
+}
+
 function Badge({ step }: { step: number }) {
   return (
     <div className={s.badge} aria-hidden="true">
@@ -94,8 +102,10 @@ function Badge({ step }: { step: number }) {
   );
 }
 export function EmployeeOnboarding() {
-  const preferenceRevision=useRef(0);
-  const selectionsTouched=useRef(false);
+  const savedPositions = useRef<{ selections: Form["desiredSelections"]; revision: number }>({
+    selections: undefined,
+    revision: 0,
+  });
   const intentText = useEmployeeIntentText();
   const router = useRouter(),
     params = useSearchParams(),
@@ -107,6 +117,7 @@ export function EmployeeOnboarding() {
     [step, setStep] = useState(1),
     [countries, setCountries] = useState<Country[]>([]),
     [error, setError] = useState(""),
+    [positionConflict, setPositionConflict] = useState(false),
     [busy, setBusy] = useState(false),
     [phoneTouched, setPhoneTouched] = useState(false),
     [phoneServerError, setPhoneServerError] = useState<string | undefined>(),
@@ -125,10 +136,11 @@ export function EmployeeOnboarding() {
     loaded.current = false;
     stopped.current = false;
     Promise.all([
-      api<State>("/profiles/me/onboarding", { signal: abort.signal }),
+      api<State>("/profiles/me/onboarding", { signal: abort.signal, cacheMode: "no-store" }),
       api<Country[]>("/meta/countries", { signal: abort.signal }),
     ])
       .then(([state, options]) => {
+        if (abort.signal.aborted) return;
         if (state.status !== "IN_PROGRESS") {
           router.replace(destination);
           return;
@@ -155,8 +167,9 @@ export function EmployeeOnboarding() {
         setFileName(selectedCv?.title||'');
         setCountries(options);
         setStep(state.step);
-        preferenceRevision.current=p.preferencesRevision??0;
-        selectionsTouched.current=false;
+        const positions = selectedPositionFields(p);
+        savedPositions.current = { selections: positions.desiredSelections, revision: p.preferencesRevision ?? 0 };
+        setPositionConflict(false);
         setForm({
           preferredCountryIds: p.preferredCountries.map((c) => c.id),
           fullName: p.user.fullName,
@@ -169,8 +182,7 @@ export function EmployeeOnboarding() {
           salaryNegotiable: p.salaryNegotiable,
           noExperience: p.noExperience,
           ...draft,
-          desiredPositions: positionPreferenceSelections(p).map(({name}) => name),
-          desiredSelections: positionPreferenceSelections(p).map(({kind,id}) => ({kind,id})),
+          ...positions,
           resumeId:selectedCv?.id,
           review:null,reviewState:null,manualExperiences:[],
           phoneDraft,
@@ -190,43 +202,59 @@ export function EmployeeOnboarding() {
       ++uploadEpoch.current;
     };
   }, [loadKey, router, destination]);
-  function persist(value: Form, targetStep: number) {
+  function showSaveError(e: unknown, completing = false) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (message === "POSITION_PREFERENCES_CHANGED") {
+      setPositionConflict(true);
+      setError("");
+    } else if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
+      setPhoneTouched(true);
+      setPhoneServerError(message);
+      if (completing) setStep(4);
+      setError("");
+    } else setError(phoneErrorText(message, t));
+  }
+
+  function persist(value: Form, targetStep: number, method: "PATCH" | "POST" = "PATCH") {
     const version = ++saveVersion.current;
     setSaveState("saving");
-    const payload = {
+    const selections = value.desiredSelections;
+    const actor = getSession()?.user.id;
+    const payload: EmployeeOnboardingInput = {
       ...value,
       step: targetStep,
       // Persist the editable draft independently of strict import validation.
       review: null,
     };
     delete payload.desiredJobTitleIds;
-    if (!selectionsTouched.current) {
-      delete payload.desiredSelections;
-      delete (payload as Partial<Form>).desiredPositions;
-    }
+    delete payload.desiredPositions;
+    delete payload.desiredSelections;
+    delete payload.preferencesRevision;
     const task = queue.current
       .catch(() => {})
-      .then(() =>
-        api<State>("/profiles/me/onboarding", {
-          method: "PATCH",
-          body: JSON.stringify({ ...payload, preferencesRevision: preferenceRevision.current }),
-        }),
-      );
+      .then(async () => {
+        if (getSession()?.user.id !== actor) throw new Error("Account changed. Please retry.");
+        const saved = savedPositions.current;
+        // Form updates for other fields retain the same selection array.
+        const writePositions = selections !== undefined && selections !== saved.selections;
+        const result = await api<State>(method === "POST" ? "/profiles/me/onboarding/complete" : "/profiles/me/onboarding", {
+          method,
+          body: JSON.stringify(writePositions ? { ...payload, desiredSelections: selections, preferencesRevision: saved.revision } : payload),
+        });
+        if (writePositions) {
+          savedPositions.current = { selections, revision: result.profile.preferencesRevision ?? saved.revision };
+        }
+        return result;
+      });
     queue.current = task;
     void task.then(
-      (result) => {
-        preferenceRevision.current = result.profile.preferencesRevision ?? preferenceRevision.current;
+      () => {
         if (version === saveVersion.current) setSaveState("saved");
       },
       (e) => {
         if (version === saveVersion.current) {
           setSaveState("");
-          const message = e instanceof Error ? e.message : String(e);
-          if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
-            setPhoneTouched(true);
-            setPhoneServerError(message);
-            setError("");
-          } else setError(phoneErrorText(message, t));
+          if (method === "PATCH") showSaveError(e);
         }
       },
     );
@@ -234,16 +262,40 @@ export function EmployeeOnboarding() {
   }
   // Queue writes in order. Every edit is sent immediately, including the selected CV file.
   useEffect(() => {
-    if (form && loaded.current && !stopped.current) void persist(form, step);
-  }, [form, step]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (form && loaded.current && !stopped.current && !positionConflict) void persist(form, step);
+  }, [form, step, positionConflict]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function reloadPositionPreferences() {
+    if (busy || uploading) return;
+    setBusy(true);
+    setError("");
+    try {
+      await queue.current.catch(() => {});
+      const state = await api<State>("/profiles/me/onboarding", { cacheMode: "no-store" });
+      if (state.status !== "IN_PROGRESS") {
+        saveSession(await api<AuthSession>("/auth/me", { cacheMode: "no-store" }));
+        router.replace(destination);
+        return;
+      }
+      const positions = selectedPositionFields(state.profile);
+      savedPositions.current = { selections: positions.desiredSelections, revision: state.profile.preferencesRevision ?? 0 };
+      setForm(current => current ? { ...current, ...positions } : current);
+      if (!positions.desiredSelections.length) setStep(1);
+      setPositionConflict(false);
+    } catch (e) {
+      showSaveError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function update(value: Partial<Form>) {
-    if(value.desiredSelections!==undefined)selectionsTouched.current=true;
     setError("");
     if (value.phoneDraft !== undefined) setPhoneServerError(undefined);
     setForm((prev) => (prev ? { ...prev, ...value } : prev));
   }
   async function navigate(targetStep: number, skipSalary = false) {
-    if (!form || busy) return;
+    if (!form || busy || positionConflict) return;
     let normalizedPhone = form.phone;
     if (targetStep > step) {
       if (step === 1 && !form.desiredSelections?.length) {
@@ -301,20 +353,14 @@ export function EmployeeOnboarding() {
         .querySelector("[data-onboarding-heading]")
         ?.scrollIntoView({ block: "start" });
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
-        setPhoneTouched(true);
-        setPhoneServerError(message);
-        setError("");
-      } else setError(phoneErrorText(message, t));
+      showSaveError(e);
     } finally {
       setBusy(false);
     }
   }
   async function finish() {
-    if (!form || busy || uploading) return;
+    if (!form || busy || uploading || positionConflict) return;
     if(!form.resumeId){setError(appText('cv.required'));return;}
-    const review=null;
     const phone = validatePhoneDraft(form.phoneDraft || { country: "", nationalNumber: "" });
     if (!phone.ok) {
       setPhoneTouched(true);
@@ -326,29 +372,13 @@ export function EmployeeOnboarding() {
     setError("");
     stopped.current = true;
     try {
-      await queue.current.catch(() => {});
-      await api("/profiles/me/onboarding/complete", {
-        method: "POST",
-        body: JSON.stringify({
-          ...form,
-          phone: phone.phone,
-          step: 5,
-          review,
-          reviewState:null,manualExperiences:[],
-        }),
-      });
+      await persist({ ...form, phone: phone.phone, reviewState: null, manualExperiences: [] }, 5, "POST");
       const session = await api<AuthSession>("/auth/me");
       saveSession(session);
       router.replace(destination);
     } catch (e) {
       stopped.current = false;
-      const message = e instanceof Error ? e.message : String(e);
-      if (/^PHONE_(REQUIRED|INVALID|COUNTRY_CODE_REPEATED|COUNTRY_CODE_MISMATCH|NATIONAL_PREFIX|DUPLICATE)$/.test(message)) {
-        setPhoneTouched(true);
-        setPhoneServerError(message);
-        setStep(4);
-        setError("");
-      } else setError(phoneErrorText(message, t));
+      showSaveError(e, true);
       setBusy(false);
     }
   }
@@ -447,6 +477,14 @@ export function EmployeeOnboarding() {
             {error}
           </div>
         )}
+        {positionConflict && (
+          <div className={s.error}>
+            <div role="alert">{t("positionPreferencesChanged")}</div>
+            <button type="button" className={s.textButton} disabled={busy || uploading} onClick={() => void reloadPositionPreferences()}>
+              {t("reloadPositionPreferences")}
+            </button>
+          </div>
+        )}
         <fieldset
           disabled={busy || uploading}
           style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
@@ -527,7 +565,7 @@ export function EmployeeOnboarding() {
           <button
             type="button"
             className={s.secondary}
-            disabled={busy || uploading}
+            disabled={busy || uploading || positionConflict}
             onClick={() => void navigate(step - 1)}
           >
             <DirectionalIcon direction="left" size={17} /> {t("back")}
@@ -537,7 +575,7 @@ export function EmployeeOnboarding() {
           {step === 3 && (
             <button
               className={s.textButton}
-              disabled={busy || uploading}
+              disabled={busy || uploading || positionConflict}
               type="button"
               onClick={() =>
                 void navigate(4, true)
@@ -549,7 +587,7 @@ export function EmployeeOnboarding() {
           <button
             type="button"
             className={s.primary}
-            disabled={busy || uploading || (step === 5 && !form.resumeId)}
+            disabled={busy || uploading || positionConflict || (step === 5 && !form.resumeId)}
             onClick={() => (step < 5 ? void navigate(step + 1) : void finish())}
           >
             {busy ? t("saving") : t(step === 5 ? "finish" : "next")}{!busy && step !== 5 && <DirectionalIcon direction="right" size={17} />}

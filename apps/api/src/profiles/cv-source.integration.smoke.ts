@@ -52,7 +52,7 @@ async function main(){
     const skills=await Promise.all(['React','PostgreSQL'].map(name=>db.skill.create({data:{name,slug:name.toLowerCase(),normalizedKey:name.toLowerCase()}})));
     const user=await db.user.create({data:{fullName:'CV Candidate fixture',email:'cv-employee@example.test',role:'EMPLOYEE',employeeProfile:{create:{phone:'+6281234567890',residenceCountryId:country.id,preferredCountries:{connect:{id:country.id}},desiredPositions:['Software Engineer'],desiredPosition:'Software Engineer',headline:'Legacy misleading title',onboardingStatus:'IN_PROGRESS',onboardingStep:5}}}}) as AuthUser;
     const profile=await db.employeeProfile.findUniqueOrThrow({where:{userId:user.id}});
-    const language=await db.language.create({data:{code:'en',name:'English'}});
+    const language=await db.language.upsert({where:{code:'en'},create:{code:'en',name:'English'},update:{}});
     await db.profileLanguage.create({data:{profileId:profile.id,languageId:language.id,level:'B2'}});
     await db.certification.create({data:{profileId:profile.id,name:'Optional cloud certification',issuer:'Fixture institute'}});
     await db.workExperience.create({data:{profileId:profile.id,title:'Obsolete profile occupation',companyName:'Legacy company',startDate:new Date('2000-01-01'),endDate:new Date('2020-01-01')}});
@@ -69,7 +69,26 @@ async function main(){
     hold=true;const fileB=await pdf('Backend Developer','PostgreSQL');
     const b=await profiles.uploadCv(user,{buffer:fileB,size:fileB.length,originalname:'backend.pdf',mimetype:'application/pdf'} as Express.Multer.File);
     for(let i=0;i<100&&!release;i++)await new Promise(resolve=>setTimeout(resolve,20));assert.ok(release,'Parser fixture should be waiting');
+    const group = await db.positionGroup.create({data:{
+      id:'fixture-web',code:'FIXTURE_WEB',nameEn:'Web Developer',definition:'Test group',scope:'FORMAL',source:{fixture:true},
+    }});
+    await db.employeeProfile.update({where:{id:profile.id},data:{
+      desiredPositions:[roles[2].name,group.nameEn],
+      desiredRoles:{create:{jobTitleId:roles[2].id}},
+      desiredGroups:{create:{groupId:group.id}},
+      preferencesRevision:7,
+    }});
+    const selections = [{kind:'ROLE' as const,id:roles[2].id},{kind:'GROUP' as const,id:group.id}];
+    await assert.rejects(() => onboarding.complete(user,{resumeId:b.id,step:5,desiredSelections:selections}), {
+      message:'POSITION_PREFERENCES_CHANGED',
+    });
+    await assert.rejects(() => onboarding.complete(user,{resumeId:b.id,step:5,desiredSelections:selections,preferencesRevision:6}), {
+      message:'POSITION_PREFERENCES_CHANGED',
+    });
     const completion=await onboarding.complete(user,{resumeId:b.id,step:5});assert.equal(completion.status,'COMPLETED','Upload, not parsing, completes onboarding');
+    assert.equal(completion.profile.preferencesRevision,7);
+    assert.deepEqual(completion.profile.desiredSelections.map(({kind,id}) => ({kind,id})),selections);
+    assert.equal(completion.profile.resumes.find(resume => resume.isPrimary)?.id,b.id);
     const resultB=await applications.apply(user,jobs[2].id,undefined,undefined,b.id);
     assert.equal((await db.application.findUniqueOrThrow({where:{id:resultB.id}})).matchScore,null);
     hold=false;release!();await ready(b.id);
