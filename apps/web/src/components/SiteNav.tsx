@@ -4,14 +4,14 @@ import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { useApplicationPresentation } from './screening/ApplicationPresentation';
 
 import { Link, localeHref, usePathname, useRouter } from '@/lib/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ADMIN_URL, api, getSession, logout, AuthSession } from '@/lib/api';
 import { useI18n, Locale } from '@/lib/i18n';
 import styles from './SiteNav.module.css';
 import { AuthLink } from './auth/AuthLink';
 import { authRoleFrom } from '@/lib/authReturn';
-import { isCandidateReviewPath } from '@/lib/accountNavigation';
+import { EMPLOYER_LANDING_PREVIEW, SEEKER_JOBS_PREVIEW, employerWorkspaceHref, isCandidateReviewPath, isSeekerJobsPreview } from '@/lib/accountNavigation';
 import { preferredCompany, rememberCompany } from './recruiter/RecruiterPrimitives';
 import { WorkspaceIcon } from './employee/WorkspaceIcon';
 import { allowEmployerContextChange } from './recruiter/useEmployerUnsaved';
@@ -27,9 +27,11 @@ type Notif = {
   createdAt: string;
 };
 
+type Notifications = { accountId: string; unread: number; items: Notif[] };
+
 const LOCALE_LABELS: Record<Locale, string> = { uz: "O'z", ru: 'Ру', en: 'En', id: 'ID' };
 const AUDIENCE_LABELS: Record<Locale, { group: string; seekers: string; employers: string }> = {
-  id: { group: 'Pilih tujuan', seekers: 'Cari kerja', employers: 'Cari kandidat' },
+  id: { group: 'Pilih tujuan', seekers: 'Cari kerja', employers: 'Cari pelamar' },
   en: { group: 'Choose a destination', seekers: 'Find a job', employers: 'Find candidates' },
   ru: { group: 'Выберите раздел', seekers: 'Найти работу', employers: 'Найти кандидатов' },
   uz: { group: 'Bo‘limni tanlang', seekers: 'Ish topish', employers: 'Nomzod topish' },
@@ -45,14 +47,19 @@ function SiteNavContent() {
   const [rememberedCompany, setRememberedCompany] = useState('');
   const searchParams = useSearchParams();
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [unread, setUnread] = useState(0);
-  const [notifs, setNotifs] = useState<Notif[]>([]);
+  const [notifications, setNotifications] = useState<Notifications | null>(null);
+  const accountId = session?.user.id;
+  const currentNotifications = notifications?.accountId === accountId ? notifications : null;
+  const unread = currentNotifications?.unread ?? 0;
+  const notifs = currentNotifications?.items ?? [];
   const [open, setOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const notificationButtonRef = useRef<HTMLButtonElement>(null);
+  const languageButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const ref = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
@@ -68,30 +75,31 @@ function SiteNavContent() {
 
   useEffect(() => {
     const refreshSession = () => setSession(getSession());
+    refreshSession();
     window.addEventListener('jt-session-updated', refreshSession);
     window.addEventListener('storage', refreshSession);
     return () => { window.removeEventListener('jt-session-updated', refreshSession); window.removeEventListener('storage', refreshSession); };
   }, []);
 
-  useEffect(() => { setMenuOpen(false); setAccountOpen(false); }, [pathname, searchParams, locale]);
+  useEffect(() => {
+    setMenuOpen(false);
+    setAccountOpen(false);
+    setOpen(false);
+    setLangOpen(false);
+  }, [pathname, searchParams, locale, accountId]);
   useEffect(() => {
     function onEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape' && menuOpen) { setMenuOpen(false); menuButtonRef.current?.focus(); }
-      if (event.key === 'Escape' && accountOpen) { setAccountOpen(false); accountButtonRef.current?.focus(); }
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (accountOpen) { setAccountOpen(false); accountButtonRef.current?.focus(); }
+      else if (open) { setOpen(false); notificationButtonRef.current?.focus(); }
+      else if (langOpen) { setLangOpen(false); languageButtonRef.current?.focus(); }
+      else if (menuOpen) { setMenuOpen(false); menuButtonRef.current?.focus(); }
+      else return;
+      event.preventDefault();
     }
     document.addEventListener('keydown', onEscape);
     return () => document.removeEventListener('keydown', onEscape);
-  }, [menuOpen, accountOpen]);
-
-  useEffect(() => {
-    const s = getSession();
-    setSession(s);
-    if (s) {
-      api<{ count: number }>('/notifications/unread-count')
-        .then((r) => setUnread(r.count))
-        .catch(() => undefined);
-    }
-  }, []);
+  }, [menuOpen, accountOpen, open, langOpen]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -106,13 +114,30 @@ function SiteNavContent() {
   useEffect(() => {
     setCompanies([]);
     if (session?.user.role !== 'RECRUITER') return;
-    let active = true;
-    api<Array<{companyId: string; company: {name: string}}>>('/companies/mine').then(mine => {
-      if (!active) return;
-      setCompanies(mine);
-      setRememberedCompany(preferredCompany(mine)?.companyId || '');
-    }).catch(() => undefined);
-    return () => { active = false; };
+    const controller = new AbortController();
+    let loading = false;
+    let loaded = false;
+    async function loadCompanies() {
+      if (loading || loaded) return;
+      loading = true;
+      try {
+        const mine = await api<Array<{companyId: string; company: {name: string}}>>('/companies/mine', { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        loaded = mine.length > 0;
+        setCompanies(mine);
+        setRememberedCompany(preferredCompany(mine)?.companyId || '');
+      } catch {
+        // Retry when the workspace next selects a company.
+      } finally {
+        loading = false;
+      }
+    }
+    void loadCompanies();
+    window.addEventListener('talentio:company', loadCompanies);
+    return () => {
+      controller.abort();
+      window.removeEventListener('talentio:company', loadCompanies);
+    };
   }, [session?.user.id, session?.user.role]);
 
   useEffect(() => {
@@ -122,20 +147,24 @@ function SiteNavContent() {
   }, [companies]);
 
   const noticeRequest = useRef(0);
-  useEffect(() => () => { ++noticeRequest.current; }, []);
-  async function refreshNotifs(showList = open) {
-    const sequence = ++noticeRequest.current, account = getSession()?.user.id;
-    if (!account) return;
+  const refreshNotifs = useCallback(async (showList: boolean) => {
+    if (!accountId || accountId !== getSession()?.user.id) return;
+    const sequence = ++noticeRequest.current;
     if (showList) {
       const data = await api<{items:Notif[];unread:number}>('/notifications');
-      if (sequence !== noticeRequest.current || account !== getSession()?.user.id) return;
-      setNotifs(data.items); setUnread(data.unread);
+      if (sequence !== noticeRequest.current || accountId !== getSession()?.user.id) return;
+      setNotifications({ accountId, items: data.items, unread: data.unread });
     } else {
       const data = await api<{count:number}>('/notifications/unread-count');
-      if (sequence === noticeRequest.current && account === getSession()?.user.id) setUnread(data.count);
+      if (sequence !== noticeRequest.current || accountId !== getSession()?.user.id) return;
+      setNotifications(current => ({ accountId, unread: data.count, items: current?.accountId === accountId ? current.items : [] }));
     }
-  }
-  useLiveRefresh('notifications', refreshNotifs, Boolean(session), locale + ':' + session?.user.id);
+  }, [accountId]);
+  useEffect(() => {
+    void refreshNotifs(false).catch(() => undefined);
+    return () => { ++noticeRequest.current; };
+  }, [refreshNotifs]);
+  useLiveRefresh('notifications', () => refreshNotifs(open), Boolean(accountId), locale + ':' + accountId);
   async function toggleNotifs() {
     if (!session) return;
     const next = !open;
@@ -151,8 +180,12 @@ function SiteNavContent() {
 
   async function markAll() {
     await api('/notifications/read-all', { method: 'POST' });
-    setUnread(0);
-    setNotifs((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
+    if (accountId !== getSession()?.user.id) return;
+    ++noticeRequest.current;
+    const readAt = new Date().toISOString();
+    setNotifications(current => current && current.accountId === accountId
+      ? { ...current, unread: 0, items: current.items.map(n => ({ ...n, readAt: n.readAt || readAt })) }
+      : current);
   }
 
   async function chooseLocale(l: Locale) {
@@ -164,10 +197,12 @@ function SiteNavContent() {
     }
   }
 
-  const activeCompany = companies.find(item => item.companyId === searchParams.get('company')) || companies.find(item => item.companyId === rememberedCompany) || companies[0];
+  const requestedCompany = searchParams.get('company');
+  const activeCompany = companies.find(item => item.companyId === requestedCompany) || companies.find(item => item.companyId === rememberedCompany) || companies[0];
   const companyHref = '/dashboard/recruiter?tab=company' + (activeCompany ? '&company=' + encodeURIComponent(activeCompany.companyId) : '');
 
   const isOnboarding = pathname.startsWith('/onboarding/');
+  const inApplication = pathname.startsWith('/apply/');
   const hrFlow = hrCompany !== null || (process.env.NEXT_PUBLIC_HR_CREATION_V2 === 'true' || process.env.NEXT_PUBLIC_PRIVACY_MARKET === 'id') && pathname === '/onboarding/recruiter';
   const isRecruiter = session?.user.role === 'RECRUITER';
   const candidateReview = Boolean(session && (isRecruiter || session.user.role === 'SUPER_ADMIN') &&
@@ -175,22 +210,43 @@ function SiteNavContent() {
   const isEmployee = session?.user.role === 'EMPLOYEE';
   const isJobs = pathname === '/jobs' || pathname.startsWith('/jobs/');
   const isPublic = !/^\/(dashboard|settings|messages|talent|candidates|billing)(\/|$)/.test(pathname);
-  const isEmployerContext = pathname === '/employers' || (/^\/(login|register|forgot-password|reset-password)$/.test(pathname) && (searchParams.get('role') === 'RECRUITER' || Boolean(searchParams.get('invite'))));
+  const isEmployerContext = pathname === '/employers' || pathname === '/pricing' || (/^\/(login|register|forgot-password|reset-password)$/.test(pathname) && (searchParams.get('role') === 'RECRUITER' || Boolean(searchParams.get('invite'))));
   const accountRole = isEmployerContext ? 'RECRUITER' : authRoleFrom(searchParams.get('role'));
   const isLanding = isEmployee || isRecruiter || (isPublic && isEmployerContext) || (isPublic && !session);
   const isDiscovery = isEmployee || isRecruiter || (isLanding && pathname !== '/' && pathname !== '/employers');
+  const seekerPreview = isRecruiter && ((pathname === '/' || isJobs) && searchParams.get('audience') === 'seekers'
+    || isJobs && isSeekerJobsPreview(searchParams.get('returnTo')));
+  const employerSide = isEmployerContext || (isRecruiter && !seekerPreview);
+  const showAudienceToggle = isLanding && (!session || isEmployee || isRecruiter)
+    && !hrFlow && !candidateReview && !isOnboarding && !inApplication;
+  const seekerHref = isRecruiter ? SEEKER_JOBS_PREVIEW : isEmployee ? '/jobs' : '/';
+  const employerHref = isRecruiter ? employerWorkspaceHref('jobs', activeCompany?.companyId) : isEmployee ? EMPLOYER_LANDING_PREVIEW : '/employers';
+  function rememberEmployerWorkspace() {
+    if (!isRecruiter || seekerPreview) return;
+    const membership = session?.user.memberships?.find(item => item.companyId === requestedCompany);
+    const companyId = membership?.companyId ?? activeCompany?.companyId;
+    if (companyId) rememberCompany(companyId);
+  }
   const employeeTab = searchParams.get('tab');
   const recruiterTab = searchParams.get('tab') || 'jobs';
   const recruiterActive = [(pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab)) || pathname.startsWith('/dashboard/recruiter/jobs/') || pathname.startsWith('/jobs/') || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
-  const browseLinks = isOnboarding || pathname.startsWith('/apply/')
+  const employerLandingLinks = isEmployerContext && (!isRecruiter || pathname === '/employers');
+  const employerLandingHref = isEmployee ? EMPLOYER_LANDING_PREVIEW : '/employers';
+  const browseLinks = isOnboarding || inApplication
     ? [['/jobs', 'home.findJobs']]
+    : seekerPreview
+    ? [[SEEKER_JOBS_PREVIEW, 'home.findJobs']]
+    : employerLandingLinks
+    ? [[employerLandingHref + '#how-it-works', 'employers.how'], [employerLandingHref + '#hiring-insights', 'employers.insights']]
     : isRecruiter
     ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]
     : isEmployee
     ? [['/jobs', 'home.findJobs'], ['/dashboard/employee?tab=applications', 'applications'], ['/dashboard/employee?tab=saved', 'savedJobs'], ['/messages', 'messages']]
-    : isEmployerContext
-    ? [['/employers#how-it-works', 'employers.how'], ['/employers#hiring-insights', 'employers.insights']]
     : [['/jobs', 'home.findJobs']];
+  const activeBrowseLinks = isOnboarding || inApplication || employerLandingLinks ? []
+    : seekerPreview ? [isJobs]
+    : isRecruiter ? recruiterActive
+    : [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'];
   const dash =
     session?.user.role === 'EMPLOYEE'
       ? '/jobs?mode=for-you'
@@ -204,32 +260,33 @@ function SiteNavContent() {
     <div ref={navWrapRef} data-hr-header={hrFlow || undefined} className={`nav-wrap ${hrFlow ? styles.hrFlow : ''} ${isLanding ? styles.landing : ''} ${isDiscovery ? styles.jobs : ''} ${isEmployee ? styles.employee : ''} ${isRecruiter ? styles.recruiter : ''} ${candidateReview ? styles.candidateReview : ''}`}>
       <nav className={`nav shell ${isLanding ? styles.landingNav : ''}`}>
         <div className={isLanding ? styles.primary : undefined}>
-        <Link href={isRecruiter ? '/dashboard/recruiter?tab=jobs' : isEmployee ? '/jobs' : isEmployerContext ? '/employers' : '/'} className={`brand ${styles.logoLink} ${isLanding ? styles.brand : ''} ${(isRecruiter || isEmployerContext) && !isEmployee ? styles.employerBrand : ''}`}>
-          <img className={styles.logo} src="/brand/talentio-logo.webp" alt="Talentio" />{!candidateReview && (isRecruiter || isEmployerContext) && !isEmployee && <small>{t('employers.badge')}</small>}
+        <Link href={employerSide ? employerHref : seekerHref} className={`brand ${styles.logoLink} ${isLanding ? styles.brand : ''} ${employerSide ? styles.employerBrand : ''}`}>
+          <img className={styles.logo} src="/brand/talentio-logo.webp" alt="Talentio" />{!candidateReview && employerSide && <small>{t('employers.badge')}</small>}
         </Link>
         {candidateReview && <span className={styles.recruitmentLabel}>{locale === 'id' ? 'Rekrutmen' : 'Recruitment'}</span>}
         {hrFlow && <span className={styles.hrCompany}><WorkspaceIcon kind="building"/><span>{hrCompany || activeCompany?.company.name || t('employers.badge')}</span></span>}
         {isLanding && !hrFlow && !candidateReview && (
           <div className={styles.browse}>
-            {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={(isRecruiter ? recruiterActive[index] : isEmployee ? [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'][index] : !isEmployerContext && isJobs && href === '/jobs') ? 'page' : undefined}>{t(key)}</Link>)}
+            {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={activeBrowseLinks[index] ? 'page' : undefined}>{t(key)}</Link>)}
           </div>
         )}
         </div>
+        {showAudienceToggle && <div className={styles.audienceToggle} role="group" aria-label={AUDIENCE_LABELS[locale].group}>
+          <Link className={`${styles.audienceOption} ${!employerSide ? styles.audienceActive : ''}`} href={seekerHref} onClick={rememberEmployerWorkspace} aria-current={!employerSide ? 'page' : undefined}>{AUDIENCE_LABELS[locale].seekers}</Link>
+          <Link className={`${styles.audienceOption} ${employerSide ? styles.audienceActive : ''}`} href={employerHref} aria-current={employerSide ? 'page' : undefined}>{AUDIENCE_LABELS[locale].employers}</Link>
+        </div>}
         <div className={`nav-links ${isLanding ? styles.landingLinks : ''} ${isLanding && session ? styles.signedIn : ''}`}>
           {hrFlow && <Link className={styles.hrHelp} href={'/dashboard/recruiter/support' + (activeCompany ? '?company=' + encodeURIComponent(activeCompany.companyId) : '')}><span aria-hidden="true">ⓘ</span>{t('hr.support')}</Link>}
           {!isLanding && !candidateReview && <><Link href="/jobs">{t('jobs')}</Link>{dash && <Link href={dash}>{t('dashboard')}</Link>}</>}
-          {isLanding && !session && <div className={styles.audienceToggle} role="group" aria-label={AUDIENCE_LABELS[locale].group}>
-            <Link className={`${styles.audienceOption} ${!isEmployerContext ? styles.audienceActive : ''}`} href="/" aria-current={!isEmployerContext ? 'page' : undefined}>{AUDIENCE_LABELS[locale].seekers}</Link>
-            <Link className={`${styles.audienceOption} ${isEmployerContext ? styles.audienceActive : ''}`} href="/employers" aria-current={isEmployerContext ? 'page' : undefined}>{AUDIENCE_LABELS[locale].employers}</Link>
-          </div>}
           {session && !isEmployee && !isRecruiter && !candidateReview && <Link href="/messages">{t('messages')}</Link>}
           {session?.user.role === 'SUPER_ADMIN' && !candidateReview && (
             <a href={ADMIN_URL} target="_blank" rel="noreferrer">
               Admin
             </a>
           )}
-          {!candidateReview && <div className="lang-switch" ref={langRef} style={{ position: 'relative' }}>
+          {!candidateReview && <div className={`lang-switch ${styles.language}`} ref={langRef}>
             <button
+              ref={languageButtonRef}
               type="button"
               className="chip"
               aria-haspopup="listbox"
@@ -237,6 +294,8 @@ function SiteNavContent() {
               aria-label={t('language')}
               onClick={(e) => {
                 e.stopPropagation();
+                setOpen(false);
+                setAccountOpen(false);
                 setLangOpen((v) => !v);
               }}
             >
@@ -292,8 +351,8 @@ function SiteNavContent() {
             </>
           ) : (
             <div className="nav-user" ref={ref}>
-              {!isOnboarding && !candidateReview && <div style={{ position: 'relative' }}>
-                <button type="button" className="notif-btn" onClick={toggleNotifs} aria-label={t('notifications')}>
+              {!isOnboarding && !candidateReview && <div className={styles.notification}>
+                <button ref={notificationButtonRef} type="button" className="notif-btn" onClick={toggleNotifs} aria-label={t('notifications')} aria-expanded={open} aria-controls="workspace-notifications">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
                     <path
                       d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Z"
@@ -305,7 +364,7 @@ function SiteNavContent() {
                   {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
                 </button>
                 {open && (
-                  <div className="notif-dropdown">
+                  <div id="workspace-notifications" className="notif-dropdown">
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
                       <strong>{t('notifications')}</strong>
                       {unread > 0 && (
@@ -380,7 +439,7 @@ function SiteNavContent() {
           )}
           {isLanding && !isOnboarding && <button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label={t('landing.menu')} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen((value) => !value)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'm6 6 12 12M6 18 18 6' : 'M3 5h18M3 12h18M3 19h18'} /></svg></button>}
         </div>
-        {isLanding && menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} onClick={() => setMenuOpen(false)}>{browseLinks.map(([href, key]) => <Link href={href} key={href}>{t(key)}</Link>)}{!session && <><Link href={isEmployerContext ? '/' : '/employers'}>{t(isEmployerContext ? 'employers.seekers' : 'recruiterHeroBadge')}</Link><AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink><AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined}>{t(isEmployerContext ? 'postAJob' : 'home.createProfile')}</AuthLink></>}</div>}
+        {isLanding && menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} onClick={() => setMenuOpen(false)}>{browseLinks.map(([href, key], index) => <Link href={href} key={href} aria-current={activeBrowseLinks[index] ? 'page' : undefined}>{t(key)}</Link>)}{!session && <><AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink><AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined}>{t(isEmployerContext ? 'postAJob' : 'home.createProfile')}</AuthLink></>}</div>}
       </nav>
     </div>
   );

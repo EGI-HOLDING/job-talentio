@@ -1,6 +1,8 @@
 import { localeFromPathname, stripLocale, withLocale } from './locale';
 
 export const EMPLOYER_JOBS = '/dashboard/recruiter?tab=jobs';
+export const SEEKER_JOBS_PREVIEW = '/jobs?audience=seekers';
+export const EMPLOYER_LANDING_PREVIEW = '/employers?audience=employers';
 export const CANDIDATE_REVIEW_ROOT = '/dashboard/recruiter/candidates';
 export const isCandidateReviewPath = (path: string) => path.startsWith(CANDIDATE_REVIEW_ROOT + '/');
 
@@ -40,7 +42,7 @@ export function accountHref(role: string | null | undefined, href: string): stri
       if (url.searchParams.get('application')) target += (target.includes('?')?'&':'?')+'application=' + encodeURIComponent(url.searchParams.get('application')!);
     }
     if (/^\/billing(\/|$)/.test(path) || (path === '/dashboard/recruiter' && url.searchParams.get('tab') === 'billing')) target = EMPLOYER_JOBS;
-    if ((path === '/' && url.searchParams.get('audience') !== 'seekers') || path === '/jobs' || /^\/(dashboard\/employee|onboarding\/employee)(\/|$)/.test(path)) target = EMPLOYER_JOBS;
+    if (((path === '/' || path === '/jobs') && url.searchParams.get('audience') !== 'seekers') || /^\/(dashboard\/employee|onboarding\/employee)(\/|$)/.test(path)) target = EMPLOYER_JOBS;
   } else if (role === 'EMPLOYEE' && path === '/dashboard/employee' && !['applications', 'saved', 'alerts', 'profile'].includes(url.searchParams.get('tab') || '')) {
     target = '/jobs?mode=for-you';
   } else if (role === 'EMPLOYEE' && /^\/(dashboard\/recruiter|talent|candidates|billing)(\/|$)/.test(path)) {
@@ -66,6 +68,11 @@ export function employerWorkspaceHref(tab = 'jobs', companyId?: string | null): 
   return '/dashboard/recruiter?' + params;
 }
 
+export function isSeekerJobsPreview(value?: string | null): boolean {
+  const url = value ? internalUrl(value) : null;
+  return url !== null && stripLocale(url.pathname).replace(/\/$/, '') === '/jobs' && url.searchParams.get('audience') === 'seekers';
+}
+
 /** Return destinations are internal, role-appropriate pages, never arbitrary URLs. */
 export function accountReturnHref(role: string | null | undefined, value?: string | null): string | null {
   if (!value || value.length > 2000) return null;
@@ -74,7 +81,7 @@ export function accountReturnHref(role: string | null | undefined, value?: strin
   const path = stripLocale(url.pathname);
   const shared = /^\/(jobs\/[^/]+|messages|settings)\/?$/.test(path);
   const allowed = isEmployerRole(role)
-    ? shared || isCandidateReviewPath(path) || /^\/(companies\/[^/]+|news(?:\/[^/]+)?|dashboard\/recruiter(?:\/(?:orders|support|jobs\/[^/]+(?:\/package)?))?|talent|candidates\/[^/]+|checkout\/[^/]+|pricing)\/?$/.test(path)
+    ? shared || isSeekerJobsPreview(value) || isCandidateReviewPath(path) || /^\/(companies\/[^/]+|news(?:\/[^/]+)?|dashboard\/recruiter(?:\/(?:orders|support|jobs\/[^/]+(?:\/package)?))?|talent|candidates\/[^/]+|checkout\/[^/]+|pricing)\/?$/.test(path)
     : shared || path === '/jobs' || (role === 'EMPLOYEE' && path === '/dashboard/employee');
   return allowed ? accountHref(role, path + url.search + url.hash) : null;
 }

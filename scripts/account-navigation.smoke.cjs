@@ -86,6 +86,70 @@ test('candidate actions still use candidate routes, while employer routes are re
   }
 });
 
+test('the public jobs preview retains filters and a valid back link for employers', () => {
+  for (const role of ['RECRUITER', 'SUPER_ADMIN']) {
+    for (const language of ['id', 'en', 'uz', 'ru']) {
+      const preview = `/${language}${policy.SEEKER_JOBS_PREVIEW}&q=engineer&page=2`;
+      assert.equal(policy.accountHref(role, preview), preview);
+      assert.equal(policy.jobBackHref(role, preview), '/jobs?audience=seekers&q=engineer&page=2');
+      assert.equal(policy.accountHref(role, `/${language}/jobs?audience=employers`), `/${language}${policy.EMPLOYER_JOBS}`);
+      assert.equal(policy.accountHref(role, `/${language}/dashboard/employee?tab=profile&audience=seekers`), `/${language}${policy.EMPLOYER_JOBS}`);
+      assert.equal(policy.accountReturnHref(role, '//outside.test/jobs?audience=seekers'), null);
+    }
+  }
+  assert.equal(policy.accountHref('EMPLOYEE', policy.EMPLOYER_LANDING_PREVIEW), policy.EMPLOYER_LANDING_PREVIEW);
+  assert.equal(policy.accountHref('EMPLOYEE', '/dashboard/recruiter?audience=employers'), '/jobs');
+});
+
+test('the shared header renders both audience choices before and after sign-in', () => {
+  const hrefCases = [
+    { role: null, href: '/', selected: 'Cari kerja', links: ['/', '/employers'] },
+    { role: 'EMPLOYEE', href: '/jobs', selected: 'Cari kerja', links: ['/jobs', policy.EMPLOYER_LANDING_PREVIEW] },
+    { role: 'EMPLOYEE', href: policy.EMPLOYER_LANDING_PREVIEW, selected: 'Cari pelamar', links: ['/jobs', policy.EMPLOYER_LANDING_PREVIEW] },
+    { role: 'RECRUITER', href: '/dashboard/recruiter?tab=jobs', selected: 'Cari pelamar', links: [policy.SEEKER_JOBS_PREVIEW, policy.EMPLOYER_JOBS] },
+    { role: 'RECRUITER', href: policy.SEEKER_JOBS_PREVIEW, selected: 'Cari kerja', links: [policy.SEEKER_JOBS_PREVIEW, policy.EMPLOYER_JOBS] },
+    { role: 'RECRUITER', href: '/dashboard/recruiter/candidates/candidate-1', selected: null },
+    { role: 'RECRUITER', href: '/onboarding/recruiter', selected: null },
+    { role: 'EMPLOYEE', href: '/apply/invitation-1', selected: null },
+    { role: 'SUPER_ADMIN', href: '/pricing', selected: null },
+  ];
+  for (const { role, href, selected, links } of hrefCases) {
+    const url = new URL(href, 'http://local');
+    const session = role ? { user: { role, id: 'fixture', fullName: 'Fixture' } } : null;
+    let stateIndex = 0;
+    const Link = ({href, children, ...props}) => React.createElement('a', { ...props, href: policy.accountHref(role, href) }, children);
+    const { SiteNav } = load('apps/web/src/components/SiteNav.tsx', {
+      react: { ...React, useState: (initial) => React.useState(++stateIndex === 3 ? session : initial) },
+      'next/navigation': { useSearchParams: () => url.searchParams },
+      '@/lib/navigation': { Link, usePathname: () => url.pathname, useRouter: () => ({}) },
+      '@/lib/i18n': { useI18n: () => ({ locale: 'id', t: key => key }) },
+      '@/lib/api': { getSession: () => session, ADMIN_URL: '/admin' },
+      '@/lib/accountNavigation': policy,
+      '@/lib/authReturn': { authRoleFrom: role => role || 'EMPLOYEE' },
+      '@/lib/useLiveRefresh': { useLiveRefresh: () => {} },
+      '@/components/ui/DirectionalIcon': { DirectionalIcon: () => null },
+      './SiteNav.module.css': {},
+      './auth/AuthLink': { AuthLink: ({ children }) => children },
+      './employee/WorkspaceIcon': { WorkspaceIcon: () => null },
+      './recruiter/RecruiterPrimitives': {},
+      './recruiter/useEmployerUnsaved': {},
+      './recruiter/HrFlowPresentation': { useHrFlowContext: () => null, useHrAssistantContext: () => null },
+      './recruiter/HrAssistantOnboarding': {},
+      './screening/ApplicationPresentation': { useApplicationPresentation: () => ({ focused: false }) },
+    }, { process: { env: {} } });
+    const html = renderToStaticMarkup(React.createElement(SiteNav));
+    const group = html.match(/role="group" aria-label="Pilih tujuan">(.+?)<\/div>/)?.[1];
+    if (selected === null) {
+      assert.equal(group, undefined, href);
+      continue;
+    }
+    assert.ok(group, href);
+    assert.deepEqual([...group.matchAll(/href="([^"]+)"/g)].map((match) => match[1]), links, href);
+    assert.equal(group.match(/<a\b[^>]*aria-current="page"[^>]*>([^<]+)<\/a>/)?.[1], selected, href);
+    assert.equal((group.match(/aria-current/g) || []).length, 1, href);
+  }
+});
+
 test('job returns support candidate and message context, and reject unsafe or opposite-role destinations', () => {
   for (const href of ['/candidates/candidate-1?matchJobId=job-7&company=company-2', '/messages?peer=person&job=job-7&role=RECRUITER']) {
     assert.equal(policy.jobBackHref('RECRUITER', href), href);

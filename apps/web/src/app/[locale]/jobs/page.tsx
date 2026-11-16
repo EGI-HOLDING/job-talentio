@@ -4,6 +4,7 @@ import { useEmployeeIntentText } from '@/lib/i18n/employeeIntent';
 import { EmployeeCountryPreferenceNotice,EmployeeRecommendationNotice,EmployeeExplorationNotice } from '@/components/jobs/EmployeeRecommendationState';
 import type { EmployeeRecommendationState,EmployeeEvidenceState,EmployeeEmptyReason,MatchInsights } from '@job-talentio/shared';
 import { loginForCurrentPage } from '@/lib/authReturn';
+import { jobDetailHref } from '@/lib/accountNavigation';
 
 import { Link } from '@/lib/navigation';
 import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -269,6 +270,11 @@ function locationFilter(value: string) {
     : { city: value, country: '' };
 }
 
+function jobsHref(params: URLSearchParams, seekerPreview: boolean) {
+  if (seekerPreview) params.set('audience', 'seekers');
+  return '/jobs' + (params.size ? '?' + params : '');
+}
+
 function JobsInner() {
   const intentText=useEmployeeIntentText();
   const router = useRouter();
@@ -287,6 +293,7 @@ function JobsInner() {
     return () => { window.removeEventListener('jt-session-updated', refresh); window.removeEventListener('storage', refresh); };
   }, []);
   const isEmployee = session?.user.role === 'EMPLOYEE';
+  const seekerPreview = searchParams.get('audience') === 'seekers';
   const implicitSort = defaultJobSort();
   const filterParams = new URLSearchParams(searchParams.toString());
   filterParams.delete('job');
@@ -315,7 +322,7 @@ function JobsInner() {
   const [retry, setRetry] = useState(0);
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [recommendationPage,setRecommendationPage]=useState(1);
-  const requestedMode = searchParams.get('mode');
+  const requestedMode = isEmployee ? searchParams.get('mode') : null;
   const exploration = requestedMode === 'exploration';
   const salaryUnverified = requestedMode === 'salary-unverified';
   const related=requestedMode==='related';
@@ -388,9 +395,9 @@ function JobsInner() {
       const keepBrowse = opts?.keepBrowse ?? browseCompanies;
       const params = toParams(next, keepBrowse ? 'companies' : null, implicitSort);
       if (isEmployee) params.set('mode', 'all');
-      router.push(`/jobs?${params}`, { scroll: false });
+      router.push(jobsHref(params, seekerPreview), { scroll: false });
     },
-    [filters, router, browseCompanies, implicitSort, isEmployee],
+    [filters, router, browseCompanies, implicitSort, isEmployee, seekerPreview],
   );
 
   useEffect(() => {
@@ -412,13 +419,13 @@ function JobsInner() {
         if (requestedMode !== 'for-you' && res.page !== filters.page) {
           const nextParams = toParams({ ...filters, page: res.page }, browseCompanies ? 'companies' : null, implicitSort);
           if (requestedMode) nextParams.set('mode', requestedMode);
-          router.replace('/jobs?' + nextParams);
+          router.replace(jobsHref(nextParams, seekerPreview));
         }
       })
       .catch((e) => { if (active) setError(e.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [filters, router, browseCompanies, implicitSort, retry, requestedMode, locale, session?.user.id,authReady,decidingMode,personalized]);
+  }, [filters, router, browseCompanies, implicitSort, retry, requestedMode, locale, session?.user.id,authReady,decidingMode,personalized,seekerPreview]);
 
   const selectedSkills = panelFilters.skills.split(',').filter(Boolean);
   const selectedCities = filters.city.split(',').filter(Boolean);
@@ -883,7 +890,7 @@ function JobsInner() {
                     <JobResultLogo company={job.company} />
                     <div className={s.jobCopy}>
                       <div className={s.rowHeading}>
-                        <h2><Link className={s.jobTitleLink} href={`/jobs/${job.id}`} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>{sanitizeMojibake(job.title)}</Link></h2>
+                        <h2><Link className={s.jobTitleLink} href={jobDetailHref(job.id, seekerPreview ? jobsHref(toParams(filters, browseCompanies ? 'companies' : null, implicitSort), true) : undefined)} onClick={(event) => openJob(event, job.id)} aria-current={selectedId === job.id ? 'true' : undefined}>{sanitizeMojibake(job.title)}</Link></h2>
                       </div>
                       <div className={s.companyMeta}>
                         <span>{job.company.name}</span>
