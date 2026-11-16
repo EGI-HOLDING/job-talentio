@@ -23,7 +23,7 @@ export function useLinkedInPosts(jobId?:string) {
     if(!jobId)return;
     let alive=true,timer:ReturnType<typeof setTimeout> | undefined;setError('');
     const load=async()=>{
-      try{const posts=await api<LinkedInPost[]>('/jobs/'+encodeURIComponent(jobId)+'/social-posts');if(!alive)return;setValue({jobId,posts});setError('');
+      try{const posts=await api<LinkedInPost[]>('/jobs/'+encodeURIComponent(jobId)+'/social-posts',{cacheMode:'no-store'});if(!alive)return;setValue({jobId,posts});setError('');
         if(posts.some(post=>activeLinkedInPost(post) || (post.status==='UNKNOWN' && post.reviewAfter && new Date(post.reviewAfter).getTime()>Date.now())))timer=setTimeout(()=>void load(),5000);
       }catch{if(alive)setError(t('li.loadFailed'));}
     };void load();return()=>{alive=false;if(timer)clearTimeout(timer);};
@@ -31,7 +31,9 @@ export function useLinkedInPosts(jobId?:string) {
   return {posts:value.jobId===jobId?value.posts:[],error,reload};
 }
 
-export function LinkedInPostStatus({post,onReload,onRetry}:{post:LinkedInPost;onReload:()=>void;onRetry:(id:string)=>void}) {
+export function LinkedInPostStatus({post,onReload,onRetry,companyPage}:{
+  post:LinkedInPost;onReload:()=>void;onRetry:(id:string)=>void;companyPage?:{id?:string;simulated:boolean};
+}) {
   const {t,locale}=useI18n(),confirm=useConfirm();
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[checked,setChecked]=useState(false),[urn,setUrn]=useState('');
   const date=(value:string)=>new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
@@ -45,6 +47,9 @@ export function LinkedInPostStatus({post,onReload,onRetry}:{post:LinkedInPost;on
   }
   const waiting=Boolean(post.reviewAfter && new Date(post.reviewAfter).getTime()>Date.now());
   const key='li.error.'+post.errorCode,translated=t(key),errorText=translated===key?t('li.error.GENERIC'):translated;
+  const companyFeed = !companyPage?.simulated && /^\d+$/.test(companyPage?.id ?? '')
+    ? 'https://www.linkedin.com/company/' + companyPage?.id + '/posts/'
+    : null;
   return <div className={s.postStatus} data-status={post.status} aria-busy={busy}>
     <strong role="status">{t('li.post.'+post.status)}</strong>
     {post.publishedAt && <p>{date(post.publishedAt)}</p>}
@@ -52,10 +57,15 @@ export function LinkedInPostStatus({post,onReload,onRetry}:{post:LinkedInPost;on
     {activeLinkedInPost(post) && <p>{t('li.queuedHint')}</p>}
     {post.status==='PENDING' && new Date(post.nextAttemptAt).getTime()>Date.now() && <p>{t('li.retryAt')}: {date(post.nextAttemptAt)}</p>}
     {post.status==='FAILED' && <p>{errorText}</p>}
-    {post.status==='PUBLISHED' && <p>{t('li.oncePerJob')}</p>}
+    {post.status==='PUBLISHED' && <p>{companyPage
+      ? (locale === 'id' ? 'Lowongan ini sudah diposting ke halaman perusahaan.' : 'This job has been posted to the company page.')
+      : t('li.oncePerJob')}</p>}
     {['PENDING','RENDERING','UPLOADING'].includes(post.status) && <button type="button" className={s.secondaryButton} disabled={busy} onClick={()=>void action('cancel')}>{t('li.cancelShare')}</button>}
     {['FAILED','CANCELLED'].includes(post.status) && post.retrySafe && <button type="button" className={s.secondaryButton} disabled={busy} onClick={()=>onRetry(post.id)}>{t('li.retryReview')}</button>}
-    {['UNKNOWN','PUBLISHED'].includes(post.status) && <a className={s.feedLink} href="https://www.linkedin.com/feed/" target="_blank" rel="noopener noreferrer">{t('li.feed')}</a>}
+    {['UNKNOWN','PUBLISHED'].includes(post.status) && (!companyPage || companyFeed) &&
+      <a className={s.feedLink} href={companyFeed ?? 'https://www.linkedin.com/feed/'} target="_blank" rel="noopener noreferrer">
+        {companyPage ? (locale === 'id' ? 'Buka halaman perusahaan' : 'Open company page') : t('li.feed')}
+      </a>}
     {post.status==='UNKNOWN' && <div className={s.reconcile}>
       <p>{t('li.unknownHint')}</p>
       {waiting && <p>{t('li.reviewAfter')}: {date(post.reviewAfter!)}</p>}

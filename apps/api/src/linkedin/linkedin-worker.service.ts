@@ -6,7 +6,7 @@ import IORedis from 'ioredis';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { LinkedInClient, LinkedInFailure } from './linkedin-client';
+import { isOrganizationUrn, LinkedInClient, LinkedInFailure } from './linkedin-client';
 import { LinkedInService } from './linkedin.service';
 import { LinkedInSettings } from './linkedin-settings';
 import { nextUtcReset, publicIp, sha256 } from './linkedin-security';
@@ -128,8 +128,12 @@ export class LinkedInWorkerService implements OnModuleInit,OnModuleDestroy {
         await tx.linkedInOutbox.updateMany({where:{socialPostId:id},data:{processedAt:null,nextDispatchAt:new Date(Date.now()+10000)}});return null;
       }
       let access=true;
-      try {const job=await this.shares.assertJob(tx,post.userId,post.jobId,true);access=job.status==='PUBLISHED' && (job.benefit?.publicationCycle??1)===post.publicationRevision;}catch{access=false;}
-      const connected=connection.status==='CONNECTED' && connection.generation===post.connectionGeneration && connection.authorUrn===post.authorUrnSnapshot && Boolean(connection.tokenCiphertext && connection.tokenKeyVersion && connection.tokenExpiresAt && connection.tokenExpiresAt.getTime()>Date.now());
+      try {
+        const job=await this.shares.assertJob(tx,post.userId,post.jobId,true);
+        access=job.status==='PUBLISHED' && (job.benefit?.publicationCycle??1)===post.publicationRevision &&
+          (await this.shares.shareTarget(tx,job,connection)).authorUrn===post.authorUrnSnapshot;
+      }catch{access=false;}
+      const connected=connection.status==='CONNECTED' && connection.generation===post.connectionGeneration && Boolean(connection.tokenCiphertext && connection.tokenKeyVersion && connection.tokenExpiresAt && connection.tokenExpiresAt.getTime()>Date.now());
       if(!access || !connected) {
         await tx.linkedInSocialPost.update({where:{id},data:{status:access?'FAILED':'CANCELLED',errorCode:access?'RECONNECT_REQUIRED':'ACCESS_REVOKED',errorSummary:access?'Reconnect LinkedIn and review a new preview.':'The job or company access is no longer available.',retrySafe:true}});
         await tx.linkedInOutbox.updateMany({where:{socialPostId:id},data:{processedAt:new Date()}});return null;
@@ -147,7 +151,9 @@ export class LinkedInWorkerService implements OnModuleInit,OnModuleDestroy {
     if(!fresh || fresh.attemptId!==post.attemptId || !allowed.includes(fresh.status as never) || !fresh.leaseUntil || fresh.leaseUntil.getTime()<=Date.now())throw new StaleAttempt();
     const connection=await this.prisma.linkedInConnection.findUnique({where:{id:post.connectionId}});
     if(!connection || connection.leaseOwner!==post.attemptId || connection.generation!==post.connectionGeneration || connection.status!=='CONNECTED' || !connection.tokenExpiresAt || connection.tokenExpiresAt.getTime()<=Date.now())throw new LinkedInFailure('RECONNECT_REQUIRED','The LinkedIn connection is no longer available.');
-    try {const job=await this.shares.assertJob(this.prisma,post.userId,post.jobId,true);if(job.status!=='PUBLISHED' || (job.benefit?.publicationCycle??1)!==post.publicationRevision)throw new Error('Not published');}
+    try {const job=await this.shares.assertJob(this.prisma,post.userId,post.jobId,true);
+      if(job.status!=='PUBLISHED' || (job.benefit?.publicationCycle??1)!==post.publicationRevision ||
+        (await this.shares.shareTarget(this.prisma,job,connection)).authorUrn!==post.authorUrnSnapshot)throw new Error('Not published');}
     catch {throw new LinkedInFailure('ACCESS_REVOKED','The job or company access is no longer available.');}
   }
   private async stage(post:LinkedInSocialPost,status:'UPLOADING'|'PUBLISHING') {
@@ -169,7 +175,8 @@ export class LinkedInWorkerService implements OnModuleInit,OnModuleDestroy {
       ]).catch(()=>this.logger.warn(JSON.stringify({event:'linkedin_lease_renewal_failed',postId:id})));
     },20000);heartbeat.unref();
     try {
-      if(!publicApplyUrl(post.jobUrlSnapshot))throw new LinkedInFailure('PUBLIC_URL_REQUIRED','Configure a public HTTPS application URL before sharing.');
+      const simulatedUrl = this.settings.simulated && new URL(post.jobUrlSnapshot).origin === new URL(this.settings.webUrl).origin;
+      if(!simulatedUrl && !publicApplyUrl(post.jobUrlSnapshot))throw new LinkedInFailure('PUBLIC_URL_REQUIRED','Configure a public HTTPS application URL before sharing.');
       let token:string;
       try {token=this.settings.vault!.decrypt(connection.tokenCiphertext!,connection.tokenKeyVersion!,`${post.userId}|${connection.subject}`);}
       catch {throw new LinkedInFailure('TOKEN_KEY_UNAVAILABLE','Reconnect LinkedIn or contact support before retrying this share.');}
@@ -194,6 +201,10 @@ export class LinkedInWorkerService implements OnModuleInit,OnModuleDestroy {
         if(ready==='unreadable'){await sleep(5000);break;}
         if(poll===3)throw new LinkedInFailure('IMAGE_PROCESSING','The image is still processing on LinkedIn.',{retryable:true});
         await sleep(1500);
+      }
+      if (isOrganizationUrn(post.authorUrnSnapshot) &&
+        !(await this.client.organizationUrns(token, connection.authorUrn!)).includes(post.authorUrnSnapshot)) {
+        throw new LinkedInFailure('ACCESS_REVOKED','Posting permission on this company page is no longer available.');
       }
       await this.stage(post,'PUBLISHING');publishing=true;
       await this.active(post,['PUBLISHING']);

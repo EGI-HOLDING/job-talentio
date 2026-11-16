@@ -26,7 +26,7 @@ export default function BenefitsPage() {
     void load().catch((error) => setMessage(error.message));
   }, []);
   useEffect(() => {
-    const policy = policies.find((row) => row.code === code);
+    const policy = policies.find((row) => row.code === code && row.currentCatalog);
     if (policy) setSettings(JSON.stringify(policy.settings, null, 2));
   }, [code, policies]);
   async function perform(run: () => Promise<unknown>) {
@@ -120,7 +120,7 @@ export default function BenefitsPage() {
           <label>
             Package
             <select value={code} onChange={(event) => setCode(event.target.value)}>
-              {['FREE', 'STANDARD', 'PREMIUM'].map((value) => (
+              {[...new Set(policies.filter(row => row.currentCatalog).map(row => row.code as string))].map((value) => (
                 <option key={value}>{value}</option>
               ))}
             </select>

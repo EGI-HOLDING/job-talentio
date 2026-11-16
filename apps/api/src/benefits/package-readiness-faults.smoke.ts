@@ -95,7 +95,8 @@ export async function runPackageReadinessFaults(db: PrismaService) {
   const premiumPeriod=await db.jobBenefit.findUniqueOrThrow({where:{jobId:directUpgradeJob.id}});
   assert.equal(premiumPeriod.code,'PREMIUM');assert.equal(premiumPeriod.expiresAt!.getTime(),freePeriod.expiresAt!.getTime());assert.equal(premiumPeriod.boostGrantedSeconds,7*86400);
   const snapshotJob=await job(),snapshotOrder=await pending(snapshotJob.id),oldPolicy=await benefits.policy('STANDARD');
-  const changedPolicy=await db.packagePolicy.create({data:{code:'STANDARD',version:oldPolicy.version+1,settings:{...oldPolicy.settings,boostDays:2}}});
+  const versions = await db.packagePolicy.aggregate({where:{code:'STANDARD'},_max:{version:true}});
+  const changedPolicy=await db.packagePolicy.create({data:{code:'STANDARD',version:(versions._max.version??0)+1,settings:{...oldPolicy.settings,boostDays:2}}});
   try {
     await commerce.settle('fixture',payment(snapshotOrder.id,'immutable-policy'));
     const purchased=await db.jobBenefit.findUniqueOrThrow({where:{jobId:snapshotJob.id}});

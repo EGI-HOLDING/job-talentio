@@ -71,15 +71,7 @@ export class HrSupportService {
         async (db) => {
           const priority =
             (await this.benefits.enabled('hr_packages', db)) &&
-            (await db.jobBenefit.count({
-              where: {
-                companyId: input.companyId,
-                code: 'PREMIUM',
-                startsAt: { lte: new Date() },
-                expiresAt: { gt: new Date() },
-                job: { status: { in: ['PUBLISHED', 'PAUSED'] } },
-              },
-            })) > 0;
+            (await this.benefits.hasPrioritySupport(input.companyId, new Date(), db));
           return db.supportTicket.create({
             data: {
               companyId: input.companyId,

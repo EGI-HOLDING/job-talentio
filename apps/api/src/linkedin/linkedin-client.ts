@@ -3,6 +3,7 @@ import { lookup } from 'node:dns/promises';
 import { LinkedInSettings } from './linkedin-settings';
 import { publicIp, retryAt, validateLinkedInUploadUrl } from './linkedin-security';
 import type { LinkedInTelemetry, LinkedInRequestMetric } from './linkedin-observability';
+import { simulateCompanyLinkedIn } from './linkedin-company-simulator';
 
 export class LinkedInFailure extends Error {
   constructor(readonly code: string, message: string, readonly options: {
@@ -13,6 +14,7 @@ export class LinkedInFailure extends Error {
 export type LinkedInQuotaCheck = (member: string, endpoint: string) => Promise<void>;
 const POST_URN = /^urn:li:(share|ugcPost):\d{1,30}$/;
 export const validPostUrn = (value: string) => POST_URN.test(value);
+export const isOrganizationUrn = (value: string) => /^urn:li:organization:\d{1,25}$/.test(value);
 
 /** No provider bodies, tokens, authorization codes or signed URLs enter errors. */
 @Injectable()
@@ -42,7 +44,8 @@ export class LinkedInClient {
   }
   private async sendRequest(url: string, init: RequestInit, final:boolean,received:(status:number)=>void): Promise<Response> {
     let response: Response;
-    try { response = await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(20_000) }); }
+    try { response = this.settings.simulated ? simulateCompanyLinkedIn(new URL(url), init)
+      : await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(20_000) }); }
     catch { throw new LinkedInFailure(final ? 'PUBLISH_RESULT_UNKNOWN' : 'PROVIDER_UNAVAILABLE', final ? 'The posting result is uncertain. Check your LinkedIn feed before taking further action.' : 'LinkedIn could not be reached.', { ambiguous: final, retryable: !final }); }
     received(response.status);
     if (response.ok) return response;
@@ -59,7 +62,7 @@ export class LinkedInClient {
     throw new LinkedInFailure(status >= 500 ? 'PROVIDER_UNAVAILABLE' : 'INVALID_PROVIDER_REQUEST', status >= 500 ? 'LinkedIn is temporarily unavailable.' : 'LinkedIn rejected the request. Review the posting configuration.', { status, retryable: status >= 500 });
   }
 
-  async exchange(code: string) {
+  async exchange(code: string, requestedScopes = this.settings.scopes) {
     const response = await this.send('https://www.linkedin.com/oauth/v2/accessToken', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: this.settings.redirectUri, client_id: this.settings.clientId, client_secret: this.settings.clientSecret }),
@@ -67,8 +70,8 @@ export class LinkedInClient {
     const token = await response.json() as { access_token?: unknown; expires_in?: unknown; scope?: unknown };
     if (typeof token.access_token !== 'string' || !token.access_token || token.access_token.length > 16000 || !Number.isFinite(Number(token.expires_in)) || Number(token.expires_in) <= 0 || Number(token.expires_in) > 366 * 86400) throw new LinkedInFailure('INVALID_TOKEN_RESPONSE', 'LinkedIn returned an invalid authorization response.');
     // LinkedIn's consent is all requested scopes, or denied. Some token responses omit scope.
-    const scopes = typeof token.scope === 'string' ? token.scope.split(/[ ,]+/).filter(Boolean) : [...this.settings.scopes];
-    if (!this.settings.scopes.every(scope => scopes.includes(scope))) throw new LinkedInFailure('MISSING_SCOPES', 'LinkedIn did not grant the permissions required for sharing.');
+    const scopes = typeof token.scope === 'string' ? token.scope.split(/[ ,]+/).filter(Boolean) : [...requestedScopes];
+    if (!requestedScopes.every(scope => scopes.includes(scope))) throw new LinkedInFailure('MISSING_SCOPES', 'LinkedIn did not grant the permissions required for sharing.');
     const identityResponse = await this.send('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${token.access_token}` } });
     const identity = await identityResponse.json() as { sub?: unknown; name?: unknown; picture?: unknown };
     if (typeof identity.sub !== 'string' || !/^[a-zA-Z0-9_-]{1,200}$/.test(identity.sub)) throw new LinkedInFailure('INVALID_IDENTITY', 'LinkedIn did not return a valid member identity.');
@@ -77,6 +80,32 @@ export class LinkedInClient {
       try { const picture = new URL(identity.picture); if (picture.protocol === 'https:' && (picture.hostname === 'media.licdn.com' || picture.hostname.endsWith('.licdn.com'))) avatarUrl = picture.toString(); } catch { /* optional avatar */ }
     }
     return { accessToken: token.access_token, scopes, expiresAt: new Date(Date.now() + Number(token.expires_in) * 1000), subject: identity.sub, authorUrn: `urn:li:person:${identity.sub}`, displayName: typeof identity.name === 'string' ? identity.name.trim().slice(0,160) : 'LinkedIn member', avatarUrl };
+  }
+
+  async organizationUrns(token: string, person: string) {
+    const urns = new Set<string>();
+    for (let start = 0; ; start += 50) {
+      const url = new URL('https://api.linkedin.com/rest/organizationAcls');
+      url.search = new URLSearchParams({q:'roleAssignee', state:'APPROVED', start:String(start), count:'50'}).toString();
+      const response = await this.send(url.href, {headers: this.headers(token)});
+      const page = await response.json() as {elements?: Array<{organization:string; state:string; role:string; roleAssignee:string}>; paging?: {total?:number; links?: Array<{rel:string}>}};
+      for (const row of page.elements ?? []) {
+        if (row.state === 'APPROVED' && row.roleAssignee === person &&
+          ['ADMINISTRATOR','CONTENT_ADMIN','CONTENT_ADMINISTRATOR'].includes(row.role) &&
+          typeof row.organization === 'string' && isOrganizationUrn(row.organization)) urns.add(row.organization);
+      }
+      if ((page.elements?.length ?? 0) < 50 || !(page.paging?.links?.some(link => link.rel === 'next') || (page.paging?.total ?? 0) > start+50)) break;
+    }
+    return [...urns];
+  }
+
+  async companyPageName(token: string, urn: string) {
+    if (!isOrganizationUrn(urn)) throw new LinkedInFailure('INVALID_PROVIDER_RESPONSE','LinkedIn returned an invalid company page.');
+    const id = urn.slice('urn:li:organization:'.length);
+    const response = await this.send('https://api.linkedin.com/rest/organizations/' + id, {headers: this.headers(token)});
+    const page = await response.json() as {localizedName?: unknown};
+    if (typeof page.localizedName !== 'string' || !page.localizedName.trim()) throw new LinkedInFailure('INVALID_PROVIDER_RESPONSE','LinkedIn did not return the company page name.');
+    return page.localizedName.trim().slice(0,160);
   }
 
   async initializeImage(token: string, author: string) {
@@ -93,8 +122,10 @@ export class LinkedInClient {
     let url: URL;
     try {
       url = validateLinkedInUploadUrl(uploadUrl);
-      const addresses = await lookup(url.hostname, { all: true });
-      if (!addresses.length || addresses.some(value => !publicIp(value.address))) throw new Error('Non-public destination');
+      if (!this.settings.simulated) {
+        const addresses = await lookup(url.hostname, { all: true });
+        if (!addresses.length || addresses.some(value => !publicIp(value.address))) throw new Error('Non-public destination');
+      }
     } catch { throw new LinkedInFailure('UNTRUSTED_UPLOAD', 'The poster destination could not be verified.'); }
     await this.guard(author, 'imageUpload');
     await this.send(url.toString(), { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/png' }, body: new Uint8Array(bytes) });

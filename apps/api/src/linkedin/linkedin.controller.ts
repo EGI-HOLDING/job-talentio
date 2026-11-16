@@ -8,6 +8,7 @@ import { LinkedInService, LINKEDIN_COOKIE, LINKEDIN_COOKIE_PATH } from './linked
 import { LinkedInSettings } from './linkedin-settings';
 import { PrismaService } from '../prisma/prisma.service';
 import { LinkedInWorkerService } from './linkedin-worker.service';
+import { z } from 'zod';
 
 @Controller('integrations/linkedin')
 @UseGuards(JwtAuthGuard,RolesGuard)
@@ -15,12 +16,22 @@ import { LinkedInWorkerService } from './linkedin-worker.service';
 export class LinkedInController {
   constructor(private linkedin:LinkedInService,private settings:LinkedInSettings) {}
   @Get()status(@CurrentUser()user:AuthUser){return this.linkedin.status(user);}
+  @Get('companies/:companyId') companyPageStatus(@CurrentUser()user:AuthUser,@Param('companyId')companyId:string){
+    return this.linkedin.companyPageStatus(user,companyId);
+  }
+  @Get('companies/:companyId/pages') companyPages(@CurrentUser()user:AuthUser,@Param('companyId')companyId:string){
+    return this.linkedin.companyPages(user,companyId);
+  }
+  @Patch('companies/:companyId/page') selectCompanyPage(@CurrentUser()user:AuthUser,@Param('companyId')companyId:string,@Body()body:unknown){
+    const {urn}=parseDto(z.object({urn:z.string().regex(/^urn:li:organization:\d{1,25}$/)}).strict(),body);
+    return this.linkedin.selectCompanyPage(user,companyId,urn);
+  }
   @Post('connect')async connect(@CurrentUser()user:AuthUser,@Body()body:unknown,@Req()req:Request,@Res({passthrough:true})res:Response){
     const data=parseDto(linkedinConnectSchema,body);
     if(this.settings.canConnect && req.get('host')!==new URL(this.settings.redirectUri).host)throw new BadRequestException('Open Talentio through the configured HTTPS API domain to connect LinkedIn securely');
-    const result=await this.linkedin.startConnection(user,data.returnTo);
-    res.cookie(LINKEDIN_COOKIE,result.cookie,{httpOnly:true,secure:true,sameSite:'lax',path:LINKEDIN_COOKIE_PATH,maxAge:600000});
-    res.setHeader('Cache-Control','no-store');return {authorizationUrl:result.authorizationUrl};
+    const result=await this.linkedin.startConnection(user,data.returnTo,data.companyId);
+    res.cookie(LINKEDIN_COOKIE,result.cookie,{httpOnly:true,secure:!this.settings.simulated,sameSite:'lax',path:LINKEDIN_COOKIE_PATH,maxAge:600000});
+    res.setHeader('Cache-Control','no-store');return {authorizationUrl:result.authorizationUrl,simulated:this.settings.simulated};
   }
   @Patch()preferences(@CurrentUser()user:AuthUser,@Body()body:unknown){return this.linkedin.preferences(user,parseDto(linkedinPreferencesSchema,body).autoShareEnabled);}
   @Delete()disconnect(@CurrentUser()user:AuthUser){return this.linkedin.disconnect(user);}
@@ -29,12 +40,12 @@ export class LinkedInController {
 // Public OAuth redirect is bound to a one-time DB state AND an HttpOnly cookie.
 @Controller('integrations/linkedin')
 export class LinkedInCallbackController {
-  constructor(private linkedin:LinkedInService){}
+  constructor(private linkedin:LinkedInService,private settings:LinkedInSettings){}
   @Get('callback')async callback(@Query()query:Record<string,unknown>,@Req()req:Request,@Res()res:Response){
     const raw=(req.headers.cookie || '').split(';').map(value=>value.trim()).find(value=>value.startsWith(LINKEDIN_COOKIE+'='));
     const cookie=raw?.slice(LINKEDIN_COOKIE.length+1);
     const input={state:typeof query.state==='string'?query.state:undefined,code:typeof query.code==='string'?query.code:undefined,error:typeof query.error==='string'?query.error:undefined};
-    res.clearCookie(LINKEDIN_COOKIE,{httpOnly:true,secure:true,sameSite:'lax',path:LINKEDIN_COOKIE_PATH});
+    res.clearCookie(LINKEDIN_COOKIE,{httpOnly:true,secure:!this.settings.simulated,sameSite:'lax',path:LINKEDIN_COOKIE_PATH});
     res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');
     return res.redirect(302,await this.linkedin.callback(input,cookie));
   }

@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import { PackageCatalog, PackageCode, JobOrder, PurchaseIntent, commerceReturn, money, packageCode } from '@/lib/jobCommerce';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
 import { PackagePricing } from './PackagePricing';
+import { jobPackageRank } from '@job-talentio/shared';
 import s from './JobCommerce.module.css';
 
 export function JobPackageSelection() {
@@ -28,8 +29,8 @@ export function JobPackageSelection() {
   const expired = Boolean(data?.benefit.expiresAt && new Date(data.benefit.expiresAt) <= new Date());
   const intent: PurchaseIntent = expired ? 'RENEW' : data?.benefit.selected && (data.benefit.startsAt || data.benefit.code !== 'FREE') ? 'UPGRADE' : 'PURCHASE';
   const highest = intent === 'UPGRADE' && data?.benefit.code === 'PREMIUM';
-  const codes: PackageCode[] = ['FREE', 'STANDARD', 'PREMIUM'];
-  const disabled = intent === 'UPGRADE' ? codes.filter(code => codes.indexOf(code) <= codes.indexOf(data?.benefit.code)) : [];
+  const offered = data?.catalog.packages.map(pack => pack.code) ?? [];
+  const disabled = intent === 'UPGRADE' ? offered.filter(code => jobPackageRank(code) <= jobPackageRank(data?.benefit.code)) : [];
   async function choose(code: PackageCode) {
     if (submitting.current || !data || data.job.id !== id || data.catalog.enabled === false) return; submitting.current = true; setBusy(true); setError('');
     const requestContext = context;
@@ -49,7 +50,7 @@ export function JobPackageSelection() {
     {error && <div className={s.error} role="alert">{error}</div>}
     {data.catalog.enabled === false && <p className={s.notice} role="status">{t('commerce.packagesUnavailable')}</p>}
     {intent === 'UPGRADE' && !highest && <p className={s.notice}>{data.catalog.packages.filter(p => !disabled.includes(p.code)).map(p => t('commerce.' + p.code) + ': ' + money(p.amount - (data.catalog.packages.find(item => item.code === data.benefit.code)?.amount || 0), locale)).join(' | ')}</p>}
-    {preferred && !disabled.includes(preferred) && <p className={s.notice}>{t('commerce.preferredHint').replace('{package}', t('commerce.' + preferred))}</p>}
-    <PackagePricing catalog={data.catalog} preferred={preferred && !disabled.includes(preferred) ? preferred : undefined} current={data.benefit.selected && !expired ? data.benefit.code : undefined} upgradeFrom={intent === 'UPGRADE' ? data.catalog.packages.find(p => p.code === data.benefit.code) : undefined} onChoose={choose} disabledCodes={disabled} busy={busy || data.catalog.enabled === false}/>
+    {preferred && offered.includes(preferred) && !disabled.includes(preferred) && <p className={s.notice}>{t('commerce.preferredHint').replace('{package}', t('commerce.' + preferred))}</p>}
+    <PackagePricing catalog={data.catalog} preferred={preferred && offered.includes(preferred) && !disabled.includes(preferred) ? preferred : undefined} current={data.benefit.selected && !expired ? data.benefit.code : undefined} upgradeFrom={intent === 'UPGRADE' ? data.catalog.packages.find(p => p.code === data.benefit.code) : undefined} onChoose={choose} disabledCodes={disabled} busy={busy || data.catalog.enabled === false}/>
   </div>;
 }

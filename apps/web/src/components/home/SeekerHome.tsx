@@ -20,14 +20,15 @@ export function SeekerHome({ isEmployee = false }: { isEmployee?: boolean }) {
   const [featuredCompanies, setFeaturedCompanies] = useState<TopCompany[]>([]);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
   const [promotionRetry, setPromotionRetry] = useState(0);
-  usePromotionRefresh(featuredJobs, () => setPromotionRetry(value => value + 1));
+  const [companyRefreshAt, setCompanyRefreshAt] = useState<string | null>(null);
+  usePromotionRefresh([...featuredJobs, {promotion: {revalidateAt: companyRefreshAt}}], () => setPromotionRetry(value => value + 1));
 
   useEffect(() => {
     let active = true;
     api<PlatformStats>('/meta/platform-stats', { auth: false }).then((data) => { if (active) setPlatformStats(data); }).catch(() => undefined);
     api<{ items: LandingJob[] }>('/jobs?limit=6&sort=featured', { auth: false }).then((data) => { if (active) setFeaturedJobs(data.items); }).catch(() => undefined);
-    api<{ items: TopCompany[] }>('/companies?sort=featured&limit=48', { auth: false })
-      .then(({ items }) => { if (active) setFeaturedCompanies(items); })
+    api<{ items: TopCompany[]; revalidateAt?: string }>('/companies?sort=featured&limit=48', { auth: false, cacheMode: promotionRetry ? 'reload' : undefined })
+      .then(({ items, revalidateAt }) => { if (active) { setFeaturedCompanies(items); setCompanyRefreshAt(revalidateAt ?? null); } })
       .catch(() => undefined);
     Promise.all([
       api<Array<{ slug: string; name: string; icon?: string | null }>>('/meta/categories', { auth: false }),

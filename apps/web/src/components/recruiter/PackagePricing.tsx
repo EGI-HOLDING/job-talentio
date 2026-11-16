@@ -5,6 +5,7 @@ import { Link, useRouter } from '@/lib/navigation';
 import { useI18n } from '@/lib/i18n';
 import { PackageCatalog, PackageCode, JobPackage, money, withPackagePreference } from '@/lib/jobCommerce';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
+import { PackageTierCards } from './PackageTierCards';
 import s from './JobCommerce.module.css';
 
 export function PackagePricing({catalog: supplied, onChoose, current, preferred, busy, disabledCodes = [], upgradeFrom}: {
@@ -31,6 +32,21 @@ export function PackagePricing({catalog: supplied, onChoose, current, preferred,
     {key: 'linkedin', value: p => p.linkedin ? check : '-'}, {key: 'instagram', value: p => p.instagram === 'COMING_SOON' ? label('instagram') : '-'},
   ];
   if (!catalog) return error ? <div className={s.error} role="alert">{error}<br/><button className={s.text} onClick={() => {setError(''); setRetry(n => n + 1);}}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>;
+  if (catalog.version === 2) return <>
+    {onChoose && !catalog.paymentAvailable && !catalog.testMode && <p className={s.notice} role="status">{label('paymentUnavailable')}</p>}
+    <PackageTierCards catalog={catalog} selected={current ?? preferred} upgradeFromAmount={upgradeFrom?.amount} action={p => {
+      const className = p.code === 'STANDARD' ? s.primary : s.secondary;
+      if (onChoose) return <button className={className} type="button"
+        disabled={busy || disabledCodes.includes(p.code) || (!catalog.paymentAvailable && !catalog.testMode)}
+        onClick={() => onChoose(p.code)}>{current === p.code ? label('current') : label('choose')}</button>;
+      const target = withPackagePreference('/dashboard/recruiter?tab=jobs&focus=create', p.code);
+      return <Link className={className}
+        href={'/register?' + new URLSearchParams({role: 'RECRUITER', next: target})}
+        onClick={event => { if (getSession()?.user.role === 'RECRUITER') { event.preventDefault(); router.push(target); } }}>
+        {label('choose')} {t('commerce.' + p.code)}
+      </Link>;
+    }}/>
+  </>;
   return <>
     <div className={s.cards}>{catalog.packages.map(p => <article className={s.card} data-code={p.code} key={p.code}>
       {p.code === 'STANDARD' && <span className={s.badge}>{label('recommended')}</span>}

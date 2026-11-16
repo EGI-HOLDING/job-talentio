@@ -15,9 +15,12 @@ export function linkedInActionError(error:unknown,t:(key:string)=>string) {
   if(error instanceof ApiError && error.status===503)return t('li.serviceUnavailable');
   return t('li.actionFailed');
 }
-export async function connectLinkedIn(returnTo:string) {
-  const result=await api<{authorizationUrl:string}>('/integrations/linkedin/connect',{method:'POST',credentials:'include',body:JSON.stringify({returnTo})});
+export async function connectLinkedIn(returnTo:string, companyId?: string) {
+  const result=await api<{authorizationUrl:string; simulated?:boolean}>('/integrations/linkedin/connect',{method:'POST',credentials:'include',body:JSON.stringify({returnTo, companyId})});
   const url=new URL(result.authorizationUrl);
-  if(url.origin!=='https://www.linkedin.com' || url.pathname!=='/oauth/v2/authorization')throw new Error('Invalid authorization destination');
+  const providerUrl = url.origin==='https://www.linkedin.com' && url.pathname==='/oauth/v2/authorization';
+  const local = result.simulated && ['localhost','127.0.0.1'].includes(window.location.hostname)
+    && url.hostname === window.location.hostname && url.protocol === 'http:' && url.pathname === '/api/integrations/linkedin/callback';
+  if (!providerUrl && !local) throw new Error('Invalid authorization destination');
   window.location.assign(url.toString());
 }

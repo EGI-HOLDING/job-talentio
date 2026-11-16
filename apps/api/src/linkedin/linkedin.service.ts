@@ -1,18 +1,20 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma, LinkedInSocialPost } from '@prisma/client';
+import { Prisma, LinkedInConnection, LinkedInSocialPost } from '@prisma/client';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
 import { LinkedInSettings } from './linkedin-settings';
-import { LinkedInClient, validPostUrn } from './linkedin-client';
+import { isOrganizationUrn, LinkedInClient, validPostUrn } from './linkedin-client';
 import { safeLinkedInReturnTo, sha256 } from './linkedin-security';
 import { buildShareContent, renderSharePoster, shareCaption, shareFingerprint, ShareLocale } from './linkedin-content';
 import { StorageService } from '../storage/storage.service';
+import { packageSettings } from '../benefits/benefit-policy';
 
 export const LINKEDIN_COOKIE = 'jt_linkedin_oauth';
 export const LINKEDIN_COOKIE_PATH = '/api/integrations/linkedin/callback';
 const queuedStatuses = ['PENDING','RENDERING','UPLOADING'] as const;
 export const shareJobInclude = { company:true, city:true, country:true, benefit:true } as const;
+type ShareJob = Prisma.JobPostGetPayload<{include: typeof shareJobInclude}>;
 export function socialPostDto(post:LinkedInSocialPost) {
   return {id:post.id,jobId:post.jobId,status:post.status,attempts:post.attempts,retrySafe:post.retrySafe,
     errorCode:post.errorCode,errorSummary:post.errorSummary,nextAttemptAt:post.nextAttemptAt,
@@ -29,6 +31,76 @@ export class LinkedInService {
     const user=await db.user.findUnique({where:{id:userId}});
     if(!user || user.isBanned || user.anonymizedAt || !['RECRUITER','SUPER_ADMIN'].includes(user.role))throw new ForbiddenException('An active HR account is required');
     return user;
+  }
+
+  private async assertCompany(db: Prisma.TransactionClient, userId: string, companyId: string) {
+    const user = await this.assertActor(db, userId);
+    const company = await db.company.findUnique({where: {id: companyId}, select: {isBanned: true, anonymizedAt: true}});
+    const member = user.role === 'SUPER_ADMIN' || await db.companyMember.findUnique({where: {companyId_userId: {companyId,userId}}});
+    if (!company || company.isBanned || company.anonymizedAt || !member) throw new ForbiddenException('Company access is required');
+  }
+
+  private companyConnectionReady(connection: LinkedInConnection | null) {
+    return Boolean(this.settings.canShareAsCompany && connection?.status === 'CONNECTED' &&
+      connection.tokenExpiresAt && connection.tokenExpiresAt > new Date() && connection.tokenCiphertext &&
+      connection.tokenKeyVersion && connection.authorUrn &&
+      this.settings.organizationScopes.every(scope => connection.grantedScopes.includes(scope)));
+  }
+
+  async companyPageStatus(user: AuthUser, companyId: string) {
+    await this.assertCompany(this.prisma, user.id, companyId);
+    const connection = await this.prisma.linkedInConnection.findUnique({where: {userId: user.id}});
+    const connected = this.companyConnectionReady(connection);
+    const page = connected && connection ? await this.prisma.linkedInCompanyPage.findUnique({
+      where: {companyId_connectionId: {companyId, connectionId: connection.id}},
+    }) : null;
+    return {available: this.settings.canShareAsCompany, simulated: this.settings.simulated, connected,
+      page: page && page.generation === connection?.generation ? {urn: page.organizationUrn, name: page.name} : null};
+  }
+
+  private async companyConnection(user: AuthUser, companyId: string) {
+    await this.assertCompany(this.prisma, user.id, companyId);
+    const connection = await this.prisma.linkedInConnection.findUnique({where: {userId: user.id}});
+    if (!connection || !this.companyConnectionReady(connection)) throw new ConflictException('Connect LinkedIn with company page access first');
+    const token = this.settings.vault!.decrypt(connection.tokenCiphertext!,connection.tokenKeyVersion!,`${connection.userId}|${connection.subject}`);
+    return {connection, token};
+  }
+
+  async companyPages(user: AuthUser, companyId: string) {
+    const {connection, token} = await this.companyConnection(user, companyId);
+    const urns = await this.client.organizationUrns(token, connection.authorUrn!);
+    return Promise.all(urns.map(async urn => ({urn, name: await this.client.companyPageName(token, urn)})));
+  }
+
+  async selectCompanyPage(user: AuthUser, companyId: string, urn: string) {
+    if (!isOrganizationUrn(urn)) throw new BadRequestException('Choose a valid LinkedIn company page');
+    const {connection, token} = await this.companyConnection(user, companyId);
+    if (!(await this.client.organizationUrns(token, connection.authorUrn!)).includes(urn)) throw new ForbiddenException('LinkedIn page access is required');
+    const name = await this.client.companyPageName(token, urn);
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "LinkedInConnection" WHERE id=${connection.id} FOR UPDATE`;
+      await this.assertCompany(tx, user.id, companyId);
+      const active = await tx.linkedInConnection.findUnique({where: {id: connection.id}});
+      if (!active || active.generation !== connection.generation || !this.companyConnectionReady(active)) throw new ConflictException('LinkedIn connection changed');
+      const target = {generation: active.generation, organizationUrn: urn, name};
+      await tx.linkedInCompanyPage.upsert({
+        where: {companyId_connectionId: {companyId, connectionId: active.id}},
+        create: {companyId, connectionId: active.id, ...target}, update: target,
+      });
+      return {urn, name};
+    });
+  }
+
+  async shareTarget(db: Prisma.TransactionClient, job: ShareJob, connection: LinkedInConnection) {
+    if (job.benefit && packageSettings(job.benefit.policySnapshot).companyPageLinkedIn) {
+      if (job.isAnonymous || job.status !== 'PUBLISHED') throw new ConflictException('Publish a public job before sharing to a company page');
+      if (!this.companyConnectionReady(connection)) throw new ConflictException('Connect LinkedIn with company page access first');
+      const page = await db.linkedInCompanyPage.findUnique({where: {companyId_connectionId: {companyId: job.companyId, connectionId: connection.id}}});
+      if (!page || page.generation !== connection.generation) throw new ConflictException('Select your authorized LinkedIn company page');
+      return {authorUrn: page.organizationUrn, organizationUrn: page.organizationUrn, displayName: page.name};
+    }
+    if (!connection.authorUrn) throw new ConflictException('Reconnect your LinkedIn profile');
+    return {authorUrn: connection.authorUrn, organizationUrn: null, displayName: connection.displayName};
   }
   async assertJob(db:Prisma.TransactionClient,userId:string,jobId:string,requirePremium=false) {
     const user=await this.assertActor(db,userId);
@@ -49,20 +121,30 @@ export class LinkedInService {
     const expired=Boolean(connection?.tokenExpiresAt && connection.tokenExpiresAt.getTime()<=Date.now());
     const connected=connection?.status==='CONNECTED' && !expired && Boolean(connection.tokenCiphertext);
     return { enabled:this.settings.canConnect,sharingEnabled:this.settings.canShare,
-      unavailableReason:!this.settings.canConnect?'SERVICE_UNAVAILABLE':!this.settings.accessVerified?'ACCESS_NOT_VERIFIED':!this.settings.publicSite?'PUBLIC_URL_REQUIRED':null,
+      unavailableReason:this.settings.canShare?null:!this.settings.canConnect?'SERVICE_UNAVAILABLE':!this.settings.accessVerified?'ACCESS_NOT_VERIFIED':'PUBLIC_URL_REQUIRED',
       status:expired && connection?.status==='CONNECTED'?'EXPIRED':connected && connection!.tokenExpiresAt!.getTime()-Date.now()<14*86400000?'EXPIRING':connection?.status || 'DISCONNECTED',
       connected,displayName:connection?.displayName || null,avatarUrl:connection?.avatarUrl || null,
       expiresAt:connection?.tokenExpiresAt || null,autoShareEnabled:connection?.autoShareEnabled || false };
   }
-  async startConnection(user:AuthUser,returnTo:unknown) {
+  async startConnection(user:AuthUser,returnTo:unknown,companyId?: string) {
     if(!this.settings.canConnect)throw new ServiceUnavailableException('LinkedIn connection is not configured yet');
     const actor=await this.assertActor(this.prisma,user.id);
+    if (companyId) {
+      await this.assertCompany(this.prisma, user.id, companyId);
+      if (!this.settings.canShareAsCompany) throw new ServiceUnavailableException('LinkedIn company page connection is not configured');
+    }
     const recent=await this.prisma.linkedInOAuthState.count({where:{userId:user.id,createdAt:{gte:new Date(Date.now()-600000)}}});
     if(recent>=5)throw new HttpException('Too many connection attempts. Try again in a few minutes.',429);
     const state=randomBytes(32).toString('base64url'),cookie=randomBytes(32).toString('base64url');
-    await this.prisma.linkedInOAuthState.create({data:{stateHash:sha256(state),cookieHash:sha256(cookie),userId:user.id,sessionVersion:actor.tokenVersion,returnTo:safeLinkedInReturnTo(returnTo,this.settings.webUrl),expiresAt:new Date(Date.now()+600000)}});
+    await this.prisma.linkedInOAuthState.create({data:{stateHash:sha256(state),cookieHash:sha256(cookie),userId:user.id,companyId,sessionVersion:actor.tokenVersion,returnTo:safeLinkedInReturnTo(returnTo,this.settings.webUrl),expiresAt:new Date(Date.now()+600000)}});
+    if (this.settings.simulated) {
+      const callback = new URL(this.settings.redirectUri);
+      callback.search = new URLSearchParams({state, code: 'talentio-local-company'}).toString();
+      return {authorizationUrl: callback.href, cookie};
+    }
     const url=new URL('https://www.linkedin.com/oauth/v2/authorization');
-    Object.entries({response_type:'code',client_id:this.settings.clientId,redirect_uri:this.settings.redirectUri,state,scope:this.settings.scopes.join(' ')}).forEach(([key,value])=>url.searchParams.set(key,value));
+    const scopes = companyId ? [...this.settings.scopes, ...this.settings.organizationScopes] : this.settings.scopes;
+    Object.entries({response_type:'code',client_id:this.settings.clientId,redirect_uri:this.settings.redirectUri,state,scope:scopes.join(' ')}).forEach(([key,value])=>url.searchParams.set(key,value));
     return {authorizationUrl:url.toString(),cookie};
   }
   private callbackUrl(returnTo:string,result:string) {
@@ -83,7 +165,9 @@ export class LinkedInService {
     try {
       const actor=await this.assertActor(this.prisma,state.userId);
       if(actor.tokenVersion!==state.sessionVersion)return this.callbackUrl(state.returnTo,'failed');
-      const identity=await this.client.exchange(input.code);
+      if (state.companyId) await this.assertCompany(this.prisma, state.userId, state.companyId);
+      const scopes = state.companyId ? [...this.settings.scopes, ...this.settings.organizationScopes] : this.settings.scopes;
+      const identity=await this.client.exchange(input.code, scopes);
       const encrypted=this.settings.vault!.encrypt(identity.accessToken,`${state.userId}|${identity.subject}`);
       await this.prisma.$transaction(async tx=>{
         await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id"=${state.userId} FOR UPDATE`;
@@ -125,25 +209,28 @@ export class LinkedInService {
     const job=await this.assertJob(this.prisma,user.id,jobId,true);
     const connection=await this.prisma.linkedInConnection.findUnique({where:{userId:user.id}});
     if(!connection || connection.status!=='CONNECTED' || !connection.authorUrn || !connection.tokenExpiresAt || connection.tokenExpiresAt.getTime()<=Date.now())throw new ConflictException('Reconnect LinkedIn to prepare an approved preview');
+    const target = await this.shareTarget(this.prisma, job, connection);
     if(await this.prisma.linkedInPreview.count({where:{userId:user.id,createdAt:{gte:new Date(Date.now()-60000)}}})>=10)throw new HttpException('Too many previews. Please wait a minute.',429);
     const content=buildShareContent(job,locale,this.settings.webUrl),caption=shareCaption(content),poster=renderSharePoster(content);
     const id=randomUUID(),posterKey=`linkedin/previews/${user.id}/${id}.png`;
     const fingerprint=shareFingerprint(content)+':'+(job.benefit?.publicationCycle??1);
     await this.storage.putObject(posterKey,poster,'image/png');
     let preview;
-    try {preview=await this.prisma.linkedInPreview.create({data:{id,userId:user.id,companyId:job.companyId,jobId,connectionId:connection.id,connectionGeneration:connection.generation,locale,fingerprint,content:content as unknown as Prisma.InputJsonValue,caption,jobUrl:content.jobUrl,posterKey,posterSha256:sha256(poster),expiresAt:new Date(Date.now()+1800000)}});}
+    try {preview=await this.prisma.linkedInPreview.create({data:{id,userId:user.id,companyId:job.companyId,jobId,connectionId:connection.id,connectionGeneration:connection.generation,organizationUrn:target.organizationUrn,locale,fingerprint,content:content as unknown as Prisma.InputJsonValue,caption,jobUrl:content.jobUrl,posterKey,posterSha256:sha256(poster),expiresAt:new Date(Date.now()+1800000)}});}
     catch(error){await this.storage.delete(posterKey);throw error;}
-    return {id:preview.id,caption,jobUrl:content.jobUrl,fingerprint:preview.fingerprint,posterDataUrl:`data:image/png;base64,${poster.toString('base64')}`,expiresAt:preview.expiresAt,isAnonymous:content.isAnonymous,displayName:connection.displayName};
+    return {id:preview.id,caption,jobUrl:content.jobUrl,fingerprint:preview.fingerprint,posterDataUrl:`data:image/png;base64,${poster.toString('base64')}`,expiresAt:preview.expiresAt,isAnonymous:content.isAnonymous,displayName:target.displayName};
   }
   private async approved(tx:Prisma.TransactionClient,userId:string,jobId:string,previewId:string) {
     const job=await this.assertJob(tx,userId,jobId,true);
     const preview=await tx.linkedInPreview.findFirst({where:{id:previewId,userId,jobId,companyId:job.companyId,expiresAt:{gt:new Date()}}});
     const connection=await tx.linkedInConnection.findUnique({where:{userId}});
     if(!preview || !connection || preview.connectionId!==connection.id || preview.connectionGeneration!==connection.generation || !connection.authorUrn)throw new ConflictException('The LinkedIn preview expired or the connection changed. Prepare a new preview.');
+    const target = await this.shareTarget(tx, job, connection);
+    if (target.organizationUrn !== preview.organizationUrn) throw new ConflictException('LinkedIn destination changed. Review a new preview.');
     const locale=preview.locale as ShareLocale;
     const content=buildShareContent(job,locale,this.settings.webUrl);
     if(shareFingerprint(content)+':'+(job.benefit?.publicationCycle??1)!==preview.fingerprint || shareCaption(content)!==preview.caption)throw new ConflictException('The job changed after the preview. Review the new poster before sharing.');
-    return {job,preview,connection};
+    return {job,preview,connection,target};
   }
   /** Called inside the SAME transaction as portal publication; no network I/O. */
   async enqueueApproved(tx:Prisma.TransactionClient,user:AuthUser,jobId:string,previewId:string) {
@@ -153,11 +240,11 @@ export class LinkedInService {
     const existing=await tx.linkedInSocialPost.findUnique({where:{jobId_userId_publicationRevision:{jobId,userId:user.id,publicationRevision}}});
     if(existing)return socialPostDto(existing);
     const approved=await this.approved(tx,user.id,jobId,previewId);
-    const {preview,connection}=approved;
-    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`linkedin-share:${jobId}:${connection.authorUrn}`},0))`;
-    if(await tx.linkedInSocialPost.findFirst({where:{jobId,authorUrnSnapshot:connection.authorUrn!,publicationRevision,userId:{not:user.id}}}))throw new ConflictException('This LinkedIn profile already has a sharing request for this job');
+    const {preview,connection,target}=approved;
+    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`linkedin-share:${jobId}:${target.authorUrn}`},0))`;
+    if(await tx.linkedInSocialPost.findFirst({where:{jobId,authorUrnSnapshot:target.authorUrn,publicationRevision,userId:{not:user.id}}}))throw new ConflictException('This LinkedIn destination already has a sharing request for this job');
     const ready=this.settings.canShare && connection.status==='CONNECTED' && Boolean(connection.tokenCiphertext) && Boolean(connection.tokenExpiresAt && connection.tokenExpiresAt.getTime()>Date.now());
-    const post=await tx.linkedInSocialPost.create({data:{userId:user.id,jobId,publicationRevision,companyId:job.companyId,connectionId:connection.id,connectionGeneration:connection.generation,authorUrnSnapshot:connection.authorUrn!,previewId:preview.id,content:preview.content as Prisma.InputJsonValue,captionSnapshot:preview.caption,jobUrlSnapshot:preview.jobUrl,posterKey:preview.posterKey,posterSha256:preview.posterSha256,status:ready?'PENDING':'FAILED',...(!ready?{errorCode:this.settings.canShare?'RECONNECT_REQUIRED':'SERVICE_UNAVAILABLE',errorSummary:this.settings.canShare?'Reconnect LinkedIn, then review and retry.':'LinkedIn sharing is temporarily unavailable. Your job is published on Talentio.'}:{})}});
+    const post=await tx.linkedInSocialPost.create({data:{userId:user.id,jobId,publicationRevision,companyId:job.companyId,connectionId:connection.id,connectionGeneration:connection.generation,authorUrnSnapshot:target.authorUrn,previewId:preview.id,content:preview.content as Prisma.InputJsonValue,captionSnapshot:preview.caption,jobUrlSnapshot:preview.jobUrl,posterKey:preview.posterKey,posterSha256:preview.posterSha256,status:ready?'PENDING':'FAILED',...(!ready?{errorCode:this.settings.canShare?'RECONNECT_REQUIRED':'SERVICE_UNAVAILABLE',errorSummary:this.settings.canShare?'Reconnect LinkedIn, then review and retry.':'LinkedIn sharing is temporarily unavailable. Your job is published on Talentio.'}:{})}});
     if(ready)await tx.linkedInOutbox.create({data:{socialPostId:post.id}});
     await tx.auditLog.create({data:{actorId:user.id,action:'LINKEDIN_SHARE_APPROVED',entityType:'LinkedInSocialPost',entityId:post.id,metadata:{jobId,companyId:job.companyId,previewId:preview.id,posterSha256:preview.posterSha256,fingerprint:preview.fingerprint}}});
     return socialPostDto(post);
@@ -185,11 +272,11 @@ export class LinkedInService {
       await tx.$queryRaw`SELECT "id" FROM "LinkedInSocialPost" WHERE "id"=${id} FOR UPDATE`;
       const post=await this.ownPost(tx,user,id);
       if(!['FAILED','CANCELLED'].includes(post.status) || !post.retrySafe)throw new ConflictException('This request cannot be retried. Uncertain posts must be reviewed first.');
-      const {job,preview,connection}=await this.approved(tx,user.id,post.jobId,previewId);
+      const {job,preview,connection,target}=await this.approved(tx,user.id,post.jobId,previewId);
       if(post.publicationRevision!==(job.benefit?.publicationCycle??1))throw new ConflictException('This request belongs to an earlier publication period');
       if(job.status!=='PUBLISHED')throw new ConflictException('This job is no longer published');
       if(!this.settings.canShare || connection.status!=='CONNECTED' || !connection.tokenCiphertext || !connection.tokenExpiresAt || connection.tokenExpiresAt.getTime()<=Date.now())throw new ConflictException('Reconnect an available LinkedIn account first');
-      if(connection.authorUrn!==post.authorUrnSnapshot)throw new ConflictException('Retry requires the same LinkedIn profile that originally approved this post');
+      if(target.authorUrn!==post.authorUrnSnapshot)throw new ConflictException('Retry requires the same LinkedIn destination that originally approved this post');
       const updated=await tx.linkedInSocialPost.update({where:{id},data:{status:'PENDING',connectionGeneration:connection.generation,previewId:preview.id,content:preview.content as Prisma.InputJsonValue,captionSnapshot:preview.caption,jobUrlSnapshot:preview.jobUrl,posterKey:preview.posterKey,posterSha256:preview.posterSha256,imageUrn:null,attemptId:null,leaseUntil:null,nextAttemptAt:new Date(),errorCode:null,errorSummary:null}});
       await tx.linkedInOutbox.upsert({where:{socialPostId:id},create:{socialPostId:id},update:{processedAt:null,nextDispatchAt:new Date()}});
       await tx.auditLog.create({data:{actorId:user.id,action:'LINKEDIN_SHARE_RETRY',entityType:'LinkedInSocialPost',entityId:id,metadata:{previewId}}});

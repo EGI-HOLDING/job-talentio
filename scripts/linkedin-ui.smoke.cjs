@@ -4,8 +4,20 @@ const translate=key=>key,i18n={useI18n:()=>({t:translate,locale:'id'}),useEnumLa
 const stub=()=>null,connection={enabled:true,sharingEnabled:true,connected:true,status:'CONNECTED',displayName:'Fixture HR',expiresAt:new Date(Date.now()+86400000).toISOString(),autoShareEnabled:false};
 const preview={id:'approval',caption:'Server-approved caption',jobUrl:'https://jobs.example.com/id/jobs/job',posterDataUrl:'data:image/png;base64,synthetic',expiresAt:new Date(Date.now()+1800000).toISOString()};
 const props={jobId:'job',title:'Engineer',companyName:'Company',draftKey:'draft-a'};
-function dependencies(api,extra={}){return {'@/lib/api':{api:(route,options)=>route.startsWith('/benefits/jobs/')?Promise.resolve({code:'PREMIUM',selected:true,expiresAt:new Date(Date.now()+86400000).toISOString()}):api(route,options)},'@/lib/jobCommerce':{packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},'@/lib/i18n':i18n,'@/lib/navigation':{Link:stub,localeUrl:(locale,href)=>'/'+locale+href},'@/lib/linkedin':{linkedInActionError:()=> 'li.actionFailed',activeLinkedInPost:post=>['PENDING','RENDERING','UPLOADING','PUBLISHING'].includes(post.status)},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'./LinkedInPostStatus':{useLinkedInPosts:()=>({posts:[],error:'',reload(){}}),LinkedInPostStatus:stub},...extra};}
+function CompanyShare() {}
+function dependencies(api,extra={}){return {'@/lib/api':{api:(route,options)=>route.startsWith('/benefits/jobs/')?Promise.resolve({code:'PREMIUM',selected:true,expiresAt:new Date(Date.now()+86400000).toISOString()}):api(route,options)},'@/lib/jobCommerce':{packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},'@/lib/i18n':i18n,'@/lib/navigation':{Link:stub,localeUrl:(locale,href)=>'/'+locale+href},'@/lib/linkedin':{linkedInActionError:()=> 'li.actionFailed',activeLinkedInPost:post=>['PENDING','RENDERING','UPLOADING','PUBLISHING'].includes(post.status)},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'./LinkedInPostStatus':{useLinkedInPosts:()=>({posts:[],error:'',reload(){}}),LinkedInPostStatus:stub},'./CompanyLinkedInShare':{CompanyLinkedInShare:CompanyShare},...extra};}
 const button=(tree,label)=>nodes(tree,node=>node.type==='button'&&text(node)===label)[0];
+test('a published Premium company-page entitlement opens company sharing', async()=>{
+  const api=async route=>route.startsWith('/benefits/jobs/')?{
+    code:'PREMIUM',selected:true,expiresAt:new Date(Date.now()+86400000).toISOString(),companyId:'company',companyPageLinkedIn:true,
+  }:connection;
+  const ui=host('apps/web/src/components/recruiter/LinkedInSharePreview.tsx','LinkedInSharePreview',dependencies(api,{'@/lib/api':{api}}));
+  const tree=await ui.render({...props,published:true});
+  assert.equal(tree.type,CompanyShare);
+  assert.equal(tree.props.companyId,'company');
+  assert.equal(tree.props.jobId,'job');
+  ui.unmount();
+});
 test('sharing waits for an exact server preview; changed drafts and expiry invalidate approval',async()=>{
   const approvals=[],intents=[],requests=[];let finish;
   const api=async(route,options)=>{requests.push({route,options});return route==='/integrations/linkedin'?connection:new Promise(resolve=>finish=resolve);};

@@ -82,7 +82,7 @@ function RecruiterDashboard() {
   const [companyId, setCompanyId] = useState('');
   const companyIdRef = useRef(companyId); companyIdRef.current = companyId;
   const [bootLoading, setBootLoading] = useState(true);
-  const bootGeneration = useRef(0);
+  const [bootRetry, setBootRetry] = useState(0);
   const companyGeneration = useRef(0);
   const jobGeneration = useRef(0);
   const [jobs, setJobs] = useState<any[]>([]);
@@ -130,7 +130,7 @@ function RecruiterDashboard() {
   }
 
   async function selectTab(next: Tab) { if (await allowEmployerContextChange()) setTab(next); }
-  async function bootstrap() {
+  async function bootstrap(signal: AbortSignal) {
     const session = getSession();
     if (!session) {
       window.location.href = localeHref('/login?role=RECRUITER&next=' + encodeURIComponent('/dashboard/recruiter?' + searchParams.toString()));
@@ -141,17 +141,18 @@ function RecruiterDashboard() {
       return;
     }
     const [mine, cities, categories, benefits, inds, langs, me] = await Promise.all([
-      api<any[]>('/companies/mine'),
-      api('/meta/cities', { auth: false }),
-      api('/meta/categories', { auth: false }),
-      api('/meta/benefits', { auth: false }),
+      api<any[]>('/companies/mine', { signal }),
+      api('/meta/cities', { auth: false, signal }),
+      api('/meta/categories', { auth: false, signal }),
+      api('/meta/benefits', { auth: false, signal }),
       api<{ groups?: Array<{ slug: string; name: string; industries: Array<{ slug: string; name: string }> }> }>(
         '/meta/industries?group=1',
-        { auth: false },
+        { auth: false, signal },
       ).catch(() => ({ groups: [] })),
-      api('/meta/languages', { auth: false }).catch(() => []),
-      api<AuthSession>('/auth/me').catch(() => null),
+      api('/meta/languages', { auth: false, signal }).catch(() => []),
+      api<AuthSession>('/auth/me', { signal }).catch(() => null),
     ]);
+    if (signal.aborted) return;
     if (me) {
       saveSession(me);
     }
@@ -166,18 +167,18 @@ function RecruiterDashboard() {
     const requested = searchParams.get('company');
     const first = mine.find((item) => item.companyId === requested)?.companyId || preferredCompany(mine)?.companyId;
     if (first) {
-      setCompanyId(first);
       rememberCompany(first);
-      await loadJobs(first);
+      if (companyIdRef.current === first) await loadJobs(first, false, signal);
+      else setCompanyId(first);
     }
   }
 
-  async function loadJobs(cid: string, quiet = false) {
+  async function loadJobs(cid: string, quiet = false, signal?: AbortSignal) {
     const generation = ++companyGeneration.current;
     if (!quiet) setJobsLoading(true);
     try {
-    const list = await api<any[]>(`/jobs/company/${cid}`);
-    if (generation !== companyGeneration.current || companyIdRef.current !== cid) return;
+    const list = await api<any[]>(`/jobs/company/${cid}`, { signal });
+    if (signal?.aborted || generation !== companyGeneration.current || companyIdRef.current !== cid) return;
     setJobs(list);
     const preferred =
       (searchParamsRef.current.get('job') && list.some((j) => j.id === searchParamsRef.current.get('job')) && searchParamsRef.current.get('job')) ||
@@ -189,7 +190,7 @@ function RecruiterDashboard() {
     } else if (preferred && !quiet) {
       await loadJobData(preferred);
     }
-    } finally { if (generation === companyGeneration.current) setJobsLoading(false); }
+    } finally { if (!signal?.aborted && generation === companyGeneration.current) setJobsLoading(false); }
   }
 
   async function loadJobData(jobId: string) {
@@ -205,10 +206,14 @@ function RecruiterDashboard() {
   }
 
   useEffect(() => {
-    const generation = ++bootGeneration.current;
+    const controller = new AbortController();
     setBootLoading(true);
-    bootstrap().catch((e) => { if (generation === bootGeneration.current) setError(e.message); }).finally(() => { if (generation === bootGeneration.current) setBootLoading(false); });
-  }, []);
+    setError('');
+    void bootstrap(controller.signal).catch(reason => {
+      if (!controller.signal.aborted) setError(reason.message);
+    }).finally(() => { if (!controller.signal.aborted) setBootLoading(false); });
+    return () => controller.abort();
+  }, [bootRetry]);
 
   useEffect(() => {
     setApplicants([]); ++jobGeneration.current;
@@ -220,10 +225,14 @@ function RecruiterDashboard() {
 
   useEffect(() => {
     if (!companyId) return;
+    const controller = new AbortController();
     setCompanyDetail(null); setJobs([]); setJobsLoading(true); setSelectedJob(''); setApplicants([]); ++jobGeneration.current;
     loadBulkTemplates(companyId).catch(() => { if (companyIdRef.current === companyId) setBulkTemplates([]); });
     loadCompanyDetail(companyId).catch((reason) => { if (companyIdRef.current === companyId) flash(reason.message, 'error'); });
-    void loadJobs(companyId).catch((reason) => flash(reason.message, 'error'));
+    void loadJobs(companyId, false, controller.signal).catch(reason => {
+      if (!controller.signal.aborted && companyIdRef.current === companyId) flash(reason.message, 'error');
+    });
+    return () => controller.abort();
   }, [companyId]);
 
   useEffect(() => {
@@ -340,7 +349,7 @@ function RecruiterDashboard() {
       <section className={rw.body}>
         {bootLoading && <WorkspaceLoading />}
         {!bootLoading && !companyId && !error && <WorkspaceEmpty title={t('rw.noCompany')} hint={t('rw.noCompanyHint')} />}
-        {error && <div className={rw.notice} role="alert"><span>{error}</span><button className={rw.textButton} onClick={() => { setError(''); setBootLoading(true); void bootstrap().catch((reason) => setError(reason.message)).finally(() => setBootLoading(false)); }}>{t('workspace.retry')}</button></div>}
+        {error && <div className={rw.notice} role="alert"><span>{error}</span><button className={rw.textButton} onClick={() => setBootRetry(value => value + 1)}>{t('workspace.retry')}</button></div>}
         {msg && <div className={rw.notice} data-tone={msgTone} role="status"><span>{msg}</span><button className={rw.icon} aria-label={t('close')} onClick={() => setMsg('')}>×</button></div>}
 
         {tab === 'jobs' && !bootLoading && companyId && <RecruiterJobs companyId={companyId} company={company} jobs={jobs} loading={jobsLoading} meta={meta} createRequested={focusFromUrl === 'create'} onCloseCreate={() => { const next = new URLSearchParams(searchParams.toString()); next.delete('focus'); router.replace('/dashboard/recruiter?' + next.toString(), { scroll: false }); }} onReload={(quiet) => loadJobs(companyId, quiet)} onApplicants={(id) => router.push(employerJobHref(id,'applicants',companyId))} onStatus={changeJobStatus} onFlash={flash} />}

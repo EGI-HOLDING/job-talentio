@@ -1,3 +1,5 @@
+import { JOB_PACKAGE_CODES, jobPackageRank } from '@job-talentio/shared';
+
 export type FeaturedJobCandidate = {
   id: string;
   companyId: string;
@@ -6,7 +8,7 @@ export type FeaturedJobCandidate = {
   publishedAt: Date | null;
 };
 
-const PACKAGE_TIERS = ['PREMIUM', 'STANDARD', 'FREE'] as const;
+const PACKAGE_TIERS = [...JOB_PACKAGE_CODES].reverse();
 
 export type FeaturedBenefitWindow = {
   code: string;
@@ -20,10 +22,10 @@ export function isFeaturedBenefitActive(benefit: FeaturedBenefitWindow, now: Dat
 }
 
 export function effectiveFeaturedPackageCode(benefit: FeaturedBenefitWindow, now: Date) {
-  if (!isFeaturedBenefitActive(benefit, now) || !PACKAGE_TIERS.includes(benefit!.code as (typeof PACKAGE_TIERS)[number])) {
+  if (!benefit || !isFeaturedBenefitActive(benefit, now) || jobPackageRank(benefit.code) < 0) {
     return 'FREE';
   }
-  return benefit!.code;
+  return benefit.code;
 }
 
 function compareWithinTier(a: FeaturedJobCandidate, b: FeaturedJobCandidate) {
@@ -53,7 +55,6 @@ export function orderFeaturedJobs<T extends FeaturedJobCandidate>(jobs: readonly
 
   return result;
 }
-
 function roundRobinCompanies<T extends FeaturedJobCandidate>(ranked: readonly T[]): T[] {
   const queues = new Map<string, T[]>();
   for (const job of ranked) {

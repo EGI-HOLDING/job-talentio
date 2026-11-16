@@ -23,6 +23,7 @@ export function CandidateScreening({ data, onChanged, reportHref }: {
   const [items, setItems] = useState<Invitation[]>();
   const [revision, setRevision] = useState(0);
   const [page, setPage] = useState(1);
+  const [listError, setListError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,8 +47,8 @@ export function CandidateScreening({ data, onChanged, reportHref }: {
   useEffect(() => {
     const abort = new AbortController();
     void api<Invitation[]>(base, { cacheMode: 'no-store', signal: abort.signal }).then(rows => {
-      if (!abort.signal.aborted) { setItems(rows); setError(''); }
-    }).catch(reason => { if (!abort.signal.aborted) setError(reason.message); });
+      if (!abort.signal.aborted) { setItems(rows); setListError(''); }
+    }).catch(reason => { if (!abort.signal.aborted) setListError(reason.message); });
     return () => abort.abort();
   }, [base, revision]);
   const needsUpdate = invitations.some(row => active(row) || ['PENDING', 'SENDING'].includes(row.emailStatus) ||
@@ -146,9 +147,10 @@ export function CandidateScreening({ data, onChanged, reportHref }: {
   }
 
   return <div className={s.stack}>
-    {error && !open && <ReviewError retry={() => setRevision(n => n + 1)}>{error}</ReviewError>}
+    {listError && <ReviewError retry={() => { setListError(''); setRevision(n => n + 1); }}>{listError}</ReviewError>}
+    {error && !open && <ReviewError>{error}</ReviewError>}
     {notice && <p className={s.notice} role="status">{notice}</p>}
-    {!items && !error ? <WorkspaceLoading /> : <>
+    {!items ? listError ? null : <WorkspaceLoading /> : <>
       <section className={s.screeningHero}>
         <ReviewCharacter character="tara" working={!hasSession && pending.length > 0} />
         <div className={s.screeningIntro}>

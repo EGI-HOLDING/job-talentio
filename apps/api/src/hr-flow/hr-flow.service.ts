@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type JobPackageCode } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
@@ -76,7 +76,7 @@ export class HrFlowService {
       return session;
     })).value;
   }
-  async patch(user:AuthUser,id:string,input:{revision:number;draft?:Record<string,unknown>;assessmentLanguage?:AssessmentLanguage;phase?:string;packageCode?:'FREE'|'STANDARD'|'PREMIUM'}){
+  async patch(user:AuthUser,id:string,input:{revision:number;draft?:Record<string,unknown>;assessmentLanguage?:AssessmentLanguage;phase?:string;packageCode?:JobPackageCode}){
     return this.db.$transaction(async tx=>{
       const before=await this.get(user,id,tx);
       if(before.jobId)throw new ConflictException('This draft is already published');

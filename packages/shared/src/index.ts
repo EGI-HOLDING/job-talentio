@@ -16,5 +16,6 @@ export * from './catalog-tech-identity';
 export * from './catalog-label';
 export * from './match-insights';
 export * from './job-promotion';
+export * from './job-packages';
 export * from './employee-intent';
 export * from './hr-ranking';

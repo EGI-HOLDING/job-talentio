@@ -2,6 +2,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {randomUUID} = require('node:crypto');
 const {host, nodes, text} = require('./lib/react-hook-host.cjs');
+const shared = require('../packages/shared');
 const stub = () => null;
 const i18n = {useI18n: () => ({t: key => key, locale: 'en'}), useEnumLabel: () => (_, value) => value};
 const commerce = {packagePreference: () => undefined, withPackagePreference: href => href,
@@ -62,18 +63,18 @@ test('Indonesia new jobs and resumable creation sessions use HrCreationFlow', as
   assert.equal(tree.type, Flow);
   ui.unmount();
 });
-for (const code of ['FREE', 'STANDARD']) test('package selection confirms ' + code + ' and preserves the onboarding return path', async () => {
+for (const code of ['FREE', 'LITE', 'STANDARD']) test('package selection confirms ' + code + ' and preserves the onboarding return path', async () => {
   function Pricing() {}
   const destinations = [], orders = [];
   const ui = host('apps/web/src/components/recruiter/JobPackageSelection.tsx', 'JobPackageSelection', {
     'next/navigation': {useParams: () => ({id: 'job'}), useSearchParams: () => new URLSearchParams()},
     '@/lib/navigation': {Link: stub, useRouter: () => ({replace: url => destinations.push(url), push: url => destinations.push(url)})},
-    '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@/components/employee/WorkspacePrimitives': {WorkspaceLoading: stub},
+    '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@job-talentio/shared': shared, '@/components/employee/WorkspacePrimitives': {WorkspaceLoading: stub},
     './PackagePricing': {PackagePricing: Pricing}, '@/components/ui/DirectionalIcon': {DirectionalIcon: stub},
     '@/lib/api': {api: async (route, options) => {
       if (route === '/jobs/job') return job;
       if (route.startsWith('/benefits/')) return {selected: false};
-      if (route === '/job-commerce/catalog') return {enabled: true, packages: []};
+      if (route === '/job-commerce/catalog') return {enabled: true, packages: [{code}]};
       orders.push(JSON.parse(options.body)); return {id: 'order', status: code === 'FREE' ? 'PAID' : 'PENDING'};
     }},
   }, {crypto: {randomUUID}});
@@ -90,7 +91,7 @@ test('disabled pricing remains visible without allowing orders', async () => {
   const ui = host('apps/web/src/components/recruiter/JobPackageSelection.tsx', 'JobPackageSelection', {
     'next/navigation': {useParams: () => ({id: 'job'}), useSearchParams: () => new URLSearchParams()},
     '@/lib/navigation': {Link: stub, useRouter: () => ({replace() {}, push() {}})},
-    '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@/components/employee/WorkspacePrimitives': {WorkspaceLoading: stub},
+    '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@job-talentio/shared': shared, '@/components/employee/WorkspacePrimitives': {WorkspaceLoading: stub},
     './PackagePricing': {PackagePricing: Pricing}, '@/components/ui/DirectionalIcon': {DirectionalIcon: stub},
     '@/lib/api': {api: async (route, options) => {
       if (options?.method) orders++;

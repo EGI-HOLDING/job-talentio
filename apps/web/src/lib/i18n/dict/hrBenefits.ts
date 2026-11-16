@@ -1,4 +1,9 @@
 export const hrBenefits = {
+  'hr.package.LITE': {
+    en: 'Lite',
+    ru: 'Lite',
+    uz: 'Lite',
+  },
   'hr.includeResolved': {
     en: 'Include resolved requests',
     uz: 'Hal qilingan so‘rovlarni ko‘rsatish',

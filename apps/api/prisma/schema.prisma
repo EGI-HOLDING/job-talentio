@@ -275,6 +275,20 @@ model LinkedInConnection {
   user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
   previews        LinkedInPreview[]
   posts           LinkedInSocialPost[]
+  companyPages    LinkedInCompanyPage[]
+}
+
+model LinkedInCompanyPage {
+  companyId       String
+  connectionId    String
+  generation      Int
+  organizationUrn String
+  name            String
+  updatedAt       DateTime @updatedAt
+  company         Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  connection      LinkedInConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  @@id([companyId, connectionId])
+  @@index([connectionId])
 }
 
 model LinkedInOAuthState {
@@ -282,6 +296,7 @@ model LinkedInOAuthState {
   userId         String
   cookieHash     String
   sessionVersion Int
+  companyId      String?
   returnTo       String
   expiresAt      DateTime
   consumedAt     DateTime?
@@ -299,6 +314,7 @@ model LinkedInPreview {
   jobId                String
   connectionId         String
   connectionGeneration Int
+  organizationUrn      String?
   locale               String
   fingerprint          String
   content              Json
@@ -399,6 +415,7 @@ enum SubscriptionStatus {
 
 enum JobPackageCode {
   FREE
+  LITE
   STANDARD
   PREMIUM
 }
@@ -1141,6 +1158,7 @@ model Company {
   supportTickets       SupportTicket[]
   linkedInPreviews      LinkedInPreview[]
   linkedInPosts         LinkedInSocialPost[]
+  linkedInCompanyPages  LinkedInCompanyPage[]
 
   @@index([cityId])
   @@index([industryId])
@@ -2243,6 +2261,7 @@ model PackagePolicy {
   id String @id @default(cuid())
   code JobPackageCode
   version Int
+  catalogVersion Int @default(1)
   settings Json
   createdById String?
   createdAt DateTime @default(now())
@@ -2420,11 +2439,14 @@ model JobPublicationPeriod {
   code JobPackageCode
   startsAt DateTime
   expiresAt DateTime
+  featuredStartsAt DateTime?
+  featuredEndsAt DateTime?
   policySnapshot Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([jobId, cycle])
   @@index([companyId, code, startsAt])
+  @@index([featuredEndsAt, companyId])
 }
 
 model CandidateCredit {

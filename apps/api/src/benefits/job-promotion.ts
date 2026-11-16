@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import type { JobPromotion } from '@job-talentio/shared';
+import { jobPackageRank } from '@job-talentio/shared';
 
 export type PromotionBenefit = {
   code?: string;
@@ -16,7 +17,7 @@ export function resolveJobPromotion(status: string, benefit: PromotionBenefit | 
     .filter((at): at is Date => Boolean(at && at > now));
   const windowActive = Boolean(enabled && status === 'PUBLISHED' && benefit?.startsAt && benefit.startsAt <= now
     && (!benefit.expiresAt || benefit.expiresAt > now));
-  const packageCode = windowActive && ['STANDARD', 'PREMIUM'].includes(benefit?.code ?? '') ? benefit!.code! : 'FREE';
+  const packageCode = windowActive && benefit?.code && jobPackageRank(benefit.code) > 0 ? benefit.code : 'FREE';
   const value = (benefit?.policySnapshot as { visibility?: number } | null)?.visibility;
   const visibility = windowActive && typeof value === 'number' && Number.isFinite(value) && value >= 1 ? value : 1;
   const boost = windowActive ? benefit?.boosts.find(b => b.startsAt <= now && b.endsAt > now) ?? null : null;

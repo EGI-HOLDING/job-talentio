@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { LinkedInTokenVault } from './linkedin-security';
 import { isIP } from 'node:net';
 import { publicIp } from './linkedin-security';
+import { localCommerce, packageCatalog } from '../benefits/package-catalog';
 
 @Injectable()
 export class LinkedInSettings {
@@ -16,15 +17,22 @@ export class LinkedInSettings {
   readonly vault?: LinkedInTokenVault;
   readonly configured: boolean;
   readonly publicSite: boolean;
+  readonly simulated: boolean;
+  readonly organizationAccessVerified: boolean;
   readonly scopes = ['openid', 'profile', 'w_member_social'];
+  readonly organizationScopes = ['w_organization_social', 'r_organization_admin'];
 
   constructor(config: ConfigService) {
-    this.enabled = config.get('LINKEDIN_ENABLED') === 'true';
+    this.simulated = config.get('LINKEDIN_COMPANY_SIMULATION') === 'true' && localCommerce() && packageCatalog().version === 2;
+    this.enabled = this.simulated || config.get('LINKEDIN_ENABLED') === 'true';
     this.accessVerified = config.get('LINKEDIN_ACCESS_VERIFIED') === 'true';
     this.version = config.get('LINKEDIN_API_VERSION', '202610');
     this.clientId = config.get('LINKEDIN_CLIENT_ID', '');
     this.clientSecret = config.get('LINKEDIN_CLIENT_SECRET', '');
-    this.redirectUri = config.get('LINKEDIN_REDIRECT_URI', '');
+    this.organizationAccessVerified = this.simulated || config.get('LINKEDIN_ORGANIZATION_ACCESS_VERIFIED') === 'true';
+    this.redirectUri = this.simulated
+      ? new URL('/api/integrations/linkedin/callback', config.get('API_URL', 'http://localhost:4000')).href
+      : config.get('LINKEDIN_REDIRECT_URI', '');
     this.webUrl = config.get('WEB_URL', 'http://localhost:3000').replace(/\/$/, '');
     const version = config.get('LINKEDIN_TOKEN_KEY_VERSION', 'v1');
     const rawKeys = config.get<string>('LINKEDIN_TOKEN_KEYS', '');
@@ -35,7 +43,9 @@ export class LinkedInSettings {
       const keys: unknown = JSON.parse(rawKeys);
       if (!keys || typeof keys !== 'object' || Array.isArray(keys) || Object.values(keys).some(key => typeof key !== 'string')) throw new Error('Invalid keyring');
       this.vault = new LinkedInTokenVault(keys as Record<string,string>, version);
-      valid = Boolean(this.clientId && this.clientSecret && /^20\d{2}(0[1-9]|1[0-2])$/.test(this.version)
+      const localSimulation = this.simulated && callback.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(callback.hostname)
+        && ['localhost', '127.0.0.1'].includes(web.hostname);
+      valid = localSimulation || Boolean(this.clientId && this.clientSecret && /^20\d{2}(0[1-9]|1[0-2])$/.test(this.version)
         && callback.protocol === 'https:' && !callback.username && !callback.password && !callback.search && !callback.hash
         && callback.pathname === '/api/integrations/linkedin/callback'
         && !web.username && !web.password && web.pathname === '/' && !web.search && !web.hash
@@ -49,5 +59,6 @@ export class LinkedInSettings {
     if (this.enabled && !valid) new Logger(LinkedInSettings.name).error('LinkedIn sharing disabled: HTTPS callback, credentials, API version, WEB_URL or encryption keyring is invalid');
   }
   get canConnect() { return this.enabled && this.configured; }
-  get canShare() { return this.canConnect && this.accessVerified && this.publicSite; }
+  get canShare() { return this.canConnect && (this.simulated || (this.accessVerified && this.publicSite)); }
+  get canShareAsCompany() { return this.canShare && this.organizationAccessVerified; }
 }

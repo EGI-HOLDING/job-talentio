@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
+import { JOB_PACKAGE_CODES } from '@job-talentio/shared';
 import { AuthUser, CurrentUser, JwtAuthGuard, Roles, RolesGuard } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
 import { JobsSearchService } from '../search/jobs-search.service';
@@ -24,7 +25,7 @@ export class JobCommerceController {
   }
   @Post()
   async create(@CurrentUser() user: AuthUser, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
-    const input = parseDto(z.object({jobId: z.string().min(1).max(100).optional(),creationSessionId:z.string().min(1).max(100).optional(),code: z.enum(['FREE','STANDARD','PREMIUM']),
+    const input = parseDto(z.object({jobId: z.string().min(1).max(100).optional(),creationSessionId:z.string().min(1).max(100).optional(),code: z.enum(JOB_PACKAGE_CODES),
       intent: z.enum(['PURCHASE','UPGRADE','RENEW'])}).strict().refine(v=>Boolean(v.jobId)!==Boolean(v.creationSessionId),'Choose exactly one order subject').refine(v=>!v.creationSessionId||v.intent==='PURCHASE','Creation sessions only support purchase'), body);
     return this.sync(await this.commerce.create(user, input, key));
   }

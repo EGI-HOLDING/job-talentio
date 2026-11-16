@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { JobPromotion } from '@job-talentio/shared';
 
 /** Focus and the next server-specified transition refresh the whole result context. */
-export function usePromotionRefresh(rows: ReadonlyArray<{ promotion?: JobPromotion | null }>, refresh: () => void) {
+export function usePromotionRefresh(rows: ReadonlyArray<{ promotion?: Pick<JobPromotion, 'revalidateAt'> | null }>, refresh: () => void) {
   const callback = useRef(refresh);
   callback.current = refresh;
   const last = useRef(Date.now());

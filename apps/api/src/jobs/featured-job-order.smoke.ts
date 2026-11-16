@@ -18,6 +18,8 @@ const job = (
 
 const ordered = orderFeaturedJobs([
   job('free-new', 'company-free', 'FREE', 29),
+  job('lite-boost', 'company-lite-boost', 'LITE', 2, true),
+  job('lite-new', 'company-lite', 'LITE', 29),
   job('standard-old', 'company-standard', 'STANDARD', 1),
   job('premium-old', 'company-premium', 'PREMIUM', 1),
   job('premium-boost', 'company-boost', 'PREMIUM', 2, true),
@@ -35,6 +37,8 @@ assert.deepEqual(
     'standard-boost',
     'standard-new',
     'standard-old',
+    'lite-boost',
+    'lite-new',
     'free-new',
   ],
   'package tiers dominate recency; boost and freshness order within each tier',

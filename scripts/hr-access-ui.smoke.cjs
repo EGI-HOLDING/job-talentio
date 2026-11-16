@@ -194,11 +194,12 @@ test('adding to Kanban is a single direct action, survives retries and ignores s
   pending.resolve({id:'app',kanbanEnteredAt:'2026-10-26',canAddToKanban:false});await ui.render();assert.equal(changes.length,1);
   tree=await ui.render({...props,application:{...row(),...changes[0]}});assert.match(nodes(tree,n=>n.props?.href)[0].props.href,/section=kanban.*application=app/);ui.unmount();
 });
-test('recruiter job package filter matches confirmed Free, Standard and Premium packages',async()=>{
+test('recruiter job package filter matches Lite and historical Free packages',async()=>{
   function Select(){} function JobRow(){} function Editor(){}
   const jobs=[
     {id:'premium',title:'Premium role',status:'PUBLISHED',createdAt:'2026-10-26',benefit:{code:'PREMIUM',selectionConfirmedAt:'2026-10-26'},_count:{}},
     {id:'standard',title:'Standard role',status:'PUBLISHED',createdAt:'2026-10-25',benefit:{code:'STANDARD',selectionConfirmedAt:'2026-10-25'},_count:{}},
+    {id:'lite',title:'Lite role',status:'PUBLISHED',createdAt:'2026-10-25',benefit:{code:'LITE',selectionConfirmedAt:'2026-10-25'},_count:{}},
     {id:'free',title:'Free role',status:'PUBLISHED',createdAt:'2026-10-24',benefit:{code:'FREE',selectionConfirmedAt:'2026-10-24'},_count:{}},
     {id:'unselected',title:'Unselected role',status:'DRAFT',createdAt:'2026-10-23',benefit:{code:'FREE',selectionConfirmedAt:null},_count:{}},
   ];
@@ -215,13 +216,14 @@ test('recruiter job package filter matches confirmed Free, Standard and Premium 
   const props={companyId:'company',company:{},jobs,loading:false,meta:{},createRequested:false,onCloseCreate(){},onReload:async()=>{},onApplicants(){},onStatus:async()=>{},onFlash(){}};
   let tree=await ui.render(props);
   const packageSelect=()=>nodes(tree,node=>node.type===Select&&node.props.label==='jr.package')[0];
-  assert.deepEqual([...packageSelect().props.options].map(option=>option.value),['ALL','PREMIUM','STANDARD','FREE']);
+  assert.deepEqual([...packageSelect().props.options].map(option=>option.value),['ALL','PREMIUM','STANDARD','LITE','FREE']);
   const visibleJobs=()=>nodes(tree,node=>node.type===JobRow).map(node=>node.props.job.id);
-  assert.deepEqual(visibleJobs(),['premium','standard','free','unselected']);
+  assert.deepEqual(visibleJobs(),['premium','standard','lite','free','unselected']);
   packageSelect().props.onChange('PREMIUM');tree=await ui.render();assert.deepEqual(visibleJobs(),['premium']);
   packageSelect().props.onChange('STANDARD');tree=await ui.render();assert.deepEqual(visibleJobs(),['standard']);
+  packageSelect().props.onChange('LITE');tree=await ui.render();assert.deepEqual(visibleJobs(),['lite']);
   packageSelect().props.onChange('FREE');tree=await ui.render();assert.deepEqual(visibleJobs(),['free'],'unselected jobs do not appear as Gratis');
-  packageSelect().props.onChange('ALL');tree=await ui.render();assert.deepEqual(visibleJobs(),['premium','standard','free','unselected']);ui.unmount();
+  packageSelect().props.onChange('ALL');tree=await ui.render();assert.deepEqual(visibleJobs(),['premium','standard','lite','free','unselected']);ui.unmount();
 });
 test('CV action resolves the submitted application file and has no database permission request',async()=>{
   const requests=[],tab={opener:'old',location:{href:''},close(){}};

@@ -1,11 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { JobPackageCode, Prisma, JobPurchaseOrder } from '@prisma/client';
+import { jobPackageRank } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
 import { BenefitsService } from './benefits.service';
 import { OperationsService } from './operations.service';
-import { PACKAGE_ORDER, BenefitPolicy } from './benefit-policy';
-import { localCheckoutEnabled, PACKAGE_CATALOG_VERSION, PACKAGE_PRICES, packageAmount, PurchaseIntent } from './package-catalog';
+import { BenefitPolicy } from './benefit-policy';
+import { localCheckoutEnabled, packageCatalog, PACKAGE_PRICES, packageAmount, PurchaseIntent } from './package-catalog';
 import { JobPaymentProvider, VerifiedJobPayment } from './job-payment.provider';
 import { assertHrFlowEnabled, assessmentLanguageSelectionEnabled, hrFlowEnabled, requireAssessmentLanguage } from '../hr-flow/hr-flow.policy';
 import { validateTemplateDraft } from '../hr-flow/job-posting-template';
@@ -16,13 +17,23 @@ export class JobCommerceService {
     private operations: OperationsService, private provider: JobPaymentProvider) {}
 
   async catalog() {
-    const packages = await Promise.all(PACKAGE_ORDER.map(async code => ({
-      code, amount: PACKAGE_PRICES[code], currency: 'IDR', ...(await this.benefits.policy(code)),
-      linkedin: code === 'PREMIUM',
-      instagram: code === 'PREMIUM' ? 'COMING_SOON' : 'NOT_INCLUDED', candidateSearch: true, cvDatabase: true,
-    })));
-    return { version: PACKAGE_CATALOG_VERSION, hrFlowV2:hrFlowEnabled(),assessmentLanguageSelection:assessmentLanguageSelectionEnabled(),perJob: true, packages, enabled: await this.benefits.enabled(),
-      testMode: localCheckoutEnabled(), paymentAvailable: this.provider.available };
+    const catalog = packageCatalog();
+    const packages = await Promise.all(catalog.offers.map(async code => {
+      const policy = await this.benefits.policy(code);
+      const previewCapacity = code !== 'FREE' ? catalog.previewCapacities?.[code] : undefined;
+      return {
+        code, amount: PACKAGE_PRICES[code], currency: 'IDR', ...policy, previewCapacity,
+        linkedin: catalog.version === 2 ? Boolean(policy.settings.companyPageLinkedIn) : code === 'PREMIUM',
+        instagram: catalog.version === 1 && code === 'PREMIUM' ? 'COMING_SOON' : 'NOT_INCLUDED',
+        candidateSearch: true, cvDatabase: true,
+      };
+    }));
+    return {
+      version: catalog.version, hrFlowV2: hrFlowEnabled(), assessmentLanguageSelection: assessmentLanguageSelectionEnabled(),
+      perJob: true, packages, enabled: await this.benefits.enabled(),
+      testMode: localCheckoutEnabled(), paymentAvailable: this.provider.available,
+      sandbox: this.provider.available && this.provider.name === 'midtrans-sandbox',
+    };
   }
   private async job(actor: AuthUser, id: string, db: Prisma.TransactionClient = this.db) {
     const job = await db.jobPost.findUnique({ where: { id }, include: { company: true, benefit: true } });
@@ -36,7 +47,7 @@ export class JobCommerceService {
       if (!expired) throw new ConflictException('Renewal is available after the publication period expires');
     } else if (expired) throw new ConflictException('This job has expired. Choose renewal to start a new period');
     else if (intent === 'UPGRADE') {
-      if (!benefit || PACKAGE_ORDER.indexOf(code) <= PACKAGE_ORDER.indexOf(benefit.code))
+      if (!benefit || jobPackageRank(code) <= jobPackageRank(benefit.code))
         throw new ConflictException('Choose a higher package to upgrade');
     } else if (benefit && (benefit.startsAt || benefit.code !== 'FREE')) {
       throw new ConflictException('This job already has a package. Choose an upgrade or renewal');
@@ -51,22 +62,24 @@ export class JobCommerceService {
       await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
       const job = await this.job(actor, before.id, db);
       this.validate(input.intent, input.code, job.benefit);
-      const policy = await this.benefits.policy(input.code, db);
-      const amount = packageAmount(input.code, input.intent, job.benefit?.code ?? 'FREE');
-      const pending = amount > 0 ? await db.jobPurchaseOrder.findFirst({where: {
+      const pending = await db.jobPurchaseOrder.findFirst({where: {
         jobId: job.id, createdById: actor.id, code: input.code, intent: input.intent,
-        status: 'PENDING', amount, catalogVersion: PACKAGE_CATALOG_VERSION, policyVersion: policy.version,
+        status: 'PENDING',
         expectedBenefitVersion: job.benefit?.updatedAt.toISOString() ?? null, expiresAt: {gt: new Date()},
-      }, orderBy: {createdAt: 'desc'}}) : null;
+      }, orderBy: {createdAt: 'desc'}});
       if (pending) return pending;
+      const catalog = packageCatalog();
+      if (!catalog.offers.includes(input.code)) throw new BadRequestException('Package is not offered');
       const active=await db.$queryRaw<Array<{id:string}>>`
         SELECT o.id FROM "JobPurchaseOrder" o WHERE o."jobId"=${job.id} AND o.status IN ('PENDING','REVIEW')
           AND (o.provider IS NOT NULL OR EXISTS(SELECT 1 FROM "OperationKey" k WHERE k.scope='job-payment-session' AND k.key=o.id)) LIMIT 1`;
       if(active.length)throw new ConflictException('Reconcile or cancel the existing checkout before changing the package');
+      const policy = await this.benefits.policy(input.code, db);
+      const amount = packageAmount(input.code, input.intent, job.benefit?.code ?? 'FREE');
       const order = await db.jobPurchaseOrder.create({ data: {
         jobId:job.id,code:input.code,intent:input.intent,companyId: job.companyId, createdById: actor.id,
         jobTitle: job.title, companyName: job.company.name, amount,
-        catalogVersion: PACKAGE_CATALOG_VERSION, policyVersion: policy.version,
+        catalogVersion: catalog.version, policyVersion: policy.version,
         policySnapshot: policy.settings, expectedBenefitVersion: job.benefit?.updatedAt.toISOString() ?? null,
         expiresAt: new Date(Date.now() + 24 * 3600000),
       } });
@@ -94,11 +107,13 @@ export class JobCommerceService {
         await validateTemplateDraft(db,session.draft);
       }
       if(previous?.status==='PENDING'&&previous.expiresAt>new Date()&&previous.code===code)return previous;
+      const catalog = packageCatalog();
+      if (!catalog.offers.includes(code)) throw new BadRequestException('Package is not offered');
       if(previous?.status==='PENDING'&&(previous.paymentRedirectUrl||await db.operationKey.findUnique({where:{scope_key:{scope:'job-payment-session',key:previous.id}}})))throw new ConflictException('Cancel or finish the existing checkout before choosing another package');
       if(previous?.status==='PENDING')await db.jobPurchaseOrder.update({where:{id:previous.id},data:{status:'CANCELLED'}});
       const policy=await this.benefits.policy(code,db),amount=PACKAGE_PRICES[code];
       const jobTitle=session.templateId?String((session.draft as Record<string,unknown>).title):'Lowongan baru';
-      const order=await db.jobPurchaseOrder.create({data:{creationSessionId:sessionId,companyId:company.id,createdById:actor.id,code,intent:'PURCHASE',amount,catalogVersion:PACKAGE_CATALOG_VERSION,policyVersion:policy.version,policySnapshot:policy.settings,companyName:company.name,jobTitle,expiresAt:new Date(Date.now()+86400000),...(amount===0?{status:'PAID',provider:'free',providerReference:'free:'+sessionId,paidAt:new Date()}:{})}});
+      const order=await db.jobPurchaseOrder.create({data:{creationSessionId:sessionId,companyId:company.id,createdById:actor.id,code,intent:'PURCHASE',amount,catalogVersion:catalog.version,policyVersion:policy.version,policySnapshot:policy.settings,companyName:company.name,jobTitle,expiresAt:new Date(Date.now()+86400000),...(amount===0?{status:'PAID',provider:'free',providerReference:'free:'+sessionId,paidAt:new Date()}:{})}});
       await db.jobCreationSession.update({where:{id:sessionId},data:{orderId:order.id,phase:amount===0?'JOB':'CHECKOUT',revision:{increment:1}}});
       return order;
     })).value;
@@ -168,6 +183,7 @@ export class JobCommerceService {
     return this.db.$transaction(async db => {
       await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
       const order = await db.jobPurchaseOrder.findUniqueOrThrow({ where: {id: event.orderId} });
+      if (order.provider && order.provider !== provider) throw new BadRequestException('Payment environment mismatch');
       if (order.amount !== event.amount || order.currency !== event.currency) throw new BadRequestException('Payment amount or currency does not match the order');
       const priorEvent = await db.jobPaymentEvent.findUnique({where: {provider_eventId: {provider, eventId: event.eventId}}});
       if (priorEvent && priorEvent.orderId !== order.id) throw new ConflictException('Payment event belongs to another order');
@@ -200,6 +216,7 @@ export class JobCommerceService {
     return this.db.$transaction(async db=>{
       await db.$queryRaw`SELECT id FROM "Company" WHERE id=${before.companyId} FOR UPDATE`;
       const order=await db.jobPurchaseOrder.findUniqueOrThrow({where:{id:before.id}});
+      if(order.provider&&order.provider!==provider)throw new BadRequestException('Payment environment mismatch');
       if(order.amount!==event.amount||order.currency!==event.currency)throw new BadRequestException('Payment amount or currency mismatch');
       if(order.status==='PAID'&&event.status!=='REVIEW')return order;
       if(['REVIEW','CANCELLED','EXPIRED','FAILED'].includes(order.status)&&event.status==='PENDING')return order;
@@ -260,12 +277,13 @@ export class JobCommerceService {
       if(order.status!=='PENDING'||order.expiresAt<=new Date())throw new ConflictException('This order cannot be paid');
       if(order.creationSessionId){
         const session=await db.jobCreationSession.findUniqueOrThrow({where:{id:order.creationSessionId}});
+        if(session.orderId!==order.id||session.jobId)throw new ConflictException('This checkout is no longer active');
         if(session.templateId){
-          if(session.orderId!==order.id||session.jobId)throw new ConflictException('This checkout is no longer active');
           requireAssessmentLanguage(session.assessmentLanguage);
           await validateTemplateDraft(db,session.draft);
         }
       }
+      if (order.provider && order.provider !== this.provider.name) throw new BadRequestException('Payment environment mismatch');
       if(order.paymentRedirectUrl)return {redirectUrl:order.paymentRedirectUrl,reference:order.id};
       if(!order.creationSessionId){
         if(!order.jobId)throw new ConflictException('Missing order subject');

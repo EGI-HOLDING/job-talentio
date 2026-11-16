@@ -31,18 +31,19 @@ export function RecruiterJobWorkspace() {
   const [candidateCount,setCandidateCount]=useState<number|null>(null);
   const linkedInReview=useRef('');
   useEffect(()=>{
-    let alive=true;setLoading(true);setData(null);setError('');setEditing(null);setEditingBusy(false);
+    const controller=new AbortController();
+    const readOptions={signal:controller.signal};
+    setLoading(true);setData(null);setError('');setEditing(null);setEditingBusy(false);
     (async()=>{
-      const [job,memberships]=await Promise.all([api<any>('/jobs/'+encodeURIComponent(id)),api<any[]>('/companies/mine')]);
+      const [job,memberships]=await Promise.all([api<any>('/jobs/'+encodeURIComponent(id),readOptions),api<any[]>('/companies/mine',readOptions)]);
       const companyId=job.companyId||job.company?.id;
       const membership=memberships.find(row=>row.companyId===companyId);
       if(!membership && getSession()?.user.role!=='SUPER_ADMIN') throw new Error(t('rw.noCompanyHint'));
-      const [cities,categories,benefits,languages]=await Promise.all(['cities','categories','benefits','languages'].map(path=>api<any[]>('/meta/'+path,{auth:false})));
-      if(alive){rememberCompany(companyId);setData({job,companyId,company:membership?.company||job.company,meta:{cities,categories,benefits,languages},applicants:[],templates:[],revision:retry});}
-    })().catch(reason=>{if(alive)setError(reason.message);}).finally(()=>{if(alive)setLoading(false);});
-    return()=>{alive=false;};
+      if(!controller.signal.aborted){rememberCompany(companyId);setData({job,companyId,company:membership?.company||job.company,applicants:[],templates:[],revision:retry});}
+    })().catch(reason=>{if(!controller.signal.aborted)setError(reason.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    return()=>controller.abort();
   },[id,locale,retry]);
-  async function refresh(){const job=await api<any>('/jobs/'+encodeURIComponent(id));setData((current:any)=>current?{...current,job,applicants:[],revision:current.revision+1}:null);}
+  async function refresh(){const job=await api<any>('/jobs/'+encodeURIComponent(id));setData((current:any)=>current?.job.id===id?{...current,job,applicants:[],revision:current.revision+1}:current);}
   async function openEditor(initialStep=0){
     if(editingBusy||!data)return;
     const requestedContext=context.current;
@@ -50,10 +51,13 @@ export function RecruiterJobWorkspace() {
     try{
       // Public detail is localized. Editing must preserve the authored wording,
       // including screening questions, rather than saving a display translation.
-      const source=await api<any>('/jobs/'+encodeURIComponent(id)+'/translations');
+      const [source,cities,categories,benefits,languages]=await Promise.all([
+        api<any>('/jobs/'+encodeURIComponent(id)+'/translations'),
+        ...['cities','categories','benefits','languages'].map(path=>api<any[]>('/meta/'+path,{auth:false})),
+      ]);
       if(context.current!==requestedContext)return;
       const questions=new Map((source.questions||[]).map((row:any)=>[row.id,row.question]));
-      setEditing({...data.job,...source.source,locale:source.sourceLocale,_initialStep:initialStep,questions:(data.job.questions||[]).map((row:any)=>({...row,question:questions.get(row.id)||row.question}))});
+      setEditing({job:{...data.job,...source.source,locale:source.sourceLocale,_initialStep:initialStep,questions:(data.job.questions||[]).map((row:any)=>({...row,question:questions.get(row.id)||row.question}))},meta:{cities,categories,benefits,languages}});
     }catch(reason){if(context.current===requestedContext)setNotice(reason instanceof Error?reason.message:t('ew.loadFailed'));}
     finally{if(context.current===requestedContext)setEditingBusy(false);}
   }
@@ -66,8 +70,8 @@ export function RecruiterJobWorkspace() {
   },[id,locale,data?.job?.id,loading,params]);
   if(error)return <section className={s.root}><Link href={employerWorkspaceHref()} className={s.back}><DirectionalIcon direction="left" size={17} /> {t('rw.backJobs')}</Link><ResourceError message={error} onRetry={()=>setRetry(n=>n+1)}/></section>;
   if(loading||!data||data.job.id!==id)return <WorkspaceLoading/>;
-  const {job,companyId,company,meta}=data;
-  if(editing)return <RecruiterJobEditor companyId={companyId} company={company} job={editing} initialStep={editing._initialStep || 0} meta={meta} onClose={()=>setEditing(null)} onSaved={async message=>{await refresh();setNotice(message);}}/>;
+  const {job,companyId,company}=data;
+  if(editing)return <RecruiterJobEditor companyId={companyId} company={company} job={editing.job} initialStep={editing.job._initialStep || 0} meta={editing.meta} onClose={()=>setEditing(null)} onSaved={async message=>{await refresh();setNotice(message);}}/>;
   const href=(value:string)=>employerJobHref(id,value,companyId);
   return <section className={s.root} data-job-workspace>
     <header className={s.header}><Link href={employerWorkspaceHref('jobs',companyId)} className={s.backIcon} aria-label={t('rw.backJobs')} title={t('rw.backJobs')}><WorkspaceIcon kind="left"/></Link><div className={s.jobIdentity}><div className={s.heading}><h1>{job.title}</h1><span className={s.badge} data-status={job.status}>{enumLabel('jobStatus',job.status)}</span></div><p className={s.subtitle}>{[company?.name,job.city?.name||localizedJobLocation(job,t),enumLabel('workMode',job.workMode)].filter(Boolean).join(' | ')}</p></div><div className={s.actions}><Link className={s.secondary} href={jobDetailHref(id,href(section))}>{t('ranking.viewJob')}</Link><button type="button" className={s.primary} disabled={editingBusy} onClick={()=>void openEditor()}><WorkspaceIcon kind="edit"/>{t('rec.edit')}</button></div></header>

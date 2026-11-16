@@ -11,6 +11,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { JOB_PACKAGE_CODES, JOB_PACKAGE_OFFERS } from '@job-talentio/shared';
+import { packageCatalog } from './package-catalog';
 import { packageSettings } from './benefit-policy';
 import { AuthUser, CurrentUser, JwtAuthGuard, Roles, RolesGuard } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
@@ -62,7 +64,9 @@ export class AdminBenefitsController {
     const rows = await this.db.packagePolicy.findMany({
       orderBy: [{ code: 'asc' }, { version: 'desc' }],
     });
-    return rows.map((row) => ({ ...row, settings: packageSettings(row.settings) }));
+    const catalog = packageCatalog();
+    return rows.map((row) => ({ ...row, currentCatalog: row.catalogVersion === catalog.version && catalog.offers.includes(row.code),
+      settings: packageSettings(row.settings) }));
   }
   @Get('exposure-policy')
   exposure() {
@@ -115,7 +119,7 @@ export class AdminBenefitsController {
   async policy(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const input = parseDto(
       z.object({
-        code: z.enum(['FREE', 'STANDARD', 'PREMIUM']),
+        code: z.enum(JOB_PACKAGE_CODES),
         reason: z.string().trim().min(8).max(1000),
         settings: z.object({
           durationDays: z.literal(30),
@@ -131,11 +135,13 @@ export class AdminBenefitsController {
     );
     return this.db.$transaction(async (db) => {
       await db.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(742159731)`;
+      const catalog = packageCatalog();
+      if (!catalog.offers.includes(input.code)) throw new ForbiddenException('Choose an offered package');
       const latest = await db.packagePolicy.findMany({ orderBy: { version: 'desc' } });
       const effective = Object.fromEntries(
-        ['FREE', 'STANDARD', 'PREMIUM'].map((code) => [
+        catalog.offers.map((code) => [
           code,
-          code === input.code ? input.settings : latest.find((row) => row.code === code)?.settings,
+          code === input.code ? input.settings : latest.find((row) => row.code === code && row.catalogVersion === catalog.version)?.settings,
         ]),
       );
       const policySchema = z.object({
@@ -146,18 +152,18 @@ export class AdminBenefitsController {
         reports: z.boolean(),
         prioritySupport: z.boolean(),
       });
-      const free = policySchema.parse(effective.FREE),
+      const entry = policySchema.parse(effective[catalog.offers[0]]),
         standard = policySchema.parse(effective.STANDARD),
         premium = policySchema.parse(effective.PREMIUM);
       for (const field of ['boostDays', 'featuredDays', 'visibility'] as const)
-        if (free[field] > standard[field] || standard[field] > premium[field])
+        if (entry[field] > standard[field] || standard[field] > premium[field])
           throw new ForbiddenException('Benefits must increase monotonically across tiers');
       if (
-        free.boostDays !== 0 ||
-        free.featuredDays !== 0 ||
-        free.conversions ||
-        free.reports ||
-        free.prioritySupport ||
+        (catalog.version === 1 && (entry.boostDays !== 0 || entry.featuredDays !== 0)) ||
+        (catalog.version === 2 && (entry.boostDays === 0 || entry.featuredDays === 0)) ||
+        entry.conversions ||
+        entry.reports ||
+        entry.prioritySupport ||
         !standard.conversions ||
         standard.reports ||
         standard.prioritySupport ||
@@ -168,7 +174,9 @@ export class AdminBenefitsController {
         throw new ForbiddenException('Capability hierarchy must be preserved');
       const version = (latest.find((row) => row.code === input.code)?.version ?? 0) + 1;
       const row = await db.packagePolicy.create({
-        data: { code: input.code, version, settings: input.settings, createdById: user.id },
+        data: { code: input.code, version, catalogVersion: catalog.version,
+          settings: { ...input.settings, ...(catalog.version === 2 ? { featuredByPeriod: true, companyPageLinkedIn: input.code === 'PREMIUM' } : {}) },
+          createdById: user.id },
       });
       await db.auditLog.create({
         data: {
@@ -207,7 +215,7 @@ export class AdminBenefitsController {
   ) {
     const input = parseDto(
       z.object({
-        code: z.enum(['STANDARD', 'PREMIUM']),
+        code: z.enum(JOB_PACKAGE_OFFERS),
         reason: z.string().trim().min(8).max(1000),
       }),
       body,

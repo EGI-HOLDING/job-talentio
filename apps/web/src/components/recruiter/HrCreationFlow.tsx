@@ -7,7 +7,7 @@ import { api, getSession } from '@/lib/api';
 import { validateHrDraft, focusHrDraftIssue, hrJobError, type HrDraftIssue } from './hrDraftValidation';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
-import { PackageCatalog, PackageCode, money } from '@/lib/jobCommerce';
+import { PackageCatalog, PackageCode, money, packageLabel, packagePreference } from '@/lib/jobCommerce';
 import { JobFormV2, cleanHrDraft, initialHrDraft, HrDraft } from './JobFormV2';
 import s from './HrFlow.module.css';
 import { useEmployerUnsaved } from './useEmployerUnsaved';
@@ -16,6 +16,8 @@ import { HrAssistantOnboarding, type AssistantFinishAction } from './HrAssistant
 import { clearAssistantProgress, readAssistantProgress, saveAssistantProgress, type AssistantSceneId } from './hrAssistantState';
 import type { AssessmentLanguage } from '@job-talentio/shared';
 import { AssessmentLanguageDialog } from './JobContentAi';
+import { PackageBenefitReceipt, PackageTierCards } from './PackageTierCards';
+import { CompanyLinkedInShare } from './CompanyLinkedInShare';
 
 type AssistantAttempt = {
   action: AssistantFinishAction;
@@ -47,8 +49,23 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   const [assistantFiles, setAssistantFiles] = useState<File[]>([]);
   const [assistantAttempt, setAssistantAttempt] = useState<AssistantAttempt | null>(null);
   const [assessmentAction, setAssessmentAction] = useState<AssessmentAction | null>(null);
+  const [publishedShare, setPublishedShare] = useState<{jobId: string; fromTemplate?: boolean} | null>(null);
+  const pageTop = useRef<HTMLDivElement>(null);
+  const catalogReady = Boolean(catalog && session);
+  useEffect(() => {
+    if (!catalogReady) return;
+    const frame = requestAnimationFrame(() => pageTop.current?.scrollIntoView({block:'start', behavior:'instant'}));
+    return () => cancelAnimationFrame(frame);
+  }, [catalogReady, phase, assistantScene, publishedShare]);
   const sessionRef=useRef<any>(null),draftRef=useRef(draft),lastSaved=useRef(''),queue=useRef<Promise<any>>(Promise.resolve()),alive=useRef(false),lock=useRef(false),intentKey=useRef(''),orderKey=useRef<Record<string,string>>({}),publishKeys=useRef<Record<string,string>>({});
   draftRef.current=draft;
+  async function completePublication(jobId: string, fromTemplate?: boolean) {
+    if (sessionRef.current?.order?.policySnapshot?.companyPageLinkedIn && !draftRef.current.isAnonymous) {
+      setPublishedShare({jobId, fromTemplate});
+      return;
+    }
+    await onPublished(jobId, fromTemplate);
+  }
   const templateId = session?.templateId;
   const templateIssue = session?.templateIssue;
   const editable = !templateId || Boolean(templateIssue);
@@ -56,7 +73,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   async function openPublishedTemplate(jobId: string) {
     if (!alive.current || publishedTemplate.current === jobId) return;
     publishedTemplate.current = jobId;
-    await onPublished(jobId, true);
+    await completePublication(jobId, true);
   }
   function accept(value:any){if(value.id===sessionRef.current?.id&&value.revision<sessionRef.current.revision)return sessionRef.current;sessionRef.current=value;if(alive.current)setSession(value);return value;}
   const loadSession=async(id:string,signal?:AbortSignal)=>{const value=await api<any>('/hr-flow/sessions/'+id,{cache:'no-store',signal});if(signal?.aborted)throw new DOMException('Aborted','AbortError');if(value.companyId!==companyId)throw Error(c("Draft berasal dari perusahaan lain."));return accept(value);};
@@ -77,7 +94,9 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
       if(value.companyId!==companyId)throw Error(c("Draft berasal dari perusahaan lain."));
       const full=value.company?value:await loadSession(value.id,abort.signal);
       if(abort.signal.aborted)return;
-      accept(full);setCatalog(packages);setSelected(full.order?.code??full.draft?._selectedPackageCode??'');
+      const preferred = full.draft?._selectedPackageCode ?? packagePreference(window.location.search);
+      accept(full);setCatalog(packages);
+      setSelected(full.order?.code ?? packages.packages.find(p => p.code === preferred)?.code ?? '');
       setPhase(full.order?.status==='PAID'&&full.phase==='CHECKOUT'?'JOB':full.phase);
       const initial={...initialHrDraft(),countryId:company?.city?.province?.country?.id??null,citySlug:company?.city?.slug??'',...cleanHrDraft(full.draft??{})};
       draftRef.current=initial;setDraft(initial);lastSaved.current=JSON.stringify(cleanHrDraft(initial));setStatus(c("Tersimpan"));
@@ -87,7 +106,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
       }
       if(full.jobId&&!onboarding){
         if(full.templateId)await openPublishedTemplate(full.jobId);
-        else await onPublished(full.jobId);
+        else await completePublication(full.jobId);
       }
     })().catch(reason=>{if(!abort.signal.aborted)setError(reason.message);});
     return()=>{alive.current=false;abort.abort();};
@@ -176,7 +195,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     }
     if(order.status==='PAID'){await confirmed(value);return;}
     if(order.status!=='PENDING')throw Error(c("Pesanan memerlukan pemeriksaan status sebelum dilanjutkan."));
-    if(!catalog?.paymentAvailable&&!catalog?.testMode)throw Error(c("Pembayaran belum tersedia. Paket Free tetap dapat dipilih."));
+    if(!catalog?.paymentAvailable&&!catalog?.testMode)throw Error(c("Pembayaran belum tersedia. Silakan coba lagi."));
     if(catalog.testMode){await api('/job-commerce/orders/'+order.id+'/complete-test',{method:'POST'});await confirmed(await loadSession(value.id));return;}
     const checkout=await api<{redirectUrl:string}>('/job-commerce/orders/'+order.id+'/payment-session',{method:'POST'});
     const target=new URL(checkout.redirectUrl);if(target.protocol!=='https:')throw Error(c("Alamat pembayaran tidak valid."));window.location.assign(target.href);
@@ -194,7 +213,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     const result=await api<{jobId:string}>('/hr-flow/sessions/'+value.id+'/publish',{method:'POST',headers:{'Idempotency-Key':publishKeys.current[key]},body:JSON.stringify({revision:value.revision})});
     lastSaved.current=JSON.stringify(cleanHrDraft(draftRef.current));
     if(value.templateId)await openPublishedTemplate(result.jobId);
-    else await onPublished(result.jobId);
+    else await completePublication(result.jobId);
   }
   async function finishAssistant(action: AssistantFinishAction) {
     let attempt = assistantAttempt;
@@ -224,7 +243,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
       await startCandidateImport(companyId, jobId, attempt.files);
       setAssistantAttempt({ ...attempt, jobId, importRegistered: true });
     }
-    await onPublished(jobId);
+    await completePublication(jobId);
     setAssistantFiles([]);
   }
   function returnToJob() {
@@ -272,13 +291,24 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
       setAssessmentAction(null);
     });
   }
-  const choice=catalog?.packages.find(v=>v.code===selected),order=session?.order,paid=order?.status==='PAID';
+  const offered = catalog?.packages.find(v => v.code === selected);
+  const order = session?.order, paid = order?.status === 'PAID';
+  const choice = order?.code === selected && ['PENDING','PAID','REVIEW'].includes(order.status)
+    ? {code: order.code as PackageCode, amount: order.amount, currency: order.currency, settings: order.policySnapshot ?? offered?.settings}
+    : offered;
   const assessmentDialog=assessmentAction && <AssessmentLanguageDialog initialLanguage={session?.assessmentLanguage ?? undefined}
     action={c(assessmentAction==='intro'?'Lanjut':assessmentAction==='pay'&&choice?.amount!==0&&!paid?'Lanjut ke pembayaran':'Publikasikan lowongan')}
     busy={busy} error={error} onCancel={()=>{setAssessmentAction(null);setError('');}} onConfirm={confirmAssessment}/>;
-  const packageName=(code:string)=>code==='FREE'?'Free':code==='STANDARD'?'Standard':'Premium';
+  const packageName = packageLabel;
   const orderState=(state:string)=>c(({PAID:'Paket dikonfirmasi',PENDING:'Menunggu pembayaran',REVIEW:'Sedang diperiksa',EXPIRED:'Pesanan kedaluwarsa',CANCELLED:'Pesanan dibatalkan',FAILED:'Pembayaran gagal',REFUNDED:'Pembayaran dikembalikan'} as Record<string,string>)[state]??'Perlu pemeriksaan status');
   if(!catalog||!session)return <div className={s.page} data-hr-surface>{error?<div className={s.error} role="alert">{error}<br/><button className={s.link} onClick={()=>setRetry(v=>v+1)}>{c("Coba lagi")}</button><button className={s.link} onClick={onClose}>{c("Kembali")}</button></div>:<WorkspaceLoading/>}</div>;
+  if(publishedShare) return <div ref={pageTop} className={s.page} data-hr-flow-v2 data-hr-surface>
+    <header><h1 className={s.title}>{locale === 'id' ? 'Lowongan sudah terbit' : 'Your job is live'}</h1></header>
+    <CompanyLinkedInShare jobId={publishedShare.jobId} companyId={companyId}/>
+    <button className={s.primary} type="button" onClick={() => void run(() => Promise.resolve(onPublished(publishedShare.jobId,publishedShare.fromTemplate)))}>
+      {locale === 'id' ? 'Selesai' : 'Done'}
+    </button>
+  </div>;
   if (onboarding && assistantScene) return <><HrAssistantOnboarding
     key={session.id}
     companyId={companyId}
@@ -294,12 +324,13 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   />{assessmentDialog}</>;
   const templateSummary = templateId && <div className={s.templateSummary}><HrIcon kind="briefcase"/><div><strong>{session.draft?.title}</strong>{session.draft?._templateFields?.location && <p>{session.draft._templateFields.location}</p>}</div></div>;
   const heading=<><h1 className={s.title}>{phase==='PACKAGE'?c("Pilih paket untuk lowongan ini"):phase==='CHECKOUT'?c("Periksa pesanan Anda"):c(templateId?(editable?"Perbaiki draf":"Menerbitkan lowongan"):"Buat lowongan")}</h1><p className={s.subtitle}>{phase==='PACKAGE'?c("Pembelian berlaku untuk satu lowongan. Tidak berlangganan otomatis."):phase==='CHECKOUT'?c("Pastikan paket dan perusahaan sudah sesuai sebelum melanjutkan."):templateId?(editable?c("Paket Anda sudah dikonfirmasi. Perbarui draf lalu terbitkan lowongan."):c("Anda boleh kembali ke daftar lowongan. Publikasi tetap berjalan.")):c("Susun kebutuhan posisi dengan jelas untuk kandidat.")}</p></>;
-  return <div className={s.page} data-hr-flow-v2 data-hr-surface>
+  return <div ref={pageTop} className={s.page} data-hr-flow-v2 data-hr-surface>
     {assessmentDialog}
     <HrFlowHeader companyName={company?.name??session.company?.name} stage={(phase==='PACKAGE'?0:phase==='CHECKOUT'?1:2)+(onboarding?1:0)} onboarding={onboarding}/>
     {error&&<div className={s.error} role="alert">{error}</div>}
     {draftIssues.length>0&&<div className={s.error} role="alert"><strong>{c("Periksa isian berikut untuk melanjutkan:")}</strong><ul>{draftIssues.map(issue=><li key={issue.path}><button type="button" className={s.link} onClick={()=>focusHrDraftIssue(issue.field)}>{c(issue.message)}</button></li>)}</ul></div>}
     {phase==='PACKAGE'?<section className={s.stageCard}><p className={s.eyebrow}><HrIcon kind="building"/>{company?.name??session.company?.name}<span aria-hidden="true">|</span>{c("Lowongan baru")}</p>{heading}{templateSummary}
+      {catalog.version === 2 ? <PackageTierCards catalog={catalog} selected={selected} disabled={busy || paid} onSelect={setSelected}/> : <>
       <div className={s.packages} role="group" aria-label={c("Pilihan paket lowongan")}>{catalog.packages.map(pack=><div className={s.package} key={pack.code} data-selected={selected===pack.code}>
         <label className={s.packageSelect}><input type="radio" name="job-package" aria-label={packageName(pack.code)} checked={selected===pack.code} disabled={busy||paid&&pack.code!==order.code} onChange={()=>setSelected(pack.code)}/><h2>{packageName(pack.code)}</h2>{selected===pack.code&&<span className={s.selectedBadge}><HrIcon kind="check" size={14}/>{c("Dipilih")}</span>}</label>
         <p className={s.price}>{money(pack.amount,locale,pack.currency)}</p><span className={s.priceUnit}>/ {c("lowongan")}</span>
@@ -308,17 +339,22 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
         <button type="button" className={s.link} aria-expanded={details===pack.code} aria-controls={details===pack.code?'package-details-'+pack.code:undefined} onClick={()=>setDetails(details===pack.code?null:pack.code)}>{c("Lihat rincian paket")}<DirectionalIcon direction={details === pack.code ? "up" : "down"} size={16} /></button>
       </div>)}</div>
       <details className={s.features}><summary><HrIcon kind="briefcase"/>{c("Bandingkan fitur paket")}<HrIcon kind="chevron"/></summary><div className={s.featureScroll}><table className={s.featureTable}><thead><tr><th>{c("Fitur")}</th>{catalog.packages.map(p=><th key={p.code}>{packageName(p.code)}</th>)}</tr></thead><tbody>{[[c("Durasi tayang"),(p:any)=>p.settings.durationDays+' '+c("hari")],['Boost',(p:any)=>p.settings.boostDays+' '+c("hari")],['Featured',(p:any)=>p.settings.featuredDays+' '+c("hari")],[c("Laporan"),(p:any)=>p.settings.reports?c("Tersedia"):c("Tidak termasuk")],[c("Dukungan prioritas"),(p:any)=>p.settings.prioritySupport?c("Tersedia"):c("Tidak termasuk")]].map(([label,value]:any)=><tr key={label}><th>{label}</th>{catalog.packages.map(p=><td key={p.code}>{value(p)}</td>)}</tr>)}</tbody></table></div></details><p className={s.hint}>{c("Harga dan manfaat mengikuti katalog paket aktif.")}</p>
-    </section>:<>{heading}{templateSummary}
+      </>}
+    </section>:<>{heading}{templateSummary}{phase==='CHECKOUT' && catalog.sandbox && <span className={s.badge}>Sandbox</span>}
       {phase==='CHECKOUT'&&choice&&<div className={s.receipt}><div><section className={s.section}><h2>{c("Informasi pesanan")}</h2><div className={s.orderCompany}><HrIcon kind="building"/><div><strong>{company?.name??session.company?.name}</strong><p>{packageName(choice.code)} | {c("1 lowongan")}</p><p className={s.hint}>{templateId?c("Lowongan terbit otomatis setelah paket dikonfirmasi."):c("Lowongan akan diisi setelah paket dikonfirmasi")+(choice.amount>0?c(" dan pembayaran selesai"):"")+"."}</p></div></div><button type="button" className={`${s.link} ${s.inlineChange}`} disabled={busy} onClick={()=>void run(()=>go('PACKAGE'))}>{c("Ubah paket")}</button></section>
         <section className={s.section}><h2>{choice.amount===0?c("Konfirmasi paket Free"):c("Pembayaran")}</h2><div className={s.paymentBody}><HrIcon kind={choice.amount===0?'check':'shield'}/><div><strong>{choice.amount===0?c("Tidak ada pembayaran uang untuk paket ini."):c("Pilih metode pembayaran di halaman penyedia pembayaran.")}</strong><p className={s.hint}>{choice.amount===0?c(templateId?"Konfirmasikan paket untuk menerbitkan lowongan.":"Konfirmasikan paket untuk mulai menyusun lowongan."):c("Anda akan diarahkan ke Midtrans untuk menyelesaikan pembayaran.")}</p></div></div>{order&&<p className={s.hint}>{c("Status:")} {orderState(order.status)}</p>}{order?.paymentRedirectUrl&&order.status==='PENDING'&&<button className={s.link} disabled={busy} onClick={()=>void run(async()=>{await api('/job-commerce/orders/'+order.id+'/reconcile',{method:'POST'});const value=await loadSession(session.id);if(value.order?.status==='PAID')await confirmed(value);})}>{c("Periksa status pembayaran")}</button>}</section>
         <div className={s.notice}><HrIcon kind="info"/><p>{choice.amount===0?c("Paket Free dapat digunakan setelah Anda mengonfirmasi."):c("Pembayaran dikonfirmasi otomatis setelah berhasil.")}</p></div>
-        {choice.amount>0&&!catalog.paymentAvailable&&!paid&&<p className={s.hint}>{c("Pembayaran belum tersedia. Paket Free tetap dapat dipilih.")}</p>}
-      </div><section className={s.section}><h2>{c("Ringkasan pesanan")}</h2><dl><div><dt>{c("Paket")} {packageName(choice.code)}</dt><dd>{money(order?.amount??choice.amount,locale,order?.currency??choice.currency)}</dd></div><div className={s.total}><dt>{choice.amount===0?c("Total"):c("Total pembayaran")}</dt><dd>{money(order?.amount??choice.amount,locale,order?.currency??choice.currency)}</dd></div></dl><p className={s.hint}>{choice.amount===0?c("Satu paket untuk satu lowongan."):c("Sekali bayar untuk lowongan ini.")}</p></section></div>}
+        {catalog.version === 2 && choice.settings && <section className={s.section}>
+          <h2>{locale === 'id' ? 'Manfaat yang dibeli' : 'Included with this order'}</h2>
+          <PackageBenefitReceipt settings={choice.settings} locale={locale}/>
+        </section>}
+        {choice.amount>0&&!catalog.paymentAvailable&&!catalog.testMode&&!paid&&<p className={s.hint}>{c("Pembayaran belum tersedia. Silakan coba lagi.")}</p>}
+      </div><section className={s.section}><h2>{c("Ringkasan pesanan")}</h2><dl><div><dt>{c("Paket")} {packageName(choice.code)}</dt><dd>{money(choice.amount,locale,choice.currency)}</dd></div><div className={s.total}><dt>{choice.amount===0?c("Total"):c("Total pembayaran")}</dt><dd>{money(choice.amount,locale,choice.currency)}</dd></div></dl><p className={s.hint}>{choice.amount===0?c("Satu paket untuk satu lowongan."):c("Sekali bayar untuk lowongan ini.")}</p></section></div>}
       {phase==='JOB'&&!editable&&<div className={s.section} role="status"><WorkspaceLoading/></div>}
       {phase==='JOB'&&editable&&<>{templateIssue&&<p className={s.error} role="alert">{c(hrJobError(templateIssue))}</p>}<div className={s.context}><strong><HrIcon kind="building"/>{company?.name??session.company?.name}</strong><span className={s.badge}>{selected&&packageName(selected)} | {choice?.amount===0?c("Paket dikonfirmasi"):c("Sudah dibayar")}</span><span className={s.saved} data-saved={status===c("Tersimpan")} role="status">{status===c("Tersimpan")&&<HrIcon kind="check" size={17}/>} {status}</span></div><form id="hr-job-form" onSubmit={e=>{e.preventDefault();submitJob();}}><JobFormV2 draft={draft} companyId={companyId} initialCity={company?.city} disabled={busy} validationIssues={draftIssues} onChange={patch=>{setDraftIssues(previous=>previous.filter(issue=>!(issue.field in patch)));setDraft(previous=>({...previous,...patch}));}}/></form></>}
     </>}
     <footer className={s.footer}><div className={s.footerInner}>
-      {phase==='PACKAGE'?<div className={s.footerSummary}><span>{c("Paket dipilih:")} <strong>{selected?packageName(selected):c("Belum dipilih")}</strong></span><span>{c("Total")} <b>{money(order?.amount??choice?.amount??0,locale,order?.currency??choice?.currency??'IDR')}</b></span></div>:<button type="button" className={s.secondary} disabled={busy} onClick={()=>templateId&&phase==='JOB'?onClose():void run(()=>go(phase==='JOB'?'CHECKOUT':'PACKAGE'))}><HrIcon kind="back"/>{c(templateId&&phase==='JOB'?"Kembali ke lowongan":"Kembali")}</button>}
+      {phase==='PACKAGE'?<div className={s.footerSummary}><span>{c("Paket dipilih:")} <strong>{selected?packageName(selected):c("Belum dipilih")}</strong></span><span>{c("Total")} <b>{money(choice?.amount??0,locale,choice?.currency??'IDR')}</b></span></div>:<button type="button" className={s.secondary} disabled={busy} onClick={()=>templateId&&phase==='JOB'?onClose():void run(()=>go(phase==='JOB'?'CHECKOUT':'PACKAGE'))}><HrIcon kind="back"/>{c(templateId&&phase==='JOB'?"Kembali ke lowongan":"Kembali")}</button>}
       {phase==='CHECKOUT'&&<span className={s.status}>{paid?orderState('PAID'):choice?.amount===0?c("Paket belum dikonfirmasi"):order?orderState(order.status):c("Pesanan belum dibayar")}</span>}
       <div className={s.actions}>{phase==='PACKAGE'&&<button type="button" className={s.secondary} disabled={busy} onClick={()=>void run(async()=>{onClose();})}>{c("Kembali")}</button>}{phase==='JOB'?editable?<><button className={s.secondary} disabled={busy} onClick={()=>void run(async()=>{await saveDraft();setError('');})}>{c("Simpan draf")}</button><button className={s.primary} type="submit" form="hr-job-form" disabled={busy}>{c(onboarding?'Lanjut':'Publikasikan lowongan')}</button></>:error?<button className={s.primary} disabled={busy} onClick={()=>void run(()=>confirmed(session))}>{c("Coba lagi")}</button>:null:<button className={s.primary} disabled={busy||!selected} onClick={()=>{if(phase==='PACKAGE')void run(()=>go('CHECKOUT'));else requestPay();}}>{busy?c("Memproses..."):phase==='PACKAGE'?c("Lanjut ke checkout"):choice?.amount===0?c("Konfirmasi paket Free"):paid?c(templateId?"Terbitkan lowongan":"Lanjut membuat lowongan"):c("Lanjut ke pembayaran")}{!busy && (phase === 'PACKAGE' || paid) && <HrIcon kind="next"/>}</button>}</div>
     </div></footer>

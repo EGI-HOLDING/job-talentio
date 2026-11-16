@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
 import { BenefitsService } from './benefits.service';
+import { packageSettings } from './benefit-policy';
 
 @Injectable()
 export class HrAnalyticsService {
@@ -40,18 +41,20 @@ export class HrAnalyticsService {
     const flags = await this.benefits.enabled('hr_packages', db);
     const entitlement = await db.jobPublicationPeriod.findMany({
       where: { companyId, ...(jobId ? { jobId } : {}) },
-      select: { jobId: true, code: true },
+      select: { jobId: true, policySnapshot: true },
     });
-    const conversions = flags && entitlement.some((row) => row.code !== 'FREE');
-    const reports = flags && entitlement.some((row) => row.code === 'PREMIUM');
+    const conversionJobs = entitlement.filter(row => packageSettings(row.policySnapshot).conversions);
+    const reportJobs = entitlement.filter(row => packageSettings(row.policySnapshot).reports);
+    const conversions = flags && conversionJobs.length > 0;
+    const reports = flags && reportJobs.length > 0;
     const entitledAt = (time: Prisma.Sql, premium = false) => Prisma.sql`EXISTS (
       SELECT 1 FROM "JobPublicationPeriod" period WHERE period."jobId"=j.id
-      AND ${premium ? Prisma.sql`period.code='PREMIUM'` : Prisma.sql`period.code IN ('STANDARD','PREMIUM')`}
+      AND period."policySnapshot"->>${premium ? 'reports' : 'conversions'}='true'
       AND ${time}>=period."startsAt" AND ${time}<period."expiresAt")`;
     const conversionScope = Prisma.sql`${scope} AND ${entitledAt(Prisma.sql`s."startedAt"`)}`;
     const premiumApplication = entitledAt(Prisma.sql`a."createdAt"`, true);
     const premiumSession = entitledAt(Prisma.sql`s."startedAt"`, true);
-    const reportScope = Prisma.sql`${scope} AND EXISTS (SELECT 1 FROM "JobPublicationPeriod" period WHERE period."jobId"=j.id AND period.code='PREMIUM')`;
+    const reportScope = Prisma.sql`${scope} AND EXISTS (SELECT 1 FROM "JobPublicationPeriod" period WHERE period."jobId"=j.id AND period."policySnapshot"->>'reports'='true')`;
     const [
       status,
       events,
@@ -193,8 +196,8 @@ export class HrAnalyticsService {
         from: from.toISOString(),
         to: to.toISOString(),
         historicalViewsAreNotImpressions: true,
-        eligibleConversionJobs: new Set(entitlement.filter((row) => row.code !== 'FREE').map(row => row.jobId)).size,
-        eligibleReportJobs: new Set(entitlement.filter((row) => row.code === 'PREMIUM').map(row => row.jobId)).size,
+        eligibleConversionJobs: new Set(conversionJobs.map(row => row.jobId)).size,
+        eligibleReportJobs: new Set(reportJobs.map(row => row.jobId)).size,
       },
     };
   }

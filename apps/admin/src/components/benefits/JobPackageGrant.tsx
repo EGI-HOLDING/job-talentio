@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
 import { postOnce } from '@/lib/operations';
 export function JobPackageGrant({ jobId }: { jobId: string }) {
   const [open, setOpen] = useState(false),
@@ -7,6 +8,15 @@ export function JobPackageGrant({ jobId }: { jobId: string }) {
     [reason, setReason] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const [codes, setCodes] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    api<{packages:Array<{code:string}>}>('/job-commerce/catalog')
+      .then(catalog => { if (active) setCodes(catalog.packages.map(pack => pack.code).filter(code => code !== 'FREE')); })
+      .catch(reason => { if (active) setError(reason.message); });
+    return () => { active = false; };
+  }, [open]);
   async function grant(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -40,8 +50,7 @@ export function JobPackageGrant({ jobId }: { jobId: string }) {
                 setCode(event.target.value);
               }}
             >
-              <option>STANDARD</option>
-              <option>PREMIUM</option>
+              {codes.map(code => <option key={code}>{code}</option>)}
             </select>
           </label>
           <label>

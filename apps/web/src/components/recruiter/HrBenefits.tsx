@@ -98,6 +98,11 @@ export function JobBenefits({ jobId, status }: { jobId: string; status: string }
           ? <>{t('hr.expires')} <time dateTime={data.expiresAt}>{new Intl.DateTimeFormat(locale, {day: 'numeric', month: 'short', year: 'numeric'}).format(new Date(data.expiresAt))}</time></>
           : t('hr.startsOnPublish')}
       </span>
+      {data.featuredUntil && new Date(data.featuredUntil) > new Date() && status === 'PUBLISHED' && (
+        <span className={s.jobPackageMeta}>{t('hr.featuredUntil')} <time dateTime={data.featuredUntil}>
+          {new Intl.DateTimeFormat(locale,{day:'numeric',month:'short',year:'numeric'}).format(new Date(data.featuredUntil))}
+        </time></span>
+      )}
       {(!data.selected || data.code !== 'PREMIUM' || (data.expiresAt && new Date(data.expiresAt) <= new Date())) && <Link className={s.jobPackageLink} href={packageHref(jobId)}>{t('commerce.' + (data.expiresAt && new Date(data.expiresAt) <= new Date() ? 'renew' : !data.selected ? 'choose' : 'upgrade'))}</Link>}
       {data.activeBoost ? (
         <span className={s.jobPackageMeta}>

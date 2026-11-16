@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { z } from 'zod';
-import { assessmentLanguageSchema, jobPostSchema } from '@job-talentio/shared';
+import { assessmentLanguageSchema, jobPostSchema, JOB_PACKAGE_CODES } from '@job-talentio/shared';
 import { AuthUser, CurrentUser, JwtAuthGuard, Roles, RolesGuard } from '../common/auth.decorators';
 import { parseDto } from '../common/utils';
 import { resumeUploadOptions,imageUploadOptions } from '../common/upload';
@@ -32,7 +32,7 @@ export class HrFlowController {
   }
   @Get('sessions') list(@CurrentUser() user:AuthUser,@Query('companyId') companyId:string){return this.flow.list(user,parseDto(z.string().min(1).max(100),companyId));}
   @Get('sessions/:id') get(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.flow.get(user,id);}
-  @Patch('sessions/:id') patch(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.flow.patch(user,id,parseDto(z.object({revision:z.number().int().nonnegative(),draft:creationDraftSchema.optional(),assessmentLanguage:assessmentLanguageSchema.optional(),phase:z.enum(['PACKAGE','CHECKOUT','JOB']).optional(),packageCode:z.enum(['FREE','STANDARD','PREMIUM']).optional()}).strict(),body));}
+  @Patch('sessions/:id') patch(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.flow.patch(user,id,parseDto(z.object({revision:z.number().int().nonnegative(),draft:creationDraftSchema.optional(),assessmentLanguage:assessmentLanguageSchema.optional(),phase:z.enum(['PACKAGE','CHECKOUT','JOB']).optional(),packageCode:z.enum(JOB_PACKAGE_CODES).optional()}).strict(),body));}
   @Post('sessions/:id/publish') publish(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown,@Headers('idempotency-key') key?:string){return this.flow.publish(user,id,parseDto(z.object({revision:z.number().int().nonnegative()}).strict(),body).revision,key);}
   @Post('sessions/:id/publish-template') publishTemplate(@CurrentUser() user:AuthUser,@Param('id') id:string){
     return this.flow.publishTemplate(user,id);

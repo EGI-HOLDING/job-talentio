@@ -34,7 +34,26 @@ export function CandidateWorkspace({jobId,jobTitle,companyId,applicationId,onCha
   const query={companyId,...(jobId?{jobId}:{}),q,phase,...(stage?{stage}:{}),sort,page,limit};
   const queryKey=JSON.stringify(query);
   const load=useCallback(async(signal?:AbortSignal)=>api<Result>('/recruitment/candidates?'+new URLSearchParams(Object.entries(JSON.parse(queryKey)).map(([key,value])=>[key,String(value)])),{signal,cacheMode:'no-store'}),[queryKey]);
-  useEffect(()=>{const sequence=++read.current,controller=new AbortController();setLoading(true);setError('');const timer=setTimeout(()=>{void load(controller.signal).then(result=>{if(sequence===read.current){setData(result);setHasUpdates(false);if(result.page!==page)setPage(result.page);}}).catch(e=>{if(!controller.signal.aborted&&sequence===read.current)setError(e.message);}).finally(()=>{if(sequence===read.current)setLoading(false);});},180);return()=>{clearTimeout(timer);controller.abort();};},[load,revision,page]);
+  useEffect(() => {
+    const sequence = ++read.current;
+    const controller = new AbortController();
+    const current = () => !controller.signal.aborted && sequence === read.current;
+    setLoading(true);
+    setError('');
+    const timer = setTimeout(() => {
+      void load(controller.signal).then(result => {
+        if (!current()) return;
+        setData(result);
+        setHasUpdates(false);
+        if (result.page !== page) setPage(result.page);
+      }).catch(reason => {
+        if (current()) setError(reason.message);
+      }).finally(() => {
+        if (current()) setLoading(false);
+      });
+    }, 180);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [load, revision, page]);
   useEffect(()=>{setSelected(new Set());setExcluded(new Set());setAll(false);},[queryKey]);
   useEffect(()=>{const update=()=>setHasUpdates(true);window.addEventListener('candidate-import-updated',update);return()=>window.removeEventListener('candidate-import-updated',update);},[]);
   const pendingIds = loading ? '' : data.items.filter(cvPending).map(row => row.id).join(',');

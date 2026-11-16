@@ -1,9 +1,13 @@
+import type { PackageCode } from '@/lib/jobCommerce';
+
 export type JobBenefitSummary = {
   packagesEnabled: boolean;
-  code: 'FREE' | 'STANDARD' | 'PREMIUM';
+  code: PackageCode;
   selected: boolean;
   startsAt: string | null;
   expiresAt: string | null;
+  featuredUntil?: string | null;
+  companyPageLinkedIn?: boolean;
   boostEnabled: boolean;
   boostRemainingSeconds: number;
   boostEffectiveSeconds: number;

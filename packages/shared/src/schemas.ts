@@ -347,7 +347,7 @@ export const jobStatusSchema = z.object({
   expectedUpdatedAt: z.string().datetime().optional(),
 });
 
-export const linkedinConnectSchema = z.object({ returnTo:z.string().max(2000).optional() }).strict();
+export const linkedinConnectSchema = z.object({ returnTo:z.string().max(2000).optional(), companyId: z.string().min(1).max(100).optional() }).strict();
 export const linkedinPreferencesSchema = z.object({ autoShareEnabled:z.boolean() }).strict();
 export const linkedinPreviewSchema = z.object({ locale:z.enum(['id','en','ru','uz']).optional() }).strict();
 export const linkedinApprovalSchema = z.object({ previewId:z.string().min(1).max(100) }).strict();

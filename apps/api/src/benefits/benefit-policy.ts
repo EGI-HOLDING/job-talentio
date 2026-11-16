@@ -53,6 +53,8 @@ export type BenefitPolicy = {
   conversions: boolean;
   reports: boolean;
   prioritySupport: boolean;
+  featuredByPeriod?: boolean;
+  companyPageLinkedIn?: boolean;
 };
 /** Old policy JSON remains in history; retired candidate quotas are never
  * returned as an effective capability or copied into a new grant. */
@@ -66,6 +68,8 @@ export function packageSettings(value: unknown): BenefitPolicy {
     conversions: settings.conversions,
     reports: settings.reports,
     prioritySupport: settings.prioritySupport,
+    ...(settings.featuredByPeriod ? { featuredByPeriod: true } : {}),
+    ...(settings.companyPageLinkedIn ? { companyPageLinkedIn: true } : {}),
   };
 }
 export const PACKAGE_ORDER: JobPackageCode[] = ['FREE', 'STANDARD', 'PREMIUM'];
@@ -79,6 +83,16 @@ export const INITIAL_POLICIES: Record<JobPackageCode, BenefitPolicy> = {
     conversions: false,
     reports: false,
     prioritySupport: false,
+  },
+  LITE: {
+    durationDays: 30,
+    boostDays: 1,
+    featuredDays: 3,
+    visibility: 1,
+    conversions: false,
+    reports: false,
+    prioritySupport: false,
+    featuredByPeriod: true,
   },
   STANDARD: {
     durationDays: 30,

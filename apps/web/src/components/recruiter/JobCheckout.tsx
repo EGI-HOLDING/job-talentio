@@ -9,9 +9,11 @@ import { commerceReturn, JobOrder, PackageCatalog, money, packageHref } from '@/
 import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
 import s from './JobCommerce.module.css';
 import { CreationCheckoutReturn } from './CreationCheckoutReturn';
+import { PackageBenefitReceipt } from './PackageTierCards';
 
 export function JobCheckout() {
   const {orderId} = useParams<{orderId: string}>(), params = useSearchParams(), router = useRouter(), {t, locale} = useI18n();
+  const returnedOrderId = params.get('order_id');
   const currentOrder = useRef(orderId); currentOrder.current = orderId;
   const [order, setOrder] = useState<JobOrder|null>(null), [catalog, setCatalog] = useState<PackageCatalog|null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -35,8 +37,17 @@ export function JobCheckout() {
     timer = setTimeout(() => void poll(), 5000);
     return () => {clearTimeout(timer); abort.abort();};
   }, [order?.id, order?.status, orderId]);
+  useEffect(() => {
+    if (returnedOrderId !== orderId || order?.id !== orderId || order.creationSessionId ||
+      order.status !== 'PENDING' || !order.provider?.startsWith('midtrans-')) return;
+    const abort = new AbortController();
+    api<JobOrder>('/job-commerce/orders/' + orderId + '/reconcile', {method: 'POST', signal: abort.signal})
+      .then(value => { if (!abort.signal.aborted) setOrder(value); })
+      .catch(() => { /* The status check remains available after a temporary provider error. */ });
+    return () => abort.abort();
+  }, [returnedOrderId, orderId, order?.id, order?.status, order?.creationSessionId, order?.provider]);
   if (!order || order.id !== orderId || !catalog) return <div className={s.page}>{error ? <div className={s.error} role="alert">{error}<br/><button className={s.text} onClick={() => setRetry(n => n + 1)}>{t('workspace.retry')}</button></div> : <WorkspaceLoading/>}</div>;
-  if(order.creationSessionId)return <CreationCheckoutReturn order={order}/>;
+  if(order.creationSessionId)return <CreationCheckoutReturn order={order} sandbox={catalog.sandbox}/>;
   if(!order.jobId)return <div className={s.page}><p role="alert">{t('ew.loadFailed')}</p></div>;
   const returnTo = commerceReturn(params.get('returnTo'), order.jobId);
   async function pay() {
@@ -61,19 +72,37 @@ export function JobCheckout() {
     try {const value = await api<JobOrder>('/job-commerce/orders/' + order.id + '/cancel', {method: 'POST'}); if (currentOrder.current === requestedOrder) setOrder(value);}
     catch (e) {if (currentOrder.current === requestedOrder) setError(e instanceof Error ? e.message : String(e));} finally {if (currentOrder.current === requestedOrder) setBusy(false);}
   }
+  async function check() {
+    if(busy || !order) return;
+    const requestedOrder = orderId;
+    setBusy(true);
+    setError('');
+    try {
+      const status = await api<JobOrder>('/job-commerce/orders/' + orderId + '/reconcile', {method:'POST'});
+      if(currentOrder.current === requestedOrder) setOrder(status);
+    } catch (reason) {
+      if(currentOrder.current === requestedOrder) setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if(currentOrder.current === requestedOrder) setBusy(false);
+    }
+  }
   if (order.status === 'PAID') return <div className={s.page}><section className={s.success} aria-live="polite"><span className={s.successIcon}>✓</span><span className={s.eyebrow}>{t('commerce.' + order.code)}</span><h1>{t('commerce.success')}</h1><p>{t(order.intent === 'UPGRADE' ? 'commerce.upgradeSuccess' : 'commerce.successHint')}</p><p><strong>{order.jobTitle}</strong><br/>{order.companyName}</p>{order.provider === 'local-test' && <p className={s.notice}>{t('commerce.testMode')} | {t('commerce.testHint')}</p>}<button className={s.primary} onClick={() => router.replace(returnTo)}>{t('commerce.continue')}</button></section></div>;
   return <div className={s.page}><Link className={s.text} href={returnTo}><DirectionalIcon direction="left" size={17} /> {t('commerce.back')}</Link><div className={s.checkout}>
     <section><header className={s.headline}><span className={s.eyebrow}>Talentio | {t('commerce.checkout')}</span><h1>{t('commerce.checkout')}</h1><p>{t('commerce.checkoutHint')}</p></header>
+      {catalog.sandbox && <span className={s.status}>Sandbox</span>}
       {error && <div className={s.error} role="alert">{error}</div>}
       <div className={s.panel}><h2>{t('commerce.' + (order.status === 'PENDING' ? catalog.testMode ? 'testMode' : 'PENDING' : order.status))}</h2>
         <p>{t('commerce.' + (order.status === 'REVIEW' ? 'reviewHint' : order.status !== 'PENDING' ? 'orderExpired' : catalog.testMode ? 'testHint' : catalog.paymentAvailable ? 'checkoutHint' : 'paymentUnavailable'))}</p>
-        {order.status === 'PENDING' ? <><button className={s.primary} disabled={busy || (!catalog.testMode && !catalog.paymentAvailable)} onClick={() => void pay()}>{t(busy ? 'saving' : catalog.testMode ? 'commerce.testContinue' : 'commerce.pay')}</button><p className={s.muted}>{t('commerce.noRecurring')}</p><button className={s.text} disabled={busy} onClick={() => void cancel()}>{t('commerce.cancelOrder')}</button></>
+        {order.status === 'PENDING' ? <><button className={s.primary} disabled={busy || (!catalog.testMode && !catalog.paymentAvailable)} onClick={() => void pay()}>{t(busy ? 'saving' : catalog.testMode ? 'commerce.testContinue' : 'commerce.pay')}</button>
+          {order.provider?.startsWith('midtrans-') && <button className={s.secondary} disabled={busy} type="button" onClick={() => void check()}>{locale === 'id' ? 'Periksa status pembayaran' : 'Check payment status'}</button>}
+          <p className={s.muted}>{t('commerce.noRecurring')}</p><button className={s.text} disabled={busy} onClick={() => void cancel()}>{t('commerce.cancelOrder')}</button></>
           : order.status !== 'REVIEW' && <Link className={s.primary} href={packageHref(order.jobId, returnTo)}>{t('commerce.choose')}</Link>}
       </div>
     </section>
     <aside className={s.panel + ' ' + s.receipt}><h2>{t('commerce.summary')}</h2><span className={s.status}>{t('commerce.' + order.code)}</span><h3 style={{fontSize: '1.1rem', marginBottom: 6}}>{order.jobTitle}</h3><p style={{marginTop: 0}}>{order.companyName}</p>
       <dl><div><dt>{t('commerce.pricing')}</dt><dd>{t('commerce.' + order.code)}</dd></div><div><dt>{t('commerce.' + (order.intent === 'UPGRADE' ? 'upgrade' : order.intent === 'RENEW' ? 'renew' : 'perJob'))}</dt><dd>{money(order.amount, locale, order.currency)}</dd></div><div className={s.total}><dt>{t('commerce.total')}</dt><dd>{money(order.amount, locale, order.currency)}</dd></div></dl>
       <p>{t('commerce.' + (order.intent === 'UPGRADE' ? 'upgradeHint' : 'subtitle'))}</p>
+      {catalog.version === 2 && order.policySnapshot && <PackageBenefitReceipt settings={order.policySnapshot} locale={locale}/>}
       <p className={s.muted} style={{fontSize: '.7rem', overflowWrap: 'anywhere'}}>#{order.id}</p>
     </aside>
   </div></div>;

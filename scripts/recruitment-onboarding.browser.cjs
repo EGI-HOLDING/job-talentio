@@ -5,7 +5,15 @@ const origin=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';if(!/^http
 const out=path.resolve(process.env.ONBOARDING_OUTPUT_DIR||'output/recruitment-onboarding');fs.mkdirSync(out,{recursive:true});
 async function main(scenario){
  const assessment=scenario.startsWith('assessment-'),dashboard=scenario==='assessment-dashboard'||scenario.startsWith('assessment-template');
- const template=scenario.startsWith('assessment-template'),standard=scenario==='assessment-template-standard';
+ const template=scenario.startsWith('assessment-template');
+ const lite=scenario==='assessment-template-lite';
+ const templateCode=lite?'LITE':scenario==='assessment-template-standard'?'STANDARD':'FREE';
+ const templateAmount=lite?49000:templateCode==='STANDARD'?149000:0;
+ const catalogV2=lite||process.env.ONBOARDING_CATALOG_V2==='true';
+ const tiers=catalogV2?[['LITE',49000,1,3],['STANDARD',149000,3,14],['PREMIUM',299000,7,30]]:
+   [['FREE',0,0,0],...(templateAmount?[['STANDARD',149000,3,7]]:[])];
+ const packages=tiers.map(([code,amount,boostDays,featuredDays])=>({code,amount,currency:'IDR',version:catalogV2?2:1,
+   settings:{durationDays:30,boostDays,featuredDays,conversions:false,reports:false,prioritySupport:false},linkedin:false,instagram:'NONE'}));
  const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{})}),context=await browser.newContext({viewport:{width:1536,height:960},reducedMotion:'reduce'});
  const report={scenario,errors:[],events:[],publish:0,metadata:0,complete:0,uploadStarted:0,uploadCompleted:0,publishKeys:[],importKeys:[],aiRequests:[]};
  const company={id:'onboarding-co',name:'Studio Onboarding',slug:'studio-onboarding',description:'Perusahaan pengujian onboarding.',city:{name:'Kota Jakarta',slug:'jakarta',province:{country:{id:'ID'}}}},membership={companyId:'onboarding-co',role:'OWNER',company};
@@ -19,7 +27,7 @@ async function main(scenario){
  if(dashboard){completed=true;auth.user.recruiterOnboarding={status:'COMPLETE',step:3};}
  if(template){
    Object.assign(resumeSession,{phase:'CHECKOUT',templateId:'synthetic-template',order:null});
-   resumeSession.draft._selectedPackageCode=standard?'STANDARD':'FREE';
+   resumeSession.draft._selectedPackageCode=templateCode;
  }
  const job={id:'onboarding-job',companyId:company.id,company,title:'API Engineer',description:'Membangun API.',status:'PUBLISHED',createdAt:new Date().toISOString(),_count:{applications:0,views:0}};
  let releaseUploads;const gate=new Promise(resolve=>releaseUploads=resolve);
@@ -54,9 +62,7 @@ async function main(scenario){
    else body={target:input.target,promptVersion:'synthetic',suggestion:input.target==='description'?{description:'Mengembangkan API TypeScript yang andal serta mendukung kebutuhan produk digital perusahaan.'}:input.target==='skills'?{items:[{name:'TypeScript',isRequired:true,minLevel:'INTERMEDIATE'}]}:{items:input.target==='responsibilities'?['Mengembangkan layanan API.','Menulis pengujian integrasi.']:['Menjaga tingkat keberhasilan layanan.','Menyelesaikan pengujian sebelum rilis.']}};
  }
  else if(p==='/companies/mine')body=[membership];else if(p==='/companies/'+company.id)body=company;
- else if(p==='/job-commerce/catalog')body={version:1,hrFlowV2:true,assessmentLanguageSelection:assessment,enabled:true,testMode:true,paymentAvailable:false,
-   packages:[{code:'FREE',amount:0,currency:'IDR',version:1,settings:{durationDays:30,boostDays:0,featuredDays:0,conversions:false,reports:false,prioritySupport:false},linkedin:false,instagram:'NONE'},
-     ...(standard?[{code:'STANDARD',amount:149000,currency:'IDR',version:1,settings:{durationDays:30,boostDays:3,featuredDays:7,conversions:false,reports:false,prioritySupport:false},linkedin:false,instagram:'NONE'}]:[])]};
+ else if(p==='/job-commerce/catalog')body={version:catalogV2?2:1,hrFlowV2:true,assessmentLanguageSelection:assessment,enabled:true,testMode:true,paymentAvailable:false,packages};
  else if(p==='/hr-flow/sessions/'+resumeSession.id&&method==='PATCH'){
    const input=req.postDataJSON();
    if(assessment&&input.assessmentLanguage){
@@ -75,7 +81,8 @@ async function main(scenario){
    assert.equal(report.events[0],'language');
    report.events.push('order');
    const code=req.postDataJSON().code;
-   resumeSession={...resumeSession,revision:resumeSession.revision+1,phase:standard?'CHECKOUT':'JOB',order:{id:'template-order',code,status:standard?'PENDING':'PAID',amount:standard?149000:0,currency:'IDR'}};
+   assert.equal(code,templateCode);
+   resumeSession={...resumeSession,revision:resumeSession.revision+1,phase:templateAmount?'CHECKOUT':'JOB',order:{id:'template-order',code,status:templateAmount?'PENDING':'PAID',amount:templateAmount,currency:'IDR'}};
    body=resumeSession.order;
  }
  else if(template&&p==='/job-commerce/orders/template-order/complete-test'){
@@ -140,7 +147,8 @@ async function main(scenario){
    const language=dialog.getByRole('combobox');
    const formAction=page.locator('button[form="hr-job-form"]');
    if(template){
-     await page.getByRole('button',{name:standard?/continue to payment/i:/confirm free package/i}).click();
+     if(lite)await page.getByText(/IDR\s?49,000/u).first().waitFor({timeout:20000});
+     await page.getByRole('button',{name:templateAmount?/continue to payment/i:/confirm free package/i}).click();
    }else if(scenario==='assessment-onboarding'){
      await scene('taka-intro').waitFor({timeout:40000});
      await back.click();
@@ -424,7 +432,7 @@ async function main(scenario){
  }finally{releaseUploads();fs.writeFileSync(path.join(out,'report-'+scenario+'.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}
 }
 async function run(){
- for(const scenario of (process.env.ONBOARDING_SCENARIO?[process.env.ONBOARDING_SCENARIO]:['validation','navigation','skip-empty','skip-selected','upload','ai-drafting','assessment-onboarding','assessment-resume','assessment-dashboard','assessment-template-free','assessment-template-standard'])){
+ for(const scenario of (process.env.ONBOARDING_SCENARIO?[process.env.ONBOARDING_SCENARIO]:['validation','navigation','skip-empty','skip-selected','upload','ai-drafting','assessment-onboarding','assessment-resume','assessment-dashboard','assessment-template-free','assessment-template-standard','assessment-template-lite'])){
    await main(scenario);
    console.log('HR onboarding passed: '+scenario);
  }

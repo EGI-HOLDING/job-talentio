@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./job-packages": {
+      "types": "./dist/job-packages.d.ts",
+      "default": "./dist/job-packages.js"
     }
   },
   "scripts": {

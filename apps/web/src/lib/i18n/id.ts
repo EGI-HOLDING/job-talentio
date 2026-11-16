@@ -96,6 +96,7 @@ export const ID_TRANSLATIONS: Partial<Record<DictKey, string>> = {
 "hr.applyFilters": "Terapkan filter",
 "hr.hireTime": "Median waktu perekrutan",
 "hr.package.FREE": "Gratis",
+"hr.package.LITE": "Lite",
 "hr.package.STANDARD": "Standard",
 "hr.package.PREMIUM": "Premium",
 "hr.expires": "Berakhir",

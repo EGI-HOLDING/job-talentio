@@ -884,10 +884,12 @@ async function main() {
       description: 'An upgrade cannot reduce previously granted policy benefits.',
       workMode: 'REMOTE',
     }))!;
+    const previousStandard = await db.packagePolicy.aggregate({ where: { code: 'STANDARD' }, _max: { version: true } });
+    const historicalVersion = (previousStandard._max.version ?? 0) + 1;
     await db.packagePolicy.create({
       data: {
         code: 'STANDARD',
-        version: 2,
+        version: historicalVersion,
         settings: {
           ...INITIAL_POLICIES.STANDARD,
           visibility: 1.6,
@@ -906,7 +908,7 @@ async function main() {
     await jobs.changeStatus(hr, policyDraft.id, 'PUBLISHED');
     // Policies can later be reduced for new grants, without rewriting old snapshots.
     await db.packagePolicy.create({
-      data: { code: 'STANDARD', version: 3, settings: INITIAL_POLICIES.STANDARD },
+      data: { code: 'STANDARD', version: historicalVersion + 1, settings: INITIAL_POLICIES.STANDARD },
     });
     await benefits.grant(
       admin,

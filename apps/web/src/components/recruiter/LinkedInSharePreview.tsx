@@ -8,6 +8,7 @@ import { packageHref } from '@/lib/jobCommerce';
 import { linkedInActionError, activeLinkedInPost, type LinkedInConnection, type LinkedInPreview } from '@/lib/linkedin';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { LinkedInPostStatus, useLinkedInPosts } from './LinkedInPostStatus';
+import { CompanyLinkedInShare } from './CompanyLinkedInShare';
 import s from './LinkedInSharePreview.module.css';
 
 const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL || 'https://jobtalent.io').replace(/\/$/,'');
@@ -17,7 +18,12 @@ export function LinkedInSharePreview({jobId,title,companyName,location,employmen
   const {t,locale}=useI18n(),enumLabel=useEnumLabel(),confirm=useConfirm();
   const [connection,setConnection]=useState<LinkedInConnection|null>(null),[loading,setLoading]=useState(true),[connectionRetry,setConnectionRetry]=useState(0);
   const [packageState,setPackageState]=useState<'loading'|'premium'|'free'|'failed'>(jobId?'loading':'free');
-  useEffect(()=>{if(!jobId){setPackageState('free');return;}const abort=new AbortController();setPackageState('loading');api<{code:string;selected:boolean;expiresAt:string|null}>('/benefits/jobs/'+jobId,{signal:abort.signal}).then(value=>{if(!abort.signal.aborted)setPackageState(value.selected&&value.code==='PREMIUM'&&(!value.expiresAt||new Date(value.expiresAt)>new Date())?'premium':'free');}).catch(()=>{if(!abort.signal.aborted)setPackageState('failed');});return()=>abort.abort();},[jobId,connectionRetry]);
+  const [companyPage,setCompanyPage]=useState<{jobId:string;companyId:string}|null>(null);
+  useEffect(()=>{if(!jobId){setPackageState('free');return;}const abort=new AbortController();setPackageState('loading');api<{code:string;selected:boolean;expiresAt:string|null;companyId?:string;companyPageLinkedIn?:boolean}>('/benefits/jobs/'+jobId,{signal:abort.signal}).then(value=>{if(!abort.signal.aborted){
+    const premium=value.selected&&value.code==='PREMIUM'&&(!value.expiresAt||new Date(value.expiresAt)>new Date());
+    setPackageState(premium?'premium':'free');
+    setCompanyPage(premium&&value.companyPageLinkedIn&&value.companyId?{jobId,companyId:value.companyId}:null);
+  }}).catch(()=>{if(!abort.signal.aborted)setPackageState('failed');});return()=>abort.abort();},[jobId,connectionRetry]);
   const [preview,setPreview]=useState<LinkedInPreview|null>(null),[checked,setChecked]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[retryTarget,setRetryTarget]=useState<string|null>(null);
   const draft=useRef(draftKey);draft.current=draftKey;
   const mounted=useRef(true);
@@ -71,6 +77,13 @@ export function LinkedInSharePreview({jobId,title,companyName,location,employmen
   try{jobUrl=jobId?new URL(localeUrl(locale,'/jobs/'+encodeURIComponent(jobId)),SITE_URL).toString():null;}catch{/* unavailable until configuration is corrected */}
   const publicCompanyName=isAnonymous?t('rec.anonymousChip'):companyName,displayTitle=title.trim()||t('li.jobTitlePlaceholder');
   const caption=preview?.caption || [t('li.captionHiring')+' '+displayTitle,publicCompanyName?t('li.captionCompany')+' '+publicCompanyName:'',location?t('li.captionLocation')+' '+location:'',employmentType?t('li.captionType')+' '+enumLabel('employmentType',employmentType):'',t('li.captionApply')+' '+(jobUrl || t('li.linkAfterSave')),'#Hiring #Jobs'].filter(Boolean).join('\n');
+  if (companyPage && companyPage.jobId === jobId) {
+    if (published && !isAnonymous) return <CompanyLinkedInShare jobId={companyPage.jobId} companyId={companyPage.companyId}/>;
+    return <section className={s.panel}>
+      <h3>{locale === 'id' ? 'Posting ke halaman perusahaan LinkedIn' : 'Post to the company LinkedIn page'}</h3>
+      <p>{locale === 'id' ? 'Posting tersedia untuk lowongan publik yang sedang tayang.' : 'Sharing is available for public jobs that are currently live.'}</p>
+    </section>;
+  }
   if(packageState!=='premium')return <section className={s.panel}><div className={s.panelHeading}><span className={s.brandMark} aria-hidden="true">in</span><div className={s.headingText}><h3>{t('commerce.linkedin')}</h3><p>{t('commerce.PREMIUM')}</p></div></div><p>{t('commerce.linkedinHint')}</p>{packageState==='failed'?<button type="button" className={s.secondaryButton} onClick={()=>setConnectionRetry(n=>n+1)}>{t('workspace.retry')}</button>:packageState==='loading'?<p role="status">{t('loading')}</p>:<button type="button" className={s.secondaryButton} disabled={busy} onClick={async()=>{setBusy(true);try{const id=jobId||await onPrepare?.();if(id){const returnTo=window.location.pathname.endsWith('/onboarding/recruiter')?'/onboarding/recruiter':undefined;window.location.assign(localeUrl(locale,packageHref(id,returnTo)));}}catch(reason){setError(linkedInActionError(reason,t));}finally{setBusy(false);}}}>{t('commerce.upgrade')}</button>}{error&&<p role="alert">{error}</p>}</section>;
   return <section className={s.panel} aria-labelledby="linkedin-share-title" aria-busy={busy||loading}>
     <div className={s.panelHeading}><span className={s.brandMark} aria-hidden="true">in</span><div className={s.headingText}><h3 id="linkedin-share-title">{t('li.shareTitle')}</h3><p>{connection?.displayName || t('li.personalProfile')}</p></div><span className={s.connectionStatus}>{loading?t('li.loadingConnection'):connection?t('li.connection.'+connection.status):t('li.loadFailed')}</span></div>

@@ -6,19 +6,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JobPackageCode, Prisma } from '@prisma/client';
+import { jobPackageRank } from '@job-talentio/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/auth.decorators';
 import {
   BenefitPolicy,
   DAY_MS,
   INITIAL_POLICIES,
-  PACKAGE_ORDER,
   HR_PUBLICATION_LOCK,
   initializePublicationPeriods,
   packageSettings,
 } from './benefit-policy';
 import { OperationsService } from './operations.service';
-import type { PurchaseIntent } from './package-catalog';
+import { packageCatalog, type PurchaseIntent } from './package-catalog';
+import { activeCompanyFeatures } from './company-featured';
 
 type Tx = Prisma.TransactionClient;
 @Injectable()
@@ -65,8 +66,9 @@ export class BenefitsService {
     await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`);
   }
   async policy(code: JobPackageCode, db: Tx = this.db) {
+    const catalogVersion = code === 'FREE' ? 1 : code === 'LITE' ? 2 : packageCatalog().version;
     const policy = await db.packagePolicy.findFirst({
-      where: { code },
+      where: { code, catalogVersion },
       orderBy: { version: 'desc' },
     });
     if (!policy) throw new ConflictException('Package policy has not been installed');
@@ -91,7 +93,7 @@ export class BenefitsService {
     const policy = benefit.policySnapshot as unknown as BenefitPolicy;
     const featuredDelta = Math.max(0, policy.featuredDays * 86400 - benefit.featuredGrantedSeconds);
     const boostDelta = Math.max(0, policy.boostDays * 86400 + benefit.boostAllowanceOffset - benefit.boostGrantedSeconds);
-    if (featuredDelta) {
+    if (featuredDelta && !policy.featuredByPeriod) {
       const current = await db.companyPromotion.findUnique({
         where: { companyId: benefit.companyId },
       });
@@ -104,10 +106,23 @@ export class BenefitsService {
         update: { endsAt, grantedSeconds: { increment: featuredDelta } },
       });
     }
-    await db.jobPublicationPeriod.upsert({where: {jobId_cycle: {jobId: benefit.jobId, cycle: benefit.publicationCycle}},
+    const periodKey = {jobId: benefit.jobId, cycle: benefit.publicationCycle};
+    let featuredWindow: { featuredStartsAt?: Date; featuredEndsAt?: Date } = {};
+    if (policy.featuredByPeriod && policy.featuredDays > 0) {
+      const previous = await db.jobPublicationPeriod.findUnique({where: {jobId_cycle: periodKey}});
+      if (!previous?.featuredEndsAt || previous.code !== benefit.code) {
+        const start = previous ? new Date() : benefit.startsAt;
+        featuredWindow = {
+          featuredStartsAt: start,
+          featuredEndsAt: new Date(Math.min(benefit.expiresAt.getTime(),
+            Math.max(previous?.featuredEndsAt?.getTime() ?? 0, start.getTime() + policy.featuredDays * DAY_MS))),
+        };
+      }
+    }
+    await db.jobPublicationPeriod.upsert({where: {jobId_cycle: periodKey},
       create: {jobId: benefit.jobId, companyId: benefit.companyId, cycle: benefit.publicationCycle, code: benefit.code,
-        startsAt: benefit.startsAt, expiresAt: benefit.expiresAt, policySnapshot: benefit.policySnapshot as Prisma.InputJsonValue},
-      update: {code: benefit.code, policySnapshot: benefit.policySnapshot as Prisma.InputJsonValue},
+        startsAt: benefit.startsAt, expiresAt: benefit.expiresAt, policySnapshot: benefit.policySnapshot as Prisma.InputJsonValue, ...featuredWindow},
+      update: {code: benefit.code, policySnapshot: benefit.policySnapshot as Prisma.InputJsonValue, ...featuredWindow},
     });
     return db.jobBenefit.update({
       where: { id: benefit.id },
@@ -140,6 +155,7 @@ export class BenefitsService {
     await this.assertEnabled();
     if (actor.role !== 'SUPER_ADMIN' || actor.isBanned)
       throw new ForbiddenException('Super Admin required');
+    if (!packageCatalog().offers.includes(code)) throw new BadRequestException('Package is not offered');
     const job = await this.db.jobPost.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
     const result = await this.operations.transaction(
@@ -151,7 +167,7 @@ export class BenefitsService {
         await this.member(actor, job.companyId, db);
         const currentJob = await db.jobPost.findUniqueOrThrow({ where: { id: jobId } });
         let benefit = await this.ensure(jobId, db);
-        if (PACKAGE_ORDER.indexOf(code) <= PACKAGE_ORDER.indexOf(benefit.code))
+        if (jobPackageRank(code) <= jobPackageRank(benefit.code))
           throw new ConflictException('Only a package upgrade is allowed');
         if (benefit.expiresAt && benefit.expiresAt <= new Date())
           throw new ConflictException('Posting has expired');
@@ -210,23 +226,26 @@ export class BenefitsService {
     await this.assertEnabled();
     await this.member(actor, companyId);
     const now = new Date();
-    const [promotion, premium] = await Promise.all([
-      this.db.companyPromotion.findUnique({ where: { companyId } }),
-      this.db.jobBenefit.count({
+    const [featuredUntil, prioritySupport] = await Promise.all([
+      packageCatalog().version === 2
+        ? this.db.$queryRaw<Array<{ endsAt: Date | null }>>`SELECT MAX("endsAt") AS "endsAt" FROM (${activeCompanyFeatures(now, companyId)}) features`
+          .then(rows => rows[0]?.endsAt ?? null)
+        : this.db.companyPromotion.findUnique({ where: { companyId } }).then(promotion => promotion?.endsAt ?? null),
+      this.hasPrioritySupport(companyId, now),
+    ]);
+    return { companyId, featuredUntil, prioritySupport };
+  }
+
+  async hasPrioritySupport(companyId: string, now = new Date(), db: Tx = this.db) {
+    return (await db.jobBenefit.count({
         where: {
           companyId,
-          code: 'PREMIUM',
+          policySnapshot: { path: ['prioritySupport'], equals: true },
           startsAt: { lte: now },
           expiresAt: { gt: now },
           job: { status: { in: ['PUBLISHED', 'PAUSED'] } },
         },
-      }),
-    ]);
-    return {
-      companyId,
-      featuredUntil: promotion?.endsAt ?? null,
-      prioritySupport: premium > 0,
-    };
+    })) > 0;
   }
   async job(actor: AuthUser, jobId: string) {
     // Reading an owned draft must remain possible while packages are disabled.
@@ -244,6 +263,9 @@ export class BenefitsService {
         ? (benefit.policySnapshot as unknown as BenefitPolicy)
         : INITIAL_POLICIES.FREE,
     };
+    const period = benefit?.startsAt && reportPolicy.settings.featuredByPeriod
+      ? await this.db.jobPublicationPeriod.findUnique({ where: { jobId_cycle: {jobId, cycle: benefit.publicationCycle} } })
+      : null;
     const reserved =
       benefit?.boosts.reduce(
         (sum, episode) => sum + (episode.endsAt.getTime() - episode.startsAt.getTime()) / 1000,
@@ -252,10 +274,13 @@ export class BenefitsService {
     const boostRemainingSeconds = Math.max(0, (benefit?.boostGrantedSeconds ?? 0) - reserved);
     return {
       packagesEnabled,
+      companyId: job.companyId,
       code: benefit?.code ?? 'FREE',
       selected: Boolean(benefit?.selectionConfirmedAt),
       startsAt: benefit?.startsAt ?? null,
       expiresAt: benefit?.expiresAt ?? null,
+      featuredUntil: period?.featuredEndsAt ?? null,
+      companyPageLinkedIn: Boolean(benefit && packageSettings(benefit.policySnapshot).companyPageLinkedIn),
       boostEnabled: await this.enabled('hr_promotions'),
       boostRemainingSeconds,
       boostEffectiveSeconds: Math.max(
@@ -433,14 +458,6 @@ export class BenefitsService {
             benefit.featuredGrantedSeconds + featuredDeltaSeconds < 0
           )
             throw new ConflictException('Already reserved or used benefits cannot be removed');
-          const promotion = await db.companyPromotion.findUnique({
-            where: { companyId: job.companyId },
-          });
-          const end = new Date(
-            Math.max(Date.now(), promotion?.endsAt.getTime() ?? 0) + featuredDeltaSeconds * 1000,
-          );
-          if (featuredDeltaSeconds < 0 && end < new Date())
-            throw new ConflictException('Featured time has already elapsed');
           await db.jobBenefit.update({
             where: { id: benefit.id },
             data: {
@@ -448,8 +465,23 @@ export class BenefitsService {
               featuredGrantedSeconds: { increment: featuredDeltaSeconds },
             },
           });
-          if (featuredDeltaSeconds)
-            await db.companyPromotion.upsert({
+          if (featuredDeltaSeconds) {
+            const now = new Date();
+            if (packageSettings(benefit.policySnapshot).featuredByPeriod) {
+              const where = {jobId_cycle: {jobId, cycle: benefit.publicationCycle}};
+              const period = await db.jobPublicationPeriod.findUniqueOrThrow({where});
+              const base = Math.max(now.getTime(), period.featuredEndsAt?.getTime() ?? 0);
+              const end = new Date(Math.min(benefit.expiresAt.getTime(), base + featuredDeltaSeconds * 1000));
+              if (end < now) throw new ConflictException('Featured time has already elapsed');
+              await db.jobPublicationPeriod.update({where, data: {
+                featuredStartsAt: period.featuredEndsAt && period.featuredEndsAt > now ? period.featuredStartsAt : now,
+                featuredEndsAt: end,
+              }});
+            } else {
+              const promotion = await db.companyPromotion.findUnique({ where: { companyId: job.companyId } });
+              const end = new Date(Math.max(now.getTime(), promotion?.endsAt.getTime() ?? 0) + featuredDeltaSeconds * 1000);
+              if (end < now) throw new ConflictException('Featured time has already elapsed');
+              await db.companyPromotion.upsert({
               where: { companyId: job.companyId },
               create: {
                 companyId: job.companyId,
@@ -457,7 +489,9 @@ export class BenefitsService {
                 grantedSeconds: featuredDeltaSeconds,
               },
               update: { endsAt: end, grantedSeconds: { increment: featuredDeltaSeconds } },
-            });
+              });
+            }
+          }
           await db.jobPackageGrant.create({
             data: {
               benefitId: benefit.id,

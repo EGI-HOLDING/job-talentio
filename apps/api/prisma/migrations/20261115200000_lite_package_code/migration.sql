@@ -1,0 +1,1 @@
+ALTER TYPE "JobPackageCode" ADD VALUE 'LITE' AFTER 'FREE';
