@@ -230,23 +230,23 @@ function SiteNavContent() {
   const employeeTab = searchParams.get('tab');
   const recruiterTab = searchParams.get('tab') || 'jobs';
   const recruiterActive = [(pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab)) || pathname.startsWith('/dashboard/recruiter/jobs/') || pathname.startsWith('/jobs/') || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
-  const employerLandingLinks = isEmployerContext && (!isRecruiter || pathname === '/employers');
-  const employerLandingHref = isEmployee ? EMPLOYER_LANDING_PREVIEW : '/employers';
+  const publicEmployerPage = isEmployerContext && (!isRecruiter || pathname === '/employers');
   const browseLinks = isOnboarding || inApplication
     ? [['/jobs', 'home.findJobs']]
     : seekerPreview
     ? [[SEEKER_JOBS_PREVIEW, 'home.findJobs']]
-    : employerLandingLinks
-    ? [[employerLandingHref + '#how-it-works', 'employers.how'], [employerLandingHref + '#hiring-insights', 'employers.insights']]
+    : publicEmployerPage
+    ? []
     : isRecruiter
     ? [['/dashboard/recruiter?tab=jobs', 'jobs'], ['/messages?role=RECRUITER', 'messages'], ['/dashboard/recruiter?tab=analytics', 'rec.tabAnalytics']]
     : isEmployee
     ? [['/jobs', 'home.findJobs'], ['/dashboard/employee?tab=applications', 'applications'], ['/dashboard/employee?tab=saved', 'savedJobs'], ['/messages', 'messages']]
     : [['/jobs', 'home.findJobs']];
-  const activeBrowseLinks = isOnboarding || inApplication || employerLandingLinks ? []
+  const activeBrowseLinks = isOnboarding || inApplication || publicEmployerPage ? []
     : seekerPreview ? [isJobs]
     : isRecruiter ? recruiterActive
     : [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'];
+  const showMobileMenu = isLanding && !isOnboarding && (browseLinks.length > 0 || !session);
   const dash =
     session?.user.role === 'EMPLOYEE'
       ? '/jobs?mode=for-you'
@@ -265,7 +265,7 @@ function SiteNavContent() {
         </Link>
         {candidateReview && <span className={styles.recruitmentLabel}>{locale === 'id' ? 'Rekrutmen' : 'Recruitment'}</span>}
         {hrFlow && <span className={styles.hrCompany}><WorkspaceIcon kind="building"/><span>{hrCompany || activeCompany?.company.name || t('employers.badge')}</span></span>}
-        {isLanding && !hrFlow && !candidateReview && (
+        {isLanding && !hrFlow && !candidateReview && browseLinks.length > 0 && (
           <div className={styles.browse}>
             {browseLinks.map(([href, key], index) => <Link key={href} href={href} aria-current={activeBrowseLinks[index] ? 'page' : undefined}>{t(key)}</Link>)}
           </div>
@@ -437,9 +437,9 @@ function SiteNavContent() {
               </button></>}
             </div>
           )}
-          {isLanding && !isOnboarding && <button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label={t('landing.menu')} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen((value) => !value)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'm6 6 12 12M6 18 18 6' : 'M3 5h18M3 12h18M3 19h18'} /></svg></button>}
+          {showMobileMenu && <button ref={menuButtonRef} className={styles.menuButton} type="button" aria-label={t('landing.menu')} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" onClick={() => setMenuOpen((value) => !value)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d={menuOpen ? 'm6 6 12 12M6 18 18 6' : 'M3 5h18M3 12h18M3 19h18'} /></svg></button>}
         </div>
-        {isLanding && menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} onClick={() => setMenuOpen(false)}>{browseLinks.map(([href, key], index) => <Link href={href} key={href} aria-current={activeBrowseLinks[index] ? 'page' : undefined}>{t(key)}</Link>)}{!session && <><AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink><AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined}>{t(isEmployerContext ? 'postAJob' : 'home.createProfile')}</AuthLink></>}</div>}
+        {showMobileMenu && menuOpen && <div id="landing-mobile-menu" className={styles.mobileMenu} onClick={() => setMenuOpen(false)}>{browseLinks.map(([href, key], index) => <Link href={href} key={href} aria-current={activeBrowseLinks[index] ? 'page' : undefined}>{t(key)}</Link>)}{!session && <><AuthLink href="/login" accountRole={accountRole}>{t(isEmployerContext ? 'employers.login' : 'login')}</AuthLink><AuthLink href="/register" accountRole={accountRole} next={isEmployerContext ? '/dashboard/recruiter?tab=jobs&focus=create' : undefined}>{t(isEmployerContext ? 'postAJob' : 'home.createProfile')}</AuthLink></>}</div>}
       </nav>
     </div>
   );
