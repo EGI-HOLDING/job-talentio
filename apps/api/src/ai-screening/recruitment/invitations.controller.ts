@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser, type AuthUser } from '../../common/auth.decorators';
 import { parseDto } from '../../common/utils';
 import { InvitationsService } from './invitations.service';
@@ -12,7 +12,7 @@ export class InvitationsController {
  @Get('candidates/:id/invitations') @UseGuards(JwtAuthGuard,RolesGuard) @Roles('RECRUITER','SUPER_ADMIN')
  list(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.invitations.list(user,id);}
  @Get('invitations/:id/report') @UseGuards(JwtAuthGuard,RolesGuard) @Roles('RECRUITER','SUPER_ADMIN')
- report(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.invitations.report(user,id);}
+ report(@CurrentUser() user:AuthUser,@Param('id') id:string,@Query('candidateId') candidateId?:string){return this.invitations.report(user,id,candidateId);}
  @Post('invitations/:id/retry-delivery') @UseGuards(JwtAuthGuard,RolesGuard) @Roles('RECRUITER','SUPER_ADMIN')
  retryDelivery(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.invitations.retryDelivery(user,id,parseDto(z.object({acknowledgePossibleDuplicate:z.boolean().default(false)}).strict(),body??{}).acknowledgePossibleDuplicate);}
  @Post('invitations/:id/retry-evaluation') @UseGuards(JwtAuthGuard,RolesGuard) @Roles('RECRUITER','SUPER_ADMIN')

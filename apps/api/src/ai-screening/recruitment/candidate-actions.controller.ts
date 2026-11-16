@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser, type AuthUser } from '../../common/auth.decorators';
 import { parseDto } from '../../common/utils';
 import { CandidateActions } from './candidate-actions.service';
@@ -10,6 +10,8 @@ export class CandidateActionsController {
  @Get('message-batches/:id') batch(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.actions.batch(user,id);}
  @Post('message-batches/:id/retry') retryBatch(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.actions.retryBatch(user,id,parseDto(deliveryRetrySchema,body??{}).acknowledgePossibleDuplicate);}
  @Get('candidates/:id/messages') messages(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.actions.messages(user,id);}
+ @Get('candidates/:id/contact-channels') @Header('Cache-Control', 'private, no-store')
+ contactChannels(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.actions.contactChannels(user,id);}
  @Post('messages/:id/retry') retry(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.actions.retry(user,id,parseDto(deliveryRetrySchema,body??{}).acknowledgePossibleDuplicate);}
  @Get('candidates/:id/interviews') interviews(@CurrentUser() user:AuthUser,@Param('id') id:string){return this.actions.interviews(user,id);}
  @Post('candidates/:id/interviews') schedule(@CurrentUser() user:AuthUser,@Param('id') id:string,@Body() body:unknown){return this.actions.schedule(user,id,parseDto(candidateInterviewSchema,body));}

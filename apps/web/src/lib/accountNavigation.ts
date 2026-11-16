@@ -1,6 +1,8 @@
 import { localeFromPathname, stripLocale, withLocale } from './locale';
 
 export const EMPLOYER_JOBS = '/dashboard/recruiter?tab=jobs';
+export const CANDIDATE_REVIEW_ROOT = '/dashboard/recruiter/candidates';
+export const isCandidateReviewPath = (path: string) => path.startsWith(CANDIDATE_REVIEW_ROOT + '/');
 
 export function employerJobHref(id: string, section = 'applicants', companyId?: string | null): string {
   const params = new URLSearchParams();
@@ -72,7 +74,7 @@ export function accountReturnHref(role: string | null | undefined, value?: strin
   const path = stripLocale(url.pathname);
   const shared = /^\/(jobs\/[^/]+|messages|settings)\/?$/.test(path);
   const allowed = isEmployerRole(role)
-    ? shared || /^\/(companies\/[^/]+|news(?:\/[^/]+)?|dashboard\/recruiter(?:\/(?:orders|support|jobs\/[^/]+(?:\/package)?))?|talent|candidates\/[^/]+|checkout\/[^/]+|pricing)\/?$/.test(path)
+    ? shared || isCandidateReviewPath(path) || /^\/(companies\/[^/]+|news(?:\/[^/]+)?|dashboard\/recruiter(?:\/(?:orders|support|jobs\/[^/]+(?:\/package)?))?|talent|candidates\/[^/]+|checkout\/[^/]+|pricing)\/?$/.test(path)
     : shared || path === '/jobs' || (role === 'EMPLOYEE' && path === '/dashboard/employee');
   return allowed ? accountHref(role, path + url.search + url.hash) : null;
 }

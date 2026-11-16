@@ -4,10 +4,12 @@ import { useHrCopy } from '@/lib/i18n/hr-flow';
 import { CandidateWorkspace } from './CandidateWorkspace';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { useRouter } from '@/lib/navigation';
-import { employerJobHref } from '@/lib/accountNavigation';
+import { employerJobHref, employerWorkspaceHref } from '@/lib/accountNavigation';
+import { candidateListHref } from './candidate-review-route';
 import { useI18n } from '@/lib/i18n';
 import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
 import { SearchField, WorkspaceEmpty, WorkspaceLoading, Pagination } from '@/components/employee/WorkspacePrimitives';
@@ -29,7 +31,8 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
   const router = useRouter();
   const confirm = useConfirm();
   const [query, setQuery] = useState('');
-  const [pool,setPool]=useState(false);
+  const pool = useSearchParams().get('pool') === '1';
+  const setPool = (visible: boolean) => router.push(visible ? candidateListHref(companyId) : employerWorkspaceHref('jobs', companyId));
   const [status, setStatus] = useState('ALL');
   const [sort, setSort] = useState('newest');
   const [packageFilter, setPackageFilter] = useState('ALL');
@@ -150,7 +153,7 @@ export function RecruiterJobs({ companyId, company, jobs:actualJobs, loading, me
     }
   }
   function closeEditor() { setEditing(null);if(hrFlowV2Enabled){const url=new URL(window.location.href);url.searchParams.delete('creationSession');window.history.replaceState(null,'',url);} onCloseCreate(); }
-  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}><DirectionalIcon direction="left" size={17} /> Kembali ke lowongan</button><h1>{uiCopy("Kumpulan CV perusahaan")}</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
+  if(pool)return <><button className={s.textButton} onClick={()=>setPool(false)}><DirectionalIcon direction="left" size={17} /> {t("rw.backJobs")}</button><h1>{uiCopy("Kumpulan CV perusahaan")}</h1><p>Upload CV terlebih dahulu, lalu pilih lowongan untuk menilai kecocokannya.</p><CandidateWorkspace key={companyId} companyId={companyId} onChanged={()=>void onReload(true)}/></>;
   if (editing) return <RecruiterJobEditor key={editing === 'new' ? 'new-' + companyId : editing.id} companyId={companyId} company={company} job={editing === 'new' ? null : editing} initialStep={editing === 'new' ? 0 : editing._initialStep || 0} meta={meta} onClose={closeEditor} onPublished={(id)=>router.push(employerJobHref(id,'applicants',companyId))} onSaved={async (message) => { await onReload(); onFlash(message); }} />;
   if (opening) return <WorkspaceLoading />;
   return <>

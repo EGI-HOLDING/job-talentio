@@ -1,8 +1,10 @@
+import type { AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentTextLanguage, foreignPresentationText } from './assessment-language';
 import type { PromptPreset } from './prompts/compose';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import { inputTrust } from './prompts/shared/input-trust';
 import { alignedCriterion, attachRoleTopics, roleInterviewCandidates, ROLE_RUBRIC_VERSION, type RoleCriterion, type RoleRubric } from './role-rubric';
-import { CONVERSATION_OPENING } from './prompts/shared/conversation-opening';
+import { CONVERSATION_OPENING, ENGLISH_CONVERSATION_OPENING } from './prompts/shared/conversation-opening';
 import { hash, normalizedText, redactScreeningContacts } from './screening.policy';
 import { validQuestion, type CandidatePayload, type JsonSchema, type PackagePayload } from './screening.schemas';
 import { TIMED_CONVERSATION } from './conversation.policy';
@@ -34,6 +36,9 @@ export function collectAlignedAgenda(value: unknown) {
     return {
         topics: value.topics.filter(row => row && typeof row === 'object' && !Array.isArray(row)),
         merges: 'merges' in value && Array.isArray(value.merges) ? value.merges.slice(0, 100) : [],
+        ...('displayLabels' in value && Array.isArray(value.displayLabels) ? {
+            displayLabels: value.displayLabels.filter(row => row && typeof row.criterionId === 'string' && typeof row.name === 'string'),
+        } : {}),
     };
 }
 export const LIVE_AGENDA_SCHEMA = object({
@@ -41,8 +46,8 @@ export const LIVE_AGENDA_SCHEMA = object({
 });
 const agendaRef = (index: number) => 'K' + (index + 1);
 
-export function liveAgendaRequest(rubric: RoleRubric, version?: string) {
-    if (rubric.version === ROLE_RUBRIC_VERSION) return alignedAgendaRequest(rubric, version);
+export function liveAgendaRequest(rubric: RoleRubric, version?: string, language?: AssessmentLanguage) {
+    if (rubric.version === ROLE_RUBRIC_VERSION) return alignedAgendaRequest(rubric, version, language);
     const data = {
         position: redactScreeningContacts(rubric.title),
         criteria: roleInterviewCandidates(rubric).map(({ name, requirementRef }, index) => ({
@@ -56,13 +61,13 @@ export function liveAgendaRequest(rubric: RoleRubric, version?: string) {
             'Susun agenda wawancara kerja maksimal 15 menit. Pilih hingga empat kompetensi inti yang berbeda. Utamakan tugas inti dan skill wajib yang menentukan pekerjaan ini. Jadikan tiap topik satu kesempatan membuktikan tindakan atau keputusan pribadi yang relevan.',
             'Kelompokkan kriteria hanya jika bukti atas tindakan, hasil kerja, dan tanggung jawab yang sama cukup untuk menilai keduanya. Parafrasa tugas yang sama masuk satu topik. Tahap, keputusan, atau tanggung jawab yang berbeda tetap terpisah walaupun terkait proyek, alat, atau istilah yang sama. Pilih satu ID yang paling mewakili pekerjaan sebagai criterionId. Simpan ID lain di equivalentIds.',
             'Urutkan dari yang paling penting. Isi hingga empat topik jika tersedia. Salin ID persis dari data. Sebut setiap ID maksimal sekali. Biarkan kriteria berbeda yang tidak terpilih di luar hasil. Jangan menambah kompetensi atau syarat baru.',
-            'Tulis satu pertanyaan terbuka berupa skenario pekerjaan untuk tiap topik, maksimal 30 kata. Pakai bahasa Indonesia yang jelas dan lugas. Sebut tugas atau keputusan spesifik dalam kalimat pertanyaan. Anggap kandidat belum punya pengalaman terkait. Jangan memberi jawaban, menyisipkan syarat rekaan, menyalin paragraf, atau merujuk “tugas berikut”.',
+            `Tulis satu pertanyaan terbuka berupa skenario pekerjaan untuk tiap topik, maksimal 30 kata. Pakai ${language === 'en' ? 'English' : 'bahasa Indonesia'} yang jelas dan lugas. Sebut tugas atau keputusan spesifik dalam kalimat pertanyaan. Anggap kandidat belum punya pengalaman terkait. Jangan memberi jawaban, menyisipkan syarat rekaan, menyalin paragraf, atau merujuk “tugas berikut”.`,
         ].join('\n\n'),
     };
     return { data, preset };
 }
 
-function alignedAgendaRequest(rubric: RoleRubric, version?: string) {
+function alignedAgendaRequest(rubric: RoleRubric, version?: string, language?: AssessmentLanguage) {
     const data = { position: redactScreeningContacts(rubric.title),
         ...(version !== PRIOR_ALIGNED_AGENDA_VERSION && rubric.description ? { description: redactScreeningContacts(rubric.description) } : {}),
         criteria: roleInterviewCandidates(rubric).map(row => ({ id: row.id, name: redactScreeningContacts(row.name),
@@ -78,22 +83,26 @@ function alignedAgendaRequest(rubric: RoleRubric, version?: string) {
         name: 'tara_aligned_role_rubric', version: TARA_ALIGNED_AGENDA_VERSION, model: 'gpt-6-luna', reasoning: 'low',
         schema: object({ merges: { type: 'array', maxItems: 100, items: relation },
             topics: { type: 'array', maxItems: Math.max(CORE_TARGET, data.criteria.length),
-                items: object({ criterionId: ref, question: string, why: string, minimumEvidence: string }) } }),
-        maxOutput: 4000,
+                items: object({ criterionId: ref, question: string, why: string, minimumEvidence: string }) },
+            ...(language ? { displayLabels: { type: 'array', maxItems: data.criteria.length,
+                items: object({ criterionId: string, name: string }) } } : {}) }),
+        maxOutput: language ? Math.min(12_000, 4000 + 50 * data.criteria.length) : 4000,
         instructions: [inputTrust,
             'Bangun satu rubrik lowongan yang dipakai untuk menilai CV dan wawancara semua kandidat pada revisi ini. Gunakan hanya tugas dan skill wajib yang diberikan.',
             'Periksa seluruh criteria, lalu gabungkan parafrasa jika satu bukti cukup untuk membuktikan tindakan, hasil kerja, dan tanggung jawab yang sama. Bandingkan tujuan, hasil yang diserahkan, dan tindakan orang yang mengerjakan. Perbedaan kata yang tidak mengubah hasil kerja tetap satu tugas, seperti menyusun atau menyiapkan jadwal mingguan yang sama. Persiapan, presentasi, persetujuan, dan tindak lanjut tetap tindakan terpisah. Kesamaan alat atau proyek saja tidak cukup. Pertahankan level minimum dan syarat yang berdiri sendiri.',
             'Gunakan ID persis dari criteria untuk representative, duplicates, dan criterionId. representative adalah satu ID utama. duplicates hanya berisi ID lain yang setara. Tulis uraian tindakan dan hasil hanya di sharedAction dan sharedOutput.',
-            'Setelah penggabungan, sertakan setiap keahlian wajib dan pilih tugas inti yang paling penting sampai sekitar empat topik. Jika kebutuhan wajib melebihi empat, sertakan semuanya. Pertanyaan situasional menyebut tindakan, hasil kerja atau keahlian yang diuji secara spesifik. Tiap pertanyaan meminta satu keputusan atau satu tindakan utama. Simpan alasan, hasil dan cara menguji hasil sebagai opsi pendalaman, jangan gabungkan beberapa permintaan dalam satu pertanyaan. Gunakan maksimal 30 kata dalam bahasa Indonesia gaya gua–lo. Jangan memberi jawaban. Contoh CV disiapkan terpisah. Gunakan deskripsi sebagai konteks untuk memprioritaskan tugas yang dikonfirmasi dalam criteria.',
+            `Setelah penggabungan, sertakan setiap keahlian wajib dan pilih tugas inti yang paling penting sampai sekitar empat topik. Jika kebutuhan wajib melebihi empat, sertakan semuanya. Pertanyaan situasional menyebut tindakan, hasil kerja atau keahlian yang diuji secara spesifik. Tiap pertanyaan meminta satu keputusan atau satu tindakan utama. Simpan alasan, hasil dan cara menguji hasil sebagai opsi pendalaman, jangan gabungkan beberapa permintaan dalam satu pertanyaan. Gunakan maksimal 30 kata dalam ${language === 'en' ? 'English yang jelas dan natural' : 'bahasa Indonesia gaya gua–lo'}. Jangan memberi jawaban. Contoh CV disiapkan terpisah. Gunakan deskripsi sebagai konteks untuk memprioritaskan tugas yang dikonfirmasi dalam criteria.`,
             'Pertanyaan skenario harus bisa dijawab oleh kandidat yang belum pernah melakukan tugas itu. Gambarkan situasi yang akan dihadapi pada posisi ini. Tanyakan langkah yang akan kandidat ambil. Pertanyaan tentang pengalaman aktual dibuat terpisah.',
             'why berisi alasan singkat topik penting untuk lowongan. minimumEvidence berisi tindakan atau keputusan pribadi yang perlu terdengar, tanpa menambah persyaratan. Keduanya berdasarkan sumber kriteria dan masing-masing maksimal 20 kata.',
+            ...(language ? [`Isi displayLabels dengan satu nama singkat dalam ${assessmentTextLanguage(language)} untuk tiap kriteria yang tetap ada setelah penggabungan, termasuk kriteria di luar topik wawancara. Gunakan ID kriteria yang sama. Terjemahkan aksi dan hasil kerja. Pertahankan nama diri, nama produk, dan identifier teknis. Batasi 140 karakter per nama dan jangan ubah arti persyaratan.`] : []),
         ].join('\n\n'),
     };
     return { data, preset };
 }
 
 type AlignedProposal = { merges?: Array<{ representative: string; duplicates: string[]; sharedAction: string; sharedOutput: string }>;
-    topics?: Array<{ criterionId: string; question: string; why?: string; minimumEvidence?: string }> };
+    topics?: Array<{ criterionId: string; question: string; why?: string; minimumEvidence?: string }>;
+    displayLabels?: Array<{ criterionId: string; name: string }> };
 
 const actionClasses: Array<{ kind: string; pattern: RegExp }> = [
     { kind: 'PREPARE', pattern: /^(?:(?:mempersiapkan|persiapkan|menyiapkan|siapkan|menyusun|susun|penyusunan|menulis|tulis|prepare|write|draft)\s)/iu },
@@ -113,7 +122,7 @@ function compatibleActions(sources: NonNullable<RoleCriterion['sources']>) {
     return kinds.size <= 1;
 }
 
-export function prepareAlignedRolePackage(rubric: RoleRubric, raw: unknown, version: LiveAgenda['version'] = TARA_ALIGNED_AGENDA_VERSION): PackagePayload {
+export function prepareAlignedRolePackage(rubric: RoleRubric, raw: unknown, version: LiveAgenda['version'] = TARA_ALIGNED_AGENDA_VERSION, language?: AssessmentLanguage): PackagePayload {
     const proposal = raw as AlignedProposal | null;
     const includesRequiredSkills = version === TARA_ALIGNED_AGENDA_VERSION;
     const candidates = roleInterviewCandidates(rubric);
@@ -183,6 +192,12 @@ export function prepareAlignedRolePackage(rubric: RoleRubric, raw: unknown, vers
     const criteria = rubric.criteria.filter(row => !removed.has(row.id)).map(row => imported.get(row.id) ?? row);
     const selectable = new Set(roleInterviewCandidates({ ...rubric, criteria }).map(row => row.id));
     const byMergedId = new Map(criteria.map(row => [row.id, row]));
+    const displayLabels: Record<string, string> = {};
+    if (language && Array.isArray(proposal?.displayLabels)) for (const label of proposal.displayLabels) {
+        if (!label || !byMergedId.has(label.criterionId) || displayLabels[label.criterionId]) continue;
+        const name = redactScreeningContacts(normalizedText(label.name));
+        if (name && name.length <= 140 && !foreignPresentationText(name, language)) displayLabels[label.criterionId] = name;
+    }
     const topics: LiveAgenda['topics'] = [];
     const selected = new Set<string>();
     const questions = new Set<string>();
@@ -193,14 +208,15 @@ export function prepareAlignedRolePackage(rubric: RoleRubric, raw: unknown, vers
         const criterion = byMergedId.get(id)!;
         const question = redactScreeningContacts(normalizedText(proposal?.question));
         const usable = /^[^?\r\n]{12,240}\?$/u.test(question) && validQuestion(question, TIMED_CONVERSATION) && question.split(' ').length <= 30 &&
+            (!language || !foreignPresentationText(question, language)) &&
             !/\btugas berikut\b|^gimana jadinya\?|^maksudnya (?:apa|gimana)\?/iu.test(question) && !questions.has(question.toLowerCase()) &&
             (!includesRequiredSkills || !assumesExperience.test(question) || /\b(?:bakal|akan|would)\b/iu.test(question));
-        const chosen = usable ? question : criterion.question;
+        const chosen = usable ? question : workScenario(criterion, language, displayLabels[id]);
         selected.add(id);
         questions.add(chosen.toLowerCase());
         topics.push({ criterionId: id, equivalentIds: [], question: chosen, ...(includesRequiredSkills ? {
             why: redactScreeningContacts(normalizedText(proposal?.why) || criterion.requirementRef).slice(0, 220),
-            minimumEvidence: redactScreeningContacts(normalizedText(proposal?.minimumEvidence) || 'Satu tindakan pribadi atau keputusan konkret pada tugas ini.').slice(0, 220),
+            minimumEvidence: redactScreeningContacts(normalizedText(proposal?.minimumEvidence) || (language === 'en' ? 'One concrete action or decision the candidate would take.' : 'Satu tindakan pribadi atau keputusan konkret pada tugas ini.')).slice(0, 220),
         } : {}) });
     }
     const proposedTopics = Array.isArray(proposal?.topics) ? proposal.topics.filter(topic =>
@@ -224,7 +240,7 @@ export function prepareAlignedRolePackage(rubric: RoleRubric, raw: unknown, vers
     const content = { version: ROLE_RUBRIC_VERSION, title: rubric.title, sourceRevision: rubric.revision,
         ...(includesRequiredSkills ? { agendaVersion: version } : {}),
         criteria: criteriaWithQuestions, interviewIds } as const;
-    const resolved = { ...content, revision: hash(content) };
+    const resolved = { ...content, revision: hash(content), ...(Object.keys(displayLabels).length ? { displayLabels } : {}) };
     const deferredIds = [...selectable].filter(id => !selected.has(id));
     const liveAgenda: LiveAgenda = { version, revision: includesRequiredSkills ? hash([resolved.revision, topics, deferredIds]) : resolved.revision,
         source, topics, deferredIds };
@@ -232,7 +248,14 @@ export function prepareAlignedRolePackage(rubric: RoleRubric, raw: unknown, vers
     return { context: rubric.title, criteria: interviewIds.map(id => core.get(id)!), roleRubric: resolved, liveAgenda };
 }
 
-export function prepareLiveAgenda(rubric: RoleRubric, raw: unknown): LiveAgenda {
+function workScenario(criterion: Pick<RoleCriterion, 'name' | 'question'>, language?: AssessmentLanguage, displayLabel?: string) {
+    if (language !== 'en' && !displayLabel) return criterion.question;
+    const requirement = redactScreeningContacts(displayLabel ?? criterion.name).replace(/[?\r\n]+/g, ' ').trim().slice(0, 140);
+    return language === 'en' ? `What would you do first if this job required you to handle “${requirement}”?` :
+        `Untuk tugas “${requirement}”, apa langkah pertama yang bakal lo ambil?`;
+}
+
+export function prepareLiveAgenda(rubric: RoleRubric, raw: unknown, language?: AssessmentLanguage): LiveAgenda {
     const criteria = roleInterviewCandidates(rubric);
     const byRef = new Map(criteria.map((row, index) => [agendaRef(index), row]));
     const parsed = raw as Partial<Pick<LiveAgenda, 'topics'>> | null;
@@ -246,8 +269,9 @@ export function prepareLiveAgenda(rubric: RoleRubric, raw: unknown): LiveAgenda 
         if (!criterion || selected.has(criterion.id)) continue;
         let question = redactScreeningContacts(normalizedText(row.question));
         if (!/^[^?\r\n]{12,240}\?$/u.test(question) || question.split(' ').length > 30 ||
+            language && foreignPresentationText(question, language) ||
             /\btugas berikut\b|^gimana jadinya\?|^maksudnya (?:apa|gimana)\?/iu.test(question) ||
-            questions.has(question.toLocaleLowerCase('id'))) question = criterion.question;
+            questions.has(question.toLocaleLowerCase('id'))) question = workScenario(criterion, language);
         // Only the provider judges equivalent work. The server verifies that references are unique and grounded.
         const equivalentIds = Array.isArray(row.equivalentIds) ? [...new Set(row.equivalentIds.flatMap(ref => {
             const other = byRef.get(ref);
@@ -263,7 +287,7 @@ export function prepareLiveAgenda(rubric: RoleRubric, raw: unknown): LiveAgenda 
         if (topics.length === CORE_TARGET) break;
         if (selected.has(row.id)) continue;
         selected.add(row.id);
-        topics.push({ criterionId: row.id, equivalentIds: [], question: row.question });
+        topics.push({ criterionId: row.id, equivalentIds: [], question: workScenario(row, language) });
     }
     const content = { source, topics, deferredIds: criteria.filter(row => !selected.has(row.id)).map(row => row.id) };
     return { version: TARA_LIVE_AGENDA_VERSION, revision: hash([TARA_LIVE_AGENDA_VERSION, rubric.revision, content]), ...content };
@@ -284,8 +308,17 @@ export function liveRolePackage(rubric: RoleRubric, liveAgenda: LiveAgenda): Pac
     }) };
 }
 
-export function attachLiveRoleTopics(plan: CandidatePayload, rubric: RoleRubric | undefined, agenda?: LiveAgenda): CandidatePayload {
-    if (!rubric || !agenda?.topics.length) return attachRoleTopics(plan, rubric);
+export function attachLiveRoleTopics(plan: CandidatePayload, rubric: RoleRubric | undefined, agenda?: LiveAgenda, language?: AssessmentLanguage): CandidatePayload {
+    if (!rubric || !agenda?.topics.length) {
+        const fallback = attachRoleTopics(plan, rubric);
+        if (language !== 'en' || !rubric || !fallback.roleTopics?.length) return fallback;
+        const criteria = new Map(rubric.criteria.map(criterion => [criterion.id, criterion]));
+        return { ...fallback, roleTopics: fallback.roleTopics.map(row => {
+            const criterion = criteria.get(row.criterionId);
+            return criterion ? { ...row, question: workScenario(criterion, language) } : row;
+        }) };
+    }
+    const en = language === 'en';
     const aligned = rubric.version === ROLE_RUBRIC_VERSION;
     const roleTopics = agenda.topics.map(topic => {
         const claim = plan.claims.find(row => row.criterionId === topic.criterionId);
@@ -302,11 +335,14 @@ export function attachLiveRoleTopics(plan: CandidatePayload, rubric: RoleRubric 
             const skillName = main?.text.replace(/[?\r\n]/gu, ' ').trim();
             let namedProbe: string | undefined;
             if (skillName && (!matchingSkill || cvEvidence !== 'CV_EXAMPLE')) {
-                namedProbe = cvEvidence === 'NOT_ATTESTED' ? `Lo pernah pakai ${skillName}?` :
-                    `Di CV lo nyebut ${matchingSkill ?? skillName}. Bisa ceritain satu contoh lo pakai keahlian itu?`;
+                namedProbe = en ? (cvEvidence === 'NOT_ATTESTED' ? `Have you used ${skillName} before?` :
+                    `Can you give one example of using ${matchingSkill ?? skillName}, which you mention on your CV?`)
+                    : cvEvidence === 'NOT_ATTESTED' ? `Lo pernah pakai ${skillName}?` :
+                        `Di CV lo nyebut ${matchingSkill ?? skillName}. Bisa ceritain satu contoh lo pakai keahlian itu?`;
             }
             const claimQuestion = claim?.skill && (claim.scope === 'CONTEXTUAL' ? cvQuestion(claim.question) :
-                `Di CV lo nyebut “${claim.skill}”. Bisa ceritain satu contoh waktu lo pakai keahlian itu?`);
+                en ? `Can you give one example of when you used ${claim.skill}, which you mention on your CV?` :
+                    `Di CV lo nyebut “${claim.skill}”. Bisa ceritain satu contoh waktu lo pakai keahlian itu?`);
             return { criterionId: topic.criterionId, question: namedProbe || claimQuestion || topic.question,
                 cvClaimId: main && !matchingSkill ? undefined : claim?.id, requiredSkill };
         }
@@ -329,7 +365,8 @@ export function attachLiveRoleTopics(plan: CandidatePayload, rubric: RoleRubric 
 
 function cvQuestion(text: string) {
     const question = text.trim();
-    return question.startsWith(CONVERSATION_OPENING) ? question.slice(CONVERSATION_OPENING.length).trim() : question;
+    const opening = [CONVERSATION_OPENING, ENGLISH_CONVERSATION_OPENING].find(value => question.startsWith(value));
+    return opening ? question.slice(opening.length).trim() : question;
 }
 
 export function liveInterviewTopics(plan: CandidatePayload, packet: PackagePayload, completionRubric?: RoleRubric) {

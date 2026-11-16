@@ -1,5 +1,7 @@
 export * from './constants';
 export * from './schemas';
+export * from './assessment-copy';
+export * from './candidate-cv-report';
 export * from './onboarding';
 export * from './types';
 export * from './location';

@@ -7,7 +7,7 @@ import { OperationsService } from './operations.service';
 import { PACKAGE_ORDER, BenefitPolicy } from './benefit-policy';
 import { localCheckoutEnabled, PACKAGE_CATALOG_VERSION, PACKAGE_PRICES, packageAmount, PurchaseIntent } from './package-catalog';
 import { JobPaymentProvider, VerifiedJobPayment } from './job-payment.provider';
-import { assertHrFlowEnabled, hrFlowEnabled } from '../hr-flow/hr-flow.policy';
+import { assertHrFlowEnabled, assessmentLanguageSelectionEnabled, hrFlowEnabled, requireAssessmentLanguage } from '../hr-flow/hr-flow.policy';
 import { validateTemplateDraft } from '../hr-flow/job-posting-template';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class JobCommerceService {
       linkedin: code === 'PREMIUM',
       instagram: code === 'PREMIUM' ? 'COMING_SOON' : 'NOT_INCLUDED', candidateSearch: true, cvDatabase: true,
     })));
-    return { version: PACKAGE_CATALOG_VERSION, hrFlowV2:hrFlowEnabled(),perJob: true, packages, enabled: await this.benefits.enabled(),
+    return { version: PACKAGE_CATALOG_VERSION, hrFlowV2:hrFlowEnabled(),assessmentLanguageSelection:assessmentLanguageSelectionEnabled(),perJob: true, packages, enabled: await this.benefits.enabled(),
       testMode: localCheckoutEnabled(), paymentAvailable: this.provider.available };
   }
   private async job(actor: AuthUser, id: string, db: Prisma.TransactionClient = this.db) {
@@ -89,7 +89,10 @@ export class JobCommerceService {
         return previous;
       }
       if(previous?.status==='REVIEW')throw new ConflictException('The existing payment needs reconciliation');
-      if(session.templateId)await validateTemplateDraft(db,session.draft);
+      if(session.templateId){
+        requireAssessmentLanguage(session.assessmentLanguage);
+        await validateTemplateDraft(db,session.draft);
+      }
       if(previous?.status==='PENDING'&&previous.expiresAt>new Date()&&previous.code===code)return previous;
       if(previous?.status==='PENDING'&&(previous.paymentRedirectUrl||await db.operationKey.findUnique({where:{scope_key:{scope:'job-payment-session',key:previous.id}}})))throw new ConflictException('Cancel or finish the existing checkout before choosing another package');
       if(previous?.status==='PENDING')await db.jobPurchaseOrder.update({where:{id:previous.id},data:{status:'CANCELLED'}});
@@ -259,6 +262,7 @@ export class JobCommerceService {
         const session=await db.jobCreationSession.findUniqueOrThrow({where:{id:order.creationSessionId}});
         if(session.templateId){
           if(session.orderId!==order.id||session.jobId)throw new ConflictException('This checkout is no longer active');
+          requireAssessmentLanguage(session.assessmentLanguage);
           await validateTemplateDraft(db,session.draft);
         }
       }

@@ -15,5 +15,7 @@ export function isIncompleteQuestion(text: string) {
 }
 
 export function isReadinessCheck(text: string) {
-    return /(?:^|[.!?]\s+|,\s+)(?:(?:bisa|boleh) (?:kita )?(?:mulai|lanjut)|(?:kita )?mulai (?:ya|sekarang)|(?:lo|lu|kamu|anda) (?:(?:udah|sudah) )?siap(?: (?:mulai|untuk mulai))?|(?:(?:udah|sudah) )?siap(?: (?:mulai|untuk mulai))?)[.!?\s]*$/iu.test(text.trim());
+    const line = text.trim();
+    return /(?:^|[.!?]\s+|,\s+)(?:(?:bisa|boleh) (?:kita )?(?:mulai|lanjut)|(?:kita )?mulai (?:ya|sekarang)|(?:lo|lu|kamu|anda) (?:(?:udah|sudah) )?siap(?: (?:mulai|untuk mulai))?|(?:(?:udah|sudah) )?siap(?: (?:mulai|untuk mulai))?)[.!?\s]*$/iu.test(line) ||
+        /(?:^|[.!?]\s+|,\s+)(?:(?:are you )?ready to (?:start|begin|get started|continue)|(?:can|shall) we (?:start|begin|continue))[.!?\s]*$/iu.test(line);
 }

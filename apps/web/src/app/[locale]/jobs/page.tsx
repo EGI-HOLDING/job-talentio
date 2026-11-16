@@ -263,6 +263,12 @@ function toggleCsv(csv: string, slug: string) {
   return [...set].join(',');
 }
 
+function locationFilter(value: string) {
+  return value.startsWith('country:')
+    ? { city: '', country: value.slice(8) }
+    : { city: value, country: '' };
+}
+
 function JobsInner() {
   const intentText=useEmployeeIntentText();
   const router = useRouter();
@@ -299,6 +305,13 @@ function JobsInner() {
   const [benefits, setBenefits] = useState<MetaItem[]>([]);
   const [languages, setLanguages] = useState<LangMeta[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState<Filters | null>(null);
+  const panelFilters = filterDraft ?? filters;
+  const editingMobileFilters = filterDraft !== null;
+  const closeFilters = useCallback(() => {
+    setFilterDraft(null);
+    setFiltersOpen(false);
+  }, []);
   const [retry, setRetry] = useState(0);
   const [discoveryRetry, setDiscoveryRetry] = useState(0);
   const [recommendationPage,setRecommendationPage]=useState(1);
@@ -358,7 +371,7 @@ function JobsInner() {
     Promise.all([api<MetaItem[]>('/meta/cities',options),api<MetaItem[]>('/meta/categories',options),api<MetaItem[]>('/meta/benefits',options),api<MetaItem[]>('/meta/countries',options)]).then(([c,cat,b,countryRows])=>{if(active){setCities(c);setCategories(cat);setBenefits(b);setCountries(countryRows);}}).catch(()=>{});
     return()=>{active=false;controller.abort();};
   },[locale,filtersOpen,browseCompanies]);
-  const needsLanguageLabels = Boolean(filters.languages);
+  const needsLanguageLabels = Boolean(panelFilters.languages);
   useEffect(() => {
     if (!needsLanguageLabels) return;
     const controller = new AbortController();
@@ -407,17 +420,17 @@ function JobsInner() {
     return () => { active = false; controller.abort(); };
   }, [filters, router, browseCompanies, implicitSort, retry, requestedMode, locale, session?.user.id,authReady,decidingMode,personalized]);
 
-  const selectedSkills = filters.skills.split(',').filter(Boolean);
+  const selectedSkills = panelFilters.skills.split(',').filter(Boolean);
   const selectedCities = filters.city.split(',').filter(Boolean);
-  const selectedCats = filters.category.split(',').filter(Boolean);
-  const selectedBenefits = filters.benefits.split(',').filter(Boolean);
-  const selectedLanguageTokens = parseLanguagesCsv(filters.languages);
-  const selectedLevels = filters.experienceLevel.split(',').filter(Boolean);
-  const selectedCompanies = filters.companySlug.split(',').filter(Boolean);
+  const selectedCats = panelFilters.category.split(',').filter(Boolean);
+  const selectedBenefits = panelFilters.benefits.split(',').filter(Boolean);
+  const selectedLanguageTokens = parseLanguagesCsv(panelFilters.languages);
+  const selectedLevels = panelFilters.experienceLevel.split(',').filter(Boolean);
+  const selectedCompanies = panelFilters.companySlug.split(',').filter(Boolean);
 
   const jobSkillTags: SkillTag[] = [
     ...selectedSkills.map(slug => ({slug, name: data?.facets?.skills?.find(skill => skill.slug === slug)?.name || slug})),
-    ...filters.skillName.map(name => ({name})),
+    ...panelFilters.skillName.map(name => ({name})),
   ];
 
   const catFacet = Object.fromEntries((data?.facets?.categories || []).map((c) => [c.slug, c.count]));
@@ -428,8 +441,8 @@ function JobsInner() {
 
   const titleCatalog = data?.facets?.jobTitles || [];
   const titleFacetList = titleCatalog;
-  const positionLabels = usePositionLabels(filters.positions, filters.jobTitle);
-  const positionRefs = filters.positions.split(',').filter(Boolean);
+  const positionLabels = usePositionLabels(panelFilters.positions, panelFilters.jobTitle);
+  const positionRefs = panelFilters.positions.split(',').filter(Boolean);
   const selectedPositions = positionRefs.map((ref): PositionValue => {
     const existing = positionLabels?.find(row => positionRef(row) === ref);
     return existing ?? { id: ref.slice(ref.indexOf(':') + 1), kind: ref.startsWith('GROUP:') ? 'GROUP' : 'ROLE',
@@ -457,26 +470,42 @@ function JobsInner() {
       : null);
 
   const advancedActiveCount = [
-    filters.industrySlug,
-    filters.positions || filters.jobTitle,
-    filters.skills || filters.skillName.length,
-    filters.benefits,
-    filters.languages,
-    filters.postedWithin,
-    filters.employmentType,
-    filters.skillMode !== 'OR' ? filters.skillMode : '',
+    panelFilters.industrySlug,
+    panelFilters.positions || panelFilters.jobTitle,
+    panelFilters.skills || panelFilters.skillName.length,
+    panelFilters.benefits,
+    panelFilters.languages,
+    panelFilters.postedWithin,
+    panelFilters.employmentType,
+    panelFilters.skillMode !== 'OR' ? panelFilters.skillMode : '',
   ].filter(Boolean).length;
   const activeFilterCount =
-    advancedActiveCount + [filters.q, filters.city, filters.country, filters.category, filters.companySlug, filters.experienceLevel, filters.workMode, filters.salaryMin, filters.salaryMax].filter(Boolean).length;
+    advancedActiveCount + [panelFilters.q, panelFilters.city, panelFilters.country, panelFilters.category, panelFilters.companySlug, panelFilters.experienceLevel, panelFilters.workMode, panelFilters.salaryMin, panelFilters.salaryMax].filter(Boolean).length;
   const forceAdvancedOpen = advancedActiveCount > 0;
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
-    const location = String(fd.get('location') || '');
-    const city = location.startsWith('country:') ? '' : location;
-    const country = location.startsWith('country:') ? location.slice(8) : '';
-    apply({ q: String(fd.get('q') || '').trim(), city, country });
+    apply({ q: String(fd.get('q') || '').trim(), ...locationFilter(String(fd.get('location') || '')) });
+  }
+
+  function changePanelFilters(patch: Partial<Filters>) {
+    if (editingMobileFilters) {
+      setFilterDraft(draft => draft ? { ...draft, ...patch } : draft);
+    } else {
+      apply(patch);
+    }
+  }
+
+  function showFilterResults() {
+    if (filterDraft) apply({ ...filterDraft, q: filterDraft.q.trim(), page: 1 });
+    closeFilters();
+  }
+
+  function openFilters(trigger: HTMLButtonElement, mobile: boolean) {
+    filterButtonRef.current = trigger;
+    if (mobile) setFilterDraft(filters);
+    setFiltersOpen(true);
   }
 
 
@@ -488,14 +517,15 @@ function JobsInner() {
   const saveInFlight = useRef(new Set<string>());
   const rootRef = useRef<HTMLDivElement>(null);
   const filtersRef = useRef<HTMLElement>(null);
-  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listScroll = useRef(0);
   const openedLocally = useRef(false);
   const requestedJob = searchParams.get('job');
   const selectedId = requestedJob;
   const selectedJob = data?.items.find((job) => job.id === selectedId) || discovery.rows.find((item) => item.job.id === selectedId)?.job;
-  const searchCities = cities;
+  const searchCities = cities.map(city => ({ ...city, country: city.province?.country?.name, countrySlug: city.province?.country?.slug }));
+  const sortOptions = ['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }));
   const countryForCity = (slug?: string, name?: string) => cities.find((city) => city.slug === slug || (!slug && city.name === name))?.province?.country?.name;
 
   useEffect(() => { setLocationDraft(filters.country ? `country:${filters.country}` : filters.city); }, [filters.city, filters.country]);
@@ -529,16 +559,18 @@ function JobsInner() {
     if (!filtersOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const frame = requestAnimationFrame(() => filtersRef.current?.querySelector<HTMLButtonElement>('button')?.focus());
+    const frame = requestAnimationFrame(() => filtersRef.current?.querySelector<HTMLButtonElement>('button[data-close-filters]')?.focus());
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') { event.preventDefault(); setFiltersOpen(false); }
+      if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeFilters(); }
       if (event.key !== 'Tab') return;
-      const focusable = Array.from(filtersRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, a[href]') || []).filter((element) => element.getClientRects().length > 0);
+      const focusable = Array.from(filtersRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), input:not(:disabled), select:not(:disabled), summary, a[href]') || []).filter((element) => element.getClientRects().length > 0);
       const first = focusable[0], last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
-    function onResize() { if (window.innerWidth >= 1440) setFiltersOpen(false); }
+    function onResize() {
+      if (window.innerWidth >= 1440 || editingMobileFilters !== window.matchMedia('(max-width: 767px)').matches) closeFilters();
+    }
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);
     return () => {
@@ -546,9 +578,9 @@ function JobsInner() {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
-      filterButtonRef.current?.focus();
+      filterButtonRef.current?.focus({ preventScroll: true });
     };
-  }, [filtersOpen]);
+  }, [filtersOpen, editingMobileFilters, closeFilters]);
 
   function openJob(event: React.MouseEvent<HTMLAnchorElement>, id: string) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -588,8 +620,10 @@ function JobsInner() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('mode', mode);
     params.delete('job');
+    params.delete('scope');
+    params.delete('relatedRoleId');
     openedLocally.current = false;
-    setFiltersOpen(false);
+    closeFilters();
     router.push(`/jobs?${params}`, { scroll: false });
     if (listRef.current) listRef.current.scrollTop = 0;
   }
@@ -631,61 +665,98 @@ function JobsInner() {
 
   return (
     <div ref={rootRef} className={`${s.page} ${isEmployee ? s.employeePage : ''} ${personalized ? s.personalized : ''} ${requestedJob ? `${s.mobileDetail} ${s.withPreview}` : ''}`}>
+      <h1 className="sr-only">{t('home.findJobs')}</h1>
       <header className={s.searchHeader} inert={filtersOpen ? true : undefined}>
-        <h1 className="sr-only">{t('home.findJobs')}</h1>
         <form className={s.searchForm} role="search" aria-label={t('searchJobs')} onSubmit={onSearch}>
           <label className={s.keyword}><JobsIcon /><span className="sr-only">{t('searchPlaceholder')}</span><input type="search" name="q" defaultValue={filters.q} key={filters.q} placeholder={t('searchPlaceholder')} /></label>
-          <div className={s.locationControl}><HeroLocationPicker cities={searchCities.map((city) => ({ ...city, country: city.province?.country?.name, countrySlug: city.province?.country?.slug }))} value={locationDraft} onChange={setLocationDraft} /></div>
+          <div className={s.locationControl}><HeroLocationPicker cities={searchCities} value={locationDraft} onChange={setLocationDraft} /></div>
           <button className={s.searchButton} type="submit">{t('search')}</button>
         </form>
       </header>
+      <div className={s.mobileToolbar} inert={filtersOpen ? true : undefined}>
+        <button className={s.mobileFilterButton} type="button" onClick={event => openFilters(event.currentTarget, true)} aria-haspopup="dialog" aria-controls={filtersOpen ? 'jobs-filters' : undefined} aria-expanded={filtersOpen}>
+          <JobsIcon kind="filter" /> {t('filters')}{!personalized && activeFilterCount > 0 && <span>{activeFilterCount}</span>}
+        </button>
+        {isEmployee && <Link className={s.mobileProfileLink} href="/dashboard/employee?tab=profile&section=cvs">{t('workspace.profileCv')}</Link>}
+      </div>
       {isEmployee && <nav className={s.modeBar} aria-label={t('home.findJobs')} inert={filtersOpen ? true : undefined}>
         <Link href="/jobs?mode=for-you" aria-current={personalized && !exploration ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('for-you'); }}>{t('home.forYou')}{!exploration && !salaryUnverified && !related && discovery.status === 'ready' && discovery.rows.length > 0 && <span>{recommendationMeta.total}</span>}</Link>
         <Link href="/jobs?mode=all" aria-current={!personalized && !decidingMode ? 'page' : undefined} onClick={(event) => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); chooseMode('all'); }}>{t('workspace.allJobs')}</Link>
         <Link className={s.profileShortcut} href="/dashboard/employee?tab=profile&section=cvs">{t('workspace.profileCv')}</Link>
       </nav>}
       <div className={s.workspace}>
-        {filtersOpen && <div className={s.filterBackdrop} onClick={() => setFiltersOpen(false)} aria-hidden="true" />}
-        {personalized ? <aside className={s.profileRail} aria-label={t('workspace.yourProfile')}>
+        {filtersOpen && <div className={s.filterBackdrop} onClick={closeFilters} aria-hidden="true" />}
+        {personalized && <aside className={s.profileRail} aria-label={t('workspace.yourProfile')}>
           <div className={s.profilePerson}>{session?.user.avatarUrl ? <img src={session.user.avatarUrl} alt="" /> : <span>{session?.user.fullName.charAt(0)}</span>}<strong>{session?.user.fullName}</strong><p>{profile?.desiredPosition || profile?.headline || t('workspace.addRole')}</p>{profile?.city && <small><JobsIcon kind="pin" />{profile.city.name}</small>}</div>
           {profile ? <><div className={s.completeness}><div><span>{t('workspace.profileComplete')}</span><strong>{completeness}%</strong></div><progress max={100} value={completeness} aria-label={t('workspace.profileComplete')} /><p>{t('cv.noManual')}</p></div><div className={s.profileSkills}>{profile.skills?.slice(0, 6).map((item) => <span key={item.skill.name}>{item.skill.name}</span>)}</div></> : discovery.status === 'error' ? <p>{t('workspace.profileUnavailable')}</p> : null}
           <Link href="/dashboard/employee?tab=profile&section=cvs" className={s.outlineButton}>{t('pc.myCvs')}</Link><p className={s.profileFootnote}>{t('cv.primaryHint')}</p>
           <div className={s.filterLegal}><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></div>
-        </aside> : <aside ref={filtersRef} id="jobs-filters" className={`${s.filters} ${filtersOpen ? s.filtersOpen : ''}`} role={filtersOpen ? 'dialog' : undefined} aria-modal={filtersOpen ? true : undefined} aria-label={t('filters')}>
-          <div className={s.filterHeading}><h2>{t('filters')}</h2><button className={s.textButton} type="button" onClick={() => apply({ ...EMPTY, sort: implicitSort })}>{t('workspace.reset')}</button><button className={s.closeFilters} type="button" onClick={() => setFiltersOpen(false)} aria-label={t('workspace.closeFilters')}><JobsIcon kind="close" /></button></div>
+        </aside>}
+        {(!personalized || editingMobileFilters) && <aside ref={filtersRef} id="jobs-filters" className={`${s.filters} ${filtersOpen ? s.filtersOpen : ''}`} role={filtersOpen ? 'dialog' : undefined} aria-modal={filtersOpen ? true : undefined} aria-label={t('filters')}>
+          <div className={s.filterHeading}>
+            <h2>{t('filters')}</h2>
+            <button className={s.textButton} type="button" onClick={() => changePanelFilters({ ...EMPTY, sort: implicitSort })}>{t('workspace.reset')}</button>
+            <button className={s.closeFilters} type="button" data-close-filters onClick={closeFilters} aria-label={t('workspace.closeFilters')}><JobsIcon kind="close" /></button>
+          </div>
           <div className={s.filterScroll}>
-            <details className={s.filterSection} open><summary>{t('category')}<JobsIcon kind="chevron" /></summary>
-              <ExpandableList items={[...categories].sort((a, b) => Number(selectedCats.includes(b.slug)) - Number(selectedCats.includes(a.slug)) || (catFacet[b.slug] || 0) - (catFacet[a.slug] || 0))} initialCount={5} step={20} getKey={(item) => item.slug} renderItem={(item) => <label className={s.filterCheck}><input type="checkbox" checked={selectedCats.includes(item.slug)} onChange={() => apply({ category: toggleCsv(filters.category, item.slug) })} /><span>{item.name}</span>{catFacet[item.slug] != null && <small>{catFacet[item.slug]}</small>}</label>} />
+            {filterDraft && <form className={s.mobileFilterFields} onSubmit={event => { event.preventDefault(); showFilterResults(); }}>
+              {personalized && <p className={s.filterScope}>{t('workspace.allJobs')}</p>}
+              <label className={s.keyword}>
+                <JobsIcon />
+                <span className="sr-only">{t('searchPlaceholder')}</span>
+                <input type="search" placeholder={t('home.findJobs')} value={filterDraft.q} onChange={event => changePanelFilters({ q: event.target.value })} />
+              </label>
+              <div className={s.mobileLocation}>
+                <HeroLocationPicker inline cities={searchCities} value={filterDraft.country ? 'country:' + filterDraft.country : filterDraft.city} onChange={value => changePanelFilters(locationFilter(value))} />
+              </div>
+              <div className={s.mobileListOptions}>
+                <label>
+                  <span>{t('sortBy')}</span>
+                  <select value={filterDraft.sort} onChange={event => changePanelFilters({ sort: event.target.value })}>
+                    {sortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>{t('resultsPerPage')}</span>
+                  <select value={filterDraft.limit} onChange={event => changePanelFilters({ limit: Number(event.target.value) })}>
+                    {PAGE_SIZE_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
+                  </select>
+                </label>
+              </div>
+              <button type="submit" className="sr-only" tabIndex={-1}>{t('workspace.showResults')}</button>
+            </form>}
+            <details className={s.filterSection} open={!editingMobileFilters || undefined}><summary>{t('category')}<JobsIcon kind="chevron" /></summary>
+              <ExpandableList items={[...categories].sort((a, b) => Number(selectedCats.includes(b.slug)) - Number(selectedCats.includes(a.slug)) || (catFacet[b.slug] || 0) - (catFacet[a.slug] || 0))} initialCount={5} step={20} getKey={(item) => item.slug} renderItem={(item) => <label className={s.filterCheck}><input type="checkbox" checked={selectedCats.includes(item.slug)} onChange={() => changePanelFilters({ category: toggleCsv(panelFilters.category, item.slug) })} /><span>{item.name}</span>{catFacet[item.slug] != null && <small>{catFacet[item.slug]}</small>}</label>} />
             </details>
-            <details className={s.filterSection} open><summary>{t('workMode')}<JobsIcon kind="chevron" /></summary>{['', 'ONSITE', 'HYBRID', 'REMOTE'].map((mode) => <label key={mode} className={s.filterCheck}><input type="radio" name="workMode" checked={filters.workMode === mode} onChange={() => apply({ workMode: mode })} /><span>{mode ? enumLabel('workMode', mode) : t('any')}</span></label>)}</details>
-            <details className={s.filterSection} open><summary>{t('experience')}<JobsIcon kind="chevron" /></summary>
-              <ExpandableList items={['JUNIOR', 'MIDDLE', 'SENIOR', 'INTERN', 'LEAD', 'EXECUTIVE'].sort((a, b) => Number(selectedLevels.includes(b)) - Number(selectedLevels.includes(a)))} initialCount={3} step={3} getKey={(level) => level} renderItem={(level) => <label className={s.filterCheck}><input type="checkbox" checked={selectedLevels.includes(level)} onChange={() => apply({ experienceLevel: toggleCsv(filters.experienceLevel, level) })} /><span>{enumLabel('experienceLevel', level)}</span>{expFacet[level] != null && <small>{expFacet[level]}</small>}</label>} />
+            <details className={s.filterSection} open={!editingMobileFilters || undefined}><summary>{t('workMode')}<JobsIcon kind="chevron" /></summary>{['', 'ONSITE', 'HYBRID', 'REMOTE'].map((mode) => <label key={mode} className={s.filterCheck}><input type="radio" name="workMode" checked={panelFilters.workMode === mode} onChange={() => changePanelFilters({ workMode: mode })} /><span>{mode ? enumLabel('workMode', mode) : t('any')}</span></label>)}</details>
+            <details className={s.filterSection} open={!editingMobileFilters || undefined}><summary>{t('experience')}<JobsIcon kind="chevron" /></summary>
+              <ExpandableList items={['JUNIOR', 'MIDDLE', 'SENIOR', 'INTERN', 'LEAD', 'EXECUTIVE'].sort((a, b) => Number(selectedLevels.includes(b)) - Number(selectedLevels.includes(a)))} initialCount={3} step={3} getKey={(level) => level} renderItem={(level) => <label className={s.filterCheck}><input type="checkbox" checked={selectedLevels.includes(level)} onChange={() => changePanelFilters({ experienceLevel: toggleCsv(panelFilters.experienceLevel, level) })} /><span>{enumLabel('experienceLevel', level)}</span>{expFacet[level] != null && <small>{expFacet[level]}</small>}</label>} />
             </details>
-            <details className={s.filterSection} open><summary>{t('company')}<JobsIcon kind="chevron" /></summary>
-              <details className={s.companyMenu} open={browseCompanies || undefined}><summary>{selectedCompanies.length ? t('workspace.companyCount').replace('{n}', String(selectedCompanies.length)) : t('workspace.allCompanies')}<JobsIcon kind="chevron" /></summary><label className={s.companySearch}><span className="sr-only">{t('workspace.searchCompany')}</span><input value={companyQ} onChange={(event) => setCompanyQ(event.target.value)} placeholder={t('workspace.searchCompany')} /></label><div className={s.companyOptions}>{companyFacetList.filter((item) => item.name.toLocaleLowerCase().includes(companyQ.toLocaleLowerCase())).map((item) => <label className={s.filterCheck} key={item.slug}><input type="checkbox" checked={selectedCompanies.includes(item.slug)} onChange={() => apply({ companySlug: toggleCsv(filters.companySlug, item.slug) })} /><span>{item.name}</span><small>{item.count}</small></label>)}</div></details>
+            <details className={s.filterSection} open={!editingMobileFilters || undefined}><summary>{t('company')}<JobsIcon kind="chevron" /></summary>
+              <details className={s.companyMenu} open={browseCompanies || undefined}><summary>{selectedCompanies.length ? t('workspace.companyCount').replace('{n}', String(selectedCompanies.length)) : t('workspace.allCompanies')}<JobsIcon kind="chevron" /></summary><label className={s.companySearch}><span className="sr-only">{t('workspace.searchCompany')}</span><input value={companyQ} onChange={(event) => setCompanyQ(event.target.value)} placeholder={t('workspace.searchCompany')} /></label><div className={s.companyOptions}>{companyFacetList.filter((item) => item.name.toLocaleLowerCase().includes(companyQ.toLocaleLowerCase())).map((item) => <label className={s.filterCheck} key={item.slug}><input type="checkbox" checked={selectedCompanies.includes(item.slug)} onChange={() => changePanelFilters({ companySlug: toggleCsv(panelFilters.companySlug, item.slug) })} /><span>{item.name}</span><small>{item.count}</small></label>)}</div></details>
             </details>
-            <details className={s.filterSection} open><summary>{t('workspace.salary')}<JobsIcon kind="chevron" /></summary><div className={s.salaryFields}>
-              <FormField label={t('job.salaryMin')}><NumberInput min={0} placeholder={t('workspace.min')} value={filters.salaryMin ? Number(filters.salaryMin) : null} onValueChange={(value) => apply({ salaryMin: value == null ? '' : String(value) })} aria-label={t('job.salaryMin')} /></FormField>
-              <FormField label={t('job.salaryMax')}><NumberInput min={0} placeholder={t('workspace.max')} value={filters.salaryMax ? Number(filters.salaryMax) : null} onValueChange={(value) => apply({ salaryMax: value == null ? '' : String(value) })} aria-label={t('job.salaryMax')} /></FormField>
+            <details className={s.filterSection} open={!editingMobileFilters || undefined}><summary>{t('workspace.salary')}<JobsIcon kind="chevron" /></summary><div className={s.salaryFields}>
+              <FormField label={t('job.salaryMin')}><NumberInput min={0} placeholder={t('workspace.min')} value={panelFilters.salaryMin ? Number(panelFilters.salaryMin) : null} onValueChange={(value) => changePanelFilters({ salaryMin: value == null ? '' : String(value) })} aria-label={t('job.salaryMin')} /></FormField>
+              <FormField label={t('job.salaryMax')}><NumberInput min={0} placeholder={t('workspace.max')} value={panelFilters.salaryMax ? Number(panelFilters.salaryMax) : null} onValueChange={(value) => changePanelFilters({ salaryMax: value == null ? '' : String(value) })} aria-label={t('job.salaryMax')} /></FormField>
             </div>{data && new Set(data.items.map((job) => job.currency).filter(Boolean)).size === 1 && <small className={s.currencyNote}>{data.items[0]?.currency}</small>}</details>
             <details className={s.moreFilters} open={forceAdvancedOpen || undefined}><summary><JobsIcon kind="filter" />{t('workspace.moreFilters')}{advancedActiveCount > 0 && <span>{advancedActiveCount}</span>}<JobsIcon kind="chevron" /></summary>
 
 
           <CatalogPositionPicker scope="candidate" max={10} label={locale === 'id' ? 'Posisi' : 'Position'}
-            disabled={Boolean(filters.jobTitle && positionLabels === undefined)} value={selectedPositions}
-            onChange={rows => apply({ positions: rows.map(positionRef).join(','), jobTitle: '' })} />
-          <FilterFieldset legend={`${t('skills')} (${filters.skillMode})`} className="filter-group">
+            disabled={Boolean(panelFilters.jobTitle && positionLabels === undefined)} value={selectedPositions}
+            onChange={rows => changePanelFilters({ positions: rows.map(positionRef).join(','), jobTitle: '' })} />
+          <FilterFieldset legend={`${t('skills')} (${panelFilters.skillMode})`} className="filter-group">
             <FormField label={t('matchMode')} optional>
               <select
-                value={filters.skillMode}
-                onChange={(e) => apply({ skillMode: e.target.value })}
+                value={panelFilters.skillMode}
+                onChange={(e) => changePanelFilters({ skillMode: e.target.value })}
                 style={{ marginBottom: '0.4rem' }}
               >
                 <option value="OR">{t('matchAny')}</option>
                 <option value="AND">{t('matchAll')}</option>
               </select>
             </FormField>
-            <SkillNameTags tags={jobSkillTags} onChange={tags => apply({
+            <SkillNameTags tags={jobSkillTags} onChange={tags => changePanelFilters({
               skills: tags.flatMap(tag => tag.slug ? [tag.slug] : []).join(','),
               skillName: tags.flatMap(tag => tag.slug ? [] : [tag.name]),
             })}/>
@@ -704,7 +775,7 @@ function JobsInner() {
                   <input
                     type="checkbox"
                     checked={selectedBenefits.includes(b.slug)}
-                    onChange={() => apply({ benefits: toggleCsv(filters.benefits, b.slug) })}
+                    onChange={() => changePanelFilters({ benefits: toggleCsv(panelFilters.benefits, b.slug) })}
                   />
                   {b.name}
                 </label>
@@ -715,13 +786,13 @@ function JobsInner() {
           <FilterFieldset legend={t('languages')} className="filter-group">
             <LookupCombobox kind="languages" focusSuggestions keepOpenOnPick
               excludedCodes={selectedLanguageTokens.map(item => item.code)}
-              onPick={item => apply({ languages: toggleLanguageCsv(filters.languages, item.code ?? item.slug) })} />
+              onPick={item => changePanelFilters({ languages: toggleLanguageCsv(panelFilters.languages, item.code ?? item.slug) })} />
             {selectedLanguageTokens.length > 0 && <div className={s.languageFilters}>
               {[...new Set(selectedLanguageTokens.map(item => item.code))].map(code => {
                 const name = languages.find(item => item.code === code)?.name
                   ?? data?.facets?.languages?.find(item => item.code === code)?.name ?? code;
                 return <button key={code} type="button" aria-label={t('pc.remove') + ': ' + name}
-                  onClick={() => apply({ languages: toggleLanguageCsv(filters.languages, code) })}>{name} <span aria-hidden>×</span></button>;
+                  onClick={() => changePanelFilters({ languages: toggleLanguageCsv(panelFilters.languages, code) })}>{name} <span aria-hidden>×</span></button>;
               })}
             </div>}
           </FilterFieldset>
@@ -729,8 +800,8 @@ function JobsInner() {
           <div className="filter-group">
             <FormField label={t('postedWithin')} optional>
               <select
-                value={filters.postedWithin}
-                onChange={(e) => apply({ postedWithin: e.target.value })}
+                value={panelFilters.postedWithin}
+                onChange={(e) => changePanelFilters({ postedWithin: e.target.value })}
               >
                 <option value="">{t('anyTime')}</option>
                 <option value="24h">{t('last24h')}</option>
@@ -741,14 +812,17 @@ function JobsInner() {
           </div>
 
 
-              <FilterFieldset legend={t('workspace.employment')} className="filter-group"><select aria-label={t('workspace.employment')} value={filters.employmentType} onChange={(event) => apply({ employmentType: event.target.value })}><option value="">{t('any')}</option>{['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY'].map((type) => <option key={type} value={type}>{enumLabel('employmentType', type)}</option>)}</select></FilterFieldset>
+              <FilterFieldset legend={t('workspace.employment')} className="filter-group"><select aria-label={t('workspace.employment')} value={panelFilters.employmentType} onChange={(event) => changePanelFilters({ employmentType: event.target.value })}><option value="">{t('any')}</option>{['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY'].map((type) => <option key={type} value={type}>{enumLabel('employmentType', type)}</option>)}</select></FilterFieldset>
             </details>
-            <div className={s.filterLegal}><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></div>
+            {editingMobileFilters && personalized && <button type="button" className={s.refreshInFilters} disabled={resultsLoading} onClick={() => { closeFilters(); setRecommendationPage(1); setDiscoveryRetry(value => value + 1); }}>
+              <JobsIcon kind="refresh" /> {t('workspace.refresh')}
+            </button>}
+            {!editingMobileFilters && <div className={s.filterLegal}><Link href="/terms">{t('termsOfService')}</Link><Link href="/privacy">{t('privacyPolicy')}</Link></div>}
           </div>
-          <button className={s.showResults} type="button" onClick={() => setFiltersOpen(false)}>{t('workspace.showResults')} {data ? `(${data.total})` : ''}</button>
+          <button className={s.showResults} type="button" onClick={showFilterResults}>{t('workspace.showResults')} {!editingMobileFilters && data ? `(${data.total})` : ''}</button>
         </aside>}
         <section className={s.results} aria-label={t('jobs')} inert={filtersOpen ? true : undefined}>
-          <div className={`${s.resultsToolbar} ${related ? s.relatedResultsToolbar : ''}`}>
+          <div className={`${s.resultsToolbar} ${related ? s.relatedResultsToolbar : ''} ${related || exploration || salaryUnverified ? s.secondaryResultsToolbar : ''}`}>
             {personalized ? <>
               <div className={s.recommendationHeading}>
                 {exploration ? <EmployeeExplorationNotice /> : related ? (
@@ -777,12 +851,12 @@ function JobsInner() {
                 <JobsIcon kind="refresh" />
               </button>
             </> : <>
-              <button ref={filterButtonRef} className={s.filterButton} type="button" onClick={() => setFiltersOpen(true)} aria-controls="jobs-filters" aria-expanded={filtersOpen}>
+              <button className={s.filterButton} type="button" onClick={event => openFilters(event.currentTarget, false)} aria-controls="jobs-filters" aria-expanded={filtersOpen}>
                 <JobsIcon kind="filter" />{t('filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </button>
               <strong className={s.resultsCount}>{data?.total ?? '-'} <span>{t('jobs')}</span></strong>
               <div className={s.resultControls}>
-                <WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={['relevance', 'featured', 'newest', 'salary_high', 'salary_low', 'experience', ...(isEmployee ? ['match'] : [])].map((sort) => ({ value: sort, label: sort === 'experience' ? t('experience') : t({ relevance: 'job.sortRelevance', featured: 'job.sortFeatured', newest: 'job.sortNewest', salary_high: 'job.sortSalaryHigh', salary_low: 'job.sortSalaryLow', match: 'job.sortBestMatch' }[sort] || sort) }))} />
+                <WorkspaceSelect className={s.sortSelect} value={filters.sort} label={t('sortBy')} onChange={(sort) => apply({ sort })} options={sortOptions} />
               </div>
             </>}
           </div>

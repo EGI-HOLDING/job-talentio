@@ -259,6 +259,6 @@ export class JobsController {
     @Body() body: unknown,
   ) {
     const data = parseDto(jobStatusSchema, body);
-    return this.jobs.changeStatus(user, id, data.status, undefined, data.linkedinPreviewId);
+    return this.jobs.changeStatus(user, id, data.status, undefined, data.linkedinPreviewId, data.expectedUpdatedAt);
   }
 }

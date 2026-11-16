@@ -1,3 +1,5 @@
+import { assessmentCopy, type AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentLanguageOf, assessmentTextLanguage } from './assessment-language';
 import type { PromptPreset } from './prompts/compose';
 import { inputTrust } from './prompts/shared/input-trust';
 import { neutrality } from './prompts/shared/neutrality';
@@ -32,6 +34,7 @@ type LivePlaybackContext = {
 type Grade = {
     criterionId: string;
     name: string;
+    displayName?: string;
     level: number | null;
     clarity: number | null;
     state: 'ASSESSED' | 'NOT_ASKED' | 'INSUFFICIENT_OPPORTUNITY' | 'TECHNICAL_INTERRUPTION' | 'PLAYBACK_UNVERIFIED' | 'ASSESSMENT_UNAVAILABLE';
@@ -130,7 +133,9 @@ export function clarificationRequest(text: string) {
 }
 
 function requestsClarification(text: string) {
-    return /^(?:(?:maaf|sorry)[, ]+)?(?:yang mana|tugas yang mana|maksudnya (?:apa|gimana)|bisa (?:diulang|diperjelas)|(?:gue |saya |aku )?(?:gak|nggak|tidak|belum) (?:dengar|kedengeran|paham))(?: ya)?[?.! ]*$/iu.test(text.trim());
+    const line = text.trim();
+    return /^(?:(?:maaf|sorry)[, ]+)?(?:yang mana|tugas yang mana|maksudnya (?:apa|gimana)|bisa (?:diulang|diperjelas)|(?:gue |saya |aku )?(?:gak|nggak|tidak|belum) (?:dengar|kedengeran|paham))(?: ya)?[?.! ]*$/iu.test(line) ||
+        /^(?:sorry[, ]+)?(?:(?:can|could|would) you (?:repeat|clarify|rephrase)(?: (?:that|the question))?(?: please)?|what (?:do|did) you mean|(?:i )?(?:did not|didn['’]t|could not|couldn['’]t) (?:hear|catch|understand)(?: that| the question)?)[?.! ]*$/iu.test(line);
 }
 
 const str: JsonSchema = { type: 'string' };
@@ -143,7 +148,7 @@ const rowSchema = obj({ level: nullable(points), clarity: nullable(points), basi
     reason: str, evidence: { type: 'array', maxItems: 4, items: str },
     questionRef: nullable(str), redirectRef: nullable(str), discrepancyRef: nullable(str) });
 
-export function freezeRoleAssessment(): PromptPreset {
+export function freezeRoleAssessment(language?: AssessmentLanguage): PromptPreset {
     return {
         name: 'taka_role_assessment', version: ROLE_ASSESSMENT_VERSION, model: 'gpt-6-luna', reasoning: 'low',
         maxOutput: 3200, schema: obj({}),
@@ -152,14 +157,15 @@ export function freezeRoleAssessment(): PromptPreset {
             'Untuk nilai 1–4 gunakan basis EVIDENCE, setidaknya satu ID kutipan kandidat yang relevan, dan questionRef dari pertanyaan yang memang menguji kriteria bila ada. Nilai jawaban situasional berdasarkan tindakan yang diusulkan. Jangan menuntut hasil atau metrik aktual pada jawaban hipotetis. Nilai setiap kriteria atas bukti terkait kriteria itu saja.',
             'Kejelasan 0–4 mengukur apakah tindakan pribadi dan alasan keputusan dapat dipahami. 0: tidak ada tindakan atau keputusan relevan yang dijelaskan setelah kesempatan lengkap. 1: maksud masih samar. 2: tindakan dapat dipahami tetapi alasan atau urutan penting kabur. 3: tindakan dan alasannya dapat diikuti. 4: tindakan, alasan dan batas atau konsekuensi yang relevan mudah diperiksa. Jangan menilai aksen, bahasa formal atau gaul, panjang, tempo, atau tata bahasa. Klarifikasi yang diminta kandidat tidak mengurangi nilai.',
             'Gunakan 0 hanya setelah pertanyaan yang relevan dan dapat dijawab. Jika kandidat mengatakan dengan jelas bahwa ia belum bisa menjelaskan cara mengerjakan tugas, dan tidak memberikan langkah yang relevan, isi level 0, clarity 0, basis DECLINED, questionRef dari pertanyaan yang sudah dijawab dan ID kutipan ucapan itu. “Belum pernah” diikuti penjelasan cara mengerjakannya tetap dinilai. AFTER_REDIRECTION memerlukan pertanyaan awal dan satu pengulangan terarah yang telah dijawab tanpa bukti relevan. Kembalikan null dengan basis INSUFFICIENT jika kesempatan atau bukti tidak dapat diperiksa. Hindari memberi 0 atas pertanyaan yang gagal disampaikan atau detail yang belum ditanya.',
-            'Salin ID referensi yang tersedia, jangan menulis kutipan baru. discrepancyRef hanya untuk ketidaksesuaian eksplisit antara klaim CV terkait dan jawaban aktual setelah kandidat mengklarifikasi. Gunakan satu kalimat alasan dalam bahasa Indonesia. Jangan menilai kejujuran, kepribadian, atau memberi keputusan perekrutan.',
+            `Salin ID referensi yang tersedia, jangan menulis kutipan baru. discrepancyRef hanya untuk ketidaksesuaian eksplisit antara klaim CV terkait dan jawaban aktual setelah kandidat mengklarifikasi. Gunakan satu kalimat alasan dalam ${assessmentTextLanguage(language)}. Jangan menilai kejujuran, kepribadian, atau memberi keputusan perekrutan.`,
+            ...(language ? ['Nilai tindakan dalam jawaban kandidat dari isinya, termasuk jawaban berbahasa lain. Arahan memakai bahasa wawancara sendiri bukan pertanyaan kompetensi atau kesempatan menjawab.'] : []),
         ].join('\n\n'),
     };
 }
 
 export function frozenRoleAssessment(snapshot: unknown) {
     const preset = (snapshot as { roleAssessmentPrompt?: PromptPreset } | null)?.roleAssessmentPrompt;
-    return preset?.version === ROLE_ASSESSMENT_VERSION ? preset : freezeRoleAssessment();
+    return preset?.version === ROLE_ASSESSMENT_VERSION ? preset : freezeRoleAssessment(assessmentLanguageOf(snapshot));
 }
 
 export function prepareRoleEvidence(rubric: RoleRubric, transcript: RoleTranscriptEntry[], plan: CandidatePayload) {
@@ -240,6 +246,7 @@ export function recordedRoleDecline(input: RoleInput, questions: RoleTranscriptE
 
 export function explicitRoleDecline(answer: string) {
     const text = answer.trim().replace(/^(?:maaf|sorry)[,.\s]+/iu, '').replace(/[.!?]+$/u, '');
+    if (/^i (?:can['’]t|cannot|can not|am unable to) (?:answer(?: (?:that|this|the question))?|(?:give|provide) (?:an?|any) example|explain (?:what i would do|the steps))$/iu.test(text)) return true;
     if (/\b(?:tapi|tetapi|namun|karena|sebenarnya|kecuali|kalau|jika)\b/iu.test(text)) return;
     const statement = text.match(/^(?:saya|gue|gua|aku)\s+(?:belum|tidak|gak|nggak|enggak)\s+(.+)$/iu)?.[1];
     if (!statement) return;
@@ -266,7 +273,7 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
         diagnostics?: ReadonlyMap<string, { questionRefs: string[]; reasons: string[]; labels?: string[] }>;
         includePartial?: boolean;
         version?: typeof TAKA_LIVE_COMPLETION_VERSION;
-    }) {
+    }, language?: AssessmentLanguage) {
     const grades = input.criteria.map<Grade>(criterion => {
         let row = judgements.get(criterion.id);
         const diagnostic = evidencePolicy?.diagnostics?.get(criterion.id);
@@ -292,9 +299,10 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
         }) ?? [];
         const claim = input.plan.claims.find(c => c.criterionId === criterion.id);
         const difference = row?.discrepancyRef ? input.snippets.get(row.discrepancyRef) : undefined;
-        return { criterionId: criterion.id, name: criterion.name, level, clarity, state,
-            reason: state === 'ASSESSED' ? row?.level != null ? row.reason : declined ? 'Kandidat menyatakan belum bisa menjawab setelah mendapat kesempatan.' :
-                'Waktu menjawab selesai dengan koneksi terkonfirmasi.' : state === 'INSUFFICIENT_OPPORTUNITY' && evidencePolicy && row ? row.reason : missingReason[state],
+        const displayName = input.rubric.displayLabels?.[criterion.id];
+        return { criterionId: criterion.id, name: criterion.name, ...(displayName ? { displayName } : {}), level, clarity, state,
+            reason: state === 'ASSESSED' ? row?.level != null ? row.reason : assessmentCopy(language, declined ? 'Kandidat menyatakan belum bisa menjawab setelah mendapat kesempatan.' :
+                'Waktu menjawab selesai dengan koneksi terkonfirmasi.') : state === 'INSUFFICIENT_OPPORTUNITY' && evidencePolicy && row ? row.reason : assessmentCopy(language, missingReason[state]),
             questionRefs: [...new Set([...questions.map(q => q.id), ...(row?.questionRef ? [row.questionRef] : []), ...(row?.redirectRef ? [row.redirectRef] : [])])],
             ...(diagnostic?.reasons.length && level === null ? { reviewReasons: diagnostic.reasons, reviewLabels: diagnostic.labels } : {}),
             evidence, ...(claim && difference && level !== null ? { discrepancy: { left: { source: 'CV', ref: claim.id, quote: claim.quote },
@@ -321,7 +329,8 @@ export function scoreRoleAssessment(input: RoleInput, judgements: Map<string, Ro
             explanation: scoreScreening(measured.map(row => ({ score: row.clarity })))!,
         } } : {}) };
     const result: EvaluationPayload = {
-        summary: coverage.assessed + ' dari ' + coverage.total + ' kompetensi inti dinilai berdasarkan percakapan yang tersimpan.',
+        summary: language === 'en' ? `${coverage.assessed} of ${coverage.total} core competencies were assessed using the recorded interview.` :
+            coverage.assessed + ' dari ' + coverage.total + ' kompetensi inti dinilai berdasarkan percakapan yang tersimpan.',
         roleAssessment, criteria: grades.map(row => ({ criterionId: row.criterionId, score: row.level, reason: row.reason, evidence: row.evidence })),
         claims: [], strengths: [], gaps: [], interviewQuestions: [], ...(notes ? { taraInterview: notes } : {}),
     };

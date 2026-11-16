@@ -262,7 +262,7 @@ export function BulkCommsPanel({
                       <div>
                         <strong>
                           {c.jobPost?.title || t('ui.job')}
-                          {c.toStatus ? ` · ${c.toStatus}` : ''}
+                          {c.toStatus ? ` \u00b7 ${c.toStatus}` : ''}
                         </strong>
                         <div className="muted" style={{ fontSize: '0.8rem' }}>
                           {new Date(c.createdAt).toLocaleString(locale)} | {c.createdBy?.fullName || '-'} | {' '}

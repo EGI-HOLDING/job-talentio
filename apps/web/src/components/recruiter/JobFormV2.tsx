@@ -226,15 +226,15 @@ export function JobFormV2({draft,onChange,companyId,initialCity,approvedMembers,
             const name=language.name??language.code;
             return <tr key={language.code??name}>
               <td><span className={s.tableValue}>{name}</span></td>
-              <td data-label={c("Kebutuhan")}><select aria-label={c("Kebutuhan")+' · '+name} value={language.isRequired?'REQUIRED':'OPTIONAL'}
+              <td data-label={c("Kebutuhan")}><select aria-label={c("Kebutuhan")+' \u00b7 '+name} value={language.isRequired?'REQUIRED':'OPTIONAL'}
                 onChange={e=>update('languages',languages.map((row,i)=>i===index?{...row,isRequired:e.target.value==='REQUIRED',confirmed:true}:row))}>
                 <option value="REQUIRED">{c("Wajib")}</option><option value="OPTIONAL">{c("Nilai tambah")}</option>
               </select></td>
-              <td data-label={c("Level minimum")}><select aria-label={c("Level minimum")+' · '+name} value={language.minLevel}
+              <td data-label={c("Level minimum")}><select aria-label={c("Level minimum")+' \u00b7 '+name} value={language.minLevel}
                 onChange={e=>update('languages',languages.map((row,i)=>i===index?{...row,minLevel:e.target.value,confirmed:true}:row))}>
                 {LANGUAGE_LEVELS.map(level=><option value={level} key={level}>{level==='NATIVE'?c("Penutur asli"):level}</option>)}
               </select></td>
-              <td><button className={s.icon} type="button" aria-label={c("Hapus")+' · '+name}
+              <td><button className={s.icon} type="button" aria-label={c("Hapus")+' \u00b7 '+name}
                 onClick={()=>update('languages',languages.filter((_,i)=>i!==index))}>×</button></td>
             </tr>;
           })}</tbody>

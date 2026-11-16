@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 
 const labels = {
-  placeholder: 'Search positions', loading: 'Loading positions…', empty: 'No positions found',
+  placeholder: 'Search positions', loading: 'Loading positions\u2026', empty: 'No positions found',
   failed: 'Position search failed.', retry: 'Retry', limited: 'Typo suggestions are temporarily limited.',
   group: 'Position group', role: 'Specific position', unavailable: 'Unavailable for selection', needsReview: 'Needs review',
   remove: 'Remove', more: 'Load more',

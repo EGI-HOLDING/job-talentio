@@ -49,7 +49,7 @@ for (const version of [ROLE_RUBRIC_VERSION, ROLE_ASSESSMENT_VERSION] as const) {
   assert.deepEqual(roleRubric.interviewIds, basicRubric.interviewIds);
   assert.deepEqual(cvCriteria(roleRubric), basicRubric.criteria);
   const request = cvRequest({ ...checkpoint, roleRubric }, languageJob);
-  assert.deepEqual(request.data.rubric, basicRubric.criteria);
+  assert.deepEqual(request.data.rubric, basicRubric.criteria.map(({ question: _question, ...criterion }) => criterion));
   assert.doesNotMatch(JSON.stringify(request.schema), /Indonesian|English/u);
   const previousGrades = roleRubric.criteria.map(row => ({ criterionId: row.id,
     level: row.name === 'Indonesian' || row.name === 'English' ? 0 : 3,

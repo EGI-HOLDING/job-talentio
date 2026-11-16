@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import s from './TaraApplication.module.css';
 import { useScreeningFocus } from './ApplicationPresentation';
 import { TaraPreparation, TaraThinking, type Preparation } from './TaraPreparation';
+import type { AssessmentLanguage } from '@job-talentio/shared';
 type Question = {
     id: string;
     text: string;
@@ -28,6 +29,7 @@ type State = {
     preparationStatus: string;
     preparation?: Preparation;
     conversationPolicy?: { version: string; questionSeconds: number; maxQuestions: number };
+    assessmentLanguage?: AssessmentLanguage;
     recoveryRequired?: boolean;
     requestOrder?: number;
     serverTime: string;
@@ -219,6 +221,7 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
     useEffect(() => { const clock = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(clock); }, []);
     const policy = state?.conversationPolicy ?? { version: 'legacy', questionSeconds: 60, maxQuestions: 15 };
     const casual = /^tara-conversation-v[45678]\./.test(policy.version);
+    const englishInterview = state?.assessmentLanguage === 'en';
     const remaining = current?.deadlineAt ? Math.min(policy.questionSeconds, Math.max(0, Math.ceil((Date.parse(current.deadlineAt) - now - offset.current) / 1000))) : policy.questionSeconds;
     const sessionRemaining = state?.interviewDeadlineAt ? Math.max(0, Math.ceil((Date.parse(state.interviewDeadlineAt) - now - offset.current) / 1000)) : null;
     const saveAnswer = useCallback((value: string, questionId: string) => {
@@ -333,7 +336,14 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
   {(notice || leaseNotice) && <p className={s.hint} role="status">{leaseNotice || notice}</p>}
   {!state && !error && <p role="status">Menyiapkan interview&#x2026;</p>}
   {state && <>
-   {step === 2 && <div className={s.intro}><Image data-tara src={tara} width={480} height={480} sizes="(max-width: 760px) 260px, 440px" alt="Tara menyapa dengan ramah"/><div><span className={s.pill}>Kenalan dulu, yuk</span><h2 ref={heading} tabIndex={-1}>Hai {name}, {casual ? 'gue' : 'aku'} Tara!</h2><p>{casual ? 'Gue asisten AI yang bakal nemenin lu ngobrol soal pengalaman di CV lu.' : 'Aku asisten AI yang akan nemeninmu ngobrol tentang pengalamanmu.'}</p><p>{casual ? 'Tim HR mengundang lu buat cerita soal pengalaman di CV dan posisi ini. Santai, ceritain yang lu kerjain dengan bahasa lu sendiri.' : 'Tim HR mengundangmu untuk screening awal. Santai aja, jawab singkat dengan ceritamu sendiri.'}</p><div className={s.callout}><strong>{casual ? 'Satu pertanyaan dulu. Gue temenin sampai beres!' : 'Satu pertanyaan setiap kali. Aku temani sampai selesai!'}</strong><p>Jawabanmu membantu tim HR meninjau pengalaman yang kamu ceritakan di CV untuk posisi ini.</p></div></div></div>}
+   {step === 2 && <div className={s.intro}><Image data-tara src={tara} width={480} height={480} sizes="(max-width: 760px) 260px, 440px" alt="Tara"/><div lang={englishInterview?'en':'id'}>
+    <span className={s.pill}>{englishInterview?'Meet Tara':'Kenalan dulu, yuk'}</span>
+    <h2 ref={heading} tabIndex={-1}>{englishInterview?`Hi ${name}, I’m Tara!`:`Hai ${name}, ${casual?'gue':'aku'} Tara!`}</h2>
+    <p>{englishInterview?'I’m your AI interviewer. We’ll talk about your skills and the work you’ve done.':casual?'Gue asisten AI yang bakal nemenin lu ngobrol soal pengalaman di CV lu.':'Aku asisten AI yang akan nemeninmu ngobrol tentang pengalamanmu.'}</p>
+    <p>{englishInterview?'The hiring team invited you to discuss your experience and this role. Take your time and use your own words.':casual?'Tim HR mengundang lu buat cerita soal pengalaman di CV dan posisi ini. Santai, ceritain yang lu kerjain dengan bahasa lu sendiri.':'Tim HR mengundangmu untuk screening awal. Santai aja, jawab singkat dengan ceritamu sendiri.'}</p>
+    <div className={s.callout}><strong>{englishInterview?'One question at a time.':casual?'Satu pertanyaan dulu. Gue temenin sampai beres!':'Satu pertanyaan setiap kali. Aku temani sampai selesai!'}</strong>
+    <p>{englishInterview?'Your answers help the hiring team understand your experience for this role.':'Jawabanmu membantu tim HR meninjau pengalaman yang kamu ceritakan di CV untuk posisi ini.'}</p></div>
+   </div></div>}
    {step === 3 && <><h2 ref={heading} tabIndex={-1}>{uiCopy("Biar ngobrolnya nyaman")}</h2><p className={s.subtitle}>Baca sebentar, lalu kita mulai bareng Tara.</p><div className={s.rulesLayout}><div className={s.rules}>{[['◷', `${policy.questionSeconds < 60 ? policy.questionSeconds + ' detik' : policy.questionSeconds / 60 + ' menit'} per pertanyaan`, 'Waktu mulai setelah pertanyaan tampil. Saat habis, draf jawaban terakhir yang tersimpan akan dikirim.'], ['✎', 'Jawab singkat aja', `Cukup ${casual ? '1\u20132' : '1\u20133'} kalimat yang menjawab pertanyaan. Ceritakan pengalamanmu sendiri.`], ['☏', 'Satu pertanyaan setiap kali', `Kirim jawabanmu, lalu Tara akan melanjutkan. Maksimal ${policy.maxQuestions} pertanyaan.`], ['⌂', 'Cari tempat yang nyaman', 'Siapkan koneksi stabil. Kalau terputus, buka lagi undangan ini untuk melanjutkan. Timer yang sudah berjalan tetap lanjut.']].map(([icon, title, desc]) => <div className={s.rule} key={title}><span aria-hidden="true">{icon}</span><div><h3>{title}</h3><p>{desc}</p></div></div>)}</div><Image data-tara src={tara} width={480} height={480} sizes="(max-width: 760px) 260px, 440px" alt="Tara menemani membaca aturan"/></div><p className={s.relax}>Tarik napas dulu. Siap? Kita mulai pelan-pelan, ya!</p></>}
    {step > 0 && step < 4 && <TaraPreparation invited casual={casual} preparation={preparation} rules={step === 3} onRetry={() => void retry()} onChangeCv={contactHr} busy={busy}/>}
    {step === 4 && <>
@@ -364,7 +374,7 @@ export function TaraApplication({ invitedSessionId }: { invitedSessionId: string
      </form>
     </div>}
    </>}
-   {step === 5 && <div className={s.success}><Image data-tara src="/images/tara/celebrate.png" width={300} height={220} sizes="300px" alt="Tara merayakan selesainya interview"/><h2 ref={heading} tabIndex={-1}>Interview selesai. Makasih sudah cerita!</h2><p>{casual ? 'Makasih udah cerita bareng gue. Semoga kabar baik segera mampir, ' + name + '!' : 'Makasih sudah cerita bareng Tara. Semoga segera dapat kabar baik. Semoga beruntung, ' + name + '!'}</p><div className={s.receipt}><strong>{state.job.title}</strong><p>{state.job.companyName}</p><ul><li>✓ Screening bersama Tara selesai</li></ul></div><p>Jawabanmu sudah tersimpan dan akan ditinjau tim HR. Pantau kabar selanjutnya melalui Pesan Talentio.</p><div className={s.actions}><a className={s.primary} href={url('/messages')}>Buka Pesan Talentio</a><a className={s.outline} href={url('/jobs')}>{uiCopy("Cari lowongan lain")}</a></div></div>}
+   {step === 5 && <div className={s.success}><Image data-tara src="/images/tara/celebrate.png" width={300} height={220} sizes="300px" alt="Tara"/><h2 ref={heading} tabIndex={-1} lang={englishInterview?'en':'id'}>{englishInterview?'Interview complete. Thanks for sharing!':'Interview selesai. Makasih sudah cerita!'}</h2><p lang={englishInterview?'en':'id'}>{englishInterview?`Thanks for talking with me, ${name}. Good luck!`:casual?'Makasih udah cerita bareng gue. Semoga kabar baik segera mampir, '+name+'!':'Makasih sudah cerita bareng Tara. Semoga segera dapat kabar baik. Semoga beruntung, '+name+'!'}</p><div className={s.receipt}><strong>{state.job.title}</strong><p>{state.job.companyName}</p><ul><li>✓ Screening bersama Tara selesai</li></ul></div><p>Jawabanmu sudah tersimpan dan akan ditinjau tim HR. Pantau kabar selanjutnya melalui Pesan Talentio.</p><div className={s.actions}><a className={s.primary} href={url('/messages')}>{uiCopy("Buka Pesan Talentio")}</a><a className={s.outline} href={url('/jobs')}>{uiCopy("Cari lowongan lain")}</a></div></div>}
    {step < 4 && <footer className={s.footer}><button className={s.outline} disabled={busy} onClick={() => step > 2 ? setStep(step - 1) : window.location.assign(url('/messages'))}><DirectionalIcon direction="left" size={17} /> Kembali</button><button className={s.primary} disabled={busy} onClick={() => void next()}>{busy ? 'Menyimpan\u2026' : step === 2 ? 'Lihat aturan singkat' : step === 3 ? 'Siap, yuk mulai!' : 'Lanjut'}{!busy && step !== 3 && <DirectionalIcon direction="right" size={17} />}</button></footer>}
   </>}
  </section>;

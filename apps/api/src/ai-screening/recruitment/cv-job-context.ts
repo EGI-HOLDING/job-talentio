@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { json } from '../screening.policy';
 import { queueCvProviderCleanup } from './cv-assessment-store';
 import { createRoleRubric, frozenRoleRubric, roleAssessmentEnabled, ROLE_RUBRIC_VERSION, type RoleRubric } from '../role-rubric';
+import { assessmentLanguageOf } from '../assessment-language';
 
 export const scoreJobInclude = { jobSkills: { include: { skill: { include: { aliases: { select: { alias: true } } } } } }, jobLanguages: { include: { language: true } } } satisfies Prisma.JobPostInclude;
 export function scoringJob(job: Prisma.JobPostGetPayload<{ include: typeof scoreJobInclude }>, version?: RoleRubric['version']) {
@@ -16,8 +17,12 @@ export function pendingCvRubric(snapshot: unknown) {
 }
 
 export function cvJobRequirements(snapshot: unknown) {
-  const { resolvedRoleRubric: _resolved, ...requirements } = (snapshot as { resolvedRoleRubric?: RoleRubric } | null) ?? {};
+  const { resolvedRoleRubric: _resolved, assessmentLanguage: _language, ...requirements } = (snapshot as { resolvedRoleRubric?: RoleRubric; assessmentLanguage?: unknown } | null) ?? {};
   return requirements;
+}
+export function cvJobSnapshot(requirements: ReturnType<typeof scoringJob>, job: { assessmentLanguage?: string | null }) {
+  const language = assessmentLanguageOf(job);
+  return language ? { ...requirements, assessmentLanguage: language } : requirements;
 }
 export function sameScoringJob(a: unknown, b: unknown): boolean {
   const canonical = (value: unknown): unknown => {
@@ -34,11 +39,12 @@ export async function invalidateCvScores(tx: Prisma.TransactionClient, jobId: st
   const job = await tx.jobPost.findUniqueOrThrow({where:{id:jobId},include:scoreJobInclude});
   const next = scoringJob(job);
   if (sameScoringJob(previous,next)) return 0;
-  await tx.recruitmentCandidate.updateMany({where:{jobId,scoreStatus:'UPLOADING'},data:{jobSnapshot:json(next),revision:{increment:1}}});
+  const snapshot = json(cvJobSnapshot(next, job));
+  await tx.recruitmentCandidate.updateMany({where:{jobId,scoreStatus:'UPLOADING'},data:{jobSnapshot:snapshot,revision:{increment:1}}});
   const rows=await tx.recruitmentCandidate.findMany({where:{jobId,scoreStatus:{notIn:['UPLOADING','DUPLICATE','ERASED']}},select:{id:true}});
   if(!rows.length)return 0;
   const ids = rows.map(row => row.id);
-  await tx.recruitmentCandidate.updateMany({where:{id:{in:ids}},data:{scoreStatus:'STALE',cvScore:null,cvProgress:Prisma.DbNull,jobSnapshot:json(next),revision:{increment:1},error:'Kriteria lowongan berubah. Nilai ulang CV agar skor sesuai kriteria terbaru.'}});
+  await tx.recruitmentCandidate.updateMany({where:{id:{in:ids}},data:{scoreStatus:'STALE',cvScore:null,cvProgress:Prisma.DbNull,jobSnapshot:snapshot,revision:{increment:1},error:'Kriteria lowongan berubah. Nilai ulang CV agar skor sesuai kriteria terbaru.'}});
   await tx.aiScreeningWork.updateMany({where:{kind:'CV_SCORE',subjectId:{in:ids},status:{in:['PENDING','FAILED']}},data:{status:'DONE',error:'JOB_CRITERIA_CHANGED',cvCheckpoint:Prisma.DbNull}});
   await queueCvProviderCleanup(tx, { subjectId: { in: ids } });
   await tx.candidateActivity.createMany({data:rows.map(row=>({candidateId:row.id,actorUserId,kind:'CV_CRITERIA_CHANGED'}))});

@@ -46,7 +46,7 @@ export function JobPositionGroupScope({id, confirmed, approved, disabled, onConf
   return <div className={s.groupScope}>
     <div className={s.groupScopeHeader}>
       <strong>{count === undefined
-        ? c(failed ? 'Cakupan belum tersedia' : 'Memuat cakupan…')
+        ? c(failed ? 'Cakupan belum tersedia' : 'Memuat cakupan\u2026')
         : `${count} ${c('posisi tercakup')}`}</strong>
       <button type="button" className={s.link} aria-expanded={open} disabled={disabled} onClick={()=>{
         setOpen(!open);

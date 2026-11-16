@@ -1,86 +1,251 @@
 'use client';
-import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
-import { useHrCopy } from '@/lib/i18n/hr-flow';
-import { useEffect,useRef,useState } from 'react';
-import { api } from '@/lib/api';
-import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
-import { CandidatePdfPreview } from './CandidatePdfPreview';
-import { ScreeningResult } from './ScreeningResult';
-import { active,clock,coverage,date,historyScore,number,partialCompetency,status,turns,typeName,type Evidence,type Invitation,type Report } from './screening-view';
-import s from './ScreeningPanel.module.css';
-import shared from './CandidateWorkspace.module.css';
 
-export function CandidateScreening({candidateId,email,compact=false,onChanged,candidateName,stage,scoreStatus,cvMethodologyUpgradeAvailable,interviewTopicCount,onOpenScreening}:{candidateId:string;email:string|null;compact?:boolean;onChanged:()=>void;candidateName?:string;stage?:string;scoreStatus?:string;cvMethodologyUpgradeAvailable?:boolean;interviewTopicCount?:number|null;onOpenScreening?:()=>void}){
- const uiCopy=useHrCopy();
- const [items,setItems]=useState<Invitation[]>([]),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[revision,setRevision]=useState(0),[selected,setSelected]=useState(''),[report,setReport]=useState<Report|null>(null),[reportLoading,setReportLoading]=useState(false),[reportRevision,setReportRevision]=useState(0),[view,setView]=useState<'result'|'conversation'|'report'>('result'),[page,setPage]=useState(1);
- const [open,setOpen]=useState(false),[help,setHelp]=useState(false),[mode,setMode]=useState<'TEXT'|'VOICE'>('TEXT'),[recipient,setRecipient]=useState(email??''),[busy,setBusy]=useState(false),[pdfBusy,setPdfBusy]=useState(false),[cancelId,setCancelId]=useState(''),[retryAck,setRetryAck]=useState<Record<string,boolean>>({}),[query,setQuery]=useState(''),[speaker,setSpeaker]=useState('all'),[highlight,setHighlight]=useState(''),[claimId,setClaimId]=useState('');
- const dialog=useRef<HTMLDialogElement>(null),helpDialog=useRef<HTMLDialogElement>(null),cancelDialog=useRef<HTMLDialogElement>(null),detail=useRef<HTMLDivElement>(null),root=useRef<HTMLElement>(null),requestKey=useRef(''),lock=useRef(false),reportOwner=useRef(''),read=useRef(0),identity=useRef(candidateId+':'+selected);
- identity.current=candidateId+':'+selected;
- const firstName=candidateName?.split(/\s+/)[0]||'Kandidat',initials=candidateName?.split(/\s+/).slice(0,2).map(n=>n[0]).join('').toUpperCase()||'K';
- const refresh=()=>{setRevision(n=>n+1);setReportRevision(n=>n+1);onChanged();};
- useEffect(()=>{setItems([]);setLoaded(false);setSelected('');setReport(null);setPage(1);setError('');setNotice('');setView('result');setOpen(false);setCancelId('');setQuery('');setSpeaker('all');setHighlight('');setClaimId('');requestKey.current='';},[candidateId]);
- useEffect(()=>{const controller=new AbortController();void api<Invitation[]>('/recruitment/candidates/'+candidateId+'/invitations',{cacheMode:'no-store',signal:controller.signal}).then(rows=>{if(controller.signal.aborted)return;setItems(rows);setLoaded(true);setSelected(current=>rows.some(i=>i.id===current)?current:rows.find(i=>i.session?.evaluation?.result)?.id??rows[0]?.id??'');}).catch(e=>{if(!controller.signal.aborted){setLoaded(true);setError(e.message);}});return()=>controller.abort();},[candidateId,revision]);
- useEffect(()=>{if(!items.some(i=>active(i)||['PENDING','SENDING'].includes(i.emailStatus)||i.status==='COMPLETED'&&(!i.session?.evaluation||['PENDING','RUNNING'].includes(i.session.evaluation.status))))return;const timer=setInterval(()=>{if(!document.hidden)setRevision(n=>n+1);},6000);return()=>clearInterval(timer);},[items]);
- useEffect(()=>{if(compact||!selected)return;const sequence=++read.current,controller=new AbortController();if(reportOwner.current!==candidateId+':'+selected){setReportLoading(true);setReport(null);}void api<Report>('/recruitment/invitations/'+selected+'/report',{cacheMode:'no-store',signal:controller.signal}).then(value=>{if(!controller.signal.aborted&&sequence===read.current){reportOwner.current=candidateId+':'+selected;setReport(value);}}).catch(e=>{if(!controller.signal.aborted)setError(e.message);}).finally(()=>{if(!controller.signal.aborted)setReportLoading(false);});return()=>controller.abort();},[candidateId,selected,reportRevision,compact]);
- useEffect(()=>{if(report?.pdfStatus!=='PENDING')return;const timer=setTimeout(()=>setReportRevision(n=>n+1),6000);return()=>clearTimeout(timer);},[report]);
- const current=items.find(i=>i.id===selected),last=items.find(i=>i.session?.evaluation?.result),pending=items.filter(active),closed=['HIRED','REJECTED','WITHDRAWN'].includes(stage??'');
- const inviteReason=closed?'Proses rekrutmen kandidat sudah ditutup.':cvMethodologyUpgradeAvailable?'Buka tab CV dan nilai dengan rubrik terbaru sebelum mengundang.':scoreStatus&&scoreStatus!=='READY'?'Selesaikan penilaian CV sebelum mengundang screening.':'';
- const selectedVersion=JSON.stringify(current?.session?.evaluation??null);
- const previousVersion=useRef('');
- useEffect(()=>{if(previousVersion.current&&previousVersion.current!==selectedVersion)setReportRevision(n=>n+1);previousVersion.current=selectedVersion;},[selectedVersion]);
- useEffect(()=>{if(open)dialog.current?.showModal();},[open]);useEffect(()=>{if(help)helpDialog.current?.showModal();},[help]);useEffect(()=>{if(cancelId)cancelDialog.current?.showModal();},[cancelId]);
- useEffect(()=>{if(view==='conversation'&&highlight){const node=root.current?.querySelector<HTMLElement>('[data-turn="'+CSS.escape(highlight)+'"]');const list=root.current?.querySelector<HTMLElement>('[data-transcript-list]');if(node&&list)list.scrollTo({top:node.offsetTop-list.offsetTop-30,behavior:'smooth'});detail.current?.scrollIntoView({behavior:'smooth',block:'start'});node?.focus({preventScroll:true});}if(view==='result'&&claimId)root.current?.querySelector<HTMLElement>('[data-claim="'+CSS.escape(claimId)+'"]')?.scrollIntoView({behavior:'smooth',block:'center'});},[view,highlight,claimId,reportLoading]);
- function select(id:string){setSelected(id);setView('result');setClaimId('');setHighlight('');setQuery('');setSpeaker('all');requestAnimationFrame(()=>detail.current?.scrollIntoView({behavior:'smooth',block:'start'}));}
- async function action(fn:()=>Promise<unknown>,success:string){if(lock.current)return;lock.current=true;setBusy(true);setError('');const owner=candidateId;try{await fn();if(identity.current.split(':')[0]!==owner)return;if(success)setNotice(success);refresh();}catch(e){if(identity.current.split(':')[0]===owner)setError(e instanceof Error?e.message:'Permintaan belum berhasil. Coba lagi.');}finally{lock.current=false;setBusy(false);}}
- async function send(){if(lock.current||inviteReason)return;const key=requestKey.current||crypto.randomUUID();requestKey.current=key;await action(async()=>{const row=await api<Invitation>('/recruitment/candidates/'+candidateId+'/invitations',{method:'POST',body:JSON.stringify({mode,email:recipient,requestKey:key})});setOpen(false);requestKey.current='';setNotice(items.some(i=>i.id===row.id)?'Undangan yang sama masih aktif. Tidak ada undangan ganda yang dikirim.':'Undangan sedang disiapkan melalui email dan Pesan Talentio.');},'');}
- async function freshPdf(newTab=false){if(!current||pdfBusy)return;const owner=identity.current;const win=newTab?window.open('about:blank','_blank'):null;if(win)win.opener=null;setPdfBusy(true);setError('');try{const latest=await api<Report>('/recruitment/invitations/'+current.id+'/report',{cacheMode:'no-store'});if(owner!==identity.current){win?.close();return;}if(!latest.pdfUrl)throw Error('Laporan belum tersedia. Periksa status pemrosesannya.');if(newTab){if(win)win.location.href=latest.pdfUrl;else{setReport(latest);setNotice('Browser memblokir tab baru. Gunakan tautan Buka PDF.');}}else{const a=document.createElement('a');a.href=latest.pdfUrl;a.download='Ringkasan-screening.pdf';a.rel='noreferrer';document.body.appendChild(a);a.click();a.remove();}}catch(e){win?.close();if(owner===identity.current)setError(e instanceof Error?e.message:'Laporan belum dapat dibuka.');}finally{setPdfBusy(false);}}
- const allTurns=report?turns(report):[],filtered=allTurns.filter(t=>(speaker==='all'||speaker===t.speaker)&&t.text.toLocaleLowerCase('id-ID').includes(query.toLocaleLowerCase('id-ID'))),evaluation=report?.evaluation?.result;
- const claim=evaluation?.claims?.find(c=>c.claimId===claimId),source=report?.claims?.find(c=>c.id===claimId);
- const competency=evaluation?.roleAssessment?.criteria.find(row=>row.criterionId===claimId);
- function evidence(id:string,e:Evidence){setClaimId(id);setHighlight(report?.voice||e.questionId.startsWith('answer:')?e.questionId:'answer:'+e.questionId);setQuery('');setSpeaker('all');setView('conversation');}
- function downloadTranscript(){if(!report||!current||!allTurns.length)return;const lines=[typeName(current)+' \u00b7 '+date(current.session?.startedAt??current.createdAt,true),'Kandidat: '+(email??'\u2014'),report.voice&&!report.voice.transcriptComplete?'Transkrip tidak lengkap.':'',...allTurns.flatMap(t=>['',`${t.speaker==='TARA'?'Tara':firstName} \u00b7 ${clock(t.startMs)}${t.timedOut?' \u00b7 Waktu habis':''}`,t.text])];const url=URL.createObjectURL(new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='Transkrip-screening-'+current.id.slice(0,8)+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- const badge=(i:Invitation,short=false)=><span className={s.badge} data-tone={status(i)==='Hasil parsial'||status(i)==='Penilaian gagal'||status(i)==='Skor akhir belum lengkap'?'warning':status(i)==='Hasil tersedia'?'good':undefined}>{short?(({'Hasil parsial':'Parsial','Hasil tersedia':'Tersedia','Menunggu kandidat':'Menunggu'} as Record<string,string>)[status(i)]??status(i)):status(i)}</span>;
- function summary(i:Invitation){
-  const evaluation=i.session?.evaluation,r=evaluation?.result,v=r?.voice,c=coverage(i),assessment=r?.interviewAssessment;
-  const alternative=r?.taraInterview?.topics.some(topic=>topic.alternative),role=r?.roleAssessment,score=role?role.score:evaluation?.screeningScore;
-  return <div className={s.summary}><div className={s.summaryGrid}>
-    <div><strong>{uiCopy("Hasil terakhir")}</strong><p>{typeName(i)} &#xb7; {date(i.session?.completedAt??i.createdAt)}</p>
-      {role&&score==null?<><strong>Skor akhir belum lengkap</strong>{role.partial&&<p>{partialCompetency(role)}</p>}</>:!role&&alternative?<strong>Pengalaman di luar CV</strong>:<><b className={s.score}>{number(score)} {score!=null&&<span>/ 100</span>}</b><small>{role?"Skor akhir":uiCopy("Dukungan klaim CV")}</small></>}
-    </div>
-    <div>{badge(i)}{c&&<p>{c.tested} dari {c.total} {c.unit??'klaim'} {role||assessment?'dinilai':'diuji'}</p>}{v?.durationSeconds!=null&&<p>Durasi {clock(v.durationSeconds*1000)}</p>}</div>
-    <div><strong className={s.inlineTitle}>{v?.transcriptComplete===false&&<WorkspaceIcon kind="warning"/>}{v?.transcriptComplete===false?'Transkrip tidak lengkap':v?.partial?'Perlu ditinjau HR':'Berdasarkan penjelasan kandidat'}</strong>
-      <p>{assessment?.openScopeClaims?'Sebagian detail klaim belum dibahas.':v?.partial?'Tinjau percakapan yang tersedia.':'Buka bukti dan konteks sebelum mengambil keputusan.'}</p>
-    </div>
-  </div><p className={s.method}>{role?'Skor akhir memakai rubrik lowongan yang disimpan saat undangan dibuat.':alternative?'Hasil sesi tersedia sebagai catatan pengalaman.':assessment?'Skor dihitung dari klaim yang dapat dinilai. '+assessment.version:'Skor screening terpisah dari kecocokan CV. Klaim yang belum diuji tidak diberi nilai nol.'}</p></div>;
- }
- function retryControls(i:Invitation){return <div className={s.actions}>{(i.session?.evaluation?.status==='FAILED'||i.session?.completion?.status==='REVIEW_REQUIRED'&&i.session.completion.canRetry)&&<button className={s.link} disabled={busy} onClick={()=>void action(()=>api('/recruitment/invitations/'+i.id+'/retry-evaluation',{method:'POST',body:'{}'}),'Hasil interview sedang diproses ulang.')}>{uiCopy("Coba proses hasil lagi")}</button>}{!i.closedByStage&&!closed&&['FAILED','UNCERTAIN'].includes(i.emailStatus)&&i.status!=='CANCELLED'&&Date.parse(i.expiresAt)>Date.now()&&<>{i.emailStatus==='UNCERTAIN'&&<label><input type="checkbox" checked={!!retryAck[i.id]} onChange={e=>setRetryAck(v=>({...v,[i.id]:e.target.checked}))}/> Saya memahami kemungkinan email ganda.</label>}<button className={s.link} disabled={busy||i.emailStatus==='UNCERTAIN'&&!retryAck[i.id]} onClick={()=>void action(()=>api('/recruitment/invitations/'+i.id+'/retry-delivery',{method:'POST',body:JSON.stringify({acknowledgePossibleDuplicate:!!retryAck[i.id]})}),'Pengiriman undangan sedang diperiksa ulang.')}>{uiCopy("Coba kirim lagi")}</button></>}</div>;}
- const showOverview=compact||view==='result';
- return <section ref={root} className={`${s.panel} ${compact?s.compact:''}`} aria-label={uiCopy("Screening kandidat")}>
- {showOverview&&<><div className={s.heading}><div><h3>{compact?'Screening Tara':'Screening'}</h3>{!compact&&<p>Evaluasi pengalaman kandidat bersama Tara.</p>}</div><div className={s.actions}><button className={s.primary} disabled={!!inviteReason||busy} title={inviteReason||undefined} aria-label={uiCopy("Undang screening")} onClick={()=>{setRecipient(email??'');setOpen(true);setError('');}}>+ Undang</button>{!compact&&<button className={s.iconButton} aria-label={uiCopy("Tentang screening Tara")} onClick={()=>setHelp(true)}><WorkspaceIcon kind="help"/></button>}</div></div>
- {inviteReason&&<p className={s.muted}>{inviteReason}</p>}{last&&summary(last)}
- {!loaded?<div className={s.empty} role="status">Memuat screening&#x2026;</div>:!items.length&&!error&&<div className={s.empty}>Belum ada undangan screening. Kandidat dapat diundang setelah penilaian CV selesai.</div>}
- {!compact&&loaded&&<section className={s.section}><div className={s.sectionTitle}><h4>{uiCopy("Undangan aktif ")}<span className={s.count}>{pending.length}</span></h4></div>{!pending.length?<p className={s.muted}>Tidak ada undangan aktif.</p>:pending.map(i=><article key={i.id} className={s.activeCard}><div className={s.activeIdentity}><span className={s.roundIcon}><WorkspaceIcon kind={i.mode==='TEXT'?'message':'mic'}/></span><div><strong>{typeName(i)}</strong><p>{i.recipientEmail}</p><p>{status(i)} &#xb7; Berlaku hingga {date(i.session?.completion?.resumeUntil??i.expiresAt)}</p></div></div><div className={s.delivery}><span data-sent={i.emailStatus==='SENT'}>Email {i.emailStatus==='SENT'?'terkirim':i.emailStatus==='UNCERTAIN'?'perlu diperiksa':i.emailStatus==='FAILED'?'gagal':'diproses'}</span><span data-sent={i.messageStatus==='SENT'}>{uiCopy("Pesan Talentio ")}{i.messageStatus==='SENT'?'terkirim':i.messageStatus==='WAITING_ACCOUNT'?'menunggu akun':'diproses'}</span></div><div>{i.status==='INVITED'&&!i.session?.startedAt&&<button className={s.button} disabled={busy} aria-label={uiCopy("Batalkan undangan")} onClick={()=>setCancelId(i.id)}>Batalkan</button>}{retryControls(i)}</div></article>)}</section>}
- {compact&&<>{pending.map(i=><p key={i.id} className={s.muted}>{typeName(i)} &#xb7; {status(i)}</p>)}<button className={s.link} onClick={onOpenScreening}>Lihat seluruh screening</button></>}
- {!compact&&!!items.length&&<section className={s.section}><div className={s.sectionTitle}><h4>{uiCopy("Riwayat screening")}</h4><small>{items.length} sesi</small></div><div className={s.tableWrap}><table className={s.history}><thead><tr><th>Sesi</th><th>Dikirim</th><th>{uiCopy("Status hasil")}</th><th>Cakupan</th><th>Skor</th><th aria-label={uiCopy("Pilih sesi")}/></tr></thead><tbody>{items.slice((page-1)*10,page*10).map((i,index)=>{const c=coverage(i);return <tr key={i.id} data-selected={i.id===selected}><td>{typeName(i)} &#xb7; #{String(items.length-((page-1)*10+index)).padStart(2,'0')}</td><td>{date(i.createdAt)}</td><td>{badge(i,true)}</td><td><span className={s.mobileCellLabel} aria-hidden="true">Cakupan</span>{c?`${c.tested}/${c.total} ${c.unit??'klaim'}`:'\u2014'}</td><td><span className={s.mobileCellLabel} aria-hidden="true">Skor</span>{historyScore(i)}</td><td><button className={s.button} aria-label={'Lihat '+typeName(i)+' '+date(i.createdAt)} aria-pressed={i.id===selected} onClick={()=>select(i.id)}>{i.id===selected?'Terpilih':'Lihat'}</button></td></tr>;})}</tbody></table></div>{items.length>10&&<div className={s.pagination}><button className={s.button} disabled={page===1} onClick={()=>setPage(p=>p-1)}><DirectionalIcon direction="left" size={16} /></button><small>{page} / {Math.ceil(items.length/10)}</small><button className={s.button} disabled={page*10>=items.length} onClick={()=>setPage(p=>p+1)}><DirectionalIcon direction="right" size={16} /></button></div>}</section>}
- </>}
- {notice&&<p role="status" className={s.notice}>{notice}</p>}{error&&!open&&<div className={s.error} role="alert">{error} <button className={s.link} onClick={()=>{setError('');setRevision(n=>n+1);setReportRevision(n=>n+1);}}>{uiCopy("Coba lagi")}</button></div>}
- {!compact&&current&&<div className={`${s.session} ${view!=='result'?s.focused:''}`} ref={detail}>
- {view!=='result'&&<button className={`${s.link} ${s.back}`} onClick={()=>{setView('result');setHighlight('');requestAnimationFrame(()=>root.current?.scrollIntoView({behavior:'smooth',block:'start'}));}}><DirectionalIcon direction="left" size={17} /> Ringkasan screening</button>}
- <div className={s.sessionHeader}><div><h3>{typeName(current)} &#xb7; Sesi #{String(items.length-items.findIndex(i=>i.id===current.id)).padStart(2,'0')}</h3><p>{date(current.session?.startedAt??current.createdAt,true)}{current.session?.completedAt?' \u2014 '+new Date(current.session.completedAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''}</p></div>{report?.pdfUrl&&<button className={s.button} disabled={pdfBusy} onClick={()=>void freshPdf()}><WorkspaceIcon kind="download"/>{uiCopy(" Unduh PDF")}</button>}</div>
- {view!=='result'&&<div className={s.meta}>{badge(current)}{evaluation?.voice?.durationSeconds!=null&&<span>Durasi {clock(evaluation.voice.durationSeconds*1000)}</span>}{coverage(current)&&<span>{coverage(current)!.tested}/{coverage(current)!.total} {coverage(current)!.unit??'klaim'} {evaluation?.roleAssessment||evaluation?.interviewAssessment?'dinilai':'diuji'}</span>}</div>}
- <nav className={s.tabs} role="tablist" aria-label={uiCopy("Detail screening")}>{[['result','Hasil'],['conversation','Percakapan'],['report','Laporan']].map(([key,label])=><button key={key} role="tab" onKeyDown={e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=Array.from(e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]'));const i=tabs.indexOf(e.currentTarget);tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length]?.focus();}} aria-selected={view===key} onClick={()=>{setView(key as typeof view);requestAnimationFrame(()=>detail.current?.scrollIntoView({behavior:'smooth',block:'start'}));}}>{label}</button>)}</nav>
- {reportLoading?<div role="status" className={s.empty}>Memuat detail sesi&#x2026;</div>:report&&<>
- {view!=='report'&&(evaluation?.voice?.partial||report.evaluation?.status==='NEEDS_REVIEW')&&<div className={s.warning}>ⓘ {view==='conversation'&&report.voice?.transcriptComplete===false?'Transkrip tidak lengkap. Sebagian percakapan tidak terekam.':'Hasil parsial \u2014 perlu ditinjau HR.'+(report.voice?.transcriptComplete===false?' Sebagian percakapan tidak terekam.':'')}</div>}
- {evaluation&&current.session?.evaluation?.status==='FAILED'&&retryControls(current)}
- {view==='result'&&(evaluation?<ScreeningResult key={selected} result={evaluation} claims={report.claims??[]} questions={report.questions} onEvidence={evidence} onNoteContext={(topicId,ref,answer)=>{setClaimId(topicId);setHighlight(report.voice||/^(?:question|answer):/.test(ref)?ref:(answer?'answer:':'question:')+ref);setQuery('');setSpeaker('all');setView('conversation');}} focusClaim={claimId}/>:<div className={s.empty}>{status(current)==='Penilaian gagal'?'Penilaian belum berhasil. Percakapan yang tersimpan tetap tersedia.':active(current)?'Hasil akan tersedia setelah kandidat menyelesaikan interview.':'Hasil penilaian belum tersedia.'}{retryControls(current)}</div>)}
- {view==='conversation'&&<><div className={s.toolbar}><label className={s.search}><WorkspaceIcon kind="search"/><input aria-label={uiCopy("Cari dalam percakapan")} placeholder={uiCopy("Cari dalam percakapan")} value={query} onChange={e=>setQuery(e.target.value)}/></label><select aria-label={uiCopy("Filter pembicara")} value={speaker} onChange={e=>setSpeaker(e.target.value)}><option value="all">{uiCopy("Semua pembicara")}</option><option value="TARA">Tara</option><option value="CANDIDATE">Kandidat</option></select><button className={s.button} disabled={reportLoading} onClick={()=>setReportRevision(n=>n+1)}>Perbarui</button><button className={s.button} disabled={!allTurns.length} onClick={downloadTranscript}><WorkspaceIcon kind="download"/>{uiCopy(" Unduh transkrip")}</button></div><div className={s.split}><section className={s.transcript}><h4>Percakapan</h4><small>Tara dan kandidat &#xb7; Urutan waktu interview</small><div className={s.transcriptList} data-transcript-list>{!filtered.length?<p className={s.empty}>{allTurns.length?'Tidak ada percakapan yang sesuai pencarian.':'Belum ada percakapan yang tersimpan.'}</p>:filtered.map(t=><article key={t.id} tabIndex={-1} data-turn={t.id} data-speaker={t.speaker} data-highlight={highlight===t.id} className={s.turn}><span className={s.avatar}>{t.speaker==='TARA'?'T':initials}</span><div><strong>{t.speaker==='TARA'?'Tara':firstName}</strong> <small>&#xb7; {clock(t.startMs)}</small>{highlight===t.id&&<span className={s.badge}>{competency?"Bukti kompetensi":uiCopy("Bukti klaim")}</span>}<p>{t.text}</p>{t.timedOut&&<small>Waktu menjawab habis.</small>}</div></article>)}</div>{report.voice&&!report.voice.transcriptComplete&&<p className={s.warning}>Lanjutan percakapan mungkin tidak terekam.</p>}{report.voice?.endedAt&&<p className={s.muted}>Interview berakhir pada {date(report.voice.endedAt,true)}.</p>}</section><aside className={s.aside}>{competency&&<section className={s.context}><h4>Konteks bukti</h4><p><strong>{competency.name}</strong></p><p>{competency.reason}</p><button className={s.link} onClick={()=>setView('result')}>Buka rincian kompetensi</button></section>}{claim&&<section className={s.context}><h4>{uiCopy("Konteks bukti")}</h4><div><span className={s.badge}>Klaim {(evaluation?.claims?.findIndex(c=>c.claimId===claimId)??0)+1}</span><p><strong>{source?.statement}</strong></p><small>{claim.score==null?'Belum diuji':`Nilai ${claim.score}/4`}</small></div>{source?.quote&&<div><strong>{uiCopy("Dalam CV")}</strong><p>{source.quote}</p></div>}<div><strong>{uiCopy("Alasan penilaian")}</strong><p>{claim.reason}</p><button className={s.link} onClick={()=>setView('result')}>Buka rincian klaim</button></div></section>}<section className={s.tip}><strong className={s.inlineTitle}><WorkspaceIcon kind="info"/>{uiCopy("Cara membaca transkrip")}</strong><p>Kutipan yang disorot menjadi sumber penilaian. Jawaban yang tidak terekam tidak ditambahkan.</p></section></aside></div></>}
- {view==='report'&&<><h4>{uiCopy("Laporan screening")}</h4><p className={s.muted}>Ringkasan penilaian dan bukti untuk ditinjau HR.</p><div className={s.split} style={{marginTop:18}}><div>{report.pdfUrl?<CandidatePdfPreview url={report.pdfUrl} name="Ringkasan screening" label="laporan" allowZoom/>:<div className={s.empty}>Laporan PDF belum tersedia.{evaluation&&<button className={s.link} disabled={busy} onClick={()=>void action(()=>api('/recruitment/invitations/'+current.id+'/retry-evaluation',{method:'POST',body:'{}'}),'Pembuatan laporan sedang diperiksa.')}>{uiCopy("Coba siapkan laporan lagi")}</button>}<button className={s.link} onClick={()=>setReportRevision(n=>n+1)}>{uiCopy("Perbarui laporan")}</button></div>}</div><aside className={s.aside}><section className={s.context}><h4>{uiCopy("Informasi laporan")}</h4><p>Jenis: {typeName(current)}</p><p>Tanggal: {date(current.session?.completedAt??current.createdAt)}</p><p>Status: {status(current)}</p><p>Isi: Ringkasan dan bukti terpilih</p><button className={s.primary} disabled={!report.pdfUrl||pdfBusy} onClick={()=>void freshPdf()}><WorkspaceIcon kind="download"/>{uiCopy(" Unduh PDF")}</button><button className={s.button} disabled={!report.pdfUrl||pdfBusy} onClick={()=>void freshPdf(true)}>{uiCopy("Buka di tab baru")}</button><p className={s.muted}>Percakapan lengkap tersedia di tab Percakapan.</p></section><section className={s.tip}><strong className={s.inlineTitle}><WorkspaceIcon kind="info"/>{uiCopy("Cara membaca hasil")}</strong><p>Nilai bukan ukuran kejujuran kandidat.</p><p>Klaim yang belum diuji tidak diberi nilai nol.</p><p>Keputusan rekrutmen tetap dilakukan HR.</p></section></aside></div></>}
- {view!=='result'&&<footer className={s.footer}><button className={s.button} onClick={()=>setView(view==='report'?'conversation':'result')}><DirectionalIcon direction="left" size={17} /> {view==='report'?'Percakapan':'Hasil'}</button>{view==='conversation'?<button className={s.button} onClick={()=>setView('report')}>Laporan <DirectionalIcon direction="right" size={17} /></button>:<button className={s.button} onClick={()=>{setView('result');requestAnimationFrame(()=>root.current?.scrollIntoView({behavior:'smooth',block:'start'}));}}>Kembali ke ringkasan</button>}</footer>}
- </>}
- {!report&&!reportLoading&&<button className={s.link} onClick={()=>setReportRevision(n=>n+1)}>{uiCopy("Coba muat detail")}</button>}
- </div>}
- {open&&<dialog ref={dialog} className={shared.modal} aria-labelledby="screening-invite-title" onCancel={e=>{if(busy)e.preventDefault();else setOpen(false);}}><form onSubmit={e=>{e.preventDefault();void send();}}><header><h2 id="screening-invite-title">{uiCopy("Undang screening bersama Tara")}</h2><button type="button" aria-label={uiCopy("Tutup undangan")} disabled={busy} onClick={()=>setOpen(false)}>×</button></header><p>Pilih jenis interview. Undangan dikirim melalui email dan Pesan Talentio.</p><fieldset disabled={busy} className={shared.modeOptions}><legend>{uiCopy("Jenis interview")}</legend>{[['TEXT','Interview teks','1 menit per pertanyaan'],['VOICE','Interview suara','Percakapan langsung \u00b7 Maksimal 15 menit']].map(([value,title,caption])=><label key={value}><input type="radio" name="screening-mode" checked={mode===value} onChange={()=>{setMode(value as typeof mode);requestKey.current='';}}/><span><strong>{title}</strong><small>{caption}</small></span></label>)}</fieldset>{interviewTopicCount!=null&&<p>Agenda memuat {interviewTopicCount} topik karena keahlian wajib dipertahankan. Waktu wawancara tetap maksimal 15 menit{mode==="TEXT"?" dengan maksimal 10 pertanyaan":""}.</p>}<label className={shared.field}>{uiCopy("Email kandidat")}<input type="email" value={recipient} required maxLength={254} disabled={busy} onChange={e=>{setRecipient(e.target.value);requestKey.current='';}}/></label><p>Jika kandidat belum memiliki akun, Pesan Talentio tersedia setelah kandidat membuka undangan dengan email yang sesuai.</p>{error&&<p role="alert" className={s.error}>{error}</p>}<footer><button type="button" className={s.button} disabled={busy} onClick={()=>setOpen(false)}>Batal</button><button className={s.primary} type="submit" disabled={busy||!recipient}>{busy?'Menyiapkan\u2026':'Kirim undangan'}</button></footer></form></dialog>}
- {help&&<dialog ref={helpDialog} className={shared.modal} aria-labelledby="screening-help-title" onCancel={()=>setHelp(false)}><header><h2 id="screening-help-title">{uiCopy("Tentang screening Tara")}</h2><button aria-label={uiCopy("Tutup bantuan")} onClick={()=>setHelp(false)}>×</button></header><p>Tara meminta kandidat menjelaskan tindakan dan keputusan yang relevan dengan lowongan. Pada rubrik terbaru, skor akhir menggabungkan kecocokan CV, kompetensi kerja, dan kejelasan penjelasan. Laporan menyimpan metode yang digunakan setiap sesi.</p><p>Hasil parsial atau transkrip tidak lengkap memerlukan tinjauan HR. Klaim yang belum diuji tidak diberi nilai nol. Nilai bukan ukuran kejujuran kandidat.</p><footer><button className={s.primary} onClick={()=>setHelp(false)}>Mengerti</button></footer></dialog>}
- {cancelId&&<dialog ref={cancelDialog} className={shared.modal} aria-labelledby="screening-cancel-title" onCancel={e=>{if(busy)e.preventDefault();else setCancelId('');}}><h2 id="screening-cancel-title">Batalkan undangan?</h2><p>Kandidat tidak dapat memulai screening dari undangan ini. Riwayatnya tetap tersimpan.</p><footer><button className={s.button} disabled={busy} onClick={()=>setCancelId('')}>Kembali</button><button className={s.primary} disabled={busy} onClick={()=>void action(async()=>{await api('/recruitment/invitations/'+cancelId+'/cancel',{method:'POST',body:'{}'});setCancelId('');},'Undangan dibatalkan.')}>{uiCopy("Batalkan undangan")}</button></footer></dialog>}
- </section>;
+import { useEffect, useRef, useState } from 'react';
+import { assessmentCopy } from '@job-talentio/shared';
+import { api } from '@/lib/api';
+import { Link } from '@/lib/navigation';
+import { DirectionalIcon } from '@/components/ui/DirectionalIcon';
+import { WorkspaceIcon } from '@/components/employee/WorkspaceIcon';
+import { WorkspaceLoading } from '@/components/employee/WorkspacePrimitives';
+import { active, coverage, evaluatedInterviewScore, number, status, type Invitation } from './screening-view';
+import { candidateDeliveryLabel } from './CandidateMessageDialog';
+import type { CandidateDetail } from './CandidateReview';
+import type { ReviewReport } from './candidate-review-route';
+import { ReviewCharacter, ReviewError, ReviewPill, reviewDate, useReviewCopy } from './candidate-review-view';
+import shared from './CandidateWorkspace.module.css';
+import s from './CandidateReview.module.css';
+
+export function CandidateScreening({ data, onChanged, reportHref }: {
+  data: CandidateDetail; onChanged: () => void; reportHref: (report: ReviewReport) => string;
+}) {
+  const c = useReviewCopy();
+  const locale = c('id-ID', 'en-US');
+  const [items, setItems] = useState<Invitation[]>();
+  const [revision, setRevision] = useState(0);
+  const [page, setPage] = useState(1);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [cancelId, setCancelId] = useState('');
+  const [mode, setMode] = useState<'TEXT' | 'VOICE'>('TEXT');
+  const [recipient, setRecipient] = useState(data.email ?? '');
+  const [ack, setAck] = useState<Record<string, boolean>>({});
+  const invite = useRef<HTMLDialogElement>(null);
+  const cancel = useRef<HTMLDialogElement>(null);
+  const requestKey = useRef('');
+  const lock = useRef(false);
+  const base = '/recruitment/candidates/' + encodeURIComponent(data.id) + '/invitations';
+  const invitations = items ?? [];
+  const pending = invitations.filter(active);
+  const closed = ['HIRED', 'REJECTED', 'WITHDRAWN'].includes(data.stage);
+  const inviteReason = closed ? c('Proses rekrutmen kandidat sudah ditutup.', 'Recruitment for this candidate is closed.')
+    : data.cvMethodologyUpgradeAvailable ? c('Nilai CV dengan rubrik terbaru sebelum mengundang.', 'Assess the CV with the latest rubric before inviting.')
+    : data.scoreStatus !== 'READY' ? c('Selesaikan penilaian CV sebelum mengundang.', 'Complete the CV assessment before inviting.') : '';
+
+  useEffect(() => {
+    const abort = new AbortController();
+    void api<Invitation[]>(base, { cacheMode: 'no-store', signal: abort.signal }).then(rows => {
+      if (!abort.signal.aborted) { setItems(rows); setError(''); }
+    }).catch(reason => { if (!abort.signal.aborted) setError(reason.message); });
+    return () => abort.abort();
+  }, [base, revision]);
+  const needsUpdate = invitations.some(row => active(row) || ['PENDING', 'SENDING'].includes(row.emailStatus) ||
+    row.status === 'COMPLETED' && (!row.session?.evaluation || ['PENDING', 'RUNNING'].includes(row.session.evaluation.status)));
+  useEffect(() => {
+    if (!needsUpdate) return;
+    const timer = setInterval(() => { if (!document.hidden && !lock.current) setRevision(value => value + 1); }, 6000);
+    return () => clearInterval(timer);
+  }, [needsUpdate]);
+  useEffect(() => { if (open) invite.current?.showModal(); }, [open]);
+  useEffect(() => { if (cancelId) cancel.current?.showModal(); }, [cancelId]);
+
+  const label = (value: Invitation['mode']) => value === 'VOICE' ? c('Wawancara Live', 'Live interview') : c('Wawancara Chat', 'Chat interview');
+  const dateOf = (row: Invitation) => row.session?.completedAt ?? row.session?.startedAt ?? row.createdAt;
+  const native = data.application?.screeningSession;
+  const nativeDate = native?.completedAt ?? data.createdAt;
+  const evaluated = [...invitations].filter(row => Boolean(row.session?.startedAt || row.session?.completedAt) ||
+    ['COMPLETED', 'INTERRUPTED'].includes(row.status)).sort((a, b) => Date.parse(dateOf(b)) - Date.parse(dateOf(a)));
+  const latest = evaluated[0];
+  const showNative = Boolean(native && (!latest || Date.parse(nativeDate) > Date.parse(dateOf(latest))));
+  const current = showNative ? undefined : latest;
+  const evaluation = showNative ? native?.evaluation : current?.session?.evaluation;
+  const { value, final } = evaluatedInterviewScore(evaluation);
+  const language = evaluation?.result ? evaluation.result.assessmentLanguage : current?.assessmentLanguage;
+  const scoreCopy = (id: string, en: string) => language ? language === 'en' ? en : id : c(id, en);
+  const cover = current ? coverage(current) : evaluation?.result?.roleAssessment
+    ? { tested: evaluation.result.roleAssessment.coverage.assessed, total: evaluation.result.roleAssessment.coverage.total, unit: 'kompetensi' }
+    : null;
+  const hasSession = Boolean(current || showNative);
+  const history = invitations.filter(row => row.id !== current?.id && !active(row));
+  const showNativeInHistory = Boolean(native && !showNative);
+  const historyCount = history.length + Number(showNativeInHistory);
+  const historyRows = [
+    ...history.map(row => ({ key: row.id, title: label(row.mode), date: dateOf(row), value: row,
+      href: reportHref({ kind: 'interview', invitationId: row.id }), icon: row.mode === 'VOICE' ? 'mic' : 'message' })),
+    ...(showNativeInHistory ? [{ key: 'native', title: label('TEXT'), date: nativeDate, value: null,
+      href: reportHref({ kind: 'application' }), icon: 'message' }] : []),
+  ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice((page - 1) * 10, page * 10);
+
+  function sessionStatus(row?: Invitation | null) {
+    const state = row ? status(row) : native?.evaluation?.result ? 'Hasil tersedia' : 'Menilai hasil';
+    const good = state === 'Hasil tersedia';
+    return <ReviewPill tone={good ? 'good' : 'warning'} icon={good ? 'check' : undefined}>
+      {good ? c('Selesai', 'Complete') : assessmentCopy(locale === 'en-US' ? 'en' : 'id', state)}
+    </ReviewPill>;
+  }
+
+  async function action(fn: () => Promise<unknown>, message: string) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await fn();
+      setNotice(message);
+      setRevision(value => value + 1);
+      onChanged();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : c('Permintaan belum berhasil.', 'The request could not be completed.')); }
+    finally { lock.current = false; setBusy(false); }
+  }
+
+  function send() {
+    if (inviteReason) return;
+    requestKey.current ||= crypto.randomUUID();
+    void action(async () => {
+      await api(base, { method: 'POST', body: JSON.stringify({ mode, email: recipient.trim(), requestKey: requestKey.current }) });
+      setOpen(false);
+      requestKey.current = '';
+    }, c('Undangan sedang disiapkan melalui email dan Pesan Talentio.', 'The invitation is being prepared for email and Talentio.'));
+  }
+
+  function retryControls(row: Invitation) {
+    const path = '/recruitment/invitations/' + encodeURIComponent(row.id);
+    const evaluation = row.session?.evaluation;
+    const completion = row.session?.completion;
+    return <div className={s.rowActions}>
+      {(evaluation?.status === 'FAILED' || completion?.status === 'REVIEW_REQUIRED' && completion.canRetry) &&
+        <button type="button" className={s.textAction} disabled={busy} onClick={() => void action(
+          () => api(path + '/retry-evaluation', { method: 'POST', body: '{}' }),
+          c('Hasil interview sedang diproses ulang.', 'The interview outcome is being recovered.'))}>
+          {c('Coba proses hasil lagi', 'Retry assessment')}
+        </button>}
+      {!row.closedByStage && !closed && ['FAILED', 'UNCERTAIN'].includes(row.emailStatus) &&
+        row.status !== 'CANCELLED' && Date.parse(row.expiresAt) > Date.now() && <>
+          {row.emailStatus === 'UNCERTAIN' && <label className={shared.checkLabel}>
+            <input type="checkbox" checked={Boolean(ack[row.id])} onChange={event => setAck(state => ({ ...state, [row.id]: event.target.checked }))} />
+            {c('Saya memahami kemungkinan email ganda.', 'I understand the email may be sent twice.')}
+          </label>}
+          <button type="button" className={s.textAction} disabled={busy || row.emailStatus === 'UNCERTAIN' && !ack[row.id]} onClick={() =>
+            void action(() => api(path + '/retry-delivery', { method: 'POST', body: JSON.stringify({ acknowledgePossibleDuplicate: Boolean(ack[row.id]) }) }),
+              c('Pengiriman undangan sedang diperiksa ulang.', 'Invitation delivery is being retried.'))}>
+            {c('Coba kirim lagi', 'Retry delivery')}
+          </button>
+        </>}
+    </div>;
+  }
+
+  return <div className={s.stack}>
+    {error && !open && <ReviewError retry={() => setRevision(n => n + 1)}>{error}</ReviewError>}
+    {notice && <p className={s.notice} role="status">{notice}</p>}
+    {!items && !error ? <WorkspaceLoading /> : <>
+      <section className={s.screeningHero}>
+        <ReviewCharacter character="tara" working={!hasSession && pending.length > 0} />
+        <div className={s.screeningIntro}>
+          <h2>{c('Wawancara terbaru', 'Latest interview')}</h2>
+          {hasSession ? <>
+            <h3>{label(current?.mode ?? 'TEXT')}</h3>
+            <div className={s.screeningMetadata}><time dateTime={current ? dateOf(current) : nativeDate}><WorkspaceIcon kind="calendar" />
+              {reviewDate(current ? dateOf(current) : nativeDate, locale)}</time>{sessionStatus(current)}</div>
+          </> : <p>{c('Belum ada wawancara Tara.', 'There is no Tara interview yet.')}</p>}
+        </div>
+        {hasSession && <div className={s.screeningEvaluation}>
+          <div className={s.evaluationScore}>
+            <ReviewCharacter character="taka" compact />
+            <div><strong>{scoreCopy('Dinilai Taka', 'Assessed by Taka')}</strong>
+              {value !== null && <span className={s.score} data-has-score>{number(value, language)}<small>/100</small></span>}
+              <span className={s.muted}>{value === null ? scoreCopy('Skor belum tersedia', 'Score unavailable')
+                : final ? scoreCopy('Skor akhir', 'Final score') : scoreCopy('Dukungan klaim CV', 'CV claim assessment')}</span>
+            </div>
+          </div>
+          {cover && <p className={s.screeningCoverage}>
+            {language === 'en' ? cover.tested + ' of ' + cover.total + (cover.unit ? ' competencies assessed' : ' claims assessed')
+              : cover.tested + ' dari ' + cover.total + ' ' + (cover.unit ?? 'klaim') + ' dinilai'}
+          </p>}
+        </div>}
+        <div className={s.heroActions}>
+          {hasSession
+            ? <Link href={reportHref(current ? { kind: 'interview', invitationId: current.id } : { kind: 'application' })} className={s.primary}>
+              {c('Buka hasil wawancara', 'Open interview report')}<WorkspaceIcon kind="arrowForward" />
+            </Link>
+            : <button type="button" className={s.primary} disabled={busy || Boolean(inviteReason)} onClick={() => { setError(''); setRecipient(data.email ?? ''); setOpen(true); }}>
+              {c('Undang screening', 'Invite to screening')}
+            </button>}
+        </div>
+      </section>
+      {current && retryControls(current)}
+      {pending.length > 0 && <section className={s.card + ' ' + s.history}>
+        <h2>{c('Undangan aktif', 'Active invitations')}</h2>
+        {pending.map(row => <article className={s.invitation} key={row.id}>
+          <div><strong>{label(row.mode)}</strong><p>{row.recipientEmail}</p><p>{status(row)} &#xb7; {reviewDate(row.session?.completion?.resumeUntil ?? row.expiresAt, locale)}</p></div>
+          <div className={s.delivery}><span>Email &#xb7; {candidateDeliveryLabel(row.emailStatus)}</span><span>Talentio &#xb7; {candidateDeliveryLabel(row.messageStatus)}</span></div>
+          <div>
+            {row.status === 'INVITED' && !row.session?.startedAt && <button type="button" className={s.secondary} disabled={busy}
+              onClick={() => setCancelId(row.id)}>{c('Batalkan undangan', 'Cancel invitation')}</button>}
+            {retryControls(row)}
+          </div>
+        </article>)}
+      </section>}
+      <section className={s.card + ' ' + s.history}>
+        <h2>{c('Riwayat sesi', 'Session history')}</h2>
+        {historyRows.length ? historyRows.map(row => <div key={row.key} className={s.historyEntry}>
+          <Link href={row.href} className={s.sessionRow}>
+            <span className={s.sessionIcon}><WorkspaceIcon kind={row.icon} /></span>
+            <strong>{row.title}</strong><time dateTime={row.date}><WorkspaceIcon kind="calendar" />{reviewDate(row.date, locale)}</time>
+            {sessionStatus(row.value)}<DirectionalIcon direction="right" size={19} />
+          </Link>
+          {row.value && retryControls(row.value)}
+        </div>) : <p className={s.muted}>{c('Belum ada sesi sebelumnya.', 'There are no earlier sessions.')}</p>}
+        {historyCount > 10 && <nav className={s.historyPagination} aria-label={c('Halaman riwayat sesi', 'Session history pages')}>
+          <button className={s.square} type="button" disabled={page === 1} onClick={() => setPage(n => n - 1)} aria-label={c('Sebelumnya', 'Previous')}><DirectionalIcon direction="left" /></button>
+          <span>{page} / {Math.ceil(historyCount / 10)}</span>
+          <button className={s.square} type="button" disabled={page * 10 >= historyCount} onClick={() => setPage(n => n + 1)} aria-label={c('Berikutnya', 'Next')}><DirectionalIcon direction="right" /></button>
+        </nav>}
+      </section>
+      {hasSession && <div className={s.sectionActions}><button type="button" className={s.secondary} disabled={busy || Boolean(inviteReason)}
+        onClick={() => { setError(''); setRecipient(data.email ?? ''); setOpen(true); }}>{c('Undang screening', 'Invite to screening')}</button></div>}
+      {inviteReason && <p className={s.muted}>{inviteReason}</p>}
+    </>}
+    {open && <dialog className={shared.modal} ref={invite} aria-labelledby="candidate-screening-invite"
+      onCancel={event => { if (busy) event.preventDefault(); else setOpen(false); }}>
+      <form onSubmit={event => { event.preventDefault(); send(); }}>
+        <header><h2 id="candidate-screening-invite">{c('Undang screening bersama Tara', 'Invite to screening with Tara')}</h2>
+          <button type="button" disabled={busy} aria-label={c('Tutup undangan', 'Close invitation')} onClick={() => setOpen(false)}>×</button></header>
+        <p>{c('Undangan dikirim melalui email dan Pesan Talentio.', 'The invitation is delivered by email and Talentio.')}</p>
+        <fieldset className={shared.modeOptions} disabled={busy}>
+          <legend>{c('Jenis interview', 'Interview type')}</legend>
+          {(['TEXT', 'VOICE'] as const).map(value => <label key={value}>
+            <input type="radio" name="screening-mode" checked={value === mode} onChange={() => { setMode(value); requestKey.current = ''; }} />
+            <span><strong>{label(value)}</strong><small>{value === 'TEXT' ? c('1 menit per pertanyaan', '1 minute per question') : c('Maksimal 15 menit aktif', 'Up to 15 active minutes')}</small></span>
+          </label>)}
+        </fieldset>
+        {data.interviewTopicCount != null && <p>{c('Jumlah topik pada agenda', 'Topics in the agenda')} &#xb7; {data.interviewTopicCount}</p>}
+        <label className={shared.field}>{c('Email kandidat', 'Candidate email')}<input type="email" value={recipient} required maxLength={254} disabled={busy}
+          onChange={event => { setRecipient(event.target.value); requestKey.current = ''; }} /></label>
+        {error && <ReviewError>{error}</ReviewError>}
+        <footer><button type="button" className={s.secondary} disabled={busy} onClick={() => setOpen(false)}>{c('Batal', 'Cancel')}</button>
+          <button type="submit" className={s.primary} disabled={busy || !recipient.trim()}>{c('Kirim undangan', 'Send invitation')}</button></footer>
+      </form>
+    </dialog>}
+    {cancelId && <dialog className={shared.modal} ref={cancel} aria-labelledby="candidate-screening-cancel"
+      onCancel={event => { if (busy) event.preventDefault(); else setCancelId(''); }}>
+      <h2 id="candidate-screening-cancel">{c('Batalkan undangan?', 'Cancel this invitation?')}</h2>
+      <p>{c('Kandidat tidak dapat memulai sesi dari undangan ini. Riwayat tetap tersimpan.', 'The candidate cannot start a session from this invitation. The history will still be available.')}</p>
+      <footer><button type="button" className={s.secondary} disabled={busy} onClick={() => setCancelId('')}>{c('Kembali', 'Go back')}</button>
+        <button type="button" className={s.primary} disabled={busy} onClick={() => void action(async () => {
+          await api('/recruitment/invitations/' + encodeURIComponent(cancelId) + '/cancel', { method: 'POST', body: '{}' });
+          setCancelId('');
+        }, c('Undangan dibatalkan.', 'The invitation was cancelled.'))}>{c('Batalkan undangan', 'Cancel invitation')}</button></footer>
+    </dialog>}
+  </div>;
 }

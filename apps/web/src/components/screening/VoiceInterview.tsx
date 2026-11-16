@@ -377,7 +377,7 @@ export function VoiceInterview({sessionId,jobTitle,companyName}:{sessionId:strin
     {busy?joiningStep:!preparation?'Memuat sesi\u2026':!ready?'Tara menyiapkan interview\u2026':error?'Coba gabung lagi':'Gabung interview'}
    </button>)}
  </div>}
- {closing&&<div className={s.prejoin} role="status"><h2>Menyimpan percakapan</h2><p>{localClosure==='UNCONFIRMED'?'Jatah waktu habis. Status penyimpanan sedang diperiksa.':'Tara sedang menyelesaikan koneksi suara.'}</p></div>}
+ {closing&&<div className={s.prejoin} role="status"><h2>{uiCopy("Menyimpan percakapan")}</h2><p>{localClosure==='UNCONFIRMED'?'Jatah waktu habis. Status penyimpanan sedang diperiksa.':'Tara sedang menyelesaikan koneksi suara.'}</p></div>}
  {ended&&completion&&<div className={s.prejoin} aria-busy={busy||completion.status==='ASSESSING'}>
   <h2>{canResume?'Lanjutkan wawancara':completion.status==='COMPLETE'?'Wawancara selesai':completion.status==='INTERRUPTED'?'Wawancara terhenti':
    completion.status==='REVIEW_REQUIRED'?'Penilaian perlu ditinjau':'Tara memeriksa bagian yang sudah dijawab'}</h2>

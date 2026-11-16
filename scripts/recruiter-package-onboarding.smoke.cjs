@@ -69,7 +69,8 @@ for (const code of ['FREE', 'STANDARD']) test('package selection confirms ' + co
     'next/navigation': {useParams: () => ({id: 'job'}), useSearchParams: () => new URLSearchParams()},
     '@/lib/navigation': {Link: stub, useRouter: () => ({replace: url => destinations.push(url), push: url => destinations.push(url)})},
     '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@/components/employee/WorkspacePrimitives': {WorkspaceLoading: stub},
-    './PackagePricing': {PackagePricing: Pricing}, '@/lib/api': {api: async (route, options) => {
+    './PackagePricing': {PackagePricing: Pricing}, '@/components/ui/DirectionalIcon': {DirectionalIcon: stub},
+    '@/lib/api': {api: async (route, options) => {
       if (route === '/jobs/job') return job;
       if (route.startsWith('/benefits/')) return {selected: false};
       if (route === '/job-commerce/catalog') return {enabled: true, packages: []};
@@ -90,7 +91,8 @@ test('disabled pricing remains visible without allowing orders', async () => {
     'next/navigation': {useParams: () => ({id: 'job'}), useSearchParams: () => new URLSearchParams()},
     '@/lib/navigation': {Link: stub, useRouter: () => ({replace() {}, push() {}})},
     '@/lib/i18n': i18n, '@/lib/jobCommerce': commerce, '@/components/employee/WorkspacePrimitives': {WorkspaceLoading: stub},
-    './PackagePricing': {PackagePricing: Pricing}, '@/lib/api': {api: async (route, options) => {
+    './PackagePricing': {PackagePricing: Pricing}, '@/components/ui/DirectionalIcon': {DirectionalIcon: stub},
+    '@/lib/api': {api: async (route, options) => {
       if (options?.method) orders++;
       if (route === '/jobs/job') return job;
       if (route.startsWith('/benefits/')) return {selected: false};

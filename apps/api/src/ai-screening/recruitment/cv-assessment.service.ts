@@ -5,12 +5,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { hash, json } from '../screening.policy';
 import { CV_ALERT_MS, CV_DELAYED_MS, CV_MAX_SUBMISSIONS, CV_PROVIDER_TASK, CV_RECOVERY_VERSION, CV_RESPONSE_FORMAT, CvWorkDelay,
-  completeCvSource, cvCriteria, cvReadTargets, cvRequest, decodeCvResponse, mergeCvGrades, mergeCvSource, projectCvScore, readCvSource, reuseCvResult,
+  completeCvSource, cvCriteria, cvReadTargets, cvRequest, cvRubricSignature, decodeCvResponse, mergeCvGrades, mergeCvSource, projectCvScore, readCvSource, reuseCvResult,
   type CvCheckpoint, type CvProgress } from './cv-assessment';
 import { queueCvProviderCleanup, queueCvProviderWork, saveCvAssessment } from './cv-assessment-store';
 import { prepareCvDocument, CV_MAX_BYTES } from './cv-document';
 import { CvProvider, cvBackoff, cvRejection, cvTerminal, cvUsage, isCvResponseId, type CvHttp } from './cv-provider';
 import { CV_EXTRACTION_VERSION, frozenRoleRubric, roleAssessmentEnabled, roleCvCriteria, type RoleRubric } from '../role-rubric';
+import { assessmentLanguageOf } from '../assessment-language';
 
 type Run = { work: AiScreeningWork; owner: string; row: RecruitmentCandidate };
 type CallTrace = { pollFailures?: number; providerRequestId?: string | null; acknowledgedAt?: string;
@@ -45,10 +46,12 @@ export class CvAssessmentService {
       return this.consume(run, checkpoint, call);
     }
     const rubric = (row.jobSnapshot as { resolvedRoleRubric?: RoleRubric } | null)?.resolvedRoleRubric ?? frozenRoleRubric(row.jobSnapshot);
+    const assessmentLanguage = assessmentLanguageOf(row.jobSnapshot);
     const extractionVersion = rubric || roleAssessmentEnabled() && !row.jobSnapshot ? CV_EXTRACTION_VERSION : undefined;
     const model = extractionVersion ? 'gpt-6-luna' : this.config.get<string>('CV_SCORING_MODEL')?.trim() || 'gpt-6-luna';
     if (!checkpoint && !call && extractionVersion && row.checksum) {
-      checkpoint = await this.cachedCheckpoint(this.db, row, row.checksum, model, rubric) ?? null;
+      const cached = await this.cachedCheckpoint(this.db, row, row.checksum, model, rubric);
+      checkpoint = cached ? { ...cached, assessmentLanguage } : null;
     }
     if (checkpoint && completeCvSource(checkpoint.source, checkpoint.expectedPages) && gradesComplete(row, checkpoint))
       return this.finish(run, checkpoint);
@@ -80,7 +83,7 @@ export class CvAssessmentService {
     }
     checkpoint ??= { stage: 'INITIAL', responseFormat: CV_RESPONSE_FORMAT, model,
       checksum: document!.checksum, expectedPages: document!.pages, fileKind: document!.fileKind,
-      wordVisualFallback: document!.wordVisualFallback, roleRubric: rubric, extractionVersion, grades: [] };
+      wordVisualFallback: document!.wordVisualFallback, roleRubric: rubric, extractionVersion, assessmentLanguage, grades: [] };
     const spec = cvRequest(checkpoint, row.jobSnapshot, document?.pagesInFile);
     const estimatedTokens = spec.maxOutput + Math.ceil(JSON.stringify(spec.data).length / 3) +
       (document ? (document.pagesInFile.length || document.pages || 10) * 2600 + 2000 : 1000);
@@ -122,8 +125,10 @@ export class CvAssessmentService {
     const args = { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { cvResult: true } } as const;
     const [cached, scored] = await Promise.all([
       tx.recruitmentCandidate.findMany({ where: base, take: 30, ...args, orderBy: [...args.orderBy] }),
-      rubric && tx.recruitmentCandidate.findFirst({ where: { AND: [base,
-        { cvResult: { path: ['roleAssessment', 'rubricRevision'], equals: rubric.revision } }] }, ...args, orderBy: [...args.orderBy] }),
+      rubric && tx.recruitmentCandidate.findFirst({ where: { ...base, OR: [
+        { cvResult: { path: ['roleAssessment', 'rubricRevision'], equals: rubric.revision } },
+        { cvResult: { path: ['sourceReferences', 'rubricSignature'], equals: cvRubricSignature(rubric) } },
+      ] }, ...args, orderBy: [...args.orderBy] }),
     ]);
     if (scored) cached.push(scored);
     const recovered = cached.flatMap(({ cvResult }) => {
@@ -145,8 +150,6 @@ export class CvAssessmentService {
       // A shared transaction lock keeps all processes on this project within the same rolling budget.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(79642131)`;
       if (checkpoint.extractionVersion && checkpoint.stage === 'INITIAL' && sent === 0) {
-        if (run.row.checksum && await this.cachedCheckpoint(tx, run.row, checkpoint.checksum, checkpoint.model, checkpoint.roleRubric))
-          throw new CvWorkDelay(1000);
         const peers = await tx.recruitmentCandidate.findMany({
           where: { companyId: run.row.companyId, checksum: checkpoint.checksum, id: { not: run.row.id }, scoreStatus: 'PROCESSING' }, select: { id: true },
         });
@@ -157,6 +160,10 @@ export class CvAssessmentService {
               { cvCheckpoint: { path: ['model'], equals: checkpoint.model } },
             ] }, select: { id: true },
         })) throw new CvWorkDelay(3000);
+        // Completion can clear a peer's checkpoint before we read it. Look for
+        // the saved result after checking the active work to cover that handoff.
+        if (run.row.checksum && await this.cachedCheckpoint(tx, run.row, checkpoint.checksum, checkpoint.model, checkpoint.roleRubric))
+          throw new CvWorkDelay(1000);
       }
       const now = Date.now();
       const [recent, cooldown] = await Promise.all([
@@ -300,19 +307,23 @@ export class CvAssessmentService {
   }
 
   private async finish(run: Run, checkpoint: CvCheckpoint) {
-    const checked = projectCvScore(checkpoint.source!, checkpoint.grades, Boolean(run.row.jobSnapshot), Boolean(checkpoint.wordVisualFallback), checkpoint.roleRubric);
+    const checked = projectCvScore(checkpoint.source!, checkpoint.grades, Boolean(run.row.jobSnapshot), Boolean(checkpoint.wordVisualFallback), checkpoint.roleRubric, checkpoint.assessmentLanguage);
     await this.db.$transaction(async tx => {
       // Taking the candidate lock first matches the ordering of job edits and retries.
       const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "RecruitmentCandidate" WHERE id=${run.row.id} FOR UPDATE`;
       if (!rows.length || !(await tx.aiScreeningWork.updateMany({ where: workFence(run), data: { cvCheckpoint: Prisma.DbNull } })).count) return;
       await saveCvAssessment(tx, run.row, run.work.id, checkpoint.checksum, checked, CV_RECOVERY_VERSION, {
         phase: run.row.jobSnapshot ? 'READY' : 'EXTRACTED',
+        assessmentLanguage: checkpoint.assessmentLanguage,
+        sourceTextLanguage: checkpoint.sourceTextLanguage,
+        gradeTextLanguage: checkpoint.gradeTextLanguage,
         sourceReferences: { ...checked.sourceReferences, fileKind: checkpoint.fileKind, checksum: checkpoint.checksum,
           model: checkpoint.model, responseFormat: checkpoint.responseFormat, extractionVersion: checkpoint.extractionVersion,
           wordVisualFallback: checkpoint.wordVisualFallback },
         roleAssessment: checkpoint.roleRubric ? { version: checkpoint.roleRubric.version, rubricRevision: checkpoint.roleRubric.revision,
           state: checked.score === null ? 'NOT_APPLICABLE' : 'READY',
           criteria: roleCvCriteria(checkpoint.roleRubric).map(row => ({ id: row.id, name: row.name, requirement: row.requirementRef,
+            displayName: checkpoint.roleRubric?.displayLabels?.[row.id],
             ...(row.sources ? { sources: row.sources, equivalence: row.equivalence } : {}) })) } : undefined,
       });
     });

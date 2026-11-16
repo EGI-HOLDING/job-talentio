@@ -6,6 +6,7 @@ import { json } from './screening.policy';
 import type { PackagePayload } from './screening.schemas';
 import { alignedRoleFromPacket, roleInterviewCandidates, ROLE_RUBRIC_VERSION } from './role-rubric';
 import { attachLiveRoleTopics } from './tara-live-agenda';
+import { assessmentLanguageOf } from './assessment-language';
 import { preparationCvSource } from './screening-preparation';
 
 export const candidatePreparationInclude = {
@@ -39,7 +40,8 @@ export function candidatePreparationInput(plan: CandidatePlan, source = candidat
     return { segments: candidateEvidence(source.text, plan.session.profile.user.fullName),
         rubric: alignedRole ? { ...packet, criteria: roleInterviewCandidates(alignedRole) } : packet,
         job: plan.package.jobSnapshot as unknown as CandidateJob,
-        coreIds: alignedRole?.interviewIds };
+        coreIds: alignedRole?.interviewIds,
+        language: assessmentLanguageOf(plan.session.invitation ? plan.session.invitation.snapshot : plan.package.jobSnapshot) };
 }
 
 export async function publishCandidatePreparation(db: PrismaClient, before: CandidatePlan, workId: string,
@@ -64,7 +66,8 @@ export async function publishCandidatePreparation(db: PrismaClient, before: Cand
         if (!claimed.count) return 'SKIPPED';
         for (const callId of options.reconcileIds ?? []) await enqueueWork(tx, 'CANDIDATE_RESPONSE', callId);
         const packet = retained.package.payload as unknown as PackagePayload;
-        const payload = attachLiveRoleTopics(prepared.payload, alignedRoleFromPacket(retained.package.jobSnapshot, packet), packet.liveAgenda);
+        const language = assessmentLanguageOf(retained.session.invitation ? retained.session.invitation.snapshot : retained.package.jobSnapshot);
+        const payload = attachLiveRoleTopics(prepared.payload, alignedRoleFromPacket(retained.package.jobSnapshot, packet), packet.liveAgenda, language);
         await tx.aiCandidatePlan.update({ where: { id: before.id }, data: { status: 'READY', payload: json(payload), error: null } });
         await tx.aiScreeningSession.update({ where: { id: before.sessionId }, data: { revision: { increment: 1 }, error: null } });
         return 'READY';
@@ -95,7 +98,7 @@ export async function recoverFailedCandidatePreparations(db: PrismaClient, apply
             const calls = await db.aiScreeningCall.findMany({ where: { workId: work.id, subjectId: plan.sessionId, task: 'candidate',
                 promptVersion: plan.promptVersion, status: { in: ['INVALID', 'COMPLETED'] }, result: { not: Prisma.DbNull } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
             const assembled = buildCandidatePreparation(context.segments, context.rubric, context.job, calls.map(call => call.result),
-                { recoverStored: true, coreIds: context.coreIds });
+                { recoverStored: true, coreIds: context.coreIds, language: context.language });
             report.eligible++;
             report.storedResponses += calls.length;
             report.claims += assembled.payload.claims.length;

@@ -32,3 +32,11 @@
 @media (max-width: 1100px) { .trigger { gap: .5rem; } .triggerCopy strong { font-size: .9rem; } }
 @media (max-width: 760px) { .trigger { min-height: 58px; } .triggerCopy strong { font-size: .95rem; } .panel { border-radius: 14px; } .option { min-height: 56px; } }
 @media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
+
+.inlinePanel {
+  position: static;
+  margin-top: 6px;
+  max-height: 330px;
+  box-shadow: none;
+}
+.inlinePanel .searchField input { font-size: 1rem; }

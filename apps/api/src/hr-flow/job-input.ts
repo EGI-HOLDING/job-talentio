@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { JobContentAiLanguage } from '@job-talentio/shared';
+import type { AssessmentLanguage, JobContentAiLanguage } from '@job-talentio/shared';
 import { catalogTitleIdentityKey } from '../common/title-resolve';
 import { currentRoleIdentity, currentRoleSelect } from '../matching/employee-occupation';
 import { previewJobGroup } from '../matching/job-group-scope';
@@ -66,4 +66,5 @@ export const structuredJobFields=(data:Record<string,unknown>)=>({
   kpis:data.kpis as string[]|undefined,
   specificExpectations:data.specificExpectations as string|null|undefined,
   jobContentAiLanguage:data.jobContentAiLanguage as JobContentAiLanguage|undefined,
+  assessmentLanguage:data.assessmentLanguage as AssessmentLanguage|undefined,
 });

@@ -84,14 +84,17 @@ async function main(){
  }
  const rubric={context:'Layanan backend',criteria:['API','Dokumentasi','Pengujian'].map((name,i)=>({id:'c'+i,name,requirementRef:'API',anchors:['Tidak tersedia','Terbatas','Sebagian','Jelas','Lengkap']}))};
  let liveAgendaCalls=0;
- const provider={run:async(_work:string,_subject:string,task:string,input:any,preset?:{version:string})=>{
+ const provider={run:async(_work:string,_subject:string,task:string,input:any,preset?:{version:string;instructions?:string})=>{
   calls++;
   if(task==='prepare')return rubric;
   if(task==='live-agenda'){
    liveAgendaCalls++;
    const criteria=input.criteria as Array<{id:string;name:string}>;
+   const englishLabels:Record<string,string>={'Bangun endpoint API':'Build an API endpoint','Tulis panduan penggunaan API':'Write an API usage guide',
+    'Tangani insiden produksi':'Handle production incidents','Kelola persetujuan akses admin':'Manage administrator access approvals'};
    return {topics:criteria.map(({id,name})=>({criterionId:id,equivalentIds:[],
     question:name.includes('endpoint')?'Apa langkah pertama lu untuk membuat endpoint API yang aman?':'Gimana lu akan menyusun panduan penggunaan API untuk tim baru?'})),
+    ...(preset?.instructions?.includes('nama singkat dalam English')?{displayLabels:criteria.map(({id,name})=>({criterionId:id,name:englishLabels[name]??name}))}:{}),
     merges:[]};
   }
   if(task==='candidate'&&input.duties){
@@ -265,9 +268,12 @@ async function main(){
   creates++;lastVoiceRequest=body;if(holdCreate)await holdCreate;
   assert.equal(body.session.model,'gpt-live-1');assert.equal(body.session.delegation.type,'client');
   assert.ok(body.session.client.data_channel.allowed_client_events.every(event=>event==='session.close'));
-  assert.match(body.session.instructions,/Biarkan kandidat menyelesaikan jawabannya/);
+  const englishSession=body.session.instructions.startsWith('Speak English');
+  assert.match(body.session.instructions,englishSession?/Let the candidate finish/u:/Biarkan kandidat menyelesaikan jawabannya/u);
   const opening=body.session.input[1].content[0].text;
-  assert.match(opening,/Bisa kita mulai\?.*Tunggu kandidat menyatakan siap|Kita lanjut, ya.*percakapan tersimpan/);
+  assert.match(opening, englishSession
+   ? /Ready to get started|pick up where we left off/u
+   : /Bisa kita mulai\?.*Tunggu kandidat menyatakan siap|Kita lanjut, ya.*percakapan tersimpan/u);
   assert.equal(JSON.parse(body.session.input[0].content[0].text.split('\n')[1]).candidateName,'Kandidat');
   if(nextVoiceHttpResult){
    const result=nextVoiceHttpResult,fetch=globalThis.fetch;
@@ -322,6 +328,7 @@ async function main(){
   if(preset?.version===ROLE_ASSESSMENT_VERSION)return roleJudgement(input);
   if(preset?.version===TAKA_LIVE_COMPLETION_VERSION){
    liveEvaluationRequests.push({ids:input.criteria.map((row:any)=>row.id),repair:input.criteria[0]?.repair,instructions:preset.instructions});
+   const english=preset.instructions?.includes('kalimat alasan dalam English');
    return {criteria:Object.fromEntries(input.criteria.map((row:any)=>{
     const endpoint=row.name.includes('endpoint');
     const evidenceTerm=endpoint?'menulis endpoint':row.name.includes('panduan')?'menyusun panduan':
@@ -336,7 +343,8 @@ async function main(){
      return [row.id,{...fields,questionRef:null,reason:'Klaim bukti kurang meski ada jawaban.'}];
     return [row.id,relevant?{...fields,level:endpoint?4:3,clarity:endpoint?3:4,fit:'DIRECT',
      evidence:[relevant.id],questionRef:question?.id??null,requiresQuestionContext:!!question,
-     reason:'Tindakan kandidat didukung percakapan.'}:{...fields,questionRef:null,reason:'Belum ada pertanyaan dan jawaban yang menguji kompetensi ini.'}];
+     reason:english?'The recorded answer supports the candidate’s actions.':'Tindakan kandidat didukung percakapan.'}:{...fields,questionRef:null,
+     reason:english?'The discussion provides no assessable evidence for this competency.':'Belum ada pertanyaan dan jawaban yang menguji kompetensi ini.'}];
    }))};
   }
   if(preset?.version===TAKA_ROLE_EVIDENCE_VERSION){
@@ -1183,7 +1191,7 @@ async function main(){
  assert.equal(recoveredReport.pdfStatus,'READY');
  await voiceService.finish(interruptedId,'SERVER_RESTART');
 
- const normalJob=await db.jobPost.create({data:{companyId:company.id,title:'Platform Engineer · Empat kompetensi',status:'PUBLISHED',
+ const normalJob=await db.jobPost.create({data:{companyId:company.id,title:'Platform Engineer · Empat kompetensi',status:'PUBLISHED',assessmentLanguage:'en',locale:'id',
   description:'Mengembangkan API, melindungi perubahan produksi, dan mendokumentasikan layanan.',
   responsibilities:['Bangun endpoint API','Tulis panduan penggunaan API','Tangani insiden produksi','Kelola persetujuan akses admin']},include:scoreJobInclude});
  const normalCandidate=await db.recruitmentCandidate.create({data:{companyId:company.id,jobId:normalJob.id,fullName:candidate.fullName,email:candidate.email,
@@ -1198,6 +1206,11 @@ async function main(){
   cvResult:{cvText,roleAssessment:{rubricRevision:normalRubric.revision}},
   jobSnapshot:{...normalPending.jobSnapshot as object,resolvedRoleRubric:normalRubric as unknown as Prisma.InputJsonObject}}});
  const normalInvite=await newCompletionInvite('live-completion-normal',normalCandidate.id);
+ const frozenEnglish=await db.screeningInvitation.findUniqueOrThrow({where:{id:normalInvite.id}});
+ assert.equal((frozenEnglish.snapshot as {assessmentLanguage?:string}).assessmentLanguage,'en');
+ const beforeAssessment=await invitations.report(hr,normalInvite.id);
+ assert.equal(beforeAssessment.invitation.assessmentLanguage,'en');
+ assert.equal(beforeAssessment.evaluation,null);
  const liveCheckpointDb=Object.create(db) as PrismaService;
  let failPlaybackCheckpoint=false,failedPlaybackCheckpoints=0;
  Object.defineProperty(liveCheckpointDb,'voiceInterview',{value:new Proxy(db.voiceInterview,{get(target,property,receiver){
@@ -1217,19 +1230,20 @@ async function main(){
  const normalId=normalConnection.connectionId!;
  const normalTopics=JSON.parse(lastVoiceRequest!.session.input[0].content[0].text.split('\n')[1]).topics;
  assert.equal(normalTopics.length,4);
+ assert.match(lastVoiceRequest!.session.input[1].content[0].text,/Ready to get started/u);
  const dialogue=[
-  ['Untuk endpoint API ini, langkah apa yang lu kerjakan sendiri?',apiAnswer],
-  ['Gimana lu akan menyusun panduan penggunaan API supaya tim baru bisa menggunakannya?',docAnswer],
-  ['Gimana cara lu menangani insiden produksi ketika versi terbaru menyebabkan lonjakan error?',
+  ['What did you personally do to build that API endpoint?',apiAnswer],
+  ['How would you write an API guide for a team that is new to it?',docAnswer],
+  ['What would you do if a production release caused an increase in errors?',
    'Saya sendiri menghentikan deploy, membandingkan error dengan versi sebelumnya, lalu memulihkan versi stabil.'],
-  ['Apa yang lu lakukan sebelum memberi akses admin ke layanan produksi?',
+  ['What would you do before granting admin access to a production service?',
    'Saya meminta persetujuan pemilik sistem dan mencatat alasan serta tanggal berakhirnya akses admin.'],
  ] as const;
  await normalVoice.media(user,normalInvite.sessionId,clientId,'READY',1,0,normalId);
  const normalLive=(normalVoice as any).active.get(normalId);
  const normalOpeningCommands=commands.length;
  await normalVoice.media(user,normalInvite.sessionId,clientId,'PLAYBACK_READY',2,0,normalId);
- onEvent({type:'session.output_transcript.delta',event_id:'normal-greeting',delta:'Halo, gua Tara.',start_ms:0,end_ms:500});
+ onEvent({type:'session.output_transcript.delta',event_id:'normal-greeting',delta:'Hi, I’m Tara. Ready to get started?',start_ms:0,end_ms:500});
  await normalVoice.media(user,normalInvite.sessionId,clientId,'INPUT_QUIET',3,0,normalId);
  await normalVoice.tick(new Date(Date.now()+1200));
  assert.equal(normalLive.delivery.firstAudioMs,undefined);
@@ -1247,6 +1261,7 @@ async function main(){
  const normalStart=Date.now()-12*60_000-26_000;
  const providerStart=normalStart+8000;
  normalLive.delivery={ ...normalLive.delivery, firstAudible:providerStart,clockStartedAt:providerStart,windows:[] };
+ normalLive.latestOutputReceivedAt=providerStart+20;
  normalLive.completion.deadlineAt=normalStart+900_000;
  normalLive.completion.startedAt=normalStart;
  await db.aiScreeningSession.update({where:{id:normalInvite.sessionId},data:{voiceDeadlineAt:new Date(normalStart+900_000)}});
@@ -1260,7 +1275,7 @@ async function main(){
   normalLive.delivery.windows.push({start:providerStart+at-50,end:providerStart+at+2650});
  }
  const earlyFarewell=12*60_000-4000;
- onEvent({type:'session.output_transcript.delta',event_id:'normal-early-farewell',delta:'Makasih udah cerita. Wawancara kita selesai.',
+ onEvent({type:'session.output_transcript.delta',event_id:'normal-early-farewell',delta:'Thanks for sharing. This concludes our interview.',
   start_ms:earlyFarewell,end_ms:earlyFarewell+800});
  normalLive.delivery.windows.push({start:providerStart+earlyFarewell-10,end:providerStart+earlyFarewell+1000});
  normalLive.playbackObservedAt=providerStart+earlyFarewell+1000;
@@ -1273,7 +1288,7 @@ async function main(){
  const stillActive=await db.voiceInterview.findUniqueOrThrow({where:{id:normalId}});
  assert.equal(stillActive.status,'ACTIVE','startup delay never counts toward the earliest farewell on the provider timeline');
  const farewellAt=providerStart+12*60_000+9000;
- onEvent({type:'session.output_transcript.delta',event_id:'normal-farewell',delta:'Oke, makasih udah cerita. Wawancara kita selesai.',
+ onEvent({type:'session.output_transcript.delta',event_id:'normal-farewell',delta:'Thanks for sharing. This concludes our interview.',
   start_ms:farewellAt-providerStart,end_ms:farewellAt-providerStart+800});
  normalLive.delivery.windows.push({start:farewellAt-10,end:farewellAt+1000});
  normalLive.playbackObservedAt=farewellAt+1000;
@@ -1286,19 +1301,35 @@ async function main(){
  const overlappingFarewell=await db.voiceInterview.findUniqueOrThrow({where:{id:normalId}});
  assert.equal(overlappingFarewell.status,'ACTIVE',
   'microphone activity during a farewell keeps the call open even if the candidate speech never reached the transcript');
- const repeatedFarewellAt=farewellAt+3500;
- onEvent({type:'session.output_transcript.delta',event_id:'normal-farewell-after-candidate',delta:'Makasih udah cerita. Wawancara kita selesai.',
-  start_ms:repeatedFarewellAt-providerStart,end_ms:repeatedFarewellAt-providerStart+800});
- normalLive.delivery.windows.push({start:repeatedFarewellAt-10,end:repeatedFarewellAt+1000});
+ const repeatedFarewellAt=Date.now()+600;
+ onEvent({type:'session.input_audio.append',audio:voiceDelta});
+ assert.ok(normalLive.lastInputAudioAt>=repeatedFarewellAt-600&&normalLive.lastInputAudioAt<repeatedFarewellAt);
+ onEvent({type:'session.input_transcript.delta',event_id:'normal-late-quiet-estimate',delta:'No more details. Please end the interview.',
+  start_ms:repeatedFarewellAt-providerStart-2200,end_ms:repeatedFarewellAt-providerStart+400});
+ normalLive.candidateLastSpeechAt=repeatedFarewellAt-650;
+ normalLive.inputObservedAt=repeatedFarewellAt+3900;
+ onEvent({type:'session.output_transcript.delta',event_id:'normal-farewell-thanks',delta:'Thanks for sharing.',
+  start_ms:repeatedFarewellAt-providerStart,end_ms:repeatedFarewellAt-providerStart+200});
+ onEvent({type:'session.output_transcript.delta',event_id:'normal-farewell-after-candidate',delta:' This concludes our interview.',
+  start_ms:repeatedFarewellAt-providerStart+200,end_ms:repeatedFarewellAt-providerStart+800});
+ normalLive.delivery.windows.push({start:repeatedFarewellAt+319,end:repeatedFarewellAt+1000});
  normalLive.playbackObservedAt=repeatedFarewellAt+1000;
+ normalLive.latestOutputReceivedAt=repeatedFarewellAt+1100;
+ const finalQuietCheck=new Date(repeatedFarewellAt+4100);
+ await normalVoice.tick(finalQuietCheck);
+ if(normalLive.flushing) await normalLive.flushing;
+ await normalVoice.tick(finalQuietCheck);
+ const pendingPlayback=await db.voiceInterview.findUniqueOrThrow({where:{id:normalId}});
+ assert.equal(pendingPlayback.status,'ACTIVE','reflected audio after the last quiet report keeps the call open');
+ normalLive.latestOutputReceivedAt=repeatedFarewellAt+800;
  const finalFragmentText=' Kalimat terakhir ini tercatat dari koneksi pencatatan awal.';
  latePrimaryTranscript={type:'session.input_transcript.delta',event_id:'normal-delayed-final-fragment',delta:finalFragmentText,
   start_ms:times.at(-1)!+8040,end_ms:times.at(-1)!+9020};
  confirmCloseDuringFallback=true;
- await normalVoice.tick();
+ await normalVoice.tick(finalQuietCheck);
  assert.equal(liveEvaluationRequests.length,beforeNormal,'the score model stays off the native audio path');
  if(normalLive.flushing) await normalLive.flushing;
- await normalVoice.tick();
+ await normalVoice.tick(finalQuietCheck);
  const normalRow=await db.voiceInterview.findUniqueOrThrow({where:{id:normalId}});
  assert.equal(normalRow.closeReason,'TARA_FINISHED');
  assert.equal(normalRow.transcriptComplete,true,'a recovered playback checkpoint does not mark a complete transcript as interrupted');
@@ -1313,6 +1344,11 @@ async function main(){
  const normalReport=await invitations.report(hr,normalInvite.id);
  assert.equal(normalReport.invitation.session?.completion?.status,'COMPLETE');
  assert.equal(normalReport.pdfStatus,'READY');
+ const englishReport=normalReport.evaluation?.result as {assessmentLanguage?:string;roleAssessment:RoleAssessment};
+ assert.equal(englishReport.assessmentLanguage,'en');
+ assert.ok(englishReport.roleAssessment.criteria.some(item=>item.name==='Bangun endpoint API'&&item.displayName==='Build an API endpoint'));
+ assert.ok(englishReport.roleAssessment.criteria.every(item=>item.reason.startsWith('The recorded answer')));
+ assert.ok(englishReport.roleAssessment.criteria.some(item=>item.evidence.some(evidence=>evidence.quote.includes('menulis endpoint'))));
  assert.equal((normalReport.evaluation?.result as {roleAssessment:RoleAssessment}).roleAssessment.coverage.assessed,4);
  assert.ok(normalReport.voice?.transcript?.some(turn=>turn.text.includes(finalFragmentText.trim())));
  assert.ok(times.every(at=>at+8000 <= 9*60_000));
@@ -1373,7 +1409,7 @@ async function main(){
  const restoredPdf=pdfjs.getDocument({data:new Uint8Array(objects.get(restoredResult.pdfKey!)!),verbosity:0});
  try{
   const contents=await(await(await restoredPdf.promise).getPage(1)).getTextContent();
-  assert.match(contents.items.flatMap(item=>'str' in item?[item.str]:[]).join(' '),/Skor akhir 82,2\s*\/\s*100/);
+  assert.match(contents.items.flatMap(item=>'str' in item?[item.str]:[]).join(' '),/Final score 82\.2\s*\/\s*100/);
  }finally{await restoredPdf.destroy();}
  console.log('Taka explicit Live recovery passed: only unresolved criteria, one new evaluation revision, one final score. Paid calls: 0.');
  const mixedInvite=await newCompletionInvite('live-completion-mixed-coverage',retryCandidate.id);

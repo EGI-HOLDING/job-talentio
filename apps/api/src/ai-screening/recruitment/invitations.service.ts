@@ -30,6 +30,8 @@ import { canPublishLiveReport, LIVE_COMPLETION_VERSION, LIVE_EVALUATION_WORK, li
 import { freezeRoleAssessment } from '../taka-role-assessment';
 import { freezeLiveEvidencePrompt } from '../taka-live-evidence';
 import { freezeLiveVoicePrompt } from '../prompts/voice-session';
+import { assessmentLanguageOf } from '../assessment-language';
+import { assessmentNarrativeState } from '../assessment-narrative';
 import { alignedRoleFromPacket, frozenRoleRubric, ROLE_RUBRIC_VERSION } from '../role-rubric';
 import type { PackagePayload } from '../screening.schemas';
 import { invitationCreateSchema, invitationId, invitationNonce, invitationToken, INVITATION_TTL_MS, tokenHash, validInvitationToken } from './invitation.policy';
@@ -44,7 +46,7 @@ export class InvitationsService {
  private url(row:{id:string;tokenNonce:string}){const base=this.config.get<string>('WEB_URL')??'http://localhost:3000';const url=new URL('/id/screening/'+this.token(row),base);if(!['http:','https:'].includes(url.protocol))throw Error('WEB_URL_INVALID');return url.toString();}
  private safe(row:Invitation){
   const completion=liveCompletion(row.session?.voiceCompletion);
-  return {id:row.id,mode:row.mode,status:row.status,closedByStage:['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt,expiresAt:row.expiresAt,recipientEmail:row.recipientEmail,emailStatus:row.emailStatus,messageStatus:row.messageStatus,error:row.error,createdAt:row.createdAt,
+  return {id:row.id,mode:row.mode,status:row.status,assessmentLanguage:assessmentLanguageOf(row.snapshot),closedByStage:['HIRED','REJECTED','WITHDRAWN'].includes(row.candidate.stage)&&!row.session?.startedAt,expiresAt:row.expiresAt,recipientEmail:row.recipientEmail,emailStatus:row.emailStatus,messageStatus:row.messageStatus,error:row.error,createdAt:row.createdAt,
    session:row.session?{id:row.session.id,status:row.session.status,startedAt:row.session.startedAt,completedAt:row.session.completedAt,evaluation:canPublishLiveReport(completion)?row.session.evaluation:null,
     ...(completion ? {completion:{status:completion.status,reason:completion.reason,deadlineAt:row.session.voiceDeadlineAt,
      canRetry:completion.canRetry,remainingVoiceMs:completion.remainingVoiceMs,resumeUntil:completion.resumeExpiresAt}}:{})}:null};
@@ -71,16 +73,17 @@ export class InvitationsService {
   const roleSources = frozenRoleRubric(packet.jobSnapshot);
   const roleRubric = alignedRoleFromPacket(packet.jobSnapshot, packet.payload as PackagePayload | null);
   const completionEnabled=input.mode==='VOICE'&&this.config.get('TARA_LIVE_COMPLETION_ENABLED')==='true';
+  const assessmentLanguage=assessmentLanguageOf(packet.jobSnapshot);
   if(roleSources?.version===ROLE_RUBRIC_VERSION&&!roleRubric)throw new ConflictException('Rubrik lowongan sedang disiapkan. Periksa kembali status penilaian CV.');
   if(completionEnabled&&!roleRubric?.interviewIds.length)
     throw new ConflictException('Siapkan tanggung jawab atau keahlian wajib lowongan sebelum mengundang wawancara suara.');
-  const roleAssessmentPrompt = roleRubric ? freezeRoleAssessment() : undefined;
-  const takaInterviewAssessment = freezeTakaInterview();
+  const roleAssessmentPrompt = roleRubric ? freezeRoleAssessment(assessmentLanguage) : undefined;
+  const takaInterviewAssessment = freezeTakaInterview(assessmentLanguage);
   const liveSnapshot = completionEnabled ? {
    liveCompletionVersion:LIVE_COMPLETION_VERSION,
-   liveVoicePrompt:freezeLiveVoicePrompt(this.config.get<string>('TARA_LIVE_VOICE')??'marin'),
+   liveVoicePrompt:freezeLiveVoicePrompt(this.config.get<string>('TARA_LIVE_VOICE')??'marin',assessmentLanguage),
    // Preserve Structured Outputs field order through PostgreSQL jsonb.
-   liveEvidencePrompt:JSON.stringify(freezeLiveEvidencePrompt()),
+   liveEvidencePrompt:JSON.stringify(freezeLiveEvidencePrompt(assessmentLanguage)),
   } : undefined;
   const id=randomUUID(),tokenNonce=invitationNonce(),token=this.token({id,tokenNonce});
   const row=await this.db.$transaction(async tx=>{
@@ -92,6 +95,7 @@ export class InvitationsService {
    if(repeated)return repeated;
    const current=await tx.recruitmentCandidate.findUniqueOrThrow({where:{id:candidateId}});if(['HIRED','REJECTED','WITHDRAWN'].includes(current.stage))throw new ConflictException('Proses rekrutmen kandidat sudah ditutup.');
    const currentJob=await tx.jobPost.findUniqueOrThrow({where:{id:candidate.jobId!},include:scoreJobInclude});
+   if (assessmentLanguageOf(currentJob)!==assessmentLanguage) throw new ConflictException('Lowongan baru saja berubah. Coba buat undangan lagi.');
    if(current.scoreStatus!=='READY'||current.revision!==candidate.revision||!sameScoringJob(cvJobRequirements(current.jobSnapshot),scoringJob(currentJob)))throw new ConflictException('Penilaian CV perlu diperbarui sebelum membuat undangan baru.');
    const text=(current.cvResult as {cvText?:unknown}|null)?.cvText;
    if(typeof text!=='string'||!text.trim())throw new BadRequestException('Isi CV belum tersedia untuk screening.');
@@ -104,7 +108,7 @@ export class InvitationsService {
    if(completionEnabled&&(typeof current.cvScore!=='number'||!Number.isFinite(current.cvScore)||current.cvScore<0||current.cvScore>100||assessedRubric!==roleRubric?.revision))
      throw new ConflictException('Perbarui penilaian CV dengan rubrik lowongan sebelum membuat undangan.');
    const created=await tx.screeningInvitation.create({data:{id,candidateId,packageId:packet.id,mode:input.mode,recipientEmail:email,createdById:user.id,requestKey:input.requestKey,tokenNonce,tokenHash:tokenHash(token),expiresAt:new Date(Date.now()+INVITATION_TTL_MS),snapshot:json({filename:current.filename,fileKey:current.fileKey,checksum:current.checksum,contentType:current.contentType,cvText:text,cvScore:current.cvScore,cvResult:current.cvResult,job:current.jobSnapshot,jobId:current.jobId,jobTitle:currentJob.title,companyName:currentJob.isAnonymous?'Perusahaan dirahasiakan':details.company.name,takaInterviewAssessment,roleAssessmentPrompt,
-    ...liveSnapshot})},include:inviteInclude});
+    assessmentLanguage,...liveSnapshot})},include:inviteInclude});
    const restored=await tx.aiScreeningPackage.updateMany({where:{id:packet.id,status:'SUPERSEDED'},data:{status:'PENDING'}});
    if(restored.count)await tx.aiScreeningWork.updateMany({where:{key:'PREPARE:'+packet.id,status:'DONE'},data:{status:'PENDING',availableAt:new Date()}});
    await enqueueWork(tx,'INVITE_DELIVERY',id);
@@ -114,15 +118,16 @@ export class InvitationsService {
   return this.safe(row);
  }
  async list(user:AuthUser,candidateId:string){await this.candidates.owned(user,candidateId);return (await this.db.screeningInvitation.findMany({where:{candidateId},include:inviteInclude,orderBy:{createdAt:'desc'}})).map(row=>this.safe(row));}
- async report(user:AuthUser,id:string){
+ async report(user:AuthUser,id:string,candidateId?:string){
   const row=await this.db.screeningInvitation.findUnique({where:{id},include:{...inviteInclude,session:{include:{questions:{orderBy:{position:'asc'}},evaluation:true,currentPlan:{select:{payload:true}}}}}});
-  if(!row)throw new NotFoundException();await this.candidates.owned(user,row.candidateId);
+  if(!row||candidateId!==undefined&&row.candidateId!==candidateId)throw new NotFoundException();await this.candidates.owned(user,row.candidateId);
   const completion=liveCompletion(row.session?.voiceCompletion);
   const evaluation=canPublishLiveReport(completion)?row.session?.evaluation:null;
   const claims=((row.session?.currentPlan?.payload as {claims?:Array<{id:string;statement:string;quote:string}>}|null)?.claims??[]).map(c=>({id:c.id,statement:c.statement,quote:c.quote}));
   let pdfStatus='NOT_READY';
   if(evaluation?.result&&row.sessionId){
    if(evaluation.pdfKey&&evaluation.pdfVersion===PDF_TEMPLATE_VERSION)pdfStatus='READY';
+   else if(assessmentNarrativeState(evaluation.result)==='PENDING')pdfStatus='PENDING';
    else{
     const legacyKeys=['PDF:'+row.sessionId+':'+PDF_TEMPLATE_VERSION];
     if(row.mode==='VOICE')legacyKeys.push('PDF:'+row.sessionId+':'+evaluation.promptVersion);
@@ -137,8 +142,9 @@ export class InvitationsService {
     voice.promptVersion === ROLE_VOICE_VERSION || voice.promptVersion === TARA_LIVE_AUDIO_PROTOCOL ? roleVoiceTurns(voice.fragments) :
     voice.promptVersion === NATIVE_VOICE_VERSION ? nativeVoiceTurns(voice.fragments) : voiceTurns(voice.fragments));
   const last=resumed.at(-1)??voice;
-  return {claims,pdfStatus,invitation:this.safe(row),voice:last&&voice?{status:last.status,startedAt:voice.startedAt,endedAt:last.endedAt,closeReason:last.closeReason,
-   transcriptComplete:[voice,...resumed].every(connection=>connection.transcriptComplete),transcript}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,finalScore:evaluation.finalScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename:'Hasil-screening-Tara.pdf',contentType:'application/pdf'}):null};
+  const filename=assessmentLanguageOf(evaluation?.result)==='en'?'Taka-interview-report.pdf':'Hasil-screening-Tara.pdf';
+  return {claims,pdfStatus,resultRevision:evaluation?.inputHash??null,invitation:this.safe(row),voice:last&&voice?{status:last.status,startedAt:voice.startedAt,endedAt:last.endedAt,closeReason:last.closeReason,
+   transcriptComplete:[voice,...resumed].every(connection=>connection.transcriptComplete),transcript}:null,questions:voice?[]:row.session?.questions.map(q=>({id:q.id,text:q.text,answer:q.answer,shownAt:q.shownAt,answeredAt:q.answeredAt,timedOut:q.timedOut}))??[],evaluation:evaluation?{status:evaluation.status,score:evaluation.screeningScore,finalScore:evaluation.finalScore,result:evaluation.result}:null,pdfUrl:pdfStatus==='READY'&&evaluation?.pdfKey?await this.storage.getPresignedGetUrl(evaluation.pdfKey,300,{filename,contentType:'application/pdf'}):null};
  }
  async retryDelivery(user:AuthUser,id:string,acknowledgePossibleDuplicate=false){
   const row=await this.db.screeningInvitation.findUnique({where:{id}});if(!row)throw new NotFoundException();await this.candidates.owned(user,row.candidateId);

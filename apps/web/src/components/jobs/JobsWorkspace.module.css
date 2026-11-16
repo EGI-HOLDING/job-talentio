@@ -384,3 +384,106 @@
   .professionGrid { grid-template-columns:1fr; gap:8px; }
   .professionCard { min-height:62px; }
 }
+
+
+.mobileToolbar, .mobileFilterFields { display: none; }
+@media (max-width: 767px) {
+  .searchHeader,
+  .modeBar > .profileShortcut,
+  .resultsToolbar,
+  .filterBackdrop,
+  .pagination > .perPage { display: none; }
+  .mobileToolbar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--line);
+    background: #fbfcfe;
+  }
+  .mobileDetail .mobileToolbar, .mobileDetail .modeBar { display: none; }
+  .mobileFilterButton, .mobileProfileLink, .refreshInFilters {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    color: #4324cb;
+    font-size: .875rem;
+    font-weight: 600;
+  }
+  .mobileFilterButton {
+    background: #fff;
+    border: 1px solid #dbe0ef;
+  }
+  .mobileFilterButton > span {
+    min-width: 20px;
+    padding: 1px 4px;
+    border-radius: 5px;
+    background: #eee8ff;
+    text-align: center;
+  }
+  .mobileProfileLink { padding-inline: 0; }
+  .modeBar { min-height: 44px; gap: 22px; padding-inline: 16px; }
+  .modeBar > a { font-size: .875rem; }
+  .secondaryResultsToolbar { display: flex; min-height: 0; padding: 12px 16px; }
+  .secondaryResultsToolbar .refreshButton { display: none; }
+  .relatedModeHeading { gap: 8px; }
+  .backToRecommendations { min-height: 44px; }
+  .activeChips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .activeChips > button { flex-shrink: 0; max-width: 80%; overflow-wrap: anywhere; }
+  .pagination { padding: 2px 12px max(2px, env(safe-area-inset-bottom)); }
+  .pagination :global(.pagination) { flex-wrap: nowrap; }
+  .pagination :global(.pagination-meta) { flex: 1; width: auto; }
+  .pagination :global(.pagination-controls) { flex: 0 0 auto; }
+  .pagination :global(.pagination-pages) { display: none; }
+  .pagination :global(.pagination-controls) button { min-width: 44px; min-height: 44px; }
+  .pagination:has(:global(.pagination-jump)) :global(.pagination) { flex-wrap: wrap; }
+  .pagination :global(.pagination-range) { font-size: .75rem; }
+  .saveButton { right: 4px; min-width: 44px; min-height: 44px; }
+  .jobLink { padding-right: 48px; }
+  .jobMeta { color: #52617b; }
+  .filtersOpen {
+    inset: 0;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+  .filterHeading {
+    flex: 0 0 auto;
+    min-height: 56px;
+    padding: max(6px, env(safe-area-inset-top)) 16px 6px;
+  }
+  .filterHeading h2 { font-size: 1.125rem; }
+  .filterHeading .textButton { min-height: 44px; margin-right: 0; padding-inline: 8px; font-size: .875rem; }
+  .closeFilters { min-width: 44px; min-height: 44px; color: #394962; }
+  .filterScroll { padding-inline: 16px; background: #fff; }
+  .mobileFilterFields { display: grid; gap: 10px; padding-block: 16px; border-bottom: 1px solid var(--line); }
+  .filterScope { margin: 0; color: #52617b; font-size: .875rem; }
+  .mobileFilterFields .keyword, .mobileLocation {
+    min-height: 48px;
+    padding-inline: 12px;
+    border: 1px solid #dbe0ef;
+    border-radius: 8px;
+  }
+  .mobileLocation > button { min-height: 48px; }
+  .mobileFilterFields .keyword > input,
+  .page .filterScroll input:not([type=radio]):not([type=checkbox]),
+  .page .filterScroll select { font-size: 1rem; }
+  .mobileListOptions {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .mobileListOptions label { display: grid; grid-template-rows: 1fr auto; gap: 5px; min-width: 0; color: #52617b; font-size: .8125rem; }
+  .mobileListOptions select { min-width: 0; min-height: 44px; }
+  .filterSection > summary, .moreFilters > summary { min-height: 44px; padding-block: 10px; font-size: .875rem; }
+  .filterSection, .moreFilters { padding-block: 3px; }
+  .filterCheck { min-height: 44px; font-size: .875rem; }
+  .refreshInFilters { margin-top: 8px; padding-inline: 0; background: transparent; }
+  .showResults { flex: 0 0 auto; margin: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+}

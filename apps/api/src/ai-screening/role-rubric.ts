@@ -38,6 +38,7 @@ export type RoleRubric = {
     title: string;
     description?: string;
     criteria: RoleCriterion[];
+    displayLabels?: Record<string, string>;
     interviewIds: string[];
 };
 

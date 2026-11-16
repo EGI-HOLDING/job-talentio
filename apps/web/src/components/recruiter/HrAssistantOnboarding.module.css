@@ -154,3 +154,70 @@
     padding-inline: 8px;
   }
 }
+
+
+@media (max-width: 767px) {
+  .header { padding-inline: 16px; }
+  .header>img { width: 116px; }
+  .header>button { font-size: .875rem; min-height: 44px; }
+  .canvas { padding: 14px 16px; }
+  .scene { gap: 12px; }
+  .introTaka { max-height: clamp(146px, 34svh, 255px); object-fit: contain; }
+  .introBubble h1 { font-size: clamp(1.5rem, 6.2vw, 2rem); margin-block: 6px; }
+  .introLead { font-size: 1.125rem; line-height: 1.35; }
+  .introBubble .introHint { font-size: .875rem; margin-top: 10px; }
+  .sourcesBubble h1 { font-size: 1.125rem; }
+  .sourcesBubble p { font-size: .9375rem; }
+  .cv_sources .portal { height: 50px !important; }
+  .cv_sources .portal > img { max-height: 36px; }
+  .scene>.collectionArt { max-width: min(100%, 320px, 47svh); }
+  .mobileCvFlow { height: 38px; margin-block: -5px -6px; }
+  .rankingPanel { padding: 14px; border-radius: 16px; }
+  .rankingPanel h1 { font-size: 1.375rem; }
+  .rankList li { height: 88px; gap: 8px; }
+  .rankList .art { width: 38px; height: 44px; }
+  .rankDetails>strong { font-size: .9375rem; }
+  .fitTrack { margin-top: 8px; }
+  .score { bottom: 26px; font-size: .875rem; }
+  .tara_intro .art { max-height: min(260px, 39svh); }
+  .roleSummary { font-size: 1rem; }
+  .chatPanel { border-radius: 16px; padding-bottom: 37px; }
+  .chatPanel>header { min-height: 60px; padding: 8px 12px; gap: 8px; }
+  .chatPanel h1 { font-size: 1.125rem; }
+  .chatPanel>header>span { font-size: .75rem; }
+  .message { gap: 8px; margin: 9px 10px; }
+  .message .art { width: 34px !important; height: 42px !important; }
+  .message p { padding: 10px; font-size: .875rem; }
+  .typing { left: 52px; }
+  .voicePanel {
+    --portrait-size: clamp(113px, 24svh, 184px);
+    display: grid;
+    grid-template-columns: minmax(0,1fr);
+    grid-template-areas: "heading" "portrait" "name" "status" "wave" "controls";
+    justify-items: center;
+    align-items: center;
+    gap: 6px;
+    padding: 12px;
+    height: auto !important;
+    border-radius: 16px;
+  }
+  .voicePanel>header { grid-area: heading; padding: 0 0 10px; }
+  .voicePanel h1 { font-size: 1.125rem; }
+  .voicePanel :is(.interviewer, .speakingRings, .voiceName, .speakingStatus, .waveform, .callControls) {
+    position: relative;
+    inset: auto;
+    transform: none;
+  }
+  .voicePanel :is(.interviewer,.speakingRings) { grid-area: portrait; }
+  .speakingRings { width: calc(var(--portrait-size) + 20px); box-shadow: 0 0 0 5px #f1e8ff; }
+  .voiceName { grid-area: name; font-size: 1.25rem; }
+  .speakingStatus { grid-area: status; font-size: .875rem; }
+  .waveform { grid-area: wave; width: 90%; height: 28px; overflow: hidden; }
+  .callControls { grid-area: controls; }
+  .callControls button { width: 44px; height: 44px; }
+  .uploadPanel h1 { font-size: 1.375rem; margin-bottom: 10px; }
+  .uploadGuide { margin-top: 8px; }
+  .footer { flex-basis: auto; min-height: 56px; padding: 4px 16px calc(4px + env(safe-area-inset-bottom)); }
+  .footer>button { min-height: 44px; font-size: .9375rem; gap: 7px; }
+  .footer .next { border-radius: 10px; }
+}

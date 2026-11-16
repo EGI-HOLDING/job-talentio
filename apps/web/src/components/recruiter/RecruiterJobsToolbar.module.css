@@ -19,3 +19,18 @@
 .controls .templates { min-height:42px; white-space:nowrap; font-size:.78rem; }
 @media(max-width:1450px) { .controls { flex-wrap:wrap; } }
 @media(max-width:600px) { .controls .templates { min-width:0; justify-content:center; white-space:normal; } .controls:has(.templates) .create { grid-column:auto; } }
+
+
+@media (max-width: 767px) {
+  .root { padding: 12px 16px; gap: 10px; }
+  .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .controls > label { grid-column: 1 / -1; min-width: 0; max-width: none; }
+  .controls > label input { font-size: 1rem; }
+  .controls .templates, .controls .create {
+    grid-row: 1;
+    min-height: 44px;
+    justify-content: center;
+    white-space: normal;
+  }
+  .controls .sort, .controls .package { width: 100%; max-width: none; min-width: 0; min-height: 44px; }
+}

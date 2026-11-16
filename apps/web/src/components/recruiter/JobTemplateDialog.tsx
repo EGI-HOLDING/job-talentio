@@ -35,7 +35,7 @@ export function JobTemplateDialog({companyId,busy,onClose,onUse,returnFocus}:{
       :templates===null?<p role="status">{c('Memuat template lowongan...')}</p>
       :templates.length===0?<p className={s.explanation}>{c('Belum ada template. Buka menu lowongan yang pernah terbit dan pilih Jadikan template.')}</p>
       :<ul className={s.templateList}>{templates.map(template=><li key={template.id}>
-        <div><strong>{template.title}</strong><small>{[template.location,dateLabel(template.updatedAt,locale)].filter(Boolean).join(' · ')}</small></div>
+        <div><strong>{template.title}</strong><small>{[template.location,dateLabel(template.updatedAt,locale)].filter(Boolean).join(' \u00b7 ')}</small></div>
         <button type="button" className={s.secondary} disabled={busy} onClick={()=>void useTemplate(template.id)}>{c('Gunakan template')}</button>
       </li>)}</ul>}
   </JobRowDialog>;

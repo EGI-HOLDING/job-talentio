@@ -1,3 +1,5 @@
+import { assessmentCopy, type AssessmentLanguage } from '@job-talentio/shared';
+
 export type Evidence={questionId:string;questionRef?:string;questionText?:string;quote:string};
 export const interviewFieldLabel:Record<string,string>={TASK:'Tugas',ACTION:'Tindakan pribadi',CONTEXT:'Konteks pengalaman',RESULT:'Hasil',ROLE_BOUNDARY:'Batas tanggung jawab'};
 export const interviewClaimLabel:Record<string,string>={NOT_ASKED:'Belum dibahas',INSUFFICIENT_OPPORTUNITY:'Kesempatan belum cukup',TECHNICAL_INTERRUPTION:'Kesempatan terpotong',PLAYBACK_UNVERIFIED:'Pemutaran belum terverifikasi',ASSESSMENT_UNAVAILABLE:'Penilaian perlu ditinjau'};
@@ -10,27 +12,18 @@ export type RoleAssessment = { version: string; rubricRevision: string; state: '
  missing: Array<keyof typeof roleScoreReasons>; components: Record<RoleComponent, number | null>;
  contributions: Record<RoleComponent, number | null>; weights: Record<RoleComponent, number>;
  partial?: { competency: number; explanation: number };
- coverage: { assessed: number; total: number; interrupted: boolean }; criteria: Array<{ criterionId: string; name: string; level: number | null;
+ coverage: { assessed: number; total: number; interrupted: boolean }; criteria: Array<{ criterionId: string; name: string; displayName?: string; level: number | null;
  clarity: number | null; reason: string; state: string; questionRefs: string[]; reviewLabels?:string[]; evidence: Evidence[]; discrepancy?: NonNullable<Claim['contradictions']>[number] }>; };
-export const roleScoreReason = (role: RoleAssessment) => role.missing.map(reason => roleScoreReasons[reason]).join(' ');
-export const partialCompetency = (role: RoleAssessment) => role.partial ? `${number(role.partial.competency)} / 100 kompetensi (parsial)` : null;
-export type ScreeningEvaluation={summary?:string;strengths?:string[];gaps?:string[];interviewQuestions?:string[];claims?:Claim[];taraInterview?:TaraInterviewNotes;roleAssessment?:RoleAssessment;interviewAssessment?:{version:string;state:'COMPLETE'|'PARTIAL'|'NO_ASSESSABLE_CLAIMS'|'ALTERNATIVE';plannedClaims:number;assessedClaims:number;openScopeClaims:number;interrupted:boolean};voice?:{testedClaims:number;totalClaims:number;partial:boolean;durationSeconds?:number;transcriptComplete?:boolean;closeReason?:string|null}};
-export type Invitation={id:string;mode:'TEXT'|'VOICE';status:string;closedByStage?:boolean;expiresAt:string;recipientEmail:string;emailStatus:string;messageStatus:string;error?:string|null;createdAt:string;session:{id:string;status:string;startedAt?:string|null;completedAt:string|null;
+export const roleScoreReason = (role: RoleAssessment, language?: AssessmentLanguage) => role.missing.map(reason => assessmentCopy(language, roleScoreReasons[reason])).join(' ');
+export const partialCompetency = (role: RoleAssessment, language?: AssessmentLanguage) => role.partial ? `${number(role.partial.competency, language)} / 100 ${language==='en'?'competency (partial)':'kompetensi (parsial)'}` : null;
+export type ScreeningEvaluation={assessmentLanguage?:AssessmentLanguage;narrative?:{state:'PENDING'|'REVIEW_REQUIRED'};summary?:string;strengths?:string[];gaps?:string[];interviewQuestions?:string[];claims?:Claim[];taraInterview?:TaraInterviewNotes;roleAssessment?:RoleAssessment;interviewAssessment?:{version:string;state:'COMPLETE'|'PARTIAL'|'NO_ASSESSABLE_CLAIMS'|'ALTERNATIVE';plannedClaims:number;assessedClaims:number;openScopeClaims:number;interrupted:boolean};voice?:{testedClaims:number;totalClaims:number;partial:boolean;durationSeconds?:number;transcriptComplete?:boolean;closeReason?:string|null}};
+export type Invitation={id:string;mode:'TEXT'|'VOICE';status:string;assessmentLanguage?:AssessmentLanguage;closedByStage?:boolean;expiresAt:string;recipientEmail:string;emailStatus:string;messageStatus:string;error?:string|null;createdAt:string;session:{id:string;status:string;startedAt?:string|null;completedAt:string|null;
  completion?:{status:'IN_PROGRESS'|'ASSESSING'|'RESUMABLE'|'REVIEW_REQUIRED'|'INTERRUPTED'|'COMPLETE';reason?:string;deadlineAt?:string|null;canRetry?:boolean;resumeUntil?:string};
  evaluation:{status:string;screeningScore:number|null;finalScore?:number|null;result:ScreeningEvaluation|null}|null}|null};
 export type Turn={id:string;speaker:string;text:string;startMs:number|null;timedOut?:boolean};
-export type Report={pdfStatus?:'NOT_READY'|'PENDING'|'FAILED'|'READY';claims?:Array<{id:string;statement:string;quote:string}>;invitation?:Invitation;voice?:{startedAt?:string;endedAt?:string;closeReason:string;transcriptComplete:boolean;transcript:Array<{id:string;speaker:string;text:string;startMs:number}>}|null;questions:Array<{id:string;text:string;answer:string|null;shownAt?:string|null;answeredAt?:string|null;timedOut:boolean}>;evaluation:{status:string;score:number|null;finalScore?:number|null;result:ScreeningEvaluation|null}|null;pdfUrl:string|null};
-export const number=(n:number|null|undefined)=>n==null?'\u2014':n.toLocaleString('id-ID',{maximumFractionDigits:1});
-export function historyScore(invitation: Invitation) {
- if(invitation.session?.completion?.status&&invitation.session.completion.status!=='COMPLETE')return number(null);
- const evaluation = invitation.session?.evaluation;
- const role = evaluation?.result?.roleAssessment;
- if (!role) return number(evaluation?.screeningScore);
- return role.score !== null ? number(role.score) : partialCompetency(role) ?? 'Belum lengkap';
-}
-export const date=(s:string|null|undefined,time=false)=>s?new Date(s).toLocaleString('id-ID',time?{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}:{day:'numeric',month:'short',year:'numeric'}):'\u2014';
+export type Report={pdfStatus?:'NOT_READY'|'PENDING'|'FAILED'|'READY';resultRevision?:string|null;assessmentLanguage?:AssessmentLanguage;claims?:Array<{id:string;statement:string;quote:string}>;invitation?:Invitation;voice?:{startedAt?:string;endedAt?:string;closeReason:string;transcriptComplete:boolean;transcript:Array<{id:string;speaker:string;text:string;startMs:number}>}|null;questions:Array<{id:string;text:string;answer:string|null;shownAt?:string|null;answeredAt?:string|null;timedOut:boolean}>;evaluation:{status:string;score:number|null;finalScore?:number|null;result:ScreeningEvaluation|null}|null;pdfUrl:string|null};
+export const number=(n:number|null|undefined, language?:AssessmentLanguage)=>n==null?'\u2014':n.toLocaleString(language==='en'?'en-US':'id-ID',{maximumFractionDigits:1});
 export const clock=(ms:number|null|undefined)=>ms==null?'\u2014':`${Math.floor(ms/60000).toString().padStart(2,'0')}:${Math.floor(ms/1000%60).toString().padStart(2,'0')}`;
-export const typeName=(i:Invitation)=>i.mode==='VOICE'?'Interview suara':'Interview teks';
 export const active=(i:Invitation)=>!i.closedByStage&&['INVITED','STARTED'].includes(i.status)&&(i.status==='STARTED'||Date.parse(i.expiresAt)>Date.now());
 export function status(i:Invitation){
  if(i.closedByStage)return 'Ditutup';
@@ -65,4 +58,13 @@ export function turns(report:Report):Turn[]{
  const recorded=report.evaluation?.result?.interviewAssessment||report.evaluation?.result?.roleAssessment;
  const questions=recorded?report.questions.filter(q=>q.shownAt):report.questions;
  return questions.flatMap(q=>[{id:'question:'+q.id,speaker:'TARA',text:q.text,startMs:offset(q.shownAt)},...(q.answeredAt||!recorded?[{id:'answer:'+q.id,speaker:'CANDIDATE',text:q.answer?.trim()||'Tidak ada jawaban tersimpan.',startMs:offset(q.answeredAt),timedOut:q.timedOut}]:[])]);
+}
+
+export function evaluatedInterviewScore(evaluation?: {
+  result: ScreeningEvaluation | null; finalScore?: number | null; screeningScore?: number | null;
+} | null) {
+  const role = evaluation?.result?.roleAssessment;
+  if (role) return { value: role.score, final: true };
+  if (evaluation?.finalScore != null) return { value: evaluation.finalScore, final: true };
+  return { value: evaluation?.screeningScore ?? null, final: false };
 }

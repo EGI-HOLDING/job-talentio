@@ -1,3 +1,5 @@
+import type { AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentTextLanguage } from './assessment-language';
 import { normalizedText, redactScreeningContacts } from './screening.policy';
 import { assertSchema, type JsonSchema } from './screening.schemas';
 import { explicitRoleDecline, freezeRoleAssessment, inRoleAnswerWindow,
@@ -128,7 +130,7 @@ function clearlyCannotAnswer(text: string) {
         (explicitRoleDecline(last) || spokenDecline.test(last) || explainsInability.test(last)));
 }
 
-export function freezeLiveEvidencePrompt() {
+export function freezeLiveEvidencePrompt(language?: AssessmentLanguage) {
     return {
         preset: { ...freezeRoleAssessment(), version: TAKA_LIVE_COMPLETION_VERSION, name: 'taka_live_evidence',
             schema: wireRow,
@@ -145,7 +147,8 @@ export function freezeLiveEvidencePrompt() {
             'Untuk 0, isi level dan clarity dengan 0, questionRef dengan qN, evidence dengan [aN] jika kandidat eksplisit tidak bisa menjelaskan langkah dan tidak memberi langkah relevan pada giliran itu, atau [jawaban pertama, jawaban kedua] jika keduanya melenceng meski diarahkan. Jika kandidat menjelaskan satu langkah yang tepat tetapi tidak tahu cara melanjutkan, nilai langkah yang sudah dijelaskan. Ambil qN dari questions yang mencantumkan jawaban itu. Untuk dua jawaban, redirectRef menunjuk pertanyaan kedua. “Belum pernah” saja, permintaan klarifikasi, dan ucapan terpotong belum membuktikan nol. Server memeriksa kesempatan menjawab.',
             'Contoh: “I checked the receipt and asked dispatch to trace the package” berisi tindakan yang bisa dinilai. “Saya tidak bisa menjelaskan cara menelusuri paket” bisa dinilai 0 setelah pertanyaan jelas. “Bisa dijelasin lagi?” tanpa jawaban lain tetap null.',
             'Nilai null memakai evidence kosong. Isi fit hanya untuk nilai positif. Gunakan redirectRef hanya untuk nilai nol setelah dua jawaban, serta requiresQuestionContext true hanya untuk nilai positif yang bergantung pada isi pertanyaan.',
-            'Salin ID referensi yang tersedia. discrepancyRef hanya untuk ketidaksesuaian yang telah diklarifikasi kandidat terhadap klaim CV terkait. Beri satu kalimat alasan dalam bahasa Indonesia. Jangan menilai kejujuran atau memberi keputusan perekrutan.',
+            `Salin ID referensi yang tersedia. discrepancyRef hanya untuk ketidaksesuaian yang telah diklarifikasi kandidat terhadap klaim CV terkait. Beri satu kalimat alasan dalam ${assessmentTextLanguage(language)}. Jangan menilai kejujuran atau memberi keputusan perekrutan.`,
+            ...(language ? ['Arahan agar kandidat memakai bahasa wawancara bukan pertanyaan kompetensi atau arahan balik tentang isi. Nilai bukti yang relevan dalam jawaban apa pun bahasanya.'] : []),
         ].join('\n\n'),
         repair: 'Perbaiki hanya kompetensi yang diminta. INSUFFICIENT_WITH_ANSWER berarti ada jawaban tersimpan. Cari bukti lintas topik, termasuk ketika pertanyaan yang menguji kompetensi ini tidak ada. Gunakan evidence atau nilai nol jika syaratnya terpenuhi. Jika jawaban tidak memberi bukti dan syarat nol belum terpenuhi, INSUFFICIENT tetap sah. Isi questionRef hanya jika kompetensi ini memang ditanya dan jelaskan apa yang masih perlu ditanyakan.',
     };

@@ -18,20 +18,25 @@ import { acceptLiveEvidence, liveEvidenceRequest, liveReviewLabels, missingLiveO
 import { liveCompletion, liveCompletionDecision, type LiveCompletion } from './voice/voice-completion';
 import { savedTakaResponses } from './taka-reassessment';
 import { composePrompt } from './prompts/compose';
+import { assessmentCopy, type AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentLanguageOf } from './assessment-language';
+import { assessmentNarrativeWork, assessmentNarrativeState, stageAssessmentNarrative } from './assessment-narrative';
 
 export async function evaluateTakaInterview(
     db: PrismaService, client: ScreeningClient, workId: string,
     session: { id: string; revision: number; currentPlanId: string | null; applicationId: string | null },
     invitation: { id: string; snapshot: unknown } | null,
     preset: PromptPreset, plan: CandidatePayload, turns: Parameters<typeof prepareTakaEvidence>[1],
-    { interrupted, notes, owner, voice, rubric, applicationCv, role, reassess, completion }: { interrupted: boolean; notes?: ReturnType<typeof taraInterviewReport>; owner?: string;
+    { interrupted, notes, owner, voice, rubric, applicationCv, role, reassess, completion, assessmentLanguage }: { interrupted: boolean; notes?: ReturnType<typeof taraInterviewReport>; owner?: string;
         rubric: PackagePayload;
+        assessmentLanguage?: AssessmentLanguage;
         applicationCv?: { assessable: boolean; total: number } | null;
         role?: { rubric: RoleRubric; transcript: RoleTranscriptEntry[]; direct?: boolean; evidenceV2?: boolean };
         completion?: { value: LiveCompletion; lastEndedAt: Date; replacementUsed: boolean; cannotResume: boolean };
         voice?: { closeReason: string | null; transcriptComplete: boolean; durationSeconds: number };
         reassess?: { previous: string; savedResponseOnly: boolean; verify: (tx: Prisma.TransactionClient) => Promise<boolean> } },
 ) {
+    const language = invitation ? assessmentLanguageOf(invitation.snapshot) : assessmentLanguage;
     if (role) preset = frozenRoleAssessment(invitation?.snapshot);
     const legacyInput = [preset, session.currentPlanId, plan, rubric, turns, interrupted, notes, voice, applicationCv];
     const roleInput = role ? [...legacyInput, role, invitation?.snapshot] : legacyInput;
@@ -72,7 +77,7 @@ export async function evaluateTakaInterview(
                 }
             }
         }
-        const { result, score, coverage } = scoreTakaInterview(evidence, judgements, interrupted, notes);
+        const { result, score, coverage } = scoreTakaInterview(evidence, judgements, interrupted, notes, language);
         return { result, score, assessed: coverage.assessedClaims, total: coverage.plannedClaims,
             ready: ['COMPLETE', 'ALTERNATIVE'].includes(coverage.state),
             finalScore: invitation || coverage.state !== 'COMPLETE' ? null : combineScores(cvScore, score) };
@@ -127,9 +132,9 @@ export async function evaluateTakaInterview(
                 return grade?.level == null && Boolean(issue && !missingLiveOpportunity(issue));
             }));
             const recordedDiagnostics = new Map([...diagnostics].map(([id, diagnostic]) =>
-                [id, { ...diagnostic, labels: diagnostic.reasons.map(reason => liveReviewLabels[reason]) }]));
+                [id, { ...diagnostic, labels: diagnostic.reasons.map(reason => assessmentCopy(language, liveReviewLabels[reason])) }]));
             const scored = scoreRoleAssessment(evidence, judgements, cvScore, interrupted, notes, { unavailable, diagnostics: recordedDiagnostics,
-                includePartial: false, version: TAKA_LIVE_COMPLETION_VERSION });
+                includePartial: false, version: TAKA_LIVE_COMPLETION_VERSION }, language);
             return { ...scored, liveDecision: {
                 assessmentFailed: unavailable.size > 0,
                 missingCriterionIds: ids.filter(id => judgements.get(id)?.level == null && !unavailable.has(id)),
@@ -143,7 +148,7 @@ export async function evaluateTakaInterview(
             const assessable = Boolean(ids.length && (refs.answers.size || refs.questions.size));
             let uncertain = false;
             async function assessRows(requested: string[], slot: 'primary' | 'repair') {
-                const request = roleEvidenceRequest(evidence, refs, requested, slot === 'repair');
+                const request = roleEvidenceRequest(evidence, refs, requested, slot === 'repair', language);
                 try {
                     const raw = await client.run(workId, session.id, 'evaluate', request.data, request.preset, undefined, undefined, slot);
                     for (const [id, row] of acceptRoleEvidence(evidence, refs, raw, requested)) judgements.set(id, row);
@@ -177,7 +182,7 @@ export async function evaluateTakaInterview(
                 if (!uncertain && unresolved.length) await assessRows(unresolved, 'repair');
             }
             return scoreRoleAssessment(evidence, judgements, cvScore, interrupted, notes,
-                { unavailable: new Set(assessable ? ids.filter(id => !judgements.has(id)) : []) });
+                { unavailable: new Set(assessable ? ids.filter(id => !judgements.has(id)) : []) }, language);
         }
         let judgements: ReturnType<typeof acceptRoleJudgements> = new Map();
         if (evidence.criteria.length && evidence.catalog.length) {
@@ -194,7 +199,7 @@ export async function evaluateTakaInterview(
                 }
             }
         }
-        return scoreRoleAssessment(evidence, judgements, cvScore, interrupted, notes);
+        return scoreRoleAssessment(evidence, judgements, cvScore, interrupted, notes, undefined, language);
     }
     const roleResult = role ? await assessRole(role) : undefined;
     const assessedResult = roleResult ?? await assessLegacy();
@@ -202,8 +207,8 @@ export async function evaluateTakaInterview(
     if (completion && !assessedResult.result.roleAssessment) throw new Error('TAKA_LIVE_RUBRIC_MISSING');
     const liveDecision = roleResult?.liveDecision;
     const cvBreakdown = invitation ? frozen?.cvResult : applicationCv;
-    const payload = voice ? { ...result, voice: { ...voice, partial: interrupted,
-        testedClaims: assessed, totalClaims: total } } : result;
+    const payload = stageAssessmentNarrative(voice ? { ...result, voice: { ...voice, partial: interrupted,
+        testedClaims: assessed, totalClaims: total } } : result, language, 'INTERVIEW_NARRATIVE');
     const saved = await db.$transaction(async tx => {
         if (invitation) {
             await tx.$queryRaw`SELECT id FROM "ScreeningInvitation" WHERE id=${invitation.id} FOR UPDATE`;
@@ -264,7 +269,10 @@ export async function evaluateTakaInterview(
                         leaseOwner: null, leaseUntil: null } });
             }
         }
-        await enqueueEvaluationPdf(tx, session.id, inputHash);
+        const written = current?.inputHash === inputHash ? current.result : payload;
+        const narrativeWork = assessmentNarrativeWork('INTERVIEW_NARRATIVE', session.id, inputHash, written);
+        if (narrativeWork) await tx.aiScreeningWork.createMany({ data: narrativeWork, skipDuplicates: true });
+        else if (assessmentNarrativeState(written) !== 'PENDING') await enqueueEvaluationPdf(tx, session.id, inputHash);
         return true;
     });
     if (completion && !saved) throw new AiPending('TAKA_LIVE_WRITE_SUPERSEDED');

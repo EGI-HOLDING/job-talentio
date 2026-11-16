@@ -1,9 +1,11 @@
 import type { Prisma } from '@prisma/client';
+import type { AssessmentLanguage } from '@job-talentio/shared';
+import { isAssessmentLanguageReminder } from '../assessment-language';
 import { enqueueEvaluationPdf, enqueueWork } from '../screening-packets.service';
 import { json } from '../screening.policy';
 import type { RoleJudgement, RoleTranscriptEntry } from '../taka-role-assessment';
 import { roleLiveTranscript } from '../taka-role-assessment';
-import { roleAssessmentVoiceEvidence, roleVoiceTurns, playbackOrigin } from './voice-role';
+import { heardContinuousTurn, roleAssessmentVoiceEvidence, roleVoiceTurns, playbackOrigin } from './voice-role';
 import type { Fragment } from './voice.policy';
 import type { NativeProgress } from './voice-native';
 import { VOICE_HARD_MS } from './voice.policy';
@@ -119,6 +121,18 @@ export function liveResumeHistory(connections: readonly Connection[]) {
             ...(playbackUnverified ? { playbackUnverified: true } : {}),
             ...(turn.cutShort ? { cutShort: true } : {}),
         }] : [];
+    });
+}
+
+export function liveLanguageReminderDelivered(connections: readonly Connection[], language: AssessmentLanguage) {
+    return connections.some(connection => {
+        const delivery = (connection.taraInterview as NativeProgress | null)?.nativeDelivery;
+        if (!delivery?.playbackVerified || delivery.firstAudioMs === undefined) return false;
+        const turns = roleVoiceTurns(connection.fragments, true);
+        const origin = playbackOrigin(turns, delivery);
+        if (origin === undefined) return false;
+        return turns.some(turn => turn.speaker === 'TARA' && isAssessmentLanguageReminder(turn.text, language) &&
+            heardContinuousTurn(turn, delivery, origin));
     });
 }
 

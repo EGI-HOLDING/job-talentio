@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { attachRoleTopics, createRoleRubric } from './role-rubric';
-import { prepareRoleEvidence, roleLiveTranscript, scoreRoleAssessment, type RoleTranscriptEntry } from './taka-role-assessment';
+import { clarificationRequest, explicitRoleDecline, prepareRoleEvidence, roleLiveTranscript, scoreRoleAssessment, type RoleTranscriptEntry } from './taka-role-assessment';
+import { assessmentLanguageReminders } from './assessment-language';
 import { acceptRoleEvidence, roleEvidenceReferences, roleEvidenceRequest } from './taka-role-evidence';
 import { directFarewellAt, roleAssessmentVoiceEvidence, roleVoiceEvidence } from './voice/voice-role';
 import type { NativeDelivery } from './voice/voice-native';
@@ -23,6 +24,17 @@ const input = prepareRoleEvidence(rubric, [question('v1', proposal, 0, 'UNVERIFI
     question('v6', integration, 4000), answer('v7', 4600, 'Saya membantu pantry kantor.'),
     question('v8', integration, 6000), answer('v9', 6600, 'Saya suka bermain bulu tangkis.')], plan);
 const refs = roleEvidenceReferences(input), ids = rubric.interviewIds;
+for (const language of ['id', 'en'] as const) {
+    const reminder = { ...question('reminder', proposal, 1100), text: assessmentLanguageReminders[language] };
+    const mixed = prepareRoleEvidence(rubric, [...input.transcript.slice(0, 2), reminder, ...input.transcript.slice(2)], plan);
+    const mixedRefs = roleEvidenceReferences(mixed);
+    assert.equal(mixedRefs.questions.size, refs.questions.size);
+    assert.ok(![...mixedRefs.questions.values()].includes(reminder));
+    assert.ok([...mixedRefs.answers.values()].some(row => row.text.includes('kelayakan teknis')));
+}
+assert.ok(clarificationRequest('Sorry, could you repeat the question?'));
+assert.ok(explicitRoleDecline('Sorry, I cannot answer the question.'));
+assert.ok(!explicitRoleDecline('I cannot answer that without knowing the budget, but I would start by scoping it.'));
 const request = roleEvidenceRequest(input, refs, ids);
 const schema = request.preset.schema.properties!.criteria.properties![proposal].properties!;
 assert.match('q1', new RegExp(schema.questionRef.anyOf![0].pattern!));

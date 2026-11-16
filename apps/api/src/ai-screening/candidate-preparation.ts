@@ -1,3 +1,4 @@
+import type { AssessmentLanguage } from '@job-talentio/shared';
 import { normalizeSkillKey } from '../common/skill-resolve';
 import { TIMED_CONVERSATION } from './conversation.policy';
 import { openConversation } from './prompts/shared/conversation-opening';
@@ -75,11 +76,12 @@ function alternativeCriterion(rubric: PackagePayload, job: CandidateJob) {
     return { criterion: criterion ?? rubric.criteria[0], duty: criterion?.requirementRef ?? job.responsibilities?.find(duty => duty.trim()) };
 }
 
-function alternativePlan(criterion: Criterion, duty?: string): CandidatePayload {
+function alternativePlan(criterion: Criterion, duty?: string, language?: AssessmentLanguage): CandidatePayload {
     const label = duty && normalize(duty).replace(/[^\p{L}\p{M}\p{N} .,+#&/()-]/gu, '').trim();
     const target = label && label.length <= 75 && label.split(' ').length <= 12 ? label : 'tanggung jawab utama posisi ini';
     return { claims: [], limitations: [], alternativeCriterionId: criterion.id,
-        alternativeQuestion: openConversation(`Pernah ada proyek atau kegiatan yang berkaitan sama ${target}?`) };
+        alternativeQuestion: openConversation(language === 'en' ? 'Can you share one project or activity connected to the main work of this role?' :
+            `Pernah ada proyek atau kegiatan yang berkaitan sama ${target}?`, language) };
 }
 
 function explicitContext(segment: Segment, label: string) {
@@ -111,11 +113,11 @@ function proposedClaims(response: unknown) {
 }
 
 export function buildCandidatePreparation(segments: Segment[], rubric: PackagePayload, job: CandidateJob,
-    responses: unknown[], { recoverStored = false, alternativeOnly = false, coreIds }: { recoverStored?: boolean; alternativeOnly?: boolean; coreIds?: string[] } = {}) {
+    responses: unknown[], { recoverStored = false, alternativeOnly = false, coreIds, language }: { recoverStored?: boolean; alternativeOnly?: boolean; coreIds?: string[]; language?: AssessmentLanguage } = {}) {
     const priorityCriteria = coreIds ? rubric.criteria.filter(row => coreIds.includes(row.id)) : rubric.criteria;
     const { criterion, duty } = alternativeCriterion({ ...rubric, criteria: priorityCriteria }, job);
     if (!criterion) throw new Error('JOB_CONTEXT_FAILED');
-    const alternate = () => alternativePlan(criterion, duty);
+    const alternate = () => alternativePlan(criterion, duty, language);
     const byId = new Map(segments.map(segment => [segment.id, segment]));
     const criteria = new Map(rubric.criteria.map(row => [row.id, row]));
     const requested = (job.jobSkills ?? []).flatMap(row => row.skill ? [{
@@ -142,9 +144,11 @@ export function buildCandidatePreparation(segments: Segment[], rubric: PackagePa
         if (!sourceLabel) return null;
         const skill = sourceLabel[0], employerSkill = catalog(skill);
         const context = allowContext ? explicitContext(segment, skill) : null;
-        const question = context ? `Soal ${skill}, bagian mana dari contoh di CV yang lu kerjain sendiri?`
+        const question = language === 'en' ? (context ? `In that CV example involving ${skill}, what did you personally do?`
+            : `Can you give one example of when you used ${skill}, which you mention on your CV?`)
+            : context ? `Soal ${skill}, bagian mana dari contoh di CV yang lu kerjain sendiri?`
             : `Soal ${skill} yang lu tulis di CV, bisa ceritain satu contoh waktu lu pakai?`;
-        if (!validQuestion(openConversation(question), TIMED_CONVERSATION)) return null;
+        if (!validQuestion(openConversation(question, language), TIMED_CONVERSATION)) return null;
         return { key: employerSkill ? `catalog:${employerSkill.id}` : folded(skill), priority: employerSkill?.required ? 0 : relevance === 'CORE' ? 1 : 2,
             claim: { skill, criterionId, statement: context?.statement ?? skill, quote: segment.text,
                 lineStart: segment.lineStart, lineEnd: segment.lineEnd, question, scope: context ? 'CONTEXTUAL' : 'GENERAL',
@@ -217,7 +221,7 @@ export function buildCandidatePreparation(segments: Segment[], rubric: PackagePa
         if (seen.has(key) || coreIds && (!coreIds.includes(claim.criterionId) || covered.has(claim.criterionId))) continue;
         seen.add(key);
         covered.add(claim.criterionId);
-        claims.push({ ...claim, id: `skill-${claims.length}`, question: claims.length ? claim.question : openConversation(claim.question) });
+        claims.push({ ...claim, id: `skill-${claims.length}`, question: claims.length ? claim.question : openConversation(claim.question, language) });
         if (claims.length === TIMED_CONVERSATION.maxCore) break;
     }
     const payload = claims.length ? { claims, limitations: [], alternativeCriterionId: null } : alternate();

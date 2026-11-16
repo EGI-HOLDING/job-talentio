@@ -72,3 +72,14 @@
   .alerts > * { padding-inline: 20px; }
   .email { gap: 8px; }
 }
+
+
+@media (max-width: 767px) {
+  .nav, .employer .nav { padding-inline: 12px; gap: 4px; }
+  .nav button, .employer .nav button { min-height: 44px; padding-inline: 10px; }
+  .scroll, .employer .scroll { padding-inline: 16px; }
+  .row { gap: 12px; padding-block: 18px; }
+  .form :is(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) { min-height: 44px; font-size: 1rem; }
+  .actions { padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
+  .actions button { min-height: 44px; }
+}

@@ -4,6 +4,8 @@ export type HrDraft = Record<string, any> & { jobContentAiLanguage?: JobContentA
 export type HrDraftIssue = { field: string; path: string; message: string };
 export function hrJobError(error: unknown) {
   const message=error instanceof Error?error.message:String(error);
+  if(message.includes('ASSESSMENT_LANGUAGE_REQUIRED'))return 'Pilih bahasa wawancara dan penilaian sebelum menerbitkan lowongan.';
+  if(message.includes('ASSESSMENT_LANGUAGE_UNAVAILABLE'))return 'Pemilihan bahasa wawancara sedang dijeda. Muat ulang halaman untuk melanjutkan.';
   if(message.includes('POSITION_GROUP_SCOPE_CHANGED'))return 'Cakupan kelompok berubah. Buka cakupan, tinjau daftar terbaru, lalu konfirmasi lagi.';
   if(message.includes('POSITION_GROUP_HAS_NO_VERIFIED_MEMBERS'))return 'Kelompok ini belum memiliki posisi terverifikasi.';
   if(message.includes('POSITION_GROUP_UNAVAILABLE')||message.includes('JOB_POSITION_GROUPS_UNAVAILABLE'))return 'Kelompok posisi ini sedang tidak tersedia.';

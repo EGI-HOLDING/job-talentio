@@ -5,16 +5,20 @@ const {chromium}=createRequire(path.join(runtime,'playwright/package.json'))('pl
 const origin=process.env.RECRUITMENT_WEB_URL||'http://127.0.0.1:3035';
 const skillMethodology=process.env.TARA_BROWSER_SKILL_INTERVIEW==='1';
 const timedMethodology=process.env.TARA_BROWSER_TIMED_INTERVIEW==='1';
+const english=process.env.TARA_BROWSER_OUTPUT_LANGUAGE==='en';
+const firstQuestion=english?'Which part of the last project did you work on yourself?':'Di proyek terakhir lu, bagian apa yang lu kerjain sendiri?';
+const secondQuestion=english?'How did you measure the impact of your work?':'Bagaimana lu mengukur hasil dari kontribusi itu?';
 if(!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))throw Error('Local-only browser guard');
 const out=path.resolve(process.env.TARA_BROWSER_OUT||(timedMethodology?'output/invited-text-ui-v8':skillMethodology?'output/invited-text-ui-v7':'output/invited-text-ui'));fs.mkdirSync(out,{recursive:true});
 const auth={accessToken:'synthetic-invited-ui',user:{id:'invited-ui',role:'EMPLOYEE',fullName:'Dinda Pramesti',email:'dinda@example.test',emailVerified:true,phone:'+6281234567890',employeeOnboarding:{status:'COMPLETED',step:3}}};
 const token='invitation-ui-1234567890.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ';
 const question=(id,text)=>({id,text,draft:'',answer:null,shownAt:null,deadlineAt:null,answeredAt:null,timedOut:false});
 async function main(){
- const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1536,height:1024},reducedMotion:'reduce'}),report={errors:[],requests:[],autosaves:0,answers:0,submissions:0};
+ const browser=await chromium.launch({headless:true,executablePath:process.env.TARA_PROBE_CHROME}),context=await browser.newContext({viewport:{width:1536,height:1024},reducedMotion:'reduce'}),report={errors:[],requests:[],autosaves:0,answers:0,submissions:0};
  let state={id:'text-session',invitation:{id:'invite-ui',mode:'TEXT',status:'INVITED'},status:'DRAFT',resumeId:'invited-cv',applicationId:null,coverLetter:'',coverFilename:null,packetReady:true,preparationStatus:'READY',preparation:{status:'READY',planId:'plan',reason:null},revision:0,conversationPolicy:{version:'tara-conversation-v6.0.0',questionSeconds:60,maxQuestions:25},questions:[],job:{id:'job',title:'Machine Learning Engineer',companyName:'Lintas Awan Teknologi',city:'Denpasar'}};
  if(skillMethodology)state.conversationPolicy={version:'tara-conversation-v7.0.0',questionSeconds:60,maxQuestions:10};
  if(timedMethodology)state.conversationPolicy={version:'tara-conversation-v8.0.0',questionSeconds:60,maxQuestions:10};
+ if(english)state.assessmentLanguage='en';
  const clone=()=>({...structuredClone(state),serverTime:new Date().toISOString()});
  try{
  await context.addInitScript(auth=>{localStorage.setItem('jt_token',auth.accessToken);localStorage.setItem('jt_session',JSON.stringify(auth));},auth);
@@ -26,7 +30,7 @@ async function main(){
   else if(p.startsWith('/applications/')&&method==='POST'){report.submissions++;throw Error('Invited interview must never submit an application');}
   else if(p==='/recruitment/invitations/open/'+token)body={mode:'TEXT',status:'INVITED',jobTitle:state.job.title,companyName:state.job.companyName,expiresAt:'2026-12-01T00:00:00Z',conversationPolicy:state.conversationPolicy};
   else if(p.endsWith('/claim')&&p.startsWith('/recruitment/'))body={invitationId:'invite-ui',mode:'TEXT',session:clone()};
-  else if(p==='/ai-screening/sessions/text-session/start'){state.status='ACTIVE';state.revision++;state.questions=[question('q1','Di proyek terakhir lu, bagian apa yang lu kerjain sendiri?')];body=clone();}
+  else if(p==='/ai-screening/sessions/text-session/start'){state.status='ACTIVE';state.revision++;state.questions=[question('q1',firstQuestion)];body=clone();}
   else if(p==='/ai-screening/sessions/text-session/claim')body=clone();
   else if(p==='/ai-screening/sessions/text-session/shown'){const input=request.postDataJSON(),q=state.questions.find(q=>q.id===input.questionId);q.shownAt??=new Date().toISOString();q.deadlineAt??=new Date(Date.now()+60000).toISOString();if(timedMethodology)state.interviewDeadlineAt??=new Date(Date.now()+900000).toISOString();body=clone();}
   else if(p==='/ai-screening/sessions/text-session/answer'){
@@ -35,7 +39,7 @@ async function main(){
    else{report.answers++;q.answer=input.answer;q.answeredAt=new Date().toISOString();state.revision++;state.status=state.questions.length===1?'GENERATING':'COMPLETED';}
    body=clone();
   }else if(p==='/ai-screening/sessions/text-session'){
-   if(state.status==='GENERATING'){state.status='ACTIVE';state.revision++;state.questions.push(question('q2','Bagaimana lu mengukur hasil dari kontribusi itu?'));}
+   if(state.status==='GENERATING'){state.status='ACTIVE';state.revision++;state.questions.push(question('q2',secondQuestion));}
    body=clone();
   }else if(p.includes('/notifications'))body=p.includes('unread')?{count:0}:[];
   else if(p.startsWith('/meta/'))body=[];
@@ -46,7 +50,7 @@ async function main(){
  const expectedQuestions=state.conversationPolicy.maxQuestions;
  await page.getByText(new RegExp('Maksimal '+expectedQuestions+' pertanyaan')).waitFor();
  await page.getByRole('button',{name:'Buka interview',exact:true}).click();
- await page.getByRole('heading',{name:/Hai Dinda/}).waitFor({timeout:60000});
+ await page.getByRole('heading',{name:english?/Hi Dinda/:/Hai Dinda/}).waitFor({timeout:60000});
  await page.waitForFunction(()=>[...document.querySelectorAll('img[data-tara]')].filter(img=>img.getBoundingClientRect().width>0).every(img=>img.complete&&img.naturalWidth>0),{timeout:60000});
  assert.equal(await page.getByRole('heading',{name:'Pilih CV andalanmu'}).count(),0);
  await page.screenshot({path:path.join(out,'01-introduction.png')});
@@ -54,17 +58,19 @@ async function main(){
  await page.getByText(new RegExp('Maksimal '+expectedQuestions+' pertanyaan')).waitFor();
  await page.getByRole('button',{name:/Siap, yuk mulai/}).click();
  const input=page.getByRole('textbox');await input.waitFor();await page.waitForFunction(()=>!document.querySelector('textarea')?.disabled,{timeout:15000});
+ await page.getByText(firstQuestion,{exact:true}).waitFor();
  if(timedMethodology)await page.getByText(/Sisa sesi 1[45]:/).waitFor();
  await page.waitForFunction(()=>[...document.querySelectorAll('img[data-tara]')].filter(img=>img.getBoundingClientRect().width>0).every(img=>img.complete&&img.naturalWidth>0),{timeout:60000});
  await page.screenshot({path:path.join(out,'02-active-interview.png')});
  const autosave=page.waitForResponse(response=>response.url().endsWith('/answer')&&response.request().method()==='PATCH');
  await input.fill('Saya mengerjakan pipeline data dan pengujian model.');await autosave;
  await page.getByRole('button',{name:'Kirim jawaban',exact:true}).click();
- await page.getByText('Bagaimana lu mengukur hasil dari kontribusi itu?',{exact:true}).waitFor();
+ await page.getByText(secondQuestion,{exact:true}).waitFor();
+ if(english)assert.equal(state.questions[0].answer,'Saya mengerjakan pipeline data dan pengujian model.');
  await page.waitForFunction(()=>!document.querySelector('textarea')?.disabled,{timeout:15000});
  await input.fill('Saya membandingkan metrik hasil terhadap baseline sebelum deployment.');
  await input.press('Enter');
- await page.getByRole('heading',{name:'Interview selesai. Makasih sudah cerita!',exact:true}).waitFor({timeout:15000});
+ await page.getByRole('heading',{name:english?'Interview complete. Thanks for sharing!':'Interview selesai. Makasih sudah cerita!',exact:true}).waitFor({timeout:15000});
  await page.screenshot({path:path.join(out,'03-completed.png')});
  assert.equal(report.answers,2);assert.ok(report.autosaves>0);assert.equal(report.submissions,0);
  assert.ok(!report.requests.some(r=>r.p.endsWith('/draft')),'no application draft flow');

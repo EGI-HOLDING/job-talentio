@@ -77,3 +77,13 @@
   .closingActions a { flex: 1; margin-left: 0; white-space: normal; text-align: center; font-size: .8rem; }
 }
 @media (prefers-reduced-motion: reduce) { .hero { scroll-behavior: auto; } }
+
+
+@media (max-width: 767px) {
+  .hero { border-radius: 16px; }
+  .hero .title { font-size: clamp(1.75rem, 7.5vw, 2.65rem); line-height: 1.14; }
+  .hero .search { padding: 12px; gap: 8px; }
+  .hero .search a { display: inline-flex; min-height: 44px; align-items: center; }
+  .closing { gap: 12px; }
+  .closingActions a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+}

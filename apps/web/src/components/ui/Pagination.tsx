@@ -64,9 +64,10 @@ export function Pagination({
           onClick={() => onPageChange(current - 1)}
           aria-label={t('ui.previousPage')}
         >
-          <DirectionalIcon direction="left" size={16} /> {t('ui.prev')}
+          <DirectionalIcon direction="left" size={16} /> <span>{t('ui.prev')}</span>
         </button>
 
+        <span className="pagination-current" aria-current="page">{current} / {safeTotalPages}</span>
         <div className="pagination-pages" role="list">
           {items.map((item, idx) =>
             item === '...' ? (
@@ -96,7 +97,7 @@ export function Pagination({
           onClick={() => onPageChange(current + 1)}
           aria-label={t('ui.nextPage')}
         >
-          {t('ui.next')} <DirectionalIcon direction="right" size={16} />
+          <span>{t('ui.next')}</span> <DirectionalIcon direction="right" size={16} />
         </button>
         <button
           type="button"

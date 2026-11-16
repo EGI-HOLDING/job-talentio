@@ -3,6 +3,10 @@ import { hrAssistantEnglish } from './hrAssistant';
 /** Indonesia HR flow; English is also the fallback for other UI languages. */
 const english:Record<string,string>={
  ...hrAssistantEnglish,
+ 'Buka Pesan Talentio':'Open Talentio Messages',
+ 'Surat lamaran':'Cover letter',
+ 'Unduh PDF revisi ini':'Download this PDF revision',
+ 'Menyimpan percakapan':'Saving the conversation',
  "Nama keahlian":"Skill name",
  "Sudah ada":"Already added",
  "Pilih keahlian yang ingin ditambahkan. Keahlian yang sudah diisi tetap tersimpan.":"Choose the skills to add. Your existing skills will be kept.",
@@ -130,6 +134,10 @@ const english:Record<string,string>={
  'Menyimpan...':'Saving...','Tersimpan':'Saved','Mengunggah...':'Uploading...','Memproses...':'Processing...',
  'Buat dengan AI':'Generate with AI','Tentang bantuan AI':'About AI assistance','AI membantu membuat draf untuk deskripsi posisi, tanggung jawab, KPI, atau keahlian dari konteks perusahaan dan posisi. Periksa hasilnya sebelum diterapkan; perubahan belum disimpan sampai lowongan disimpan.':'AI drafts the role description, responsibilities, KPIs, or skills using company and role context. Review the result before applying it; changes are not saved until you save the job.','Tutup':'Close','Saran AI':'AI suggestion','Tinjau hasil AI':'Review AI suggestion','Hasil AI untuk bagian ini akan mengganti isi yang sekarang setelah diterapkan.':'Applying this result replaces the current content in this section.','Terapkan':'Apply','Batal':'Cancel','AI sedang menyusun saran...':'AI is drafting a suggestion...','AI belum tersedia. Coba lagi sebentar.':'AI is temporarily unavailable. Please try again.','Hasil AI tidak sesuai dengan bagian yang dipilih. Silakan coba lagi.':'AI returned a result for a different section. Please try again.','Level minimum belum ditentukan':'Minimum level not specified','Pemula':'Beginner','Menengah':'Intermediate','Mahir':'Advanced','Ahli':'Expert',
  'Bahasa AI':'AI language','Pilih bahasa AI':'Choose AI language','Ubah bahasa AI':'Change AI language',
+ 'Bahasa wawancara dan penilaian':'Interview and assessment language',
+ 'Tara memakai bahasa ini saat wawancara. Taka memakai bahasa yang sama untuk ulasan CV dan hasil wawancara.':'Tara interviews in this language. Taka uses it for CV and interview reviews.',
+ 'Pilih bahasa wawancara dan penilaian sebelum menerbitkan lowongan.':'Choose an interview and assessment language before publishing the job.',
+ 'Pemilihan bahasa wawancara sedang dijeda. Muat ulang halaman untuk melanjutkan.':'Interview language selection is paused. Refresh the page to continue.',
  'Pilihan ini dipakai untuk semua saran AI di lowongan ini.':'This language is used for all AI suggestions for this job.',
  'Bahasa hasil':'Output language','Pilih bahasa':'Select a language','Saran untuk':'Suggestion for',
  'Buat saran':'Generate suggestion','Simpan bahasa':'Save language',

@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp, appendFile, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { assessmentLanguageReminders } from './assessment-language';
 import { attachRoleTopics, createRoleRubric, ROLE_RUBRIC_VERSION } from './role-rubric';
 import { attachLiveRoleTopics, liveInterviewTopics, liveRolePackage, prepareAlignedRolePackage, prepareLiveAgenda } from './tara-live-agenda';
 import { acceptLiveEvidence, liveEvidenceRequest, missingLiveOpportunity } from './taka-live-evidence';
 import { prepareRoleEvidence, scoreRoleAssessment } from './taka-role-assessment';
 import { roleEvidenceReferences } from './taka-role-evidence';
-import { createVoiceRequest } from './prompts/voice-session';
-import { canResumeLive, liveAssessmentTranscript, liveCompletionDecision, liveResumeHistory, liveTranscript, LIVE_RESUME_MINIMUM_MS, newLiveCompletion, voiceBudgetAfterClose } from './voice/voice-completion';
+import { createVoiceRequest, freezeLiveVoicePrompt } from './prompts/voice-session';
+import { canResumeLive, liveAssessmentTranscript, liveCompletionDecision, liveLanguageReminderDelivered, liveResumeHistory, liveTranscript, LIVE_RESUME_MINIMUM_MS, newLiveCompletion, voiceBudgetAfterClose } from './voice/voice-completion';
 import type { NativeDelivery } from './voice/voice-native';
 import type { Fragment } from './voice/voice.policy';
 import { VoiceTranscriptJournal } from './voice/voice-transcript-journal';
@@ -243,6 +244,35 @@ for (const text of [unansweredQuestion, finalUnansweredQuestion])
     assert.equal(recordedQuestions.find(turn => turn.text === text)?.playback, 'UNKNOWN');
 assert.deepEqual(liveResumeHistory([unansweredLeg, followingLeg]).map(turn => turn.text),
     [...defaultFragments.map(row => row.text), 'Oke, lanjut.'], 'both unanswered and unverified questions stay out of the shared history');
+for (const language of ['id', 'en'] as const) {
+    const reminder = assessmentLanguageReminders[language];
+    const split = reminder.indexOf(' ');
+    const fragments = [...defaultFragments, fragment(44, 'TARA', 23_600, 23_800, reminder.slice(0, split)),
+        fragment(45, 'TARA', 23_800, 25_800, reminder.slice(split))];
+    const reminderWindow = { start: base + 23_858, end: base + 26_241 };
+    const heard = connection(fragments, telemetry({ windows: [...telemetry().windows, reminderWindow] }));
+    assert.equal(liveAssessmentTranscript([heard]).at(-1)?.playback, 'HEALTHY_UNVERIFIED');
+    assert.ok(!liveResumeHistory([heard]).some(turn => turn.text === reminder));
+    assert.equal(liveLanguageReminderDelivered([heard, followingLeg], language), true,
+        'a native transcript estimate ahead of playback does not cause the reminder to be repeated');
+    const delayedWindow = { start: base + 24_067, end: base + 26_355 };
+    assert.equal(liveLanguageReminderDelivered([connection(fragments, telemetry({ windows: [delayedWindow] }))], language), true,
+        'a later complete playback window carries the reminder across reconnection');
+    assert.equal(liveLanguageReminderDelivered([heard], language === 'id' ? 'en' : 'id'), false);
+    for (const window of [{ ...reminderWindow, interrupted: true }, { ...reminderWindow, end: base + 24_200 }]) {
+        assert.equal(liveLanguageReminderDelivered([connection(fragments, telemetry({ windows: [window] }))], language), false);
+    }
+    assert.equal(liveLanguageReminderDelivered([connection(fragments,
+        telemetry({ playbackVerified: false, windows: [reminderWindow] }))], language), false);
+    assert.equal(liveLanguageReminderDelivered([connection(fragments.map(row => row.id >= 44 ? { ...row, speaker: 'CANDIDATE' } : row),
+        telemetry({ windows: [reminderWindow] }))], language), false);
+    const prompt = freezeLiveVoicePrompt('marin', language);
+    const reconnect = createVoiceRequest('marin', 'offer', topics, 'Rani', { prompt, remainingSeconds: 480,
+        history: liveResumeHistory([heard]), languageReminderDelivered: liveLanguageReminderDelivered([heard], language) });
+    const brief = JSON.parse(reconnect.session.input[0].content[0].text.split('\n')[1]);
+    assert.equal(brief.languageReminderDelivered, true);
+    assert.ok(!brief.previousConversation.some((turn: { text: string }) => turn.text === reminder));
+}
 const continued = createVoiceRequest('marin', 'offer', topics, 'Rani', { remainingSeconds: 480, history,
     assessedCriterionIds: [ids[0]], missingCriterionIds: ids.slice(1) });
 const resumeData = JSON.parse(continued.session.input[0].content[0].text.split('\n')[1]);

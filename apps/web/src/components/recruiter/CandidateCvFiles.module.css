@@ -35,3 +35,16 @@
   .picker[data-illustrated][data-filled=false] .drop > svg { width: 43px; height: 43px; }
   .picker[data-illustrated][data-filled=false] .prompt strong { font-size: 19px; }
 }
+
+@media (max-width: 1000px) and (max-height: 480px) and (orientation: landscape) {
+  .picker[data-illustrated][data-filled=false] .drop {
+    min-height: 96px;
+    flex-direction: row;
+    gap: 14px;
+    text-align: left;
+  }
+  .picker[data-illustrated][data-filled=false] .drop > svg { width: 36px; height: 36px; }
+  .picker[data-illustrated][data-filled=false] .prompt { flex: 1; }
+  .picker[data-illustrated][data-filled=false] .prompt strong { font-size: 16px; }
+  .picker[data-illustrated][data-filled=false] .action { min-width: 0; margin-top: 0; }
+}

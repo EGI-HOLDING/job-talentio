@@ -1257,6 +1257,7 @@ model JobPost {
   kpis String[] @default([])
   specificExpectations String?
   jobContentAiLanguage String? @db.VarChar(2)
+  assessmentLanguage String? @db.VarChar(2)
   experienceRangeMin Int?
   experienceRangeMax Int?
   experienceRangeSource String?
@@ -2335,6 +2336,7 @@ model JobCreationSession {
   phase String @default("PACKAGE")
   revision Int @default(0)
   draft Json @default("{}")
+  assessmentLanguage String? @db.VarChar(2)
   orderId String? @unique
   jobId String? @unique
   templateId String?

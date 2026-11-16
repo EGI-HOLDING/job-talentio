@@ -15,7 +15,8 @@ import { candidatePlanFingerprint, ScreeningCandidatePlans } from './screening-c
 import { screeningPreparation } from './screening-preparation';
 import { newConversationPolicy, conversationPolicy, publicConversationPolicy, requireCurrentConversation, isCurrentConversation } from './conversation.policy';
 import { advanceTara, recordTaraOpportunity, startTara, taraTopics, TARA_CHAT_REVIEW_MS, TARA_COMPLETE_MS, TARA_FIRST_PASS_MS,
-    TARA_ROLE_INTRO, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
+    TARA_ROLE_INTRO, TARA_ROLE_INTRO_EN, TARA_SESSION_MS, type TaraDecision, type TaraProgress } from './tara-interview';
+import { assessmentLanguageOf } from './assessment-language';
 import { frozenRoleRubric } from './role-rubric';
 const sessionInclude = { invitation: { include: { candidate: { select: { stage:true, company: { select: { isBanned: true, anonymizedAt: true } } } } } }, package: true, currentPlan: true, questions: { orderBy: { position: 'asc' as const } }, resumeVersion: { include: { screeningSource: true } }, evaluation: true, job: { include: { company: { select: { name: true } }, city: { select: { name: true } } } } } satisfies Prisma.AiScreeningSessionInclude;
 type Session = Prisma.AiScreeningSessionGetPayload<{
@@ -60,6 +61,7 @@ export class ScreeningSessions {
     }
     private async public(row: Session) {
         const active = row.questions.find(q => q.answer === null);
+        const assessmentLanguage = assessmentLanguageOf(row.invitation ? row.invitation.snapshot : row.package?.jobSnapshot);
         const preparation = screeningPreparation(row);
         const requiresRecovery = /UNCERTAIN|REQUIRES_REVIEW|UNCONFIRMED|RETRY_LIMIT/.test([row.error, row.package?.error, row.currentPlan?.error].join(' ')) ||
             Boolean((preparation.status === 'FAILED' || row.error) && await this.db.aiScreeningWork.count({ where: {
@@ -75,6 +77,7 @@ export class ScreeningSessions {
         return { id: row.id, invitation: row.invitation ? { id: row.invitation.id, mode: row.invitation.mode, status: row.invitation.status } : null, status: row.status, startedAt: row.startedAt, completedAt: row.completedAt, applicationId: row.applicationId,
             resumeId: row.resumeId, cv: cv?.resume ? { id: cv.resume.id, title: cv.resume.title, parseStatus: row.resumeVersion?.parseStatus } : null,
             coverLetter: row.coverLetter ?? '', coverFilename: row.coverFilename, source: row.source, revision: row.revision, serverTime: new Date().toISOString(),
+            ...(assessmentLanguage ? { assessmentLanguage } : {}),
             ...(row.taraDeadlineAt ? {interviewDeadlineAt:row.taraDeadlineAt} : {}),
             packetReady: preparation.status === 'READY',
             preparationStatus: row.currentPlan?.status ?? 'WAITING_CV',
@@ -248,13 +251,14 @@ export class ScreeningSessions {
                 throw new ConflictException('CV berubah. Pilih ulang CV sebelum mulai.');
             const profile = await tx.employeeProfile.findUniqueOrThrow({ where: { id: row.profileId }, include: { languages: { include: { language: true } }, certifications: true } });
             requireCurrentConversation(session.package?.conversationPolicy);
+            const language = assessmentLanguageOf(row.invitation ? row.invitation.snapshot : fresh.package?.jobSnapshot);
             const topics = transport === 'TEXT'
-                ? taraTopics(payload, fresh.package?.payload as unknown as PackagePayload, true) : null;
+                ? taraTopics(payload, fresh.package?.payload as unknown as PackagePayload, true, language) : null;
             const now = new Date(), snapshot = { resume: { id: resume.id, title: invitedCv?.filename ?? resume.title, fileKey: version.fileKey }, submission: freezeHrSubmission(version, profile, now) };
             await tx.aiScreeningSession.update({ where: { id }, data: { packageId: plan.packageId, resumeVersionId: version.id, cvSnapshot: json(snapshot), status: 'ACTIVE', startedAt: now, error: null, leaseToken: clientId, leaseExpiresAt: new Date(+now + SESSION_LEASE_MS), revision: { increment: 1 }, ...(topics ? { taraInterview: json(startTara(topics, true)) } : {}) } });
             if (row.invitation) await tx.screeningInvitation.update({ where: { id: row.invitation.id }, data: { status: 'STARTED' } });
             const startingQuestions = topics?.slice(0, 1) ?? [];
-            const introduction = frozenRoleRubric(fresh.package?.jobSnapshot) ? TARA_ROLE_INTRO + '\n\n' : '';
+            const introduction = frozenRoleRubric(fresh.package?.jobSnapshot) ? (language === 'en' ? TARA_ROLE_INTRO_EN : TARA_ROLE_INTRO) + '\n\n' : '';
             if (startingQuestions.length) await tx.aiScreeningQuestion.createMany({ data: startingQuestions.map((c, position) => ({ sessionId: id, position, criterionId: c.criterionId, claimId: c.id, kind: 'CORE', depth: 0, text: introduction + c.question })) });
         });
         return this.state(user, id);
@@ -352,7 +356,8 @@ export class ScreeningSessions {
             const closing = +now >= closeAt;
             if (!closing && (row.status !== 'GENERATING' || !row.taraAdvanceAt || !decision && +now < +row.taraAdvanceAt)) return false;
             if (row.taraAdvanceAt && +now >= +row.taraAdvanceAt) decision = undefined;
-            const topics = taraTopics(row.currentPlan!.payload as unknown as CandidatePayload, row.package!.payload as unknown as PackagePayload, true);
+            const language = assessmentLanguageOf(row.invitation ? row.invitation.snapshot : row.package!.jobSnapshot);
+            const topics = taraTopics(row.currentPlan!.payload as unknown as CandidatePayload, row.package!.payload as unknown as PackagePayload, true, language);
             const progress = row.taraInterview as unknown as TaraProgress;
             const last = row.questions.at(-1)!;
             const previous = row.questions.filter(q => q.claimId === topics[progress.active].id);
@@ -372,6 +377,7 @@ export class ScreeningSessions {
                 canContinue: !closing,
                 canClarify:+now + window <= Math.min(closeAt, start + TARA_FIRST_PASS_MS - remaining * window),
                 canRevisit:+now + window <= closeAt,
+                language,
             });
             await tx.aiScreeningSession.update({where:{id},data:{
                 taraInterview:json(next.progress),taraAdvanceAt:null,revision:{increment:1},error:null,

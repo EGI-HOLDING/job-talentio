@@ -2,7 +2,7 @@
 
 import { createPortal } from 'react-dom';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import type { JobContentAiLanguage } from '@job-talentio/shared';
+import type { AssessmentLanguage, JobContentAiLanguage } from '@job-talentio/shared';
 import { useHrCopy } from '@/lib/i18n/hr-flow';
 import s from './JobContentAi.module.css';
 
@@ -45,6 +45,26 @@ export function JobContentAiLanguageDialog({ initialLanguage, targetLabel, onCan
   initialLanguage?: JobContentAiLanguage; targetLabel?: string; onCancel: () => void; onConfirm: (language: JobContentAiLanguage) => void;
 }) {
   const c = useHrCopy();
+  return <JobLanguageDialog initialLanguage={initialLanguage} targetLabel={targetLabel} onCancel={onCancel} onConfirm={onConfirm}
+    title={c(targetLabel ? 'Pilih bahasa AI' : 'Ubah bahasa AI')}
+    description={c('Pilihan ini dipakai untuk semua saran AI di lowongan ini.')}
+    action={c(targetLabel ? 'Buat saran' : 'Simpan bahasa')}/>;
+}
+
+export function AssessmentLanguageDialog(props: {
+  initialLanguage?: AssessmentLanguage; action: string; busy?: boolean; error?: string;
+  onCancel: () => void; onConfirm: (language: AssessmentLanguage) => void;
+}) {
+  const c = useHrCopy();
+  return <JobLanguageDialog {...props} title={c('Bahasa wawancara dan penilaian')}
+    description={c('Tara memakai bahasa ini saat wawancara. Taka memakai bahasa yang sama untuk ulasan CV dan hasil wawancara.')}/>;
+}
+
+function JobLanguageDialog({ initialLanguage, targetLabel, title, description, action, busy, error, onCancel, onConfirm }: {
+  initialLanguage?: AssessmentLanguage; targetLabel?: string; title: string; description: string; action: string;
+  busy?: boolean; error?: string; onCancel: () => void; onConfirm: (language: AssessmentLanguage) => void;
+}) {
+  const c = useHrCopy();
   const id = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const select = useRef<HTMLSelectElement>(null);
@@ -67,24 +87,24 @@ export function JobContentAiLanguageDialog({ initialLanguage, targetLabel, onCan
 
   if (typeof document === 'undefined') return null;
   return createPortal(<dialog ref={dialog} className={s.languageDialog} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
-    onCancel={event => { event.preventDefault(); onCancel(); }}
-    onClick={event => { if (event.target === event.currentTarget) onCancel(); }}>
+    onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}
+    onClick={event => { if (!busy && event.target === event.currentTarget) onCancel(); }}>
     <form className={s.languageForm} onSubmit={event => {
       event.preventDefault();
       event.stopPropagation();
-      if (language) onConfirm(language);
+      if (language && !busy) onConfirm(language);
     }}>
       <div className={s.languageContent}>
         <div className={s.languageHeader}>
           <span className={s.languageIcon}><JobContentAiIcon/></span>
-          <button type="button" className={s.close} onClick={onCancel} aria-label={c('Tutup')}>×</button>
+          <button type="button" className={s.close} onClick={onCancel} disabled={busy} aria-label={c('Tutup')}>×</button>
         </div>
-        <h2 id={`${id}-title`}>{c(targetLabel ? 'Pilih bahasa AI' : 'Ubah bahasa AI')}</h2>
-        <p id={`${id}-description`}>{c('Pilihan ini dipakai untuk semua saran AI di lowongan ini.')}</p>
+        <h2 id={`${id}-title`}>{title}</h2>
+        <p id={`${id}-description`}>{description}</p>
         <div className={s.languageField}>
           <label htmlFor={`${id}-language`}>{c('Bahasa hasil')}</label>
           <div className={s.languageSelect}>
-            <select id={`${id}-language`} ref={select} required value={language} onChange={event => {
+            <select id={`${id}-language`} ref={select} required disabled={busy} value={language} onChange={event => {
               const value = event.currentTarget.value;
               if (value === 'id' || value === 'en') setLanguage(value);
             }}>
@@ -95,12 +115,13 @@ export function JobContentAiLanguageDialog({ initialLanguage, targetLabel, onCan
             <span className={s.languageChevron} aria-hidden="true"/>
           </div>
         </div>
+        {error && <p className={s.languageError} role="alert">{error}</p>}
       </div>
       <footer className={s.languageFooter}>
         {targetLabel && <p className={s.languageTarget}><span>{c('Saran untuk')}</span><strong>{targetLabel}</strong></p>}
         <div className={s.languageActions}>
-          <button className={s.cancel} type="button" onClick={onCancel}>{c('Batal')}</button>
-          <button className={s.languagePrimary} type="submit" disabled={!language}>{c(targetLabel ? 'Buat saran' : 'Simpan bahasa')}</button>
+          <button className={s.cancel} type="button" disabled={busy} onClick={onCancel}>{c('Batal')}</button>
+          <button className={s.languagePrimary} type="submit" disabled={!language || busy}>{busy ? c('Memproses...') : action}</button>
         </div>
       </footer>
     </form>

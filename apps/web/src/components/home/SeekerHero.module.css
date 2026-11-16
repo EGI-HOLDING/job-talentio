@@ -129,3 +129,28 @@
   .title { font-size: 2.05rem; }
   .queryField input { font-size: .85rem; }
 }
+
+
+@media (max-width: 767px) {
+  .shell { padding-top: 10px; }
+  .hero { padding: 24px 18px 16px; border-radius: 16px; }
+  .eyebrow { display: none; }
+  .title { font-size: clamp(1.75rem, 7.4vw, 2.65rem); line-height: 1.14; }
+  .subtitle { max-width: 34ch; margin: 10px 0 18px; font-size: .9375rem; line-height: 1.5; }
+  .search { padding: 6px; border-radius: 11px; }
+  .queryField, .cityField { gap: 9px; padding-inline: 10px; }
+  .queryField input { min-height: 46px; font-size: 1rem; }
+  .cityField > button { min-height: 46px; }
+  .searchButton { min-height: 46px; min-width: 0; padding: 10px 14px; font-size: .9375rem; }
+  .popular { align-items: center; gap: 4px 12px; margin-top: 8px; }
+  .popular > span { flex-basis: auto; }
+  .popular a { display: inline-flex; align-items: center; min-height: 44px; }
+  .remoteLink { padding-inline-start: 0; border: 0; }
+  .stats { padding: 16px 0 12px; }
+  .stats dd { font-size: 1.375rem; }
+}
+
+
+@media (max-width: 767px) {
+  .queryField input:not(:focus) { text-overflow: ellipsis; }
+}

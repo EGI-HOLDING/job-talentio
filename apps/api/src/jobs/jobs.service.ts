@@ -1,6 +1,7 @@
 import { invalidateCvScores, scoringJob, scoreJobInclude } from '../ai-screening/recruitment/cv-job-context';
 import { jobChatPeers } from '../chat/job-chat-peer';
 import { assertJobPositionFields, resolveHrPosition, effectiveExperience, structuredJobFields } from '../hr-flow/job-input';
+import { assertAssessmentLanguageChange, requireAssessmentLanguage } from '../hr-flow/hr-flow.policy';
 import { approveJobGroup, jobGroupsEnabled } from '../matching/job-group-scope';
 import { ScreeningPackets } from '../ai-screening/screening-packets.service';
 import { screeningEnabled } from '../ai-screening/screening.policy';
@@ -291,6 +292,7 @@ export class JobsService {
   }
 
   async create(user: AuthUser, companyId: string, data: Record<string, unknown>) {
+    assertAssessmentLanguageChange(null, data.assessmentLanguage);
     const created = await this.prisma.$transaction(async db => {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`);
       return this.createInside(user, companyId, data, db);
@@ -421,6 +423,9 @@ export class JobsService {
     this.companies.assertOpen(job.company);
     if (data.expectedUpdatedAt && data.expectedUpdatedAt !== job.updatedAt.toISOString())
       throw new ConflictException('Job changed. Refresh before saving your changes.');
+    if (data.assessmentLanguage !== undefined && data.assessmentLanguage !== job.assessmentLanguage && (job.publishedAt || job.status !== 'DRAFT'))
+      throw new ConflictException('ASSESSMENT_LANGUAGE_FROZEN');
+    assertAssessmentLanguageChange(job.assessmentLanguage, data.assessmentLanguage);
     const seniority=await resolveSeniority(db,data,job);
     this.assertSalaryRange(
       data.salaryMin === undefined ? job.salaryMin : data.salaryMin as number | null,
@@ -540,6 +545,7 @@ export class JobsService {
     status: JobStatus,
     adminAudit?: { actorId: string; bulk?: boolean },
     linkedinPreviewId?: string,
+    expectedUpdatedAt?: string,
   ) {
     if (linkedinPreviewId && status !== 'PUBLISHED') throw new BadRequestException('LinkedIn approval can only accompany publication');
     if (linkedinPreviewId && !this.linkedin) throw new ServiceUnavailableException('LinkedIn sharing is unavailable');
@@ -616,10 +622,11 @@ export class JobsService {
         if (linkedinPreviewId) await this.linkedin!.enqueueApproved(tx, user, jobId, linkedinPreviewId);
         return { changed: false, updated };
       }
-      if (current.updatedAt.getTime() !== job.updatedAt.getTime()) {
+      if (current.updatedAt.getTime() !== job.updatedAt.getTime() || expectedUpdatedAt && current.updatedAt.toISOString() !== expectedUpdatedAt) {
         throw new ConflictException('Job changed. Refresh and try again.');
       }
       if (status === 'PUBLISHED') {
+        if (current.status === 'DRAFT' && !current.publishedAt) requireAssessmentLanguage(current.assessmentLanguage);
         if (current.positionEntryMode==='GROUP') {
           if(!jobGroupsEnabled())throw new BadRequestException('JOB_POSITION_GROUPS_UNAVAILABLE');
           if(!current.positionGroupApprovedAt)await approveJobGroup(tx, jobId, current.positionGroupId!, current.positionGroupScopeRevision);
@@ -1732,7 +1739,7 @@ export class JobsService {
     if (!['CLOSED','EXPIRED'].includes(source.status) && !(benefit?.expiresAt && benefit.expiresAt <= new Date())) throw new ConflictException('Close the original job before copying it');
     const job = await this.prisma.$transaction(async db => {
       await db.$queryRaw(Prisma.sql`SELECT id FROM "Company" WHERE id=${source.companyId} FOR UPDATE`);
-      const {seniorityVersion,seniorityYearsMin,seniorityYearsMax,experienceRangeSource,positionGroupScopeRevision,...copy}=source;
+      const {seniorityVersion,seniorityYearsMin,seniorityYearsMax,experienceRangeSource,positionGroupScopeRevision,assessmentLanguage: _assessmentLanguage,...copy}=source;
       const created = await this.createInside(user,source.companyId,{ ...copy, citySlug: source.city?.slug, categorySlug: source.category?.slug, skills: source.jobSkills.map(row=>({name:row.skill.name,isRequired:row.isRequired,weight:row.weight,minLevel:row.minLevel})), benefits: source.benefits.map(row=>({name:row.benefit.name})), languages:source.jobLanguages.map(row=>({code:row.language.code,minLevel:row.minLevel,isRequired:row.isRequired,confirmed:row.provenance==='EMPLOYER_CONFIRMED'})) },db);
       if (!created) throw new NotFoundException();
       await this.syncQuestions(created.id,source.questions.map(({question,type,isRequired,sortOrder})=>({question,type,isRequired,sortOrder})),db);

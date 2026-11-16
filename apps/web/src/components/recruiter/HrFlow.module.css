@@ -89,3 +89,21 @@
   .skillTable td:last-child::before{display:none}
 }
 @media(max-width:365px){.skillTable tr{grid-template-columns:minmax(0,1fr)}}
+
+
+@media (max-width: 767px) {
+  .page { padding-top: 16px; padding-inline: 16px; }
+  .steps { margin-bottom: 18px; }
+  .stepNumber { width: 28px; height: 28px; }
+  .steps li:not(:last-child)::after { top: 14px; }
+  .title { font-size: clamp(1.375rem, 5.7vw, 1.75rem); }
+  .subtitle { margin-bottom: 14px; }
+  .context { margin-block: 12px; }
+  .section, .stageCard { padding: 16px; }
+  .section h2 { margin-bottom: 14px; font-size: 1.125rem; }
+  .section :is(input:not([type=radio]):not([type=checkbox]), textarea, select) { font-size: 1rem; }
+  .footer { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
+  .footerInner { gap: 8px; }
+  .footer :is(.primary, .secondary) { min-height: 44px; padding-inline: 10px; }
+  .actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+}

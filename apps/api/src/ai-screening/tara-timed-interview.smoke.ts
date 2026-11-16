@@ -60,4 +60,13 @@ function conversationEdges() {
 
 conversationEdges();
 replay();
+const englishTopics = topics.map(topic => ({ ...topic, question: `How did you use ${topic.label} in that project?` }));
+const answer = 'Saya menyiapkan estimasi anggaran sebelum proyek dimulai.';
+const redirected = advanceTara(startTara(englishTopics, true), englishTopics, {
+    questionRef: 'q1', answerRefs: ['a1'], answered: true, previous: [], answers: [{ ref: 'a1', text: answer }],
+    decision: { outcome: 'OFF_TOPIC', answerQuote: answer, question: null, evidence: [] },
+}, { language: 'en' });
+assert.match(redirected.question!, /back|which|what|could/iu);
+assert.equal(redirected.progress.topics[0].note.quote, answer);
+assert.deepEqual(redirected.progress.topics[0].note.answerRefs, ['a1']);
 console.log('Tara timed Chat: four opportunities, cross-topic evidence, redirects, clarifications and expiry. Paid calls: 0.');

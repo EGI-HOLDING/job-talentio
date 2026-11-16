@@ -3,8 +3,8 @@ import { buildCandidatePreparation, candidateEvidence } from './candidate-prepar
 import { createVoiceRequest } from './prompts/voice-session';
 import { alignedRoleFromPacket, createRoleRubric, ROLE_RUBRIC_VERSION } from './role-rubric';
 import { fileChecksum } from './recruitment/cv-scoring.policy';
-import { projectCvScore, reuseCvResult } from './recruitment/cv-assessment';
-import { attachLiveRoleTopics, liveAgendaRequest, liveInterviewTopics, prepareAlignedRolePackage } from './tara-live-agenda';
+import { cvRequest, cvRubricSignature, projectCvScore, reuseCvResult } from './recruitment/cv-assessment';
+import { attachLiveRoleTopics, collectAlignedAgenda, liveAgendaRequest, liveInterviewTopics, prepareAlignedRolePackage } from './tara-live-agenda';
 import { advanceTara, startTara, taraTopics } from './tara-interview';
 
 function liveBrief(topics: ReturnType<typeof taraTopics>) {
@@ -135,6 +135,53 @@ const refreshed = reuseCvResult(saved, checksum, 'gpt-6-luna', 'taka-cv-source-v
 assert.equal(refreshed?.stage, 'GRADE');
 assert.equal(refreshed?.grades.length, 0);
 assert.deepEqual(refreshed?.source?.blocks, cvSource.blocks);
+
+const englishPacket = prepareAlignedRolePackage(sourceRubric, { ...planned, topics: [
+    { criterionId: discovery, question: 'How would you discover requirements in the first client meeting?' },
+    { criterionId: proposal, question: 'How would you draft a proposal based on the client requirements?' },
+    { criterionId: studio, question: 'How would you assign production responsibilities within the Studio team?' },
+    { criterionId: pitch, question: 'How would you present a complex solution to the client?' },
+] }, undefined, 'en');
+const translatedPacket = prepareAlignedRolePackage(sourceRubric, collectAlignedAgenda({ ...planned, displayLabels: [
+    { criterionId: proposal, name: 'Draft a customer proposal' },
+    { criterionId: studio, name: 'Coordinate production with Studio' },
+    { criterionId: technical, name: 'Memeriksa rancangan dan tugas yang disiapkan' },
+    { criterionId: 'unknown', name: 'Unknown competency' },
+    { criterionId: 'skill-proposal', name: 'Duplicate proposal label' },
+] }), undefined, 'en');
+assert.deepEqual(translatedPacket.roleRubric?.displayLabels, {
+    [proposal]: 'Draft a customer proposal', [studio]: 'Coordinate production with Studio',
+});
+const untranslatedPacket = prepareAlignedRolePackage(sourceRubric, planned, undefined, 'en');
+assert.equal(cvRubricSignature(translatedPacket.roleRubric!), cvRubricSignature(untranslatedPacket.roleRubric!));
+assert.deepEqual(translatedPacket.roleRubric!.criteria.map(({ question, ...row }) => row),
+    untranslatedPacket.roleRubric!.criteria.map(({ question, ...row }) => row));
+assert.match(translatedPacket.liveAgenda!.topics.find(row => row.criterionId === studio)!.question, /“Coordinate production with Studio”/u);
+assert.equal(translatedPacket.roleRubric!.criteria.find(row => row.id === studio)!.name, duties[1]);
+const englishDuty = createRoleRubric({ title: 'Inventory Engineer', responsibilities: ['Verify the stock updates for concurrent reservations'],
+    jobSkills: [], jobLanguages: [] }, ROLE_RUBRIC_VERSION);
+const inventoryId = englishDuty.criteria[0].id;
+const indonesiaFallback = prepareAlignedRolePackage(englishDuty, { topics: [],
+    displayLabels: [{ criterionId: inventoryId, name: 'Periksa pembaruan stok saat pesanan masuk bersamaan' }] }, undefined, 'id');
+assert.match(indonesiaFallback.liveAgenda!.topics[0].question, /^Untuk tugas “Periksa pembaruan stok saat pesanan masuk bersamaan”/u);
+assert.equal(indonesiaFallback.liveAgenda!.topics[0].criterionId, inventoryId);
+assert.ok(liveAgendaRequest(sourceRubric, undefined, 'en').preset.schema.properties?.displayLabels);
+const englishRubric = englishPacket.roleRubric!;
+assert.notEqual(englishRubric.revision, rubric.revision);
+const original = reuseCvResult(saved, checksum, 'gpt-6-luna', 'taka-cv-source-v1', rubric)!;
+const translated = reuseCvResult(saved, checksum, 'gpt-6-luna', 'taka-cv-source-v1', englishRubric)!;
+assert.deepEqual(translated.grades, original.grades, 'localized interview questions do not require a new CV assessment');
+assert.deepEqual(cvRequest({ ...translated, grades: [] }, job).data, cvRequest({ ...original, grades: [] }, job).data);
+
+const foreignQuestions = [
+    { language: 'en', question: 'Bagaimana cara Anda menyusun proposal berdasarkan persyaratan yang disepakati?', fallback: /^What would you do first/u },
+    { language: 'id', question: 'How would you draft the proposal with the client requirements?', fallback: /^Untuk tugas/u },
+] as const;
+for (const { language, question, fallback } of foreignQuestions) {
+    const packet = prepareAlignedRolePackage(sourceRubric, { topics: [{ criterionId: proposal, question }] }, undefined, language);
+    assert.match(packet.liveAgenda!.topics.find(row => row.criterionId === proposal)!.question, fallback,
+        'the frozen agenda substitutes the localized question when its provider used another language');
+}
 
 const otherRole = createRoleRubric({ title: 'Production Planner', responsibilities: ['Prepare production schedules',
     'Approve supply plans and document inventory decisions', 'Review material constraints'], jobSkills: [], jobLanguages: [] }, ROLE_RUBRIC_VERSION);

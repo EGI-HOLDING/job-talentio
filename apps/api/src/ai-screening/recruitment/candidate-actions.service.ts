@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException, 
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
+import { normalizeE164Phone } from '@job-talentio/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { LiveUpdates } from '../../common/live-updates';
@@ -13,10 +14,11 @@ import { enqueueWork } from '../screening-packets.service';
 import { hash, json } from '../screening.policy';
 import { ANONYMOUS_REVEAL_STATUSES, revealsAnonymousEmployer } from '../../common/anonymous-job';
 import { candidateRevealActivities } from '../../chat/recruitment-chat-access';
+import { normalizeCvPhone } from '../../profiles/cv-parser';
 
 const contextInclude={company:true,job:true,application:{include:{profile:{include:{user:true}}}}} satisfies Prisma.RecruitmentCandidateInclude;
 type Candidate=Prisma.RecruitmentCandidateGetPayload<{include:typeof contextInclude}>;
-const safeMessage={id:true,candidateId:true,subject:true,body:true,recipientEmail:true,kind:true,emailStatus:true,messageStatus:true,error:true,createdAt:true} satisfies Prisma.CandidateMessageSelect;
+const safeMessage={id:true,candidateId:true,subject:true,body:true,recipientEmail:true,kind:true,emailStatus:true,messageStatus:true,messageId:true,error:true,createdAt:true} satisfies Prisma.CandidateMessageSelect;
 const activeAccount={isBanned:false,anonymizedAt:null} as const;
 
 @Injectable()
@@ -37,6 +39,13 @@ export class CandidateActions {
     if(!candidate.jobId||!candidate.job)throw new BadRequestException('Tambahkan CV ke lowongan sebelum menghubungi kandidat.');
     if(candidate.stage==='WITHDRAWN'||candidate.scoreStatus==='ERASED'||candidate.company.isBanned||candidate.company.anonymizedAt)throw new BadRequestException('Kandidat atau perusahaan sudah tidak tersedia untuk dihubungi.');
   }
+  private async canRevealEmployer(db: PrismaService | Prisma.TransactionClient, candidate: Candidate) {
+    if (!candidate.job?.isAnonymous || revealsAnonymousEmployer(candidate.application?.status ?? candidate.stage)) return true;
+    if (await db.candidateActivity.count({ where: { candidateId: candidate.id, ...candidateRevealActivities } })) return true;
+    return Boolean(candidate.applicationId && await db.pipelineEvent.count({ where: {
+      applicationId: candidate.applicationId, toStatus: { in: [...ANONYMOUS_REVEAL_STATUSES] },
+    } }));
+  }
   private async selection(tx:Prisma.TransactionClient,input:z.infer<typeof candidateMessageSchema>){
     const selection=input.selection;
     if('filter' in selection&&selection.filter.companyId!==input.companyId)throw new BadRequestException('Filter perusahaan tidak sesuai.');
@@ -45,7 +54,10 @@ export class CandidateActions {
     const expected='ids' in selection?new Set(selection.ids).size:selection.expectedCount;
     if(!rows.length||rows.length!==expected)throw new ConflictException('Daftar kandidat berubah. Perbarui pilihan lalu coba lagi.');
     if(input.email&&rows.length!==1)throw new BadRequestException('Email pengganti hanya dapat digunakan untuk satu kandidat.');
-    for(const row of rows){this.assertCandidate(row);if(row.job?.isAnonymous&&!revealsAnonymousEmployer(row.stage)&&!await tx.candidateActivity.count({where:{candidateId:row.id,...candidateRevealActivities}})&&!(row.applicationId&&await tx.pipelineEvent.count({where:{applicationId:row.applicationId,toStatus:{in:[...ANONYMOUS_REVEAL_STATUSES]}}})))throw new BadRequestException('Pindahkan kandidat ke tahap Wawancara sebelum menghubunginya untuk lowongan yang dirahasiakan.');}
+    for (const row of rows) {
+      this.assertCandidate(row);
+      if (!await this.canRevealEmployer(tx, row)) throw new BadRequestException('Pindahkan kandidat ke tahap Wawancara sebelum menghubunginya untuk lowongan yang dirahasiakan.');
+    }
     return rows;
   }
   async send(user:AuthUser,input:z.infer<typeof candidateMessageSchema>){
@@ -82,6 +94,41 @@ export class CandidateActions {
     return{id,count,subject:batch.subject,createdAt:batch.createdAt,emailCounts:Object.fromEntries(emails.map(e=>[e.emailStatus,e._count])),messageCounts:Object.fromEntries(messages.map(m=>[m.messageStatus,m._count])),messages:items};
   }
   async messages(user:AuthUser,candidateId:string){await this.candidates.owned(user,candidateId);return this.db.candidateMessage.findMany({where:{candidateId},select:safeMessage,orderBy:{createdAt:'desc'},take:50});}
+
+  async contactChannels(user: AuthUser, id: string) {
+    await this.candidates.owned(user, id);
+    const candidate = await this.db.recruitmentCandidate.findUniqueOrThrow({ where: { id }, include: contextInclude });
+    const empty = { whatsapp: null, telegram: null, conversationId: null, peerUserId: null };
+    const profile = candidate.application?.profile;
+    const account = profile?.user;
+    if (!candidate.jobId || !candidate.job) return { ...empty, state: 'NEEDS_JOB' };
+    if (candidate.stage === 'WITHDRAWN' || candidate.application?.status === 'WITHDRAWN' || candidate.scoreStatus === 'ERASED' ||
+        candidate.company.isBanned || candidate.company.anonymizedAt || account?.isBanned || account?.anonymizedAt) {
+      return { ...empty, state: 'UNAVAILABLE' };
+    }
+    if (!await this.canRevealEmployer(this.db, candidate)) return { ...empty, state: 'CONFIDENTIAL' };
+
+    // Use the contact number the candidate shared, never the account's login number.
+    const sharedPhone = profile?.phone ?? candidate.phone;
+    const phone = normalizeE164Phone(sharedPhone && normalizeCvPhone(sharedPhone));
+    const importedAccount = !account && candidate.email ? await this.db.user.findFirst({ where: {
+      ...activeAccount, email: { equals: candidate.email, mode: 'insensitive' }, emailVerified: true, role: 'EMPLOYEE',
+    }, select: { id: true } }) : null;
+    const peer = account?.id ?? importedAccount?.id;
+    let conversationId: string | null = null;
+    if (peer) {
+      const [userAId, userBId] = [user.id, peer].sort();
+      const conversation = await this.db.conversation.findUnique({ where: {
+        userAId_userBId_jobPostId: { userAId, userBId, jobPostId: candidate.jobId },
+      }, select: { id: true, companyId: true } });
+      if (conversation?.companyId === candidate.companyId) conversationId = conversation.id;
+    }
+    return {
+      state: 'AVAILABLE', conversationId, peerUserId: account?.id ?? null,
+      whatsapp: phone ? `https://wa.me/${phone.slice(1)}` : null,
+      telegram: phone ? `https://t.me/${phone}` : null,
+    };
+  }
 
   async deliver(id:string){
     const row=await this.db.candidateMessage.findUnique({where:{id},include:{batch:true,interview:true,candidate:{include:contextInclude}}});
@@ -141,7 +188,26 @@ export class CandidateActions {
     const message=await tx.candidateMessage.create({data:{batchId:batch.id,candidateId:candidate.id,interviewId:interview.id,interviewRevision:interview.revision,recipientEmail:recipient.email,recipientUserId:recipient.userId,subject,body,kind:'INTERVIEW',emailStatus:recipient.email?'PENDING':'NO_EMAIL'}});
     await enqueueWork(tx,'CANDIDATE_DELIVERY',message.id);
   }
-  async interviews(user:AuthUser,candidateId:string){const candidate=await this.candidates.owned(user,candidateId);const rows=await this.db.candidateInterview.findMany({where:{candidateId},include:{nativeInterview:true},orderBy:{scheduledAt:'asc'}}),legacy=candidate.applicationId?await this.db.interview.findMany({where:{applicationId:candidate.applicationId,recruitmentInterview:null},orderBy:{scheduledAt:'asc'}}):[];return [...rows.map(({nativeInterview,...row})=>({...row,nativeOnly:false,...(nativeInterview?{status:nativeInterview.status,scheduledAt:nativeInterview.scheduledAt,durationMins:nativeInterview.durationMins,meetingUrl:nativeInterview.meetingUrl,location:nativeInterview.location,note:nativeInterview.note}:{})})),...legacy.map(row=>({...row,id:'native:'+row.id,revision:0,nativeOnly:true}))].sort((a,b)=>+a.scheduledAt-+b.scheduledAt);}
+  async interviews(user: AuthUser, candidateId: string) {
+    const candidate = await this.candidates.owned(user, candidateId);
+    const [rows, legacy] = await Promise.all([
+      this.db.candidateInterview.findMany({ where: { candidateId }, include: { nativeInterview: true }, orderBy: { scheduledAt: 'asc' } }),
+      candidate.applicationId ? this.db.interview.findMany({
+        where: { applicationId: candidate.applicationId, recruitmentInterview: null }, orderBy: { scheduledAt: 'asc' },
+      }) : [],
+    ]);
+    const organizers = [...new Set(rows.flatMap(row => row.createdById ? [row.createdById] : []))];
+    const people = organizers.length ? await this.db.user.findMany({
+      where: { id: { in: organizers }, ...activeAccount }, select: { id: true, fullName: true },
+    }) : [];
+    const names = new Map(people.map(row => [row.id, row.fullName]));
+    return [...rows.map(({ nativeInterview, ...row }) => ({
+      ...row, nativeOnly: false, organizerName: names.get(row.createdById ?? '') ?? null,
+      ...(nativeInterview ? { status: nativeInterview.status, scheduledAt: nativeInterview.scheduledAt,
+        durationMins: nativeInterview.durationMins, meetingUrl: nativeInterview.meetingUrl, location: nativeInterview.location, note: nativeInterview.note } : {}),
+    })), ...legacy.map(row => ({ ...row, id: 'native:' + row.id, revision: 0, nativeOnly: true, organizerName: null }))]
+      .sort((a, b) => +a.scheduledAt - +b.scheduledAt);
+  }
   async schedule(user:AuthUser,candidateId:string,input:z.infer<typeof candidateInterviewSchema>){
     await this.candidates.owned(user,candidateId);
     if(Date.parse(input.scheduledAt)<=Date.now())throw new BadRequestException('Pilih waktu interview di masa mendatang.');

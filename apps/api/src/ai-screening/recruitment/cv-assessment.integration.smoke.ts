@@ -132,8 +132,18 @@ const recovery = new CvAssessmentService(db, storage as never, config, provider 
 const packets = new ScreeningPackets(db);
 const scorer = new CvScoringService(db, recovery, packets);
   let rubricCalls = 0;
+  let narrativeCalls = 0;
   const worker = () => new ScreeningWorker(db, config, storage as never, {} as never, packets, {} as never, {} as never,
-    { run: async (_work: unknown, _id: unknown, task: string, input: { criteria: Array<{ id: string; name: string }> }, preset: { version: string }) => {
+    { run: async (_work: unknown, _id: string, task: string,
+      input: { criteria: Array<{ id: string; name: string }>; texts?: Record<string, string> },
+      preset: { version: string; instructions: string }) => {
+      if (task === 'assessment-narrative') {
+        narrativeCalls++;
+        assert.match(preset.instructions, /into English/u);
+        assert.equal(new Set(Object.values(input.texts!)).size, Object.keys(input.texts!).length);
+        if (_id === 'role-en-narrative-failed') throw new Error('Simulated narrative failure');
+        return Object.fromEntries(Object.keys(input.texts!).map(id => [id, 'The candidate demonstrated a relevant work activity.']));
+      }
       assert.equal(task, 'live-agenda');
       assert.equal(preset.version, TARA_ALIGNED_AGENDA_VERSION);
       rubricCalls++;
@@ -360,6 +370,44 @@ async function main() {
   assert.equal(firstScore.cvScore, 75);
   assert.deepEqual(firstScore.cvResult, repeatedScore.cvResult, 'identical company, file and rubric reuse the same evidence and score');
   assert.equal(history.get('role-canonical')!.length, 1, 'concurrent identical assessments submit one reading');
+  for (const id of ['role-en-narrative', 'role-en-narrative-failed']) {
+    const localized = await create('role-canonical', id);
+    await db.recruitmentCandidate.update({ where: { id }, data: {
+      jobSnapshot: json({ ...scoringJob(localized.job), assessmentLanguage: 'en' }),
+    } });
+    const beforeAssessment = await candidates.detail(hr, id);
+    assert.equal(beforeAssessment.assessmentLanguage, 'en');
+    assert.equal(beforeAssessment.cvResult, null);
+    const awaiting = await untilDone(id, localized.work.id);
+    assert.equal(awaiting.cvScore, firstScore.cvScore);
+    assert.equal(await db.aiScreeningCall.count({ where: { workId: localized.work.id } }), 0);
+    const evaluation = awaiting.cvResult as unknown as { assessmentLanguage: string; narrative?: { state: string };
+      criteria: Array<{ level: number; reason: string; evidence: string[] }>; cvText: string; sourceReferences: unknown;
+      roleAssessment: { criteria: Array<{ name: string; displayName?: string }> } };
+    const original = firstScore.cvResult as unknown as typeof evaluation;
+    assert.equal(evaluation.assessmentLanguage, 'en');
+    assert.equal(evaluation.narrative?.state, 'PENDING');
+    assert.equal(evaluation.cvText, original.cvText);
+    assert.deepEqual(evaluation.sourceReferences, original.sourceReferences);
+    assert.equal(evaluation.roleAssessment.criteria[0].displayName, 'Criterion 1');
+    const task = await db.aiScreeningWork.findFirstOrThrow({ where: { subjectId: id, kind: 'CV_NARRATIVE' } });
+    const before = narrativeCalls;
+    await Promise.all([turn(task.id), turn(task.id)]);
+    await turn(task.id);
+    const final = await state(id);
+    const result = final.cvResult as unknown as typeof evaluation;
+    assert.equal(narrativeCalls, before + 1);
+    assert.equal(final.cvScore, firstScore.cvScore);
+    assert.deepEqual(result.criteria.map(({ level, evidence }) => ({ level, evidence })),
+      original.criteria.map(({ level, evidence }) => ({ level, evidence })));
+    if (id.endsWith('failed')) assert.equal(result.narrative?.state, 'REVIEW_REQUIRED');
+    else {
+      assert.equal(result.narrative, undefined);
+      assert.match(result.criteria[0].reason, /The candidate demonstrated/u);
+      assert.equal(result.roleAssessment.criteria[0].name, original.roleAssessment.criteria[0].name);
+      assert.match(result.roleAssessment.criteria[0].displayName!, /The candidate demonstrated/u);
+    }
+  }
   const rescoped = await create('role-changed');
   const rescopedScore = await untilDone(rescoped.row.id, rescoped.work.id);
   assert.notEqual(frozenRoleRubric(firstScore.jobSnapshot)?.revision, frozenRoleRubric(rescopedScore.jobSnapshot)?.revision);

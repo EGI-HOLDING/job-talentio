@@ -8,6 +8,7 @@ import type { RecruiterBreakdown } from '../matching/recruiter-matching';
 import { conversationPolicy, assessmentVersion } from './conversation.policy';
 import { rankScreening, SCREENING_RANKING_VERSION, hash } from './screening.policy';
 import type { EvaluationPayload } from './screening.schemas';
+import { assessmentLanguageOf } from './assessment-language';
 
 function taraScoreReason(evaluation?: {result: unknown; screeningScore: number | null; cvScore: number | null; status: string} | null) {
     if (evaluation?.status === 'FAILED') return 'EVALUATION_FAILED';
@@ -128,10 +129,11 @@ export class ScreeningHr {
         const reevaluation = await this.db.aiScreeningWork.findUnique({ where: { key: 'EVALUATE:' + s.id + ':' + assessmentVersion(conversationPolicy(s.package?.conversationPolicy)) }, select: { status: true } });
         const revisions = e ? await this.db.aiScreeningEvaluationRevision.findMany({ where: { evaluationId: e.id }, select: { id: true, promptVersion: true, createdAt: true }, orderBy: { createdAt: 'desc' } }) : [];
         return { status: e?.status ?? 'PENDING', cvScore: e?.cvScore ?? null, screeningScore: e?.screeningScore ?? null, finalScore: e?.finalScore ?? null, result: e?.result ?? null,
+            assessmentLanguage: assessmentLanguageOf(s.package?.jobSnapshot),
             methodology: e?.promptVersion ?? null, reevaluationStatus: reevaluation?.status ?? null, assessedClaims: (e?.result as { claims?: unknown[] } | null)?.claims?.length ?? 0,
             scoreReason: taraScoreReason(e), revisions,
             version: s.package?.version, promptVersion: e?.promptVersion, pdfReady: Boolean(e?.pdfKey), coverFilename: s.coverFilename,
-            rubric: s.package?.payload, plan: s.currentPlan?.payload, questions: s.questions.map(q => ({ id: q.id, question: q.text, answer: q.answer, timedOut: q.timedOut })) };
+            rubric: s.package?.payload, plan: s.currentPlan?.payload, questions: s.questions.map(q => ({ id: q.id, question: q.text, answer: q.answer, shownAt: q.shownAt, answeredAt: q.answeredAt, timedOut: q.timedOut })) };
     }
     async revision(user: AuthUser, id: string, revisionId: string) {
         const session = await this.access(user, id);

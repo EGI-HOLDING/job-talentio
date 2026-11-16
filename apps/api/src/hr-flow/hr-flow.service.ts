@@ -9,7 +9,8 @@ import { BenefitsService } from '../benefits/benefits.service';
 import { OperationsService } from '../benefits/operations.service';
 import { JobCommerceService } from '../benefits/job-commerce.service';
 import { HR_PUBLICATION_LOCK } from '../benefits/benefit-policy';
-import { assertHrFlowEnabled } from './hr-flow.policy';
+import { assertAssessmentLanguageChange, assertHrFlowEnabled, requireAssessmentLanguage } from './hr-flow.policy';
+import type { AssessmentLanguage } from '@job-talentio/shared';
 import { resolveSeniority } from '../catalogs/business-catalog';
 import { isDocxPackage } from './document-upload';
 import { creationJobInput, snapshotJob, templateJobInclude, validateTemplateDraft } from './job-posting-template';
@@ -75,10 +76,11 @@ export class HrFlowService {
       return session;
     })).value;
   }
-  async patch(user:AuthUser,id:string,input:{revision:number;draft?:Record<string,unknown>;phase?:string;packageCode?:'FREE'|'STANDARD'|'PREMIUM'}){
+  async patch(user:AuthUser,id:string,input:{revision:number;draft?:Record<string,unknown>;assessmentLanguage?:AssessmentLanguage;phase?:string;packageCode?:'FREE'|'STANDARD'|'PREMIUM'}){
     return this.db.$transaction(async tx=>{
       const before=await this.get(user,id,tx);
       if(before.jobId)throw new ConflictException('This draft is already published');
+      assertAssessmentLanguageChange(before.assessmentLanguage,input.assessmentLanguage);
       if(input.draft&&before.order?.status!=='PAID')throw new ConflictException('Confirm checkout before editing the job');
       if(input.draft&&before.templateId&&!before.templateIssue)throw new ConflictException('Template publication is in progress');
       if(before.templateId&&before.order?.status==='PAID'&&(input.phase&&input.phase!=='JOB'||input.packageCode))throw new ConflictException('Package already confirmed');
@@ -93,7 +95,7 @@ export class HrFlowService {
           ...(before.templateId?{_templateFields:previous._templateFields}:{})};
       }
       if(input.packageCode)draft={...(draft??before.draft as Record<string,unknown>),_selectedPackageCode:input.packageCode};
-      const changed=await tx.jobCreationSession.updateMany({where:{id,revision:input.revision,jobId:null},data:{draft:draft as Prisma.InputJsonValue|undefined,phase:input.phase,revision:{increment:1}}});
+      const changed=await tx.jobCreationSession.updateMany({where:{id,revision:input.revision,jobId:null},data:{draft:draft as Prisma.InputJsonValue|undefined,assessmentLanguage:input.assessmentLanguage,phase:input.phase,revision:{increment:1}}});
       if(!changed.count)throw new ConflictException('Draft changed in another tab. Refresh before saving.');
       return this.get(user,id,tx);
     });
@@ -111,8 +113,9 @@ export class HrFlowService {
       if(session.revision!==revision)throw new ConflictException('Draft changed. Review before publishing.');
       const order=session.order;
       if(!order||order.status!=='PAID'||order.creationSessionId!==id||order.companyId!==session.companyId||order.fulfilledAt)throw new ConflictException('A confirmed unused package is required');
+      requireAssessmentLanguage(session.assessmentLanguage);
       const {data,version}=creationJobInput(session.draft,Boolean(session.templateId));
-      const job=await this.jobs.createInside(user,session.companyId,data,tx,version);
+      const job=await this.jobs.createInside(user,session.companyId,{...data,assessmentLanguage:session.assessmentLanguage??undefined},tx,version);
       if(!job)throw new BadRequestException('Could not create the job');
       await this.jobs.assertCreationPublication(user,job.id,tx);
       await this.benefits.applyPurchase(user,job.id,order.code,'PURCHASE',{version:order.policyVersion,settings:order.policySnapshot as never},tx);
@@ -138,7 +141,7 @@ export class HrFlowService {
     }catch(error){
       const groupChanged=error instanceof ConflictException&&error.message==='POSITION_GROUP_SCOPE_CHANGED';
       if(!(error instanceof BadRequestException)&&!groupChanged)throw error;
-      const issue=groupChanged?'POSITION_GROUP_SCOPE_CHANGED':'JOB_TEMPLATE_REVIEW_REQUIRED';
+      const issue=groupChanged?'POSITION_GROUP_SCOPE_CHANGED':error.message==='ASSESSMENT_LANGUAGE_REQUIRED'?'ASSESSMENT_LANGUAGE_REQUIRED':'JOB_TEMPLATE_REVIEW_REQUIRED';
       await this.db.jobCreationSession.updateMany({
         where:{id,revision:session.revision,jobId:null,templateIssue:null,orderId:session.order.id},
         data:{templateIssue:issue,templateNextAttemptAt:null,revision:{increment:1}},

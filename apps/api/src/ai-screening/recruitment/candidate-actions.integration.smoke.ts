@@ -25,14 +25,27 @@ async function main(){
  await db.jobPost.create({data:{id:'actions-job',companyId:'actions-co',title:'API Engineer',description:'Membangun API.',status:'PUBLISHED'}});
  await db.jobPost.create({data:{id:'actions-anon',companyId:'actions-co',title:'Confidential API Engineer',description:'Membangun API.',status:'PUBLISHED',isAnonymous:true}});
  const base={companyId:'actions-co',jobId:'actions-job',filename:'CV.pdf',contentType:'application/pdf',sizeBytes:100,scoreStatus:'READY',stage:'IN_REVIEW' as const};
- await db.recruitmentCandidate.create({data:{...base,id:'actions-c1',fullName:user.fullName,email:user.email,cvScore:20}});
+ await db.recruitmentCandidate.create({data:{...base,id:'actions-c1',fullName:user.fullName,email:user.email,phone:'+62 812-1000-0000',cvScore:20,
+  cvResult:{assessmentLanguage:'id',summary:'Sintetis: pengembangan API.',criteria:[{criterionId:'skills',level:1,reason:'Menyebutkan HTTP.',evidence:['Mengembangkan API HTTP.']}],limitations:[]}}});
  await db.recruitmentCandidate.create({data:{...base,id:'actions-c2',fullName:'Later Candidate',email:'actions-later@example.test',cvScore:99}});
  await db.recruitmentCandidate.create({data:{...base,id:'actions-missing',fullName:'Missing Email'}});
- await db.recruitmentCandidate.create({data:{...base,id:'actions-anon-c',jobId:'actions-anon',fullName:user.fullName,email:user.email}});
+ await db.recruitmentCandidate.create({data:{...base,id:'actions-anon-c',jobId:'actions-anon',fullName:user.fullName,email:user.email,phone:'+62 812-1000-0000'}});
  const companies={assertMember:async(actor:AuthUser,id:string)=>{if(actor.id!==hr.id||id!=='actions-co')throw Error('Forbidden');return{company:{id}};},assertOpen:()=>{}};
  const storage={keyFromPublicUrl:()=>null,delete:async()=>{}},candidates=new RecruitmentService(db,storage as never,companies as never);
  const emails:Array<{to:string;body:string}>=[];let failEmail=false;
  const actions=new CandidateActions(db,candidates,{send:async(to:string,_subject:string,body:string)=>{if(failEmail)return null;emails.push({to,body});return{id:'mock-mail-'+emails.length};}} as never);
+ const external = await actions.contactChannels(hr, 'actions-c1');
+ assert.equal(external.whatsapp, 'https://wa.me/6281210000000');
+ assert.equal(external.telegram, 'https://t.me/+6281210000000');
+ assert.equal((await actions.contactChannels(hr, 'actions-c2')).whatsapp, null);
+ assert.equal((await actions.contactChannels(hr, 'actions-anon-c')).state, 'CONFIDENTIAL');
+ assert.equal((await actions.contactChannels(hr, 'actions-anon-c')).telegram, null);
+ await assert.rejects(actions.contactChannels({ ...hr, id: 'foreign' }, 'actions-c1'));
+ assert.equal(await db.candidateMessageBatch.count(), 0, 'An external chat lookup does not queue a message');
+ const pdf = await candidates.cvReport(hr, 'actions-c1', '0');
+ assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+ await assert.rejects(candidates.cvReport(hr, 'actions-c1', '1'), /diperbarui/);
+ await assert.rejects(candidates.cvReport({ ...hr, id: 'foreign' }, 'actions-c1'));
  const worker=new ScreeningWorker(db,new ConfigService({}),storage as never,{} as never,{} as never,{} as never,{} as never,{} as never,undefined,candidates,undefined,undefined,actions);
  async function deliver(messageId:string,key?:string){const work=await db.aiScreeningWork.findUniqueOrThrow({where:{key:key??'CANDIDATE_DELIVERY:'+messageId}});await worker.process(work.id);const finished=await db.aiScreeningWork.findUniqueOrThrow({where:{id:work.id}});assert.equal(finished.status,'DONE',JSON.stringify({key:finished.key,error:finished.error,availableAt:finished.availableAt,started:work.availableAt,attempts:finished.attempts}));}
  const input=candidateMessageSchema.parse({companyId:'actions-co',selection:{ids:['actions-c1','actions-c2']},requestKey:'actions-message-001',subject:'Info {{jobTitle}}',body:'Halo {{name}}, <script> adalah teks biasa.\nTim {{companyName}} mengundangmu berdiskusi.',channels:{email:true,talentio:true}});
@@ -48,6 +61,7 @@ async function main(){
  const chats=new ChatService(db,{getPresence:async()=>({}),getOne:async()=>({isOnline:false})} as never,{create:async()=>{}} as never,{} as never);
  const inbox=await chats.listConversations(user);assert.equal(inbox.length,1,'imported candidate can read the Talentio inbox without an Application');
  const conversation=inbox[0];assert.ok((await chats.getMessages(user,conversation.id)).some(m=>m.body.includes('Halo Dinda Actions')));
+ assert.equal((await actions.contactChannels(hr, 'actions-c1')).conversationId, conversation.id);
  await chats.sendMessage(user,conversation.id,'Terima kasih, saya sudah menerima informasinya.',{telegram:'never'});
  assert.equal(await db.application.count({where:{jobPostId:'actions-job'}}),0,'inbox access does not fabricate an Application');
  await db.user.update({where:{id:user.id},data:{emailVerified:false}});assert.equal(await recruitmentChatAccess(db,conversation),null,'an unverified imported identity cannot claim inbox access');await db.user.update({where:{id:user.id},data:{emailVerified:true}});
@@ -72,6 +86,7 @@ async function main(){
  const nativeUser=await db.user.create({data:{id:'actions-native-user',fullName:'Native Candidate',role:'EMPLOYEE',email:'actions-native@example.test',emailVerified:true}}),nativeProfile=await db.employeeProfile.create({data:{userId:nativeUser.id}}),application=await db.application.create({data:{jobPostId:'actions-job',profileId:nativeProfile.id,status:'IN_REVIEW'}});
  await db.recruitmentCandidate.create({data:{...base,id:'actions-native',applicationId:application.id,fullName:nativeUser.fullName,email:nativeUser.email,cvScore:50}});
  const native=await actions.schedule(hr,'actions-native',{...schedule,requestKey:'actions-native-schedule',scheduledAt:at(1),email:nativeUser.email!});assert.ok(native.nativeInterviewId);assert.equal((await db.interview.findUniqueOrThrow({where:{id:native.nativeInterviewId!}})).applicationId,application.id);assert.equal((await db.application.findUniqueOrThrow({where:{id:application.id}})).status,'INTERVIEW');
+ assert.equal((await actions.interviews(hr, 'actions-native'))[0].organizerName, hr.fullName);
  const nearest=await candidates.list(hr,candidateListSchema.parse({companyId:'actions-co',jobId:'actions-job',sort:'schedule',limit:1}));assert.equal(nearest.items[0].id,'actions-native','nearest native and imported schedules sort before pagination');assert.equal((await candidates.list(hr,candidateListSchema.parse({companyId:'actions-co',jobId:'actions-job',q:'Dinda'}))).overallTotal,4,'tab total is independent of search');
  const cancelled=await actions.updateInterview(hr,'actions-native',native.id,{revision:native.revision,status:'CANCELLED'});assert.equal((await db.interview.findUniqueOrThrow({where:{id:native.nativeInterviewId!}})).status,'CANCELLED');
  const cancelMessage=await db.candidateMessage.findFirstOrThrow({where:{interviewId:cancelled.id,interviewRevision:cancelled.revision}});await deliver(cancelMessage.id);assert.ok(emails.at(-1)!.body.includes('dibatalkan'));
@@ -80,6 +95,7 @@ async function main(){
  const bulk=await actions.send(hr,{...input,requestKey:'actions-bulk-125',selection:{filter:candidateListSchema.parse({companyId:'actions-co',jobId:'actions-bulk-job'}),expectedCount:125,excludedIds:[]}});assert.equal(bulk.count,125);assert.equal(await db.aiScreeningWork.count({where:{kind:'CANDIDATE_DELIVERY',subjectId:{in:(await db.candidateMessage.findMany({where:{batchId:bulk.id},select:{id:true}})).map(m=>m.id)}}}),125);
  await assert.rejects(actions.send(hr,{...input,requestKey:'actions-stale-filter',selection:{filter:candidateListSchema.parse({companyId:'actions-co',jobId:'actions-bulk-job'}),expectedCount:124,excludedIds:[]}}));
  await new UserErasureService(db,storage as never).erase(user.id);assert.equal((await db.recruitmentCandidate.findUniqueOrThrow({where:{id:'actions-c1'}})).scoreStatus,'ERASED');assert.ok((await db.candidateMessage.findMany({where:{candidateId:'actions-c1'}})).every(m=>m.body==='Message removed'&&m.recipientEmail==='erased@example.invalid'));assert.equal(await db.candidateInterview.count({where:{candidateId:'actions-c1'}}),0);assert.equal(await recruitmentChatAccess(db,conversation),null);
+ assert.equal((await actions.contactChannels(hr, 'actions-c1')).whatsapp, null);
  console.log('Candidate actions passed: 125-recipient durable bulk messaging, retry/idempotency/opt-out, private imported inbox and reply without fabricated application, verified-account delivery, confidential-employer gate, imported/native scheduling and cancellation, stale schedule suppression, nearest-date pagination and erasure. Paid calls: 0.');
 }
 main().finally(()=>db.$disconnect()).catch(error=>{console.error(error);process.exitCode=1;});

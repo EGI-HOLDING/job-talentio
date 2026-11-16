@@ -148,6 +148,8 @@ export const jobScreeningQuestionSchema = z.object({
 
 export const jobContentAiLanguageSchema = z.enum(['id', 'en']);
 export type JobContentAiLanguage = z.infer<typeof jobContentAiLanguageSchema>;
+export const assessmentLanguageSchema = z.enum(['id', 'en']);
+export type AssessmentLanguage = z.infer<typeof assessmentLanguageSchema>;
 
 export const jobPostSchema = z.object({
   positionEntryMode: z.enum(['CATALOG', 'MANUAL', 'GROUP']).optional(),
@@ -164,6 +166,7 @@ export const jobPostSchema = z.object({
   jobTitleSlug: z.string().max(120).optional(),
   description: z.string().trim().min(20).max(20000),
   jobContentAiLanguage: jobContentAiLanguageSchema.optional(),
+  assessmentLanguage: assessmentLanguageSchema.optional(),
   screeningQuestions: z.array(jobScreeningQuestionSchema).max(20).optional(),
   expectedUpdatedAt: z.string().datetime().optional(),
   citySlug: z.string().max(120).optional(),
@@ -341,6 +344,7 @@ export const notificationListSchema = z.object({
 export const jobStatusSchema = z.object({
   status: z.enum(['DRAFT', 'PUBLISHED', 'PAUSED', 'CLOSED', 'EXPIRED']),
   linkedinPreviewId: z.string().min(1).max(100).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
 });
 
 export const linkedinConnectSchema = z.object({ returnTo:z.string().max(2000).optional() }).strict();

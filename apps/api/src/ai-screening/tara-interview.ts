@@ -1,4 +1,5 @@
 import { SKILL_CONVERSATION, TIMED_CONVERSATION, repeatsQuestion } from './conversation.policy';
+import type { AssessmentLanguage } from '@job-talentio/shared';
 import { assertSchema, validQuestion, type CandidatePayload, type PackagePayload, type RequiredSkillProbe } from './screening.schemas';
 import { SKILL_TURN_SCHEMA, TIMED_TURN_SCHEMA } from './prompts/tasks/skill-interview';
 
@@ -7,6 +8,7 @@ export const TARA_COMPLETE_MS = 14 * 60_000;
 export const TARA_SESSION_MS = 15 * 60_000;
 export const TARA_CHAT_REVIEW_MS = 8_000;
 export const TARA_ROLE_INTRO = 'Halo, gue Tara. Kita bahas tugas di posisi ini, ya.';
+export const TARA_ROLE_INTRO_EN = 'Hi, I’m Tara. Let’s talk about the work you’d do in this role.';
 export const ALTERNATIVE_TOPIC = 'outside-cv';
 const MAX_TURNS = SKILL_CONVERSATION.maxCore + SKILL_CONVERSATION.maxFollowUp;
 
@@ -61,7 +63,7 @@ export type TaraProgress = {
     topics: TopicState[];
 };
 
-export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed = false): TaraTopic[] {
+export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed = false, language?: AssessmentLanguage): TaraTopic[] {
     if (plan.roleTopics?.length) return plan.roleTopics.map(row => {
         const criterion = rubric.criteria.find(criterion => criterion.id === row.criterionId);
         const claim = plan.claims.find(claim => claim.id === row.cvClaimId);
@@ -83,8 +85,8 @@ export function taraTopics(plan: CandidatePayload, rubric: PackagePayload, timed
     return [{
         id: ALTERNATIVE_TOPIC, criterionId: criterion.id, label: criterion.name,
         ...(timed ? {requirementRef: criterion.requirementRef, priority:'CORE' as const, fields:['TASK', 'ACTION'] as EvidenceField[]} : {}),
-        question: plan.alternativeQuestion ?? ('Oke, kita mulai ya 😄 Pernah ada proyek atau kegiatan yang berkaitan sama ' +
-            (label && label.length <= 65 ? label : 'tugas utama posisi ini') + '?'),
+        question: plan.alternativeQuestion ?? (language === 'en' ? 'Hi, I’m Tara. Can you share a project connected to the main work of this role?' :
+            'Oke, kita mulai ya 😄 Pernah ada proyek atau kegiatan yang berkaitan sama ' + (label && label.length <= 65 ? label : 'tugas utama posisi ini') + '?'),
         alternative: true,
     }];
 }
@@ -144,26 +146,39 @@ export function taraAssessmentTopics(progress: TaraProgress, topics: TaraTopic[]
         ? [{...topic, covered: [...new Set(progress.topics[index].note.evidence?.flatMap(item => item.fields) ?? [])]}] : []);
 }
 
-function clarification(outcome: TurnJudgment) {
+function clarification(outcome: TurnJudgment, language?: AssessmentLanguage) {
+    if (language === 'en') {
+        if (outcome === 'DISCREPANCY') return 'Just to clarify, did you use that skill in the experience on your CV?';
+        if (outcome === 'OFF_TOPIC') return 'Let’s get back to that skill. What work did you use it for?';
+        return 'Which part of that example did you handle yourself?';
+    }
     if (outcome === 'DISCREPANCY') return 'Gue cek maksud lu sebentar ya. Keahlian tadi lu pakai di pengalaman yang lu tulis itu?';
     if (outcome === 'OFF_TOPIC') return 'Gue tarik balik dikit ya. Keahlian tadi lu pakai buat ngerjain bagian yang mana?';
     return 'Dari contoh tadi, bagian mana yang lu kerjain sendiri?';
 }
 
 const noPriorExperience = /^(?:(?:maaf|jujur)[,.\s]+)?(?:(?:gua|gue|aku|saya)\s+)?(?:(?:nggak|gak|enggak|tidak) pernah|belum pernah)(?:\s+(?:pakai|menggunakan)\s+[^.,!?]+)?[.!\s]*$/iu;
-const addsContext = /\b(?:tapi|tetapi|namun|meski|walaupun|karena)\b/iu;
+const noPriorExperienceEnglish = /^(?:(?:sorry|honestly)[,.\s]+)?(?:no[,.!\s]*|i (?:have never|haven['’]t|never) (?:used|worked with) [^.,!?]+|i haven['’]t)[.!\s]*$/iu;
+const addsContext = /\b(?:tapi|tetapi|namun|meski|walaupun|karena|but|however|because|though)\b/iu;
 
-function missingDetail(topic: TaraTopic, note: TaraNote) {
+function missingDetail(topic: TaraTopic, note: TaraNote, language?: AssessmentLanguage) {
     if (!topic.fields) return undefined;
     const missing = topic.fields.filter(field => !note.evidence?.some(item => item.fields.includes(field)));
     if (missing.includes('ACTION')) return undefined;
+    if (language === 'en') {
+        if (missing.includes('TASK')) return 'What task did you use that skill to complete?';
+        if (missing.includes('CONTEXT')) return 'Which project or activity did you use that skill in?';
+        if (missing.includes('RESULT')) return 'What was the result of the part you handled?';
+        if (missing.includes('ROLE_BOUNDARY')) return 'How did you divide the work with the rest of your team?';
+        return undefined;
+    }
     if (missing.includes('TASK')) return 'Keahlian tadi lu pakai buat menyelesaikan tugas yang mana?';
     if (missing.includes('CONTEXT')) return 'Lu pakai keahlian itu di proyek atau kegiatan yang mana?';
     if (missing.includes('RESULT')) return 'Apa hasil dari bagian yang lu kerjain waktu itu?';
     if (missing.includes('ROLE_BOUNDARY')) return 'Gimana pembagian tanggung jawab lu dengan anggota tim lain?';
 }
 
-function moveTopic(progress: TaraProgress, topics: TaraTopic[], canRevisit: boolean) {
+function moveTopic(progress: TaraProgress, topics: TaraTopic[], canRevisit: boolean, language?: AssessmentLanguage) {
     if (progress.questions >= MAX_TURNS) return null;
     if (progress.stage === 'FIRST' && progress.active + 1 < topics.length) {
         progress.active++;
@@ -171,6 +186,11 @@ function moveTopic(progress: TaraProgress, topics: TaraTopic[], canRevisit: bool
         if (!note.evidence?.length || (topic.requiredSkill && topic.requiredSkill.cvEvidence !== 'CV_EXAMPLE')) return topic.question;
         const label = topic.label.replace(/[?:\r\n]+/g, ' ').trim().slice(0, 65);
         const missing = topic.fields?.find(field => !note.evidence?.some(item => item.fields.includes(field)));
+        if (language === 'en') {
+            if (missing === 'RESULT') return `For ${label}, what was the result of your own contribution?`;
+            if (missing === 'CONTEXT') return `Which project or activity did you use ${label} in?`;
+            return `For ${label}, which part did you personally handle?`;
+        }
         if (missing === 'RESULT') return `Masih soal ${label}, apa hasil dari bagian yang lu kerjain?`;
         if (missing === 'CONTEXT') return `Lu pakai ${label} itu di proyek atau kegiatan yang mana?`;
         return `Soal ${label} yang lu sebut tadi, bagian mana yang lu tangani sendiri?`;
@@ -187,6 +207,9 @@ function moveTopic(progress: TaraProgress, topics: TaraTopic[], canRevisit: bool
     topic.focus = topic.revisit;
     topic.revisit = null;
     const label = topics[index].label.replace(/[?:\r\n]+/g, ' ').trim();
+    if (language === 'en') return topic.focus === 'DISCREPANCY'
+        ? 'Which experience actually involved that skill?'
+        : missingDetail(topics[index], topic.note, language) ?? 'What decision did you make yourself in that example?';
     const lead = label && label.length <= 55 ? label : 'keahlian yang lu tulis';
     return topic.focus === 'DISCREPANCY'
         ? `Gue balik sebentar ke ${lead} ya. Pengalaman mana yang sebenarnya melibatkan keahlian itu?`
@@ -197,7 +220,9 @@ export function advanceTara(progress: TaraProgress, topics: TaraTopic[], turn: {
     questionRef?: string; answerRefs: string[]; answered: boolean; previous: string[];
     decision?: TaraDecision; timedOut?: boolean; technical?: boolean; answers?: Array<{ref: string; text: string}>;
     opportunity?: TaraOpportunity;
-}, { canClarify = true, canRevisit = true, canContinue = true } = {}) {
+}, { canClarify = true, canRevisit = true, canContinue = true, language }: {
+    canClarify?: boolean; canRevisit?: boolean; canContinue?: boolean; language?: AssessmentLanguage;
+} = {}) {
     const next = structuredClone(progress);
     const state = next.topics[next.active];
     const topic = topics[next.active];
@@ -205,7 +230,8 @@ export function advanceTara(progress: TaraProgress, topics: TaraTopic[], turn: {
     const priorOutcome = state.note.outcome;
     const initialRequiredProbe = turn.questionRef && topic.requiredSkill && topic.requiredSkill.cvEvidence !== 'CV_EXAMPLE' && !state.note.questionRefs.length;
     const reply = initialRequiredProbe ? turn.answers?.filter(answer => turn.answerRefs.includes(answer.ref)) : undefined;
-    const answeredWithoutExperience = reply?.length === 1 && noPriorExperience.test(reply[0].text.trim()) && !addsContext.test(reply[0].text);
+    const answeredWithoutExperience = reply?.length === 1 &&
+        (noPriorExperience.test(reply[0].text.trim()) || Boolean(language && noPriorExperienceEnglish.test(reply[0].text.trim()))) && !addsContext.test(reply[0].text);
     if (next.policyVersion && !answeredWithoutExperience) rememberTaraEvidence(next, topics, turn.decision, turn.answers ?? []);
     const completeEvidence = next.policyVersion && turn.questionRef && taraHasEvidence(topic, state.note);
     const decision = answeredWithoutExperience ? {
@@ -238,7 +264,7 @@ export function advanceTara(progress: TaraProgress, topics: TaraTopic[], turn: {
     if (turn.questionRef && turn.answered && !turn.technical && !turn.timedOut && outcome !== 'EXAMPLE'
         && state.note.outcome !== 'CLARIFIED_DISCREPANCY' && canContinue && canClarify && !state.depth && next.questions + waiting < MAX_TURNS) {
         const question = decision?.question ?? (initialRequiredProbe ? topic.workScenario : undefined) ??
-            (outcome === 'NEEDS_DETAIL' ? missingDetail(topic,state.note) : undefined) ?? clarification(outcome);
+            (outcome === 'NEEDS_DETAIL' ? missingDetail(topic,state.note,language) : undefined) ?? clarification(outcome,language);
         if (!repeatsQuestion(question, turn.previous)) {
             state.depth = 1;
             state.focus = outcome;
@@ -249,7 +275,7 @@ export function advanceTara(progress: TaraProgress, topics: TaraTopic[], turn: {
     if (!topic.alternative && state.depth === 1 && decision && !turn.technical
         && (outcome === 'NEEDS_DETAIL' || outcome === 'DISCREPANCY') &&
         ['NO_RELEVANT_EXAMPLE','INCOMPLETE_EXAMPLE'].includes(state.note.outcome)) state.revisit = outcome;
-    const question = canContinue ? moveTopic(next, topics, canRevisit) : null;
+    const question = canContinue ? moveTopic(next, topics, canRevisit, language) : null;
     if (question) next.questions++;
     else {
         next.stage = 'DONE';

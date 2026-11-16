@@ -1,3 +1,4 @@
+import type { AssessmentLanguage } from '@job-talentio/shared';
 import { TARA_LIVE_AUDIO_PROTOCOL } from '@job-talentio/shared';
 import { nativeVoiceTurns, NATIVE_VOICE_VERSION, type NativeDelivery } from './voice-native';
 import type { Fragment, VoiceTurn } from './voice.policy';
@@ -9,6 +10,15 @@ export function isNativeVoice(version: string) {
     return version === ROLE_VOICE_VERSION || version === NATIVE_VOICE_VERSION || version === TARA_LIVE_AUDIO_PROTOCOL;
 }
 export const ROLE_VOICE_CLOSING_TEXT = 'Makasih udah cerita. Wawancara kita selesai.';
+export const ROLE_VOICE_EN_CLOSING_TEXT = 'Thanks for sharing. This concludes our interview.';
+const farewellPatterns: Record<AssessmentLanguage, RegExp> = {
+    id: /(?:^|[.!?]\s+)wawancara kita selesai[.!]?$/iu,
+    en: /(?:^|[.!?]\s+)this concludes our interview[.!]?$/iu,
+};
+const fullClosingPatterns: Record<AssessmentLanguage, RegExp> = {
+    id: /(?:^|(?<=[.!?]))\s*makasih\s+udah\s+cerita\.\s+wawancara\s+kita\s+selesai[.!]?\s*$/iu,
+    en: /(?:^|(?<=[.!?]))\s*thanks\s+for\s+sharing\.\s+this\s+concludes\s+our\s+interview[.!]?\s*$/iu,
+};
 
 type Slot = { topicId: string; openedAt: number; questionRefs: string[];
     repeated?: Array<{ ref: string; topicId: string }> };
@@ -56,6 +66,22 @@ export function playbackOrigin(turns: VoiceTurn[], delivery: NativeDelivery) {
     const first = turns.find(turn => turn.speaker === 'TARA');
     const startMs = delivery.firstAudioMs ?? first?.startMs;
     return startMs !== undefined && delivery.firstAudible !== undefined ? delivery.firstAudible - startMs : undefined;
+}
+
+export function heardContinuousTurn(turn: VoiceTurn, delivery: NativeDelivery, origin: number) {
+    const start = origin + turn.startMs;
+    const end = origin + turn.endMs;
+    // A word estimate can fall just outside the metered audio. Confirm the
+    // whole utterance against one window for language reminders and farewells.
+    if (delivery.windows.some(window => window.interrupted && window.end >= start && window.start < end)) return false;
+    return delivery.windows.some(window => {
+        if (window.interrupted || window.start >= end || window.end <= start) return false;
+        const lag = window.start - start;
+        if (lag <= 350) return end <= window.end + 350;
+        // The native transcript can lead continuous browser audio. For a later
+        // window require its full duration instead of allowing a clipped tail.
+        return lag <= 650 && window.end - window.start >= end - start;
+    });
 }
 
 // A quiet gap can split the playback meter window even though all spoken words
@@ -108,16 +134,51 @@ export function roleAssessmentVoiceEvidence(fragments: Fragment[], delivery: Nat
     });
 }
 
-export function directFarewellAt(fragments: Fragment[], delivery: NativeDelivery, earliestStartMs = 0, candidateLastSpeechAt?: number) {
+function closingSpeech(turn: VoiceTurn, byId: Map<number, Fragment>, language: AssessmentLanguage) {
+    const spans = outputSpans(turn, byId, false);
+    const text = spans.map(span => span.text).join('');
+    const match = fullClosingPatterns[language].exec(text);
+    if (!match?.index) return turn;
+    const start = match.index + match[0].length - match[0].trimStart().length;
+    let end = 0;
+    for (const [index, span] of spans.entries()) {
+        const previousEnd = end;
+        end += span.text.length;
+        if (end <= start) continue;
+        // Earlier speech may have been interrupted. Use the complete closing
+        // only when its first word can be timed separately from that speech.
+        if (span.text.slice(0, start - previousEnd).trim()) return turn;
+        return { ...turn, startMs: span.startMs, text: text.slice(start),
+            fragmentIds: spans.slice(index).map(row => row.id) };
+    }
+    return turn;
+}
+
+export function directFarewellAt(fragments: Fragment[], delivery: NativeDelivery, earliestStartMs = 0, candidateLastSpeechAt?: number,
+    language: AssessmentLanguage = 'id', reflectedCandidateSpeechAt?: number) {
     if (delivery.open !== undefined || !delivery.playbackVerified || delivery.firstAudioMs === undefined) return;
     const turns = roleVoiceTurns(fragments);
-    const farewell = turns.at(-1);
-    if (farewell?.speaker !== 'TARA' || farewell.startMs < earliestStartMs ||
-        !/(?:^|[.!?]\s+)(?:oke,\s+)?(?:makasih|terima kasih) (?:udah|sudah) (?:cerita|bercerita|berbagi)[.,!]\s+wawancara kita selesai[.!]?$/iu.test(farewell.text.trim())) return;
-    if (turns.some(turn => turn.speaker === 'CANDIDATE' && turn.endMs > farewell.startMs)) return;
+    const last = turns.at(-1);
+    if (last?.speaker !== 'TARA' || !farewellPatterns[language].test(last.text.trim())) return;
+    const byId = new Map(fragments.map(row => [row.id, row]));
+    const farewell = closingSpeech(last, byId, language);
+    if (farewell.startMs < earliestStartMs) return;
     const origin = playbackOrigin(turns, delivery);
-    if (origin === undefined || candidateLastSpeechAt !== undefined && candidateLastSpeechAt >= origin + farewell.startMs ||
-        !heardRoleSpeech(farewell, delivery, origin, new Map(fragments.map(row => [row.id, row])))) return;
+    if (origin === undefined) return;
+    const startsAt = origin + farewell.startMs;
+    if ((candidateLastSpeechAt ?? -Infinity) >= startsAt || (reflectedCandidateSpeechAt ?? -Infinity) >= startsAt) return;
+    const heardWholeFarewell = heardContinuousTurn(farewell, delivery, origin);
+    for (const turn of turns) {
+        if (turn.speaker !== 'CANDIDATE' || turn.endMs <= farewell.startMs) continue;
+        if (candidateLastSpeechAt === undefined || !heardWholeFarewell) return;
+        if (turn.endMs - farewell.startMs <= 350) continue;
+        // When the estimate extends further, require a separately timed, complete
+        // farewell and speech measurements from this turn on both input paths.
+        const candidateStartsAt = origin + turn.startMs;
+        if (fullClosingPatterns[language].exec(farewell.text)?.index !== 0 || candidateLastSpeechAt < candidateStartsAt ||
+            reflectedCandidateSpeechAt === undefined || reflectedCandidateSpeechAt < candidateStartsAt) return;
+    }
+    if (!heardWholeFarewell && !heardRoleSpeech(farewell, delivery, origin, byId)) return;
     return origin + farewell.endMs;
 }
 

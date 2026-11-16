@@ -14,6 +14,8 @@ import { useEmployerUnsaved } from './useEmployerUnsaved';
 import { HrIcon, useHrFlowSurface } from './HrFlowPresentation';
 import { HrAssistantOnboarding, type AssistantFinishAction } from './HrAssistantOnboarding';
 import { clearAssistantProgress, readAssistantProgress, saveAssistantProgress, type AssistantSceneId } from './hrAssistantState';
+import type { AssessmentLanguage } from '@job-talentio/shared';
+import { AssessmentLanguageDialog } from './JobContentAi';
 
 type AssistantAttempt = {
   action: AssistantFinishAction;
@@ -24,6 +26,7 @@ type AssistantAttempt = {
   jobId?: string;
   importRegistered?: boolean;
 };
+type AssessmentAction = 'intro' | 'publish' | 'pay' | AssistantFinishAction;
 
 export const hrFlowV2Enabled=process.env.NEXT_PUBLIC_HR_CREATION_V2==='true'||process.env.NEXT_PUBLIC_PRIVACY_MARKET==='id';
 export function HrFlowHeader({companyName,stage,onboarding=false}:{companyName?:string;stage:number;onboarding?:boolean}){
@@ -43,6 +46,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
   const [assistantScene,setAssistantScene]=useState<AssistantSceneId|null>(null);
   const [assistantFiles, setAssistantFiles] = useState<File[]>([]);
   const [assistantAttempt, setAssistantAttempt] = useState<AssistantAttempt | null>(null);
+  const [assessmentAction, setAssessmentAction] = useState<AssessmentAction | null>(null);
   const sessionRef=useRef<any>(null),draftRef=useRef(draft),lastSaved=useRef(''),queue=useRef<Promise<any>>(Promise.resolve()),alive=useRef(false),lock=useRef(false),intentKey=useRef(''),orderKey=useRef<Record<string,string>>({}),publishKeys=useRef<Record<string,string>>({});
   draftRef.current=draft;
   const templateId = session?.templateId;
@@ -62,6 +66,7 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     setError('');setAssistantScene(null);
     setAssistantFiles([]);
     setAssistantAttempt(null);
+    setAssessmentAction(null);
     (async()=>{
       const packages=await api<PackageCatalog>('/job-commerce/catalog',{auth:false,signal:abort.signal});
       if(!('hrFlowV2' in packages)||!packages.hrFlowV2)throw Error(c("Alur baru belum diaktifkan pada server."));
@@ -87,16 +92,20 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     })().catch(reason=>{if(!abort.signal.aborted)setError(reason.message);});
     return()=>{alive.current=false;abort.abort();};
   },[companyId,sessionId,retry]);
-  function saveDraft(){
+  function saveDraft(assessmentLanguage?: AssessmentLanguage, includeDraft = true){
     const run=queue.current.catch(()=>undefined).then(async()=>{
       if(!alive.current||!sessionRef.current)throw Error(c("Halaman sudah berubah."));
       const body=cleanHrDraft(draftRef.current),serialized=JSON.stringify(body);
-      if(serialized===lastSaved.current)return sessionRef.current;
+      const draftChanged=includeDraft&&serialized!==lastSaved.current;
+      const languageChanged=assessmentLanguage!==undefined&&assessmentLanguage!==sessionRef.current.assessmentLanguage;
+      if(!draftChanged&&!languageChanged)return sessionRef.current;
       setStatus(c("Menyimpan..."));
       try{
-        const value=await api<any>('/hr-flow/sessions/'+sessionRef.current.id,{method:'PATCH',body:JSON.stringify({revision:sessionRef.current.revision,draft:body})});
+        const value=await api<any>('/hr-flow/sessions/'+sessionRef.current.id,{method:'PATCH',body:JSON.stringify({revision:sessionRef.current.revision,
+          ...(draftChanged?{draft:body}:{}),...(languageChanged?{assessmentLanguage}:{})})});
         if(!alive.current)return value;
-        accept(value);lastSaved.current=serialized;setStatus(serialized===JSON.stringify(cleanHrDraft(draftRef.current))?c("Tersimpan"):c("Perubahan belum tersimpan"));return value;
+        const latest=accept(value);if(draftChanged)lastSaved.current=serialized;
+        setStatus(lastSaved.current===JSON.stringify(cleanHrDraft(draftRef.current))?c("Tersimpan"):c("Perubahan belum tersimpan"));return latest;
       }catch(reason){if(alive.current)setStatus(c("Belum tersimpan"));throw reason;}
     });queue.current=run;return run;
   }
@@ -231,11 +240,46 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     saveAssistantProgress(getSession()?.user.id??'',value.id,'taka-intro');
     setAssistantScene('taka-intro');
   }
+  function requestAssessment(action: AssessmentAction) {
+    setError('');
+    setAssessmentAction(action);
+  }
+  function submitJob() {
+    if (!validateJob()) return;
+    if (catalog?.assessmentLanguageSelection) requestAssessment(onboarding ? 'intro' : 'publish');
+    else void run(onboarding ? continueToAssistant : publish);
+  }
+  function requestPay() {
+    if (templateId && catalog?.assessmentLanguageSelection && !sessionRef.current.assessmentLanguage) requestAssessment('pay');
+    else void run(pay);
+  }
+  async function requestAssistantFinish(action: AssistantFinishAction) {
+    if (catalog?.assessmentLanguageSelection && !sessionRef.current.assessmentLanguage && !assistantAttempt?.jobId) {
+      requestAssessment(action);
+      return;
+    }
+    await finishAssistant(action);
+  }
+  function confirmAssessment(language: AssessmentLanguage) {
+    const action=assessmentAction;
+    if (!action) return;
+    void run(async () => {
+      await saveDraft(language, action !== 'pay');
+      if (action === 'intro') await continueToAssistant();
+      else if (action === 'publish') await publish();
+      else if (action === 'pay') await pay();
+      else await finishAssistant(action);
+      setAssessmentAction(null);
+    });
+  }
   const choice=catalog?.packages.find(v=>v.code===selected),order=session?.order,paid=order?.status==='PAID';
+  const assessmentDialog=assessmentAction && <AssessmentLanguageDialog initialLanguage={session?.assessmentLanguage ?? undefined}
+    action={c(assessmentAction==='intro'?'Lanjut':assessmentAction==='pay'&&choice?.amount!==0&&!paid?'Lanjut ke pembayaran':'Publikasikan lowongan')}
+    busy={busy} error={error} onCancel={()=>{setAssessmentAction(null);setError('');}} onConfirm={confirmAssessment}/>;
   const packageName=(code:string)=>code==='FREE'?'Free':code==='STANDARD'?'Standard':'Premium';
   const orderState=(state:string)=>c(({PAID:'Paket dikonfirmasi',PENDING:'Menunggu pembayaran',REVIEW:'Sedang diperiksa',EXPIRED:'Pesanan kedaluwarsa',CANCELLED:'Pesanan dibatalkan',FAILED:'Pembayaran gagal',REFUNDED:'Pembayaran dikembalikan'} as Record<string,string>)[state]??'Perlu pemeriksaan status');
   if(!catalog||!session)return <div className={s.page} data-hr-surface>{error?<div className={s.error} role="alert">{error}<br/><button className={s.link} onClick={()=>setRetry(v=>v+1)}>{c("Coba lagi")}</button><button className={s.link} onClick={onClose}>{c("Kembali")}</button></div>:<WorkspaceLoading/>}</div>;
-  if (onboarding && assistantScene) return <HrAssistantOnboarding
+  if (onboarding && assistantScene) return <><HrAssistantOnboarding
     key={session.id}
     companyId={companyId}
     companyName={company?.name ?? session.company?.name ?? ''}
@@ -246,11 +290,12 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
     setSelectedFiles={setAssistantFiles}
     pendingAction={assistantAttempt?.action}
     onBackToJob={returnToJob}
-    onFinish={finishAssistant}
-  />;
+    onFinish={requestAssistantFinish}
+  />{assessmentDialog}</>;
   const templateSummary = templateId && <div className={s.templateSummary}><HrIcon kind="briefcase"/><div><strong>{session.draft?.title}</strong>{session.draft?._templateFields?.location && <p>{session.draft._templateFields.location}</p>}</div></div>;
   const heading=<><h1 className={s.title}>{phase==='PACKAGE'?c("Pilih paket untuk lowongan ini"):phase==='CHECKOUT'?c("Periksa pesanan Anda"):c(templateId?(editable?"Perbaiki draf":"Menerbitkan lowongan"):"Buat lowongan")}</h1><p className={s.subtitle}>{phase==='PACKAGE'?c("Pembelian berlaku untuk satu lowongan. Tidak berlangganan otomatis."):phase==='CHECKOUT'?c("Pastikan paket dan perusahaan sudah sesuai sebelum melanjutkan."):templateId?(editable?c("Paket Anda sudah dikonfirmasi. Perbarui draf lalu terbitkan lowongan."):c("Anda boleh kembali ke daftar lowongan. Publikasi tetap berjalan.")):c("Susun kebutuhan posisi dengan jelas untuk kandidat.")}</p></>;
   return <div className={s.page} data-hr-flow-v2 data-hr-surface>
+    {assessmentDialog}
     <HrFlowHeader companyName={company?.name??session.company?.name} stage={(phase==='PACKAGE'?0:phase==='CHECKOUT'?1:2)+(onboarding?1:0)} onboarding={onboarding}/>
     {error&&<div className={s.error} role="alert">{error}</div>}
     {draftIssues.length>0&&<div className={s.error} role="alert"><strong>{c("Periksa isian berikut untuk melanjutkan:")}</strong><ul>{draftIssues.map(issue=><li key={issue.path}><button type="button" className={s.link} onClick={()=>focusHrDraftIssue(issue.field)}>{c(issue.message)}</button></li>)}</ul></div>}
@@ -270,12 +315,12 @@ export function HrCreationFlow({companyId,company,sessionId,onboarding=false,onC
         {choice.amount>0&&!catalog.paymentAvailable&&!paid&&<p className={s.hint}>{c("Pembayaran belum tersedia. Paket Free tetap dapat dipilih.")}</p>}
       </div><section className={s.section}><h2>{c("Ringkasan pesanan")}</h2><dl><div><dt>{c("Paket")} {packageName(choice.code)}</dt><dd>{money(order?.amount??choice.amount,locale,order?.currency??choice.currency)}</dd></div><div className={s.total}><dt>{choice.amount===0?c("Total"):c("Total pembayaran")}</dt><dd>{money(order?.amount??choice.amount,locale,order?.currency??choice.currency)}</dd></div></dl><p className={s.hint}>{choice.amount===0?c("Satu paket untuk satu lowongan."):c("Sekali bayar untuk lowongan ini.")}</p></section></div>}
       {phase==='JOB'&&!editable&&<div className={s.section} role="status"><WorkspaceLoading/></div>}
-      {phase==='JOB'&&editable&&<>{templateIssue&&<p className={s.error} role="alert">{c(hrJobError(templateIssue))}</p>}<div className={s.context}><strong><HrIcon kind="building"/>{company?.name??session.company?.name}</strong><span className={s.badge}>{selected&&packageName(selected)} | {choice?.amount===0?c("Paket dikonfirmasi"):c("Sudah dibayar")}</span><span className={s.saved} data-saved={status===c("Tersimpan")} role="status">{status===c("Tersimpan")&&<HrIcon kind="check" size={17}/>} {status}</span></div><form id="hr-job-form" onSubmit={e=>{e.preventDefault();void run(onboarding?continueToAssistant:publish);}}><JobFormV2 draft={draft} companyId={companyId} initialCity={company?.city} disabled={busy} validationIssues={draftIssues} onChange={patch=>{setDraftIssues(previous=>previous.filter(issue=>!(issue.field in patch)));setDraft(previous=>({...previous,...patch}));}}/></form></>}
+      {phase==='JOB'&&editable&&<>{templateIssue&&<p className={s.error} role="alert">{c(hrJobError(templateIssue))}</p>}<div className={s.context}><strong><HrIcon kind="building"/>{company?.name??session.company?.name}</strong><span className={s.badge}>{selected&&packageName(selected)} | {choice?.amount===0?c("Paket dikonfirmasi"):c("Sudah dibayar")}</span><span className={s.saved} data-saved={status===c("Tersimpan")} role="status">{status===c("Tersimpan")&&<HrIcon kind="check" size={17}/>} {status}</span></div><form id="hr-job-form" onSubmit={e=>{e.preventDefault();submitJob();}}><JobFormV2 draft={draft} companyId={companyId} initialCity={company?.city} disabled={busy} validationIssues={draftIssues} onChange={patch=>{setDraftIssues(previous=>previous.filter(issue=>!(issue.field in patch)));setDraft(previous=>({...previous,...patch}));}}/></form></>}
     </>}
     <footer className={s.footer}><div className={s.footerInner}>
       {phase==='PACKAGE'?<div className={s.footerSummary}><span>{c("Paket dipilih:")} <strong>{selected?packageName(selected):c("Belum dipilih")}</strong></span><span>{c("Total")} <b>{money(order?.amount??choice?.amount??0,locale,order?.currency??choice?.currency??'IDR')}</b></span></div>:<button type="button" className={s.secondary} disabled={busy} onClick={()=>templateId&&phase==='JOB'?onClose():void run(()=>go(phase==='JOB'?'CHECKOUT':'PACKAGE'))}><HrIcon kind="back"/>{c(templateId&&phase==='JOB'?"Kembali ke lowongan":"Kembali")}</button>}
       {phase==='CHECKOUT'&&<span className={s.status}>{paid?orderState('PAID'):choice?.amount===0?c("Paket belum dikonfirmasi"):order?orderState(order.status):c("Pesanan belum dibayar")}</span>}
-      <div className={s.actions}>{phase==='PACKAGE'&&<button type="button" className={s.secondary} disabled={busy} onClick={()=>void run(async()=>{onClose();})}>{c("Kembali")}</button>}{phase==='JOB'?editable?<><button className={s.secondary} disabled={busy} onClick={()=>void run(async()=>{await saveDraft();setError('');})}>{c("Simpan draf")}</button><button className={s.primary} type="submit" form="hr-job-form" disabled={busy}>{c(onboarding?'Lanjut':'Publikasikan lowongan')}</button></>:error?<button className={s.primary} disabled={busy} onClick={()=>void run(()=>confirmed(session))}>{c("Coba lagi")}</button>:null:<button className={s.primary} disabled={busy||!selected} onClick={()=>void run(phase==='PACKAGE'?()=>go('CHECKOUT'):pay)}>{busy?c("Memproses..."):phase==='PACKAGE'?c("Lanjut ke checkout"):choice?.amount===0?c("Konfirmasi paket Free"):paid?c(templateId?"Terbitkan lowongan":"Lanjut membuat lowongan"):c("Lanjut ke pembayaran")}{!busy && (phase === 'PACKAGE' || paid) && <HrIcon kind="next"/>}</button>}</div>
+      <div className={s.actions}>{phase==='PACKAGE'&&<button type="button" className={s.secondary} disabled={busy} onClick={()=>void run(async()=>{onClose();})}>{c("Kembali")}</button>}{phase==='JOB'?editable?<><button className={s.secondary} disabled={busy} onClick={()=>void run(async()=>{await saveDraft();setError('');})}>{c("Simpan draf")}</button><button className={s.primary} type="submit" form="hr-job-form" disabled={busy}>{c(onboarding?'Lanjut':'Publikasikan lowongan')}</button></>:error?<button className={s.primary} disabled={busy} onClick={()=>void run(()=>confirmed(session))}>{c("Coba lagi")}</button>:null:<button className={s.primary} disabled={busy||!selected} onClick={()=>{if(phase==='PACKAGE')void run(()=>go('CHECKOUT'));else requestPay();}}>{busy?c("Memproses..."):phase==='PACKAGE'?c("Lanjut ke checkout"):choice?.amount===0?c("Konfirmasi paket Free"):paid?c(templateId?"Terbitkan lowongan":"Lanjut membuat lowongan"):c("Lanjut ke pembayaran")}{!busy && (phase === 'PACKAGE' || paid) && <HrIcon kind="next"/>}</button>}</div>
     </div></footer>
   </div>;
 }

@@ -2,6 +2,8 @@ import { redactScreeningContacts } from './screening.policy';
 import { assertSchema, type JsonSchema } from './screening.schemas';
 import { explicitRoleDecline, freezeRoleAssessment, type RoleInput, type RoleJudgement, type RoleTranscriptEntry } from './taka-role-assessment';
 import { TAKA_ROLE_EVIDENCE_VERSION } from './taka-versions';
+import { isAssessmentLanguageReminder } from './assessment-language';
+import type { AssessmentLanguage } from '@job-talentio/shared';
 
 const str: JsonSchema = { type: 'string' };
 const points: JsonSchema = { type: 'integer', enum: [0, 1, 2, 3, 4] };
@@ -22,19 +24,21 @@ const recoverableRow = object({ ...common, questionRef: nullable(str), redirectR
 type Proposed = RoleJudgement & { fit: 'DIRECT' | 'TRANSFERABLE' | null; actionRef: string | null; requiresQuestionContext: boolean };
 
 export function roleEvidenceReferences(input: RoleInput) {
-    const questions = new Map(input.transcript.filter(row => row.speaker === 'TARA' && row.question)
+    const turns = input.transcript.filter(row => row.speaker === 'TARA' && row.question);
+    const questions = new Map(turns.filter(row => !isAssessmentLanguageReminder(row.text))
         .map((row, i) => ['q' + (i + 1), row] as const));
     const answers = new Map(input.catalog.map((row, i) => ['a' + (i + 1), row] as const));
-    const followingQuestions = new Map([...questions.values()].map((question, index, all) => {
+    const followingQuestions = new Map(turns.map((question, index, all) => {
         const next = all[index + 1];
         return [question.id, next && next.connectionId === question.connectionId ? next.startMs : undefined];
     }));
     return { questions, answers, followingQuestions };
 }
 
-export function roleEvidenceRequest(input: RoleInput, refs: ReturnType<typeof roleEvidenceReferences>, ids: string[], repair = false) {
+export function roleEvidenceRequest(input: RoleInput, refs: ReturnType<typeof roleEvidenceReferences>, ids: string[], repair = false,
+    language?: AssessmentLanguage) {
     const criteria = input.criteria.filter(row => ids.includes(row.id));
-    const preset = freezeRoleAssessment();
+    const preset = freezeRoleAssessment(language);
     const questionIds = new Map([...refs.questions].map(([id, row]) => [row.id, id]));
     return {
         preset: { ...preset, version: TAKA_ROLE_EVIDENCE_VERSION, name: 'taka_role_evidence',

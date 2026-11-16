@@ -18,7 +18,7 @@ function LocationIcon({ globe = false }: { globe?: boolean }) {
   </svg>;
 }
 
-export function HeroLocationPicker({ cities, value: controlledValue, onChange }: { cities: City[]; value?: string; onChange?: (value: string) => void }) {
+export function HeroLocationPicker({ cities, value: controlledValue, onChange, inline = false }: { cities: City[]; value?: string; onChange?: (value: string) => void; inline?: boolean }) {
   const { t, locale } = useI18n();
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -56,6 +56,10 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
 
   useLayoutEffect(() => {
     if (!open) return;
+    if (inline) {
+      const frame = requestAnimationFrame(() => input.current?.focus());
+      return () => cancelAnimationFrame(frame);
+    }
     function placePanel() {
       const rect = trigger.current?.getBoundingClientRect();
       if (!rect) return;
@@ -84,7 +88,7 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
       window.removeEventListener('scroll', placePanel, true);
       window.visualViewport?.removeEventListener('resize', placePanel);
     };
-  }, [open]);
+  }, [open, inline]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,7 +136,7 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
       event.preventDefault();
       setOpen(false);
       trigger.current?.focus();
-    } else if (event.key === 'Tab') {
+    } else if (event.key === 'Tab' && !inline) {
       event.preventDefault();
       setOpen(false);
       if (event.shiftKey) trigger.current?.focus();
@@ -140,27 +144,8 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
     }
   }
 
-  return <>
-    <input type="hidden" name="location" value={value} />
-    <button
-      ref={trigger}
-      type="button"
-      className={s.trigger}
-      aria-label={`${t('landing.locationLabel')}: ${selected.label}`}
-      aria-expanded={open}
-      aria-haspopup="dialog"
-      aria-controls={open ? `${id}-panel` : undefined}
-      onClick={() => open ? setOpen(false) : show()}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); show(); }
-      }}
-    >
-      <LocationIcon />
-      <span className={s.triggerCopy}><span>{t('landing.locationLabel')}</span><strong>{selected.label}</strong></span>
-      <DirectionalIcon direction={open ? "up" : "down"} size={18} className={s.chevron} />
-    </button>
-    {open && position && createPortal(
-      <div ref={panel} id={`${id}-panel`} className={s.panel} role="dialog" aria-label={t('landing.chooseLocation')} style={position}>
+  const locationPanel = open && (inline || position) ? (
+      <div ref={panel} id={`${id}-panel`} className={`${s.panel} ${inline ? s.inlinePanel : ''}`} role="dialog" aria-label={t('landing.chooseLocation')} style={!inline && position ? position : undefined}>
         <div className={s.panelHeading}>{t('landing.chooseLocation')}</div>
         <div className={s.searchField}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg>
@@ -206,7 +191,28 @@ export function HeroLocationPicker({ cities, value: controlledValue, onChange }:
           })}
         </div>
         {!filtered.length && <p className={s.empty} role="status">{t('landing.noLocations')}</p>}
-      </div>, document.body,
-    )}
+      </div>
+  ) : null;
+
+  return <>
+    <input type="hidden" name="location" value={value} />
+    <button
+      ref={trigger}
+      type="button"
+      className={s.trigger}
+      aria-label={`${t('landing.locationLabel')}: ${selected.label}`}
+      aria-expanded={open}
+      aria-haspopup="dialog"
+      aria-controls={open ? `${id}-panel` : undefined}
+      onClick={() => open ? setOpen(false) : show()}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); show(); }
+      }}
+    >
+      <LocationIcon />
+      <span className={s.triggerCopy}><span>{t('landing.locationLabel')}</span><strong>{selected.label}</strong></span>
+      <DirectionalIcon direction={open ? "up" : "down"} size={18} className={s.chevron} />
+    </button>
+    {locationPanel && (inline ? locationPanel : createPortal(locationPanel, document.body))}
   </>;
 }

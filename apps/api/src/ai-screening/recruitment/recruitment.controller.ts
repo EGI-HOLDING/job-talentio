@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard, RolesGuard, Roles, CurrentUser, type AuthUser } from '../../common/auth.decorators';
 import { parseDto } from '../../common/utils';
 import { RecruitmentService } from './recruitment.service';
@@ -22,6 +22,12 @@ export class RecruitmentController {
   @Get('candidates/:id') detail(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.candidates.detail(user, id); }
   @Get('jobs/:jobId/applications/:applicationId/candidate') applicationCandidate(@CurrentUser() user:AuthUser,@Param('jobId') jobId:string,@Param('applicationId') applicationId:string){return this.candidates.applicationCandidate(user,jobId,applicationId);}
   @Get('candidates/:id/cv') download(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.candidates.download(user, id); }
+  @Get('candidates/:id/cv-report') @Header('Cache-Control', 'private, no-store')
+  async cvReport(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('revision') revision?: string) {
+    return new StreamableFile(await this.candidates.cvReport(user, id, revision), {
+      type: 'application/pdf', disposition: 'attachment; filename="Laporan-CV-Taka.pdf"',
+    });
+  }
   @Post('candidates/:id/retry') retry(@CurrentUser() user: AuthUser, @Param('id') id: string) { return this.candidates.retry(user, id); }
   @Get('cv-recovery') @Roles('SUPER_ADMIN')
   cvRecoveryQueue(@CurrentUser() user: AuthUser) { return this.candidates.cvRecoveryQueue(user); }

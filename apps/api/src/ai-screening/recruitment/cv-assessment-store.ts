@@ -2,6 +2,8 @@ import type { Prisma, RecruitmentCandidate } from '@prisma/client';
 import { json } from '../screening.policy';
 import { CV_PROVIDER_TASK, type CvProgress } from './cv-assessment';
 import type { validateCvResult } from './cv-scoring.policy';
+import type { AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentNarrativeWork, stageAssessmentNarrative } from '../assessment-narrative';
 
 export function queueCvProviderWork(tx: Pick<Prisma.TransactionClient, 'aiScreeningWork'>,
   kind: 'CV_PROVIDER_DELETE' | 'CV_PROVIDER_EVENT', responseId: string, eventId = responseId) {
@@ -17,7 +19,8 @@ export async function queueCvProviderCleanup(tx: Prisma.TransactionClient, where
 
 export async function saveCvAssessment(tx: Prisma.TransactionClient, row: RecruitmentCandidate, workId: string,
   checksum: string, checked: ReturnType<typeof validateCvResult>, version: string,
-  publication?: { phase: CvProgress['phase']; sourceReferences: object; roleAssessment?: object }) {
+  publication?: { phase: CvProgress['phase']; sourceReferences: object; roleAssessment?: object;
+    assessmentLanguage?: AssessmentLanguage; sourceTextLanguage?: AssessmentLanguage; gradeTextLanguage?: AssessmentLanguage }) {
   const received = await tx.candidateActivity.findFirst({ where: { candidateId: row.id, kind: 'CV_RECEIVED' },
     orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
   const receivedAt = received?.createdAt ?? (row.applicationId ? row.createdAt : null);
@@ -25,12 +28,14 @@ export async function saveCvAssessment(tx: Prisma.TransactionClient, row: Recrui
   const timing = { receivedAt: receivedAt?.toISOString() ?? null, completedAt: completedAt.toISOString(),
     elapsedMs: receivedAt ? +completedAt - +receivedAt : null, revision: row.revision, workId };
   const { result, score } = checked;
+  const written = publication ? stageAssessmentNarrative({ ...result, sourceReferences: publication.sourceReferences,
+    roleAssessment: publication.roleAssessment }, publication.assessmentLanguage, 'CV_NARRATIVE',
+    { source: publication.sourceTextLanguage, grades: publication.gradeTextLanguage }) : result;
   const saved = await tx.recruitmentCandidate.updateMany({
     where: { id: row.id, revision: row.revision, fileKey: row.fileKey, scoreStatus: 'PROCESSING' },
     data: {
       scoreStatus: result.readable ? row.jobSnapshot ? 'READY' : 'EXTRACTED' : 'UNREADABLE',
-      cvScore: score, cvResult: json(publication ? { ...result, sourceReferences: publication.sourceReferences,
-        roleAssessment: publication.roleAssessment } : result), checksum, scoringVersion: version,
+      cvScore: score, cvResult: json(written), checksum, scoringVersion: version,
       ...(publication ? { cvProgress: json({ phase: publication.phase, updatedAt: completedAt.toISOString() }) } : {}),
       error: result.readable ? null : 'CV belum dapat dibaca. Periksa berkas atau upload ulang.',
       ...(row.applicationId ? {} : { fullName: result.fullName ?? row.fullName, email: result.email?.toLowerCase(), phone: result.phone }),
@@ -38,6 +43,8 @@ export async function saveCvAssessment(tx: Prisma.TransactionClient, row: Recrui
     },
   });
   if (!saved.count) return;
+  const narrativeWork = assessmentNarrativeWork('CV_NARRATIVE', row.id, row.revision, written);
+  if (narrativeWork) await tx.aiScreeningWork.createMany({ data: narrativeWork, skipDuplicates: true });
   await tx.candidateActivity.create({ data: { candidateId: row.id, kind: result.readable ? 'CV_ANALYZED' : 'CV_UNREADABLE',
     detail: json({ score, methodology: version, timing }) } });
   if (!row.applicationId || !result.readable) return;

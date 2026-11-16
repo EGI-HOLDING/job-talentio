@@ -28,6 +28,9 @@ import { validatePackage, type PackagePayload, type CandidatePayload, type Evalu
 import { renderScreeningReport } from './screening-report';
 import { currentTaraPrompt, type PromptRegistry } from './prompts/registry';
 import { composePrompt } from './prompts/compose';
+import { assessmentLanguageOf, foreignPresentationText } from './assessment-language';
+import type { AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentNarrativeState, localizeAssessmentNarrative } from './assessment-narrative';
 import { buildCandidatePreparation, CANDIDATE_PREPARATION_MS } from './candidate-preparation';
 import { candidatePreparationInclude, candidatePreparationInput, candidatePreparationSource, pendingCandidateDraft, publishCandidatePreparation } from './screening-candidate-recovery';
 import { enqueueEvaluationPdf, enqueueWork } from './screening-packets.service';
@@ -114,7 +117,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
             const now = new Date();
             const due = { OR: [{ status: 'PENDING', availableAt: { lte: now } }, { status: 'RUNNING', leaseUntil: { lte: now } }] };
             // CV imports must not fill the delivery window ahead of live interview follow-ups.
-            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE', 'CANDIDATE_RESPONSE', 'LIVE_AGENDA_RESPONSE'];
+            const bulkKinds = ['CV_SCORE', 'CAPTURE_APPLICATION', 'CV_PROVIDER_DELETE', 'CANDIDATE_RESPONSE', 'LIVE_AGENDA_RESPONSE', 'CV_NARRATIVE', 'INTERVIEW_NARRATIVE'];
             const [interactive, imports] = await Promise.all([
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { notIn: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
                 this.db.aiScreeningWork.findMany({ where: { ...due, kind: { in: bulkKinds } }, take: 8, orderBy: { availableAt: 'asc' } }),
@@ -168,6 +171,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                 await this.recruitment!.captureApplication(work.subjectId);
             else if (work.kind === 'CV_SCORE')
                 await this.cvScoring!.process(id, work.subjectId, owner);
+            else if (work.kind === 'CV_NARRATIVE' || work.kind === 'INTERVIEW_NARRATIVE')
+                await localizeAssessmentNarrative(this.db, this.client, work, owner);
             else if (work.kind === 'CV_PROVIDER_EVENT')
                 await this.cvRecovery!.receiveProviderEvent(work.subjectId);
             else if (work.kind === 'TAKA_PROVIDER_EVENT')
@@ -268,7 +273,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (role?.interviewIds.length) {
             const preset = (packet.promptSnapshot as unknown as PromptRegistry)?.liveAgenda;
             if (preset) {
-                await this.prepareVoicePackage(workId, id, owner, role, preset);
+                await this.prepareVoicePackage(workId, id, owner, role, preset, assessmentLanguageOf(packet.jobSnapshot));
                 return;
             }
             await this.db.aiScreeningPackage.update({ where: { id }, data: { status: 'READY', payload: json(rolePackage(role)), error: null } });
@@ -283,7 +288,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
     }
 
     private async prepareVoicePackage(workId: string, id: string, owner: string, rubric: NonNullable<ReturnType<typeof frozenRoleRubric>>,
-        preset: NonNullable<PromptRegistry['liveAgenda']>) {
+        preset: NonNullable<PromptRegistry['liveAgenda']>, language?: AssessmentLanguage) {
         const key = workId + ':live-agenda';
         const call = await this.db.aiScreeningCall.findUnique({ where: { key } });
         const deadline = +(call?.createdAt ?? new Date()) + LIVE_AGENDA_PREPARATION_MS;
@@ -291,14 +296,14 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         if (!call || ['RUNNING', 'UNCERTAIN'].includes(call.status) && Date.now() < deadline) {
             try {
                 const remaining = Math.max(1, Math.min(12_000, deadline - Date.now()));
-                proposal = await this.client.run(workId, id, 'live-agenda', liveAgendaRequest(rubric, preset.version).data, preset, undefined, remaining);
+                proposal = await this.client.run(workId, id, 'live-agenda', liveAgendaRequest(rubric, preset.version, language).data, preset, undefined, remaining);
             } catch (error) {
                 if (error instanceof AiPending && Date.now() < deadline) throw error;
                 if (!(error instanceof AiPending || error instanceof AiUncertain || error instanceof Error && agendaProviderError.test(error.message))) throw error;
             }
         }
-        const payload = rubric.version === ROLE_RUBRIC_VERSION ? prepareAlignedRolePackage(rubric, proposal, preset.version as LiveAgenda['version']) :
-            liveRolePackage(rubric, prepareLiveAgenda(rubric, proposal));
+        const payload = rubric.version === ROLE_RUBRIC_VERSION ? prepareAlignedRolePackage(rubric, proposal, preset.version as LiveAgenda['version'], language) :
+            liveRolePackage(rubric, prepareLiveAgenda(rubric, proposal, language));
         await this.db.$transaction(async tx => {
             const lease = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "AiScreeningWork"
                 WHERE id=${workId} AND "leaseOwner"=${owner} AND status='RUNNING' AND "leaseUntil">now() FOR UPDATE`;
@@ -407,7 +412,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const unresolved = await this.db.aiScreeningCall.findMany({ where: { workId, task: 'candidate', status: { in: ['RUNNING', 'UNCERTAIN'] },
             responseId: { not: null } }, select: { id: true } });
         const prepared = buildCandidatePreparation(context.segments, context.rubric, context.job, responses,
-            { recoverStored: calls.length > 0, alternativeOnly, coreIds: context.coreIds });
+            { recoverStored: calls.length > 0, alternativeOnly, coreIds: context.coreIds, language: context.language });
         const outcome = await publishCandidatePreparation(this.db, plan, workId, prepared, { owner, reconcileIds: unresolved.map(call => call.id) });
         if (outcome === 'CHANGED') throw new AiPending('TARA_DRAFT_CHANGED');
         if (outcome === 'READY') this.logger.log(`Tara preparation ready claims=${prepared.payload.claims.length} rejected=${prepared.rejected} waitMs=${Math.max(0, Date.now() - deadline + CANDIDATE_PREPARATION_MS)}`);
@@ -431,7 +436,8 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         requireCurrentConversation(session.package?.conversationPolicy);
         const plan = session.currentPlan!.payload as unknown as CandidatePayload;
         const rubric = session.package!.payload as unknown as PackagePayload;
-        const topics = taraTopics(plan, rubric, true);
+        const language = assessmentLanguageOf(session.package!.jobSnapshot);
+        const topics = taraTopics(plan, rubric, true, language);
         const progress = session.taraInterview as unknown as TaraProgress;
         const topic = topics[progress.active], last = session.questions.at(-1)!;
         const previous = session.questions.filter(q => q.claimId === topic.id);
@@ -450,6 +456,7 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
                     tonePreference: conversationTone(session.questions), recentTaraMessages: session.questions.slice(-2).map(q => q.text),
                 }, currentTaraPrompt(session.package!.promptSnapshot, 'follow-up'), undefined,
                 Math.max(1, +session.taraAdvanceAt! - Date.now())), last.answer, previous.map(q => q.text), topics);
+                if (language && decision.question && foreignPresentationText(decision.question, language)) decision.question = null;
             } catch (error) {
                 if (error instanceof AiPending && +session.taraAdvanceAt! > Date.now()) throw error;
                 // Invalid or unavailable analysis cannot close a claim as verified.
@@ -508,18 +515,19 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         await evaluateTakaInterview(this.db, this.client, workId, session, session.invitation,
             frozenTakaInterview(session.invitation?.snapshot, (session.package.promptSnapshot as unknown as PromptRegistry)?.takaInterview),
             plan, roleRubric ? [] : chatTakaTurns(session.questions, notes),
-            { rubric, notes, owner, applicationCv, interrupted: progress?.endedReason === 'INTERRUPTED',
+            { rubric, notes, owner, applicationCv, assessmentLanguage: assessmentLanguageOf(session.package.jobSnapshot), interrupted: progress?.endedReason === 'INTERRUPTED',
                 role: roleRubric ? { rubric: roleRubric, transcript: roleChatTranscript(session.questions, notes) } : undefined });
     }
     private async ensurePdfWork(id: string) {
         const evaluation = await this.db.aiScreeningEvaluation.findUnique({ where: { sessionId: id } });
+        if (assessmentNarrativeState(evaluation?.result) === 'PENDING') return;
         const work = await enqueueEvaluationPdf(this.db, id, evaluation?.inputHash ?? null);
         if (!evaluation?.pdfKey && work.status === 'DONE') await this.db.aiScreeningWork.updateMany({ where: { id: work.id, status: 'DONE' }, data: { status: 'PENDING', availableAt: new Date() } });
     }
     private async pdf(id: string) {
         const session = await this.db.aiScreeningSession.findUnique({ where: { id }, include: { voice: {include:{fragments:true}},
             resumedVoices: {include:{fragments:true},orderBy:{connectionNumber:'asc'}}, invitation: true, package: true, currentPlan: true, evaluation: true, questions: { select: { id: true, position: true } }, profile: { select: { user: { select: { fullName: true } } } }, application: { select: { createdAt: true } } } });
-        if (!session?.evaluation?.result || !session.package || !session.currentPlan || !canPublishLiveReport(liveCompletion(session.voiceCompletion)))
+        if (!session?.evaluation?.result || assessmentNarrativeState(session.evaluation.result) === 'PENDING' || !session.package || !session.currentPlan || !canPublishLiveReport(liveCompletion(session.voiceCompletion)))
             return;
         if (session.evaluation.pdfKey && session.evaluation.pdfVersion === PDF_TEMPLATE_VERSION)
             return;
@@ -532,12 +540,15 @@ export class ScreeningWorker implements OnModuleInit, OnModuleDestroy {
         const voiceLabels = session.voiceCompletion && session.voice ?
             liveTranscript([session.voice, ...session.resumedVoices]).map(turn => [turn.id, turn.startMs] as const) :
             session.voice?.fragments.map(fragment => ['v' + fragment.id, fragment.startMs] as const) ?? [];
+        const assessmentLanguage = assessmentLanguageOf(session.evaluation.result);
         const buffer = await renderScreeningReport({ name: session.profile.user.fullName, job: job.title, company: job.company.name, submittedAt: session.application?.createdAt ?? session.completedAt ?? session.startedAt ?? session.createdAt,
+            assessmentLanguage,
             independentScores: Boolean(session.invitation), methodology: session.evaluation.promptVersion, jobVersion: session.package.version, cvScore: session.evaluation.cvScore, screeningScore: session.evaluation.screeningScore, finalScore: session.evaluation.finalScore,
             voiceCompletionStatus: liveCompletion(session.voiceCompletion)?.status,
             questionLabels: Object.fromEntries([...session.questions.flatMap(q => [[q.id, 'Q' + (q.position + 1)],
                 ['answer:' + q.id, 'Q' + (q.position + 1)]]), ...voiceLabels.map(([ref, ms])=>[ref, Math.floor(ms/60000)+':'+String(Math.floor(ms/1000)%60).padStart(2,'0')])]), result: session.evaluation.result as unknown as EvaluationPayload, rubric: session.package.payload as unknown as PackagePayload, plan: session.currentPlan.payload as unknown as CandidatePayload });
-        const key = 'screening/reports/' + session.evaluation.id + '/' + session.evaluation.inputHash + '/' + PDF_TEMPLATE_VERSION + '.pdf';
+        const key = 'screening/reports/' + session.evaluation.id + '/' + session.evaluation.inputHash + '/' +
+            (assessmentLanguage ? assessmentLanguage + '/' : '') + PDF_TEMPLATE_VERSION + '.pdf';
         await this.storage.putObject(key, buffer, 'application/pdf');
         const kept = await this.db.aiScreeningEvaluation.updateMany({ where: { id: session.evaluation.id, inputHash: session.evaluation.inputHash }, data: { pdfKey: key, pdfVersion: PDF_TEMPLATE_VERSION } });
         if (!kept.count)

@@ -218,3 +218,17 @@
   .tools .primary:has(.findMoreText) { width: 44px; min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } .switch::after { transition: none; } }
+
+
+@media (max-width: 767px) {
+  .toolbar { gap: 8px; padding: 10px 16px; }
+  .tabs { min-height: 44px; }
+  .search, .tools .select, .tools .primary { min-height: 44px; }
+  .search input { font-size: 1rem; }
+  .table .actions :is(button, a) { min-height: 44px; }
+  .modalForm { padding-inline: 16px; }
+  .modalForm :is(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) { min-height: 44px; font-size: 1rem; }
+  .modalFooter { margin-inline: -16px; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
+  .footer { padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
+  .footer :is(button, a) { min-width: 44px; min-height: 44px; }
+}

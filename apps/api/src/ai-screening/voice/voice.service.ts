@@ -7,6 +7,8 @@ import type { AuthUser } from '../../common/auth.decorators';
 import { PrismaService } from '../../prisma/prisma.service';
 import { requireCurrentConversation } from '../conversation.policy';
 import { createVoiceRequest, TARA_LIVE_MODEL, type FrozenLiveVoicePrompt } from '../prompts/voice-session';
+import { assessmentLanguageOf } from '../assessment-language';
+import type { AssessmentLanguage } from '@job-talentio/shared';
 import type { PromptRegistry } from '../prompts/registry';
 import { AiPending, ScreeningClient } from '../screening.client';
 import { enqueueWork } from '../screening-packets.service';
@@ -26,7 +28,7 @@ import { directFarewellAt, isNativeVoice, roleAssessmentVoiceEvidence, roleVoice
 import { roleLiveTranscript } from '../taka-role-assessment';
 import { liveAgendaRubric, liveInterviewTopics } from '../tara-live-agenda';
 import { takaReassessment, takaVoiceInput } from '../taka-reassessment';
-import { canResumeLive, expireLiveContinuations, liveAssessmentTranscript, liveCompletion, liveEvaluationKey, liveResumeHistory, liveTranscript,
+import { canResumeLive, expireLiveContinuations, liveAssessmentTranscript, liveCompletion, liveEvaluationKey, liveLanguageReminderDelivered, liveResumeHistory, liveTranscript,
     LIVE_CLOSE_RESERVE_MS, LIVE_DEEPEN_MS, LIVE_EVALUATION_WORK, LIVE_RESUME_MINIMUM_MS, LIVE_RESUME_WINDOW_MS,
     newLiveCompletion, reconcileLiveEvaluations, reportedVoiceMs, usesLiveCompletion, voiceBudgetAfterClose, type LiveCompletion } from './voice-completion';
 
@@ -34,6 +36,7 @@ type Channel = ReturnType<VoiceProvider['attach']>;
 type Captured = Required<Omit<Fragment, 'id'>>;
 type Live = {
     providerId: string; channel?: Channel; taraProgress: TaraProgress; delivery: NativeDelivery; opening?: string;
+    assessmentLanguage?: AssessmentLanguage;
     fragments: Fragment[]; queue: Captured[]; writingTranscript?: Captured[]; seen: Set<string>; pending: Promise<void>;
     backupChannel?: Channel; backupReady?: boolean; nextBackupAttachAt?: number; transcriptDrainUntil?: number; closingWithFallback?: boolean;
     closed: boolean; finishing: boolean; acceptedAt: number; providerStartedAt?: number; exchangeStarted?: boolean; openingSent?: boolean;
@@ -46,7 +49,7 @@ type Live = {
     providerClose?: ReturnType<VoiceProvider['closeWebRtc']>; closingReceipt?: { usage: unknown };
     candidateLastSpeechAt?: number;
     inputQuiet?: boolean; inputObservedAt?: number; lastInputAudioAt?: number;
-    unexpectedDelegation?: boolean; checkedPlaybackEnd?: number; checkedFragmentCount?: number; latestOutputEnd?: number;
+    unexpectedDelegation?: boolean; checkedPlaybackEnd?: number; checkedFragmentCount?: number; latestOutputReceivedAt?: number;
     playbackObservedAt?: number; firstOutputReceivedAt?: number; mediaObservedAt?: number; disconnectedAt?: number; playbackBlockedAt?: number;
     completion?: { sessionId: string; connectionId: string; deadlineAt?: number; startedAt?: number; usedVoiceMs: number };
 };
@@ -186,7 +189,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         const rubric = baseRubric && liveAgendaRubric(baseRubric, packet.liveAgenda);
         if (managed && !rubric?.interviewIds.length) throw new ConflictException('Agenda wawancara belum tersedia.');
         const completion = liveCompletion(session.voiceCompletion);
-        const topics = liveInterviewTopics(plan, packet, rubric);
+        const assessmentLanguage = assessmentLanguageOf(owned.invitation ? owned.invitation.snapshot : session.package.jobSnapshot);
+        const displayLabels = assessmentLanguage ? (rubric ?? packet.roleRubric)?.displayLabels : undefined;
+        const interviewTopics = liveInterviewTopics(plan, packet, rubric);
+        const topics = displayLabels ? interviewTopics.map(topic => ({ ...topic,
+            label: displayLabels[topic.criterionId] ?? topic.label })) : interviewTopics;
         const voiceMs = completion?.remainingVoiceMs ?? VOICE_HARD_MS;
         if (managed && topics.length !== rubric?.interviewIds.length)
             throw new ConflictException('Agenda wawancara belum lengkap. Periksa persiapan undangan.');
@@ -204,10 +211,11 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         const request = createVoiceRequest(this.config.get<string>('TARA_LIVE_VOICE') ?? 'marin', sdp, topics, user.fullName, managed ? {
             prompt: (owned.invitation?.snapshot as { liveVoicePrompt?: FrozenLiveVoicePrompt } | null)?.liveVoicePrompt,
             ...(resume ? { remainingSeconds: Math.ceil(voiceMs / 1000), history: liveResumeHistory(previousConnections),
+                languageReminderDelivered: assessmentLanguage ? liveLanguageReminderDelivered(previousConnections, assessmentLanguage) : undefined,
                 missingCriterionIds: completion?.missingCriterionIds,
                 coverageReview,
                 assessedCriterionIds: completion?.retained?.map(([criterionId]) => criterionId) } : {}),
-        } : undefined);
+        } : undefined, assessmentLanguage);
         const reservedAt = Date.now();
         const activeDeadlineAt = reservedAt + voiceMs;
         const taraProgress = startTara(topics, true);
@@ -215,7 +223,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
             ...(resume ? { resumedForId: id, connectionNumber: existing!.connectionNumber + 1 } : { sessionId: id }),
             ...(managed ? { attemptKey, reservedVoiceMs: voiceMs } : {}), owner: this.owner, leaseUntil: new Date(reservedAt + 30_000),
             model: TARA_LIVE_MODEL, promptVersion: TARA_LIVE_AUDIO_PROTOCOL,
-            promptSnapshot: json({ instructions: request.session.instructions, mode: 'NATIVE', agendaRevision: packet.liveAgenda?.revision,
+            promptSnapshot: json({ instructions: request.session.instructions, mode: 'NATIVE', assessmentLanguage, agendaRevision: packet.liveAgenda?.revision,
                 topicOrder: topics.map(topic => topic.id), ...(managed ? { completion: true } : {}) }),
             taraInterview: json(taraProgress),
         };
@@ -255,7 +263,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
             if (managed && providerId) await this.journal?.recordProviderId(row.id, providerId)
                 .catch(() => this.logger.warn('Tara Live provider ID journal unavailable'));
             if (!providerId || !response.transport?.sdp) throw Error('VOICE_CREATE_INVALID');
-            const live: Live = { providerId, taraProgress, opening: request.session.input[1].content[0].text,
+            const live: Live = { providerId, taraProgress, assessmentLanguage, opening: request.session.input[1].content[0].text,
                 acceptedAt: Date.now(), delivery: { sequence: 0, windows: [] }, fragments: [], queue: [],
                 seen: new Set(), pending: Promise.resolve(), closed: false, finishing: false, sidebandLostAt: Date.now(),
                 ...(managed ? { completion: { sessionId: id, connectionId: row.id,
@@ -405,7 +413,9 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
                 const now = Date.now();
                 live.mediaObservedAt = now;
                 // WebRTC input can arrive before the browser reports the new speech state.
-                if (!live.exchangeStarted && !live.openingSent && reflectedVoiceSignal(event.audio))
+                const checkingOpening = !live.exchangeStarted && !live.openingSent;
+                const checkingFarewell = live.completion?.startedAt !== undefined && now - live.completion.startedAt >= LIVE_DEEPEN_MS;
+                if ((checkingOpening || checkingFarewell) && reflectedVoiceSignal(event.audio))
                     live.lastInputAudioAt = now;
                 return;
             }
@@ -423,7 +433,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
                         live.firstOutputReceivedAt = Date.now();
                         this.verifyPlayback(live);
                     }
-                    live.latestOutputEnd = Math.max(live.latestOutputEnd ?? 0, end);
+                    live.latestOutputReceivedAt = live.mediaObservedAt;
                 }
                 return;
             }
@@ -569,6 +579,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
     }
 
     async media(user: AuthUser, id: string, clientId: string, event: MediaSignal, sequence: number, delayMs: number, connectionId?: string) {
+        const receivedAt = Date.now();
         const session = await this.owned(user, id);
         const row = await this.connection(id, session);
         if (!row) throw new NotFoundException('Sesi suara tidak tersedia.');
@@ -583,7 +594,9 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
             if (event === 'INPUT_ACTIVE' || event === 'INPUT_QUIET') live.inputQuiet = undefined;
             return this.safe(row, session);
         }
-        const at = Math.max(+row.createdAt, now - delayMs);
+        // Client delay describes the event's age on send. Database reads do not
+        // belong in that event's timestamp.
+        const at = Math.max(+row.createdAt, receivedAt - delayMs);
         if (!recordMedia(live.delivery, event, sequence, at)) return this.safe(row, session);
         if (event === 'MEDIA_LOST') { live.disconnectedAt ??= at; return this.safe(row, session); }
         if (event === 'MEDIA_RESTORED') { live.disconnectedAt = undefined; live.mediaObservedAt = now; return this.safe(row, session); }
@@ -713,6 +726,7 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         const usedVoiceMs = completion.usedVoiceMs ?? 0;
         const heartbeatStale = +now - +row.mediaConnectedAt >= mediaHeartbeatFreshMs;
         const live: Live = {
+            assessmentLanguage: assessmentLanguageOf(row.promptSnapshot),
             providerId: row.providerId, taraProgress, delivery: { sequence: 0, windows: [], ...nativeDelivery,
                 readyAt: nativeDelivery?.readyAt ?? +row.mediaConnectedAt }, fragments, queue: [],
             seen: new Set(fragments.map(fragment => fragment.eventId)), pending: Promise.resolve(), closed: false, finishing: false,
@@ -813,12 +827,14 @@ export class VoiceService implements OnModuleInit, OnModuleDestroy {
         if (!played || played.interrupted || live.delivery.open !== undefined ||
             played.end === live.checkedPlaybackEnd && live.fragments.length === live.checkedFragmentCount ||
             +now - (live.playbackObservedAt ?? played.end) < farewellGraceMs) return;
-        if (live.latestOutputEnd !== undefined && live.delivery.firstAudible !== undefined && live.delivery.firstAudioMs !== undefined &&
-            live.delivery.firstAudible - live.delivery.firstAudioMs + live.latestOutputEnd > played.end + 350) return;
+        // Reflected packets and the browser meter do not share an exact media
+        // timeline. Output received after the browser reported quiet may still play.
+        if ((live.latestOutputReceivedAt ?? 0) > (live.playbackObservedAt ?? played.end)) return;
         // The reservation includes startup. Compare the spoken farewell with
         // the provider timeline and confirmed time from earlier connections.
         const earliestFarewell = live.completion ? Math.max(0, LIVE_DEEPEN_MS - live.completion.usedVoiceMs) : 0;
-        const farewell = directFarewellAt(live.fragments, live.delivery, earliestFarewell, live.candidateLastSpeechAt);
+        const farewell = directFarewellAt(live.fragments, live.delivery, earliestFarewell, live.candidateLastSpeechAt,
+            live.assessmentLanguage, live.lastInputAudioAt);
         if (farewell !== undefined) {
             await this.finish(row.id, 'TARA_FINISHED');
         } else {

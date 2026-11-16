@@ -90,9 +90,9 @@ export class ScreeningClient {
                 data: { status: 'RUNNING', error: null } });
             if (!claimed.count) throw new AiPending('TAKA_CALL_IN_FLIGHT');
         } else if (!call || ['FAILED', 'INVALID'].includes(call.status)) {
-            const singleSubmission = task === 'candidate' || task === 'live-agenda';
+            const singleSubmission = task === 'candidate' || task === 'live-agenda' || task === 'assessment-narrative';
             if (singleSubmission && (call || await this.db.aiScreeningCall.count({ where: { workId, task } })))
-                throw new Error(task === 'candidate' ? 'TARA_CANDIDATE_ALREADY_SUBMITTED' : 'TARA_LIVE_AGENDA_ALREADY_SUBMITTED');
+                throw new Error(task === 'candidate' ? 'TARA_CANDIDATE_ALREADY_SUBMITTED' : task === 'live-agenda' ? 'TARA_LIVE_AGENDA_ALREADY_SUBMITTED' : 'TAKA_NARRATIVE_ALREADY_SUBMITTED');
             const count = await this.db.aiScreeningCall.count({ where: { workId, inputHash } });
             const activeCount = await this.db.aiScreeningCall.count({ where: { workId, inputHash, status: { not: 'RECOVERED' } } });
             if (activeCount >= 3)
@@ -250,7 +250,7 @@ export class ScreeningClient {
         const cost = (cached * 0.01 + (writes ?? 0) * 0.125 + uncached * (writes === undefined ? 0.125 : 0.10) + output * 0.50) / 1000000;
         const accounting = { inputTokens: input, outputTokens: output, cachedTokens: cached, reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
             usage: json({ ...usage, providerTiming: timing }), costUsd: cost, pricing: { input: 0.10, cacheRead: 0.01, cacheWrite: 0.125, output: 0.50, unit: 1000000, conservative: writes === undefined } };
-        const preparation = call.task === 'candidate' || call.task === 'live-agenda';
+        const preparation = call.task === 'candidate' || call.task === 'live-agenda' || call.task === 'assessment-narrative';
         if (body.status !== 'completed') {
             await this.db.aiScreeningCall.updateMany({ where: { id: call.id, status: { not: 'ERASED' } }, data: { ...accounting, status: 'FAILED', error: 'PROVIDER_' + (body.status ?? 'FAILED') } });
             if (call.task === 'live-agenda' && call.responseId)

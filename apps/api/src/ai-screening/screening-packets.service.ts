@@ -7,6 +7,7 @@ import { freezePromptRegistry } from './prompts/registry';
 import { isCurrentConversation, newConversationPolicy } from './conversation.policy';
 import { createRoleRubric, roleAssessmentEnabled, ROLE_RUBRIC_VERSION, type RoleRubric } from './role-rubric';
 import { liveAgendaRequest } from './tara-live-agenda';
+import { assessmentLanguageOf } from './assessment-language';
 export async function enqueueWork(db: Pick<Prisma.TransactionClient, 'aiScreeningWork'>, kind: string, subjectId: string, key = kind + ':' + subjectId) {
     return db.aiScreeningWork.upsert({ where: { key }, create: { key, kind, subjectId }, update: {} });
 }
@@ -42,11 +43,12 @@ export class ScreeningPackets {
                 skills: job.jobSkills.map(s => ({ skillId: s.skillId, name: s.skill.name, isRequired: s.isRequired, minLevel: s.minLevel,
                     aliases: s.skill.aliases.map(alias => alias.alias).sort() })).sort((a, b) => a.skillId.localeCompare(b.skillId)),
                 languages: job.jobLanguages.map(l => ({ code: l.language.code, minLevel: l.minLevel, isRequired: l.isRequired, provenance: l.provenance })).sort((a, b) => a.code.localeCompare(b.code)), company };
-            const promptSnapshot = freezePromptRegistry();
-            const liveAgendaPrompt = (aligned || invited === 'VOICE') && roleRubric?.interviewIds.length ? liveAgendaRequest(roleRubric).preset : undefined;
+            const language = assessmentLanguageOf(job);
+            const promptSnapshot = freezePromptRegistry(language);
+            const liveAgendaPrompt = (aligned || invited === 'VOICE') && roleRubric?.interviewIds.length ? liveAgendaRequest(roleRubric, undefined, language).preset : undefined;
             // Company context and the invitation channel do not change a competency rubric.
             const fingerprint = aligned ? hash([roleRubric.revision, liveAgendaPrompt, job.title, job.description, source.experienceLevel,
-                source.skills, source.languages, job.jobLanguages.map(row => [row.language.code, row.language.name]).sort()]) :
+                source.skills, source.languages, job.jobLanguages.map(row => [row.language.code, row.language.name]).sort(), ...(language ? [language] : [])]) :
                 hash([source, policy.version, promptSnapshot, policy,
                     ...(roleRubric ? [roleRubric.revision] : []), ...(liveAgendaPrompt ? [liveAgendaPrompt] : [])]);
             const found = await tx.aiScreeningPackage.findUnique({ where: { jobId_fingerprint: { jobId, fingerprint } } });
@@ -64,7 +66,7 @@ export class ScreeningPackets {
         const frozen = await this.db.aiScreeningPackage.findUniqueOrThrow({ where: { id } });
         if (isCurrentConversation(frozen.conversationPolicy)) return frozen;
         if (!screeningEnabled()) return null;
-        const policy = newConversationPolicy(), prompts = freezePromptRegistry();
+        const policy = newConversationPolicy(), prompts = freezePromptRegistry(assessmentLanguageOf(frozen.jobSnapshot));
         const fingerprint = hash(['invitation-policy-upgrade', frozen.fingerprint, policy, prompts]);
         return this.db.$transaction(async tx => {
             await tx.$queryRaw`SELECT id FROM "JobPost" WHERE id=${frozen.jobId} FOR UPDATE`;

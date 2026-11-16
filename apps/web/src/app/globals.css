@@ -1252,6 +1252,22 @@ a.card.job-card--hot {
   align-items: center;
   justify-content: space-between;
 }
+.pagination-current { display: none; }
+@media (max-width: 767px) {
+  .pagination .pagination-controls { flex-wrap: nowrap; gap: 4px; }
+  .pagination .pagination-current { display: inline-block; color: var(--muted); font-size: .78rem; white-space: nowrap; }
+  .pagination .pagination-pages,
+  .pagination .pagination-nav:first-child,
+  .pagination .pagination-nav:last-child,
+  .pagination .pagination-nav > span { display: none; }
+  .pagination .pagination-nav {
+    display: inline-grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+}
 .pagination-meta {
   display: flex;
   flex-direction: column;

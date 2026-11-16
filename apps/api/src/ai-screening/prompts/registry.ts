@@ -2,16 +2,17 @@ import { composePrompt, type PromptPreset, type ScreeningTask } from './compose'
 import { screeningModel } from '../screening.policy';
 import { newConversationPolicy } from '../conversation.policy';
 import { freezeTakaInterview } from '../taka-interview';
-type ConversationTask = Exclude<ScreeningTask, 'evaluate' | 'live-agenda'>;
+import type { AssessmentLanguage } from '@job-talentio/shared';
+type ConversationTask = Exclude<ScreeningTask, 'evaluate' | 'live-agenda' | 'assessment-narrative'>;
 export type PromptRegistry = Record<ConversationTask, PromptPreset> & { takaInterview?: PromptPreset; liveAgenda?: PromptPreset };
 // Persist the assembled stable instructions/schema with each job context. A later
 // deploy cannot silently change the prompts or model of an already-started session.
-export function freezePromptRegistry(): PromptRegistry {
+export function freezePromptRegistry(language?: AssessmentLanguage): PromptRegistry {
     const prompts = Object.fromEntries((['prepare', 'candidate', 'follow-up'] as const).map(task => {
-        const { input: _input, ...preset } = composePrompt(task, {});
+        const { input: _input, ...preset } = composePrompt(task, {}, undefined, language);
         return [task, { ...preset, model: screeningModel() }];
     })) as PromptRegistry;
-    return { ...prompts, takaInterview: freezeTakaInterview() };
+    return { ...prompts, takaInterview: freezeTakaInterview(language) };
 }
 
 export function currentTaraPrompt(snapshot: unknown, task: ConversationTask) {

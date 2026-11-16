@@ -1,3 +1,5 @@
+import { assessmentCopy, type AssessmentLanguage } from '@job-talentio/shared';
+import { assessmentTextLanguage } from './assessment-language';
 import type { PromptPreset } from './prompts/compose';
 import type { CandidatePayload, Claim, ClaimResult, EvaluationPayload, JsonSchema, PackagePayload } from './screening.schemas';
 import { inputTrust } from './prompts/shared/input-trust';
@@ -37,7 +39,7 @@ const object = (properties: Record<string, JsonSchema>): JsonSchema => ({
 });
 const nullable = (schema: JsonSchema): JsonSchema => ({ anyOf: [schema, { type: 'null' }] });
 
-export function freezeTakaInterview(): PromptPreset {
+export function freezeTakaInterview(language?: AssessmentLanguage): PromptPreset {
     return {
         version: TAKA_INTERVIEW_VERSION, model: screeningModel(), name: 'taka_interview_evidence',
         reasoning: 'low', maxOutput: 4500, schema: object({}),
@@ -46,7 +48,8 @@ export function freezeTakaInterview(): PromptPreset {
             'Untuk tiap klaim: NONE jika belum ada bukti yang relevan atau tidak ada jawaban, OFF_TOPIC jika jawaban akhir membahas hal lain, DECLINED hanya jika kandidat dengan jelas menyatakan tidak bisa memberi contoh, menolak menjawab atau menyangkal penggunaan yang persis diklaim. GENERAL untuk pernyataan umum, PARTIAL untuk rincian relevan dengan celah yang benar-benar diuji, CONCRETE untuk tindakan pribadi yang jelas, STRONG untuk contoh spesifik yang mendukung lingkup yang ditanya dengan jelas dan lengkap.',
             'Periksa askedFields pada pertanyaan dan ruang lingkup klaim. Ketiadaan detail yang belum ditanya, termasuk alasan, hasil, konteks, dan batas peran, tidak menurunkan nilai; contoh singkat dapat STRONG. Cakupan terbuka tetap dicatat server. Jangan mewajibkan metrik, perusahaan tertentu, nama rahasia, atau pengalaman formal kecuali konteks itu memang diklaim dan diuji.',
             'Tautkan hanya quoteRef dari katalog jawaban kandidat. Untuk bukti positif, isi fields yang benar-benar dibuktikan kutipan itu. Untuk OFF_TOPIC atau DECLINED, rujuk jawaban aktual dan fields kosong. Gunakan jawaban topik lain hanya jika tugas dan tindakan nyata untuk klaim ini dijelaskan secara independen. Jika hanya menyebut nama skill, gunakan NONE. Kembalikan null hanya jika klaim tidak dapat diperiksa dari masukan.',
-            'discrepancyRef hanya jika kandidat menjelaskan kontribusi atau konteks yang secara eksplisit bertentangan dengan klaim CV. Jika kandidat mengklarifikasi atau mengoreksi, gunakan jawaban akhirnya. Alasan satu kalimat dalam bahasa Indonesia, tanpa kesimpulan tentang kepribadian.',
+            `discrepancyRef hanya jika kandidat menjelaskan kontribusi atau konteks yang secara eksplisit bertentangan dengan klaim CV. Jika kandidat mengklarifikasi atau mengoreksi, gunakan jawaban akhirnya. Alasan satu kalimat dalam ${assessmentTextLanguage(language)}, tanpa kesimpulan tentang kepribadian.`,
+            ...(language ? ['Gunakan bukti substansial dalam bahasa apa pun. Arahan bahasa saja bukan pertanyaan untuk menilai klaim.'] : []),
         ].join('\n\n'),
     };
 }
@@ -180,7 +183,7 @@ const reasonFor: Record<Exclude<TakaClaimScope['state'], 'ASSESSED'>, string> = 
     ASSESSMENT_UNAVAILABLE: 'Bukti tersimpan, penilaian klaim perlu ditinjau.',
 };
 
-function gradeClaim(input: Input, claim: Claim, judgement: Judged | null | undefined, interrupted: boolean): AssessedClaim {
+function gradeClaim(input: Input, claim: Claim, judgement: Judged | null | undefined, interrupted: boolean, language?: AssessmentLanguage): AssessedClaim {
     const direct = input.turns.filter(turn => turn.claimId === claim.id);
     const expected = plannedFields(claim), askedFields = input.askedFields.get(claim.id) ?? [];
     const citations = judgement?.evidence.flatMap(entry => {
@@ -229,7 +232,7 @@ function gradeClaim(input: Input, claim: Claim, judgement: Judged | null | undef
     return {
         claimId: claim.id, score, asked: direct.length > 0,
         status: contradiction && score !== null ? 'CLARIFY' : score !== null && score >= 3 ? 'SUPPORTED' : 'INSUFFICIENT',
-        reason: score !== null ? reason : reasonFor[state as Exclude<typeof state, 'ASSESSED'>],
+        reason: assessmentCopy(language, score !== null ? reason : reasonFor[state as Exclude<typeof state, 'ASSESSED'>]),
         evidence, contradictions: contradiction && score !== null ? [{
             left: { source: 'CV', ref: claim.id, quote: claim.quote },
             right: { source: 'ANSWER', ref: contradiction.snippet.ref, quote: contradiction.snippet.text },
@@ -238,8 +241,8 @@ function gradeClaim(input: Input, claim: Claim, judgement: Judged | null | undef
     };
 }
 
-export function scoreTakaInterview(input: Input, judgements: Map<string, Judged | null>, interrupted: boolean, taraInterview?: Notes) {
-    const claims = input.plan.claims.map(claim => gradeClaim(input, claim, judgements.get(claim.id), interrupted));
+export function scoreTakaInterview(input: Input, judgements: Map<string, Judged | null>, interrupted: boolean, taraInterview?: Notes, language?: AssessmentLanguage) {
+    const claims = input.plan.claims.map(claim => gradeClaim(input, claim, judgements.get(claim.id), interrupted, language));
     const assessed = claims.filter(claim => claim.score !== null);
     const openScopeClaims = assessed.filter(claim => claim.assessment.openFields.length).length;
     const coverage: TakaCoverage = {
@@ -249,8 +252,9 @@ export function scoreTakaInterview(input: Input, judgements: Map<string, Judged 
     };
     const score = assessed.length ? Math.round(assessed.reduce((total, row) => total + row.score!, 0) * 250 / assessed.length) / 10 : null;
     const result: EvaluationPayload = {
-        summary: coverage.state === 'ALTERNATIVE' ? 'Pengalaman di luar CV dicatat untuk HR.' :
-            score === null ? 'Belum ada klaim yang dapat dinilai dari percakapan ini.' :
+        summary: coverage.state === 'ALTERNATIVE' ? assessmentCopy(language, 'Pengalaman di luar CV dicatat untuk HR.') :
+            score === null ? assessmentCopy(language, 'Belum ada klaim yang dapat dinilai dari percakapan ini.') :
+            language === 'en' ? `${assessed.length} of ${claims.length} claims were assessed using the recorded interview.` :
             assessed.length + ' dari ' + claims.length + ' klaim dinilai berdasarkan percakapan yang tersimpan.',
         criteria: [], claims, strengths: assessed.filter(row => row.score! >= 3).map(row => row.reason).slice(0, 3),
         gaps: assessed.filter(row => row.score! <= 2).map(row => row.reason).slice(0, 3), interviewQuestions: [],
