@@ -46,7 +46,7 @@ function SiteNavContent() {
   const [companies, setCompanies] = useState<Array<{companyId: string; company: {name: string}}>>([]);
   const [rememberedCompany, setRememberedCompany] = useState('');
   const searchParams = useSearchParams();
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<AuthSession | null>();
   const [notifications, setNotifications] = useState<Notifications | null>(null);
   const accountId = session?.user.id;
   const currentNotifications = notifications?.accountId === accountId ? notifications : null;
@@ -217,16 +217,10 @@ function SiteNavContent() {
   const seekerPreview = isRecruiter && ((pathname === '/' || isJobs) && searchParams.get('audience') === 'seekers'
     || isJobs && isSeekerJobsPreview(searchParams.get('returnTo')));
   const employerSide = isEmployerContext || (isRecruiter && !seekerPreview);
-  const showAudienceToggle = isLanding && (!session || isEmployee || isRecruiter)
+  const showAudienceToggle = session === null && isLanding
     && !hrFlow && !candidateReview && !isOnboarding && !inApplication;
   const seekerHref = isRecruiter ? SEEKER_JOBS_PREVIEW : isEmployee ? '/jobs' : '/';
   const employerHref = isRecruiter ? employerWorkspaceHref('jobs', activeCompany?.companyId) : isEmployee ? EMPLOYER_LANDING_PREVIEW : '/employers';
-  function rememberEmployerWorkspace() {
-    if (!isRecruiter || seekerPreview) return;
-    const membership = session?.user.memberships?.find(item => item.companyId === requestedCompany);
-    const companyId = membership?.companyId ?? activeCompany?.companyId;
-    if (companyId) rememberCompany(companyId);
-  }
   const employeeTab = searchParams.get('tab');
   const recruiterTab = searchParams.get('tab') || 'jobs';
   const recruiterActive = [(pathname === '/dashboard/recruiter' && ['jobs', 'pipeline', 'bulk'].includes(recruiterTab)) || pathname.startsWith('/dashboard/recruiter/jobs/') || pathname.startsWith('/jobs/') || pathname.startsWith('/candidates/'), pathname === '/messages', pathname === '/dashboard/recruiter' && recruiterTab === 'analytics'];
@@ -246,7 +240,8 @@ function SiteNavContent() {
     : seekerPreview ? [isJobs]
     : isRecruiter ? recruiterActive
     : [isJobs, pathname === '/dashboard/employee' && employeeTab === 'applications', pathname === '/dashboard/employee' && employeeTab === 'saved', pathname === '/messages'];
-  const showMobileMenu = isLanding && !isOnboarding && (browseLinks.length > 0 || !session);
+  const showMobileMenu = isLanding && !isOnboarding && !hrFlow && !candidateReview
+    && (browseLinks.length > 0 || !session);
   const dash =
     session?.user.role === 'EMPLOYEE'
       ? '/jobs?mode=for-you'
@@ -272,7 +267,7 @@ function SiteNavContent() {
         )}
         </div>
         {showAudienceToggle && <div className={styles.audienceToggle} role="group" aria-label={AUDIENCE_LABELS[locale].group}>
-          <Link className={`${styles.audienceOption} ${!employerSide ? styles.audienceActive : ''}`} href={seekerHref} onClick={rememberEmployerWorkspace} aria-current={!employerSide ? 'page' : undefined}>{AUDIENCE_LABELS[locale].seekers}</Link>
+          <Link className={`${styles.audienceOption} ${!employerSide ? styles.audienceActive : ''}`} href={seekerHref} aria-current={!employerSide ? 'page' : undefined}>{AUDIENCE_LABELS[locale].seekers}</Link>
           <Link className={`${styles.audienceOption} ${employerSide ? styles.audienceActive : ''}`} href={employerHref} aria-current={employerSide ? 'page' : undefined}>{AUDIENCE_LABELS[locale].employers}</Link>
         </div>}
         <div className={`nav-links ${isLanding ? styles.landingLinks : ''} ${isLanding && session ? styles.signedIn : ''}`}>

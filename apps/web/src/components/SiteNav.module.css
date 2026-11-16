@@ -148,12 +148,12 @@
 @media(max-width:760px) { .accountAttention { position:absolute; top:2px; right:2px; border:1px solid #fff; width:8px; height:8px; } }
 
 @media (max-width: 1140px) {
-  .landing .landingNav:has(.audienceToggle) {
+  .landing .landingNav:has(.menuButton) {
     flex-wrap: wrap;
   }
-  .landingNav:has(.audienceToggle) .browse { display: none; }
-  .landingNav:has(.audienceToggle) .menuButton { display: inline-flex; min-width: 44px; min-height: 44px; }
-  .landingNav:has(.audienceToggle) .mobileMenu {
+  .landingNav:has(.menuButton) .browse { display: none; }
+  .landingNav .menuButton { display: inline-flex; min-width: 44px; min-height: 44px; }
+  .landingNav .mobileMenu {
     display: flex;
     flex: 0 0 100%;
     flex-direction: column;
@@ -161,7 +161,7 @@
     max-height: calc(100dvh - 120px);
     overflow: auto;
   }
-  .landingNav:has(.audienceToggle) .mobileMenu a { display: flex; align-items: center; min-height: 44px; padding: .65rem .5rem; }
+  .landingNav .mobileMenu a { display: flex; align-items: center; min-height: 44px; padding: .65rem .5rem; }
 }
 
 @media (max-width: 767px) {

@@ -101,21 +101,23 @@ test('the public jobs preview retains filters and a valid back link for employer
   assert.equal(policy.accountHref('EMPLOYEE', '/dashboard/recruiter?audience=employers'), '/jobs');
 });
 
-test('the shared header renders both audience choices before and after sign-in', () => {
+test('the shared header shows both audience choices only for guests', () => {
   const hrefCases = [
     { role: null, href: '/', selected: 'Cari kerja', links: ['/', '/employers'] },
-    { role: 'EMPLOYEE', href: '/jobs', selected: 'Cari kerja', links: ['/jobs', policy.EMPLOYER_LANDING_PREVIEW] },
-    { role: 'EMPLOYEE', href: policy.EMPLOYER_LANDING_PREVIEW, selected: 'Cari pelamar', links: ['/jobs', policy.EMPLOYER_LANDING_PREVIEW] },
-    { role: 'RECRUITER', href: '/dashboard/recruiter?tab=jobs', selected: 'Cari pelamar', links: [policy.SEEKER_JOBS_PREVIEW, policy.EMPLOYER_JOBS] },
-    { role: 'RECRUITER', href: policy.SEEKER_JOBS_PREVIEW, selected: 'Cari kerja', links: [policy.SEEKER_JOBS_PREVIEW, policy.EMPLOYER_JOBS] },
+    { role: null, href: '/employers', selected: 'Cari pelamar', links: ['/', '/employers'] },
+    { role: null, loading: true, href: '/', selected: null },
+    { role: 'EMPLOYEE', href: '/jobs', selected: null },
+    { role: 'EMPLOYEE', href: policy.EMPLOYER_LANDING_PREVIEW, selected: null },
+    { role: 'RECRUITER', href: '/dashboard/recruiter?tab=jobs', selected: null },
+    { role: 'RECRUITER', href: policy.SEEKER_JOBS_PREVIEW, selected: null },
     { role: 'RECRUITER', href: '/dashboard/recruiter/candidates/candidate-1', selected: null },
     { role: 'RECRUITER', href: '/onboarding/recruiter', selected: null },
     { role: 'EMPLOYEE', href: '/apply/invitation-1', selected: null },
     { role: 'SUPER_ADMIN', href: '/pricing', selected: null },
   ];
-  for (const { role, href, selected, links } of hrefCases) {
+  for (const { role, loading, href, selected, links } of hrefCases) {
     const url = new URL(href, 'http://local');
-    const session = role ? { user: { role, id: 'fixture', fullName: 'Fixture' } } : null;
+    const session = loading ? undefined : role ? { user: { role, id: 'fixture', fullName: 'Fixture' } } : null;
     let stateIndex = 0;
     const Link = ({href, children, ...props}) => React.createElement('a', { ...props, href: policy.accountHref(role, href) }, children);
     const { SiteNav } = load('apps/web/src/components/SiteNav.tsx', {
@@ -138,6 +140,7 @@ test('the shared header renders both audience choices before and after sign-in',
       './screening/ApplicationPresentation': { useApplicationPresentation: () => ({ focused: false }) },
     }, { process: { env: {} } });
     const html = renderToStaticMarkup(React.createElement(SiteNav));
+    assert.doesNotMatch(html, /#(?:how-it-works|hiring-insights)/, href);
     const group = html.match(/role="group" aria-label="Pilih tujuan">(.+?)<\/div>/)?.[1];
     if (selected === null) {
       assert.equal(group, undefined, href);

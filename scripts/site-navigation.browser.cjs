@@ -90,9 +90,14 @@ async function scenario(browser, { role, width, locale, entry, recover = false }
     const response = await page.goto(web.origin + '/' + locale + entry, { waitUntil: 'domcontentloaded', timeout: 30000 });
     assert.equal(response.status(), 200);
     if (role) await page.locator(accountSelector).waitFor();
-    const group = page.locator('nav > [role="group"]');
-    await group.waitFor();
-    assert.equal(await group.getByRole('link').count(), 2);
+    const group = page.locator('nav.shell > [role="group"]');
+    if (role) {
+      assert.equal(await group.count(), 0);
+    } else {
+      await group.waitFor();
+      assert.equal(await group.getByRole('link').count(), 2);
+    }
+    assert.equal(await page.locator('nav.shell a[href$="#how-it-works"], nav.shell a[href$="#hiring-insights"]').count(), 0);
     await test({ page, group, requests, restoreCompanyRead: () => { companyReadUnavailable = false; } });
     assert.deepEqual(errors, []);
   } finally {
@@ -122,13 +127,14 @@ async function verifyHeader(browser) {
   for (const width of widths) {
     const locale = width === 1141 ? 'ru' : width === 767 ? 'uz' : width === 768 ? 'en' : 'id';
     await Promise.all([
-      { role: null, entry: '/employers', active: 1 },
-      { role: 'EMPLOYEE', entry: '/jobs?mode=all', active: 0 },
-      { role: 'RECRUITER', entry: '/dashboard/recruiter?tab=jobs&company=company-a', active: 1 },
-    ].map(({ role, entry, active }) => scenario(browser, { role, width, locale, entry }, async ({ page, group }) => {
-      const link = group.getByRole('link').nth(active);
-      await page.waitForFunction(element => element.getAttribute('aria-current') === 'page', await link.elementHandle());
-      await fits(page, group);
+      { role: null, entry: '/employers' },
+      { role: 'EMPLOYEE', entry: '/jobs?mode=all' },
+      { role: 'RECRUITER', entry: '/dashboard/recruiter?tab=jobs&company=company-a' },
+    ].map(({ role, entry }) => scenario(browser, { role, width, locale, entry }, async ({ page, group }) => {
+      if (!role) {
+        assert.equal(await group.getByRole('link').nth(1).getAttribute('aria-current'), 'page');
+        await fits(page, group);
+      }
       await fits(page, page.locator('nav.shell .brand').first());
       if (role) await fits(page, page.locator(accountSelector));
       if (width <= 1140) {
@@ -150,23 +156,32 @@ async function verifyHeader(browser) {
 }
 
 async function verifyRoutes(browser) {
-  await scenario(browser, { role: 'EMPLOYEE', width: 390, locale: 'id', entry: '/jobs?mode=all' }, async ({ page, group, requests }) => {
+  await scenario(browser, { role: null, width: 390, locale: 'id', entry: '' }, async ({ page, group }) => {
     const employer = group.getByRole('link', { name: 'Cari pelamar', exact: true });
     await employer.press('Enter');
-    await page.waitForURL('**/id/employers?audience=employers');
+    await page.waitForURL('**/id/employers');
     await page.locator('#employer-title').waitFor();
     assert.equal(await employer.getAttribute('aria-current'), 'page');
-    assert.equal(await page.locator('a[href*="/register?"][href*="role=RECRUITER"]').first().count(), 1);
+    await page.locator(mobileSelector).click();
+    const menu = page.locator('#landing-mobile-menu');
+    await menu.waitFor();
+    assert.equal(await menu.locator('a[href$="#how-it-works"], a[href$="#hiring-insights"]').count(), 0);
+    await page.keyboard.press('Escape');
     await group.getByRole('link', { name: 'Cari kerja', exact: true }).click();
-    await page.waitForURL('**/id/jobs');
-    await page.goBack();
-    await page.locator('#employer-title').waitFor();
-    assert.ok(!requests.some(endpoint => endpoint.startsWith('/jobs/company/')));
+    await page.waitForURL('**/id');
+    await page.evaluate(session => {
+      localStorage.setItem('jt_token', session.accessToken);
+      localStorage.setItem('jt_session', JSON.stringify(session));
+      window.dispatchEvent(new Event('jt-session-updated'));
+    }, auth('EMPLOYEE'));
+    await page.locator(accountSelector).waitFor();
+    assert.equal(await group.count(), 0);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator(accountSelector).waitFor();
+    assert.equal(await group.count(), 0);
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.jt_session).user.role), 'EMPLOYEE');
   });
-  await scenario(browser, { role: 'RECRUITER', width: 1440, locale: 'en', entry: '/dashboard/recruiter?tab=jobs&company=company-b' }, async ({ page, group, requests }) => {
-    await group.getByRole('link', { name: 'Find a job', exact: true }).click();
-    await page.waitForURL('**/en/jobs?audience=seekers');
+  await scenario(browser, { role: 'RECRUITER', width: 1440, locale: 'en', entry: '/jobs?audience=seekers' }, async ({ page, group, requests }) => {
     await page.getByRole('searchbox').fill('engineer');
     await page.getByRole('searchbox').press('Enter');
     await page.waitForURL(url => url.searchParams.get('q') === 'engineer' && url.searchParams.get('audience') === 'seekers');
@@ -177,11 +192,10 @@ async function verifyRoutes(browser) {
     await page.locator('main a[href*="audience=seekers"][href*="q=engineer"]').first().click();
     await page.waitForURL(url => url.pathname === '/en/jobs' && url.searchParams.get('q') === 'engineer');
     assert.ok(!requests.some(endpoint => ['/profiles/me', '/profiles/me/saved-jobs', '/jobs/recommended'].includes(endpoint)));
-    await group.getByRole('link', { name: 'Find candidates', exact: true }).click();
-    await page.waitForURL(url => url.pathname === '/en/dashboard/recruiter' && url.searchParams.get('company') === 'company-b');
+    assert.equal(await group.count(), 0);
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.jt_session).user.role), 'RECRUITER');
   });
-  console.log('Both directions, employer browse, detail back, locale, and current company verified');
+  console.log('Guest destinations, toggle removal after login and reload, and public job detail back verified');
 }
 
 async function verifyAccountIsolation(browser) {
