@@ -107,6 +107,7 @@ function host(file, exportName, dependencies, globals = {}) {
         if (name === 'react/jsx-runtime') return requireWeb(name);
         if (name === '@/lib/whatsapp') return whatsAppModule;
         if (name in dependencies) return dependencies[name];
+        if (name === '@/components/ui/DirectionalIcon') return { DirectionalIcon: () => null };
         if (name.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
         if (name === '@/lib/useLiveRefresh') return { useLiveRefresh() {} };
         if (name === '@/lib/useSessionIdentity') return { useSessionIdentity: () => 'test-user' };
@@ -202,11 +203,14 @@ test('recruiter job package filter matches confirmed Free, Standard and Premium 
     {id:'unselected',title:'Unselected role',status:'DRAFT',createdAt:'2026-10-23',benefit:{code:'FREE',selectionConfirmedAt:null},_count:{}},
   ];
   const ui=host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
+    'next/navigation':{useSearchParams:()=>new URLSearchParams()},
     '@/lib/api':{api:async()=>({})},'@/lib/useLiveRefresh':{useLiveRefresh(){}},'@/lib/navigation':{useRouter:()=>({push(){}})},
     '@/lib/accountNavigation':{employerJobHref:()=>'/job'},'@/lib/i18n':t,'@/components/employee/WorkspaceIcon':{WorkspaceIcon:()=>null},
     '@/components/employee/WorkspacePrimitives':{SearchField:()=>null,WorkspaceEmpty:()=>null,WorkspaceLoading:()=>null,Pagination:()=>null},
     '@/components/jobs/WorkspaceSelect':{WorkspaceSelect:Select},'@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},
     './RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:JobRow},
+    './candidate-review-route':{candidateListHref:()=>'/dashboard/recruiter?pool=1'},
+    './JobTemplateDialog':{JobTemplateDialog:()=>null},'./hrDraftValidation':{hrJobError:error=>error.message},
   });
   const props={companyId:'company',company:{},jobs,loading:false,meta:{},createRequested:false,onCloseCreate(){},onReload:async()=>{},onApplicants(){},onStatus:async()=>{},onFlash(){}};
   let tree=await ui.render(props);
@@ -503,6 +507,8 @@ test('the V2 editor saves existing-job content with its loaded version', async (
         initialHrDraft: value => ({...value}),
       },
       './useEmployerUnsaved': {useEmployerUnsaved() {}},
+      './hrDraftValidation': {hrJobError: error => error.message, validateHrSkills: () => []},
+      './JobContentAi': {AssessmentLanguageDialog: stub},
     },
     {window: {addEventListener() {}, removeEventListener() {}}, setTimeout: () => 1, clearTimeout() {}},
   );

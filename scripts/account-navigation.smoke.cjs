@@ -40,21 +40,22 @@ test('retired billing and checkout destinations return to the role-appropriate j
 });
 
 test('retired billing URLs redirect in middleware before rendering the old page', () => {
-  const response = (kind, url) => ({ kind, url: url?.href, cookies: { set() {} } });
   const { middleware } = load('apps/web/src/middleware.ts', {
     '@/lib/locale': locale,
-    'next/server': { NextResponse: { next: () => response('next'), redirect: (url) => response('redirect', url) } },
+    'next/server': webRequire('next/server'),
   });
   for (const language of ['en', 'id', 'uz', 'ru']) {
     for (const route of ['/billing', '/billing/mock-checkout?paymentId=legacy', '/billing/legacy', '/dashboard/recruiter?tab=billing']) {
       const url = new URL(`/${language}${route}`, 'http://localhost:3000');
       const result = middleware({ url: url.href, nextUrl: url, cookies: { get: () => null } });
-      assert.equal(result.kind, 'redirect');
-      assert.equal(result.url, `http://localhost:3000/${language}/dashboard/recruiter?tab=jobs`);
+      assert.equal(result.status, 307);
+      assert.equal(result.headers.get('location'), `http://localhost:3000/${language}/dashboard/recruiter?tab=jobs`);
     }
   }
   const url = new URL('http://localhost:3000/id/dashboard/recruiter?tab=company');
-  assert.equal(middleware({ url: url.href, nextUrl: url, cookies: { get: () => null } }).kind, 'next');
+  const result = middleware({ url: url.href, nextUrl: url, cookies: { get: () => null } });
+  assert.equal(result.headers.get('x-middleware-next'), '1');
+  assert.match(result.headers.get('cache-control'), /\bno-store\b/);
 });
 
 test('employer job viewing, company profile and return preserve the workspace in four locales', () => {
@@ -168,7 +169,7 @@ test('shared Link and router apply the policy and retain the active locale', () 
   assert.equal(calls[2].args[0], '/id/jobs/job-7');
 });
 
-test('job preview renders employer return without candidate follow/apply controls or management params in share URL', () => {
+test('job preview scopes apply and save to candidates and shares the public job URL', () => {
   const shares = [];
   const Preview = load('apps/web/src/components/jobs/JobPreview.tsx', {
     '@/lib/navigation': { Link: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) },
@@ -181,12 +182,13 @@ test('job preview renders employer return without candidate follow/apply control
     './JobsWorkspace.module.css': {}, '@/lib/authReturn': { authLink: () => '/login' },
   }).JobPreview;
   const job = { id: 'job-7', title: 'Developer', description: 'Role description', company: { name: 'Example', slug: 'example' } };
-  const employer = renderToStaticMarkup(React.createElement(Preview, { standalone: true, backHref: '/dashboard/recruiter?tab=jobs&company=c', job, canSave: false, following: false, guest: false, busy: false }));
+  const employer = renderToStaticMarkup(React.createElement(Preview, { standalone: true, backHref: '/dashboard/recruiter?tab=jobs&company=c', job, canSave: false, guest: false, busy: false }));
   assert.match(employer, /href="\/dashboard\/recruiter\?tab=jobs&amp;company=c"/);
-  assert.ok(!employer.includes('followCompany') && !employer.includes('saveJob') && !employer.includes('applyNow'));
+  assert.doesNotMatch(employer, /saveJob|applyNow/);
   assert.equal(shares[0], '/jobs/job-7');
-  const employee = renderToStaticMarkup(React.createElement(Preview, { standalone: true, job, following: false, guest: false, busy: false, onFollow: () => {}, onApply: () => {}, onSave: () => {} }));
-  assert.ok(employee.includes('followCompany') && employee.includes('applyNow') && employee.includes('saveJob'));
+  const employee = renderToStaticMarkup(React.createElement(Preview, { standalone: true, job, guest: false, busy: false, onApply: () => {}, onSave: () => {} }));
+  assert.match(employee, /applyNow/);
+  assert.match(employee, /saveJob/);
 });
 
 test('public catalog cards keep their meaning for employers and candidates', () => {
@@ -196,8 +198,6 @@ test('public catalog cards keep their meaning for employers and candidates', () 
       ['ExploreTitleCard', { name: 'Engineer', slug: 'engineer' }, '/dashboard/recruiter?tab=jobs', '/jobs?jobTitle=engineer'],
       ['ExploreCityCard', { name: 'Jakarta', slug: 'jakarta' }, '/dashboard/recruiter?tab=jobs', '/jobs?city=jakarta'],
       ['ExploreCategoryCard', { name: 'Engineering', slug: 'engineering' }, '/dashboard/recruiter?tab=jobs', '/jobs?category=engineering'],
-      ['ExploreIndustryCard', { name: 'Manufacturing', slug: 'manufacturing' }, '/explore/companies?industrySlug=manufacturing', '/jobs?industrySlug=manufacturing'],
-      ['ExploreCompanyCard', { name: 'Example', slug: 'example' }, '/companies/example', '/jobs?companySlug=example'],
     ]) {
       const Card = load(`apps/web/src/components/explore/${component}.tsx`, {
         '@/lib/navigation': { Link: ({ href, children }) => React.createElement('a', { href }, children) },
@@ -207,6 +207,28 @@ test('public catalog cards keep their meaning for employers and candidates', () 
       const markup = renderToStaticMarkup(React.createElement(Card, props));
       assert.ok(markup.includes(`href="${employer ? employerHref : employeeHref}"`), `${role || 'guest'} ${component}: ${markup}`);
     }
+  }
+});
+
+test('retired industry and company directories redirect to the jobs workspace for the active role', () => {
+  for (const role of ['RECRUITER', 'EMPLOYEE', null]) {
+    const redirects = [];
+    const navigation = load('apps/web/src/lib/navigation.tsx', {
+      'next/link': () => null,
+      'next/navigation': { useParams: () => ({ locale: 'id' }), usePathname: () => '/id/explore',
+        useRouter: () => ({ replace: (href) => redirects.push(href) }) },
+      '@/lib/locale': locale, './accountNavigation': policy, './useAccountRole': { useAccountRole: () => role },
+    });
+    for (const directory of ['industries', 'companies']) {
+      const effects = [];
+      const { default: Page } = load(`apps/web/src/app/[locale]/explore/${directory}/page.tsx`, {
+        react: { useEffect: (effect) => effects.push(effect) }, '@/lib/navigation': navigation,
+      });
+      assert.equal(renderToStaticMarkup(React.createElement(Page)), '');
+      effects.forEach((effect) => effect());
+    }
+    const expected = role === 'RECRUITER' ? '/id/dashboard/recruiter?tab=jobs' : '/id/jobs';
+    assert.deepEqual(redirects, [expected, expected]);
   }
 });
 

@@ -51,19 +51,34 @@ test('an unavailable integration is clearly disabled and cannot pretend to conne
   const tree=await ui.render({});assert.equal(button(tree,'li.connect').props.disabled,true);assert.match(text(tree),/li.serviceUnavailable/);assert.equal(connects,0);ui.unmount();
 });
 
-test('the actual job editor blocks unreviewed sharing and sends the approved preview with portal publication',async()=>{
-  function Share(){}const requests=[],published=[];
-  const job={id:'job',status:'DRAFT',updatedAt:'2026-10-26T00:00:00Z',title:'Frontend Developer',description:'Build reliable interfaces with our product team.',workMode:'REMOTE',employmentType:'FULL_TIME',currency:'USD',locale:'id'};
-  const ui=host('apps/web/src/components/recruiter/RecruiterJobEditor.tsx','RecruiterJobEditor',{
-    '@/lib/api':{api:async(route,options)=>{if(route.startsWith('/benefits/jobs/'))return {selected:true,code:'PREMIUM'};requests.push({route,body:JSON.parse(options.body)});return {...job};}},'@/lib/i18n':i18n,
-    '@/components/ui/ConfirmProvider':{useConfirm:()=>async()=>true},'@/components/ui/Field':{FormField:stub,LabelText:stub},'@/components/ui/JobTitleInput':{JobTitleInput:stub},'@/components/ui/LocationFields':{LocationFields:stub},'@/components/ui/LookupCombobox':{LookupCombobox:stub},'@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},'@/components/employee/WorkspacePrimitives':{CompanyMark:stub},
-    './ScreeningQuestionsEditor':{ScreeningQuestionsEditor:stub,screeningDraftsFromJob:()=>[]},'./JobLanguageVersions':{JobLanguageVersions:stub},'./LinkedInSharePreview':{LinkedInSharePreview:Share},'./useEmployerUnsaved':{useEmployerUnsaved:()=>()=>{}},'@/lib/jobCommerce':{packageHref:id=>'/dashboard/recruiter/jobs/'+id+'/package'},'@/lib/navigation':{localeUrl:(locale,path)=>'/'+locale+path},'@/lib/accountNavigation':{employerJobHref:id=>'/dashboard/recruiter/jobs/'+id}
-  });
-  let tree=await ui.render({job,companyId:'company',company:{name:'Fixture Company'},meta:{},initialStep:3,onClose(){},onSaved:async()=>{},onPublished:id=>published.push(id)});
-  nodes(tree,node=>node.type===Share)[0].props.onShareIntentChange(true);tree=await ui.render();
-  nodes(tree,node=>node.type==='button'&&text(node).trim()==='rec.publish')[0].props.onClick();tree=await ui.render();assert.match(text(tree),/li.previewRequired/);assert.equal(requests.length,0,'unreviewed requested sharing must block publication');
-  nodes(tree,node=>node.type===Share)[0].props.onApprovalChange('exact-server-preview');tree=await ui.render();nodes(tree,node=>node.type==='button'&&text(node).trim()==='rec.publish')[0].props.onClick();await ui.render();
-  assert.equal(requests[0].route,'/jobs/job');assert.equal(requests[1].route,'/jobs/job/status');assert.equal(requests[1].body.linkedinPreviewId,'exact-server-preview');assert.equal(requests[1].body.status,'PUBLISHED');assert.deepEqual(published,['job']);ui.unmount();
+test('sharing a published job requires the exact server preview and explicit confirmation', async () => {
+  const writes = [];
+  let confirmed = false;
+  const api = async (route, options) => {
+    if (route === '/integrations/linkedin') return connection;
+    writes.push({route, method: options.method, body: JSON.parse(options.body)});
+    return route.endsWith('/linkedin/preview') ? preview : {id:'social-post'};
+  };
+  const ui = host('apps/web/src/components/recruiter/LinkedInSharePreview.tsx', 'LinkedInSharePreview', dependencies(api, {
+    '@/components/ui/ConfirmProvider': {useConfirm: () => async () => confirmed},
+  }));
+  let tree = await ui.render({...props, published: true});
+  assert.equal(button(tree, 'li.shareNow'), undefined);
+  button(tree, 'li.prepareSaved').props.onClick();
+  tree = await ui.render();
+  assert.match(text(tree), /Server-approved caption/);
+  button(tree, 'li.shareNow').props.onClick();
+  tree = await ui.render();
+  assert.equal(writes.length, 1, 'dismissing the confirmation cannot enqueue a post');
+
+  confirmed = true;
+  button(tree, 'li.shareNow').props.onClick();
+  await ui.render();
+  assert.deepEqual(writes, [
+    {route:'/jobs/job/linkedin/preview', method:'POST', body:{locale:'id'}},
+    {route:'/jobs/job/social-posts', method:'POST', body:{previewId:preview.id}},
+  ]);
+  ui.unmount();
 });
 
 test('admin operations shows quota pressure and preserves unavailable usage rather than inventing zero',async()=>{

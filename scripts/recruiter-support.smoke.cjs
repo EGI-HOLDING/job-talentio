@@ -126,9 +126,17 @@ test('reply uses the selected ticket and loads the last reply page after a succe
   assert.ok(reads.includes('/hr-support/a?page=2')); assert.equal(nodes(tree,n=>n.type==='textarea')[0].props.value,''); ui.unmount();
 });
 
+const jobListDependencies = {
+  'next/navigation': {useSearchParams: () => new URLSearchParams()},
+  './candidate-review-route': {candidateListHref: () => '/dashboard/recruiter?pool=1'},
+  './JobTemplateDialog': {JobTemplateDialog: stub},
+  './hrDraftValidation': {hrJobError: error => error.message},
+};
+
 test('combined job toolbar retains company totals while filtering and still opens the correct create-job editor', async () => {
   function SearchField() {} function WorkspaceSelect() {} function Editor() {} function JobRow() {}
   const ui = host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
+    ...jobListDependencies,
     '@/lib/api':{api:async()=>{}},'@/lib/navigation':{Link:stub,useRouter:()=>({push(){}})},'@/lib/accountNavigation':{employerJobHref:id=>'/job/'+id},
     '@/lib/i18n':i18n,'@/lib/location':{localizedJobLocation:()=>''},'@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},
     '@/components/employee/WorkspacePrimitives':{SearchField,WorkspaceEmpty:stub,WorkspaceLoading:stub,Pagination:stub,dateLabel:()=>''},
@@ -148,6 +156,7 @@ test('combined job toolbar retains company totals while filtering and still open
 function jobList(api, confirm=async()=>true) {
   function Editor() {} function Row() {} function Pager() {}
   const ui=host('apps/web/src/components/recruiter/RecruiterJobs.tsx','RecruiterJobs',{
+    ...jobListDependencies,
     '@/lib/api':{api},'@/lib/navigation':{useRouter:()=>({push(){}})},'@/lib/accountNavigation':{employerJobHref:id=>'/job/'+id},'@/lib/i18n':i18n,
     '@/components/employee/WorkspaceIcon':{WorkspaceIcon:stub},'@/components/employee/WorkspacePrimitives':{SearchField:stub,WorkspaceEmpty:stub,WorkspaceLoading:stub,Pagination:Pager},
     '@/components/jobs/WorkspaceSelect':{WorkspaceSelect:stub},'@/components/ui/ConfirmProvider':{useConfirm:()=>confirm},'./HrCreationFlow':{hrFlowV2Enabled:false},'./RecruiterJobEditor':{RecruiterJobEditor:Editor},'./RecruiterJobRow':{RecruiterJobRow:Row},

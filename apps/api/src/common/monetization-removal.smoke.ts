@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { RequestMethod } from '@nestjs/common';
+import { ForbiddenException, RequestMethod } from '@nestjs/common';
+import type { AuthUser } from './auth.decorators';
 import { JobsController } from '../jobs/jobs.controller';
 import { AdminController } from '../admin/admin.controller';
 import { JobsService } from '../jobs/jobs.service';
@@ -63,5 +64,42 @@ try {
 // Contact privacy and the scraping quota remain present after removing paid access.
 assert.match(ProfilesService.prototype.revealCandidateContact.toString(), /assertRevealQuota/);
 assert.match(source('apps/api/src/profiles/profiles.service.ts'), /REVEAL_LIMIT_PER_HOUR = 30/);
-assert.match(source('apps/api/src/profiles/profiles.service.ts'), /resumeId,\s*jobPost: \{ companyId: \{ in: companyIds \} \}/);
-console.log('PASS monetization removal: retired controllers/providers, no commercial readers/writers, neutral ranking and legacy boosts, privacy and anti-scraping protections retained.');
+
+async function verifySubmittedResumeAccess() {
+  const recruiter: AuthUser = { id: 'recruiter', email: null, role: 'RECRUITER', fullName: 'Fixture HR', isBanned: false };
+  const resumeId = 'submitted-resume';
+  const profileId = 'candidate-profile';
+  const signed: string[] = [];
+  const scopes: string[] = [];
+  const profiles = new ProfilesService({
+    resume: { findUnique: async () => ({
+      fileKey: 'private/latest-library-cv.pdf', title: 'Latest CV',
+      profile: { id: profileId, userId: 'candidate', user: { isBanned: false, anonymizedAt: null } },
+    }) },
+    application: { findFirst: async ({ where }: {
+      where: { resumeId: string; profileId: string; jobPost: { companyId: string } };
+    }) => {
+      assert.equal(where.resumeId, resumeId);
+      assert.equal(where.profileId, profileId);
+      scopes.push(where.jobPost.companyId);
+      return where.jobPost.companyId === 'company-with-application'
+        ? { id: 'application', resumeSnapshot: { resume: { fileKey: 'private/submitted-cv.pdf', title: 'Submitted CV' } } }
+        : null;
+    } },
+  } as never, {
+    getPresignedGetUrl: async (key: string) => { signed.push(key); return 'https://storage.example.test/submitted'; },
+  } as never, {} as never, {} as never, {} as never, {} as never, {} as never, null, {
+    context: async (_user: AuthUser, companyId: string) => companyId,
+  } as never);
+
+  await assert.rejects(profiles.downloadResume(recruiter, resumeId, 'company-without-application'), ForbiddenException);
+  assert.equal(signed.length, 0);
+  const result = await profiles.downloadResume(recruiter, resumeId, 'company-with-application');
+  assert.equal(result.title, 'Submitted CV');
+  assert.deepEqual(signed, ['private/submitted-cv.pdf']);
+  assert.deepEqual(scopes, ['company-without-application', 'company-with-application']);
+}
+
+verifySubmittedResumeAccess().then(() => {
+  console.log('PASS monetization removal: retired controllers/providers, no commercial readers/writers, neutral ranking and legacy boosts, scoped CV access and anti-scraping protections retained.');
+}).catch(error => { console.error(error); process.exitCode = 1; });
